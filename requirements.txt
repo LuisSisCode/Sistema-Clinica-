@@ -1,0 +1,35 @@
+# requirements.txt - Dependencias del proyecto Clínica App
+
+# Framework GUI
+PySide6==6.6.1
+
+# Base de datos SQL Server
+pyodbc==5.0.1
+
+# Configuración y variables de entorno
+python-dotenv==1.0.0
+
+# Logging y utilidades
+colorama==0.4.6
+
+# Caché y sesiones (opcional)
+redis==5.0.1
+
+# Generación de PDFs (si lo necesitas)
+reportlab==4.0.7
+
+# Fecha y tiempo
+python-dateutil==2.8.2
+
+# Validación de datos
+pydantic==2.5.2
+
+# Criptografía para passwords (recomendado)
+bcrypt==4.1.2
+
+# Para manejo de archivos y paths
+pathlib2==2.3.7
+
+
+# Desarrollo y debugging
+ipython==8.18.1
