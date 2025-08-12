@@ -1,23 +1,41 @@
-# backend/services/auth_service.py
 import hashlib
 import secrets
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-from ..database.repositories.seguridad_repository import seguridad_repository
-from ..database.models import UsuarioSesion
-from ..core.config import Config
-from ..cache.cache_decorators import cache_usuario, invalidate_usuario_cache
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
+
+from ..repositories.usuario_repository import UsuarioRepository
+from ..core.excepciones import AuthenticationError, ValidationError, ExceptionHandler
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class UsuarioSesion:
+    """Clase para manejar información de sesión de usuario"""
+    usuario_id: int
+    nombre_completo: str
+    correo: str
+    rol_id: int
+    rol_nombre: str
+    token: str
+    fecha_login: datetime
+    ultimo_acceso: datetime
 
 class AuthService:
     """Servicio de autenticación y gestión de sesiones"""
     
     def __init__(self):
+        self.repository = UsuarioRepository()
         self.sesiones_activas: Dict[str, UsuarioSesion] = {}
         self.intentos_login: Dict[str, Dict] = {}
+        
+        # Configuración
+        self.MAX_LOGIN_ATTEMPTS = 5
+        self.LOGIN_BLOCK_TIME = 15  # minutos
+        self.SESSION_TIMEOUT = 8 * 60 * 60  # 8 horas en segundos
     
+    @ExceptionHandler.handle_exception
     def login(self, email: str, password: str) -> Dict[str, Any]:
         """
         Autentica un usuario y crea una sesión
@@ -30,14 +48,14 @@ class AuthService:
             if self._verificar_intentos_login(email):
                 return {
                     'success': False,
-                    'error': 'Demasiados intentos de login. Intente más tarde.',
+                    'error': f'Demasiados intentos de login. Intente en {self.LOGIN_BLOCK_TIME} minutos.',
                     'code': 'MAX_ATTEMPTS'
                 }
             
-            # Obtener usuario por email
-            usuario = seguridad_repository.get_usuario_by_email(email)
+            # Autenticar usando repository
+            usuario_data = self.repository.authenticate(email, password)
             
-            if not usuario:
+            if not usuario_data:
                 self._registrar_intento_fallido(email)
                 return {
                     'success': False,
@@ -45,30 +63,12 @@ class AuthService:
                     'code': 'INVALID_CREDENTIALS'
                 }
             
-            # Verificar contraseña
-            if not self._verificar_password(password, usuario.contrasena):
-                self._registrar_intento_fallido(email)
+            # Verificar que el rol esté activo
+            if not usuario_data.get('rol_estado', True):
                 return {
                     'success': False,
-                    'error': 'Credenciales incorrectas',
-                    'code': 'INVALID_CREDENTIALS'
-                }
-            
-            # Verificar que el usuario esté activo
-            if not usuario.estado:
-                return {
-                    'success': False,
-                    'error': 'Usuario inactivo. Contacte al administrador.',
-                    'code': 'USER_INACTIVE'
-                }
-            
-            # Obtener información del rol
-            rol = seguridad_repository.get_rol_by_id(usuario.id_rol)
-            if not rol:
-                return {
-                    'success': False,
-                    'error': 'Rol de usuario no válido',
-                    'code': 'INVALID_ROLE'
+                    'error': 'Su rol está inactivo. Contacte al administrador.',
+                    'code': 'ROLE_INACTIVE'
                 }
             
             # Generar token de sesión
@@ -76,20 +76,18 @@ class AuthService:
             
             # Crear sesión de usuario
             sesion = UsuarioSesion(
-                usuario_id=usuario.id,
-                nombre_completo=usuario.nombre_completo,
-                correo=usuario.correo,
-                rol_id=usuario.id_rol,
-                rol_nombre=rol.nombre,
+                usuario_id=usuario_data['id'],
+                nombre_completo=f"{usuario_data['Nombre']} {usuario_data['Apellido_Paterno']} {usuario_data['Apellido_Materno']}",
+                correo=usuario_data['correo'],
+                rol_id=usuario_data['rol_id'],
+                rol_nombre=usuario_data['rol_nombre'],
+                token=token,
                 fecha_login=datetime.now(),
-                token=token
+                ultimo_acceso=datetime.now()
             )
             
             # Guardar sesión activa
             self.sesiones_activas[token] = sesion
-            
-            # Actualizar último acceso
-            seguridad_repository.actualizar_ultimo_acceso(usuario.id)
             
             # Limpiar intentos fallidos
             self._limpiar_intentos_login(email)
@@ -100,16 +98,24 @@ class AuthService:
                 'success': True,
                 'token': token,
                 'usuario': {
-                    'id': usuario.id,
-                    'nombre_completo': usuario.nombre_completo,
-                    'correo': usuario.correo,
-                    'rol_id': usuario.id_rol,
-                    'rol_nombre': rol.nombre,
-                    'rol_descripcion': rol.descripcion
+                    'id': sesion.usuario_id,
+                    'nombre_completo': sesion.nombre_completo,
+                    'correo': sesion.correo,
+                    'rol_id': sesion.rol_id,
+                    'rol_nombre': sesion.rol_nombre,
+                    'rol_descripcion': usuario_data.get('rol_descripcion', '')
                 },
-                'fecha_login': sesion.fecha_login.isoformat()
+                'fecha_login': sesion.fecha_login.isoformat(),
+                'session_timeout': self.SESSION_TIMEOUT
             }
             
+        except AuthenticationError as e:
+            self._registrar_intento_fallido(email)
+            return {
+                'success': False,
+                'error': str(e),
+                'code': 'AUTH_ERROR'
+            }
         except Exception as e:
             logger.error(f"Error en login para {email}: {e}")
             return {
@@ -118,6 +124,7 @@ class AuthService:
                 'code': 'INTERNAL_ERROR'
             }
     
+    @ExceptionHandler.handle_exception
     def logout(self, token: str) -> Dict[str, Any]:
         """Cierra una sesión de usuario"""
         try:
@@ -159,8 +166,8 @@ class AuthService:
             sesion = self.sesiones_activas[token]
             
             # Verificar tiempo de expiración
-            tiempo_transcurrido = datetime.now() - sesion.fecha_login
-            if tiempo_transcurrido.total_seconds() > Config.SESSION_TIMEOUT:
+            tiempo_transcurrido = datetime.now() - sesion.ultimo_acceso
+            if tiempo_transcurrido.total_seconds() > self.SESSION_TIMEOUT:
                 del self.sesiones_activas[token]
                 return {
                     'valid': False,
@@ -168,8 +175,12 @@ class AuthService:
                     'code': 'SESSION_EXPIRED'
                 }
             
+            # Actualizar último acceso
+            sesion.ultimo_acceso = datetime.now()
+            
             # Verificar que el usuario siga activo en BD
-            if not seguridad_repository.verificar_usuario_activo(sesion.usuario_id):
+            usuario = self.repository.get_by_id(sesion.usuario_id)
+            if not usuario or not usuario.get('Estado', False):
                 del self.sesiones_activas[token]
                 return {
                     'valid': False,
@@ -185,7 +196,8 @@ class AuthService:
                     'correo': sesion.correo,
                     'rol_id': sesion.rol_id,
                     'rol_nombre': sesion.rol_nombre
-                }
+                },
+                'tiempo_restante': self.SESSION_TIMEOUT - tiempo_transcurrido.total_seconds()
             }
             
         except Exception as e:
@@ -207,35 +219,92 @@ class AuthService:
         try:
             sesiones = []
             for token, sesion in self.sesiones_activas.items():
+                tiempo_activo = datetime.now() - sesion.fecha_login
                 sesiones.append({
                     'token': token[:8] + "...",  # Solo mostrar parte del token
                     'usuario': sesion.nombre_completo,
                     'correo': sesion.correo,
                     'rol': sesion.rol_nombre,
                     'fecha_login': sesion.fecha_login.isoformat(),
-                    'tiempo_activo': str(datetime.now() - sesion.fecha_login)
+                    'ultimo_acceso': sesion.ultimo_acceso.isoformat(),
+                    'tiempo_activo': str(tiempo_activo)
                 })
             
-            return sesiones
+            return sorted(sesiones, key=lambda x: x['ultimo_acceso'], reverse=True)
             
         except Exception as e:
             logger.error(f"Error listando sesiones activas: {e}")
             return []
     
+    def cerrar_sesion_usuario(self, usuario_id: int) -> int:
+        """Cierra todas las sesiones de un usuario específico"""
+        tokens_a_eliminar = []
+        for token, sesion in self.sesiones_activas.items():
+            if sesion.usuario_id == usuario_id:
+                tokens_a_eliminar.append(token)
+        
+        for token in tokens_a_eliminar:
+            del self.sesiones_activas[token]
+        
+        if tokens_a_eliminar:
+            logger.info(f"Sesiones cerradas para usuario ID {usuario_id}: {len(tokens_a_eliminar)}")
+        
+        return len(tokens_a_eliminar)
+    
+    def limpiar_sesiones_expiradas(self) -> int:
+        """Limpia sesiones expiradas"""
+        ahora = datetime.now()
+        tokens_expirados = []
+        
+        for token, sesion in self.sesiones_activas.items():
+            tiempo_transcurrido = ahora - sesion.ultimo_acceso
+            if tiempo_transcurrido.total_seconds() > self.SESSION_TIMEOUT:
+                tokens_expirados.append(token)
+        
+        for token in tokens_expirados:
+            del self.sesiones_activas[token]
+        
+        if tokens_expirados:
+            logger.info(f"Sesiones expiradas limpiadas: {len(tokens_expirados)}")
+        
+        return len(tokens_expirados)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Obtiene estadísticas de sesiones"""
+        return {
+            'sesiones_activas': len(self.sesiones_activas),
+            'usuarios_unicos': len(set(s.usuario_id for s in self.sesiones_activas.values())),
+            'intentos_login_fallidos': len(self.intentos_login)
+        }
+    
+    # ===============================
+    # MÉTODOS PRIVADOS
+    # ===============================
+    
     def _verificar_password(self, password_plain: str, password_hash: str) -> bool:
         """
         Verifica una contraseña contra su hash
-        Nota: Ajustar según el método de hash usado en tu BD
+        Nota: Usar el mismo método que en UsuarioRepository
         """
-        # Si las contraseñas están en texto plano en la BD (no recomendado)
-        if password_plain == password_hash:
-            return True
-        
-        # Si usas hash MD5 o SHA256
-        hash_md5 = hashlib.md5(password_plain.encode()).hexdigest()
-        hash_sha256 = hashlib.sha256(password_plain.encode()).hexdigest()
-        
-        return password_hash in [hash_md5, hash_sha256, password_plain]
+        try:
+            # Si usa el sistema de hash con salt del repository
+            if '$' in password_hash:
+                salt, stored_hash = password_hash.split('$')
+                password_hash_check = hashlib.pbkdf2_hmac('sha256', password_plain.encode(), salt.encode(), 100000)
+                return password_hash_check.hex() == stored_hash
+            
+            # Si las contraseñas están en texto plano (no recomendado)
+            if password_plain == password_hash:
+                return True
+            
+            # Si usas hash MD5 o SHA256 simple
+            hash_md5 = hashlib.md5(password_plain.encode()).hexdigest()
+            hash_sha256 = hashlib.sha256(password_plain.encode()).hexdigest()
+            
+            return password_hash in [hash_md5, hash_sha256, password_plain]
+            
+        except Exception:
+            return False
     
     def _generar_token(self) -> str:
         """Genera un token único para la sesión"""
@@ -249,12 +318,12 @@ class AuthService:
         datos = self.intentos_login[email]
         ahora = datetime.now()
         
-        # Si han pasado más de 15 minutos, limpiar intentos
-        if (ahora - datos['ultimo_intento']).total_seconds() > 900:  # 15 minutos
+        # Si han pasado más del tiempo de bloqueo, limpiar intentos
+        if (ahora - datos['ultimo_intento']).total_seconds() > (self.LOGIN_BLOCK_TIME * 60):
             del self.intentos_login[email]
             return False
         
-        return datos['intentos'] >= Config.MAX_LOGIN_ATTEMPTS
+        return datos['intentos'] >= self.MAX_LOGIN_ATTEMPTS
     
     def _registrar_intento_fallido(self, email: str):
         """Registra un intento de login fallido"""

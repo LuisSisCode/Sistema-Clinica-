@@ -9,7 +9,7 @@ class Config:
     """Configuración principal del sistema"""
     
     # ===== BASE DE DATOS =====
-    DB_SERVER = "DESKTOP-HOE6AHT"
+    DB_SERVER = "10.171.82.135"
     DB_NAME = "ClinicaMariaInmaculada"  # Debe coincidir con database_conexion.py
     DB_TRUSTED_CONNECTION = True
     DB_TIMEOUT = 30

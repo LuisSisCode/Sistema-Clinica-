@@ -14,6 +14,7 @@ from generar_pdf import GeneradorReportesPDF
 from backend.models.inventario_model import InventarioModel, register_inventario_model
 from backend.models.venta_model import VentaModel, register_venta_model
 from backend.models.compra_model import CompraModel, register_compra_model
+from backend.models.usuario_model import UsuarioModel, register_usuario_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -52,6 +53,7 @@ class AppController(QObject):
         self.inventario_model = None
         self.venta_model = None
         self.compra_model = None
+        self.usuario_model = None
     
     # ===============================
     # INICIALIZACIÓN DE MODELS
@@ -67,6 +69,7 @@ class AppController(QObject):
             self.inventario_model = InventarioModel()
             self.venta_model = VentaModel()
             self.compra_model = CompraModel()
+            self.usuario_model = UsuarioModel()
             
             # Conectar signals entre models
             self._connect_models()
@@ -92,11 +95,13 @@ class AppController(QObject):
             self.inventario_model.operacionError.connect(self._on_model_error)
             self.venta_model.operacionError.connect(self._on_model_error)
             self.compra_model.operacionError.connect(self._on_model_error)
+            self.usuario_model.errorOccurred.connect(self._on_model_error)
             
             # Conectar operaciones exitosas
             self.inventario_model.operacionExitosa.connect(self._on_model_success)
             self.venta_model.operacionExitosa.connect(self._on_model_success)
             self.compra_model.operacionExitosa.connect(self._on_model_success)
+            self.usuario_model.successMessage.connect(self._on_model_success)
             
             print("🔗 Models conectados correctamente")
             
@@ -149,6 +154,11 @@ class AppController(QObject):
     def compra_model_instance(self):
         """Propiedad para acceder al CompraModel desde QML"""
         return self.compra_model
+    
+    @Property(QObject, notify=modelsReady)
+    def usuario_model_instance(self):
+        """Propiedad para acceder al UsuarioModel desde QML"""
+        return self.usuario_model
     
     # ===============================
     # MÉTODOS DE INTEGRACIÓN MODELS-PDF
@@ -222,6 +232,43 @@ class AppController(QObject):
             
         except Exception as e:
             print(f"❌ Error generando reporte ventas: {e}")
+            return ""
+    
+    @Slot(str, result=str)
+    def generar_reporte_usuarios(self, tipo_reporte: str):
+        """Genera reporte PDF de usuarios usando el model"""
+        try:
+            if not self.usuario_model:
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            if tipo_reporte == "todos":
+                datos = self.usuario_model.usuarios
+            elif tipo_reporte == "estadisticas":
+                datos = self.usuario_model.estadisticas
+            elif tipo_reporte == "administradores":
+                datos = self.usuario_model.obtenerAdministradores()
+            elif tipo_reporte == "medicos":
+                datos = self.usuario_model.obtenerMedicos()
+            else:
+                datos = []
+            
+            if not datos:
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            return self.generarReportePDF(
+                datos_json,
+                f"usuarios_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte usuarios: {e}")
             return ""
     
     # ===============================
@@ -370,6 +417,7 @@ def register_qml_types():
         register_inventario_model()
         register_venta_model() 
         register_compra_model()
+        register_usuario_model()
         
         print("✅ Tipos QML registrados correctamente")
         

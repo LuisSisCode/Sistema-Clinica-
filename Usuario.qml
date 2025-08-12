@@ -24,59 +24,74 @@ Item {
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
-    // Modelo para usuarios existentes
-    property var usuariosModel: [
-        {
-            usuarioId: "1",
-            nombreCompleto: "Luis López",
-            nombreUsuario: "luis.lopez",
-            correoElectronico: "luis.lopez@clinica.com",
-            rolPerfil: "Administrador",
-            estado: "Activo",
-            ultimoAcceso: "2025-06-21 08:30",
-            fechaRegistro: "2025-01-01"
-        },
-        {
-            usuarioId: "2",
-            nombreCompleto: "Dr. Juan Carlos Mendoza",
-            nombreUsuario: "juan.mendoza",
-            correoElectronico: "juan.mendoza@clinica.com",
-            rolPerfil: "Médico",
-            estado: "Activo",
-            ultimoAcceso: "2025-06-21 07:45",
-            fechaRegistro: "2025-01-15"
-        },
-        {
-            usuarioId: "3",
-            nombreCompleto: "María Elena Vargas",
-            nombreUsuario: "maria.vargas",
-            correoElectronico: "maria.vargas@clinica.com",
-            rolPerfil: "Recepcionista",
-            estado: "Activo",
-            ultimoAcceso: "2025-06-20 18:00",
-            fechaRegistro: "2025-02-10"
-        },
-        {
-            usuarioId: "4",
-            nombreCompleto: "Ana Patricia Silva",
-            nombreUsuario: "ana.silva",
-            correoElectronico: "ana.silva@clinica.com",
-            rolPerfil: "Enfermero",
-            estado: "Inactivo",
-            ultimoAcceso: "2025-06-15 16:30",
-            fechaRegistro: "2025-01-08"
-        },
-        {
-            usuarioId: "5",
-            nombreCompleto: "Roberto García",
-            nombreUsuario: "roberto.garcia",
-            correoElectronico: "roberto.garcia@clinica.com",
-            rolPerfil: "Laboratorista",
-            estado: "Bloqueado",
-            ultimoAcceso: "2025-06-10 14:15",
-            fechaRegistro: "2025-03-01"
+    property var editingUser: null
+    
+    // Referencia al modelo de usuario
+    property var usuarioModel: null
+    property var rolesDisponibles: []
+    
+    // Inicialización cuando el model esté disponible
+    Component.onCompleted: {
+        if (appController && appController.usuario_model_instance) {
+            usuarioModel = appController.usuario_model_instance
+            rolesDisponibles = usuarioModel.obtenerRolesDisponibles()
         }
-    ]
+    }
+    
+    // Conexiones para manejar cuando los models estén listos
+    Connections {
+        target: appController
+        function onModelsReady() {
+            if (appController.usuario_model_instance) {
+                usuarioModel = appController.usuario_model_instance
+                rolesDisponibles = usuarioModel.obtenerRolesDisponibles()
+                console.log("UsuarioModel conectado:", usuarioModel.totalUsuarios, "usuarios")
+            }
+        }
+    }
+    
+    // Conexiones con el modelo de usuario
+    Connections {
+        target: usuarioModel
+        
+        function onUsuarioCreado(success, message) {
+            if (success) {
+                showNewUserDialog = false
+                mostrarNotificacion("Éxito", message, successColor)
+                limpiarFormulario()
+            } else {
+                mostrarNotificacion("Error", message, dangerColor)
+            }
+        }
+        
+        function onUsuarioActualizado(success, message) {
+            if (success) {
+                showNewUserDialog = false
+                mostrarNotificacion("Éxito", message, successColor)
+                limpiarFormulario()
+                selectedRowIndex = -1
+            } else {
+                mostrarNotificacion("Error", message, dangerColor)
+            }
+        }
+        
+        function onUsuarioEliminado(success, message) {
+            if (success) {
+                mostrarNotificacion("Éxito", message, successColor)
+                selectedRowIndex = -1
+            } else {
+                mostrarNotificacion("Error", message, dangerColor)
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            mostrarNotificacion(title, message, dangerColor)
+        }
+        
+        function onSuccessMessage(message) {
+            mostrarNotificacion("Éxito", message, successColor)
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -103,6 +118,7 @@ Item {
                     color: "#f8f9fa"
                     border.color: "#e0e0e0"
                     border.width: 1
+                    z: 10
                     Rectangle {
                         anchors.fill: parent
                         anchors.bottomMargin: 20
@@ -129,6 +145,14 @@ Item {
                                 font.bold: true
                                 color: textColor
                             }
+                            
+                            // Loading indicator
+                            BusyIndicator {
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                visible: usuarioModel ? usuarioModel.loading : false
+                                running: visible
+                            }
                         }
                         
                         Item { Layout.fillWidth: true }
@@ -152,65 +176,239 @@ Item {
                             onClicked: {
                                 isEditMode = false
                                 editingIndex = -1
+                                editingUser = null
                                 showNewUserDialog = true
+                            }
+                        }
+                        
+                        Button {
+                            text: "🔄 Recargar"
+                            
+                            background: Rectangle {
+                                color: infoColor
+                                radius: 12
+                            }
+                            
+                            contentItem: Label {
+                                text: parent.text
+                                color: whiteColor
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            
+                            onClicked: {
+                                if (usuarioModel) {
+                                    usuarioModel.recargarDatos()
+                                }
                             }
                         }
                     }
                 }
                 
-                // Filtros y búsqueda - FIJO
+                // Filtros y búsqueda mejorados - FIJO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    color: "transparent"
+                    Layout.preferredHeight: 120  // Aumentado para dar más espacio
+                    color: "#f8f9fa"
+                    border.color: "#e9ecef"
+                    border.width: 1
                     z: 10
                     
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 32
+                        anchors.margins: 24
                         spacing: 16
                         
-                        Label {
-                            text: "Filtrar por:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroRol
-                            Layout.preferredWidth: 150
-                            model: ["Todos los roles", "Administrador", "Médico", "Recepcionista", "Enfermero", "Laboratorista", "Cajero"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Label {
-                            text: "Estado:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroEstado
-                            Layout.preferredWidth: 120
-                            model: ["Todos", "Activo", "Inactivo", "Bloqueado"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        TextField {
-                            id: campoBusqueda
-                            Layout.preferredWidth: 200
-                            placeholderText: "Buscar usuario..."
-                            onTextChanged: aplicarFiltros()
+                        // Fila superior - Título de filtros
+                        RowLayout {
+                            Layout.fillWidth: true
                             
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: "#e0e0e0"
-                                border.width: 1
-                                radius: 8
+                            Label {
+                                text: "🔍 Filtros y Búsqueda"
+                                font.bold: true
+                                font.pixelSize: 16
+                                color: textColor
+                            }
+                            
+                            Item { Layout.fillWidth: true }
+                            
+                            // Contador de usuarios mejorado
+                            Rectangle {
+                                Layout.preferredWidth: 120
+                                Layout.preferredHeight: 32
+                                color: primaryColor
+                                radius: 16
+                                
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    
+                                    Label {
+                                        text: "👥"
+                                        color: whiteColor
+                                        font.pixelSize: 14
+                                    }
+                                    
+                                    Label {
+                                        text: usuarioModel ? `${usuarioModel.totalUsuarios} usuarios` : "0 usuarios"
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                        color: whiteColor
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Fila inferior - Controles de filtro
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 20
+                            
+                            // Filtro por Rol
+                            ColumnLayout {
+                                spacing: 4
+                                
+                                Label {
+                                    text: "Rol/Perfil"
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    color: textColor
+                                }
+                                
+                                ComboBox {
+                                    id: filtroRol
+                                    Layout.preferredWidth: 160
+                                    Layout.preferredHeight: 36
+                                    model: rolesDisponibles
+                                    currentIndex: 0
+                                    onCurrentTextChanged: aplicarFiltros()
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: "#dee2e6"
+                                        border.width: 1
+                                        radius: 8
+                                    }
+                                    
+                                    contentItem: Text {
+                                        text: parent.displayText
+                                        font.pixelSize: 12
+                                        color: textColor
+                                        verticalAlignment: Text.AlignVCenter
+                                        leftPadding: 12
+                                    }
+                                }
+                            }
+                            
+                            // Filtro por Estado
+                            ColumnLayout {
+                                spacing: 4
+                                
+                                Label {
+                                    text: "Estado"
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    color: textColor
+                                }
+                                
+                                ComboBox {
+                                    id: filtroEstado
+                                    Layout.preferredWidth: 140
+                                    Layout.preferredHeight: 36
+                                    model: usuarioModel ? usuarioModel.obtenerEstadosDisponibles() : ["Todos"]
+                                    currentIndex: 0
+                                    onCurrentTextChanged: aplicarFiltros()
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: "#dee2e6"
+                                        border.width: 1
+                                        radius: 8
+                                    }
+                                    
+                                    contentItem: Text {
+                                        text: parent.displayText
+                                        font.pixelSize: 12
+                                        color: textColor
+                                        verticalAlignment: Text.AlignVCenter
+                                        leftPadding: 12
+                                    }
+                                }
+                            }
+                            
+                            // Espaciador flexible
+                            Item { Layout.fillWidth: true }
+                            
+                            // Campo de búsqueda mejorado
+                            ColumnLayout {
+                                spacing: 4
+                                
+                                Label {
+                                    text: "Búsqueda rápida"
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    color: textColor
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 280
+                                    Layout.preferredHeight: 36
+                                    color: whiteColor
+                                    border.color: campoBusqueda.activeFocus ? primaryColor : "#dee2e6"
+                                    border.width: campoBusqueda.activeFocus ? 2 : 1
+                                    radius: 8
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        spacing: 8
+                                        
+                                        Label {
+                                            text: "🔍"
+                                            color: "#6c757d"
+                                            font.pixelSize: 14
+                                        }
+                                        
+                                        TextField {
+                                            id: campoBusqueda
+                                            Layout.fillWidth: true
+                                            placeholderText: "Buscar por nombre, usuario o correo..."
+                                            font.pixelSize: 12
+                                            color: textColor
+                                            onTextChanged: aplicarFiltros()
+                                            
+                                            background: Rectangle {
+                                                color: "transparent"
+                                            }
+                                        }
+                                        
+                                        // Botón limpiar
+                                        Button {
+                                            Layout.preferredWidth: 20
+                                            Layout.preferredHeight: 20
+                                            visible: campoBusqueda.text.length > 0
+                                            text: "✕"
+                                            
+                                            background: Rectangle {
+                                                color: "transparent"
+                                                radius: 10
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: "#6c757d"
+                                                font.pixelSize: 10
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: {
+                                                campoBusqueda.text = ""
+                                                campoBusqueda.focus = true
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -228,15 +426,7 @@ Item {
                         
                         ListView {
                             id: usuariosListView
-                            model: ListModel {
-                                id: usuariosListModel
-                                Component.onCompleted: {
-                                    // Cargar datos iniciales
-                                    for (var i = 0; i < usuariosModel.length; i++) {
-                                        append(usuariosModel[i])
-                                    }
-                                }
-                            }
+                            model: usuarioModel ? usuarioModel.usuarios : []
                             
                             header: Rectangle {
                                 width: parent.width
@@ -355,7 +545,7 @@ Item {
                                         
                                         Label { 
                                             anchors.centerIn: parent
-                                            text: "ÚLTIMO ACCESO"
+                                            text: "ACCIONES"
                                             font.bold: true
                                             font.pixelSize: 12
                                             color: textColor
@@ -387,7 +577,7 @@ Item {
                                         
                                         Label { 
                                             anchors.centerIn: parent
-                                            text: model.usuarioId
+                                            text: modelData.id || ""
                                             color: textColor
                                             font.bold: true
                                             font.pixelSize: 12
@@ -404,7 +594,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: model.nombreCompleto
+                                            text: (modelData.Nombre + " " + modelData.Apellido_Paterno + " " + modelData.Apellido_Materno) || ""
                                             color: primaryColor
                                             font.bold: true
                                             font.pixelSize: 12
@@ -426,7 +616,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: model.nombreUsuario || ""
+                                            text: modelData.correo ? modelData.correo.split('@')[0] : ""
                                             color: "#7f8c8d"
                                             font.pixelSize: 11
                                             font.bold: true
@@ -446,7 +636,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: model.correoElectronico
+                                            text: modelData.correo || ""
                                             color: textColor
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -467,7 +657,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: model.rolPerfil
+                                            text: modelData.rol_nombre || ""
                                             color: textColor
                                             font.pixelSize: 11
                                             font.bold: true
@@ -491,7 +681,7 @@ Item {
                                             width: 65
                                             height: 20
                                             color: {
-                                                switch(model.estado) {
+                                                switch(modelData.Estado ? "Activo" : "Inactivo") {
                                                     case "Activo": return successColor
                                                     case "Inactivo": return "#95a5a6"
                                                     case "Bloqueado": return dangerColor
@@ -502,7 +692,7 @@ Item {
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: model.estado
+                                                text: modelData.Estado ? "Activo" : "Inactivo"
                                                 color: whiteColor
                                                 font.pixelSize: 9
                                                 font.bold: true
@@ -517,31 +707,64 @@ Item {
                                         border.color: "#d0d0d0"
                                         border.width: 1
                                         
-                                        ColumnLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 4
-                                            spacing: 2
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 4
                                             
-                                            Label { 
-                                                Layout.fillWidth: true
-                                                text: {
-                                                    var fecha = model.ultimoAcceso.split(" ")[0]
-                                                    return fecha
+                                            Button {
+                                                width: 32
+                                                height: 32
+                                                text: "✏️"
+                                                
+                                                background: Rectangle {
+                                                    color: warningColor
+                                                    radius: 6
+                                                    border.color: "#f1c40f"
+                                                    border.width: 1
                                                 }
-                                                color: textColor
-                                                font.pixelSize: 10
-                                                font.bold: true
-                                                horizontalAlignment: Text.AlignHCenter
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: whiteColor
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    font.pixelSize: 12
+                                                }
+                                                
+                                                onClicked: {
+                                                    isEditMode = true
+                                                    editingIndex = index
+                                                    editingUser = modelData
+                                                    selectedRowIndex = index
+                                                    showNewUserDialog = true
+                                                }
                                             }
-                                            Label { 
-                                                Layout.fillWidth: true
-                                                text: {
-                                                    var hora = model.ultimoAcceso.split(" ")[1]
-                                                    return hora || ""
+                                            
+                                            Button {
+                                                width: 32
+                                                height: 32
+                                                text: "🗑️"
+                                                
+                                                background: Rectangle {
+                                                    color: dangerColor
+                                                    radius: 6
+                                                    border.color: "#c0392b"
+                                                    border.width: 1
                                                 }
-                                                color: "#7f8c8d"
-                                                font.pixelSize: 9
-                                                horizontalAlignment: Text.AlignHCenter
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: whiteColor
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    font.pixelSize: 12
+                                                }
+                                                
+                                                onClicked: {
+                                                    if (usuarioModel && modelData.id) {
+                                                        usuarioModel.eliminarUsuario(modelData.id.toString())
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -551,75 +774,7 @@ Item {
                                     anchors.fill: parent
                                     onClicked: {
                                         selectedRowIndex = index
-                                        console.log("Seleccionado usuario ID:", model.usuarioId)
-                                    }
-                                }
-                                
-                                // Botones de acción que aparecen cuando se selecciona la fila
-                                RowLayout {
-                                    anchors.top: parent.top
-                                    anchors.right: parent.right
-                                    anchors.margins: 8
-                                    spacing: 4
-                                    visible: selectedRowIndex === index
-                                    z: 10
-                                    
-                                    Button {
-                                        id: editButton
-                                        width: 32
-                                        height: 32
-                                        text: "✏️"
-                                        
-                                        background: Rectangle {
-                                            color: warningColor
-                                            radius: 6
-                                            border.color: "#f1c40f"
-                                            border.width: 1
-                                        }
-                                        
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: whiteColor
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: 12
-                                        }
-                                        
-                                        onClicked: {
-                                            isEditMode = true
-                                            editingIndex = index
-                                            var usuario = usuariosListModel.get(index)
-                                            console.log("Editando usuario:", JSON.stringify(usuario))
-                                            showNewUserDialog = true
-                                        }
-                                    }
-                                    
-                                    Button {
-                                        id: deleteButton
-                                        width: 32
-                                        height: 32
-                                        text: "🗑️"
-                                        
-                                        background: Rectangle {
-                                            color: dangerColor
-                                            radius: 6
-                                            border.color: "#c0392b"
-                                            border.width: 1
-                                        }
-                                        
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: whiteColor
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: 12
-                                        }
-                                        
-                                        onClicked: {
-                                            usuariosListModel.remove(index)
-                                            selectedRowIndex = -1
-                                            console.log("Usuario eliminado en índice:", index)
-                                        }
+                                        console.log("Seleccionado usuario ID:", modelData.id)
                                     }
                                 }
                             }
@@ -630,7 +785,7 @@ Item {
         }
     }
 
-    // Diálogo Nuevo Usuario / Editar Usuario Optimizado
+    // Diálogo Nuevo Usuario / Editar Usuario
     Rectangle {
         id: newUserDialog
         anchors.fill: parent
@@ -679,17 +834,21 @@ Item {
         
         // Función para cargar datos en modo edición
         function loadEditData() {
-            if (isEditMode && editingIndex >= 0) {
-                var usuario = usuariosListModel.get(editingIndex)
-                
+            if (isEditMode && editingUser) {
                 // Cargar datos del usuario
-                nombreCompleto.text = usuario.nombreCompleto || ""
-                nombreUsuario.text = usuario.nombreUsuario || ""
-                correoElectronico.text = usuario.correoElectronico || ""
-                rolField.text = usuario.rolPerfil || ""
+                nombreCompleto.text = editingUser.Nombre || ""
+                apellidoPaterno.text = editingUser.Apellido_Paterno || ""
+                apellidoMaterno.text = editingUser.Apellido_Materno || ""
+                correoElectronico.text = editingUser.correo || ""
+                
+                // Configurar rol
+                var rolIndex = rolesDisponibles.indexOf(editingUser.rol_nombre)
+                if (rolIndex >= 0) {
+                    rolComboBox.currentIndex = rolIndex
+                }
                 
                 // Configurar estado
-                switch(usuario.estado) {
+                switch(editingUser.Estado ? "Activo" : "Inactivo") {
                     case "Activo":
                         activoRadio.checked = true
                         break
@@ -700,11 +859,6 @@ Item {
                         bloqueadoRadio.checked = true
                         break
                 }
-                
-                // Cargar permisos si existen
-                if (usuario.permisos) {
-                    userForm.selectedPermisos = usuario.permisos
-                }
             }
         }
         
@@ -712,15 +866,7 @@ Item {
             if (visible && isEditMode) {
                 loadEditData()
             } else if (visible && !isEditMode) {
-                // Limpiar formulario para nuevo usuario
-                nombreCompleto.text = ""
-                nombreUsuario.text = ""
-                correoElectronico.text = ""
-                rolField.text = ""
-                contrasenaField.text = ""
-                confirmarContrasenaField.text = ""
-                activoRadio.checked = true
-                userForm.selectedPermisos = {}
+                limpiarFormulario()
             }
         }
         
@@ -766,11 +912,11 @@ Item {
                             color: textColor
                         }
                         
-                        // Nombre Completo
+                        // Nombre
                         TextField {
                             id: nombreCompleto
                             Layout.fillWidth: true
-                            placeholderText: "Nombre completo"
+                            placeholderText: "Nombre"
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
@@ -779,11 +925,24 @@ Item {
                             }
                         }
                         
-                        // Nombre de Usuario (acceso al sistema)
+                        // Apellido Paterno
                         TextField {
-                            id: nombreUsuario
+                            id: apellidoPaterno
                             Layout.fillWidth: true
-                            placeholderText: "Nombre de usuario (acceso)"
+                            placeholderText: "Apellido Paterno"
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: lightGrayColor
+                                border.width: 1
+                                radius: 4
+                            }
+                        }
+                        
+                        // Apellido Materno
+                        TextField {
+                            id: apellidoMaterno
+                            Layout.fillWidth: true
+                            placeholderText: "Apellido Materno"
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
@@ -835,23 +994,18 @@ Item {
                         }
                         
                         // Rol
-                        TextField {
-                            id: rolField
+                        ComboBox {
+                            id: rolComboBox
                             Layout.fillWidth: true
-                            placeholderText: "Rol del usuario"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: lightGrayColor
-                                border.width: 1
-                                radius: 4
-                            }
+                            model: rolesDisponibles.filter(rol => rol !== "Todos los roles")
+                            displayText: currentIndex >= 0 ? model[currentIndex] : "Seleccione rol"
                         }
                         
                         Item { Layout.fillHeight: true }
                     }
                 }
                 
-                // COLUMNA DERECHA - Permisos y Estado
+                // COLUMNA DERECHA - Estado
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -866,73 +1020,7 @@ Item {
                         spacing: 12
                         
                         Label {
-                            text: "Permisos de Acceso"
-                            font.bold: true
-                            font.pixelSize: 14
-                            color: textColor
-                        }
-                        
-                        // Lista de permisos
-                        ScrollView {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            
-                            ColumnLayout {
-                                width: parent.width
-                                spacing: 6
-                                
-                                Repeater {
-                                    model: userForm.modulosDisponibles
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        height: 32
-                                        color: permisoCheck.checked ? "#e3f2fd" : "transparent"
-                                        radius: 4
-                                        border.color: permisoCheck.checked ? primaryColor : "transparent"
-                                        border.width: 1
-                                        
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 8
-                                            spacing: 8
-                                            
-                                            CheckBox {
-                                                id: permisoCheck
-                                                checked: userForm.selectedPermisos[modelData] || false
-                                                onCheckedChanged: {
-                                                    var permisos = userForm.selectedPermisos
-                                                    if (checked) {
-                                                        permisos[modelData] = true
-                                                    } else {
-                                                        delete permisos[modelData]
-                                                    }
-                                                    userForm.selectedPermisos = permisos
-                                                }
-                                            }
-                                            
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: modelData
-                                                color: textColor
-                                                font.pixelSize: 13
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: lightGrayColor
-                        }
-                        
-                        // Estado
-                        Label {
-                            text: "Estado"
+                            text: "Estado del Usuario"
                             font.bold: true
                             font.pixelSize: 14
                             color: textColor
@@ -961,6 +1049,8 @@ Item {
                                 font.pixelSize: 13
                             }
                         }
+                        
+                        Item { Layout.fillHeight: true }
                     }
                 }
             }
@@ -989,6 +1079,7 @@ Item {
                         selectedRowIndex = -1
                         isEditMode = false
                         editingIndex = -1
+                        editingUser = null
                     }
                 }
                 
@@ -996,9 +1087,10 @@ Item {
                     text: isEditMode ? "Actualizar" : "Guardar"
                     Layout.preferredWidth: 100
                     enabled: nombreCompleto.text.length > 0 &&
-                            nombreUsuario.text.length > 0 &&
+                            apellidoPaterno.text.length > 0 &&
+                            apellidoMaterno.text.length > 0 &&
                             correoElectronico.text.length > 0 &&
-                            rolField.text.length > 0 &&
+                            rolComboBox.currentIndex >= 0 &&
                             (isEditMode || (contrasenaField.text.length > 0 && contrasenaField.text === confirmarContrasenaField.text))
                     background: Rectangle {
                         color: parent.enabled ? primaryColor : "#bdc3c7"
@@ -1012,83 +1104,119 @@ Item {
                         font.pixelSize: 13
                     }
                     onClicked: {
-                        // Crear datos de usuario
+                        if (!usuarioModel) return
+                        
                         var estado = activoRadio.checked ? "Activo" : 
                                     inactivoRadio.checked ? "Inactivo" : "Bloqueado"
                         
-                        var usuarioData = {
-                            nombreCompleto: nombreCompleto.text,
-                            nombreUsuario: nombreUsuario.text,
-                            correoElectronico: correoElectronico.text,
-                            rolPerfil: rolField.text,
-                            permisos: userForm.selectedPermisos,
-                            estado: estado,
-                            ultimoAcceso: isEditMode ? usuariosListModel.get(editingIndex).ultimoAcceso : "Nunca",
-                            fechaRegistro: new Date().toISOString().split('T')[0]
-                        }
+                        var rolIndex = rolComboBox.currentIndex
+                        var rolesValidos = rolesDisponibles.filter(rol => rol !== "Todos los roles")
                         
-                        if (isEditMode && editingIndex >= 0) {
+                        if (isEditMode && editingUser) {
                             // Actualizar usuario existente
-                            var usuarioExistente = usuariosListModel.get(editingIndex)
-                            usuarioData.usuarioId = usuarioExistente.usuarioId
-                            
-                            usuariosListModel.set(editingIndex, usuarioData)
-                            console.log("Usuario actualizado:", JSON.stringify(usuarioData))
+                            usuarioModel.actualizarUsuario(
+                                editingUser.id.toString(),
+                                nombreCompleto.text,
+                                apellidoPaterno.text,
+                                apellidoMaterno.text,
+                                correoElectronico.text,
+                                rolIndex + 1, // Ajustar índice para el backend
+                                estado
+                            )
                         } else {
                             // Crear nuevo usuario
-                            usuarioData.usuarioId = (usuariosListModel.count + 1).toString()
-                            usuariosListModel.append(usuarioData)
-                            console.log("Nuevo usuario guardado:", JSON.stringify(usuarioData))
+                            usuarioModel.crearUsuario(
+                                nombreCompleto.text,
+                                apellidoPaterno.text,
+                                apellidoMaterno.text,
+                                correoElectronico.text,
+                                contrasenaField.text,
+                                confirmarContrasenaField.text,
+                                rolIndex + 1, // Ajustar índice para el backend
+                                estado
+                            )
                         }
-                        
-                        // Limpiar y cerrar
-                        showNewUserDialog = false
-                        selectedRowIndex = -1
-                        isEditMode = false
-                        editingIndex = -1
                     }
                 }
             }
         }
     }
 
-    // Función para aplicar filtros
-    function aplicarFiltros() {
-        usuariosListModel.clear()
+    // Componente de notificación
+    Rectangle {
+        id: notificationArea
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 20
+        width: 300
+        height: 80
+        color: successColor
+        radius: 8
+        visible: false
+        z: 1000
         
-        var textoBusqueda = campoBusqueda.text.toLowerCase()
+        property alias messageText: notificationLabel.text
+        property alias titleText: notificationTitle.text
         
-        for (var i = 0; i < usuariosModel.length; i++) {
-            var usuario = usuariosModel[i]
-            var mostrar = true
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 4
             
-            // Filtro por rol
-            if (filtroRol.currentIndex > 0 && mostrar) {
-                var rolSeleccionado = filtroRol.model[filtroRol.currentIndex]
-                if (usuario.rolPerfil !== rolSeleccionado) {
-                    mostrar = false
-                }
+            Label {
+                id: notificationTitle
+                Layout.fillWidth: true
+                font.bold: true
+                color: whiteColor
+                font.pixelSize: 14
             }
             
-            // Filtro por estado
-            if (filtroEstado.currentIndex > 0 && mostrar) {
-                var estadoSeleccionado = filtroEstado.model[filtroEstado.currentIndex]
-                if (usuario.estado !== estadoSeleccionado) {
-                    mostrar = false
-                }
-            }
-            
-            // Búsqueda por texto en nombre o correo
-            if (textoBusqueda.length > 0 && mostrar) {
-                if (!usuario.nombreCompleto.toLowerCase().includes(textoBusqueda) && 
-                    !usuario.correoElectronico.toLowerCase().includes(textoBusqueda)) {
-                    mostrar = false
-                }
-            }
-            
-            if (mostrar) {
-                usuariosListModel.append(usuario)
+            Label {
+                id: notificationLabel
+                Layout.fillWidth: true
+                color: whiteColor
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
             }
         }
+        
+        Timer {
+            id: notificationTimer
+            interval: 3000
+            onTriggered: notificationArea.visible = false
+        }
+    }
+
+    // Funciones auxiliares
+    function aplicarFiltros() {
+        if (usuarioModel) {
+            usuarioModel.aplicarFiltros(
+                filtroRol.currentText,
+                filtroEstado.currentText,
+                campoBusqueda.text
+            )
+        }
+    }
+    
+    function limpiarFormulario() {
+        nombreCompleto.text = ""
+        apellidoPaterno.text = ""
+        apellidoMaterno.text = ""
+        correoElectronico.text = ""
+        contrasenaField.text = ""
+        confirmarContrasenaField.text = ""
+        rolComboBox.currentIndex = -1
+        activoRadio.checked = true
+        isEditMode = false
+        editingIndex = -1
+        editingUser = null
+    }
+    
+    function mostrarNotificacion(titulo, mensaje, color) {
+        notificationArea.color = color
+        notificationArea.titleText = titulo
+        notificationArea.messageText = mensaje
+        notificationArea.visible = true
+        notificationTimer.restart()
     }
 }
