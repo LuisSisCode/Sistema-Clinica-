@@ -7,6 +7,25 @@ Item {
     id: enfermeriaRoot
     objectName: "enfermeriaRoot"
     
+    // ✅ SISTEMA DE ESTILOS ADAPTABLES INTEGRADO
+    readonly property real screenWidth: width
+    readonly property real screenHeight: height
+    readonly property real baseUnit: Math.min(screenWidth, screenHeight) / 40  // Unidad base escalable
+    readonly property real fontScale: screenHeight / 800  // Factor de escala para fuentes
+    
+    // Márgenes escalables
+    readonly property real marginSmall: baseUnit * 0.5
+    readonly property real marginMedium: baseUnit * 1
+    readonly property real marginLarge: baseUnit * 1.5
+    
+    // Tamaños de fuente escalables
+    readonly property real fontTiny: Math.max(8, 10 * fontScale)
+    readonly property real fontSmall: Math.max(10, 12 * fontScale)
+    readonly property real fontBase: Math.max(12, 14 * fontScale)
+    readonly property real fontMedium: Math.max(14, 16 * fontScale)
+    readonly property real fontLarge: Math.max(16, 18 * fontScale)
+    readonly property real fontTitle: Math.max(18, 24 * fontScale)
+    
     // Acceso a colores
     readonly property color primaryColor: "#e91e63"
     readonly property color successColor: "#27ae60"
@@ -262,17 +281,18 @@ Item {
         id: procedimientosPaginadosModel // Modelo para la página actual
     }
 
+    // ✅ LAYOUT PRINCIPAL RESPONSIVO
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 32
+        anchors.margins: marginLarge
+        spacing: marginLarge
 
-        // Contenido principal
+        // ✅ CONTENIDO PRINCIPAL CON PROPORCIONES ADAPTABLES
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: whiteColor
-            radius: 20
+            radius: baseUnit * 0.5
             border.color: "#e0e0e0"
             border.width: 1
             
@@ -280,36 +300,36 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header de Procedimientos - FIJO
+                // ✅ HEADER RESPONSIVO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
+                    Layout.preferredHeight: Math.max(60, screenHeight * 0.08)
                     color: "#f8f9fa"
                     border.color: "#e0e0e0"
                     border.width: 1
                     Rectangle {
                         anchors.fill: parent
-                        anchors.bottomMargin: 20
+                        anchors.bottomMargin: marginMedium
                         color: parent.color
                         radius: parent.radius
                     }
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
+                        anchors.margins: marginMedium
                         
                         RowLayout {
-                            spacing: 12
+                            spacing: marginSmall
                             
                             Label {
                                 text: "🩹"
-                                font.pixelSize: 24
+                                font.pixelSize: fontTitle
                                 color: primaryColor
                             }
                             
                             Label {
                                 text: "Registro de Procedimientos de Enfermería"
-                                font.pixelSize: 20
+                                font.pixelSize: fontLarge
                                 font.bold: true
                                 color: textColor
                             }
@@ -320,16 +340,18 @@ Item {
                         Button {
                             objectName: "newProcedureButton"
                             text: "➕ Nuevo Procedimiento"
+                            Layout.preferredHeight: Math.max(36, screenHeight * 0.045)
                             
                             background: Rectangle {
                                 color: primaryColor
-                                radius: 12
+                                radius: baseUnit * 0.3
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
+                                font.pixelSize: fontBase
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -340,15 +362,17 @@ Item {
                             }
                         } 
                         
-                        // Botón de configuración (engranaje)
+                        // ✅ BOTÓN DE CONFIGURACIÓN RESPONSIVO
                         Button {
                             id: configButton
                             text: "⚙️"
-                            font.pixelSize: 18
+                            font.pixelSize: fontMedium
+                            Layout.preferredWidth: Math.max(40, screenWidth * 0.04)
+                            Layout.preferredHeight: Math.max(36, screenHeight * 0.045)
                             
                             background: Rectangle {
                                 color: "#6c757d"
-                                radius: 12
+                                radius: baseUnit * 0.3
                             }
                             
                             contentItem: Label {
@@ -372,106 +396,119 @@ Item {
                     }
                 }
                 
-                // ✅ FILTROS CON MÁS ESPACIO
+                // ✅ FILTROS RESPONSIVOS
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80  // ✅ AUMENTADO de 60 a 80
+                    Layout.preferredHeight: Math.max(70, screenHeight * 0.09)
                     color: "transparent"
                     z: 10
                     
-                    RowLayout {
+                    // ✅ USAR FLOWLAYOUT PARA ADAPTARSE A DIFERENTES TAMAÑOS
+                    Flow {
                         anchors.fill: parent
-                        anchors.margins: 32
-                        anchors.bottomMargin: 16  // ✅ AGREGAR separación
-                        spacing: 16
+                        anchors.margins: marginMedium
+                        spacing: marginSmall
                         
-                        Label {
-                            text: "Filtrar por:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroFecha
-                            Layout.preferredWidth: 120
-                            model: ["Todas", "Hoy", "Semana", "Mes"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Label {
-                            text: "Procedimiento:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroProcedimiento
-                            Layout.preferredWidth: 160
-                            model: {
-                                var list = ["Todos"]
-                                for (var i = 0; i < tiposProcedimientos.length; i++) {
-                                    list.push(tiposProcedimientos[i].nombre)
-                                }
-                                return list
-                            }
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Label {
-                            text: "Tipo:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroTipo
-                            Layout.preferredWidth: 100
-                            model: ["Todos", "Normal", "Emergencia"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        TextField {
-                            id: campoBusqueda
-                            Layout.preferredWidth: 180
-                            placeholderText: "Buscar paciente..."
-                            onTextChanged: aplicarFiltros()
+                        // ✅ PRIMER GRUPO DE FILTROS
+                        Row {
+                            spacing: marginSmall
                             
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: "#e0e0e0"
-                                border.width: 1
-                                radius: 8
+                            Label {
+                                text: "Filtrar por:"
+                                font.bold: true
+                                font.pixelSize: fontBase
+                                color: textColor
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            
+                            ComboBox {
+                                id: filtroFecha
+                                width: Math.max(120, screenWidth * 0.12)
+                                model: ["Todas", "Hoy", "Semana", "Mes"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                            }
+                            
+                            Label {
+                                text: "Procedimiento:"
+                                font.bold: true
+                                font.pixelSize: fontBase
+                                color: textColor
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            
+                            ComboBox {
+                                id: filtroProcedimiento
+                                width: Math.max(160, screenWidth * 0.15)
+                                model: {
+                                    var list = ["Todos"]
+                                    for (var i = 0; i < tiposProcedimientos.length; i++) {
+                                        list.push(tiposProcedimientos[i].nombre)
+                                    }
+                                    return list
+                                }
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                            }
+                        }
+                        
+                        // ✅ SEGUNDO GRUPO DE FILTROS
+                        Row {
+                            spacing: marginSmall
+                            
+                            Label {
+                                text: "Tipo:"
+                                font.bold: true
+                                font.pixelSize: fontBase
+                                color: textColor
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            
+                            ComboBox {
+                                id: filtroTipo
+                                width: Math.max(100, screenWidth * 0.1)
+                                model: ["Todos", "Normal", "Emergencia"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                            }
+                            
+                            TextField {
+                                id: campoBusqueda
+                                width: Math.max(180, screenWidth * 0.18)
+                                placeholderText: "Buscar paciente..."
+                                onTextChanged: aplicarFiltros()
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: "#e0e0e0"
+                                    border.width: 1
+                                    radius: baseUnit * 0.2
+                                }
                             }
                         }
                     }
                 }
                
-                // ✅ CONTENEDOR DE TABLA CORREGIDO
+                // ✅ CONTENEDOR DE TABLA COMPLETAMENTE RESPONSIVO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 565  // ✅ ALTURA FIJA para que quepan 10 filas + header
-                    Layout.fillHeight: false
-                    Layout.margins: 32
+                    Layout.fillHeight: true
+                    Layout.margins: marginMedium
                     Layout.topMargin: 0
                     color: "#FFFFFF"
                     border.color: "#D5DBDB"
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit * 0.2
                     
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 0
                         spacing: 0
                         
-                        // Header de la tabla - FIJO
+                        // ✅ HEADER DE TABLA CON ANCHOS PROPORCIONALES
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 45
+                            Layout.preferredHeight: Math.max(40, screenHeight * 0.06)
                             color: "#f5f5f5"
                             border.color: "#d0d0d0"
                             border.width: 1
@@ -481,8 +518,9 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
                                 
+                                // ✅ COLUMNAS CON ANCHOS PROPORCIONALES
                                 Rectangle {
-                                    Layout.preferredWidth: 50
+                                    Layout.preferredWidth: parent.width * 0.05  // 5% para ID
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -492,13 +530,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "ID"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 150
+                                    Layout.preferredWidth: parent.width * 0.18  // 18% para PACIENTE
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -508,13 +546,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PACIENTE"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 140
+                                    Layout.preferredWidth: parent.width * 0.16  // 16% para PROCEDIMIENTO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -524,13 +562,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PROCEDIMIENTO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 60
+                                    Layout.preferredWidth: parent.width * 0.07  // 7% para CANTIDAD
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -540,13 +578,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "CANT."
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: parent.width * 0.09  // 9% para TIPO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -556,13 +594,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "TIPO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: parent.width * 0.1  // 10% para PRECIO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -572,13 +610,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PRECIO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: parent.width * 0.1  // 10% para TOTAL
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -588,13 +626,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "TOTAL"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 90
+                                    Layout.preferredWidth: parent.width * 0.1  // 10% para FECHA
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -604,13 +642,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "FECHA"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 130
+                                    Layout.fillWidth: true  // El resto del espacio se distribuye entre las últimas dos columnas
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -618,45 +656,28 @@ Item {
                                     
                                     Label { 
                                         anchors.centerIn: parent
-                                        text: "TRABAJADOR"
+                                        text: "TRABAJADOR / REGISTRADO"
                                         font.bold: true
-                                        font.pixelSize: 12
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "REGISTRADO POR"
-                                        font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         color: textColor
                                     }
                                 }
                             }
                         }
                         
-                        // Contenido de la tabla con scroll controlado
+                        // ✅ CONTENIDO DE TABLA CON ALTURA ADAPTABLE
                         ScrollView {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 520  // ✅ ALTURA FIJA (565-45=520)
-                            Layout.fillHeight: false
+                            Layout.fillHeight: true
                             clip: true
                             
                             ListView {
                                 id: procedimientosListView
-                                model: procedimientosPaginadosModel  // ✅ USAR MODELO PAGINADO
+                                model: procedimientosPaginadosModel
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: 50  // ✅ REDUCIDO de 65 a 50
+                                    height: Math.max(45, screenHeight * 0.06)  // Altura adaptable
                                     color: {
                                         if (selectedRowIndex === index) return "#fce4ec"
                                         return index % 2 === 0 ? "transparent" : "#fafafa"
@@ -668,8 +689,9 @@ Item {
                                         anchors.fill: parent
                                         spacing: 0
                                         
+                                        // ✅ CELDAS CON PROPORCIONES ADAPTABLES
                                         Rectangle {
-                                            Layout.preferredWidth: 50
+                                            Layout.preferredWidth: parent.width * 0.05
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -680,12 +702,12 @@ Item {
                                                 text: model.procedimientoId
                                                 color: textColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 150
+                                            Layout.preferredWidth: parent.width * 0.18
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -693,11 +715,11 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
+                                                anchors.margins: marginSmall * 0.5
                                                 text: model.paciente
                                                 color: textColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontSmall
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
@@ -707,7 +729,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 140
+                                            Layout.preferredWidth: parent.width * 0.16
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -715,11 +737,11 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
+                                                anchors.margins: marginSmall * 0.5
                                                 text: model.tipoProcedimiento
                                                 color: primaryColor
                                                 font.bold: true
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
+                                                font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
@@ -729,7 +751,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 60
+                                            Layout.preferredWidth: parent.width * 0.07
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -737,23 +759,23 @@ Item {
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 22  // ✅ REDUCIDO de 25 a 22
-                                                height: 18  // ✅ REDUCIDO de 20 a 18
+                                                width: Math.min(parent.width * 0.8, baseUnit * 1.5)
+                                                height: Math.min(parent.height * 0.6, baseUnit * 1.2)
                                                 color: model.cantidad > 1 ? warningColor : successColor
-                                                radius: 9
+                                                radius: height / 2
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: model.cantidad
                                                     color: whiteColor
-                                                    font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
+                                                    font.pixelSize: fontTiny
                                                     font.bold: true
                                                 }
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: parent.width * 0.09
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -761,23 +783,23 @@ Item {
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 45  // ✅ REDUCIDO de 50 a 45
-                                                height: 16  // ✅ REDUCIDO de 18 a 16
+                                                width: Math.min(parent.width * 0.9, baseUnit * 3)
+                                                height: Math.min(parent.height * 0.5, baseUnit * 1)
                                                 color: model.tipo === "Emergencia" ? emergencyColor : successColor
-                                                radius: 8
+                                                radius: height / 2
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: model.tipo
                                                     color: whiteColor
-                                                    font.pixelSize: 8  // ✅ REDUCIDO de 9 a 8
+                                                    font.pixelSize: fontTiny
                                                     font.bold: true
                                                 }
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: parent.width * 0.1
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -788,12 +810,12 @@ Item {
                                                 text: "Bs " + model.precioUnitario
                                                 color: model.tipo === "Emergencia" ? emergencyColor : successColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontTiny
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: parent.width * 0.1
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -804,12 +826,12 @@ Item {
                                                 text: "Bs " + model.precioTotal
                                                 color: model.tipo === "Emergencia" ? emergencyColor : successColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontTiny
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 90
+                                            Layout.preferredWidth: parent.width * 0.1
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -819,29 +841,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 text: model.fecha
                                                 color: textColor
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 130
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
-                                                text: model.trabajadorRealizador
-                                                color: "#34495e"
-                                                font.bold: true
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                font.pixelSize: fontTiny
                                             }
                                         }
                                         
@@ -852,17 +852,28 @@ Item {
                                             border.color: "#d0d0d0"
                                             border.width: 1
                                             
-                                            Label { 
+                                            Column {
                                                 anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
-                                                text: model.registradoPor || "Luis López"
-                                                color: "#7f8c8d"
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                anchors.margins: marginSmall * 0.25
+                                                
+                                                Label { 
+                                                    width: parent.width
+                                                    text: model.trabajadorRealizador
+                                                    color: "#34495e"
+                                                    font.bold: true
+                                                    font.pixelSize: fontTiny
+                                                    elide: Text.ElideRight
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                }
+                                                
+                                                Label { 
+                                                    width: parent.width
+                                                    text: "Por: " + (model.registradoPor || "Luis López")
+                                                    color: "#7f8c8d"
+                                                    font.pixelSize: Math.max(6, fontTiny * 0.8)
+                                                    elide: Text.ElideRight
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                }
                                             }
                                         }
                                     }
@@ -875,24 +886,24 @@ Item {
                                         }
                                     }
                                     
-                                    // ✅ BOTONES DE ACCIÓN CORREGIDOS
+                                    // ✅ BOTONES DE ACCIÓN ADAPTABLES
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
-                                        anchors.margins: 5  // ✅ REDUCIDO de 6 a 5
-                                        spacing: 3
+                                        anchors.margins: marginSmall * 0.5
+                                        spacing: marginSmall * 0.25
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
                                         Button {
                                             id: editButton
-                                            width: 24  // ✅ REDUCIDO de 28 a 24
-                                            height: 24  // ✅ REDUCIDO de 28 a 24
+                                            width: Math.max(20, baseUnit * 1.5)
+                                            height: width
                                             text: "✏️"
                                             
                                             background: Rectangle {
                                                 color: warningColor
-                                                radius: 5
+                                                radius: width / 2
                                                 border.color: "#f1c40f"
                                                 border.width: 1
                                             }
@@ -902,11 +913,10 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: 9  // ✅ REDUCIDO de 10 a 9
+                                                font.pixelSize: fontTiny
                                             }
                                             
                                             onClicked: {
-                                                // ✅ BUSCAR EL ÍNDICE REAL EN EL MODELO FILTRADO
                                                 var procedimientoId = model.procedimientoId
                                                 var realIndex = -1
                                                 
@@ -927,13 +937,13 @@ Item {
                                         
                                         Button {
                                             id: deleteButton
-                                            width: 24  // ✅ REDUCIDO de 28 a 24
-                                            height: 24  // ✅ REDUCIDO de 28 a 24
+                                            width: Math.max(20, baseUnit * 1.5)
+                                            height: width
                                             text: "🗑️"
                                             
                                             background: Rectangle {
                                                 color: dangerColor
-                                                radius: 5
+                                                radius: width / 2
                                                 border.color: "#c0392b"
                                                 border.width: 1
                                             }
@@ -943,11 +953,10 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: 9  // ✅ REDUCIDO de 10 a 9
+                                                font.pixelSize: fontTiny
                                             }
                                             
                                             onClicked: {
-                                                // ✅ ELIMINAR DEL MODELO FILTRADO Y ACTUALIZAR
                                                 var procedimientoId = model.procedimientoId
                                                 
                                                 // Eliminar de procedimientosListModel
@@ -967,7 +976,7 @@ Item {
                                                 }
                                                 
                                                 selectedRowIndex = -1
-                                                updatePaginatedModel() // ✅ ACTUALIZAR PAGINACIÓN
+                                                updatePaginatedModel()
                                                 console.log("Procedimiento eliminado ID:", procedimientoId)
                                             }
                                         }
@@ -996,25 +1005,25 @@ Item {
                     }
                 }
                 
-                // ✅ CONTROL DE PAGINACIÓN CORREGIDO
+                // ✅ CONTROL DE PAGINACIÓN RESPONSIVO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    Layout.margins: 32
+                    Layout.preferredHeight: Math.max(50, screenHeight * 0.08)
+                    Layout.margins: marginMedium
                     Layout.topMargin: 0
                     color: "#F8F9FA"
                     border.color: "#D5DBDB"
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit * 0.2
                     
                     RowLayout {
                         anchors.centerIn: parent
-                        spacing: 20
+                        spacing: marginLarge
                         
                         // Botón Anterior
                         Button {
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: Math.max(80, screenWidth * 0.08)
+                            Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
                             text: "← Anterior"
                             enabled: currentPageEnfermeria > 0
                             
@@ -1022,7 +1031,7 @@ Item {
                                 color: parent.enabled ? 
                                     (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
                                     "#E5E7EB"
-                                radius: 18
+                                radius: height / 2
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -1033,7 +1042,7 @@ Item {
                                 text: parent.text
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontBase
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -1041,7 +1050,7 @@ Item {
                             onClicked: {
                                 if (currentPageEnfermeria > 0) {
                                     currentPageEnfermeria--
-                                    updatePaginatedModel()  // ✅ CAMBIAR A FUNCIÓN CORRECTA
+                                    updatePaginatedModel()
                                 }
                             }
                         }
@@ -1050,22 +1059,22 @@ Item {
                         Label {
                             text: "Página " + (currentPageEnfermeria + 1) + " de " + Math.max(1, totalPagesEnfermeria)
                             color: "#374151"
-                            font.pixelSize: 14
+                            font.pixelSize: fontBase
                             font.weight: Font.Medium
                         }
                         
                         // Botón Siguiente
                         Button {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: Math.max(90, screenWidth * 0.09)
+                            Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
                             text: "Siguiente →"
-                            enabled: currentPageEnfermeria < totalPagesEnfermeria - 1  // ✅ CORREGIDO
+                            enabled: currentPageEnfermeria < totalPagesEnfermeria - 1
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
                                     (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
                                     "#E5E7EB"
-                                radius: 18
+                                radius: height / 2
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -1076,15 +1085,15 @@ Item {
                                 text: parent.text
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontBase
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: {
-                                if (currentPageEnfermeria < totalPagesEnfermeria - 1) {  // ✅ CORREGIDO
+                                if (currentPageEnfermeria < totalPagesEnfermeria - 1) {
                                     currentPageEnfermeria++
-                                    updatePaginatedModel()  // ✅ CAMBIAR A FUNCIÓN CORRECTA
+                                    updatePaginatedModel()
                                 }
                             }
                         }
@@ -1094,7 +1103,7 @@ Item {
         }
     }
 
-    // Diálogo Nuevo Procedimiento / Editar Procedimiento
+    // ✅ DIÁLOGO RESPONSIVO PARA NUEVO/EDITAR PROCEDIMIENTO
     Rectangle {
         id: newProcedureDialog
         anchors.fill: parent
@@ -1118,10 +1127,10 @@ Item {
     Rectangle {
         id: procedureForm
         anchors.centerIn: parent
-        width: 550
-        height: 750  // Aumentado para incluir campo trabajador
+        width: Math.min(parent.width * 0.9, 600)  // ✅ Ancho adaptable
+        height: Math.min(parent.height * 0.9, 750)  // ✅ Altura adaptable
         color: whiteColor
-        radius: 20
+        radius: baseUnit * 0.5
         border.color: lightGrayColor
         border.width: 2
         visible: showNewProcedureDialog
@@ -1216,432 +1225,471 @@ Item {
             }
         }
         
-        ColumnLayout {
+        // ✅ SCROLL PARA FORMULARIOS LARGOS
+        ScrollView {
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 20
+            anchors.margins: marginLarge
+            clip: true
             
-            // Título
-            Label {
-                Layout.fillWidth: true
-                text: isEditMode ? "Editar Procedimiento" : "Nuevo Procedimiento"
-                font.pixelSize: 24
-                font.bold: true
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-            }
-            
-            // Datos del Paciente
-            GroupBox {
-                Layout.fillWidth: true
-                title: "Datos del Paciente"
-                
-                background: Rectangle {
-                    color: "#f8f9fa"
-                    border.color: lightGrayColor
-                    border.width: 1
-                    radius: 8
-                }
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 12
-                    
-                    // Nombre
-                    TextField {
-                        id: nombrePaciente
-                        Layout.fillWidth: true
-                        placeholderText: "Nombre del paciente"
-                        background: Rectangle {
-                            color: whiteColor
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: 6
-                        }
-                    }
-                    
-                    // Apellidos
-                    RowLayout {
-                        Layout.fillWidth: true                       
-                        TextField {
-                            id: apellidoPaterno
-                            Layout.fillWidth: true
-                            placeholderText: "Apellido paterno"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: lightGrayColor
-                                border.width: 1
-                                radius: 6
-                            }
-                        }
-                        
-                        TextField {
-                            id: apellidoMaterno
-                            Layout.fillWidth: true
-                            placeholderText: "Apellido materno"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: lightGrayColor
-                                border.width: 1
-                                radius: 6
-                            }
-                        }
-                    }
-                    
-                    // Edad
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            Layout.preferredWidth: 120
-                            text: "Edad:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        TextField {
-                            id: edadPaciente
-                            Layout.preferredWidth: 100
-                            placeholderText: "0"
-                            validator: IntValidator { bottom: 0; top: 120 }
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: lightGrayColor
-                                border.width: 1
-                                radius: 6
-                            }
-                        }
-                        Label {
-                            text: "años"
-                            color: textColor
-                        }
-                        Item { Layout.fillWidth: true }
-                    }
-                }
-            }
-            
-            // Tipo de Procedimiento
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: 120
-                    text: "Procedimiento:"
-                    font.bold: true
-                    color: textColor
-                }
-                ComboBox {
-                    id: procedimientoCombo
-                    Layout.fillWidth: true
-                    model: {
-                        var list = ["Seleccionar procedimiento..."]
-                        for (var i = 0; i < tiposProcedimientos.length; i++) {
-                            list.push(tiposProcedimientos[i].nombre)
-                        }
-                        return list
-                    }
-                    onCurrentIndexChanged: {
-                        if (currentIndex > 0) {
-                            procedureForm.selectedProcedureIndex = currentIndex - 1
-                        } else {
-                            procedureForm.selectedProcedureIndex = -1
-                        }
-                        procedureForm.updatePrices()
-                    }
-                }
-            }
-            
-            // Trabajador que realizará el procedimiento
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: 120
-                    text: "Trabajador:"
-                    font.bold: true
-                    color: textColor
-                }
-                ComboBox {
-                    id: trabajadorCombo
-                    Layout.fillWidth: true
-                    model: {
-                        var list = ["Seleccionar trabajador..."]
-                        for (var i = 0; i < trabajadoresDisponibles.length; i++) {
-                            list.push(trabajadoresDisponibles[i])
-                        }
-                        return list
-                    }
-                }
-            }
-            
-            // Descripción del procedimiento seleccionado
-            RowLayout {
-                Layout.fillWidth: true
-                visible: procedureForm.selectedProcedureIndex >= 0
-                Label {
-                    Layout.preferredWidth: 120
-                    text: "Descripción:"
-                    font.bold: true
-                    color: textColor
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: procedureForm.selectedProcedureIndex >= 0 ? 
-                          tiposProcedimientos[procedureForm.selectedProcedureIndex].descripcion : ""
-                    color: "#7f8c8d"
-                    font.italic: true
-                    wrapMode: Text.WordWrap
-                }
-            }
-            
-            // Tipo de Procedimiento (Normal/Emergencia)
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: 120
-                    text: "Tipo:"
-                    font.bold: true
-                    color: textColor
-                }
-                
-                RadioButton {
-                    id: normalRadio
-                    text: "Normal"
-                    checked: true
-                    onCheckedChanged: {
-                        if (checked) {
-                            procedureForm.procedureType = "Normal"
-                            procedureForm.updatePrices()
-                        }
-                    }
-                }
-                
-                RadioButton {
-                    id: emergenciaRadio
-                    text: "Emergencia"
-                    onCheckedChanged: {
-                        if (checked) {
-                            procedureForm.procedureType = "Emergencia"
-                            procedureForm.updatePrices()
-                        }
-                    }
-                }
-                Item { Layout.fillWidth: true }
-            }
-            
-            // Cantidad
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: 120
-                    text: "Cantidad:"
-                    font.bold: true
-                    color: textColor
-                }
-                SpinBox {
-                    id: cantidadSpinBox
-                    Layout.preferredWidth: 120
-                    from: 1
-                    to: 50
-                    value: 1
-                    onValueChanged: procedureForm.updatePrices()
-                }
-                Label {
-                    text: "procedimiento(s)"
-                    color: textColor
-                }
-                Item { Layout.fillWidth: true }
-            }
-            
-            // Precios calculados
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 80
-                color: "#f8f9fa"
-                radius: 8
-                border.color: lightGrayColor
-                border.width: 1
-                
-                GridLayout {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    columns: 2
-                    rowSpacing: 8
-                    columnSpacing: 20
-                    
-                    Label {
-                        text: "Precio Unitario:"
-                        font.bold: true
-                        color: textColor
-                    }
-                    Label {
-                        text: procedureForm.selectedProcedureIndex >= 0 ? 
-                              "Bs" + procedureForm.calculatedUnitPrice.toFixed(2) : "Seleccione procedimiento"
-                        font.bold: true
-                        font.pixelSize: 14
-                        color: procedureForm.procedureType === "Emergencia" ? emergencyColor : successColor
-                    }
-                    
-                    Label {
-                        text: "Total a Pagar:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: 16
-                    }
-                    Label {
-                        text: procedureForm.selectedProcedureIndex >= 0 ? 
-                              "Bs" + procedureForm.calculatedTotalPrice.toFixed(2) : "Bs0.00"
-                        font.bold: true
-                        font.pixelSize: 18
-                        color: procedureForm.procedureType === "Emergencia" ? emergencyColor : successColor
-                    }
-                }
-            }
-            
-            // Observaciones
             ColumnLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                width: parent.width - marginLarge * 2
+                spacing: marginMedium
                 
+                // Título
                 Label {
-                    text: "Observaciones:"
+                    Layout.fillWidth: true
+                    text: isEditMode ? "Editar Procedimiento" : "Nuevo Procedimiento"
+                    font.pixelSize: fontTitle
                     font.bold: true
                     color: textColor
+                    horizontalAlignment: Text.AlignHCenter
                 }
                 
-                ScrollView {
+                // Datos del Paciente
+                GroupBox {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.minimumHeight: 60
+                    title: "Datos del Paciente"
                     
-                    TextArea {
-                        id: observacionesProcedimiento
-                        placeholderText: "Observaciones del procedimiento, resultados, reacciones del paciente..."
-                        wrapMode: TextArea.Wrap
-                        background: Rectangle {
-                            color: whiteColor
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: 8
-                        }
-                    }
-                }
-            }
-            
-            // Botones
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                
-                Button {
-                    text: "Cancelar"
                     background: Rectangle {
-                        color: lightGrayColor
-                        radius: 8
+                        color: "#f8f9fa"
+                        border.color: lightGrayColor
+                        border.width: 1
+                        radius: baseUnit * 0.2
                     }
-                    contentItem: Label {
-                        text: parent.text
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    onClicked: {
-                        // Limpiar campos
-                        nombrePaciente.text = ""
-                        apellidoPaterno.text = ""
-                        apellidoMaterno.text = ""
-                        edadPaciente.text = ""
-                        procedimientoCombo.currentIndex = 0
-                        trabajadorCombo.currentIndex = 0
-                        normalRadio.checked = true
-                        cantidadSpinBox.value = 1
-                        observacionesProcedimiento.text = ""
-                        showNewProcedureDialog = false
-                        selectedRowIndex = -1
-                        isEditMode = false
-                        editingIndex = -1
-                    }
-                }
-                
-                Button {
-                    text: isEditMode ? "Actualizar" : "Guardar"
-                    enabled: procedureForm.selectedProcedureIndex >= 0 && 
-                             nombrePaciente.text.length > 0 &&
-                             trabajadorCombo.currentIndex > 0
-                    background: Rectangle {
-                        color: parent.enabled ? primaryColor : "#bdc3c7"
-                        radius: 8
-                    }
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    onClicked: {
-                        // Crear datos de procedimiento
-                        var nombreCompleto = nombrePaciente.text + " " + 
-                                           apellidoPaterno.text + " " + 
-                                           apellidoMaterno.text
+                    
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: marginSmall
                         
-                        var tipoProcedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex].nombre
-                        var trabajadorSeleccionado = trabajadoresDisponibles[trabajadorCombo.currentIndex - 1]
-                        
-                        var procedimientoData = {
-                            paciente: nombreCompleto.trim(),
-                            tipoProcedimiento: tipoProcedimiento,
-                            cantidad: cantidadSpinBox.value,
-                            tipo: procedureForm.procedureType,
-                            precioUnitario: procedureForm.calculatedUnitPrice.toFixed(2),
-                            precioTotal: procedureForm.calculatedTotalPrice.toFixed(2),
-                            fecha: new Date().toISOString().split('T')[0],
-                            trabajadorRealizador: trabajadorSeleccionado,
-                            registradoPor: "Luis López",  // Siempre Luis López
-                            observaciones: observacionesProcedimiento.text || "Sin observaciones adicionales"
+                        // Nombre
+                        TextField {
+                            id: nombrePaciente
+                            Layout.fillWidth: true
+                            placeholderText: "Nombre del paciente"
+                            font.pixelSize: fontBase
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: lightGrayColor
+                                border.width: 1
+                                radius: baseUnit * 0.15
+                            }
                         }
                         
-                        if (isEditMode && editingIndex >= 0) {
-                            // ✅ ACTUALIZAR PROCEDIMIENTO EXISTENTE
-                            var procedimientoExistente = procedimientosListModel.get(editingIndex)
-                            procedimientoData.procedimientoId = procedimientoExistente.procedimientoId
+                        // Apellidos - Layout adaptable
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: screenWidth > 500 ? 2 : 1  // ✅ Adaptable según ancho
+                            columnSpacing: marginSmall
                             
-                            // Actualizar en modelo filtrado
-                            procedimientosListModel.set(editingIndex, procedimientoData)
-                            
-                            // Actualizar en datos originales
-                            for (var i = 0; i < procedimientosOriginales.length; i++) {
-                                if (procedimientosOriginales[i].procedimientoId === procedimientoData.procedimientoId) {
-                                    procedimientosOriginales[i] = procedimientoData
-                                    break
+                            TextField {
+                                id: apellidoPaterno
+                                Layout.fillWidth: true
+                                placeholderText: "Apellido paterno"
+                                font.pixelSize: fontBase
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: lightGrayColor
+                                    border.width: 1
+                                    radius: baseUnit * 0.15
                                 }
                             }
                             
-                            console.log("Procedimiento actualizado:", JSON.stringify(procedimientoData))
-                        } else {
-                            // ✅ CREAR NUEVO PROCEDIMIENTO
-                            procedimientoData.procedimientoId = (getTotalEnfermeriaCount() + 1).toString()
-                            
-                            // Agregar a modelo filtrado
-                            procedimientosListModel.append(procedimientoData)
-                            
-                            // Agregar a datos originales
-                            procedimientosOriginales.push(procedimientoData)
-                            
-                            console.log("Nuevo procedimiento guardado:", JSON.stringify(procedimientoData))
+                            TextField {
+                                id: apellidoMaterno
+                                Layout.fillWidth: true
+                                placeholderText: "Apellido materno"
+                                font.pixelSize: fontBase
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: lightGrayColor
+                                    border.width: 1
+                                    radius: baseUnit * 0.15
+                                }
+                            }
                         }
                         
-                        // ✅ ACTUALIZAR PAGINACIÓN
-                        updatePaginatedModel()
+                        // Edad
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                Layout.preferredWidth: Math.max(80, screenWidth * 0.12)
+                                text: "Edad:"
+                                font.bold: true
+                                font.pixelSize: fontBase
+                                color: textColor
+                            }
+                            TextField {
+                                id: edadPaciente
+                                Layout.preferredWidth: Math.max(80, screenWidth * 0.12)
+                                placeholderText: "0"
+                                font.pixelSize: fontBase
+                                validator: IntValidator { bottom: 0; top: 120 }
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: lightGrayColor
+                                    border.width: 1
+                                    radius: baseUnit * 0.15
+                                }
+                            }
+                            Label {
+                                text: "años"
+                                font.pixelSize: fontBase
+                                color: textColor
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                    }
+                }
+                
+                // Tipo de Procedimiento
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: screenWidth > 400 ? 2 : 1  // ✅ Adaptable
+                    columnSpacing: marginSmall
+                    
+                    Label {
+                        text: "Procedimiento:"
+                        font.bold: true
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    ComboBox {
+                        id: procedimientoCombo
+                        Layout.fillWidth: true
+                        font.pixelSize: fontBase
+                        model: {
+                            var list = ["Seleccionar procedimiento..."]
+                            for (var i = 0; i < tiposProcedimientos.length; i++) {
+                                list.push(tiposProcedimientos[i].nombre)
+                            }
+                            return list
+                        }
+                        onCurrentIndexChanged: {
+                            if (currentIndex > 0) {
+                                procedureForm.selectedProcedureIndex = currentIndex - 1
+                            } else {
+                                procedureForm.selectedProcedureIndex = -1
+                            }
+                            procedureForm.updatePrices()
+                        }
+                    }
+                }
+                
+                // Trabajador
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: screenWidth > 400 ? 2 : 1
+                    columnSpacing: marginSmall
+                    
+                    Label {
+                        text: "Trabajador:"
+                        font.bold: true
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    ComboBox {
+                        id: trabajadorCombo
+                        Layout.fillWidth: true
+                        font.pixelSize: fontBase
+                        model: {
+                            var list = ["Seleccionar trabajador..."]
+                            for (var i = 0; i < trabajadoresDisponibles.length; i++) {
+                                list.push(trabajadoresDisponibles[i])
+                            }
+                            return list
+                        }
+                    }
+                }
+                
+                // Descripción del procedimiento seleccionado
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: procedureForm.selectedProcedureIndex >= 0
+                    Label {
+                        Layout.preferredWidth: Math.max(80, screenWidth * 0.15)
+                        text: "Descripción:"
+                        font.bold: true
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: procedureForm.selectedProcedureIndex >= 0 ? 
+                              tiposProcedimientos[procedureForm.selectedProcedureIndex].descripcion : ""
+                        color: "#7f8c8d"
+                        font.italic: true
+                        font.pixelSize: fontBase
+                        wrapMode: Text.WordWrap
+                    }
+                }
+                
+                // Tipo de Procedimiento (Normal/Emergencia)
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        Layout.preferredWidth: Math.max(80, screenWidth * 0.15)
+                        text: "Tipo:"
+                        font.bold: true
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    
+                    RadioButton {
+                        id: normalRadio
+                        text: "Normal"
+                        font.pixelSize: fontBase
+                        checked: true
+                        onCheckedChanged: {
+                            if (checked) {
+                                procedureForm.procedureType = "Normal"
+                                procedureForm.updatePrices()
+                            }
+                        }
+                    }
+                    
+                    RadioButton {
+                        id: emergenciaRadio
+                        text: "Emergencia"
+                        font.pixelSize: fontBase
+                        onCheckedChanged: {
+                            if (checked) {
+                                procedureForm.procedureType = "Emergencia"
+                                procedureForm.updatePrices()
+                            }
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                
+                // Cantidad
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        Layout.preferredWidth: Math.max(80, screenWidth * 0.15)
+                        text: "Cantidad:"
+                        font.bold: true
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    SpinBox {
+                        id: cantidadSpinBox
+                        Layout.preferredWidth: Math.max(100, screenWidth * 0.15)
+                        font.pixelSize: fontBase
+                        from: 1
+                        to: 50
+                        value: 1
+                        onValueChanged: procedureForm.updatePrices()
+                    }
+                    Label {
+                        text: "procedimiento(s)"
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                
+                // Precios calculados
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(70, screenHeight * 0.1)
+                    color: "#f8f9fa"
+                    radius: baseUnit * 0.2
+                    border.color: lightGrayColor
+                    border.width: 1
+                    
+                    GridLayout {
+                        anchors.fill: parent
+                        anchors.margins: marginSmall
+                        columns: 2
+                        rowSpacing: marginSmall * 0.5
+                        columnSpacing: marginMedium
                         
-                        // Limpiar y cerrar
-                        nombrePaciente.text = ""
-                        apellidoPaterno.text = ""
-                        apellidoMaterno.text = ""
-                        edadPaciente.text = ""
-                        procedimientoCombo.currentIndex = 0
-                        trabajadorCombo.currentIndex = 0
-                        normalRadio.checked = true
-                        cantidadSpinBox.value = 1
-                        observacionesProcedimiento.text = ""
-                        showNewProcedureDialog = false
-                        selectedRowIndex = -1
-                        isEditMode = false
-                        editingIndex = -1
+                        Label {
+                            text: "Precio Unitario:"
+                            font.bold: true
+                            font.pixelSize: fontBase
+                            color: textColor
+                        }
+                        Label {
+                            text: procedureForm.selectedProcedureIndex >= 0 ? 
+                                  "Bs" + procedureForm.calculatedUnitPrice.toFixed(2) : "Seleccione procedimiento"
+                            font.bold: true
+                            font.pixelSize: fontBase
+                            color: procedureForm.procedureType === "Emergencia" ? emergencyColor : successColor
+                        }
+                        
+                        Label {
+                            text: "Total a Pagar:"
+                            font.bold: true
+                            color: textColor
+                            font.pixelSize: fontMedium
+                        }
+                        Label {
+                            text: procedureForm.selectedProcedureIndex >= 0 ? 
+                                  "Bs" + procedureForm.calculatedTotalPrice.toFixed(2) : "Bs0.00"
+                            font.bold: true
+                            font.pixelSize: fontLarge
+                            color: procedureForm.procedureType === "Emergencia" ? emergencyColor : successColor
+                        }
+                    }
+                }
+                
+                // Observaciones
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    
+                    Label {
+                        text: "Observaciones:"
+                        font.bold: true
+                        font.pixelSize: fontBase
+                        color: textColor
+                    }
+                    
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(80, screenHeight * 0.12)
+                        
+                        TextArea {
+                            id: observacionesProcedimiento
+                            placeholderText: "Observaciones del procedimiento, resultados, reacciones del paciente..."
+                            font.pixelSize: fontBase
+                            wrapMode: TextArea.Wrap
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: lightGrayColor
+                                border.width: 1
+                                radius: baseUnit * 0.2
+                            }
+                        }
+                    }
+                }
+                
+                // Botones
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        text: "Cancelar"
+                        Layout.preferredHeight: Math.max(36, screenHeight * 0.045)
+                        font.pixelSize: fontBase
+                        background: Rectangle {
+                            color: lightGrayColor
+                            radius: baseUnit * 0.2
+                        }
+                        contentItem: Label {
+                            text: parent.text
+                            font.pixelSize: fontBase
+                            color: textColor
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        onClicked: {
+                            // Limpiar campos
+                            nombrePaciente.text = ""
+                            apellidoPaterno.text = ""
+                            apellidoMaterno.text = ""
+                            edadPaciente.text = ""
+                            procedimientoCombo.currentIndex = 0
+                            trabajadorCombo.currentIndex = 0
+                            normalRadio.checked = true
+                            cantidadSpinBox.value = 1
+                            observacionesProcedimiento.text = ""
+                            showNewProcedureDialog = false
+                            selectedRowIndex = -1
+                            isEditMode = false
+                            editingIndex = -1
+                        }
+                    }
+                    
+                    Button {
+                        text: isEditMode ? "Actualizar" : "Guardar"
+                        Layout.preferredHeight: Math.max(36, screenHeight * 0.045)
+                        font.pixelSize: fontBase
+                        enabled: procedureForm.selectedProcedureIndex >= 0 && 
+                                 nombrePaciente.text.length > 0 &&
+                                 trabajadorCombo.currentIndex > 0
+                        background: Rectangle {
+                            color: parent.enabled ? primaryColor : "#bdc3c7"
+                            radius: baseUnit * 0.2
+                        }
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: fontBase
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        onClicked: {
+                            // Crear datos de procedimiento
+                            var nombreCompleto = nombrePaciente.text + " " + 
+                                               apellidoPaterno.text + " " + 
+                                               apellidoMaterno.text
+                            
+                            var tipoProcedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex].nombre
+                            var trabajadorSeleccionado = trabajadoresDisponibles[trabajadorCombo.currentIndex - 1]
+                            
+                            var procedimientoData = {
+                                paciente: nombreCompleto.trim(),
+                                tipoProcedimiento: tipoProcedimiento,
+                                cantidad: cantidadSpinBox.value,
+                                tipo: procedureForm.procedureType,
+                                precioUnitario: procedureForm.calculatedUnitPrice.toFixed(2),
+                                precioTotal: procedureForm.calculatedTotalPrice.toFixed(2),
+                                fecha: new Date().toISOString().split('T')[0],
+                                trabajadorRealizador: trabajadorSeleccionado,
+                                registradoPor: "Luis López",
+                                observaciones: observacionesProcedimiento.text || "Sin observaciones adicionales"
+                            }
+                            
+                            if (isEditMode && editingIndex >= 0) {
+                                // Actualizar procedimiento existente
+                                var procedimientoExistente = procedimientosListModel.get(editingIndex)
+                                procedimientoData.procedimientoId = procedimientoExistente.procedimientoId
+                                
+                                // Actualizar en modelo filtrado
+                                procedimientosListModel.set(editingIndex, procedimientoData)
+                                
+                                // Actualizar en datos originales
+                                for (var i = 0; i < procedimientosOriginales.length; i++) {
+                                    if (procedimientosOriginales[i].procedimientoId === procedimientoData.procedimientoId) {
+                                        procedimientosOriginales[i] = procedimientoData
+                                        break
+                                    }
+                                }
+                                
+                                console.log("Procedimiento actualizado:", JSON.stringify(procedimientoData))
+                            } else {
+                                // Crear nuevo procedimiento
+                                procedimientoData.procedimientoId = (getTotalEnfermeriaCount() + 1).toString()
+                                
+                                // Agregar a modelo filtrado
+                                procedimientosListModel.append(procedimientoData)
+                                
+                                // Agregar a datos originales
+                                procedimientosOriginales.push(procedimientoData)
+                                
+                                console.log("Nuevo procedimiento guardado:", JSON.stringify(procedimientoData))
+                            }
+                            
+                            // Actualizar paginación
+                            updatePaginatedModel()
+                            
+                            // Limpiar y cerrar
+                            nombrePaciente.text = ""
+                            apellidoPaterno.text = ""
+                            apellidoMaterno.text = ""
+                            edadPaciente.text = ""
+                            procedimientoCombo.currentIndex = 0
+                            trabajadorCombo.currentIndex = 0
+                            normalRadio.checked = true
+                            cantidadSpinBox.value = 1
+                            observacionesProcedimiento.text = ""
+                            showNewProcedureDialog = false
+                            selectedRowIndex = -1
+                            isEditMode = false
+                            editingIndex = -1
+                        }
                     }
                 }
             }
@@ -1708,7 +1756,7 @@ Item {
             }
         }
         
-        // ✅ RESETEAR A PRIMERA PÁGINA Y ACTUALIZAR PAGINACIÓN
+        // Resetear a primera página y actualizar paginación
         currentPageEnfermeria = 0
         updatePaginatedModel()
         
@@ -1753,307 +1801,6 @@ Item {
                     "- Mostrando", procedimientosPaginadosModel.count, "de", totalItems)
     }
 
-    // Diálogo Configuración de Tipos de Procedimientos
-    Rectangle {
-        id: configProceduresBackground
-        anchors.fill: parent
-        color: "black"
-        opacity: showConfigProceduresDialog ? 0.5 : 0
-        visible: opacity > 0
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: showConfigProceduresDialog = false
-        }
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-    
-    Rectangle {
-        id: configProceduresDialog
-        anchors.centerIn: parent
-        width: 750
-        height: 650
-        color: whiteColor
-        radius: 20
-        border.color: lightGrayColor
-        border.width: 2
-        visible: showConfigProceduresDialog
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            
-            // Header fijo para título y formulario
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 380
-                color: whiteColor
-                radius: 20
-                z: 10
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 30
-                    spacing: 20
-                    
-                    Label {
-                        Layout.fillWidth: true
-                        text: "🩺 Configuración de Tipos de Procedimientos"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    
-                    // Formulario para agregar nuevo tipo de procedimiento
-                    GroupBox {
-                        Layout.fillWidth: true
-                        title: "Agregar Nuevo Tipo de Procedimiento"
-                        
-                        background: Rectangle {
-                            color: "#f8f9fa"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: 8
-                        }
-                        
-                        GridLayout {
-                            anchors.fill: parent
-                            columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 10
-                            
-                            Label {
-                                text: "Nombre:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProcedimientoNombre
-                                Layout.fillWidth: true
-                                placeholderText: "Ej: Sutura Simple"
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Descripción:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProcedimientoDescripcion
-                                Layout.fillWidth: true
-                                placeholderText: "Ej: Sutura de heridas superficiales"
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Precio Normal:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProcedimientoPrecioNormal
-                                Layout.fillWidth: true
-                                placeholderText: "0.00"
-                                validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Precio Emergencia:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProcedimientoPrecioEmergencia
-                                Layout.fillWidth: true
-                                placeholderText: "0.00"
-                                validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Item { }
-                            Button {
-                                Layout.alignment: Qt.AlignRight
-                                text: "➕ Agregar Procedimiento"
-                                background: Rectangle {
-                                    color: successColor
-                                    radius: 8
-                                }
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                onClicked: {
-                                    if (nuevoProcedimientoNombre.text && nuevoProcedimientoDescripcion.text && 
-                                        nuevoProcedimientoPrecioNormal.text && nuevoProcedimientoPrecioEmergencia.text) {
-                                        
-                                        var nuevoProcedimiento = {
-                                            nombre: nuevoProcedimientoNombre.text,
-                                            descripcion: nuevoProcedimientoDescripcion.text,
-                                            precioNormal: parseFloat(nuevoProcedimientoPrecioNormal.text),
-                                            precioEmergencia: parseFloat(nuevoProcedimientoPrecioEmergencia.text)
-                                        }
-                                        
-                                        tiposProcedimientos.push(nuevoProcedimiento)
-                                        enfermeriaRoot.tiposProcedimientos = tiposProcedimientos
-                                        
-                                        // Limpiar campos
-                                        nuevoProcedimientoNombre.text = ""
-                                        nuevoProcedimientoDescripcion.text = ""
-                                        nuevoProcedimientoPrecioNormal.text = ""
-                                        nuevoProcedimientoPrecioEmergencia.text = ""
-                                        
-                                        console.log("Nuevo tipo de procedimiento agregado:", JSON.stringify(nuevoProcedimiento))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Lista de tipos de procedimientos existentes con scroll limitado
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: 30
-                Layout.topMargin: 0
-                color: "transparent"
-                
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
-                    
-                    ListView {
-                        model: tiposProcedimientos
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: 90
-                            color: index % 2 === 0 ? "transparent" : "#fafafa"
-                            border.color: "#e8e8e8"
-                            border.width: 1
-                            radius: 8
-                            
-                            GridLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                columns: 4
-                                rowSpacing: 6
-                                columnSpacing: 12
-                                
-                                // Nombre y Descripción
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 4
-                                    
-                                    Label {
-                                        text: modelData.nombre
-                                        font.bold: true
-                                        color: primaryColor
-                                        font.pixelSize: 14
-                                    }
-                                    Label {
-                                        text: modelData.descripcion
-                                        color: textColor
-                                        font.pixelSize: 12
-                                        wrapMode: Text.WordWrap
-                                    }
-                                }
-                                
-                                // Precio Normal
-                                ColumnLayout {
-                                    Layout.preferredWidth: 100
-                                    spacing: 4
-                                    
-                                    Label {
-                                        text: "Normal"
-                                        font.bold: true
-                                        color: successColor
-                                        font.pixelSize: 12
-                                    }
-                                    Label {
-                                        text: "Bs" + modelData.precioNormal.toFixed(2)
-                                        color: successColor
-                                        font.bold: true
-                                        font.pixelSize: 14
-                                    }
-                                }
-                                
-                                // Precio Emergencia
-                                ColumnLayout {
-                                    Layout.preferredWidth: 100
-                                    spacing: 4
-                                    
-                                    Label {
-                                        text: "Emergencia"
-                                        font.bold: true
-                                        color: emergencyColor
-                                        font.pixelSize: 12
-                                    }
-                                    Label {
-                                        text: "Bs" + modelData.precioEmergencia.toFixed(2)
-                                        color: emergencyColor
-                                        font.bold: true
-                                        font.pixelSize: 14
-                                    }
-                                }
-                                
-                                // Botón eliminar
-                                Button {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
-                                    text: "🗑️"
-                                    background: Rectangle {
-                                        color: dangerColor
-                                        radius: 6
-                                    }
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: whiteColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    onClicked: {
-                                        tiposProcedimientos.splice(index, 1)
-                                        enfermeriaRoot.tiposProcedimientos = tiposProcedimientos
-                                        console.log("Tipo de procedimiento eliminado en índice:", index)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }      
-        }
-    }
-    
     // ✅ FUNCIÓN PARA OBTENER TOTAL DE PROCEDIMIENTOS CORREGIDA
     function getTotalEnfermeriaCount() {
         return procedimientosOriginales.length
