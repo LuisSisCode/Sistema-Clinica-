@@ -22,6 +22,33 @@ Item {
     property int currentPageVentas: 0
     property int totalPagesVentas: 0
 
+    // SISTEMA DE MÉTRICAS COHERENTE CON MAIN.QML
+    readonly property real scaleFactor: Math.min(width / 1400, height / 900)
+    readonly property real baseUnit: Math.max(8, height / 100) // Coherente con main.qml
+    readonly property real fontBaseSize: Math.max(12, height / 70) // Coherente con main.qml
+    
+    // Tamaños de fuente escalables pero más conservadores
+    readonly property real fontTiny: fontBaseSize * 0.75
+    readonly property real fontSmall: fontBaseSize * 0.85
+    readonly property real fontMedium: fontBaseSize
+    readonly property real fontLarge: fontBaseSize * 1.15
+    readonly property real fontXLarge: fontBaseSize * 1.4
+    
+    // Espaciados más conservadores
+    readonly property real marginTiny: baseUnit * 0.5
+    readonly property real marginSmall: baseUnit * 0.75
+    readonly property real marginMedium: baseUnit
+    readonly property real marginLarge: baseUnit * 1.5
+    
+    // Radios proporcionalmente más pequeños
+    readonly property real radiusSmall: baseUnit * 0.5
+    readonly property real radiusMedium: baseUnit * 0.75
+    readonly property real radiusLarge: baseUnit
+    
+    // Alturas de controles más compactas
+    readonly property real controlHeight: Math.max(40, baseUnit * 5)
+    readonly property real buttonHeight: Math.max(36, baseUnit * 4.5)
+    readonly property real headerHeight: Math.max(60, baseUnit * 7.5)
 
     // CONEXIÓN CON DATOS CENTRALES
     Connections {
@@ -32,6 +59,7 @@ Item {
             // Aquí podrías refrescar listas si es necesario
         }
     }
+
     // Colores del tema
     property color primaryColor: "#3498db"
     property color successColor: "#27ae60"
@@ -74,7 +102,6 @@ Item {
     ListModel {
         id: ventasPaginadasModel
     }
-
 
     // CONEXIÓN CON DATOS CENTRALES: Escuchar cambios
     Connections {
@@ -391,6 +418,7 @@ Item {
             })
         }
     }
+
     // FUNCIÓN CORREGIDA para Ventas.qml
     function actualizarPaginacionVentas() {
         if (!farmaciaData || !farmaciaData.ventasModel) return
@@ -422,6 +450,7 @@ Item {
         console.log("📄 Ventas: Página", currentPageVentas + 1, "de", totalPagesVentas,
                     "- Mostrando", ventasPaginadasModel.count, "de", totalItems)
     }
+
     // CONTENEDOR PRINCIPAL CON DOS VISTAS
     Item {
         anchors.fill: parent
@@ -431,38 +460,38 @@ Item {
         // =============================================
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 24
-            spacing: 24
+            anchors.margins: marginMedium
+            spacing: marginMedium
             visible: !mostrarNuevaVenta
             
             // Header del módulo con título y botones de acción
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 16
+                spacing: marginMedium
                 
                 // Información del módulo
                 RowLayout {
-                    spacing: 12
+                    spacing: marginSmall
                     
                     Label {
                         text: "🛒"
-                        font.pixelSize: 32
+                        font.pixelSize: fontXLarge
                         color: primaryColor
                     }
                     
                     ColumnLayout {
-                        spacing: 4
+                        spacing: marginTiny
                         
                         Label {
                             text: "Módulo de Farmacia"
-                            font.pixelSize: 24
+                            font.pixelSize: fontLarge
                             font.bold: true
                             color: textColor
                         }
                         
                         Label {
                             text: "Gestión de Ventas"
-                            font.pixelSize: 16
+                            font.pixelSize: fontMedium
                             color: darkGrayColor
                         }
                     }
@@ -474,17 +503,17 @@ Item {
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 60
                     color: "#E8F5E8"
-                    radius: 8
+                    radius: radiusSmall
                     border.color: successColor
                     border.width: 1
                     
                     ColumnLayout {
                         anchors.centerIn: parent
-                        spacing: 4
+                        spacing: marginTiny
                         
                         Label {
                             text: "Productos Disponibles:"
-                            font.pixelSize: 11
+                            font.pixelSize: fontTiny
                             color: darkGrayColor
                             Layout.alignment: Qt.AlignHCenter
                         }
@@ -492,7 +521,7 @@ Item {
                         Label {
                             text: farmaciaData && farmaciaData.obtenerProductosUnicos ? 
                                   farmaciaData.obtenerProductosUnicos().length.toString() : "5"
-                            font.pixelSize: 18
+                            font.pixelSize: fontLarge
                             font.bold: true
                             color: successColor
                             Layout.alignment: Qt.AlignHCenter
@@ -502,7 +531,7 @@ Item {
                 
                 // Botones de acción principal
                 RowLayout {
-                    spacing: 12
+                    spacing: marginSmall
                     
                     Button {
                         id: nuevaVentaButton
@@ -510,7 +539,7 @@ Item {
                         
                         background: Rectangle {
                             color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                            radius: 8
+                            radius: radiusMedium
                             
                             Behavior on color {
                                 ColorAnimation { duration: 150 }
@@ -521,7 +550,7 @@ Item {
                             text: parent.text
                             color: whiteColor
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: fontMedium
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -545,8 +574,8 @@ Item {
             // Filtros de período
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 8
-                spacing: 8
+                Layout.topMargin: marginSmall
+                spacing: marginSmall
                 
                 Button {
                     id: filtroTodos
@@ -562,18 +591,18 @@ Item {
                     }
                     
                     contentItem: RowLayout {
-                        spacing: 4
+                        spacing: marginTiny
                         
                         Label {
                             text: "📊"
-                            font.pixelSize: 12
+                            font.pixelSize: fontSmall
                         }
                         
                         Label {
                             text: parent.parent.text
                             color: parent.parent.isSelected ? whiteColor : textColor
                             font.bold: parent.parent.isSelected
-                            font.pixelSize: 12
+                            font.pixelSize: fontSmall
                         }
                         
                         Rectangle {
@@ -588,7 +617,7 @@ Item {
                                 text: farmaciaData ? farmaciaData.ventasModel.count.toString() : "0"
                                 color: "#3498db"
                                 font.bold: true
-                                font.pixelSize: 10
+                                font.pixelSize: fontTiny
                             }
                         }
                     }
@@ -608,7 +637,7 @@ Item {
                 color: "#FFFFFF"
                 border.color: "#D5DBDB"
                 border.width: 1
-                radius: 8
+                radius: radiusMedium
                 
                 ColumnLayout {
                     anchors.fill: parent
@@ -618,7 +647,7 @@ Item {
                     // Header de la tabla
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 50
+                        Layout.preferredHeight: controlHeight
                         color: "#F8F9FA"
                         
                         RowLayout {
@@ -637,7 +666,7 @@ Item {
                                     text: "ID VENTA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                 }
                             }
                             
@@ -651,12 +680,12 @@ Item {
                                 
                                 Label {
                                     anchors.left: parent.left
-                                    anchors.leftMargin: 12
+                                    anchors.leftMargin: marginSmall
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: "USUARIO"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                 }
                             }
                             
@@ -672,7 +701,7 @@ Item {
                                     text: "TOTAL"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                 }
                             }
                             
@@ -688,7 +717,7 @@ Item {
                                     text: "FECHA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                 }
                             }
                             
@@ -704,7 +733,7 @@ Item {
                                     text: "HORA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                 }
                             }
                             
@@ -720,7 +749,7 @@ Item {
                                     text: "ACCIÓN"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                 }
                             }
                         }
@@ -763,7 +792,7 @@ Item {
                                             text: model.idVenta
                                             color: "#3498DB"
                                             font.bold: true
-                                            font.pixelSize: 13
+                                            font.pixelSize: fontMedium
                                         }
                                     }
                                     
@@ -777,7 +806,7 @@ Item {
                                         
                                         ColumnLayout {
                                             anchors.left: parent.left
-                                            anchors.leftMargin: 12
+                                            anchors.leftMargin: marginSmall
                                             anchors.verticalCenter: parent.verticalCenter
                                             spacing: 2
                                             
@@ -785,7 +814,7 @@ Item {
                                                 text: model.usuario
                                                 color: "#2C3E50"
                                                 font.bold: true
-                                                font.pixelSize: 13
+                                                font.pixelSize: fontMedium
                                                 elide: Text.ElideRight
                                                 Layout.maximumWidth: parent.parent.width - 24
                                             }
@@ -795,13 +824,13 @@ Item {
                                                 
                                                 Label {
                                                     text: "👤"
-                                                    font.pixelSize: 10
+                                                    font.pixelSize: fontTiny
                                                 }
                                                 
                                                 Label {
                                                     text: model.tipoUsuario
                                                     color: "#7F8C8D"
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: fontSmall
                                                     elide: Text.ElideRight
                                                     Layout.maximumWidth: 150
                                                 }
@@ -828,7 +857,7 @@ Item {
                                                 text: "$" + model.total.toFixed(2)
                                                 color: "#FFFFFF"
                                                 font.bold: true
-                                                font.pixelSize: 11
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                     }
@@ -846,14 +875,14 @@ Item {
                                             
                                             Label {
                                                 text: "📅"
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                                 color: "#3498DB"
                                             }
                                             
                                             Label {
                                                 text: model.fecha
                                                 color: "#2C3E50"
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                                 font.bold: true
                                             }
                                         }
@@ -870,7 +899,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: model.hora
                                             color: "#7F8C8D"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -896,7 +925,7 @@ Item {
                                                 text: parent.text
                                                 color: whiteColor
                                                 font.bold: true
-                                                font.pixelSize: 11
+                                                font.pixelSize: fontSmall
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
                                             }
@@ -956,7 +985,7 @@ Item {
                                 
                                 ColumnLayout {
                                     anchors.centerIn: parent
-                                    spacing: 16
+                                    spacing: marginMedium
                                     
                                     Label {
                                         text: "🛒"
@@ -968,7 +997,7 @@ Item {
                                     Label {
                                         text: "No hay ventas registradas"
                                         color: darkGrayColor
-                                        font.pixelSize: 16
+                                        font.pixelSize: fontMedium
                                         font.bold: true
                                         Layout.alignment: Qt.AlignHCenter
                                     }
@@ -976,7 +1005,7 @@ Item {
                                     Label {
                                         text: "Las ventas aparecerán aquí cuando se completen"
                                         color: darkGrayColor
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                         Layout.alignment: Qt.AlignHCenter
                                         wrapMode: Text.WordWrap
                                         Layout.maximumWidth: 250
@@ -986,6 +1015,7 @@ Item {
                             }
                         }
                     }
+
                     // Control de Paginación - Centrado con indicador
                     Rectangle {
                         Layout.fillWidth: true
@@ -1020,7 +1050,7 @@ Item {
                                     text: parent.text
                                     color: parent.enabled ? "#FFFFFF" : "#9CA3AF"   // ✅ BLANCO cuando activo
                                     font.bold: true
-                                    font.pixelSize: 14
+                                    font.pixelSize: fontMedium
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -1039,7 +1069,7 @@ Item {
                             Label {
                                 text: "Página " + (currentPageVentas + 1) + " de " + Math.max(1, totalPagesVentas)
                                 color: "#374151"
-                                font.pixelSize: 14
+                                font.pixelSize: fontMedium
                                 font.weight: Font.Medium
                             }
 
@@ -1065,7 +1095,7 @@ Item {
                                     text: parent.text
                                     color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                     font.bold: true
-                                    font.pixelSize: 14
+                                    font.pixelSize: fontMedium
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -1094,19 +1124,19 @@ Item {
             
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 24
-                spacing: 16
+                anchors.margins: marginMedium
+                spacing: marginMedium
                 
                 // Header con botón de regreso
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: marginSmall
 
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 120
                         color: "#ffffff"
-                        radius: 12
+                        radius: radiusLarge
                         border.color: "#e9ecef"
                         border.width: 1
                         
@@ -1133,7 +1163,7 @@ Item {
                                         text: "←"
                                         color: whiteColor
                                         font.bold: true
-                                        font.pixelSize: 18
+                                        font.pixelSize: fontLarge
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
                                     }
@@ -1157,14 +1187,14 @@ Item {
                                         Label {
                                             anchors.centerIn: parent
                                             text: "🛒"
-                                            font.pixelSize: 16
+                                            font.pixelSize: fontMedium
                                             color: whiteColor
                                         }
                                     }
                                     
                                     Label {
                                         text: "Nueva Venta"
-                                        font.pixelSize: 22
+                                        font.pixelSize: fontLarge
                                         font.bold: true
                                         color: textColor
                                     }
@@ -1180,7 +1210,7 @@ Item {
                                 Label {
                                     text: "Usuario: Dr. Admin"
                                     color: textColor
-                                    font.pixelSize: 13
+                                    font.pixelSize: fontMedium
                                 }
                                 
                                 Label {
@@ -1194,7 +1224,7 @@ Item {
                                         return "Fecha: " + dia + "/" + mes + "/" + año + " " + hora + ":" + minutos
                                     }
                                     color: textColor
-                                    font.pixelSize: 13
+                                    font.pixelSize: fontMedium
                                 }
                                 
                                 Item { Layout.fillWidth: true }
@@ -1202,7 +1232,7 @@ Item {
                                 Label {
                                     text: "No. Venta: V" + String((farmaciaData ? farmaciaData.ventasModel.count : 0) + 1).padStart(3, '0')
                                     color: blueColor
-                                    font.pixelSize: 13
+                                    font.pixelSize: fontMedium
                                     font.bold: true
                                 }
                             }
@@ -1219,7 +1249,7 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     
                     color: "#ffffff"
-                    radius: 12
+                    radius: radiusLarge
                     border.color: "#e1e8ed"
                     border.width: 1
                     
@@ -1245,14 +1275,14 @@ Item {
                             
                             Label {
                                 text: "🔍"
-                                font.pixelSize: 16
+                                font.pixelSize: fontMedium
                                 color: "#2c3e50"
                             }
                             
                             Label {
                                 text: "BUSCAR PRODUCTO"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontMedium
                                 color: "#2c3e50"
                             }
                             
@@ -1283,7 +1313,7 @@ Item {
                                         anchors.fill: parent
                                         anchors.margins: 12
                                         
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontMedium
                                         color: "#000000"  // NEGRO SÓLIDO
                                         verticalAlignment: Text.AlignVCenter
                                         
@@ -1315,7 +1345,7 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: "Buscar por nombre o código..."
                                         color: "#999999"
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontMedium
                                         visible: busquedaField.text.length === 0
                                     }
                                 }
@@ -1323,7 +1353,7 @@ Item {
                                 // ETIQUETA CANTIDAD
                                 Text {
                                     text: "Cantidad:"
-                                    font.pixelSize: 13
+                                    font.pixelSize: fontMedium
                                     font.bold: true
                                     color: "#000000"
                                     Layout.alignment: Qt.AlignVCenter
@@ -1344,7 +1374,7 @@ Item {
                                         anchors.margins: 8
                                         
                                         text: "1"
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontMedium
                                         font.bold: true
                                         color: "#000000"  // NEGRO SÓLIDO
                                         
@@ -1382,14 +1412,14 @@ Item {
                                             text: "+"
                                             color: "#ffffff"
                                             font.bold: true
-                                            font.pixelSize: 16
+                                            font.pixelSize: fontMedium
                                         }
                                         
                                         Text {
                                             text: "Agregar"
                                             color: "#ffffff"
                                             font.bold: true
-                                            font.pixelSize: 13
+                                            font.pixelSize: fontMedium
                                         }
                                     }
                                     
@@ -1414,7 +1444,7 @@ Item {
                     color: whiteColor
                     border.color: "#dee2e6"
                     border.width: 1
-                    radius: 8
+                    radius: radiusMedium
                     visible: resultadosBusquedaModel.count > 0
                     
                     ColumnLayout {
@@ -1424,7 +1454,7 @@ Item {
                         
                         Label {
                             text: "📦 " + resultadosBusquedaModel.count + " productos encontrados"
-                            font.pixelSize: 11
+                            font.pixelSize: fontSmall
                             color: "#495057"
                             font.bold: true
                         }
@@ -1449,14 +1479,14 @@ Item {
                                         text: model.codigo
                                         color: blueColor
                                         font.bold: true
-                                        font.pixelSize: 11
+                                        font.pixelSize: fontSmall
                                         Layout.preferredWidth: 70
                                     }
                                     
                                     Label {
                                         text: model.nombre
                                         color: textColor
-                                        font.pixelSize: 11
+                                        font.pixelSize: fontSmall
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
                                     }
@@ -1465,7 +1495,7 @@ Item {
                                         text: "$" + model.precio.toFixed(2)
                                         color: successColor
                                         font.bold: true
-                                        font.pixelSize: 11
+                                        font.pixelSize: fontSmall
                                         Layout.preferredWidth: 60
                                     }
                                     
@@ -1480,7 +1510,7 @@ Item {
                                             text: model.stock.toString()
                                             color: whiteColor
                                             font.bold: true
-                                            font.pixelSize: 9
+                                            font.pixelSize: fontTiny
                                         }
                                     }
                                 }
@@ -1511,7 +1541,7 @@ Item {
                         text: "🛒 Productos en la venta:"
                         font.bold: true
                         color: textColor
-                        font.pixelSize: 14
+                        font.pixelSize: fontMedium
                     }
                     
                     // CONTENEDOR DE LA TABLA CON BORDES
@@ -1560,7 +1590,7 @@ Item {
                                             text: "#"
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -1577,7 +1607,7 @@ Item {
                                             text: "CÓDIGO"
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -1594,7 +1624,7 @@ Item {
                                             text: "NOMBRE"
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -1611,7 +1641,7 @@ Item {
                                             text: "PRECIO"
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -1628,7 +1658,7 @@ Item {
                                             text: "CANT."
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -1645,7 +1675,7 @@ Item {
                                             text: "SUBTOTAL"
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                     
@@ -1662,7 +1692,7 @@ Item {
                                             text: "ACCIÓN"
                                             font.bold: true
                                             color: "#495057"
-                                            font.pixelSize: 12
+                                            font.pixelSize: fontSmall
                                         }
                                     }
                                 }
@@ -1710,7 +1740,7 @@ Item {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: (index + 1).toString()
                                                     color: "#6c757d"
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: fontSmall
                                                     // ALINEADO A LA DERECHA
                                                 }
                                             }
@@ -1730,7 +1760,7 @@ Item {
                                                     text: model.codigo || ""
                                                     color: "#007bff"  // AZUL
                                                     font.bold: true
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: fontSmall
                                                     // ALINEADO A LA IZQUIERDA
                                                 }
                                             }
@@ -1751,7 +1781,7 @@ Item {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: model.nombre || ""
                                                     color: textColor
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: fontSmall
                                                     elide: Text.ElideRight
                                                     // ALINEADO A LA IZQUIERDA
                                                 }
@@ -1772,7 +1802,7 @@ Item {
                                                     text: model.precio ? "$" + model.precio.toFixed(2) : ""
                                                     color: "#28a745"  // VERDE
                                                     font.bold: true
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: fontSmall
                                                     // ALINEADO A LA DERECHA
                                                 }
                                             }
@@ -1792,7 +1822,7 @@ Item {
                                                     text: model.cantidad ? model.cantidad.toString() : ""
                                                     color: "#fd7e14"  // NARANJA
                                                     font.bold: true
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: fontSmall
                                                     // ALINEADO A LA DERECHA
                                                 }
                                             }
@@ -1812,7 +1842,7 @@ Item {
                                                     text: model.subtotal ? "$" + model.subtotal.toFixed(2) : ""
                                                     color: "#007bff"  // AZUL
                                                     font.bold: true
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: fontSmall
                                                     // ALINEADO A LA DERECHA
                                                 }
                                             }
@@ -1838,7 +1868,7 @@ Item {
                                                         anchors.centerIn: parent
                                                         text: "🗑️"  // ÍCONO DE PAPELERA
                                                         color: "#ffffff"  // BLANCO
-                                                        font.pixelSize: 14
+                                                        font.pixelSize: fontMedium
                                                         font.bold: true
                                                     }
                                                     
@@ -1892,14 +1922,14 @@ Item {
                                             Label {
                                                 text: "No hay productos en la venta"
                                                 color: darkGrayColor
-                                                font.pixelSize: 14
+                                                font.pixelSize: fontMedium
                                                 Layout.alignment: Qt.AlignHCenter
                                             }
                                             
                                             Label {
                                                 text: "Busque y agregue productos usando el campo de arriba"
                                                 color: darkGrayColor
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                                 Layout.alignment: Qt.AlignHCenter
                                                 wrapMode: Text.WordWrap
                                                 Layout.maximumWidth: 250
@@ -1912,6 +1942,7 @@ Item {
                         }
                     }
                 }
+
                 // Footer con totales y botones
                 RowLayout {
                     Layout.fillWidth: true
@@ -1937,7 +1968,7 @@ Item {
                                     text: "PRODUCTOS"
                                     font.bold: true
                                     color: "#495057"
-                                    font.pixelSize: 9
+                                    font.pixelSize: fontTiny
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
@@ -1945,7 +1976,7 @@ Item {
                                     text: calcularProductos().toString()
                                     font.bold: true
                                     color: blueColor
-                                    font.pixelSize: 16
+                                    font.pixelSize: fontMedium
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
@@ -1967,7 +1998,7 @@ Item {
                                     text: "UNIDADES"
                                     font.bold: true
                                     color: "#495057"
-                                    font.pixelSize: 9
+                                    font.pixelSize: fontTiny
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
@@ -1975,7 +2006,7 @@ Item {
                                     text: calcularUnidadesTotales().toString()
                                     font.bold: true
                                     color: blueColor
-                                    font.pixelSize: 16
+                                    font.pixelSize: fontMedium
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
@@ -2000,7 +2031,7 @@ Item {
                                 text: "TOTAL"
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: fontSmall
                             }
                             
                             Item { Layout.fillWidth: true }
@@ -2009,7 +2040,7 @@ Item {
                                 text: "$" + calcularTotal().toFixed(2)
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontMedium
                             }
                         }
                     }
@@ -2032,7 +2063,7 @@ Item {
                                 text: parent.text
                                 color: "#212529"
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: fontSmall
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -2056,7 +2087,7 @@ Item {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: fontSmall
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -2085,7 +2116,7 @@ Item {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: fontSmall
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -2142,7 +2173,6 @@ Item {
         visible: detalleVentaDialogOpen
         z: 1001
         
-        // AGREGAR ESTE DEBUG
         onVisibleChanged: {
             console.log("👁️ Modal Container visible:", visible)
             if (visible) {
@@ -2151,11 +2181,10 @@ Item {
             }
         }       
         color: "#ffffff"
-        radius: 16
+        radius: radiusLarge
         border.color: "#dee2e6"
         border.width: 1
         
-        // SOMBRA DEL MODAL
         Rectangle {
             anchors.fill: parent
             anchors.topMargin: 4
@@ -2167,15 +2196,15 @@ Item {
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 24
-            spacing: 20
+            anchors.margins: marginLarge
+            spacing: marginLarge
             
             // 1. CABECERA DEL MODAL
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 120
                 color: "#f8f9fa"
-                radius: 12
+                radius: radiusLarge
                 border.color: "#e9ecef"
                 border.width: 1
                 
@@ -2190,14 +2219,13 @@ Item {
                         
                         Label {
                             text: "Detalle de Venta: " + (ventaSeleccionada ? ventaSeleccionada.idVenta : "---")
-                            font.pixelSize: 20
+                            font.pixelSize: fontLarge
                             font.bold: true
                             color: "#2c3e50"
                         }
                         
                         Item { Layout.fillWidth: true }
                         
-                        // BOTÓN DE CIERRE (X)
                         Rectangle {
                             width: 32
                             height: 32
@@ -2209,7 +2237,7 @@ Item {
                                 text: "✕"
                                 color: "#ffffff"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontMedium
                             }
                             
                             MouseArea {
@@ -2233,7 +2261,7 @@ Item {
                             
                             Text {
                                 text: "📅"
-                                font.pixelSize: 16
+                                font.pixelSize: fontMedium
                                 color: "#3498db"
                             }
                             
@@ -2242,7 +2270,7 @@ Item {
                                 
                                 Label {
                                     text: "Fecha y Hora:"
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                     color: "#6c757d"
                                     font.bold: true
                                 }
@@ -2250,7 +2278,7 @@ Item {
                                 Label {
                                     text: ventaSeleccionada ? 
                                         ventaSeleccionada.fecha + " | " + ventaSeleccionada.hora : "---"
-                                    font.pixelSize: 14
+                                    font.pixelSize: fontMedium
                                     color: "#2c3e50"
                                     font.bold: true
                                 }
@@ -2263,7 +2291,7 @@ Item {
                             
                             Text {
                                 text: "👤"
-                                font.pixelSize: 16
+                                font.pixelSize: fontMedium
                                 color: "#3498db"
                             }
                             
@@ -2272,14 +2300,14 @@ Item {
                                 
                                 Label {
                                     text: "Vendido por:"
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontSmall
                                     color: "#6c757d"
                                     font.bold: true
                                 }
                                 
                                 Label {
                                     text: ventaSeleccionada ? ventaSeleccionada.usuario : "---"
-                                    font.pixelSize: 14
+                                    font.pixelSize: fontMedium
                                     color: "#2c3e50"
                                     font.bold: true
                                 }
@@ -2301,7 +2329,7 @@ Item {
                     text: "📦 Productos vendidos:"
                     font.bold: true
                     color: "#2c3e50"
-                    font.pixelSize: 16
+                    font.pixelSize: fontMedium
                 }
                 
                 Rectangle {
@@ -2310,7 +2338,7 @@ Item {
                     color: "#ffffff"
                     border.color: "#dee2e6"
                     border.width: 1
-                    radius: 8
+                    radius: radiusMedium
                     
                     ColumnLayout {
                         anchors.fill: parent
@@ -2346,7 +2374,7 @@ Item {
                                         text: "#"
                                         font.bold: true
                                         color: "#495057"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                     }
                                 }
                                 
@@ -2363,7 +2391,7 @@ Item {
                                         text: "CÓDIGO"
                                         font.bold: true
                                         color: "#495057"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                     }
                                 }
                                 
@@ -2380,7 +2408,7 @@ Item {
                                         text: "PRODUCTO"
                                         font.bold: true
                                         color: "#495057"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                     }
                                 }
                                 
@@ -2397,7 +2425,7 @@ Item {
                                         text: "CANT."
                                         font.bold: true
                                         color: "#495057"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                     }
                                 }
                                 
@@ -2414,7 +2442,7 @@ Item {
                                         text: "PRECIO UNIT."
                                         font.bold: true
                                         color: "#495057"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                     }
                                 }
                                 
@@ -2431,7 +2459,7 @@ Item {
                                         text: "SUBTOTAL"
                                         font.bold: true
                                         color: "#495057"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontSmall
                                     }
                                 }
                             }
@@ -2477,7 +2505,7 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: (index + 1).toString()
                                                 color: "#6c757d"
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
@@ -2496,9 +2524,10 @@ Item {
                                                 text: model.codigo || "---"
                                                 color: "#007bff"
                                                 font.bold: true
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                             }
                                         }
+
                                         
                                         // PRODUCTO
                                         Rectangle {
@@ -2510,20 +2539,20 @@ Item {
                                             
                                             Label {
                                                 anchors.left: parent.left
-                                                anchors.leftMargin: 8
+                                                anchors.leftMargin: marginSmall
                                                 anchors.right: parent.right
-                                                anchors.rightMargin: 8
+                                                anchors.rightMargin: marginSmall
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: model.nombre || "Sin nombre"
                                                 color: "#2c3e50"
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                                 elide: Text.ElideRight
                                             }
                                         }
                                         
                                         // CANT.
                                         Rectangle {
-                                            Layout.preferredWidth: 70
+                                            Layout.preferredWidth: parent.width * 0.10
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
@@ -2531,18 +2560,18 @@ Item {
                                             
                                             Label {
                                                 anchors.right: parent.right
-                                                anchors.rightMargin: 8
+                                                anchors.rightMargin: marginSmall
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: (model.cantidad || 0).toString()
                                                 color: "#fd7e14"
                                                 font.bold: true
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
                                         // PRECIO UNIT.
                                         Rectangle {
-                                            Layout.preferredWidth: 90
+                                            Layout.preferredWidth: parent.width * 0.15
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
@@ -2550,18 +2579,18 @@ Item {
                                             
                                             Label {
                                                 anchors.right: parent.right
-                                                anchors.rightMargin: 8
+                                                anchors.rightMargin: marginSmall
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: "$" + (model.precio || 0).toFixed(2)
                                                 color: "#28a745"
                                                 font.bold: true
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
                                         // SUBTOTAL
                                         Rectangle {
-                                            Layout.preferredWidth: 90
+                                            Layout.preferredWidth: parent.width * 0.15
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
@@ -2569,12 +2598,12 @@ Item {
                                             
                                             Label {
                                                 anchors.right: parent.right
-                                                anchors.rightMargin: 8
+                                                anchors.rightMargin: marginSmall
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: "$" + (model.subtotal || 0).toFixed(2)
                                                 color: "#007bff"
                                                 font.bold: true
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                     }
@@ -2592,22 +2621,22 @@ Item {
                 Item { Layout.fillWidth: true }
                 
                 Rectangle {
-                    Layout.preferredWidth: 160
-                    Layout.preferredHeight: 40
+                    Layout.preferredWidth: baseUnit * 32
+                    Layout.preferredHeight: baseUnit * 8
                     color: "#f8f9fa"
-                    radius: 6
+                    radius: radiusSmall
                     border.color: "#dee2e6"
                     border.width: 1
                     
                     // SOLO EL TOTAL - COMPACTO
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 12
+                        anchors.margins: marginSmall
                         
                         Label {
                             text: "TOTAL:"
                             color: "#2c3e50"
-                            font.pixelSize: 14
+                            font.pixelSize: fontMedium
                             font.bold: true
                         }
                         
@@ -2625,11 +2654,10 @@ Item {
                                 return "$" + total.toFixed(2)
                             }
                             color: "#e74c3c"
-                            font.pixelSize: 16
+                            font.pixelSize: fontLarge
                             font.bold: true
                         }
                     }
-
                 }
             }
             
@@ -2641,10 +2669,10 @@ Item {
                 
                 // BOTÓN CERRAR
                 Rectangle {
-                    Layout.preferredWidth: 100
-                    Layout.preferredHeight: 40
+                    Layout.preferredWidth: baseUnit * 20
+                    Layout.preferredHeight: baseUnit * 8
                     color: cerrarBtnMouseArea.pressed ? "#5a6268" : "#6c757d"
-                    radius: 8
+                    radius: radiusMedium
                     border.color: "#495057"
                     border.width: 1
                     
@@ -2653,7 +2681,7 @@ Item {
                         text: "Cerrar"
                         color: "#ffffff"
                         font.bold: true
-                        font.pixelSize: 14
+                        font.pixelSize: fontMedium
                     }
                     
                     MouseArea {
@@ -2667,6 +2695,7 @@ Item {
             }
         }
     }
+
     // Función para mostrar detalles de venta
     function mostrarDetalleVenta(index) {
         console.log("🔍🔍🔍 FUNCIÓN MOSTRAR DETALLE EJECUTADA 🔍🔍🔍")
@@ -2751,6 +2780,7 @@ Item {
         console.log("✅ Estado del modal después de abrir:", detalleVentaDialogOpen)
         console.log("=== FIN MOSTRAR DETALLE ===")
     }
+
     // Función para obtener total de ventas
     function getTotalVentasCount() {
         return farmaciaData ? farmaciaData.ventasModel.count : 0
