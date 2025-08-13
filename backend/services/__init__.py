@@ -14,19 +14,26 @@ from .compra_service import CompraService
 from .consulta_service import ConsultaService
 from .dashboard_service import *
 from .doctor_service import DoctorService
-from .gasto_service import *
-from .inventario_service import *
-from .laboratorio_service import *
-from .paciente_service import *
-from .reporte_service import *
-from .trabajador_service import *
+from .gasto_service import GastoService
+from .inventario_service import InventarioService
+from .laboratorio_service import LaboratorioService
+from .paciente_service import PacienteService
+from .reporte_service import ReporteService
+from .trabajador_service import TrabajadorService
 from .usuario_service import UsuarioService
 
 __all__ = [
     'AuthService',
     'CompraService',
     'ConsultaService',
+    '',
     'DoctorService',
+    'GastoService',
+    'InventarioService',
+    'LaboratorioService',
+    'PacienteService',
+    'ReporteService',
+    'TrabajadorService',
     'UsuarioService'
 ]
 
