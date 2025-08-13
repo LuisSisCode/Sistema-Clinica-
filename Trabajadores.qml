@@ -7,7 +7,27 @@ Item {
     id: trabajadoresRoot
     objectName: "trabajadoresRoot"
     
-    // Acceso a colores
+    // ===== SISTEMA DE MEDIDAS RESPONSIVAS =====
+    readonly property real baseUnit: Math.min(width, height) / 100
+    readonly property real smallMargin: baseUnit * 1
+    readonly property real mediumMargin: baseUnit * 2
+    readonly property real largeMargin: baseUnit * 3
+    readonly property real extraLargeMargin: baseUnit * 4
+    
+    readonly property real smallFont: baseUnit * 1.5
+    readonly property real mediumFont: baseUnit * 2.0
+    readonly property real largeFont: baseUnit * 3.0
+    readonly property real titleFont: baseUnit * 4.0
+    
+    readonly property real smallRadius: baseUnit * 0.8
+    readonly property real mediumRadius: baseUnit * 1.2
+    readonly property real largeRadius: baseUnit * 2
+    
+    readonly property real rowHeight: baseUnit * 6 // Altura responsiva para filas
+    readonly property real headerHeight: baseUnit * 6
+    readonly property real buttonHeight: baseUnit * 4
+    
+    // ===== COLORES =====
     readonly property color primaryColor: "#3498DB"
     readonly property color successColor: "#27ae60"
     readonly property color dangerColor: "#E74C3C"
@@ -18,19 +38,18 @@ Item {
     readonly property color infoColor: "#17a2b8"
     readonly property color violetColor: "#9b59b6"
     
-    // Propiedades para los diálogos
+    // ===== PROPIEDADES PARA DIÁLOGOS =====
     property bool showNewWorkerDialog: false
     property bool showConfigTiposDialog: false
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
     
-    // Modelo de tipos de trabajadores - CAMBIADO A ListModel
+    // ===== MODELO DE TIPOS DE TRABAJADORES =====
     ListModel {
         id: tiposTrabajadoresModel
         
         Component.onCompleted: {
-            // Cargar datos iniciales
             append({
                 nombre: "Médico General", 
                 descripcion: "Profesional médico con título universitario en medicina",
@@ -64,7 +83,7 @@ Item {
         }
     }
 
-    // Función helper para obtener nombres de tipos de trabajadores
+    // ===== FUNCIONES HELPER =====
     function getTiposTrabajadoresNombres() {
         var nombres = ["Todos los tipos"]
         for (var i = 0; i < tiposTrabajadoresModel.count; i++) {
@@ -73,7 +92,6 @@ Item {
         return nombres
     }
 
-    // Función helper para obtener nombres para ComboBox de nuevo trabajador
     function getTiposTrabajadoresParaCombo() {
         var nombres = ["Seleccionar tipo..."]
         for (var i = 0; i < tiposTrabajadoresModel.count; i++) {
@@ -82,7 +100,7 @@ Item {
         return nombres
     }
 
-    // Modelo para trabajadores existentes
+    // ===== MODELO PARA TRABAJADORES EXISTENTES =====
     property var trabajadoresModel: [
         {
             trabajadorId: "1",
@@ -118,17 +136,18 @@ Item {
         }
     ]
 
+    // ===== LAYOUT PRINCIPAL RESPONSIVO =====
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 32
+        anchors.margins: largeMargin
+        spacing: mediumMargin
         
-        // Contenido principal
+        // ===== CONTENIDO PRINCIPAL =====
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: whiteColor
-            radius: 20
+            radius: largeRadius
             border.color: "#e0e0e0"
             border.width: 1
             
@@ -136,36 +155,40 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header de Trabajadores - FIJO
+                // ===== HEADER RESPONSIVO =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
+                    Layout.preferredHeight: headerHeight
                     color: "#f8f9fa"
                     border.color: "#e0e0e0"
                     border.width: 1
+                    radius: largeRadius
+                    
                     Rectangle {
                         anchors.fill: parent
-                        anchors.bottomMargin: 20
+                        anchors.bottomMargin: mediumMargin
                         color: parent.color
                         radius: parent.radius
                     }
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
+                        anchors.margins: mediumMargin
+                        spacing: mediumMargin
                         
+                        // Título y icono
                         RowLayout {
-                            spacing: 12
+                            spacing: smallMargin
                             
                             Label {
                                 text: "👥"
-                                font.pixelSize: 24
+                                font.pixelSize: titleFont
                                 color: primaryColor
                             }
                             
                             Label {
                                 text: "Gestión de Trabajadores"
-                                font.pixelSize: 20
+                                font.pixelSize: largeFont
                                 font.bold: true
                                 color: textColor
                             }
@@ -173,20 +196,24 @@ Item {
                         
                         Item { Layout.fillWidth: true }
                         
+                        // Botón Nuevo Trabajador
                         Button {
                             objectName: "newWorkerButton"
                             text: "➕ Nuevo Trabajador"
+                            Layout.preferredHeight: buttonHeight
                             
                             background: Rectangle {
                                 color: primaryColor
-                                radius: 12
+                                radius: mediumRadius
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
+                                font.pixelSize: mediumFont
                                 horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: {
@@ -196,21 +223,24 @@ Item {
                             }
                         }
                         
-                        // Botón de configuración (engranaje)
+                        // Botón de configuración
                         Button {
                             id: configButton
                             text: "⚙️"
-                            font.pixelSize: 18
+                            Layout.preferredWidth: buttonHeight
+                            Layout.preferredHeight: buttonHeight
+                            font.pixelSize: mediumFont
                             
                             background: Rectangle {
                                 color: "#6c757d"
-                                radius: 12
+                                radius: mediumRadius
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: configMenu.open()
@@ -228,29 +258,32 @@ Item {
                     }
                 }
                 
-                // Filtros y búsqueda - FIJO (SIN FILTRO DE ESTADO)
+                // ===== FILTROS RESPONSIVOS =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
+                    Layout.preferredHeight: headerHeight * 0.8
                     color: "transparent"
                     z: 10
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 32
-                        spacing: 16
+                        anchors.margins: mediumMargin
+                        spacing: mediumMargin
                         
                         Label {
                             text: "Filtrar por:"
                             font.bold: true
+                            font.pixelSize: mediumFont
                             color: textColor
                         }
                         
                         ComboBox {
                             id: filtroTipo
-                            Layout.preferredWidth: 180
+                            Layout.preferredWidth: width > 0 ? Math.max(120, parent.width * 0.2) : 120
+                            Layout.preferredHeight: buttonHeight
                             model: getTiposTrabajadoresNombres()
                             currentIndex: 0
+                            font.pixelSize: smallFont*1.3
                             onCurrentIndexChanged: aplicarFiltros()
                         }
                         
@@ -258,25 +291,27 @@ Item {
                         
                         TextField {
                             id: campoBusqueda
-                            Layout.preferredWidth: 200
+                            Layout.preferredWidth: Math.max(150, parent.width * 0.25)
+                            Layout.preferredHeight: buttonHeight
                             placeholderText: "Buscar trabajador..."
+                            font.pixelSize: smallFont*1.3
                             onTextChanged: aplicarFiltros()
                             
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: "#e0e0e0"
                                 border.width: 1
-                                radius: 8
+                                radius: smallRadius
                             }
                         }
                     }
                 }
                
-                // Contenedor para tabla con scroll limitado
+                // ===== TABLA RESPONSIVA =====
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.margins: 32
+                    Layout.margins: mediumMargin
                     
                     ScrollView {
                         anchors.fill: parent
@@ -287,16 +322,16 @@ Item {
                             model: ListModel {
                                 id: trabajadoresListModel
                                 Component.onCompleted: {
-                                    // Cargar datos iniciales
                                     for (var i = 0; i < trabajadoresModel.length; i++) {
                                         append(trabajadoresModel[i])
                                     }
                                 }
                             }
                             
+                            // ===== HEADER DE LA TABLA =====
                             header: Rectangle {
                                 width: parent.width
-                                height: 40
+                                height: rowHeight * 0.8
                                 color: "#f5f5f5"
                                 border.color: "#d0d0d0"
                                 border.width: 1
@@ -307,7 +342,7 @@ Item {
                                     spacing: 0
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(50, parent.width * 0.08)
+                                        Layout.preferredWidth: Math.max(40, parent.width * 0.08)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -317,13 +352,13 @@ Item {
                                             anchors.centerIn: parent
                                             text: "ID"
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                             color: textColor
                                         }
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(160, parent.width * 0.25)
+                                        Layout.preferredWidth: Math.max(120, parent.width * 0.25)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -333,13 +368,13 @@ Item {
                                             anchors.centerIn: parent
                                             text: "NOMBRE COMPLETO"
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                             color: textColor
                                         }
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(140, parent.width * 0.22)
+                                        Layout.preferredWidth: Math.max(100, parent.width * 0.22)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -349,13 +384,13 @@ Item {
                                             anchors.centerIn: parent
                                             text: "TIPO TRABAJADOR"
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                             color: textColor
                                         }
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.20)
+                                        Layout.preferredWidth: Math.max(80, parent.width * 0.20)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -365,7 +400,23 @@ Item {
                                             anchors.centerIn: parent
                                             text: "ESPECIALIDAD"
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
+                                            color: textColor
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: Math.max(80, parent.width * 0.15)
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
+                                        
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "MATRÍCULA"
+                                            font.bold: true
+                                            font.pixelSize: smallFont*1.3
                                             color: textColor
                                         }
                                     }
@@ -379,33 +430,19 @@ Item {
                                         
                                         Label { 
                                             anchors.centerIn: parent
-                                            text: "MATRÍCULA"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
-                                    }
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(100, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
                                             text: "FECHA"
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                             color: textColor
                                         }
                                     }                                   
                                 }
                             }
                             
+                            // ===== FILAS DE LA TABLA (ALTURA REDUCIDA) =====
                             delegate: Rectangle {
                                 width: ListView.view.width
-                                height: 80
+                                height: rowHeight  // Altura responsiva reducida
                                 color: {
                                     if (selectedRowIndex === index) return "#e3f2fd"
                                     return index % 2 === 0 ? "transparent" : "#fafafa"
@@ -418,7 +455,7 @@ Item {
                                     spacing: 0
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(50, parent.width * 0.08)
+                                        Layout.preferredWidth: Math.max(40, parent.width * 0.08)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -429,12 +466,12 @@ Item {
                                             text: model.trabajadorId
                                             color: textColor
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                         }
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(160, parent.width * 0.25)
+                                        Layout.preferredWidth: Math.max(120, parent.width * 0.25)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -442,11 +479,11 @@ Item {
                                         
                                         Label { 
                                             anchors.fill: parent
-                                            anchors.margins: 4
+                                            anchors.margins: smallMargin
                                             text: model.nombreCompleto
                                             color: primaryColor
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                             elide: Text.ElideRight
                                             wrapMode: Text.WordWrap
                                             maximumLineCount: 2
@@ -456,7 +493,7 @@ Item {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(140, parent.width * 0.22)
+                                        Layout.preferredWidth: Math.max(100, parent.width * 0.22)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -464,11 +501,11 @@ Item {
                                         
                                         Label { 
                                             anchors.fill: parent
-                                            anchors.margins: 4
+                                            anchors.margins: smallMargin
                                             text: model.tipoTrabajador
                                             color: textColor
                                             font.bold: true
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont*1.3
                                             elide: Text.ElideRight
                                             wrapMode: Text.WordWrap
                                             maximumLineCount: 2
@@ -478,7 +515,7 @@ Item {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.20)
+                                        Layout.preferredWidth: Math.max(80, parent.width * 0.20)
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#d0d0d0"
@@ -486,10 +523,31 @@ Item {
                                         
                                         Label { 
                                             anchors.fill: parent
-                                            anchors.margins: 4
+                                            anchors.margins: smallMargin
                                             text: model.especialidad
                                             color: "#7f8c8d"
-                                            font.pixelSize: 11
+                                            font.pixelSize: smallFont
+                                            elide: Text.ElideRight
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
+                                            verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: Math.max(80, parent.width * 0.15)
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
+                                        
+                                        Label { 
+                                            anchors.fill: parent
+                                            anchors.margins: smallMargin
+                                            text: model.matricula || "Sin matrícula"
+                                            color: model.matricula ? textColor : "#95a5a6"
+                                            font.pixelSize: smallFont * 0.9
                                             elide: Text.ElideRight
                                             wrapMode: Text.WordWrap
                                             maximumLineCount: 2
@@ -505,36 +563,16 @@ Item {
                                         border.color: "#d0d0d0"
                                         border.width: 1
                                         
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: 4
-                                            text: model.matricula || "Sin matrícula"
-                                            color: model.matricula ? textColor : "#95a5a6"
-                                            font.pixelSize: 11
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(100, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
                                         TextField {
                                             anchors.fill: parent
-                                            anchors.margins: 4
+                                            anchors.margins: smallMargin
                                             placeholderText: "DD/MM/YYYY"
                                             text: ""
+                                            font.pixelSize: smallFont * 0.9
                                             background: Rectangle {
                                                 color: "transparent"
                                                 border.color: "transparent"
                                             }
-                                            font.pixelSize: 11
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
@@ -549,24 +587,24 @@ Item {
                                     }
                                 }
                                 
-                                // Botones de acción que aparecen cuando se selecciona la fila
+                                // ===== BOTONES DE ACCIÓN RESPONSIVOS =====
                                 RowLayout {
                                     anchors.top: parent.top
                                     anchors.right: parent.right
-                                    anchors.margins: 8
-                                    spacing: 4
+                                    anchors.margins: smallMargin
+                                    spacing: smallMargin / 2
                                     visible: selectedRowIndex === index
                                     z: 10
                                     
                                     Button {
                                         id: editButton
-                                        width: 32
-                                        height: 32
+                                        width: buttonHeight * 0.8
+                                        height: buttonHeight * 0.8
                                         text: "✏️"
                                         
                                         background: Rectangle {
                                             color: warningColor
-                                            radius: 6
+                                            radius: smallRadius
                                             border.color: "#f1c40f"
                                             border.width: 1
                                         }
@@ -576,7 +614,7 @@ Item {
                                             color: whiteColor
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont
                                         }
                                         
                                         onClicked: {
@@ -590,13 +628,13 @@ Item {
                                     
                                     Button {
                                         id: deleteButton
-                                        width: 32
-                                        height: 32
+                                        width: buttonHeight * 0.8
+                                        height: buttonHeight * 0.8
                                         text: "🗑️"
                                         
                                         background: Rectangle {
                                             color: dangerColor
-                                            radius: 6
+                                            radius: smallRadius
                                             border.color: "#c0392b"
                                             border.width: 1
                                         }
@@ -606,7 +644,7 @@ Item {
                                             color: whiteColor
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: 12
+                                            font.pixelSize: smallFont
                                         }
                                         
                                         onClicked: {
@@ -624,7 +662,40 @@ Item {
         }
     }
 
-    // Diálogo Nuevo Trabajador / Editar Trabajador (SIN OPCIONES DE ESTADO)
+    // ===== FUNCIÓN PARA APLICAR FILTROS =====
+    function aplicarFiltros() {
+        trabajadoresListModel.clear()
+        
+        var textoBusqueda = campoBusqueda.text.toLowerCase()
+        
+        for (var i = 0; i < trabajadoresModel.length; i++) {
+            var trabajador = trabajadoresModel[i]
+            var mostrar = true
+            
+            // Filtro por tipo
+            if (filtroTipo.currentIndex > 0 && mostrar) {
+                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
+                if (trabajador.tipoTrabajador !== tipoSeleccionado) {
+                    mostrar = false
+                }
+            }
+            
+            // Búsqueda por texto en nombre
+            if (textoBusqueda.length > 0 && mostrar) {
+                if (!trabajador.nombreCompleto.toLowerCase().includes(textoBusqueda)) {
+                    mostrar = false
+                }
+            }
+            
+            if (mostrar) {
+                trabajadoresListModel.append(trabajador)
+            }
+        }
+    }
+
+    // ===== DIÁLOGOS (MANTENGO LA FUNCIONALIDAD ORIGINAL PERO CON MEDIDAS RESPONSIVAS) =====
+    
+    // Fondo del diálogo
     Rectangle {
         id: newWorkerDialog
         anchors.fill: parent
@@ -645,19 +716,20 @@ Item {
         }
     }
     
+    // Diálogo del formulario (continúa igual pero con medidas responsivas)
     Rectangle {
         id: workerForm
         anchors.centerIn: parent
-        width: 600
-        height: 550  // Reducido porque ya no hay opciones de estado
+        width: Math.min(parent.width * 0.8, 600)
+        height: Math.min(parent.height * 0.8, 550)
         color: whiteColor
-        radius: 20
+        radius: largeRadius
         border.color: lightGrayColor
         border.width: 2
         visible: showNewWorkerDialog
         
         property int selectedTipoTrabajadorIndex: -1
-        
+                
         // Función para cargar datos en modo edición
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
@@ -950,37 +1022,6 @@ Item {
                         editingIndex = -1
                     }
                 }
-            }
-        }
-    }
-
-    // Función para aplicar filtros (SIN FILTRO DE ESTADO)
-    function aplicarFiltros() {
-        trabajadoresListModel.clear()
-        
-        var textoBusqueda = campoBusqueda.text.toLowerCase()
-        
-        for (var i = 0; i < trabajadoresModel.length; i++) {
-            var trabajador = trabajadoresModel[i]
-            var mostrar = true
-            
-            // Filtro por tipo
-            if (filtroTipo.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
-                if (trabajador.tipoTrabajador !== tipoSeleccionado) {
-                    mostrar = false
-                }
-            }
-            
-            // Búsqueda por texto en nombre
-            if (textoBusqueda.length > 0 && mostrar) {
-                if (!trabajador.nombreCompleto.toLowerCase().includes(textoBusqueda)) {
-                    mostrar = false
-                }
-            }
-            
-            if (mostrar) {
-                trabajadoresListModel.append(trabajador)
             }
         }
     }
