@@ -7,7 +7,12 @@ Item {
     id: consultasRoot
     objectName: "consultasRoot"
     
-    // Acceso a colores
+    // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
+    readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
+    readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
+    readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
+    
+    // Colores (mantener)
     readonly property color primaryColor: "#3498DB"
     readonly property color successColor: "#27ae60"
     readonly property color dangerColor: "#E74C3C"
@@ -16,22 +21,22 @@ Item {
     readonly property color textColor: "#2c3e50"
     readonly property color whiteColor: "#FFFFFF"
     
-    // Propiedades para los diálogos
+    // Propiedades para los diálogos (mantener)
     property bool showNewConsultationDialog: false
     property bool showConfigEspecialidadesDialog: false
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
     
-    // Propiedades de paginación para consultas
-    property int itemsPerPageConsultas: 10
+    // PAGINACIÓN ADAPTATIVA
+    property int itemsPerPageConsultas: calcularElementosPorPagina()
     property int currentPageConsultas: 0
     property int totalPagesConsultas: 0
     
-    // ✅ NUEVAS PROPIEDADES PARA DATOS ORIGINALES
+    // Datos originales (mantener)
     property var consultasOriginales: []
     
-    // Modelo de especialidades mejorado
+    // Modelo de especialidades (mantener)
     property var especialidades: [
         { 
             nombre: "Cardiología", 
@@ -59,7 +64,7 @@ Item {
         }
     ]
 
-    // Modelo para consultas existentes - DATOS ORIGINALES
+    // Datos de ejemplo (mantener)
     property var consultasModelData: [
         {
             consultaId: "1",
@@ -171,25 +176,46 @@ Item {
         }
     ]
 
-    // ✅ MODELOS SEPARADOS PARA PAGINACIÓN
+    // Modelos (mantener)
     ListModel {
-        id: consultasListModel // Modelo filtrado (todos los resultados del filtro)
+        id: consultasListModel
     }
     
     ListModel {
-        id: consultasPaginadasModel // Modelo para la página actual
+        id: consultasPaginadasModel
     }
 
+    // FUNCIÓN PARA CALCULAR ELEMENTOS POR PÁGINA ADAPTATIVAMENTE
+    function calcularElementosPorPagina() {
+        var alturaDisponible = height - baseUnit * 25 // Headers, filtros, paginación
+        var alturaFila = baseUnit * 6
+        var elementosCalculados = Math.floor(alturaDisponible / alturaFila)
+        
+        // Límites inteligentes: mínimo 8, máximo 20
+        return Math.max(8, Math.min(elementosCalculados, 20))
+    }
+
+    // RECALCULAR PAGINACIÓN CUANDO CAMBIE EL TAMAÑO
+    onHeightChanged: {
+        var nuevosElementos = calcularElementosPorPagina()
+        if (nuevosElementos !== itemsPerPageConsultas) {
+            itemsPerPageConsultas = nuevosElementos
+            updatePaginatedModel()
+        }
+    }
+
+    // LAYOUT PRINCIPAL ADAPTATIVO
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 32
-        // Contenido principal
+        anchors.margins: baseUnit * 4
+        spacing: baseUnit * 3
+        
+        // CONTENEDOR PRINCIPAL
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: whiteColor
-            radius: 20
+            radius: baseUnit * 2
             border.color: "#e0e0e0"
             border.width: 1
             
@@ -197,36 +223,37 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header de Consultas - FIJO
+                // HEADER ADAPTATIVO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
+                    Layout.preferredHeight: baseUnit * 8
                     color: "#f8f9fa"
                     border.color: "#e0e0e0"
                     border.width: 1
+                    
                     Rectangle {
                         anchors.fill: parent
-                        anchors.bottomMargin: 20
+                        anchors.bottomMargin: baseUnit * 2
                         color: parent.color
                         radius: parent.radius
                     }
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
+                        anchors.margins: baseUnit * 1.5
                         
                         RowLayout {
-                            spacing: 12
+                            spacing: baseUnit
                             
                             Label {
                                 text: "🩺"
-                                font.pixelSize: 24
+                                font.pixelSize: fontBaseSize * 1.8
                                 color: primaryColor
                             }
                             
                             Label {
                                 text: "Registro de Consultas Médicas"
-                                font.pixelSize: 20
+                                font.pixelSize: fontBaseSize * 1.4
                                 font.bold: true
                                 color: textColor
                             }
@@ -237,16 +264,18 @@ Item {
                         Button {
                             objectName: "newConsultationButton"
                             text: "➕ Nueva Consulta"
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: primaryColor
-                                radius: 12
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
+                                font.pixelSize: fontBaseSize * 0.9
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -255,21 +284,23 @@ Item {
                                 editingIndex = -1
                                 showNewConsultationDialog = true
                             }
-                        } 
-                        // Botón de configuración (engranaje)
+                        }
+                        
                         Button {
                             id: configButton
                             text: "⚙️"
-                            font.pixelSize: 18
+                            Layout.preferredWidth: baseUnit * 4.5
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: "#6c757d"
-                                radius: 12
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
+                                font.pixelSize: fontBaseSize * 1.1
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -284,76 +315,127 @@ Item {
                                     onTriggered: showConfigEspecialidadesDialog = true
                                 }
                             }
-                        }           
+                        }
                     }
                 }
                 
-                //Filtros y búsqueda - FIJO
+                // FILTROS ADAPTATIVOS
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
+                    Layout.preferredHeight: width < 1000 ? baseUnit * 16 : baseUnit * 8
                     color: "transparent"
                     z: 10
                     
-                    RowLayout {
+                    // Layout adaptativo: una fila en pantallas grandes, dos en pequeñas
+                    GridLayout {
                         anchors.fill: parent
-                        anchors.margins: 32
-                        anchors.bottomMargin: 16  
-                        spacing: 16
+                        anchors.margins: baseUnit * 3
+                        anchors.bottomMargin: baseUnit * 1.5
                         
-                        Label {
-                            text: "Filtrar por:"
-                            font.bold: true
-                            color: textColor
-                        }
+                        columns: width < 1000 ? 2 : 4
+                        rowSpacing: baseUnit
+                        columnSpacing: baseUnit * 2
                         
-                        ComboBox {
-                            id: filtroFecha
-                            Layout.preferredWidth: 150
-                            model: ["Todas", "Hoy", "Esta Semana", "Este Mes"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Label {
-                            text: "Especialidad:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroEspecialidad
-                            Layout.preferredWidth: 180
-                            model: {
-                                var list = ["Todas"]
-                                for (var i = 0; i < especialidades.length; i++) {
-                                    list.push(especialidades[i].nombre)
-                                }
-                                return list
+                        // Primera fila/grupo de filtros
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            Label {
+                                text: "Filtrar por:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
+                            
+                            ComboBox {
+                                id: filtroFecha
+                                Layout.preferredWidth: Math.max(120, width * 0.15)
+                                Layout.preferredHeight: baseUnit * 4
+                                model: ["Todas", "Hoy", "Esta Semana", "Este Mes"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                                
+                                contentItem: Label {
+                                    text: filtroFecha.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                }
+                            }
                         }
                         
-                        Label {
-                            text: "Tipo:"
-                            font.bold: true
-                            color: textColor
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            Label {
+                                text: "Especialidad:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                            }
+                            
+                            ComboBox {
+                                id: filtroEspecialidad
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                model: {
+                                    var list = ["Todas"]
+                                    for (var i = 0; i < especialidades.length; i++) {
+                                        list.push(especialidades[i].nombre)
+                                    }
+                                    return list
+                                }
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                                
+                                contentItem: Label {
+                                    text: filtroEspecialidad.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
+                            }
                         }
                         
-                        ComboBox {
-                            id: filtroTipo
-                            Layout.preferredWidth: 120
-                            model: ["Todos", "Normal", "Emergencia"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            Label {
+                                text: "Tipo:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                            }
+                            
+                            ComboBox {
+                                id: filtroTipo
+                                Layout.preferredWidth: Math.max(100, width * 0.12)
+                                Layout.preferredHeight: baseUnit * 4
+                                model: ["Todos", "Normal", "Emergencia"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                                
+                                contentItem: Label {
+                                    text: filtroTipo.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                }
+                            }
                         }
                         
-                        Item { Layout.fillWidth: true }
-                        
+                        // Campo de búsqueda
                         TextField {
                             id: campoBusqueda
-                            Layout.preferredWidth: 200
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Buscar por paciente..."
                             onTextChanged: aplicarFiltros()
                             
@@ -361,33 +443,36 @@ Item {
                                 color: whiteColor
                                 border.color: "#e0e0e0"
                                 border.width: 1
-                                radius: 8
+                                radius: baseUnit * 0.8
                             }
+                            
+                            leftPadding: baseUnit * 1.5
+                            rightPadding: baseUnit * 1.5
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                     }
                 }
-               
-                //Contenedor para tabla con scroll limitado
+                
+                // TABLA ADAPTATIVA CON COLUMNAS PORCENTUALES
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 565
-                    Layout.fillHeight: false
-                    Layout.margins: 32
+                    Layout.fillHeight: true
+                    Layout.margins: baseUnit * 3
                     Layout.topMargin: 0
                     color: "#FFFFFF"
                     border.color: "#D5DBDB"
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit
                     
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 0
                         spacing: 0
                         
-                        // Header de la tabla - FIJO
+                        // HEADER DE TABLA CON PORCENTAJES
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 45
+                            Layout.preferredHeight: baseUnit * 5
                             color: "#f5f5f5"
                             border.color: "#d0d0d0"
                             border.width: 1
@@ -398,7 +483,7 @@ Item {
                                 spacing: 0
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: parent.width * 0.06 // 6% para ID
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -408,13 +493,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "ID"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 200
+                                    Layout.preferredWidth: parent.width * 0.18 // 18% para PACIENTE
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -424,13 +509,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PACIENTE"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 250
+                                    Layout.preferredWidth: parent.width * 0.22 // 22% para DETALLE
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -440,13 +525,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "DETALLE"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: parent.width * 0.25 // 25% para ESPECIALIDAD
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -456,13 +541,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "ESPECIALIDAD - DOCTOR"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: parent.width * 0.11 // 11% para TIPO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -472,13 +557,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "TIPO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: parent.width * 0.09 // 9% para PRECIO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -488,13 +573,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PRECIO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: parent.width * 0.09 // 9% para FECHA
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -504,18 +589,17 @@ Item {
                                         anchors.centerIn: parent
                                         text: "FECHA"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                             }
                         }
                         
-                        // Contenido de la tabla con scroll controlado
+                        // CONTENIDO DE TABLA CON SCROLL
                         ScrollView {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 545  // ✅ CAMBIAR de fillHeight a preferredHeight: 500
-                            Layout.fillHeight: false     // ✅ AGREGAR esta línea
+                            Layout.fillHeight: true
                             clip: true
                             
                             ListView {
@@ -524,7 +608,7 @@ Item {
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: 50
+                                    height: baseUnit * 6
                                     color: {
                                         if (selectedRowIndex === index) return "#e3f2fd"
                                         return index % 2 === 0 ? "transparent" : "#fafafa"
@@ -537,7 +621,7 @@ Item {
                                         spacing: 0
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: parent.width * 0.06
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -548,12 +632,12 @@ Item {
                                                 text: model.consultaId
                                                 color: textColor
                                                 font.bold: true
-                                                font.pixelSize: 11
+                                                font.pixelSize: fontBaseSize * 0.8
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 200
+                                            Layout.preferredWidth: parent.width * 0.18
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -564,13 +648,14 @@ Item {
                                                 text: model.paciente
                                                 color: textColor
                                                 font.bold: true
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontBaseSize * 0.85
                                                 elide: Text.ElideRight
+                                                maximumLineCount: 1
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 250
+                                            Layout.preferredWidth: parent.width * 0.22
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -578,10 +663,10 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 4
+                                                anchors.margins: baseUnit * 0.5
                                                 text: model.detalles
                                                 color: "#7f8c8d"
-                                                font.pixelSize: 10
+                                                font.pixelSize: fontBaseSize * 0.75
                                                 wrapMode: Text.WordWrap
                                                 elide: Text.ElideRight
                                                 maximumLineCount: 2
@@ -590,7 +675,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: parent.width * 0.25
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -598,11 +683,11 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 6
+                                                anchors.margins: baseUnit * 0.6
                                                 text: model.especialidadDoctor
                                                 color: primaryColor
                                                 font.bold: true
-                                                font.pixelSize: 10
+                                                font.pixelSize: fontBaseSize * 0.75
                                                 wrapMode: Text.WordWrap
                                                 elide: Text.ElideRight
                                                 maximumLineCount: 2
@@ -611,7 +696,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 120
+                                            Layout.preferredWidth: parent.width * 0.11
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -619,23 +704,23 @@ Item {
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 45
-                                                height: 18
+                                                width: baseUnit * 5
+                                                height: baseUnit * 2
                                                 color: model.tipo === "Emergencia" ? "#e67e22" : successColor
-                                                radius: 9
+                                                radius: baseUnit
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: model.tipo
                                                     color: whiteColor
-                                                    font.pixelSize: 8
+                                                    font.pixelSize: fontBaseSize * 0.7
                                                     font.bold: true
                                                 }
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: parent.width * 0.09
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -646,12 +731,12 @@ Item {
                                                 text: "Bs" + model.precio
                                                 color: model.tipo === "Emergencia" ? "#e67e22" : successColor
                                                 font.bold: true
-                                                font.pixelSize: 11
+                                                font.pixelSize: fontBaseSize * 0.8
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 120
+                                            Layout.preferredWidth: parent.width * 0.09
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -661,7 +746,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 text: model.fecha
                                                 color: textColor
-                                                font.pixelSize: 11
+                                                font.pixelSize: fontBaseSize * 0.75
                                             }
                                         }
                                     }
@@ -674,24 +759,24 @@ Item {
                                         }
                                     }
                                     
-                                    // Botones de acción
+                                    // BOTONES DE ACCIÓN ADAPTATIVOS
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
-                                        anchors.margins: 6
-                                        spacing: 3
+                                        anchors.margins: baseUnit * 0.6
+                                        spacing: baseUnit * 0.3
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
                                         Button {
                                             id: editButton
-                                            width: 28
-                                            height: 28
+                                            width: baseUnit * 3
+                                            height: baseUnit * 3
                                             text: "✏️"
                                             
                                             background: Rectangle {
                                                 color: warningColor
-                                                radius: 6
+                                                radius: baseUnit * 0.6
                                                 border.color: "#f1c40f"
                                                 border.width: 1
                                             }
@@ -701,7 +786,7 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontBaseSize * 0.8
                                             }
                                             
                                             onClicked: {
@@ -725,13 +810,13 @@ Item {
                                         
                                         Button {
                                             id: deleteButton
-                                            width: 28
-                                            height: 28
+                                            width: baseUnit * 3
+                                            height: baseUnit * 3
                                             text: "🗑️"
                                             
                                             background: Rectangle {
                                                 color: dangerColor
-                                                radius: 6
+                                                radius: baseUnit * 0.6
                                                 border.color: "#c0392b"
                                                 border.width: 1
                                             }
@@ -741,7 +826,7 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: 12
+                                                font.pixelSize: fontBaseSize * 0.8
                                             }
                                             
                                             onClicked: {
@@ -772,25 +857,25 @@ Item {
                         }
                     }
                 }
-                // Control de Paginación - Centrado con indicador
+                
+                // PAGINACIÓN ADAPTATIVA
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    Layout.margins: 32
+                    Layout.preferredHeight: baseUnit * 6
+                    Layout.margins: baseUnit * 3
                     Layout.topMargin: 0
                     color: "#F8F9FA"
                     border.color: "#D5DBDB"
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit
                     
                     RowLayout {
                         anchors.centerIn: parent
-                        spacing: 20
+                        spacing: baseUnit * 2
                         
-                        // Botón Anterior
                         Button {
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: baseUnit * 10
+                            Layout.preferredHeight: baseUnit * 4
                             text: "← Anterior"
                             enabled: currentPageConsultas > 0
                             
@@ -798,7 +883,7 @@ Item {
                                 color: parent.enabled ? 
                                     (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
                                     "#E5E7EB"
-                                radius: 18
+                                radius: baseUnit * 2
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -809,7 +894,7 @@ Item {
                                 text: parent.text
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontBaseSize * 0.9
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -822,18 +907,16 @@ Item {
                             }
                         }
                         
-                        // Indicador de página
                         Label {
                             text: "Página " + (currentPageConsultas + 1) + " de " + Math.max(1, totalPagesConsultas)
                             color: "#374151"
-                            font.pixelSize: 14
+                            font.pixelSize: fontBaseSize * 0.9
                             font.weight: Font.Medium
                         }
                         
-                        // Botón Siguiente
                         Button {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: baseUnit * 11
+                            Layout.preferredHeight: baseUnit * 4
                             text: "Siguiente →"
                             enabled: currentPageConsultas < totalPagesConsultas - 1
                             
@@ -841,7 +924,7 @@ Item {
                                 color: parent.enabled ? 
                                     (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
                                     "#E5E7EB"
-                                radius: 18
+                                radius: baseUnit * 2
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -852,7 +935,7 @@ Item {
                                 text: parent.text
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontBaseSize * 0.9
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -870,7 +953,9 @@ Item {
         }
     }
 
-    // Diálogo Nueva Consulta / Editar Consulta
+    // ===== DIÁLOGOS (mantener originales pero con tamaños adaptativos) =====
+    
+    // Fondo del diálogo
     Rectangle {
         id: newConsultationDialog
         anchors.fill: parent
@@ -891,13 +976,14 @@ Item {
         }
     }
     
+    // Diálogo de consulta adaptativo
     Rectangle {
         id: consultationForm
         anchors.centerIn: parent
-        width: 500
-        height: 650
+        width: Math.min(500, parent.width * 0.9)
+        height: Math.min(650, parent.height * 0.9)
         color: whiteColor
-        radius: 20
+        radius: baseUnit * 2
         border.color: lightGrayColor
         border.width: 2
         visible: showNewConsultationDialog
@@ -906,18 +992,15 @@ Item {
         property string consultationType: "Normal"
         property real calculatedPrice: 0.0
         
-        // Función para cargar datos en modo edición
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
                 var consulta = consultasListModel.get(editingIndex)
                 
-                // Extraer nombres del paciente completo
                 var nombreCompleto = consulta.paciente.split(" ")
                 nombrePaciente.text = nombreCompleto[0] || ""
                 apellidoPaterno.text = nombreCompleto[1] || ""
                 apellidoMaterno.text = nombreCompleto.slice(2).join(" ") || ""
                 
-                // Buscar la especialidad correspondiente
                 var especialidadDoctor = consulta.especialidadDoctor
                 for (var i = 0; i < especialidades.length; i++) {
                     var espStr = especialidades[i].nombre + " - " + especialidades[i].doctor
@@ -928,7 +1011,6 @@ Item {
                     }
                 }
                 
-                // Configurar tipo de consulta
                 if (consulta.tipo === "Normal") {
                     normalRadio.checked = true
                     consultationForm.consultationType = "Normal"
@@ -937,10 +1019,7 @@ Item {
                     consultationForm.consultationType = "Emergencia"
                 }
                 
-                // Cargar precio
                 consultationForm.calculatedPrice = parseFloat(consulta.precio)
-                
-                // Cargar detalles
                 detallesConsulta.text = consulta.detalles
             }
         }
@@ -949,7 +1028,6 @@ Item {
             if (visible && isEditMode) {
                 loadEditData()
             } else if (visible && !isEditMode) {
-                // Limpiar formulario para nueva consulta
                 nombrePaciente.text = ""
                 apellidoPaterno.text = ""
                 apellidoMaterno.text = ""
@@ -964,20 +1042,18 @@ Item {
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 20
+            anchors.margins: baseUnit * 3
+            spacing: baseUnit * 2
             
-            // Título
             Label {
                 Layout.fillWidth: true
                 text: isEditMode ? "Editar Consulta" : "Nueva Consulta"
-                font.pixelSize: 24
+                font.pixelSize: fontBaseSize * 1.6
                 font.bold: true
                 color: textColor
                 horizontalAlignment: Text.AlignHCenter
             }
             
-            // Datos del Paciente
             GroupBox {
                 Layout.fillWidth: true
                 title: "Datos del Paciente"
@@ -986,96 +1062,104 @@ Item {
                     color: "#f8f9fa"
                     border.color: lightGrayColor
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit
                 }
                 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 12
+                    spacing: baseUnit
                     
-                    // Nombre
                     TextField {
                         id: nombrePaciente
                         Layout.fillWidth: true
+                        Layout.preferredHeight: baseUnit * 4
                         placeholderText: "Nombre del paciente"
+                        font.pixelSize: fontBaseSize * 0.9
                         background: Rectangle {
                             color: whiteColor
                             border.color: lightGrayColor
                             border.width: 1
-                            radius: 6
+                            radius: baseUnit * 0.6
                         }
                     }
                     
-                    // Apellidos
                     RowLayout {
                         Layout.fillWidth: true                       
                         TextField {
                             id: apellidoPaterno
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido paterno"
+                            font.pixelSize: fontBaseSize * 0.9
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                         }
                         
                         TextField {
                             id: apellidoMaterno
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido materno"
+                            font.pixelSize: fontBaseSize * 0.9
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                         }
                     }
                     
-                    // Edad
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            Layout.preferredWidth: 120
+                            Layout.preferredWidth: baseUnit * 12
                             text: "Edad:"
                             font.bold: true
                             color: textColor
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                         TextField {
                             id: edadPaciente
-                            Layout.preferredWidth: 100
+                            Layout.preferredWidth: baseUnit * 10
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "0"
                             validator: IntValidator { bottom: 0; top: 120 }
+                            font.pixelSize: fontBaseSize * 0.9
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                         }
                         Label {
                             text: "años"
                             color: textColor
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                         Item { Layout.fillWidth: true }
                     }
                 }
             }
             
-            // Especialidad y Doctor
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Especialidad:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 ComboBox {
                     id: especialidadCombo
                     Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 4
                     model: {
                         var list = ["Seleccionar especialidad..."]
                         for (var i = 0; i < especialidades.length; i++) {
@@ -1097,17 +1181,26 @@ Item {
                             consultationForm.calculatedPrice = 0.0
                         }
                     }
+                    
+                    contentItem: Label {
+                        text: especialidadCombo.displayText
+                        font.pixelSize: fontBaseSize * 0.8
+                        color: textColor
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: baseUnit
+                        elide: Text.ElideRight
+                    }
                 }
             }
             
-            // Tipo de Consulta
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Tipo de Consulta:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 
                 RadioButton {
@@ -1123,6 +1216,14 @@ Item {
                             }
                         }
                     }
+                    
+                    contentItem: Label {
+                        text: normalRadio.text
+                        font.pixelSize: fontBaseSize * 0.9
+                        color: textColor
+                        leftPadding: normalRadio.indicator.width + normalRadio.spacing
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
                 
                 RadioButton {
@@ -1137,30 +1238,37 @@ Item {
                             }
                         }
                     }
+                    
+                    contentItem: Label {
+                        text: emergenciaRadio.text
+                        font.pixelSize: fontBaseSize * 0.9
+                        color: textColor
+                        leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
                 Item { Layout.fillWidth: true }
             }
             
-            // Precio calculado
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Precio:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 Label {
                     text: consultationForm.selectedEspecialidadIndex >= 0 ? 
                           "Bs" + consultationForm.calculatedPrice.toFixed(2) : "Seleccione especialidad"
                     font.bold: true
-                    font.pixelSize: 16
+                    font.pixelSize: fontBaseSize * 1.1
                     color: consultationForm.consultationType === "Emergencia" ? "#e67e22" : successColor
                 }
                 Item { Layout.fillWidth: true }
             }
             
-            // Detalles
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -1169,45 +1277,47 @@ Item {
                     text: "Detalles:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 
                 ScrollView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 80
+                    Layout.minimumHeight: baseUnit * 8
                     
                     TextArea {
                         id: detallesConsulta
                         placeholderText: "Descripción de la consulta, síntomas, observaciones..."
                         wrapMode: TextArea.Wrap
+                        font.pixelSize: fontBaseSize * 0.9
                         background: Rectangle {
                             color: whiteColor
                             border.color: lightGrayColor
                             border.width: 1
-                            radius: 8
+                            radius: baseUnit
                         }
                     }
                 }
             }
             
-            // Botones
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 
                 Button {
                     text: "Cancelar"
+                    Layout.preferredHeight: baseUnit * 4
                     background: Rectangle {
                         color: lightGrayColor
-                        radius: 8
+                        radius: baseUnit
                     }
                     contentItem: Label {
                         text: parent.text
                         color: textColor
+                        font.pixelSize: fontBaseSize * 0.9
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        // Limpiar campos
                         nombrePaciente.text = ""
                         apellidoPaterno.text = ""
                         apellidoMaterno.text = ""
@@ -1226,18 +1336,19 @@ Item {
                     text: isEditMode ? "Actualizar" : "Guardar"
                     enabled: consultationForm.selectedEspecialidadIndex >= 0 && 
                              nombrePaciente.text.length > 0
+                    Layout.preferredHeight: baseUnit * 4
                     background: Rectangle {
                         color: parent.enabled ? primaryColor : "#bdc3c7"
-                        radius: 8
+                        radius: baseUnit
                     }
                     contentItem: Label {
                         text: parent.text
                         color: whiteColor
                         font.bold: true
+                        font.pixelSize: fontBaseSize * 0.9
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        // Crear datos de consulta
                         var nombreCompleto = nombrePaciente.text + " " + 
                                            apellidoPaterno.text + " " + 
                                            apellidoMaterno.text
@@ -1255,14 +1366,11 @@ Item {
                         }
                         
                         if (isEditMode && editingIndex >= 0) {
-                            // ✅ ACTUALIZAR CONSULTA EXISTENTE
                             var consultaExistente = consultasListModel.get(editingIndex)
                             consultaData.consultaId = consultaExistente.consultaId
                             
-                            // Actualizar en modelo filtrado
                             consultasListModel.set(editingIndex, consultaData)
                             
-                            // Actualizar en datos originales
                             for (var i = 0; i < consultasOriginales.length; i++) {
                                 if (consultasOriginales[i].consultaId === consultaData.consultaId) {
                                     consultasOriginales[i] = consultaData
@@ -1272,22 +1380,16 @@ Item {
                             
                             console.log("Consulta actualizada:", JSON.stringify(consultaData))
                         } else {
-                            // ✅ CREAR NUEVA CONSULTA
                             consultaData.consultaId = (getTotalConsultasCount() + 1).toString()
                             
-                            // Agregar a modelo filtrado
                             consultasListModel.append(consultaData)
-                            
-                            // Agregar a datos originales
                             consultasOriginales.push(consultaData)
                             
                             console.log("Nueva consulta guardada:", JSON.stringify(consultaData))
                         }
                         
-                        // ✅ ACTUALIZAR PAGINACIÓN
                         updatePaginatedModel()
                         
-                        // Limpiar y cerrar
                         nombrePaciente.text = ""
                         apellidoPaterno.text = ""
                         apellidoMaterno.text = ""
@@ -1305,112 +1407,7 @@ Item {
         }
     }
     
-    // ✅ FUNCIÓN PARA APLICAR FILTROS - MEJORADA
-    function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
-        
-        // Limpiar el modelo filtrado
-        consultasListModel.clear()
-        
-        var hoy = new Date()
-        var textoBusqueda = campoBusqueda.text.toLowerCase()
-        
-        for (var i = 0; i < consultasOriginales.length; i++) {
-            var consulta = consultasOriginales[i]
-            var mostrar = true
-            
-            // Filtro por fecha
-            if (filtroFecha.currentIndex > 0) {
-                var fechaConsulta = new Date(consulta.fecha)
-                var diferenciaDias = Math.floor((hoy - fechaConsulta) / (1000 * 60 * 60 * 24))
-                
-                switch(filtroFecha.currentIndex) {
-                    case 1: // Hoy
-                        if (diferenciaDias !== 0) mostrar = false
-                        break
-                    case 2: // Esta Semana
-                        if (diferenciaDias > 7) mostrar = false
-                        break
-                    case 3: // Este Mes
-                        if (diferenciaDias > 30) mostrar = false
-                        break
-                }
-            }
-            
-            // Filtro por especialidad
-            if (filtroEspecialidad.currentIndex > 0 && mostrar) {
-                var especialidadSeleccionada = especialidades[filtroEspecialidad.currentIndex - 1].nombre
-                if (!consulta.especialidadDoctor.includes(especialidadSeleccionada)) {
-                    mostrar = false
-                }
-            }
-            
-            // Filtro por tipo
-            if (filtroTipo.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
-                if (consulta.tipo !== tipoSeleccionado) {
-                    mostrar = false
-                }
-            }
-            
-            // Búsqueda por texto en paciente
-            if (textoBusqueda.length > 0 && mostrar) {
-                if (!consulta.paciente.toLowerCase().includes(textoBusqueda)) {
-                    mostrar = false
-                }
-            }
-            
-            if (mostrar) {
-                consultasListModel.append(consulta)
-            }
-        }
-        
-        // ✅ RESETEAR A PRIMERA PÁGINA Y ACTUALIZAR PAGINACIÓN
-        currentPageConsultas = 0
-        updatePaginatedModel()
-        
-        console.log("✅ Filtros aplicados. Consultas mostradas:", consultasListModel.count)
-    }
-
-    // ✅ AGREGAR ESTA FUNCIÓN ANTES DE aplicarFiltros() SI NO EXISTE
-    function updatePaginatedModel() {
-        console.log("📄 Consultas: Actualizando paginación - Página:", currentPageConsultas + 1)
-        
-        // Limpiar modelo paginado
-        consultasPaginadasModel.clear()
-        
-        // Calcular total de páginas basado en consultas filtradas
-        var totalItems = consultasListModel.count
-        totalPagesConsultas = Math.ceil(totalItems / itemsPerPageConsultas)
-        
-        // Asegurar que siempre hay al menos 1 página
-        if (totalPagesConsultas === 0) {
-            totalPagesConsultas = 1
-        }
-        
-        // Ajustar página actual si es necesario
-        if (currentPageConsultas >= totalPagesConsultas && totalPagesConsultas > 0) {
-            currentPageConsultas = totalPagesConsultas - 1
-        }
-        if (currentPageConsultas < 0) {
-            currentPageConsultas = 0
-        }
-        
-        // Calcular índices
-        var startIndex = currentPageConsultas * itemsPerPageConsultas
-        var endIndex = Math.min(startIndex + itemsPerPageConsultas, totalItems)
-        
-        // Agregar elementos de la página actual
-        for (var i = startIndex; i < endIndex; i++) {
-            var consulta = consultasListModel.get(i)
-            consultasPaginadasModel.append(consulta)
-        }
-        
-        console.log("📄 Consultas: Página", currentPageConsultas + 1, "de", totalPagesConsultas,
-                    "- Mostrando", consultasPaginadasModel.count, "de", totalItems)
-    }
-
-    // Diálogo Configuración de Especialidades
+    // === DIÁLOGO DE CONFIGURACIÓN (mantener con ajustes adaptativos) ===
     Rectangle {
         id: configEspecialidadesBackground
         anchors.fill: parent
@@ -1431,10 +1428,10 @@ Item {
     Rectangle {
         id: configEspecialidadesDialog
         anchors.centerIn: parent
-        width: 700
-        height: 600
+        width: Math.min(700, parent.width * 0.95)
+        height: Math.min(600, parent.height * 0.9)
         color: whiteColor
-        radius: 20
+        radius: baseUnit * 2
         border.color: lightGrayColor
         border.width: 2
         visible: showConfigEspecialidadesDialog
@@ -1443,29 +1440,27 @@ Item {
             anchors.fill: parent
             spacing: 0
             
-            // Header fijo para título y formulario
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 350
+                Layout.preferredHeight: baseUnit * 35
                 color: whiteColor
-                radius: 20
+                radius: baseUnit * 2
                 z: 10
                 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 30
-                    spacing: 20
+                    anchors.margins: baseUnit * 3
+                    spacing: baseUnit * 2
                     
                     Label {
                         Layout.fillWidth: true
                         text: "🏥 Configuración de Especialidades"
-                        font.pixelSize: 24
+                        font.pixelSize: fontBaseSize * 1.6
                         font.bold: true
                         color: textColor
                         horizontalAlignment: Text.AlignHCenter
                     }
                     
-                    // Formulario para agregar nueva especialidad
                     GroupBox {
                         Layout.fillWidth: true
                         title: "Agregar Nueva Especialidad"
@@ -1474,29 +1469,32 @@ Item {
                             color: "#f8f9fa"
                             border.color: lightGrayColor
                             border.width: 1
-                            radius: 8
+                            radius: baseUnit
                         }
                         
                         GridLayout {
                             anchors.fill: parent
                             columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 10
+                            rowSpacing: baseUnit
+                            columnSpacing: baseUnit
                             
                             Label {
                                 text: "Especialidad:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevaEspecialidadNombre
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "Ej: Dermatología"
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
@@ -1504,16 +1502,19 @@ Item {
                                 text: "Doctor:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevaEspecialidadDoctor
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "Ej: Dr. Ana María García"
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
@@ -1521,17 +1522,20 @@ Item {
                                 text: "Precio Normal:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevaEspecialidadPrecioNormal
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "0.00"
                                 validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
@@ -1539,32 +1543,37 @@ Item {
                                 text: "Precio Emergencia:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevaEspecialidadPrecioEmergencia
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "0.00"
                                 validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
                             Item { }
                             Button {
                                 Layout.alignment: Qt.AlignRight
+                                Layout.preferredHeight: baseUnit * 4
                                 text: "➕ Agregar Especialidad"
                                 background: Rectangle {
                                     color: successColor
-                                    radius: 8
+                                    radius: baseUnit
                                 }
                                 contentItem: Label {
                                     text: parent.text
                                     color: whiteColor
                                     font.bold: true
+                                    font.pixelSize: fontBaseSize * 0.9
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 onClicked: {
@@ -1581,7 +1590,6 @@ Item {
                                         especialidades.push(nuevaEspecialidad)
                                         consultasRoot.especialidades = especialidades
                                         
-                                        // Limpiar campos
                                         nuevaEspecialidadNombre.text = ""
                                         nuevaEspecialidadDoctor.text = ""
                                         nuevaEspecialidadPrecioNormal.text = ""
@@ -1596,11 +1604,10 @@ Item {
                 }
             }
             
-            // Lista de especialidades existentes con scroll limitado
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 30
+                Layout.margins: baseUnit * 3
                 Layout.topMargin: 0
                 color: "transparent"
                 
@@ -1612,89 +1619,86 @@ Item {
                         model: especialidades
                         delegate: Rectangle {
                             width: ListView.view.width
-                            height: 70
+                            height: baseUnit * 8
                             color: index % 2 === 0 ? "transparent" : "#fafafa"
                             border.color: "#e8e8e8"
                             border.width: 1
-                            radius: 8
+                            radius: baseUnit
                             
                             GridLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
+                                anchors.margins: baseUnit
                                 columns: 4
-                                rowSpacing: 6
-                                columnSpacing: 12
+                                rowSpacing: baseUnit * 0.6
+                                columnSpacing: baseUnit
                                 
-                                // Especialidad y Doctor
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 4
+                                    spacing: baseUnit * 0.4
                                     
                                     Label {
                                         text: modelData.nombre
                                         font.bold: true
                                         color: primaryColor
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.95
                                     }
                                     Label {
                                         text: modelData.doctor
                                         color: textColor
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                 }
                                 
-                                // Precio Normal
                                 ColumnLayout {
-                                    Layout.preferredWidth: 100
-                                    spacing: 4
+                                    Layout.preferredWidth: baseUnit * 10
+                                    spacing: baseUnit * 0.4
                                     
                                     Label {
                                         text: "Normal"
                                         font.bold: true
                                         color: successColor
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                     Label {
                                         text: "Bs" + modelData.precioNormal.toFixed(2)
                                         color: successColor
                                         font.bold: true
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.95
                                     }
                                 }
                                 
-                                // Precio Emergencia
                                 ColumnLayout {
-                                    Layout.preferredWidth: 100
-                                    spacing: 4
+                                    Layout.preferredWidth: baseUnit * 10
+                                    spacing: baseUnit * 0.4
                                     
                                     Label {
                                         text: "Emergencia"
                                         font.bold: true
                                         color: "#e67e22"
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                     Label {
                                         text: "Bs" + modelData.precioEmergencia.toFixed(2)
                                         color: "#e67e22"
                                         font.bold: true
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.95
                                     }
                                 }
                                 
-                                // Botón eliminar
                                 Button {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
+                                    Layout.preferredWidth: baseUnit * 3.5
+                                    Layout.preferredHeight: baseUnit * 3.5
                                     text: "🗑️"
                                     background: Rectangle {
                                         color: dangerColor
-                                        radius: 6
+                                        radius: baseUnit * 0.6
                                     }
                                     contentItem: Label {
                                         text: parent.text
                                         color: whiteColor
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                     onClicked: {
                                         especialidades.splice(index, 1)
@@ -1708,26 +1712,117 @@ Item {
                 }
             }      
         }
-    } 
+    }
+
+    // ===== FUNCIONES (mantener todas) =====
     
-    // ✅ FUNCIÓN PARA OBTENER TOTAL DE CONSULTAS
+    function aplicarFiltros() {
+        console.log("🔍 Aplicando filtros...")
+        
+        consultasListModel.clear()
+        
+        var hoy = new Date()
+        var textoBusqueda = campoBusqueda.text.toLowerCase()
+        
+        for (var i = 0; i < consultasOriginales.length; i++) {
+            var consulta = consultasOriginales[i]
+            var mostrar = true
+            
+            if (filtroFecha.currentIndex > 0) {
+                var fechaConsulta = new Date(consulta.fecha)
+                var diferenciaDias = Math.floor((hoy - fechaConsulta) / (1000 * 60 * 60 * 24))
+                
+                switch(filtroFecha.currentIndex) {
+                    case 1:
+                        if (diferenciaDias !== 0) mostrar = false
+                        break
+                    case 2:
+                        if (diferenciaDias > 7) mostrar = false
+                        break
+                    case 3:
+                        if (diferenciaDias > 30) mostrar = false
+                        break
+                }
+            }
+            
+            if (filtroEspecialidad.currentIndex > 0 && mostrar) {
+                var especialidadSeleccionada = especialidades[filtroEspecialidad.currentIndex - 1].nombre
+                if (!consulta.especialidadDoctor.includes(especialidadSeleccionada)) {
+                    mostrar = false
+                }
+            }
+            
+            if (filtroTipo.currentIndex > 0 && mostrar) {
+                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
+                if (consulta.tipo !== tipoSeleccionado) {
+                    mostrar = false
+                }
+            }
+            
+            if (textoBusqueda.length > 0 && mostrar) {
+                if (!consulta.paciente.toLowerCase().includes(textoBusqueda)) {
+                    mostrar = false
+                }
+            }
+            
+            if (mostrar) {
+                consultasListModel.append(consulta)
+            }
+        }
+        
+        currentPageConsultas = 0
+        updatePaginatedModel()
+        
+        console.log("✅ Filtros aplicados. Consultas mostradas:", consultasListModel.count)
+    }
+
+    function updatePaginatedModel() {
+        console.log("📄 Consultas: Actualizando paginación - Página:", currentPageConsultas + 1)
+        
+        consultasPaginadasModel.clear()
+        
+        var totalItems = consultasListModel.count
+        totalPagesConsultas = Math.ceil(totalItems / itemsPerPageConsultas)
+        
+        if (totalPagesConsultas === 0) {
+            totalPagesConsultas = 1
+        }
+        
+        if (currentPageConsultas >= totalPagesConsultas && totalPagesConsultas > 0) {
+            currentPageConsultas = totalPagesConsultas - 1
+        }
+        if (currentPageConsultas < 0) {
+            currentPageConsultas = 0
+        }
+        
+        var startIndex = currentPageConsultas * itemsPerPageConsultas
+        var endIndex = Math.min(startIndex + itemsPerPageConsultas, totalItems)
+        
+        for (var i = startIndex; i < endIndex; i++) {
+            var consulta = consultasListModel.get(i)
+            consultasPaginadasModel.append(consulta)
+        }
+        
+        console.log("📄 Consultas: Página", currentPageConsultas + 1, "de", totalPagesConsultas,
+                    "- Mostrando", consultasPaginadasModel.count, "de", totalItems, 
+                    "- Elementos por página:", itemsPerPageConsultas)
+    }
+    
     function getTotalConsultasCount() {
         return consultasOriginales.length
     }
     
-    // ✅ INICIALIZACIÓN AL CARGAR EL COMPONENTE
     Component.onCompleted: {
         console.log("🩺 Módulo Consultas iniciado")
         
-        // Cargar datos originales
         for (var i = 0; i < consultasModelData.length; i++) {
             consultasOriginales.push(consultasModelData[i])
             consultasListModel.append(consultasModelData[i])
         }
         
-        // Inicializar paginación
         updatePaginatedModel()
         
         console.log("✅ Consultas cargadas:", consultasOriginales.length)
+        console.log("📱 Elementos por página calculados:", itemsPerPageConsultas)
     }
 }

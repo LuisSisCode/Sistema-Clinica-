@@ -22,7 +22,7 @@ class DatabaseConnection:
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self, server="10.171.82.135", database="ClinicaMariaInmaculada", trusted_connection=False):
+    def __init__(self, server="DESKTOP-HOE6AHT\SQLEXPRESS", database="ClinicaMariaInmaculada", trusted_connection=False):
         """
         Inicializa la conexión a la base de datos SQL Server.
         
