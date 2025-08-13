@@ -7,7 +7,12 @@ Item {
     id: laboratorioRoot
     objectName: "laboratorioRoot"
     
-    // Acceso a colores
+    // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
+    readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
+    readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
+    readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
+    
+    // Colores (mantener)
     readonly property color primaryColor: "#3498DB"
     readonly property color successColor: "#27ae60"
     readonly property color dangerColor: "#E74C3C"
@@ -17,22 +22,22 @@ Item {
     readonly property color whiteColor: "#FFFFFF"
     readonly property color emergencyColor: "#e67e22"
     
-    // Propiedades para los diálogos
+    // Propiedades para los diálogos (mantener)
     property bool showNewLabTestDialog: false
     property bool showConfigTiposAnalisisDialog: false
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
 
-    // ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
-    property int itemsPerPageLaboratorio: 10
+    // PAGINACIÓN ADAPTATIVA
+    property int itemsPerPageLaboratorio: calcularElementosPorPagina()
     property int currentPageLaboratorio: 0
     property int totalPagesLaboratorio: 0
 
-    // ✅ NUEVA PROPIEDAD PARA DATOS ORIGINALES
+    // Datos originales (mantener)
     property var analisisOriginales: []
 
-    // Modelo de tipos de análisis
+    // Modelo de tipos de análisis (mantener)
     property var tiposAnalisis: [
         { 
             nombre: "Hemograma Completo", 
@@ -78,7 +83,7 @@ Item {
         }
     ]
 
-    // Modelo de trabajadores de laboratorio
+    // Modelo de trabajadores de laboratorio (mantener)
     property var trabajadoresLab: [
         "Lic. Carmen Ruiz",
         "Lic. Roberto Silva", 
@@ -86,7 +91,7 @@ Item {
         "Lic. Pedro González"
     ]
 
-    // ✅ DATOS AMPLIADOS PARA PROBAR PAGINACIÓN (12 análisis)
+    // Datos de ejemplo ampliados (mantener)
     property var analisisModelData: [
         {
             analisisId: "1",
@@ -222,26 +227,46 @@ Item {
         }
     ]
 
-    // ✅ MODELOS SEPARADOS PARA PAGINACIÓN
+    // Modelos (mantener)
     ListModel {
-        id: analisisListModel // Modelo filtrado (todos los resultados del filtro)
+        id: analisisListModel
     }
     
     ListModel {
-        id: analisisPaginadosModel // Modelo para la página actual
+        id: analisisPaginadosModel
     }
 
+    // FUNCIÓN PARA CALCULAR ELEMENTOS POR PÁGINA ADAPTATIVAMENTE
+    function calcularElementosPorPagina() {
+        var alturaDisponible = height - baseUnit * 25 // Headers, filtros, paginación
+        var alturaFila = baseUnit * 6
+        var elementosCalculados = Math.floor(alturaDisponible / alturaFila)
+        
+        // Límites inteligentes: mínimo 8, máximo 20
+        return Math.max(8, Math.min(elementosCalculados, 20))
+    }
+
+    // RECALCULAR PAGINACIÓN CUANDO CAMBIE EL TAMAÑO
+    onHeightChanged: {
+        var nuevosElementos = calcularElementosPorPagina()
+        if (nuevosElementos !== itemsPerPageLaboratorio) {
+            itemsPerPageLaboratorio = nuevosElementos
+            updatePaginatedModel()
+        }
+    }
+
+    // LAYOUT PRINCIPAL ADAPTATIVO
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 32
+        anchors.margins: baseUnit * 4
+        spacing: baseUnit * 3
         
-        // Contenido principal
+        // CONTENEDOR PRINCIPAL
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: whiteColor
-            radius: 20
+            radius: baseUnit * 2
             border.color: "#e0e0e0"
             border.width: 1
             
@@ -249,36 +274,37 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header de Laboratorio - FIJO
+                // HEADER ADAPTATIVO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
+                    Layout.preferredHeight: baseUnit * 8
                     color: "#f8f9fa"
                     border.color: "#e0e0e0"
                     border.width: 1
+                    
                     Rectangle {
                         anchors.fill: parent
-                        anchors.bottomMargin: 20
+                        anchors.bottomMargin: baseUnit * 2
                         color: parent.color
                         radius: parent.radius
                     }
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
+                        anchors.margins: baseUnit * 1.5
                         
                         RowLayout {
-                            spacing: 12
+                            spacing: baseUnit
                             
                             Label {
                                 text: "🧪"
-                                font.pixelSize: 24
+                                font.pixelSize: fontBaseSize * 1.8
                                 color: primaryColor
                             }
                             
                             Label {
                                 text: "Gestión de Análisis de Laboratorio"
-                                font.pixelSize: 20
+                                font.pixelSize: fontBaseSize * 1.4
                                 font.bold: true
                                 color: textColor
                             }
@@ -289,16 +315,18 @@ Item {
                         Button {
                             objectName: "newLabTestButton"
                             text: "➕ Nuevo Análisis"
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: primaryColor
-                                radius: 12
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
+                                font.pixelSize: fontBaseSize * 0.9
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -309,20 +337,21 @@ Item {
                             }
                         }
                         
-                        // Botón de configuración (engranaje)
                         Button {
                             id: configButton
                             text: "⚙️"
-                            font.pixelSize: 18
+                            Layout.preferredWidth: baseUnit * 4.5
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: "#6c757d"
-                                radius: 12
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
+                                font.pixelSize: fontBaseSize * 1.1
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -341,52 +370,87 @@ Item {
                     }
                 }
                 
-                // ✅ FILTROS CON MÁS ESPACIO
+                // FILTROS ADAPTATIVOS
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80  // ✅ AUMENTADO de 60 a 80
+                    Layout.preferredHeight: width < 800 ? baseUnit * 12 : baseUnit * 8
                     color: "transparent"
                     z: 10
                     
-                    RowLayout {
+                    // Layout adaptativo: una fila en pantallas grandes, dos en pequeñas
+                    GridLayout {
                         anchors.fill: parent
-                        anchors.margins: 32
-                        anchors.bottomMargin: 16  // ✅ AGREGAR separación
-                        spacing: 16
+                        anchors.margins: baseUnit * 3
+                        anchors.bottomMargin: baseUnit * 1.5
                         
-                        Label {
-                            text: "Filtrar por:"
-                            font.bold: true
-                            color: textColor
+                        columns: width < 800 ? 2 : 3
+                        rowSpacing: baseUnit
+                        columnSpacing: baseUnit * 2
+                        
+                        // Primera fila/grupo de filtros
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            Label {
+                                text: "Filtrar por:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                            }
+                            
+                            ComboBox {
+                                id: filtroFecha
+                                Layout.preferredWidth: Math.max(120, width * 0.15)
+                                Layout.preferredHeight: baseUnit * 4
+                                model: ["Todas", "Hoy", "Esta Semana", "Este Mes"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                                
+                                contentItem: Label {
+                                    text: filtroFecha.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                }
+                            }
                         }
                         
-                        ComboBox {
-                            id: filtroFecha
-                            Layout.preferredWidth: 150
-                            model: ["Todas", "Hoy", "Esta Semana", "Este Mes"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            Label {
+                                text: "Tipo:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                            }
+                            
+                            ComboBox {
+                                id: filtroTipo
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                model: ["Todos", "Normal", "Emergencia"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                                
+                                contentItem: Label {
+                                    text: filtroTipo.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                }
+                            }
                         }
                         
-                        Label {
-                            text: "Tipo:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        ComboBox {
-                            id: filtroTipo
-                            Layout.preferredWidth: 120
-                            model: ["Todos", "Normal", "Emergencia"]
-                            currentIndex: 0
-                            onCurrentIndexChanged: aplicarFiltros()
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
+                        // Campo de búsqueda
                         TextField {
                             id: campoBusqueda
-                            Layout.preferredWidth: 200
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Buscar por paciente..."
                             onTextChanged: aplicarFiltros()
                             
@@ -394,33 +458,36 @@ Item {
                                 color: whiteColor
                                 border.color: "#e0e0e0"
                                 border.width: 1
-                                radius: 8
+                                radius: baseUnit * 0.8
                             }
+                            
+                            leftPadding: baseUnit * 1.5
+                            rightPadding: baseUnit * 1.5
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                     }
                 }
-               
-                // ✅ CONTENEDOR DE TABLA CORREGIDO
+                
+                // TABLA ADAPTATIVA CON COLUMNAS PORCENTUALES
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 565  // ✅ ALTURA FIJA para que quepan 10 filas + header
-                    Layout.fillHeight: false
-                    Layout.margins: 32
+                    Layout.fillHeight: true
+                    Layout.margins: baseUnit * 3
                     Layout.topMargin: 0
                     color: "#FFFFFF"
                     border.color: "#D5DBDB"
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit
                     
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 0
                         spacing: 0
                         
-                        // Header de la tabla - FIJO
+                        // HEADER DE TABLA CON PORCENTAJES
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 45
+                            Layout.preferredHeight: baseUnit * 5
                             color: "#f5f5f5"
                             border.color: "#d0d0d0"
                             border.width: 1
@@ -431,7 +498,7 @@ Item {
                                 spacing: 0
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 50
+                                    Layout.preferredWidth: parent.width * 0.04 // 4% para ID
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -441,13 +508,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "ID"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 150
+                                    Layout.preferredWidth: parent.width * 0.12 // 12% para PACIENTE
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -457,13 +524,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PACIENTE"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 220
+                                    Layout.preferredWidth: parent.width * 0.30 // 30% para ANÁLISIS
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -473,13 +540,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "ANÁLISIS"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: parent.width * 0.07 // 7% para TIPO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -489,13 +556,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "TIPO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: parent.width * 0.07 // 7% para PRECIO
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -505,13 +572,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "PRECIO"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 130
+                                    Layout.preferredWidth: parent.width * 0.15 // 15% para TRABAJADOR
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -521,13 +588,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "TRABAJADOR"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 130
+                                    Layout.preferredWidth: parent.width * 0.16 // 16% para REGISTRADO POR
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -537,13 +604,13 @@ Item {
                                         anchors.centerIn: parent
                                         text: "REGISTRADO POR"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: parent.width * 0.09// 9% para FECHA (resto)
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -553,27 +620,26 @@ Item {
                                         anchors.centerIn: parent
                                         text: "FECHA"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         color: textColor
                                     }
                                 }
                             }
                         }
                         
-                        // Contenido de la tabla con scroll controlado
+                        // CONTENIDO DE TABLA CON SCROLL
                         ScrollView {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 520  // ✅ ALTURA FIJA (565-45=520)
-                            Layout.fillHeight: false
+                            Layout.fillHeight: true
                             clip: true
                             
                             ListView {
                                 id: analisisListView
-                                model: analisisPaginadosModel  // ✅ USAR MODELO PAGINADO
+                                model: analisisPaginadosModel
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: 50  // ✅ REDUCIDO de 65 a 50
+                                    height: baseUnit * 6
                                     color: {
                                         if (selectedRowIndex === index) return "#e3f2fd"
                                         return index % 2 === 0 ? "transparent" : "#fafafa"
@@ -586,7 +652,7 @@ Item {
                                         spacing: 0
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 50
+                                            Layout.preferredWidth: parent.width * 0.04
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -597,12 +663,12 @@ Item {
                                                 text: model.analisisId
                                                 color: textColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontBaseSize * 0.8
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 150
+                                            Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -610,11 +676,11 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
+                                                anchors.margins: baseUnit * 0.3
                                                 text: model.paciente
                                                 color: textColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontBaseSize * 0.8
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
@@ -624,7 +690,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 220
+                                            Layout.preferredWidth: parent.width * 0.30
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -632,15 +698,15 @@ Item {
                                             
                                             ColumnLayout {
                                                 anchors.fill: parent
-                                                anchors.margins: 6  // ✅ REDUCIDO de 8 a 6
-                                                spacing: 1
+                                                anchors.margins: baseUnit * 0.6
+                                                spacing: baseUnit * 0.1
                                                 
                                                 Label { 
                                                     Layout.fillWidth: true
                                                     text: model.tipoAnalisis
                                                     color: primaryColor
                                                     font.bold: true
-                                                    font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
+                                                    font.pixelSize: fontBaseSize * 0.75
                                                     elide: Text.ElideRight
                                                     maximumLineCount: 1
                                                     verticalAlignment: Text.AlignVCenter
@@ -649,7 +715,7 @@ Item {
                                                     Layout.fillWidth: true
                                                     text: model.detalles
                                                     color: "#7f8c8d"
-                                                    font.pixelSize: 8  // ✅ REDUCIDO de 9 a 8
+                                                    font.pixelSize: fontBaseSize * 0.65
                                                     wrapMode: Text.WordWrap
                                                     elide: Text.ElideRight
                                                     maximumLineCount: 2
@@ -658,7 +724,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: parent.width * 0.07
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -666,23 +732,23 @@ Item {
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 45  // ✅ REDUCIDO de 60 a 45
-                                                height: 16  // ✅ REDUCIDO de 20 a 16
+                                                width: baseUnit * 4.5
+                                                height: baseUnit * 1.6
                                                 color: model.tipo === "Emergencia" ? emergencyColor : successColor
-                                                radius: 8
+                                                radius: baseUnit * 0.8
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: model.tipo
                                                     color: whiteColor
-                                                    font.pixelSize: 8  // ✅ REDUCIDO de 9 a 8
+                                                    font.pixelSize: fontBaseSize * 0.65
                                                     font.bold: true
                                                 }
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: parent.width * 0.07
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -693,12 +759,12 @@ Item {
                                                 text: "Bs " + model.precio
                                                 color: model.tipo === "Emergencia" ? emergencyColor : successColor
                                                 font.bold: true
-                                                font.pixelSize: 11  // ✅ REDUCIDO de 12 a 11
+                                                font.pixelSize: fontBaseSize * 0.8
                                             }
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 130
+                                            Layout.preferredWidth: parent.width * 0.15
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -706,10 +772,10 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
+                                                anchors.margins: baseUnit * 0.3
                                                 text: model.trabajadorAsignado || "Sin asignar"
                                                 color: model.trabajadorAsignado ? textColor : "#95a5a6"
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
+                                                font.pixelSize: fontBaseSize * 0.7
                                                 verticalAlignment: Text.AlignVCenter
                                                 horizontalAlignment: Text.AlignHCenter
                                                 elide: Text.ElideRight
@@ -719,7 +785,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 130
+                                            Layout.preferredWidth: parent.width * 0.16
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -727,10 +793,10 @@ Item {
                                             
                                             Label { 
                                                 anchors.fill: parent
-                                                anchors.margins: 3  // ✅ REDUCIDO de 4 a 3
+                                                anchors.margins: baseUnit * 0.3
                                                 text: model.registradoPor || "Luis López"
                                                 color: "#7f8c8d"
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
+                                                font.pixelSize: fontBaseSize * 0.7
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
@@ -740,7 +806,7 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: parent.width * 0.9
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -757,7 +823,7 @@ Item {
                                                     })
                                                 }
                                                 color: textColor
-                                                font.pixelSize: 10  // ✅ REDUCIDO de 12 a 10
+                                                font.pixelSize: fontBaseSize * 0.75
                                                 font.bold: true
                                             }
                                         }
@@ -771,24 +837,24 @@ Item {
                                         }
                                     }
                                     
-                                    // ✅ BOTONES DE ACCIÓN CORREGIDOS
+                                    // BOTONES DE ACCIÓN ADAPTATIVOS
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
-                                        anchors.margins: 5  // ✅ REDUCIDO de 8 a 5
-                                        spacing: 3
+                                        anchors.margins: baseUnit * 0.5
+                                        spacing: baseUnit * 0.3
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
                                         Button {
                                             id: editButton
-                                            width: 24  // ✅ REDUCIDO de 32 a 24
-                                            height: 24  // ✅ REDUCIDO de 32 a 24
+                                            width: baseUnit * 2.8
+                                            height: baseUnit * 2.8
                                             text: "✏️"
                                             
                                             background: Rectangle {
                                                 color: warningColor
-                                                radius: 5
+                                                radius: baseUnit * 0.5
                                                 border.color: "#f1c40f"
                                                 border.width: 1
                                             }
@@ -798,11 +864,10 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: 9  // ✅ REDUCIDO de 12 a 9
+                                                font.pixelSize: fontBaseSize * 0.7
                                             }
                                             
                                             onClicked: {
-                                                // ✅ BUSCAR EL ÍNDICE REAL EN EL MODELO FILTRADO
                                                 var analisisId = model.analisisId
                                                 var realIndex = -1
                                                 
@@ -823,13 +888,13 @@ Item {
                                         
                                         Button {
                                             id: deleteButton
-                                            width: 24  // ✅ REDUCIDO de 32 a 24
-                                            height: 24  // ✅ REDUCIDO de 32 a 24
+                                            width: baseUnit * 2.8
+                                            height: baseUnit * 2.8
                                             text: "🗑️"
                                             
                                             background: Rectangle {
                                                 color: dangerColor
-                                                radius: 5
+                                                radius: baseUnit * 0.5
                                                 border.color: "#c0392b"
                                                 border.width: 1
                                             }
@@ -839,14 +904,12 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: 9  // ✅ REDUCIDO de 12 a 9
+                                                font.pixelSize: fontBaseSize * 0.7
                                             }
                                             
                                             onClicked: {
-                                                // ✅ ELIMINAR DEL MODELO FILTRADO Y ACTUALIZAR
                                                 var analisisId = model.analisisId
                                                 
-                                                // Eliminar de analisisListModel
                                                 for (var i = 0; i < analisisListModel.count; i++) {
                                                     if (analisisListModel.get(i).analisisId === analisisId) {
                                                         analisisListModel.remove(i)
@@ -854,7 +917,6 @@ Item {
                                                     }
                                                 }
                                                 
-                                                // Eliminar de analisisOriginales
                                                 for (var j = 0; j < analisisOriginales.length; j++) {
                                                     if (analisisOriginales[j].analisisId === analisisId) {
                                                         analisisOriginales.splice(j, 1)
@@ -863,7 +925,7 @@ Item {
                                                 }
                                                 
                                                 selectedRowIndex = -1
-                                                updatePaginatedModel() // ✅ ACTUALIZAR PAGINACIÓN
+                                                updatePaginatedModel()
                                                 console.log("Análisis eliminado ID:", analisisId)
                                             }
                                         }
@@ -874,25 +936,24 @@ Item {
                     }
                 }
                 
-                // ✅ CONTROL DE PAGINACIÓN CORREGIDO
+                // PAGINACIÓN ADAPTATIVA
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    Layout.margins: 32
+                    Layout.preferredHeight: baseUnit * 6
+                    Layout.margins: baseUnit * 3
                     Layout.topMargin: 0
                     color: "#F8F9FA"
                     border.color: "#D5DBDB"
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit
                     
                     RowLayout {
                         anchors.centerIn: parent
-                        spacing: 20
+                        spacing: baseUnit * 2
                         
-                        // Botón Anterior
                         Button {
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: baseUnit * 10
+                            Layout.preferredHeight: baseUnit * 4
                             text: "← Anterior"
                             enabled: currentPageLaboratorio > 0
                             
@@ -900,7 +961,7 @@ Item {
                                 color: parent.enabled ? 
                                     (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
                                     "#E5E7EB"
-                                radius: 18
+                                radius: baseUnit * 2
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -911,7 +972,7 @@ Item {
                                 text: parent.text
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontBaseSize * 0.9
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -919,31 +980,29 @@ Item {
                             onClicked: {
                                 if (currentPageLaboratorio > 0) {
                                     currentPageLaboratorio--
-                                    updatePaginatedModel()  // ✅ CAMBIAR A FUNCIÓN CORRECTA
+                                    updatePaginatedModel()
                                 }
                             }
                         }
                         
-                        // Indicador de página
                         Label {
                             text: "Página " + (currentPageLaboratorio + 1) + " de " + Math.max(1, totalPagesLaboratorio)
                             color: "#374151"
-                            font.pixelSize: 14
+                            font.pixelSize: fontBaseSize * 0.9
                             font.weight: Font.Medium
                         }
                         
-                        // Botón Siguiente
                         Button {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: baseUnit * 11
+                            Layout.preferredHeight: baseUnit * 4
                             text: "Siguiente →"
-                            enabled: currentPageLaboratorio < totalPagesLaboratorio - 1  // ✅ CORREGIDO
+                            enabled: currentPageLaboratorio < totalPagesLaboratorio - 1
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
                                     (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
                                     "#E5E7EB"
-                                radius: 18
+                                radius: baseUnit * 2
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -954,15 +1013,15 @@ Item {
                                 text: parent.text
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: fontBaseSize * 0.9
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: {
-                                if (currentPageLaboratorio < totalPagesLaboratorio - 1) {  // ✅ CORREGIDO
+                                if (currentPageLaboratorio < totalPagesLaboratorio - 1) {
                                     currentPageLaboratorio++
-                                    updatePaginatedModel()  // ✅ CAMBIAR A FUNCIÓN CORRECTA
+                                    updatePaginatedModel()
                                 }
                             }
                         }
@@ -972,7 +1031,9 @@ Item {
         }
     }
 
-    // Diálogo Nuevo Análisis / Editar Análisis
+    // ===== DIÁLOGOS ADAPTATIVOS =====
+    
+    // Fondo del diálogo
     Rectangle {
         id: newLabTestDialog
         anchors.fill: parent
@@ -993,13 +1054,14 @@ Item {
         }
     }
     
+    // Diálogo de análisis adaptativo
     Rectangle {
         id: labTestForm
         anchors.centerIn: parent
-        width: 500
-        height: 700
+        width: Math.min(500, parent.width * 0.9)
+        height: Math.min(700, parent.height * 0.9)
         color: whiteColor
-        radius: 20
+        radius: baseUnit * 2
         border.color: lightGrayColor
         border.width: 2
         visible: showNewLabTestDialog
@@ -1008,18 +1070,15 @@ Item {
         property string analisisType: "Normal"
         property real calculatedPrice: 0.0
         
-        // Función para cargar datos en modo edición
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
                 var analisis = analisisListModel.get(editingIndex)
                 
-                // Extraer nombres del paciente completo
                 var nombreCompleto = analisis.paciente.split(" ")
                 nombrePaciente.text = nombreCompleto[0] || ""
                 apellidoPaterno.text = nombreCompleto[1] || ""
                 apellidoMaterno.text = nombreCompleto.slice(2).join(" ") || ""
                 
-                // Buscar el tipo de análisis correspondiente
                 var tipoAnalisisNombre = analisis.tipoAnalisis
                 for (var i = 0; i < tiposAnalisis.length; i++) {
                     if (tiposAnalisis[i].nombre === tipoAnalisisNombre) {
@@ -1029,7 +1088,6 @@ Item {
                     }
                 }
                 
-                // Configurar tipo de análisis
                 if (analisis.tipo === "Normal") {
                     normalRadio.checked = true
                     labTestForm.analisisType = "Normal"
@@ -1038,10 +1096,8 @@ Item {
                     labTestForm.analisisType = "Emergencia"
                 }
                 
-                // Cargar precio
                 labTestForm.calculatedPrice = parseFloat(analisis.precio)
                 
-                // Buscar trabajador
                 for (var j = 0; j < trabajadoresLab.length; j++) {
                     if (trabajadoresLab[j] === analisis.trabajadorAsignado) {
                         trabajadorCombo.currentIndex = j + 1
@@ -1055,7 +1111,6 @@ Item {
             if (visible && isEditMode) {
                 loadEditData()
             } else if (visible && !isEditMode) {
-                // Limpiar formulario para nuevo análisis
                 nombrePaciente.text = ""
                 apellidoPaterno.text = ""
                 apellidoMaterno.text = ""
@@ -1070,20 +1125,18 @@ Item {
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 20
+            anchors.margins: baseUnit * 3
+            spacing: baseUnit * 2
             
-            // Título
             Label {
                 Layout.fillWidth: true
                 text: isEditMode ? "Editar Análisis" : "Nuevo Análisis"
-                font.pixelSize: 24
+                font.pixelSize: fontBaseSize * 1.6
                 font.bold: true
                 color: textColor
                 horizontalAlignment: Text.AlignHCenter
             }
             
-            // Datos del Paciente
             GroupBox {
                 Layout.fillWidth: true
                 title: "Datos del Paciente"
@@ -1092,96 +1145,104 @@ Item {
                     color: "#f8f9fa"
                     border.color: lightGrayColor
                     border.width: 1
-                    radius: 8
+                    radius: baseUnit
                 }
                 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 12
+                    spacing: baseUnit
                     
-                    // Nombre
                     TextField {
                         id: nombrePaciente
                         Layout.fillWidth: true
+                        Layout.preferredHeight: baseUnit * 4
                         placeholderText: "Nombre del paciente"
+                        font.pixelSize: fontBaseSize * 0.9
                         background: Rectangle {
                             color: whiteColor
                             border.color: lightGrayColor
                             border.width: 1
-                            radius: 6
+                            radius: baseUnit * 0.6
                         }
                     }
                     
-                    // Apellidos
                     RowLayout {
                         Layout.fillWidth: true                       
                         TextField {
                             id: apellidoPaterno
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido paterno"
+                            font.pixelSize: fontBaseSize * 0.9
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                         }
                         
                         TextField {
                             id: apellidoMaterno
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido materno"
+                            font.pixelSize: fontBaseSize * 0.9
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                         }
                     }
                     
-                    // Edad
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            Layout.preferredWidth: 120
+                            Layout.preferredWidth: baseUnit * 12
                             text: "Edad:"
                             font.bold: true
                             color: textColor
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                         TextField {
                             id: edadPaciente
-                            Layout.preferredWidth: 100
+                            Layout.preferredWidth: baseUnit * 10
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "0"
                             validator: IntValidator { bottom: 0; top: 120 }
+                            font.pixelSize: fontBaseSize * 0.9
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                         }
                         Label {
                             text: "años"
                             color: textColor
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                         Item { Layout.fillWidth: true }
                     }
                 }
             }
             
-            // Tipo de Análisis
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Tipo de Análisis:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 ComboBox {
                     id: tipoAnalisisCombo
                     Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 4
                     model: {
                         var list = ["Seleccionar tipo de análisis..."]
                         for (var i = 0; i < tiposAnalisis.length; i++) {
@@ -1203,17 +1264,26 @@ Item {
                             labTestForm.calculatedPrice = 0.0
                         }
                     }
+                    
+                    contentItem: Label {
+                        text: tipoAnalisisCombo.displayText
+                        font.pixelSize: fontBaseSize * 0.8
+                        color: textColor
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: baseUnit
+                        elide: Text.ElideRight
+                    }
                 }
             }
             
-            // Tipo de Servicio
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Tipo de Servicio:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 
                 RadioButton {
@@ -1229,6 +1299,14 @@ Item {
                             }
                         }
                     }
+                    
+                    contentItem: Label {
+                        text: normalRadio.text
+                        font.pixelSize: fontBaseSize * 0.9
+                        color: textColor
+                        leftPadding: normalRadio.indicator.width + normalRadio.spacing
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
                 
                 RadioButton {
@@ -1243,22 +1321,31 @@ Item {
                             }
                         }
                     }
+                    
+                    contentItem: Label {
+                        text: emergenciaRadio.text
+                        font.pixelSize: fontBaseSize * 0.9
+                        color: textColor
+                        leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
                 Item { Layout.fillWidth: true }
             }
             
-            // Trabajador
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Trabajador:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 ComboBox {
                     id: trabajadorCombo
                     Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 4
                     model: {
                         var list = ["Seleccionar trabajador..."]
                         for (var i = 0; i < trabajadoresLab.length; i++) {
@@ -1267,23 +1354,32 @@ Item {
                         list.push("Sin asignar")
                         return list
                     }
+                    
+                    contentItem: Label {
+                        text: trabajadorCombo.displayText
+                        font.pixelSize: fontBaseSize * 0.8
+                        color: textColor
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: baseUnit
+                        elide: Text.ElideRight
+                    }
                 }
             }
             
-            // Precio calculado
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: baseUnit * 12
                     text: "Precio:"
                     font.bold: true
                     color: textColor
+                    font.pixelSize: fontBaseSize * 0.9
                 }
                 Label {
                     text: labTestForm.selectedTipoAnalisisIndex >= 0 ? 
                           "Bs " + labTestForm.calculatedPrice.toFixed(2) : "Seleccione tipo de análisis"
                     font.bold: true
-                    font.pixelSize: 16
+                    font.pixelSize: fontBaseSize * 1.1
                     color: labTestForm.analisisType === "Emergencia" ? emergencyColor : successColor
                 }
                 Item { Layout.fillWidth: true }
@@ -1291,24 +1387,24 @@ Item {
             
             Item { Layout.fillHeight: true }
             
-            // Botones
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 
                 Button {
                     text: "Cancelar"
+                    Layout.preferredHeight: baseUnit * 4
                     background: Rectangle {
                         color: lightGrayColor
-                        radius: 8
+                        radius: baseUnit
                     }
                     contentItem: Label {
                         text: parent.text
                         color: textColor
+                        font.pixelSize: fontBaseSize * 0.9
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        // Limpiar campos
                         nombrePaciente.text = ""
                         apellidoPaterno.text = ""
                         apellidoMaterno.text = ""
@@ -1327,18 +1423,19 @@ Item {
                     text: isEditMode ? "Actualizar" : "Guardar"
                     enabled: labTestForm.selectedTipoAnalisisIndex >= 0 && 
                              nombrePaciente.text.length > 0
+                    Layout.preferredHeight: baseUnit * 4
                     background: Rectangle {
                         color: parent.enabled ? primaryColor : "#bdc3c7"
-                        radius: 8
+                        radius: baseUnit
                     }
                     contentItem: Label {
                         text: parent.text
                         color: whiteColor
                         font.bold: true
+                        font.pixelSize: fontBaseSize * 0.9
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        // Crear datos de análisis
                         var nombreCompleto = nombrePaciente.text + " " + 
                                            apellidoPaterno.text + " " + 
                                            apellidoMaterno.text
@@ -1355,18 +1452,15 @@ Item {
                             precio: labTestForm.calculatedPrice.toFixed(2),
                             trabajadorAsignado: trabajadorSeleccionado,
                             fecha: new Date().toISOString().split('T')[0],
-                            registradoPor: "Luis López"  // Siempre Luis López
+                            registradoPor: "Luis López"
                         }
                         
                         if (isEditMode && editingIndex >= 0) {
-                            // ✅ ACTUALIZAR ANÁLISIS EXISTENTE
                             var analisisExistente = analisisListModel.get(editingIndex)
                             analisisData.analisisId = analisisExistente.analisisId
                             
-                            // Actualizar en modelo filtrado
                             analisisListModel.set(editingIndex, analisisData)
                             
-                            // Actualizar en datos originales
                             for (var i = 0; i < analisisOriginales.length; i++) {
                                 if (analisisOriginales[i].analisisId === analisisData.analisisId) {
                                     analisisOriginales[i] = analisisData
@@ -1376,22 +1470,16 @@ Item {
                             
                             console.log("Análisis actualizado:", JSON.stringify(analisisData))
                         } else {
-                            // ✅ CREAR NUEVO ANÁLISIS
                             analisisData.analisisId = (getTotalLaboratorioCount() + 1).toString()
                             
-                            // Agregar a modelo filtrado
                             analisisListModel.append(analisisData)
-                            
-                            // Agregar a datos originales
                             analisisOriginales.push(analisisData)
                             
                             console.log("Nuevo análisis guardado:", JSON.stringify(analisisData))
                         }
                         
-                        // ✅ ACTUALIZAR PAGINACIÓN
                         updatePaginatedModel()
                         
-                        // Limpiar y cerrar
                         nombrePaciente.text = ""
                         apellidoPaterno.text = ""
                         apellidoMaterno.text = ""
@@ -1409,104 +1497,7 @@ Item {
         }
     }
 
-    // ✅ FUNCIÓN PARA APLICAR FILTROS - MEJORADA
-    function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros en laboratorio...")
-        
-        // Limpiar el modelo filtrado
-        analisisListModel.clear()
-        
-        var hoy = new Date()
-        var textoBusqueda = campoBusqueda.text.toLowerCase()
-        
-        for (var i = 0; i < analisisOriginales.length; i++) {
-            var analisis = analisisOriginales[i]
-            var mostrar = true
-            
-            // Filtro por fecha
-            if (filtroFecha.currentIndex > 0) {
-                var fechaAnalisis = new Date(analisis.fecha)
-                var diferenciaDias = Math.floor((hoy - fechaAnalisis) / (1000 * 60 * 60 * 24))
-                
-                switch(filtroFecha.currentIndex) {
-                    case 1: // Hoy
-                        if (diferenciaDias !== 0) mostrar = false
-                        break
-                    case 2: // Esta Semana
-                        if (diferenciaDias > 7) mostrar = false
-                        break
-                    case 3: // Este Mes
-                        if (diferenciaDias > 30) mostrar = false
-                        break
-                }
-            }
-            
-            // Filtro por tipo
-            if (filtroTipo.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
-                if (analisis.tipo !== tipoSeleccionado) {
-                    mostrar = false
-                }
-            }
-            
-            // Búsqueda por texto en paciente
-            if (textoBusqueda.length > 0 && mostrar) {
-                if (!analisis.paciente.toLowerCase().includes(textoBusqueda)) {
-                    mostrar = false
-                }
-            }
-            
-            if (mostrar) {
-                analisisListModel.append(analisis)
-            }
-        }
-        
-        // ✅ RESETEAR A PRIMERA PÁGINA Y ACTUALIZAR PAGINACIÓN
-        currentPageLaboratorio = 0
-        updatePaginatedModel()
-        
-        console.log("✅ Filtros aplicados. Análisis mostrados:", analisisListModel.count)
-    }
-
-    // ✅ NUEVA FUNCIÓN PARA ACTUALIZAR PAGINACIÓN
-    function updatePaginatedModel() {
-        console.log("📄 Laboratorio: Actualizando paginación - Página:", currentPageLaboratorio + 1)
-        
-        // Limpiar modelo paginado
-        analisisPaginadosModel.clear()
-        
-        // Calcular total de páginas basado en análisis filtrados
-        var totalItems = analisisListModel.count
-        totalPagesLaboratorio = Math.ceil(totalItems / itemsPerPageLaboratorio)
-        
-        // Asegurar que siempre hay al menos 1 página
-        if (totalPagesLaboratorio === 0) {
-            totalPagesLaboratorio = 1
-        }
-        
-        // Ajustar página actual si es necesario
-        if (currentPageLaboratorio >= totalPagesLaboratorio && totalPagesLaboratorio > 0) {
-            currentPageLaboratorio = totalPagesLaboratorio - 1
-        }
-        if (currentPageLaboratorio < 0) {
-            currentPageLaboratorio = 0
-        }
-        
-        // Calcular índices
-        var startIndex = currentPageLaboratorio * itemsPerPageLaboratorio
-        var endIndex = Math.min(startIndex + itemsPerPageLaboratorio, totalItems)
-        
-        // Agregar elementos de la página actual
-        for (var i = startIndex; i < endIndex; i++) {
-            var analisis = analisisListModel.get(i)
-            analisisPaginadosModel.append(analisis)
-        }
-        
-        console.log("📄 Laboratorio: Página", currentPageLaboratorio + 1, "de", totalPagesLaboratorio,
-                    "- Mostrando", analisisPaginadosModel.count, "de", totalItems)
-    }
-
-    // Diálogo Configuración de Tipos de Análisis
+    // === DIÁLOGO DE CONFIGURACIÓN (adaptativo) ===
     Rectangle {
         id: configTiposAnalisisBackground
         anchors.fill: parent
@@ -1527,10 +1518,10 @@ Item {
     Rectangle {
         id: configTiposAnalisisDialog
         anchors.centerIn: parent
-        width: 700
-        height: 600
+        width: Math.min(700, parent.width * 0.95)
+        height: Math.min(600, parent.height * 0.9)
         color: whiteColor
-        radius: 20
+        radius: baseUnit * 2
         border.color: lightGrayColor
         border.width: 2
         visible: showConfigTiposAnalisisDialog
@@ -1539,29 +1530,27 @@ Item {
             anchors.fill: parent
             spacing: 0
             
-            // Header fijo para título y formulario
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 400
+                Layout.preferredHeight: baseUnit * 40
                 color: whiteColor
-                radius: 20
+                radius: baseUnit * 2
                 z: 10
                 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 30
-                    spacing: 20
+                    anchors.margins: baseUnit * 3
+                    spacing: baseUnit * 2
                     
                     Label {
                         Layout.fillWidth: true
                         text: "🧪 Configuración de Tipos de Análisis"
-                        font.pixelSize: 24
+                        font.pixelSize: fontBaseSize * 1.6
                         font.bold: true
                         color: textColor
                         horizontalAlignment: Text.AlignHCenter
                     }
                     
-                    // Formulario para agregar nuevo tipo de análisis
                     GroupBox {
                         Layout.fillWidth: true
                         title: "Agregar Nuevo Tipo de Análisis"
@@ -1570,29 +1559,32 @@ Item {
                             color: "#f8f9fa"
                             border.color: lightGrayColor
                             border.width: 1
-                            radius: 8
+                            radius: baseUnit
                         }
                         
                         GridLayout {
                             anchors.fill: parent
                             columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 10
+                            rowSpacing: baseUnit
+                            columnSpacing: baseUnit
                             
                             Label {
                                 text: "Nombre:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevoTipoAnalisisNombre
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "Ej: Hemograma Completo"
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
@@ -1600,20 +1592,22 @@ Item {
                                 text: "Detalles:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             ScrollView {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 60
+                                Layout.preferredHeight: baseUnit * 6
                                 
                                 TextArea {
                                     id: nuevoTipoAnalisisDetalles
                                     placeholderText: "Descripción del análisis..."
                                     wrapMode: TextArea.Wrap
+                                    font.pixelSize: fontBaseSize * 0.9
                                     background: Rectangle {
                                         color: whiteColor
                                         border.color: lightGrayColor
                                         border.width: 1
-                                        radius: 6
+                                        radius: baseUnit * 0.6
                                     }
                                 }
                             }
@@ -1622,17 +1616,20 @@ Item {
                                 text: "Precio Normal:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevoTipoAnalisisPrecioNormal
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "0.00"
                                 validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
@@ -1640,32 +1637,37 @@ Item {
                                 text: "Precio Emergencia:"
                                 font.bold: true
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
                             }
                             TextField {
                                 id: nuevoTipoAnalisisPrecioEmergencia
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "0.00"
                                 validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                font.pixelSize: fontBaseSize * 0.9
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: lightGrayColor
                                     border.width: 1
-                                    radius: 6
+                                    radius: baseUnit * 0.6
                                 }
                             }
                             
                             Item { }
                             Button {
                                 Layout.alignment: Qt.AlignRight
+                                Layout.preferredHeight: baseUnit * 4
                                 text: "➕ Agregar Tipo de Análisis"
                                 background: Rectangle {
                                     color: successColor
-                                    radius: 8
+                                    radius: baseUnit
                                 }
                                 contentItem: Label {
                                     text: parent.text
                                     color: whiteColor
                                     font.bold: true
+                                    font.pixelSize: fontBaseSize * 0.9
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 onClicked: {
@@ -1682,7 +1684,6 @@ Item {
                                         tiposAnalisis.push(nuevoTipoAnalisis)
                                         laboratorioRoot.tiposAnalisis = tiposAnalisis
                                         
-                                        // Limpiar campos
                                         nuevoTipoAnalisisNombre.text = ""
                                         nuevoTipoAnalisisDetalles.text = ""
                                         nuevoTipoAnalisisPrecioNormal.text = ""
@@ -1697,11 +1698,10 @@ Item {
                 }
             }
             
-            // Lista de tipos de análisis existentes con scroll limitado
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 30
+                Layout.margins: baseUnit * 3
                 Layout.topMargin: 0
                 color: "transparent"
                 
@@ -1713,92 +1713,89 @@ Item {
                         model: tiposAnalisis
                         delegate: Rectangle {
                             width: ListView.view.width
-                            height: 90
+                            height: baseUnit * 8
                             color: index % 2 === 0 ? "transparent" : "#fafafa"
                             border.color: "#e8e8e8"
                             border.width: 1
-                            radius: 8
+                            radius: baseUnit
                             
                             GridLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
+                                anchors.margins: baseUnit
                                 columns: 4
-                                rowSpacing: 6
-                                columnSpacing: 12
+                                rowSpacing: baseUnit * 0.6
+                                columnSpacing: baseUnit
                                 
-                                // Nombre y Detalles
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 4
+                                    spacing: baseUnit * 0.4
                                     
                                     Label {
                                         text: modelData.nombre
                                         font.bold: true
                                         color: primaryColor
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.95
                                     }
                                     Label {
                                         text: modelData.detalles
                                         color: textColor
-                                        font.pixelSize: 11
+                                        font.pixelSize: fontBaseSize * 0.75
                                         wrapMode: Text.WordWrap
                                         elide: Text.ElideRight
                                         maximumLineCount: 2
                                     }
                                 }
                                 
-                                // Precio Normal
                                 ColumnLayout {
-                                    Layout.preferredWidth: 100
-                                    spacing: 4
+                                    Layout.preferredWidth: baseUnit * 10
+                                    spacing: baseUnit * 0.4
                                     
                                     Label {
                                         text: "Normal"
                                         font.bold: true
                                         color: successColor
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                     Label {
                                         text: "Bs " + modelData.precioNormal.toFixed(2)
                                         color: successColor
                                         font.bold: true
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.95
                                     }
                                 }
                                 
-                                // Precio Emergencia
                                 ColumnLayout {
-                                    Layout.preferredWidth: 100
-                                    spacing: 4
+                                    Layout.preferredWidth: baseUnit * 10
+                                    spacing: baseUnit * 0.4
                                     
                                     Label {
                                         text: "Emergencia"
                                         font.bold: true
                                         color: emergencyColor
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                     Label {
                                         text: "Bs " + modelData.precioEmergencia.toFixed(2)
                                         color: emergencyColor
                                         font.bold: true
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.95
                                     }
                                 }
                                 
-                                // Botón eliminar
                                 Button {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
+                                    Layout.preferredWidth: baseUnit * 3.5
+                                    Layout.preferredHeight: baseUnit * 3.5
                                     text: "🗑️"
                                     background: Rectangle {
                                         color: dangerColor
-                                        radius: 6
+                                        radius: baseUnit * 0.6
                                     }
                                     contentItem: Label {
                                         text: parent.text
                                         color: whiteColor
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
+                                        font.pixelSize: fontBaseSize * 0.8
                                     }
                                     onClicked: {
                                         tiposAnalisis.splice(index, 1)
@@ -1813,25 +1810,109 @@ Item {
             }      
         }
     }
+
+    // ===== FUNCIONES (mantener todas con adaptaciones) =====
     
-    // ✅ FUNCIÓN PARA OBTENER TOTAL DE ANÁLISIS CORREGIDA
+    function aplicarFiltros() {
+        console.log("🔍 Aplicando filtros en laboratorio...")
+        
+        analisisListModel.clear()
+        
+        var hoy = new Date()
+        var textoBusqueda = campoBusqueda.text.toLowerCase()
+        
+        for (var i = 0; i < analisisOriginales.length; i++) {
+            var analisis = analisisOriginales[i]
+            var mostrar = true
+            
+            if (filtroFecha.currentIndex > 0) {
+                var fechaAnalisis = new Date(analisis.fecha)
+                var diferenciaDias = Math.floor((hoy - fechaAnalisis) / (1000 * 60 * 60 * 24))
+                
+                switch(filtroFecha.currentIndex) {
+                    case 1:
+                        if (diferenciaDias !== 0) mostrar = false
+                        break
+                    case 2:
+                        if (diferenciaDias > 7) mostrar = false
+                        break
+                    case 3:
+                        if (diferenciaDias > 30) mostrar = false
+                        break
+                }
+            }
+            
+            if (filtroTipo.currentIndex > 0 && mostrar) {
+                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
+                if (analisis.tipo !== tipoSeleccionado) {
+                    mostrar = false
+                }
+            }
+            
+            if (textoBusqueda.length > 0 && mostrar) {
+                if (!analisis.paciente.toLowerCase().includes(textoBusqueda)) {
+                    mostrar = false
+                }
+            }
+            
+            if (mostrar) {
+                analisisListModel.append(analisis)
+            }
+        }
+        
+        currentPageLaboratorio = 0
+        updatePaginatedModel()
+        
+        console.log("✅ Filtros aplicados. Análisis mostrados:", analisisListModel.count)
+    }
+
+    function updatePaginatedModel() {
+        console.log("📄 Laboratorio: Actualizando paginación - Página:", currentPageLaboratorio + 1)
+        
+        analisisPaginadosModel.clear()
+        
+        var totalItems = analisisListModel.count
+        totalPagesLaboratorio = Math.ceil(totalItems / itemsPerPageLaboratorio)
+        
+        if (totalPagesLaboratorio === 0) {
+            totalPagesLaboratorio = 1
+        }
+        
+        if (currentPageLaboratorio >= totalPagesLaboratorio && totalPagesLaboratorio > 0) {
+            currentPageLaboratorio = totalPagesLaboratorio - 1
+        }
+        if (currentPageLaboratorio < 0) {
+            currentPageLaboratorio = 0
+        }
+        
+        var startIndex = currentPageLaboratorio * itemsPerPageLaboratorio
+        var endIndex = Math.min(startIndex + itemsPerPageLaboratorio, totalItems)
+        
+        for (var i = startIndex; i < endIndex; i++) {
+            var analisis = analisisListModel.get(i)
+            analisisPaginadosModel.append(analisis)
+        }
+        
+        console.log("📄 Laboratorio: Página", currentPageLaboratorio + 1, "de", totalPagesLaboratorio,
+                    "- Mostrando", analisisPaginadosModel.count, "de", totalItems,
+                    "- Elementos por página:", itemsPerPageLaboratorio)
+    }
+    
     function getTotalLaboratorioCount() {
         return analisisOriginales.length
     }
     
-    // ✅ INICIALIZACIÓN AL CARGAR EL COMPONENTE
     Component.onCompleted: {
         console.log("🧪 Módulo Laboratorio iniciado")
         
-        // Cargar datos originales
         for (var i = 0; i < analisisModelData.length; i++) {
             analisisOriginales.push(analisisModelData[i])
             analisisListModel.append(analisisModelData[i])
         }
         
-        // Inicializar paginación
         updatePaginatedModel()
         
         console.log("✅ Análisis cargados:", analisisOriginales.length)
+        console.log("📱 Elementos por página calculados:", itemsPerPageLaboratorio)
     }
 }

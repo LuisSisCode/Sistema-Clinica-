@@ -6,12 +6,23 @@ import QtQuick.Window 2.15
 ApplicationWindow {
     id: mainWindow
     objectName: "mainWindow"
-    width: 1400
-    height: 900
+    
+    // TAMAÑOS ADAPTATIVOS EN LUGAR DE FIJOS
+    minimumWidth: Screen.width * 0.6   // Mínimo 60% del ancho de pantalla
+    minimumHeight: Screen.height * 0.7 // Mínimo 70% del alto de pantalla
+    width: Screen.width * 0.85         // Por defecto 85% del ancho
+    height: Screen.height * 0.9        // Por defecto 90% del alto
+    
     visible: true
     title: "Sistema de Gestión Médica - Clínica Maria Inmaculada"
     
-    readonly property color primaryColor:  "#273746"  
+    // SISTEMA DE ESCALADO RESPONSIVO
+    readonly property real scaleFactor: Math.min(width / 1400, height / 900)
+    readonly property real baseUnit: Math.max(8, Screen.height / 100) // Unidad base escalable
+    readonly property real fontBaseSize: Math.max(12, Screen.height / 70) // Tamaño base de fuente
+    
+    // COLORES (mantener como están)
+    readonly property color primaryColor: "#273746"  
     readonly property color primaryDarkColor: "#34495E"
     readonly property color successColor: "#27ae60"
     readonly property color dangerColor: "#E74C3C"
@@ -21,12 +32,13 @@ ApplicationWindow {
     readonly property color textColor: "#2c3e50"
     readonly property color whiteColor: "#FFFFFF"
     
+    // PROPIEDADES DE ESTADO (mantener)
     property bool drawerOpen: true
     property int currentIndex: 0
     property bool farmaciaExpanded: false
     property int farmaciaSubsection: 0
     
-    // NUEVAS PROPIEDADES PARA NOTIFICACIONES
+    // PROPIEDADES DE NOTIFICACIONES (mantener)
     property bool notificationPanelOpen: false
     property var notificaciones: []
     property int totalNotificaciones: 0
@@ -37,9 +49,11 @@ ApplicationWindow {
     Universal.background: lightGrayColor
     Universal.foreground: textColor
     
+    // HEADER ADAPTATIVO
     header: ToolBar {
         objectName: "mainToolBar"
-        height: 80
+        height: Math.max(60, baseUnit * 8) // Altura escalable con mínimo
+        
         background: Rectangle {
             gradient: Gradient {
                 GradientStop { position: 0.0; color: primaryDarkColor }
@@ -51,24 +65,26 @@ ApplicationWindow {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 24
+            anchors.margins: baseUnit * 2
+            spacing: baseUnit * 2
             
+            // BOTÓN DE MENÚ ADAPTATIVO
             RoundButton {
                 objectName: "menuToggleButton"
-                Layout.preferredWidth: 48
-                Layout.preferredHeight: 48
+                Layout.preferredWidth: baseUnit * 5
+                Layout.preferredHeight: baseUnit * 5
                 text: "☰"
+                
                 background: Rectangle {
                     color: whiteColor
-                    radius: 12
+                    radius: baseUnit
                 }
                 
                 contentItem: Label {
                     text: parent.text
                     color: primaryColor
                     font.bold: true
-                    font.pixelSize: 16
+                    font.pixelSize: fontBaseSize * 1.2
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -79,23 +95,29 @@ ApplicationWindow {
                 }
             }
             
+            // BREADCRUMB ADAPTATIVO
             RowLayout {
-                spacing: 8
+                spacing: baseUnit
                 
                 Label {
                     text: "🏠"
                     color: whiteColor
+                    font.pixelSize: fontBaseSize
                 }
                 
                 Label {
                     text: "Clínica María Inmaculada"
                     color: whiteColor
-                    font.pixelSize: 14
+                    font.pixelSize: fontBaseSize * 0.9
+                    // En pantallas pequeñas, acortar el texto
+                    visible: parent.parent.width > 600
                 }
                 
                 Label {
                     text: ">"
                     color: whiteColor
+                    font.pixelSize: fontBaseSize * 0.8
+                    visible: parent.parent.width > 600
                 }
                 
                 Label {
@@ -103,43 +125,37 @@ ApplicationWindow {
                     text: getCurrentPageName()
                     color: whiteColor
                     font.bold: true
-                    font.pixelSize: 14
+                    font.pixelSize: fontBaseSize * 0.9
                 }
             }
             
             Item { Layout.fillWidth: true }
             
-            // BOTÓN DE NOTIFICACIONES MEJORADO
+            // BOTÓN DE NOTIFICACIONES ADAPTATIVO
             RoundButton {
                 id: notificationButton
                 objectName: "notificationButton"
-                Layout.preferredWidth: 48
-                Layout.preferredHeight: 48
+                Layout.preferredWidth: baseUnit * 5
+                Layout.preferredHeight: baseUnit * 5
                 text: "🔔"
                 
                 background: Rectangle {
                     color: notificationButton.pressed ? Qt.darker(whiteColor, 1.1) : whiteColor
-                    radius: 12
+                    radius: baseUnit
                     border.color: totalNotificaciones > 0 ? dangerColor : "transparent"
                     border.width: totalNotificaciones > 0 ? 2 : 0
                     
-                    Behavior on color {
-                        ColorAnimation { duration: 150 }
-                    }
-                    
-                    Behavior on border.color {
-                        ColorAnimation { duration: 150 }
-                    }
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    Behavior on border.color { ColorAnimation { duration: 150 } }
                 }
                 
                 contentItem: Label {
                     text: parent.text
                     color: primaryColor
-                    font.pixelSize: 16
+                    font.pixelSize: fontBaseSize * 1.1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     
-                    // Animación de pulseo cuando hay notificaciones críticas
                     SequentialAnimation on scale {
                         running: totalNotificaciones > 0
                         loops: Animation.Infinite
@@ -148,29 +164,26 @@ ApplicationWindow {
                     }
                 }
                 
-                // Badge de contador de notificaciones
+                // Badge adaptativo
                 Rectangle {
                     anchors.top: parent.top
                     anchors.right: parent.right
-                    anchors.margins: -2
-                    width: 20
-                    height: 20
+                    anchors.margins: -baseUnit * 0.25
+                    width: baseUnit * 2.5
+                    height: baseUnit * 2.5
                     color: totalNotificaciones > 0 ? dangerColor : "transparent"
-                    radius: 10
+                    radius: baseUnit * 1.25
                     visible: totalNotificaciones > 0
                     
                     Label {
                         anchors.centerIn: parent
                         text: totalNotificaciones > 99 ? "99+" : totalNotificaciones.toString()
                         color: whiteColor
-                        font.pixelSize: totalNotificaciones > 99 ? 8 : 11
+                        font.pixelSize: totalNotificaciones > 99 ? fontBaseSize * 0.6 : fontBaseSize * 0.8
                         font.bold: true
                     }
                     
-                    // Animación de aparición
-                    Behavior on opacity {
-                        NumberAnimation { duration: 300 }
-                    }
+                    Behavior on opacity { NumberAnimation { duration: 300 } }
                 }
                 
                 onClicked: {
@@ -179,53 +192,57 @@ ApplicationWindow {
                 }
             }
             
+            // PERFIL DE USUARIO ADAPTATIVO
             Rectangle {
-                Layout.preferredWidth: 200
-                Layout.preferredHeight: 56
+                Layout.preferredWidth: Math.max(150, width * 0.15) // Adaptativo con mínimo
+                Layout.preferredHeight: baseUnit * 6
                 color: whiteColor
-                radius: 16
+                radius: baseUnit * 1.5
                 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 12
+                    anchors.margins: baseUnit * 0.8
+                    spacing: baseUnit
                     
                     Rectangle {
-                        Layout.preferredWidth: 44
-                        Layout.preferredHeight: 44
+                        Layout.preferredWidth: baseUnit * 4.5
+                        Layout.preferredHeight: baseUnit * 4.5
                         color: primaryColor
-                        radius: 22
+                        radius: baseUnit * 2.25
                         
                         Label {
                             anchors.centerIn: parent
                             text: "AM"
                             color: whiteColor
                             font.bold: true
-                            font.pixelSize: 16
+                            font.pixelSize: fontBaseSize
                         }
                     }
                     
                     Column {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: baseUnit * 0.25
+                        visible: parent.parent.width > 120 // Ocultar texto en espacios muy pequeños
                         
                         Label {
                             text: "Dr. Admin"
                             color: textColor
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: fontBaseSize * 0.9
                         }
                         
                         Label {
                             text: "Administrador"
                             color: darkGrayColor
-                            font.pixelSize: 12
+                            font.pixelSize: fontBaseSize * 0.7
                         }
                     }
                     
                     Label {
                         text: "▼"
                         color: darkGrayColor
+                        font.pixelSize: fontBaseSize * 0.8
+                        visible: parent.parent.width > 120
                     }
                 }
                 
@@ -241,7 +258,7 @@ ApplicationWindow {
         }
     }
     
-    // PANEL DE NOTIFICACIONES - OVERLAY
+    // PANEL DE NOTIFICACIONES ADAPTATIVO
     Rectangle {
         id: notificationOverlay
         anchors.fill: parent
@@ -250,27 +267,28 @@ ApplicationWindow {
         opacity: notificationPanelOpen ? 1.0 : 0.0
         z: 1000
         
-        Behavior on opacity {
-            NumberAnimation { duration: 300 }
-        }
+        Behavior on opacity { NumberAnimation { duration: 300 } }
         
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                notificationPanelOpen = false
-            }
+            onClicked: { notificationPanelOpen = false }
         }
         
-        // Panel deslizable desde la derecha
+        // Panel adaptativo
         Rectangle {
             id: notificationPanel
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.right: parent.right
-            width: Math.min(420, parent.width * 0.4)
+            
+            // ANCHO ADAPTATIVO: 400px en pantallas grandes, 80% en pequeñas, máximo 90%
+            width: Math.min(
+                Math.max(300, parent.width * 0.3),  // Mínimo 300px o 30%
+                Math.min(420, parent.width * 0.9)   // Máximo 420px o 90%
+            )
+            
             color: whiteColor
             
-            // Animación de deslizamiento
             transform: Translate {
                 x: notificationPanelOpen ? 0 : notificationPanel.width
                 Behavior on x {
@@ -278,14 +296,13 @@ ApplicationWindow {
                 }
             }
             
-            // Sombra
             Rectangle {
                 anchors.fill: parent
-                anchors.leftMargin: -10
+                anchors.leftMargin: -baseUnit
                 color: "transparent"
                 border.color: "#20000000"
-                border.width: 10
-                radius: 10
+                border.width: baseUnit
+                radius: baseUnit
                 z: -1
             }
             
@@ -293,106 +310,102 @@ ApplicationWindow {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header del panel
+                // Header adaptativo
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
+                    Layout.preferredHeight: Math.max(60, baseUnit * 8)
                     color: primaryColor
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 20
-                        spacing: 16
+                        anchors.margins: baseUnit * 2
+                        spacing: baseUnit * 1.5
                         
                         Rectangle {
-                            width: 40
-                            height: 40
+                            width: baseUnit * 4
+                            height: baseUnit * 4
                             color: whiteColor
-                            radius: 20
+                            radius: baseUnit * 2
                             
                             Label {
                                 anchors.centerIn: parent
                                 text: "🔔"
-                                font.pixelSize: 20
+                                font.pixelSize: fontBaseSize * 1.3
                             }
                         }
                         
                         ColumnLayout {
-                            spacing: 4
+                            spacing: baseUnit * 0.5
                             
                             Label {
                                 text: "Centro de Notificaciones"
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: 18
+                                font.pixelSize: fontBaseSize * 1.2
                             }
                             
                             Label {
                                 text: totalNotificaciones + " alertas activas"
                                 color: "#E8F4FD"
-                                font.pixelSize: 13
+                                font.pixelSize: fontBaseSize * 0.8
                             }
                         }
                         
                         Item { Layout.fillWidth: true }
                         
                         Button {
-                            width: 36
-                            height: 36
+                            width: baseUnit * 3.5
+                            height: baseUnit * 3.5
                             
                             background: Rectangle {
                                 color: parent.pressed ? "#40FFFFFF" : "transparent"
-                                radius: 18
+                                radius: baseUnit * 1.75
                             }
                             
                             contentItem: Label {
                                 text: "×"
                                 color: whiteColor
-                                font.pixelSize: 20
+                                font.pixelSize: fontBaseSize * 1.3
                                 font.bold: true
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: {
-                                notificationPanelOpen = false
-                            }
+                            onClicked: { notificationPanelOpen = false }
                         }
                     }
                 }
                 
-                // Filtros de notificaciones
+                // Filtros adaptativos
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
+                    Layout.preferredHeight: baseUnit * 6
                     color: "#F8F9FA"
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 8
+                        anchors.margins: baseUnit * 1.5
+                        spacing: baseUnit
                         
                         Button {
                             text: "🔄 Actualizar"
-                            Layout.preferredHeight: 32
+                            Layout.preferredHeight: baseUnit * 3.5
                             
                             background: Rectangle {
                                 color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                radius: 6
+                                radius: baseUnit * 0.6
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
-                                font.pixelSize: 12
+                                font.pixelSize: fontBaseSize * 0.8
                                 font.bold: true
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: {
-                                actualizarNotificaciones()
-                            }
+                            onClicked: { actualizarNotificaciones() }
                         }
                         
                         Item { Layout.fillWidth: true }
@@ -400,7 +413,7 @@ ApplicationWindow {
                         Label {
                             text: Qt.formatDateTime(fechaActual, "dd/MM/yyyy hh:mm")
                             color: darkGrayColor
-                            font.pixelSize: 11
+                            font.pixelSize: fontBaseSize * 0.7
                         }
                     }
                 }
@@ -413,14 +426,12 @@ ApplicationWindow {
                     
                     ListView {
                         id: notificationsList
-                        model: ListModel {
-                            id: notificacionesModel
-                        }
+                        model: ListModel { id: notificacionesModel }
                         spacing: 0
                         
                         delegate: Rectangle {
                             width: notificationsList.width
-                            height: Math.max(80, contentColumn.implicitHeight + 20)
+                            height: Math.max(baseUnit * 8, contentColumn.implicitHeight + baseUnit * 2)
                             color: index % 2 === 0 ? "#FFFFFF" : "#F8F9FA"
                             border.color: "#E5E7EB"
                             border.width: 1
@@ -429,27 +440,27 @@ ApplicationWindow {
                                 anchors.left: parent.left
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
-                                width: 4
+                                width: baseUnit * 0.5
                                 color: getPrioridadColor(model.prioridad)
                             }
                             
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 16
-                                anchors.leftMargin: 20
-                                spacing: 12
+                                anchors.margins: baseUnit * 1.5
+                                anchors.leftMargin: baseUnit * 2
+                                spacing: baseUnit
                                 
                                 Rectangle {
-                                    width: 36
-                                    height: 36
+                                    width: baseUnit * 3.5
+                                    height: baseUnit * 3.5
                                     color: getPrioridadColor(model.prioridad)
-                                    radius: 18
+                                    radius: baseUnit * 1.75
                                     
                                     Label {
                                         anchors.centerIn: parent
                                         text: model.icono
                                         color: whiteColor
-                                        font.pixelSize: 16
+                                        font.pixelSize: fontBaseSize
                                         font.bold: true
                                     }
                                 }
@@ -457,13 +468,13 @@ ApplicationWindow {
                                 ColumnLayout {
                                     id: contentColumn
                                     Layout.fillWidth: true
-                                    spacing: 4
+                                    spacing: baseUnit * 0.5
                                     
                                     Label {
                                         text: model.titulo
                                         color: textColor
                                         font.bold: true
-                                        font.pixelSize: 14
+                                        font.pixelSize: fontBaseSize * 0.9
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
@@ -471,7 +482,7 @@ ApplicationWindow {
                                     Label {
                                         text: model.mensaje
                                         color: darkGrayColor
-                                        font.pixelSize: 12
+                                        font.pixelSize: fontBaseSize * 0.8
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
@@ -479,26 +490,25 @@ ApplicationWindow {
                                     Label {
                                         text: model.tiempo
                                         color: "#9CA3AF"
-                                        font.pixelSize: 10
+                                        font.pixelSize: fontBaseSize * 0.7
                                     }
                                 }
                                 
-                                // Botón de acción si está en farmacia
                                 Button {
                                     visible: model.modulo === "farmacia" && currentIndex !== 1
                                     text: "Ver"
-                                    Layout.preferredWidth: 50
-                                    Layout.preferredHeight: 28
+                                    Layout.preferredWidth: baseUnit * 5
+                                    Layout.preferredHeight: baseUnit * 3
                                     
                                     background: Rectangle {
                                         color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                        radius: 4
+                                        radius: baseUnit * 0.5
                                     }
                                     
                                     contentItem: Label {
                                         text: parent.text
                                         color: whiteColor
-                                        font.pixelSize: 10
+                                        font.pixelSize: fontBaseSize * 0.7
                                         font.bold: true
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
@@ -506,9 +516,8 @@ ApplicationWindow {
                                     
                                     onClicked: {
                                         notificationPanelOpen = false
-                                        // Navegar a farmacia - productos
                                         farmaciaExpanded = true
-                                        farmaciaSubsection = 1 // Productos
+                                        farmaciaSubsection = 1
                                         switchToPage(1)
                                     }
                                 }
@@ -519,16 +528,16 @@ ApplicationWindow {
                         Item {
                             anchors.centerIn: parent
                             visible: notificacionesModel.count === 0
-                            width: 200
-                            height: 150
+                            width: baseUnit * 20
+                            height: baseUnit * 15
                             
                             ColumnLayout {
                                 anchors.centerIn: parent
-                                spacing: 16
+                                spacing: baseUnit * 1.5
                                 
                                 Label {
                                     text: "🎉"
-                                    font.pixelSize: 48
+                                    font.pixelSize: fontBaseSize * 3
                                     color: successColor
                                     Layout.alignment: Qt.AlignHCenter
                                 }
@@ -537,17 +546,17 @@ ApplicationWindow {
                                     text: "¡Todo en orden!"
                                     color: textColor
                                     font.bold: true
-                                    font.pixelSize: 16
+                                    font.pixelSize: fontBaseSize * 1.1
                                     Layout.alignment: Qt.AlignHCenter
                                 }
                                 
                                 Label {
                                     text: "No hay alertas pendientes en este momento."
                                     color: darkGrayColor
-                                    font.pixelSize: 12
+                                    font.pixelSize: fontBaseSize * 0.8
                                     Layout.alignment: Qt.AlignHCenter
                                     wrapMode: Text.WordWrap
-                                    Layout.maximumWidth: 180
+                                    Layout.maximumWidth: baseUnit * 18
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
@@ -555,42 +564,42 @@ ApplicationWindow {
                     }
                 }
                 
-                // Footer con estadísticas
+                // Footer adaptativo
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 50
+                    Layout.preferredHeight: baseUnit * 5
                     color: "#F1F5F9"
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 16
+                        anchors.margins: baseUnit * 1.5
+                        spacing: baseUnit * 1.5
                         
                         Label {
                             text: "📊 Resumen:"
                             color: darkGrayColor
-                            font.pixelSize: 11
+                            font.pixelSize: fontBaseSize * 0.7
                             font.bold: true
                         }
                         
                         Label {
                             text: getConteoNotificaciones("critica") + " críticas"
                             color: dangerColor
-                            font.pixelSize: 11
+                            font.pixelSize: fontBaseSize * 0.7
                             font.bold: true
                         }
                         
                         Label {
                             text: getConteoNotificaciones("alta") + " importantes"
                             color: warningColor
-                            font.pixelSize: 11
+                            font.pixelSize: fontBaseSize * 0.7
                             font.bold: true
                         }
                         
                         Label {
                             text: getConteoNotificaciones("media") + " normales"
                             color: primaryColor
-                            font.pixelSize: 11
+                            font.pixelSize: fontBaseSize * 0.7
                             font.bold: true
                         }
                         
@@ -601,18 +610,24 @@ ApplicationWindow {
         }
     }
     
-    // ... Resto del código original (RowLayout, drawer, páginas, etc.) ...
+    // ESTRUCTURA PRINCIPAL ADAPTATIVA
     RowLayout {
         anchors.fill: parent
         spacing: 0
         
+        // DRAWER LATERAL ADAPTATIVO
         Rectangle {
             id: drawer
             objectName: "navigationDrawer"
-            Layout.preferredWidth: drawerOpen ? 320 : 0
+            
+            // ANCHO ADAPTATIVO DEL DRAWER
+            Layout.preferredWidth: drawerOpen ? Math.max(280, width * 0.22) : 0
             Layout.fillHeight: true
             visible: drawerOpen
             layer.enabled: true
+            
+            // Comportamiento responsive: colapsar automáticamente en pantallas pequeñas
+            readonly property bool autoCollapse: mainWindow.width < 1000
             
             Behavior on Layout.preferredWidth {
                 NumberAnimation { duration: 150; easing.type: Easing.InOutQuad }
@@ -627,24 +642,25 @@ ApplicationWindow {
                 anchors.fill: parent
                 spacing: 0
                 
+                // Logo adaptativo
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 120
+                    Layout.preferredHeight: baseUnit * 12
                     color: "transparent"
                     border.color: "#20FFFFFF"
                     border.width: 1
                     
                     ColumnLayout {
                         anchors.centerIn: parent
-                        spacing: 16
+                        spacing: baseUnit * 1.5
                         
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter  
                             Image {
                                 anchors.centerIn: parent
                                 source: "iconos/logo_CMI.svg"
-                                width: 150
-                                height: 200
+                                width: Math.min(150, drawer.width * 0.8)
+                                height: Math.min(200, baseUnit * 20)
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                             }
@@ -652,6 +668,7 @@ ApplicationWindow {
                     }                    
                 }
                 
+                // Navegación adaptativa
                 ScrollView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -740,6 +757,7 @@ ApplicationWindow {
                                 active: currentIndex === 6
                                 onClicked: switchToPage(6)
                             }
+                            
                             NavItem {
                                 id: navItem7
                                 text: "PERSONAL"
@@ -771,8 +789,16 @@ ApplicationWindow {
                     }
                 }
             }
+            
+            // Auto-colapsar en pantallas pequeñas
+            onAutoCollapseChanged: {
+                if (autoCollapse && drawerOpen) {
+                    drawerOpen = false
+                }
+            }
         }
         
+        // ÁREA DE CONTENIDO PRINCIPAL
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -786,7 +812,7 @@ ApplicationWindow {
                 layer.enabled: true
             }
             
-            // Farmacia Page
+            // Farmacia Page  
             Farmacia {
                 id: farmaciaPage
                 objectName: "farmaciaPage"
@@ -868,34 +894,26 @@ ApplicationWindow {
         }
     }
     
-    // ===== FUNCIONES DE NOTIFICACIONES =====
-    
+    // ===== FUNCIONES (mantener todas como están) =====
     function actualizarNotificaciones() {
         console.log("🔔 Actualizando notificaciones...")
         fechaActual = new Date()
         
-        // Limpiar notificaciones anteriores
         notificacionesModel.clear()
         notificaciones = []
         
-        // Obtener productos de farmacia si está disponible
         if (farmaciaPage && farmaciaPage.farmaciaData) {
             var productos = farmaciaPage.farmaciaData.obtenerProductosParaInventario()
             verificarProductosVencidos(productos)
             verificarProductosProximosVencer(productos)
             verificarProductosBajoStock(productos)
         } else {
-            // Si no hay datos, usar datos de ejemplo para testing
             console.log("⚠️ Datos de farmacia no disponibles, usando datos de ejemplo")
             verificarNotificacionesEjemplo()
         }
         
-        // Agregar notificaciones del sistema
         verificarNotificacionesSistema()
-        
-        // Actualizar contador total
         totalNotificaciones = notificacionesModel.count
-        
         console.log("✅ Notificaciones actualizadas. Total:", totalNotificaciones)
     }
     
@@ -905,13 +923,11 @@ ApplicationWindow {
         for (var i = 0; i < productos.length; i++) {
             var producto = productos[i]
             
-            // Simular verificación de lotes vencidos
             if (producto.stockUnitario > 0) {
-                // En una implementación real, consultarías la tabla de lotes
                 var fechaSimuladaVenc = new Date()
                 fechaSimuladaVenc.setDate(fechaSimuladaVenc.getDate() - Math.random() * 10)
                 
-                if (fechaSimuladaVenc < fechaActual && Math.random() < 0.1) { // 10% de productos vencidos para demo
+                if (fechaSimuladaVenc < fechaActual && Math.random() < 0.1) {
                     productosVencidos.push(producto)
                 }
             }
@@ -937,8 +953,7 @@ ApplicationWindow {
             var producto = productos[i]
             
             if (producto.stockUnitario > 0) {
-                // Simular productos próximos a vencer (próximos 30 días)
-                if (Math.random() < 0.15) { // 15% de productos próximos a vencer para demo
+                if (Math.random() < 0.15) {
                     productosProxVencer.push(producto)
                 }
             }
@@ -982,7 +997,6 @@ ApplicationWindow {
     }
     
     function verificarNotificacionesSistema() {
-        // Simular algunas notificaciones del sistema
         var notificacionesSistema = [
             {
                 icono: "🔄",
@@ -1004,16 +1018,14 @@ ApplicationWindow {
             }
         ]
         
-        // Agregar aleatoriamente algunas notificaciones del sistema
         for (var i = 0; i < notificacionesSistema.length; i++) {
-            if (Math.random() < 0.3) { // 30% de probabilidad
+            if (Math.random() < 0.3) {
                 agregarNotificacion(notificacionesSistema[i])
             }
         }
     }
     
     function verificarNotificacionesEjemplo() {
-        // Datos de ejemplo cuando no hay farmacia disponible
         var notificacionesEjemplo = [
             {
                 icono: "⚠️",
@@ -1056,16 +1068,11 @@ ApplicationWindow {
     
     function getPrioridadColor(prioridad) {
         switch(prioridad) {
-            case "critica":
-                return dangerColor
-            case "alta":
-                return warningColor
-            case "media":
-                return primaryColor
-            case "baja":
-                return successColor
-            default:
-                return darkGrayColor
+            case "critica": return dangerColor
+            case "alta": return warningColor
+            case "media": return primaryColor
+            case "baja": return successColor
+            default: return darkGrayColor
         }
     }
     
@@ -1079,12 +1086,10 @@ ApplicationWindow {
         return count
     }
     
-    // Lista de referencias a todos los NavItem para resetear el hover
     property var navItems: [navItem0, navItem1, navItem2, navItem3, navItem4, navItem5, navItem6, navItem7, navItem8, navItem9]
     
     function switchToPage(index) {
         if (currentIndex !== index) {
-            // Resetear el estado hover de todos los elementos
             for (var i = 0; i < navItems.length; i++) {
                 if (navItems[i]) {
                     navItems[i].resetHoverState()
@@ -1105,21 +1110,13 @@ ApplicationWindow {
         }
         
         const pageNames = [
-            "Dashboard",
-            "Farmacia", 
-            "Consultas",
-            "Laboratorio",
-            "Enfermería",
-            "Servicios Básicos",
-            "Usuarios",
-            "Trabajadores",
-            "Reportes",
-            "Configuración"
+            "Dashboard", "Farmacia", "Consultas", "Laboratorio", "Enfermería",
+            "Servicios Básicos", "Usuarios", "Trabajadores", "Reportes", "Configuración"
         ]
         return pageNames[currentIndex] || "Dashboard"
     }
 
-    // Components originales (NavSection, NavItem, NavItemWithSubmenu)
+    // ===== COMPONENTES ADAPTATIVOS =====
     component NavSection: ColumnLayout {
         property string title: ""
         spacing: 0
@@ -1129,16 +1126,16 @@ ApplicationWindow {
         
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 48
+            Layout.preferredHeight: baseUnit * 5
             color: "transparent"
             
             Label {
                 anchors.left: parent.left
-                anchors.leftMargin: 24
+                anchors.leftMargin: baseUnit * 2.5
                 anchors.verticalCenter: parent.verticalCenter
                 text: title
                 color: whiteColor
-                font.pixelSize: 12
+                font.pixelSize: fontBaseSize * 0.8
                 font.bold: true
             }
         }
@@ -1146,15 +1143,15 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
+            Layout.leftMargin: baseUnit * 2.5
+            Layout.rightMargin: baseUnit * 2.5
             color: "#20FFFFFF"
         }
         
         ColumnLayout {
             id: itemsColumn
             Layout.fillWidth: true
-            spacing: 4
+            spacing: baseUnit * 0.5
         }
     }
 
@@ -1166,9 +1163,9 @@ ApplicationWindow {
         signal clicked()
         
         Layout.fillWidth: true
-        Layout.preferredHeight: 56
-        Layout.leftMargin: 4
-        Layout.rightMargin: 4
+        Layout.preferredHeight: baseUnit * 6
+        Layout.leftMargin: baseUnit * 0.5
+        Layout.rightMargin: baseUnit * 0.5
         color: active ? "#30FFFFFF" : (hovered && !active ? "#20FFFFFF" : "transparent")
         border.color: active ? whiteColor : "transparent"
         border.width: active ? 4 : 0
@@ -1183,27 +1180,27 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: 4
+            width: baseUnit * 0.5
             color: active ? whiteColor : "transparent"
         }
         
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 24
-            anchors.rightMargin: 24
-            spacing: 16
+            anchors.leftMargin: baseUnit * 2.5
+            anchors.rightMargin: baseUnit * 2.5
+            spacing: baseUnit * 1.5
             
             Label {
                 text: icon
                 color: whiteColor
-                font.pixelSize: 20
+                font.pixelSize: fontBaseSize * 1.3
             }
             
             Label {
                 Layout.fillWidth: true
                 text: parent.parent.text
                 color: whiteColor
-                font.pixelSize: 15
+                font.pixelSize: fontBaseSize * 0.9
                 font.bold: true
             }
         }
@@ -1225,9 +1222,7 @@ ApplicationWindow {
             onClicked: parent.clicked()
         }
         
-        Behavior on color {
-            ColorAnimation { duration: 100 }
-        }
+        Behavior on color { ColorAnimation { duration: 100 } }
     }
 
     component NavItemWithSubmenu: ColumnLayout {
@@ -1250,9 +1245,9 @@ ApplicationWindow {
         
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 56
-            Layout.leftMargin: 4
-            Layout.rightMargin: 4
+            Layout.preferredHeight: baseUnit * 6
+            Layout.leftMargin: baseUnit * 0.5
+            Layout.rightMargin: baseUnit * 0.5
             color: active ? "#30FFFFFF" : (hovered && !active ? "#20FFFFFF" : "transparent")
             border.color: active ? whiteColor : "transparent"
             border.width: active ? 4 : 0
@@ -1263,34 +1258,34 @@ ApplicationWindow {
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                width: 4
+                width: baseUnit * 0.5
                 color: active ? whiteColor : "transparent"
             }
             
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 24
-                anchors.rightMargin: 24
-                spacing: 16
+                anchors.leftMargin: baseUnit * 2.5
+                anchors.rightMargin: baseUnit * 2.5
+                spacing: baseUnit * 1.5
                 
                 Label {
                     text: icon
                     color: whiteColor
-                    font.pixelSize: 20
+                    font.pixelSize: fontBaseSize * 1.3
                 }
                 
                 Label {
                     Layout.fillWidth: true
                     text: parent.parent.parent.text
                     color: whiteColor
-                    font.pixelSize: 15
+                    font.pixelSize: fontBaseSize * 0.9
                     font.bold: true
                 }
                 
                 Label {
                     text: expanded ? "▼" : "▶"
                     color: whiteColor
-                    font.pixelSize: 12
+                    font.pixelSize: fontBaseSize * 0.8
                     
                     Behavior on rotation {
                         NumberAnimation { duration: 200 }
@@ -1317,54 +1312,47 @@ ApplicationWindow {
                 }
             }
             
-            Behavior on color {
-                ColorAnimation { duration: 100 }
-            }
+            Behavior on color { ColorAnimation { duration: 100 } }
         }
         
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: baseUnit * 0.25
             visible: expanded
             opacity: expanded ? 1.0 : 0.0
             height: expanded ? implicitHeight : 0
             
-            Behavior on opacity {
-                NumberAnimation { duration: 200 }
-            }
-            
-            Behavior on height {
-                NumberAnimation { duration: 200 }
-            }
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on height { NumberAnimation { duration: 200 } }
             
             Repeater {
                 model: submenuItems
                 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 48
-                    Layout.leftMargin: 12
-                    Layout.rightMargin: 8
+                    Layout.preferredHeight: baseUnit * 5
+                    Layout.leftMargin: baseUnit * 1.5
+                    Layout.rightMargin: baseUnit
                     color: (currentIndex === 1 && farmaciaSubsection === modelData.subsection) ? "#40FFFFFF" : "transparent"
-                    radius: 8
+                    radius: baseUnit
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 40
-                        anchors.rightMargin: 24
-                        spacing: 12
+                        anchors.leftMargin: baseUnit * 4
+                        anchors.rightMargin: baseUnit * 2.5
+                        spacing: baseUnit
                         
                         Label {
                             text: modelData.icon
                             color: whiteColor
-                            font.pixelSize: 16
+                            font.pixelSize: fontBaseSize
                         }
                         
                         Label {
                             Layout.fillWidth: true
                             text: modelData.text
                             color: whiteColor
-                            font.pixelSize: 14
+                            font.pixelSize: fontBaseSize * 0.85
                             font.bold: (currentIndex === 1 && farmaciaSubsection === modelData.subsection)
                         }
                     }
@@ -1390,29 +1378,22 @@ ApplicationWindow {
                         }
                     }
                     
-                    Behavior on color {
-                        ColorAnimation { duration: 100 }
-                    }
+                    Behavior on color { ColorAnimation { duration: 100 } }
                 }
             }
         }
     }
     
-    // Timer para actualizar notificaciones periódicamente
     Timer {
         id: notificationTimer
         interval: 300000 // 5 minutos
         running: true
         repeat: true
-        onTriggered: {
-            actualizarNotificaciones()
-        }
+        onTriggered: { actualizarNotificaciones() }
     }
     
-    // Inicialización
     Component.onCompleted: {
         console.log("🔔 Sistema de notificaciones iniciado")
-        // Pequeño delay para asegurar que farmacia esté cargada
         Qt.callLater(function() {
             actualizarNotificaciones()
         })
