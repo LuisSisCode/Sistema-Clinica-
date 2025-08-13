@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from ..core.excepciones import (
     ReporteError, ValidationError, ExceptionHandler, 
-    validate_required, validate_required_string
+    validate_required
 )
 from ..core.utils import parse_date_from_str, safe_float
 from ..repositories.venta_repository import VentaRepository
