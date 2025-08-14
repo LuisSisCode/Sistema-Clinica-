@@ -233,37 +233,6 @@ Item {
                                 showNewGastoDialog = true
                             }
                         }
-                        
-                        // Botón de configuración (engranaje)
-                        Button {
-                            id: configButton
-                            text: "⚙️"
-                            font.pixelSize: 18
-                            
-                            background: Rectangle {
-                                color: "#6c757d"
-                                radius: 12
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            
-                            onClicked: configMenu.open()
-                            
-                            Menu {
-                                id: configMenu
-                                y: parent.height
-                                
-                                MenuItem {
-                                    text: "💰 Configuración de Tipos de Gastos"
-                                    // ===== MODIFICADO: EMITIR SEÑAL EN LUGAR DE CAMBIAR BOOLEANO =====
-                                    onTriggered: serviciosBasicosRoot.irAConfigServiciosBasicos()
-                                }
-                            }
-                        }
                     }
                 }
                 
