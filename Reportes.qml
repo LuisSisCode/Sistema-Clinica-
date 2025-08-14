@@ -8,17 +8,19 @@ Item {
     id: reportesRoot
     objectName: "reportesRoot"
     
-    // Colores del tema
-    readonly property color primaryColor: "#3498DB"
-    readonly property color successColor: "#27ae60"
-    readonly property color dangerColor: "#E74C3C"
-    readonly property color warningColor: "#f39c12"
-    readonly property color lightGrayColor: "#ECF0F1"
-    readonly property color textColor: "#2c3e50"
-    readonly property color whiteColor: "#FFFFFF"
-    readonly property color darkGrayColor: "#7f8c8d"
-    readonly property color infoColor: "#17a2b8"
-    readonly property color violetColor: "#9b59b6"
+    // Colores del tema PROFESIONAL (monocromático)
+    readonly property color primaryColor: "#2C3E50"      // Azul oscuro profesional
+    readonly property color successColor: "#27AE60"      // Verde para valores positivos
+    readonly property color dangerColor: "#E74C3C"       // Rojo para valores negativos
+    readonly property color warningColor: "#F39C12"      // Naranja para advertencias
+    readonly property color lightGrayColor: "#ECF0F1"    // Gris claro
+    readonly property color textColor: "#2C3E50"         // Texto principal
+    readonly property color whiteColor: "#FFFFFF"        // Blanco
+    readonly property color darkGrayColor: "#7F8C8D"     // Gris oscuro
+    readonly property color infoColor: "#34495E"         // Azul información
+    readonly property color violetColor: "#8E44AD"       // Violeta profesional
+    readonly property color blackColor: "#000000"        // Negro puro
+    readonly property color zebraColor: "#F8F9FA"        // Color zebra striping
     
     // Estados del módulo
     property int vistaActual: 0  // 0: Configuración, 1: Resultados
@@ -46,7 +48,7 @@ Item {
             modulo: "farmacia",
             icono: "💰",
             descripcion: "Reporte detallado de todas las ventas realizadas en farmacia",
-            color: successColor
+            color: primaryColor
         },
         {
             id: 2,
@@ -78,7 +80,7 @@ Item {
             modulo: "laboratorio",
             icono: "🧪",
             descripcion: "Historial de análisis realizados en laboratorio",
-            color: "#e67e22"
+            color: "#7F8C8D"
         },
         {
             id: 6,
@@ -86,7 +88,7 @@ Item {
             modulo: "enfermeria",
             icono: "💉",
             descripcion: "Registro de procedimientos realizados por enfermería",
-            color: "#e91e63"
+            color: "#95A5A6"
         },
         {
             id: 7,
@@ -102,7 +104,7 @@ Item {
             modulo: "consolidado",
             icono: "📈",
             descripcion: "Resumen financiero de todos los módulos",
-            color: "#2c3e50"
+            color: blackColor
         }
     ]
     
@@ -119,21 +121,21 @@ Item {
                 anchors.margins: 40
                 spacing: 32
                 
-                // Header del módulo
+                // Header del módulo PROFESIONAL
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 120
                     color: whiteColor
-                    radius: 20
-                    border.color: "#e0e0e0"
+                    radius: 8
+                    border.color: "#E0E6ED"
                     border.width: 1
                     
-                    // Sombra sutil
+                    // Sombra profesional
                     Rectangle {
                         anchors.fill: parent
-                        anchors.topMargin: 3
-                        anchors.leftMargin: 3
-                        color: "#10000000"
+                        anchors.topMargin: 2
+                        anchors.leftMargin: 2
+                        color: "#08000000"
                         radius: parent.radius
                         z: -1
                     }
@@ -147,7 +149,7 @@ Item {
                             Layout.preferredWidth: 70
                             Layout.preferredHeight: 70
                             color: primaryColor
-                            radius: 12
+                            radius: 8
                             
                             Label {
                                 anchors.centerIn: parent
@@ -162,27 +164,29 @@ Item {
                             spacing: 8
                             
                             Label {
-                                text: "Centro de Reportes"
+                                text: "Centro de Reportes Profesional"
                                 font.pixelSize: 26
                                 font.bold: true
                                 color: textColor
+                                font.family: "Segoe UI"
                             }
                             
                             Label {
-                                text: "Generación de reportes y análisis estadísticos del sistema"
+                                text: "Generación de reportes ejecutivos y análisis estadísticos del sistema"
                                 font.pixelSize: 14
                                 color: darkGrayColor
+                                font.family: "Segoe UI"
                             }
                         }
                         
                         Item { Layout.fillWidth: true }
                         
                         Rectangle {
-                            Layout.preferredWidth: 200
-                            Layout.preferredHeight: 60
-                            color: "#f8f9fa"
-                            radius: 12
-                            border.color: "#dee2e6"
+                            Layout.preferredWidth: 220
+                            Layout.preferredHeight: 70
+                            color: "#F8F9FA"
+                            radius: 8
+                            border.color: "#E9ECEF"
                             border.width: 1
                             
                             ColumnLayout {
@@ -190,10 +194,11 @@ Item {
                                 spacing: 4
                                 
                                 Label {
-                                    text: "Estado del Sistema"
-                                    font.pixelSize: 11
+                                    text: "ESTADO DEL SISTEMA"
+                                    font.pixelSize: 10
                                     color: darkGrayColor
                                     font.bold: true
+                                    font.family: "Segoe UI"
                                     Layout.alignment: Qt.AlignHCenter
                                 }
                                 
@@ -202,6 +207,7 @@ Item {
                                     font.pixelSize: 12
                                     color: successColor
                                     font.bold: true
+                                    font.family: "Segoe UI"
                                     Layout.alignment: Qt.AlignHCenter
                                 }
                             }
@@ -209,13 +215,13 @@ Item {
                     }
                 }
                 
-                // Sección de configuración del reporte
+                // Sección de configuración del reporte PROFESIONAL
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 300
+                    Layout.preferredHeight: 320
                     color: whiteColor
-                    radius: 16
-                    border.color: "#e0e0e0"
+                    radius: 8
+                    border.color: "#E0E6ED"
                     border.width: 1
                     
                     ColumnLayout {
@@ -223,7 +229,7 @@ Item {
                         anchors.margins: 24
                         spacing: 20
                         
-                        // Título de sección
+                        // Título de sección PROFESIONAL
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 12
@@ -240,6 +246,7 @@ Item {
                                 font.pixelSize: 18
                                 font.bold: true
                                 color: textColor
+                                font.family: "Segoe UI"
                             }
                             
                             Item { Layout.fillWidth: true }
@@ -250,9 +257,9 @@ Item {
                                 visible: tipoReporteSeleccionado > 0
                                 
                                 background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(lightGrayColor, 1.2) : lightGrayColor
-                                    radius: 6
-                                    border.color: darkGrayColor
+                                    color: parent.pressed ? Qt.darker(lightGrayColor, 1.1) : lightGrayColor
+                                    radius: 4
+                                    border.color: "#BDC3C7"
                                     border.width: 1
                                 }
                                 
@@ -261,6 +268,7 @@ Item {
                                     color: textColor
                                     font.bold: true
                                     font.pixelSize: 12
+                                    font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -269,7 +277,7 @@ Item {
                             }
                         }
                         
-                        // Formulario de configuración
+                        // Formulario de configuración MEJORADO
                         GridLayout {
                             Layout.fillWidth: true
                             columns: 3
@@ -286,6 +294,7 @@ Item {
                                     font.pixelSize: 13
                                     font.bold: true
                                     color: textColor
+                                    font.family: "Segoe UI"
                                 }
                                 
                                 ComboBox {
@@ -306,9 +315,9 @@ Item {
                                     
                                     background: Rectangle {
                                         color: whiteColor
-                                        border.color: parent.activeFocus ? primaryColor : "#dee2e6"
+                                        border.color: parent.activeFocus ? primaryColor : "#E0E6ED"
                                         border.width: parent.activeFocus ? 2 : 1
-                                        radius: 8
+                                        radius: 4
                                     }
                                     
                                     contentItem: RowLayout {
@@ -327,6 +336,7 @@ Item {
                                             text: tipoReporteCombo.displayText
                                             font.pixelSize: 13
                                             color: textColor
+                                            font.family: "Segoe UI"
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -349,6 +359,7 @@ Item {
                                     font.pixelSize: 13
                                     font.bold: true
                                     color: textColor
+                                    font.family: "Segoe UI"
                                 }
                                 
                                 TextField {
@@ -357,12 +368,13 @@ Item {
                                     Layout.preferredHeight: 45
                                     placeholderText: "DD/MM/YYYY"
                                     font.pixelSize: 13
+                                    font.family: "Segoe UI"
                                     
                                     background: Rectangle {
                                         color: whiteColor
-                                        border.color: parent.activeFocus ? primaryColor : "#dee2e6"
+                                        border.color: parent.activeFocus ? primaryColor : "#E0E6ED"
                                         border.width: parent.activeFocus ? 2 : 1
-                                        radius: 8
+                                        radius: 4
                                     }
                                     
                                     onTextChanged: {
@@ -381,6 +393,7 @@ Item {
                                     font.pixelSize: 13
                                     font.bold: true
                                     color: textColor
+                                    font.family: "Segoe UI"
                                 }
                                 
                                 TextField {
@@ -389,12 +402,13 @@ Item {
                                     Layout.preferredHeight: 45
                                     placeholderText: "DD/MM/YYYY"
                                     font.pixelSize: 13
+                                    font.family: "Segoe UI"
                                     
                                     background: Rectangle {
                                         color: whiteColor
-                                        border.color: parent.activeFocus ? primaryColor : "#dee2e6"
+                                        border.color: parent.activeFocus ? primaryColor : "#E0E6ED"
                                         border.width: parent.activeFocus ? 2 : 1
-                                        radius: 8
+                                        radius: 4
                                     }
                                     
                                     onTextChanged: {
@@ -404,13 +418,13 @@ Item {
                             }
                         }
                         
-                        // Descripción del reporte seleccionado
+                        // Descripción del reporte seleccionado PROFESIONAL
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 60
-                            color: tipoReporteSeleccionado > 0 ? "#f8f9fa" : "#fafafa"
-                            radius: 8
-                            border.color: "#e9ecef"
+                            Layout.preferredHeight: 70
+                            color: tipoReporteSeleccionado > 0 ? "#F8F9FA" : "#FAFAFA"
+                            radius: 6
+                            border.color: "#E9ECEF"
                             border.width: 1
                             visible: tipoReporteSeleccionado > 0
                             
@@ -420,17 +434,17 @@ Item {
                                 spacing: 12
                                 
                                 Rectangle {
-                                    width: 28
-                                    height: 28
+                                    width: 32
+                                    height: 32
                                     color: tipoReporteSeleccionado > 0 ? 
                                            tiposReportes[tipoReporteSeleccionado].color : lightGrayColor
-                                    radius: 6
+                                    radius: 4
                                     
                                     Label {
                                         anchors.centerIn: parent
                                         text: tipoReporteSeleccionado > 0 ? 
                                               tiposReportes[tipoReporteSeleccionado].icono : "📊"
-                                        font.pixelSize: 14
+                                        font.pixelSize: 16
                                         color: whiteColor
                                     }
                                 }
@@ -445,6 +459,7 @@ Item {
                                         font.pixelSize: 14
                                         font.bold: true
                                         color: textColor
+                                        font.family: "Segoe UI"
                                     }
                                     
                                     Label {
@@ -452,6 +467,7 @@ Item {
                                               tiposReportes[tipoReporteSeleccionado].descripcion : ""
                                         font.pixelSize: 12
                                         color: darkGrayColor
+                                        font.family: "Segoe UI"
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
@@ -459,7 +475,7 @@ Item {
                             }
                         }
                         
-                        // Botón de acción principal
+                        // Botón de acción principal PROFESIONAL
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 12
@@ -468,18 +484,28 @@ Item {
                             
                             Button {
                                 id: generarReporteBtn
-                                text: "📊 Generar Reporte"
-                                Layout.preferredHeight: 45
-                                Layout.preferredWidth: 180
+                                text: "📊 Generar Reporte Profesional"
+                                Layout.preferredHeight: 50
+                                Layout.preferredWidth: 220
                                 enabled: tipoReporteSeleccionado > 0 && fechaDesde && fechaHasta
                                 
                                 background: Rectangle {
                                     color: parent.enabled ? 
                                            (parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor) : 
                                            lightGrayColor
-                                    radius: 8
-                                    border.color: parent.enabled ? primaryColor : darkGrayColor
+                                    radius: 6
+                                    border.color: parent.enabled ? primaryColor : "#BDC3C7"
                                     border.width: 1
+                                    
+                                    // Efecto de gradiente sutil
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: parent.radius
+                                        gradient: Gradient {
+                                            GradientStop { position: 0.0; color: "transparent" }
+                                            GradientStop { position: 1.0; color: "#10000000" }
+                                        }
+                                    }
                                 }
                                 
                                 contentItem: Label {
@@ -487,6 +513,7 @@ Item {
                                     color: parent.enabled ? whiteColor : darkGrayColor
                                     font.bold: true
                                     font.pixelSize: 14
+                                    font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -501,7 +528,7 @@ Item {
             }
         }
         
-        // VISTA 1: RESULTADOS DEL REPORTE
+        // VISTA 1: RESULTADOS DEL REPORTE PROFESIONAL
         Item {
             id: vistaResultados
             
@@ -509,11 +536,20 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header de navegación mejorado
+                // Header de navegación PROFESIONAL
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 70
+                    Layout.preferredHeight: 80
                     color: primaryColor
+                    
+                    // Gradiente sutil
+                    Rectangle {
+                        anchors.fill: parent
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "transparent" }
+                            GradientStop { position: 1.0; color: "#10000000" }
+                        }
+                    }
                     
                     RowLayout {
                         anchors.fill: parent
@@ -522,12 +558,12 @@ Item {
                         
                         Button {
                             text: "← Volver"
-                            Layout.preferredHeight: 35
-                            Layout.preferredWidth: 90
+                            Layout.preferredHeight: 40
+                            Layout.preferredWidth: 100
                             
                             background: Rectangle {
                                 color: parent.pressed ? "#40FFFFFF" : "transparent"
-                                radius: 6
+                                radius: 4
                                 border.color: whiteColor
                                 border.width: 1
                             }
@@ -537,6 +573,7 @@ Item {
                                 color: whiteColor
                                 font.bold: true
                                 font.pixelSize: 12
+                                font.family: "Segoe UI"
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -549,19 +586,21 @@ Item {
                         
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 2
+                            spacing: 4
                             
                             Label {
-                                text: "Reporte: " + obtenerTituloReporte().replace("REPORTE DE ", "").replace("REPORTE ", "")
+                                text: "REPORTE: " + obtenerTituloReporte().replace("REPORTE DE ", "").replace("REPORTE ", "")
                                 color: whiteColor
                                 font.bold: true
                                 font.pixelSize: 16
+                                font.family: "Segoe UI"
                             }
                             
                             Label {
                                 text: "Período: " + fechaDesde + " al " + fechaHasta + " • " + datosReporte.length + " registros"
                                 color: "#E8F4FD"
                                 font.pixelSize: 11
+                                font.family: "Segoe UI"
                             }
                         }
                         
@@ -570,12 +609,12 @@ Item {
                             
                             Button {
                                 text: mostrandoVistaPrevia ? "📊 Ver Datos" : "👁️ Vista Previa"
-                                Layout.preferredHeight: 35
-                                Layout.preferredWidth: 110
+                                Layout.preferredHeight: 40
+                                Layout.preferredWidth: 120
                                 
                                 background: Rectangle {
                                     color: parent.pressed ? Qt.darker(infoColor, 1.2) : infoColor
-                                    radius: 6
+                                    radius: 4
                                 }
                                 
                                 contentItem: Label {
@@ -583,6 +622,7 @@ Item {
                                     color: whiteColor
                                     font.bold: true
                                     font.pixelSize: 10
+                                    font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -594,12 +634,12 @@ Item {
                             
                             Button {
                                 text: "📄 Descargar PDF"
-                                Layout.preferredHeight: 35
-                                Layout.preferredWidth: 120
+                                Layout.preferredHeight: 40
+                                Layout.preferredWidth: 130
                                 
                                 background: Rectangle {
                                     color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                                    radius: 6
+                                    radius: 4
                                 }
                                 
                                 contentItem: Label {
@@ -607,6 +647,7 @@ Item {
                                     color: whiteColor
                                     font.bold: true
                                     font.pixelSize: 10
+                                    font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -617,12 +658,12 @@ Item {
                         
                         Button {
                             text: "×"
-                            Layout.preferredHeight: 35
-                            Layout.preferredWidth: 35
+                            Layout.preferredHeight: 40
+                            Layout.preferredWidth: 40
                             
                             background: Rectangle {
                                 color: parent.pressed ? "#40FFFFFF" : "transparent"
-                                radius: 17
+                                radius: 20
                             }
                             
                             contentItem: Label {
@@ -644,36 +685,41 @@ Item {
                 }
 
                 
-                // Contenido principal (tabla o vista previa)
+                // Contenido principal PROFESIONAL (tabla o vista previa)
                 StackLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     currentIndex: mostrandoVistaPrevia ? 1 : 0
                     
-                    // Vista de tabla de datos MEJORADA
+                    // Vista de tabla de datos PROFESIONAL
                     Rectangle {
                         color: whiteColor
                         
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 15
-                            spacing: 15
+                            anchors.margins: 20
+                            spacing: 20
                             
-                            // Información del período
+                            // Información del período PROFESIONAL
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 40
-                                color: "transparent"
+                                Layout.preferredHeight: 50
+                                color: "#F8F9FA"
+                                radius: 4
+                                border.color: "#E9ECEF"
+                                border.width: 1
                                 
                                 RowLayout {
                                     anchors.fill: parent
-                                    spacing: 10
+                                    anchors.margins: 15
+                                    spacing: 15
                                     
                                     Label {
                                         text: "PERÍODO: " + fechaDesde + " al " + fechaHasta
-                                        font.pixelSize: 12
+                                        font.pixelSize: 13
                                         font.bold: true
                                         color: textColor
+                                        font.family: "Segoe UI"
                                     }
                                     
                                     Item { Layout.fillWidth: true }
@@ -681,42 +727,36 @@ Item {
                                     Label {
                                         text: "Fecha: " + Qt.formatDateTime(new Date(), "dd/MM/yyyy")
                                         font.pixelSize: 12
-                                        color: textColor
+                                        color: darkGrayColor
+                                        font.family: "Segoe UI"
                                     }
-                                }
-                                
-                                Rectangle {
-                                    anchors.bottom: parent.bottom
-                                    width: parent.width
-                                    height: 1
-                                    color: textColor
                                 }
                             }
                             
-                            // Tabla de datos con scroll
+                            // Tabla de datos PROFESIONAL con zebra striping
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 color: whiteColor
-                                border.color: "#e0e0e0"
+                                radius: 4
+                                border.color: "#E0E6ED"
                                 border.width: 1
                                 
                                 ColumnLayout {
                                     anchors.fill: parent
                                     spacing: 0
                                     
-                                    // Encabezados de la tabla
+                                    // Encabezados de la tabla PROFESIONAL
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 40
-                                        color: "#f0f0f0"
-                                        border.color: "transparent" 
-                                        border.width: 0
+                                        Layout.preferredHeight: 45
+                                        color: blackColor
+                                        radius: 4
                                         
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.margins: 8
-                                            spacing: 5
+                                            anchors.margins: 12
+                                            spacing: 0
                                             
                                             Repeater {
                                                 model: obtenerColumnasReporte()
@@ -726,23 +766,16 @@ Item {
                                                     text: modelData.titulo
                                                     font.bold: true
                                                     font.pixelSize: 11
-                                                    color: textColor
+                                                    font.family: "Segoe UI"
+                                                    color: whiteColor
                                                     horizontalAlignment: modelData.align || Text.AlignLeft
                                                     verticalAlignment: Text.AlignVCenter
-                                                    
-                                                    Rectangle {
-                                                        anchors.right: parent.right
-                                                        width: 1
-                                                        height: parent.height
-                                                        color: "#ccc"
-                                                        visible: index < obtenerColumnasReporte().length - 1
-                                                    }
                                                 }
                                             }
                                         }
                                     }
                                     
-                                    // Área de datos con scroll
+                                    // Área de datos con scroll y ZEBRA STRIPING
                                     ScrollView {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
@@ -752,23 +785,24 @@ Item {
                                             width: parent.width
                                             spacing: 0
                                             
-                                            // Filas de datos
+                                            // Filas de datos con zebra striping
                                             Repeater {
                                                 model: datosReporte.length
                                                 
                                                 Rectangle {
                                                     Layout.fillWidth: true
-                                                    Layout.preferredHeight: 35
-                                                    color: index % 2 === 0 ? whiteColor : "#f8f8f8"
-                                                    border.color: "#e0e0e0"
-                                        
+                                                    Layout.preferredHeight: 40
+                                                    // ZEBRA STRIPING PROFESIONAL
+                                                    color: index % 2 === 0 ? whiteColor : zebraColor
+                                                    border.color: "transparent"
+                                                    border.width: 0
                                                     
                                                     property int rowIndex: index
                                                     
                                                     RowLayout {
                                                         anchors.fill: parent
-                                                        anchors.margins: 8
-                                                        spacing: 5
+                                                        anchors.margins: 12
+                                                        spacing: 0
                                                         
                                                         Repeater {
                                                             model: obtenerColumnasReporte()
@@ -777,6 +811,7 @@ Item {
                                                                 Layout.preferredWidth: modelData.width
                                                                 text: obtenerValorColumna(parent.parent.rowIndex, modelData.campo)
                                                                 font.pixelSize: 10
+                                                                font.family: "Segoe UI"
                                                                 color: textColor
                                                                 horizontalAlignment: modelData.align || Text.AlignLeft
                                                                 verticalAlignment: Text.AlignVCenter
@@ -790,17 +825,17 @@ Item {
                                         }
                                     }
                                     
-                                    // Fila de total
+                                    // Fila de total PROFESIONAL
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 40
-                                        color: "#f0f0f0"
+                                        Layout.preferredHeight: 50
+                                        color: lightGrayColor
                                         border.color: textColor
                                         border.width: 1
                                         
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.margins: 8
+                                            anchors.margins: 12
                                             spacing: 5
                                             
                                             Item {
@@ -811,7 +846,8 @@ Item {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: "TOTAL GENERAL:"
                                                     font.bold: true
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: 13
+                                                    font.family: "Segoe UI"
                                                     color: textColor
                                                 }
                                             }
@@ -820,7 +856,8 @@ Item {
                                                 Layout.preferredWidth: 120
                                                 text: "Bs " + (resumenReporte.totalValor || 0).toFixed(2)
                                                 font.bold: true
-                                                font.pixelSize: 12
+                                                font.pixelSize: 13
+                                                font.family: "Segoe UI"
                                                 color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
                                                 horizontalAlignment: Text.AlignRight
                                                 verticalAlignment: Text.AlignVCenter
@@ -830,38 +867,36 @@ Item {
                                 }
                             }
                             
-                            // Resumen inferior
+                            // Resumen inferior PROFESIONAL
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 60
-                                color: "transparent"
-                                
-                                Rectangle {
-                                    anchors.top: parent.top
-                                    width: parent.width
-                                    height: 1
-                                    color: textColor
-                                }
+                                Layout.preferredHeight: 70
+                                color: "#F8F9FA"
+                                radius: 4
+                                border.color: "#E9ECEF"
+                                border.width: 1
                                 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.topMargin: 10
+                                    anchors.margins: 15
                                     spacing: 40
                                     
                                     ColumnLayout {
-                                        spacing: 4
+                                        spacing: 6
                                         
                                         Label {
                                             text: "Total de Registros: " + datosReporte.length
-                                            font.pixelSize: 11
+                                            font.pixelSize: 12
                                             font.bold: true
+                                            font.family: "Segoe UI"
                                             color: textColor
                                         }
                                         
                                         Label {
                                             text: "Valor Total: Bs " + (resumenReporte.totalValor || 0).toFixed(2)
-                                            font.pixelSize: 11
+                                            font.pixelSize: 12
                                             font.bold: true
+                                            font.family: "Segoe UI"
                                             color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
                                         }
                                     }
@@ -871,6 +906,7 @@ Item {
                                     Label {
                                         text: "Sistema de Gestión Médica - Clínica María Inmaculada"
                                         font.pixelSize: 10
+                                        font.family: "Segoe UI"
                                         color: darkGrayColor
                                         horizontalAlignment: Text.AlignRight
                                     }
@@ -878,56 +914,102 @@ Item {
                             }
                         }
                     }
-                    // Vista previa del PDF - OPTIMIZADA PARA TAMAÑO CARTA
+                    
+                    // Vista previa del PDF PROFESIONAL
                     Rectangle {
-                        color: "#f5f6fa"
+                        color: "#F5F6FA"
                         
                         ScrollView {
                             anchors.fill: parent
                             clip: true
                             
-                            // Contenedor centrado que simula una hoja carta
+                            // Contenedor centrado que simula una hoja carta PROFESIONAL
                             Item {
-                                width: Math.max(parent.width, 900)  // Ancho mínimo para carta
-                                height: Math.max(parent.height, 700) // Alto mínimo
+                                width: Math.max(parent.width, 900)
+                                height: Math.max(parent.height, 700)
                                 
-                                // Simulación de hoja carta (8.5" x 11" = proporción 0.77)
+                                // Simulación de hoja carta PROFESIONAL
                                 Rectangle {
-                                    id: cartaPage
-                                    // Dimensiones proporcionales a carta real
-                                    width: 650   // Equivale a 8.5" en escala
-                                    height: 850  // Equivale a 11" en escala
+                                    id: cartaPageProfesional
+                                    width: 650
+                                    height: 850
                                     anchors.centerIn: parent
                                     color: whiteColor
-                                    border.color: "#cccccc"
+                                    radius: 4
+                                    border.color: "#BDC3C7"
                                     border.width: 1
                                     
-                                    // Sombra realista
+                                    // Sombra profesional
                                     Rectangle {
                                         anchors.fill: parent
-                                        anchors.topMargin: 3
-                                        anchors.leftMargin: 3
+                                        anchors.topMargin: 4
+                                        anchors.leftMargin: 4
                                         color: "#15000000"
-                                        radius: 2
+                                        radius: 4
                                         z: -1
                                     }
                                     
                                     ColumnLayout {
-                                        id: contentColumn
                                         anchors.fill: parent
-                                        anchors.margins: 25  // Márgenes proporcionales a carta
-                                        spacing: 12
+                                        anchors.margins: 30
+                                        spacing: 15
                                         
-                                        // Encabezado optimizado para carta
+                                        // Encabezado PROFESIONAL simulado
                                         ColumnLayout {
                                             Layout.fillWidth: true
-                                            spacing: 8
+                                            spacing: 10
+                                            
+                                            // Simulación de logo
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                
+                                                Rectangle {
+                                                    width: 80
+                                                    height: 40
+                                                    color: primaryColor
+                                                    radius: 4
+                                                    
+                                                    Label {
+                                                        anchors.centerIn: parent
+                                                        text: "CMI\nLOGO"
+                                                        color: whiteColor
+                                                        font.bold: true
+                                                        font.pixelSize: 10
+                                                        font.family: "Segoe UI"
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                    }
+                                                }
+                                                
+                                                Item { Layout.fillWidth: true }
+                                                
+                                                ColumnLayout {
+                                                    spacing: 2
+                                                    
+                                                    Label {
+                                                        text: "CLÍNICA MARÍA INMACULADA"
+                                                        font.pixelSize: 10
+                                                        font.bold: true
+                                                        font.family: "Segoe UI"
+                                                        color: darkGrayColor
+                                                        horizontalAlignment: Text.AlignRight
+                                                    }
+                                                    
+                                                    Label {
+                                                        text: "Villa Yapacaní, Santa Cruz - Bolivia"
+                                                        font.pixelSize: 8
+                                                        font.family: "Segoe UI"
+                                                        color: darkGrayColor
+                                                        horizontalAlignment: Text.AlignRight
+                                                    }
+                                                }
+                                            }
                                             
                                             // Título principal
                                             Label {
                                                 text: obtenerTituloReporte()
-                                                font.pixelSize: 14  // REDUCIDO para carta
+                                                font.pixelSize: 16
                                                 font.bold: true
+                                                font.family: "Segoe UI"
                                                 color: textColor
                                                 Layout.fillWidth: true
                                                 horizontalAlignment: Text.AlignHCenter
@@ -936,39 +1018,28 @@ Item {
                                             // Línea separadora
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                height: 1.5
+                                                height: 2
+                                                color: blackColor
+                                            }
+                                            
+                                            // Información del período
+                                            Label {
+                                                text: "PERÍODO: " + fechaDesde + " al " + fechaHasta
+                                                font.pixelSize: 10
+                                                font.family: "Segoe UI"
                                                 color: textColor
-                                            }
-                                            
-                                            // Información del período (en línea para ahorrar espacio)
-                                            RowLayout {
                                                 Layout.fillWidth: true
-                                                
-                                                Label {
-                                                    text: "PERÍODO: " + fechaDesde + " al " + fechaHasta
-                                                    font.pixelSize: 9   // REDUCIDO
-                                                    color: textColor
-                                                    font.bold: true
-                                                }
-                                                
-                                                Item { Layout.fillWidth: true }
-                                                
-                                                Label {
-                                                    text: "Fecha: " + Qt.formatDateTime(new Date(), "dd/MM/yyyy")
-                                                    font.pixelSize: 9   // REDUCIDO
-                                                    color: textColor
-                                                }
+                                                horizontalAlignment: Text.AlignHCenter
                                             }
                                             
-                                            // Línea separadora
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                height: 1.5
-                                                color: textColor
+                                                height: 1
+                                                color: blackColor
                                             }
                                         }
                                         
-                                        // Tabla principal optimizada para carta
+                                        // Tabla principal PROFESIONAL
                                         ColumnLayout {
                                             Layout.fillWidth: true
                                             spacing: 0
@@ -976,109 +1047,78 @@ Item {
                                             // Encabezados de tabla
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                Layout.preferredHeight: 28  // REDUCIDO
-                                                color: "#f0f0f0"
-                                                border.color: "transparent"
-                                                border.width: 0
+                                                Layout.preferredHeight: 32
+                                                color: blackColor
                                                 
                                                 RowLayout {
                                                     anchors.fill: parent
-                                                    anchors.margins: 4  // REDUCIDO
-                                                    spacing: 1
+                                                    anchors.margins: 6
+                                                    spacing: 0
                                                     
                                                     Repeater {
                                                         model: obtenerColumnasReporteCarta()
                                                         
-                                                        Rectangle {
+                                                        Label {
                                                             Layout.preferredWidth: modelData.width
-                                                            Layout.fillHeight: true
-                                                            color: "transparent"
-                                                            
-                                                            
-                                                            Label {
-                                                                anchors.centerIn: parent
-                                                                anchors.margins: 3
-                                                                text: modelData.titulo
-                                                                font.bold: true
-                                                                font.pixelSize: 8   // REDUCIDO para carta
-                                                                color: textColor
-                                                                horizontalAlignment: modelData.align || Text.AlignLeft
-                                                            }
+                                                            text: modelData.titulo
+                                                            font.bold: true
+                                                            font.pixelSize: 8
+                                                            font.family: "Segoe UI"
+                                                            color: whiteColor
+                                                            horizontalAlignment: modelData.align || Text.AlignLeft
+                                                            verticalAlignment: Text.AlignVCenter
                                                         }
                                                     }
                                                 }
                                             }
                                             
-                                            // Filas de datos (máximo visible en carta)
+                                            // Filas de datos con ZEBRA STRIPING
                                             Repeater {
-                                                model: Math.min(datosReporte.length, 25)  // Límite para carta
+                                                model: Math.min(datosReporte.length, 25)
                                                 
                                                 Rectangle {
                                                     Layout.fillWidth: true
-                                                    Layout.preferredHeight: 22  // REDUCIDO para carta
-                                                    color: index % 2 === 0 ? whiteColor : "#f8f8f8"
-                                                    border.color: "#e0e0e0"
-                                                    
+                                                    Layout.preferredHeight: 25
+                                                    // ZEBRA STRIPING PROFESIONAL
+                                                    color: index % 2 === 0 ? whiteColor : zebraColor
+                                                    border.color: "transparent"
                                                     
                                                     property int rowIndex: index
                                                     
                                                     RowLayout {
                                                         anchors.fill: parent
-                                                        anchors.margins: 4  // REDUCIDO
-                                                        spacing: 1
+                                                        anchors.margins: 6
+                                                        spacing: 0
                                                         
                                                         Repeater {
                                                             model: obtenerColumnasReporteCarta()
                                                             
-                                                            Rectangle {
+                                                            Label {
                                                                 Layout.preferredWidth: modelData.width
-                                                                Layout.fillHeight: true
-                                                                color: "transparent"
-                                                               
-                                                                
-                                                                Label {
-                                                                    anchors.centerIn: parent
-                                                                    anchors.margins: 2
-                                                                    text: obtenerValorColumnaCarta(parent.parent.parent.rowIndex, modelData.campo)
-                                                                    font.pixelSize: 7   // REDUCIDO para carta
-                                                                    color: textColor
-                                                                    horizontalAlignment: modelData.align || Text.AlignLeft
-                                                                    elide: Text.ElideRight
-                                                                    font.bold: modelData.campo === "valor"
-                                                                }
+                                                                text: obtenerValorColumnaCarta(parent.parent.parent.rowIndex, modelData.campo)
+                                                                font.pixelSize: 7
+                                                                font.family: "Segoe UI"
+                                                                color: textColor
+                                                                horizontalAlignment: modelData.align || Text.AlignLeft
+                                                                elide: Text.ElideRight
+                                                                font.bold: modelData.campo === "valor"
                                                             }
                                                         }
                                                     }
-                                                }
-                                            }
-                                            
-                                            // Indicador de más registros si hay
-                                            Rectangle {
-                                                Layout.fillWidth: true
-                                                Layout.preferredHeight: 20
-                                                color: "#f0f0f0"
-                                                visible: datosReporte.length > 25
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: "... y " + (datosReporte.length - 25) + " registros más"
-                                                    font.pixelSize: 7
-                                                    color: darkGrayColor
-                                                    font.italic: true
                                                 }
                                             }
                                             
                                             // Fila de total
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                Layout.preferredHeight: 28
-                                                color: "#f0f0f0"
-                                                border.color: textColor
+                                                Layout.preferredHeight: 32
+                                                color: lightGrayColor
+                                                border.color: blackColor
                                                 border.width: 1
                                                 
                                                 RowLayout {
                                                     anchors.fill: parent
-                                                    anchors.margins: 6
+                                                    anchors.margins: 8
                                                     spacing: 0
                                                     
                                                     Item {
@@ -1090,6 +1130,7 @@ Item {
                                                             text: "TOTAL GENERAL:"
                                                             font.bold: true
                                                             font.pixelSize: 9
+                                                            font.family: "Segoe UI"
                                                             color: textColor
                                                         }
                                                     }
@@ -1099,6 +1140,7 @@ Item {
                                                         text: "Bs " + (resumenReporte.totalValor || 0).toFixed(2)
                                                         font.bold: true
                                                         font.pixelSize: 9
+                                                        font.family: "Segoe UI"
                                                         color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
                                                         horizontalAlignment: Text.AlignRight
                                                         verticalAlignment: Text.AlignVCenter
@@ -1107,73 +1149,48 @@ Item {
                                             }
                                         }
                                         
-                                        // Resumen final compacto
+                                        // Pie de página PROFESIONAL simulado
                                         ColumnLayout {
                                             Layout.fillWidth: true
-                                            spacing: 6
-                                            Layout.topMargin: 12
+                                            spacing: 8
+                                            Layout.topMargin: 15
                                             
                                             Rectangle {
                                                 Layout.fillWidth: true
                                                 height: 1
-                                                color: textColor
+                                                color: blackColor
                                             }
                                             
                                             RowLayout {
                                                 Layout.fillWidth: true
-                                                spacing: 30
                                                 
                                                 Label {
-                                                    text: "Total de Registros: " + datosReporte.length
+                                                    text: "Página 1 de 1"
                                                     font.pixelSize: 8
+                                                    font.family: "Segoe UI"
                                                     color: textColor
-                                                    font.bold: true
                                                 }
                                                 
                                                 Item { Layout.fillWidth: true }
                                                 
                                                 Label {
-                                                    text: "Valor Total: Bs " + (resumenReporte.totalValor || 0).toFixed(2)
+                                                    text: "Generado el " + Qt.formatDateTime(new Date(), "dd/MM/yyyy hh:mm")
                                                     font.pixelSize: 8
-                                                    color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
-                                                    font.bold: true
-                                                    horizontalAlignment: Text.AlignRight
+                                                    font.family: "Segoe UI"
+                                                    color: textColor
                                                 }
                                             }
                                             
-                                            Rectangle {
-                                                Layout.fillWidth: true
-                                                height: 1
-                                                color: textColor
-                                            }
-                                            
                                             Label {
-                                                text: "Sistema de Gestión Médica - Clínica María Inmaculada"
+                                                text: "Sistema de Gestión Médica - Documento generado automáticamente"
                                                 font.pixelSize: 7
-                                                color: darkGrayColor
-                                                Layout.fillWidth: true
-                                                horizontalAlignment: Text.AlignHCenter
-                                                Layout.topMargin: 8
-                                            }
-                                            
-                                            Label {
-                                                text: "Villa Yapacaní, Santa Cruz - Bolivia"
-                                                font.pixelSize: 6
-                                                color: darkGrayColor
-                                                Layout.fillWidth: true
-                                                horizontalAlignment: Text.AlignHCenter
-                                            }
-                                            
-                                            Label {
-                                                text: "Documento generado el " + Qt.formatDateTime(new Date(), "dd/MM/yyyy hh:mm:ss")
-                                                font.pixelSize: 6
+                                                font.family: "Segoe UI"
                                                 color: darkGrayColor
                                                 Layout.fillWidth: true
                                                 horizontalAlignment: Text.AlignHCenter
                                             }
                                         }
                                         
-                                        // Espaciador para empujar el contenido hacia arriba
                                         Item { Layout.fillHeight: true }
                                     }
                                 }
@@ -1185,7 +1202,7 @@ Item {
         }
     }
     
-    // ===== FUNCIONES DE LÓGICA DE NEGOCIO =====
+    // ===== FUNCIONES DE LÓGICA DE NEGOCIO (SIN CAMBIOS) =====
     
     function limpiarFormulario() {
         tipoReporteCombo.currentIndex = 0
@@ -1201,13 +1218,11 @@ Item {
     }
     
     function generarReporte() {
-        console.log("📊 Generando reporte tipo:", tipoReporteSeleccionado)
+        console.log("📊 Generando reporte profesional tipo:", tipoReporteSeleccionado)
         console.log("📅 Período:", fechaDesde, "al", fechaHasta)
         
-        // Limpiar datos anteriores
         datosReporte = []
         
-        // Generar datos según el tipo de reporte
         switch(tipoReporteSeleccionado) {
             case 1: generarReporteVentas(); break
             case 2: generarReporteInventario(); break
@@ -1223,12 +1238,12 @@ Item {
         }
         
         reporteGenerado = true
-        vistaActual = 1 // Cambiar a vista de resultados
+        vistaActual = 1
         
-        console.log("✅ Reporte generado con", datosReporte.length, "registros")
+        console.log("✅ Reporte profesional generado con", datosReporte.length, "registros")
     }
     
-    // ===== FUNCIONES DE GENERACIÓN DE DATOS =====
+    // ===== FUNCIONES DE GENERACIÓN DE DATOS (SIN CAMBIOS) =====
     
     function generarReporteVentas() {
         var ventasEjemplo = [
@@ -1419,7 +1434,7 @@ Item {
         }
     }
     
-    // ===== FUNCIONES AUXILIARES PARA REPORTES =====
+    // ===== FUNCIONES AUXILIARES PARA REPORTES (SIN CAMBIOS FUNCIONALES) =====
     
     function obtenerTituloReporte() {
         if (tipoReporteSeleccionado <= 0) return "REPORTE GENERAL"
@@ -1580,7 +1595,7 @@ Item {
     }
     
     Component.onCompleted: {
-        console.log("📊 Módulo de Reportes inicializado completamente")
+        console.log("📊 Módulo de Reportes Profesional inicializado completamente")
         console.log("📋 Tipos de reportes disponibles:", tiposReportes.length)
         
         // Establecer fechas por defecto
@@ -1723,9 +1738,9 @@ Item {
         return true
     }
 
-   // ===== FUNCIÓN DESCARGAR PDF =====
+   // ===== FUNCIÓN DESCARGAR PDF PROFESIONAL =====
     function descargarPDF() {
-        console.log("📄 Iniciando generación de PDF via Python...")
+        console.log("📄 Iniciando generación de PDF profesional via Python...")
         
         try {
             // Validar que hay datos para generar
@@ -1752,7 +1767,7 @@ Item {
             
             // Verificar resultado
             if (rutaArchivo && rutaArchivo.length > 0) {
-                console.log("✅ PDF generado exitosamente:", rutaArchivo)
+                console.log("✅ PDF profesional generado exitosamente:", rutaArchivo)
                 
                 // Extraer solo el nombre del archivo para mostrar
                 var nombreArchivo = rutaArchivo.split("/").pop().split("\\").pop()
@@ -1773,9 +1788,9 @@ Item {
         }
     }
 
-    // ===== FUNCIÓN NOTIFICACIÓN DESCARGA =====
+    // ===== FUNCIÓN NOTIFICACIÓN DESCARGA PROFESIONAL =====
     function mostrarNotificacionDescarga(nombreArchivo, rutaCompleta) {
-        // Crear notificación temporal mejorada
+        // Crear notificación temporal mejorada PROFESIONAL
         var notificacion = Qt.createQmlObject(`
             import QtQuick 2.15
             import QtQuick.Controls 2.15
@@ -1783,14 +1798,24 @@ Item {
             
             Rectangle {
                 id: notification
-                width: 450
-                height: 100
+                width: 480
+                height: 110
                 color: "${successColor}"
-                radius: 12
+                radius: 8
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 20
                 z: 1000
+                
+                // Sombra profesional
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.topMargin: 3
+                    anchors.leftMargin: 3
+                    color: "#20000000"
+                    radius: parent.radius
+                    z: -1
+                }
                 
                 // Animación de entrada
                 opacity: 0
@@ -1800,7 +1825,7 @@ Item {
                 }
                 
                 Behavior on opacity {
-                    NumberAnimation { duration: 300 }
+                    NumberAnimation { duration: 400 }
                 }
                 
                 RowLayout {
@@ -1809,32 +1834,34 @@ Item {
                     spacing: 15
                     
                     Rectangle {
-                        width: 50
-                        height: 50
+                        width: 55
+                        height: 55
                         color: "${whiteColor}"
-                        radius: 25
+                        radius: 8
                         
                         Label {
                             anchors.centerIn: parent
                             text: "📄"
-                            font.pixelSize: 24
+                            font.pixelSize: 28
                         }
                     }
                     
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 4
+                        spacing: 6
                         
                         Label {
-                            text: "PDF Generado Exitosamente"
+                            text: "PDF Profesional Generado Exitosamente"
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: 15
+                            font.family: "Segoe UI"
                             color: "${whiteColor}"
                         }
                         
                         Label {
                             text: "Archivo: " + nombreArchivo
-                            font.pixelSize: 11
+                            font.pixelSize: 12
+                            font.family: "Segoe UI"
                             color: "${whiteColor}"
                             opacity: 0.9
                             wrapMode: Text.WordWrap
@@ -1844,6 +1871,7 @@ Item {
                         Label {
                             text: "📁 Guardado en: Documents/Reportes_CMI/"
                             font.pixelSize: 10
+                            font.family: "Segoe UI"
                             color: "${whiteColor}"
                             opacity: 0.8
                         }
@@ -1851,12 +1879,12 @@ Item {
                     
                     Button {
                         text: "×"
-                        Layout.preferredWidth: 30
-                        Layout.preferredHeight: 30
+                        Layout.preferredWidth: 35
+                        Layout.preferredHeight: 35
                         
                         background: Rectangle {
                             color: parent.pressed ? "${whiteColor}" : "transparent"
-                            radius: 15
+                            radius: 17
                             opacity: parent.pressed ? 0.3 : 0.1
                         }
                         
@@ -1864,7 +1892,8 @@ Item {
                             text: parent.text
                             color: "${whiteColor}"
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: 16
+                            font.family: "Segoe UI"
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -1875,7 +1904,7 @@ Item {
                 
                 Timer {
                     id: timer
-                    interval: 8000  // 8 segundos
+                    interval: 10000  // 10 segundos
                     onTriggered: {
                         notification.opacity = 0
                         Qt.callLater(function() { notification.destroy() })
@@ -1885,7 +1914,7 @@ Item {
         `, reportesRoot)
     }
 
-    // ===== FUNCIÓN NOTIFICACIÓN ERROR =====
+    // ===== FUNCIÓN NOTIFICACIÓN ERROR PROFESIONAL =====
     function mostrarNotificacionError(mensaje) {
         var notificacion = Qt.createQmlObject(`
             import QtQuick 2.15
@@ -1894,14 +1923,24 @@ Item {
             
             Rectangle {
                 id: errorNotification
-                width: 400
-                height: 90
+                width: 420
+                height: 100
                 color: "${dangerColor}"
-                radius: 10
+                radius: 8
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 20
                 z: 1000
+                
+                // Sombra profesional
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.topMargin: 3
+                    anchors.leftMargin: 3
+                    color: "#20000000"
+                    radius: parent.radius
+                    z: -1
+                }
                 
                 opacity: 0
                 Component.onCompleted: {
@@ -1910,7 +1949,7 @@ Item {
                 }
                 
                 Behavior on opacity {
-                    NumberAnimation { duration: 300 }
+                    NumberAnimation { duration: 400 }
                 }
                 
                 RowLayout {
@@ -1920,7 +1959,7 @@ Item {
                     
                     Label {
                         text: "❌"
-                        font.pixelSize: 24
+                        font.pixelSize: 28
                         color: "${whiteColor}"
                     }
                     
@@ -1929,15 +1968,17 @@ Item {
                         spacing: 4
                         
                         Label {
-                            text: "Error al Generar PDF"
+                            text: "Error al Generar PDF Profesional"
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: 15
+                            font.family: "Segoe UI"
                             color: "${whiteColor}"
                         }
                         
                         Label {
                             text: mensaje || "Intente nuevamente o contacte al administrador"
-                            font.pixelSize: 11
+                            font.pixelSize: 12
+                            font.family: "Segoe UI"
                             color: "${whiteColor}"
                             opacity: 0.9
                             wrapMode: Text.WordWrap
@@ -1947,12 +1988,12 @@ Item {
                     
                     Button {
                         text: "×"
-                        Layout.preferredWidth: 30
-                        Layout.preferredHeight: 30
+                        Layout.preferredWidth: 35
+                        Layout.preferredHeight: 35
                         
                         background: Rectangle {
                             color: parent.pressed ? "${whiteColor}" : "transparent"
-                            radius: 15
+                            radius: 17
                             opacity: parent.pressed ? 0.3 : 0.1
                         }
                         
@@ -1960,6 +2001,8 @@ Item {
                             text: parent.text
                             color: "${whiteColor}"
                             font.bold: true
+                            font.pixelSize: 16
+                            font.family: "Segoe UI"
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -1970,7 +2013,7 @@ Item {
                 
                 Timer {
                     id: timer
-                    interval: 6000
+                    interval: 7000
                     onTriggered: {
                         errorNotification.opacity = 0
                         Qt.callLater(function() { errorNotification.destroy() })

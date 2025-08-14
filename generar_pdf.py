@@ -1,6 +1,7 @@
 """
-Módulo para generar reportes en PDF
+Módulo para generar reportes PDF profesionales - VERSIÓN OPTIMIZADA
 Sistema de Gestión Médica - Clínica María Inmaculada
+Versión 2.1 - Solo usa logo existente, sin crear archivos adicionales
 """
 
 import os
@@ -10,46 +11,86 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, Image
+from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 class GeneradorReportesPDF:
     """
-    Clase encargada de generar reportes en formato PDF
+    Clase encargada de generar reportes PDF profesionales
     """
     
     def __init__(self):
         """Inicializar el generador de PDFs"""
         self.setup_directories()
+        self.setup_logo()
     
     def setup_directories(self):
-        """Crear directorio de reportes si no existe"""
+        """Crear directorios necesarios"""
         try:
+            # Directorio principal del proyecto
+            project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+            # Directorio de assets
+            self.assets_dir = os.path.join(project_dir, "assets")
+            os.makedirs(self.assets_dir, exist_ok=True)
+            
+            # Directorio de reportes
             home_dir = os.path.expanduser("~")
             self.pdf_dir = os.path.join(home_dir, "Documents", "Reportes_CMI")
             os.makedirs(self.pdf_dir, exist_ok=True)
+            
+            print(f"📁 Directorio de assets: {self.assets_dir}")
             print(f"📁 Directorio de reportes: {self.pdf_dir}")
+            
         except Exception as e:
-            print(f"❌ Error creando directorio: {e}")
+            print(f"❌ Error creando directorios: {e}")
             # Fallback a directorio actual
+            self.assets_dir = os.path.join(os.getcwd(), "assets")
             self.pdf_dir = os.path.join(os.getcwd(), "Reportes_CMI")
+            os.makedirs(self.assets_dir, exist_ok=True)
             os.makedirs(self.pdf_dir, exist_ok=True)
+    
+    def setup_logo(self):
+        """Configurar logo para PDF usando ruta específica del usuario"""
+        # Ruta específica del logo del usuario
+        logo_path_directo = r"D:\Sistema-Clinica-\Resources\iconos\logo.png"
+        
+        # Rutas alternativas de búsqueda 
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_paths = [
+            logo_path_directo,  # Ruta específica del usuario
+            os.path.join(current_dir, "..", "Resources", "iconos", "logo.png"),
+            os.path.join(current_dir, "..", "Resources", "iconos", "logo_CMI.png"),
+            os.path.join(current_dir, "..", "Resources", "iconos", "logo_CMI.svg"),
+            os.path.join(current_dir, "..", "..", "Resources", "iconos", "logo.png"),
+            os.path.join(current_dir, "Resources", "iconos", "logo.png"),
+        ]
+        
+        self.logo_path = None
+        
+        # Buscar logo existente
+        for logo_path in logo_paths:
+            if os.path.exists(logo_path):
+                self.logo_path = logo_path
+                print(f"✅ Logo encontrado: {logo_path}")
+                break
+        
+        # Si no se encuentra, usar texto profesional
+        if not self.logo_path:
+            print("⚠️ Logo no encontrado, usando texto profesional")
+            self.logo_path = None
+    
+
     
     def generar_reporte_pdf(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
         """
         Método principal para generar un PDF del reporte
-        
-        Args:
-            datos_json (str): Datos del reporte en formato JSON
-            tipo_reporte (str): Tipo de reporte (1-8)
-            fecha_desde (str): Fecha inicio del período
-            fecha_hasta (str): Fecha fin del período
-            
-        Returns:
-            str: Ruta del archivo PDF generado o string vacío si hay error
         """
         try:
-            print(f"📄 Iniciando generación de PDF - Tipo: {tipo_reporte}")
+            print(f"📄 Iniciando generación de PDF profesional - Tipo: {tipo_reporte}")
             
             # Parsear datos del reporte
             datos = json.loads(datos_json)
@@ -60,10 +101,11 @@ class GeneradorReportesPDF:
             filepath = os.path.join(self.pdf_dir, filename)
             
             # Generar el PDF
-            success = self._crear_pdf_reporte(filepath, datos, tipo_reporte_int, fecha_desde, fecha_hasta)
+            success = self._crear_pdf_profesional(filepath, datos, tipo_reporte_int, 
+                                                fecha_desde, fecha_hasta)
             
             if success:
-                print(f"✅ PDF generado exitosamente: {filepath}")
+                print(f"✅ PDF profesional generado: {filepath}")
                 return filepath
             else:
                 print("❌ Error al generar PDF")
@@ -82,7 +124,7 @@ class GeneradorReportesPDF:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         nombre_tipo = self._obtener_nombre_tipo_reporte(tipo_reporte)
-        filename = f"reporte_{nombre_tipo}_{fecha_limpia_desde}_{fecha_limpia_hasta}_{timestamp}.pdf"
+        filename = f"CMI_reporte_{nombre_tipo}_{fecha_limpia_desde}_{fecha_limpia_hasta}_{timestamp}.pdf"
         
         return filename
     
@@ -114,245 +156,132 @@ class GeneradorReportesPDF:
         }
         return titulos.get(tipo_reporte, "REPORTE GENERAL")
     
-    def _obtener_columnas_reporte_carta(self, tipo_reporte):
-        """Define las columnas optimizadas para tamaño CARTA (8.5" x 11")"""
-        # Ancho total disponible en carta: ~175mm (descontando márgenes)
-        
+    def _obtener_columnas_reporte(self, tipo_reporte):
+        """Define las columnas para cada tipo de reporte"""
+        # Anchos en mm para carta (190mm disponible)
         columnas = {
-            1: [  # Ventas - Total: 175mm
-                ("FECHA", 25),
-                ("N° VENTA", 25), 
-                ("CLIENTE/DESCRIPCIÓN", 80),
-                ("CANT.", 20),
-                ("TOTAL (Bs)", 25)
+            1: [  # Ventas
+                ("FECHA", 25, 'LEFT'),
+                ("N° VENTA", 25, 'LEFT'), 
+                ("DESCRIPCIÓN", 85, 'LEFT'),
+                ("CANT.", 20, 'RIGHT'),
+                ("TOTAL (Bs)", 35, 'RIGHT')
             ],
-            2: [  # Inventario - Total: 175mm  
-                ("CÓDIGO", 22),
-                ("PRODUCTO", 75),
-                ("UM", 15),
-                ("STOCK", 20),
-                ("P.U.", 20),
-                ("STOCK VAL.", 23)
+            2: [  # Inventario
+                ("CÓDIGO", 25, 'LEFT'),
+                ("PRODUCTO", 80, 'LEFT'),
+                ("UM", 15, 'CENTER'),
+                ("STOCK", 25, 'RIGHT'),
+                ("P.U.", 25, 'RIGHT'),
+                ("VALOR (Bs)", 30, 'RIGHT')
             ],
-            3: [  # Compras - Total: 175mm
-                ("FECHA", 25),
-                ("N° COMPRA", 25),
-                ("PROVEEDOR", 85), 
-                ("CANT.", 20),
-                ("TOTAL (Bs)", 20)
+            3: [  # Compras
+                ("FECHA", 25, 'LEFT'),
+                ("N° COMPRA", 30, 'LEFT'),
+                ("PROVEEDOR", 85, 'LEFT'),
+                ("CANT.", 20, 'RIGHT'),
+                ("TOTAL (Bs)", 30, 'RIGHT')
             ],
-            4: [  # Consultas - Total: 175mm
-                ("FECHA", 25),
-                ("ESPECIALIDAD", 40),
-                ("MÉDICO", 60),
-                ("PACIENTE", 30),
-                ("VALOR (Bs)", 20)
+            4: [  # Consultas
+                ("FECHA", 25, 'LEFT'),
+                ("ESPECIALIDAD", 45, 'LEFT'),
+                ("MÉDICO", 65, 'LEFT'),
+                ("PACIENTE", 35, 'LEFT'),
+                ("VALOR (Bs)", 25, 'RIGHT')
             ],
-            5: [  # Laboratorio - Total: 175mm
-                ("FECHA", 25),
-                ("EXAMEN", 70),
-                ("PACIENTE", 35),
-                ("ESTADO", 25),
-                ("VALOR (Bs)", 20)
+            5: [  # Laboratorio
+                ("FECHA", 25, 'LEFT'),
+                ("EXAMEN", 75, 'LEFT'),
+                ("PACIENTE", 40, 'LEFT'),
+                ("ESTADO", 25, 'CENTER'),
+                ("VALOR (Bs)", 25, 'RIGHT')
             ],
-            6: [  # Enfermería - Total: 175mm
-                ("FECHA", 25),
-                ("PROCEDIMIENTO", 75),
-                ("PACIENTE", 35),
-                ("CANT.", 20),
-                ("TOTAL (Bs)", 20)
+            6: [  # Enfermería
+                ("FECHA", 25, 'LEFT'),
+                ("PROCEDIMIENTO", 80, 'LEFT'),
+                ("PACIENTE", 40, 'LEFT'),
+                ("CANT.", 20, 'RIGHT'),
+                ("TOTAL (Bs)", 25, 'RIGHT')
             ],
-            7: [  # Gastos - Total: 175mm
-                ("FECHA", 25),
-                ("CATEGORÍA", 35),
-                ("DESCRIPCIÓN", 95),
-                ("MONTO (Bs)", 20)
+            7: [  # Gastos
+                ("FECHA", 25, 'LEFT'),
+                ("CATEGORÍA", 40, 'LEFT'),
+                ("DESCRIPCIÓN", 95, 'LEFT'),
+                ("MONTO (Bs)", 30, 'RIGHT')
             ],
-            8: [  # Consolidado - Total: 175mm
-                ("FECHA", 25),
-                ("TIPO", 25),
-                ("DESCRIPCIÓN", 75),
-                ("REGISTROS", 25),
-                ("VALOR (Bs)", 25)
+            8: [  # Consolidado
+                ("FECHA", 25, 'LEFT'),
+                ("TIPO", 30, 'CENTER'),
+                ("DESCRIPCIÓN", 80, 'LEFT'),
+                ("REGISTROS", 25, 'RIGHT'),
+                ("VALOR (Bs)", 30, 'RIGHT')
             ]
         }
         return columnas.get(tipo_reporte, [
-            ("FECHA", 25),
-            ("DESCRIPCIÓN", 110), 
-            ("CANT.", 20),
-            ("VALOR (Bs)", 20)
+            ("FECHA", 25, 'LEFT'),
+            ("DESCRIPCIÓN", 115, 'LEFT'), 
+            ("CANT.", 20, 'RIGHT'),
+            ("VALOR (Bs)", 30, 'RIGHT')
         ])
     
-    def _crear_pdf_reporte(self, filepath, datos, tipo_reporte, fecha_desde, fecha_hasta):
+    def _crear_pdf_profesional(self, filepath, datos, tipo_reporte, fecha_desde, fecha_hasta):
         """
-        Crea el archivo PDF del reporte usando ReportLab - Optimizado para tamaño CARTA
+        Crea el archivo PDF profesional con encabezado y pie
         """
         try:
-            # Configurar el documento para CARTA (8.5" x 11")
+            from reportlab.platypus import PageTemplate, Frame
+            from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
+            
+            # Crear documento base
             doc = SimpleDocTemplate(
                 filepath,
-                pagesize=letter,  # Letter size
-                rightMargin=15*mm,  # Márgenes más pequeños para carta
-                leftMargin=15*mm,
-                topMargin=20*mm,
-                bottomMargin=20*mm
+                pagesize=letter,
+                rightMargin=20*mm,
+                leftMargin=20*mm,
+                topMargin=50*mm,  # Más espacio para encabezado
+                bottomMargin=35*mm  # Más espacio para pie
             )
             
-            # Estilos optimizados para carta
-            styles = getSampleStyleSheet()
+            # Configurar información del documento
+            titulo_reporte = self._obtener_titulo_reporte(tipo_reporte)
             
-            # Estilo para título principal
-            titulo_style = ParagraphStyle(
-                'TituloPersonalizado',
-                parent=styles['Title'],
-                fontSize=13,  # Reducido para carta
-                spaceAfter=8*mm,
-                alignment=TA_CENTER,
-                fontName='Helvetica-Bold'
-            )
-            
-            # Estilo para subtítulos
-            subtitulo_style = ParagraphStyle(
-                'SubtituloPersonalizado',
-                parent=styles['Normal'],
-                fontSize=9,  # Reducido
-                spaceBefore=2*mm,
-                spaceAfter=2*mm,
-                alignment=TA_CENTER,
-                fontName='Helvetica'
-            )
-            
-            # Lista de elementos del documento
+            # Story principal
             story = []
             
-            # === ENCABEZADO ===
-            titulo_reporte = self._obtener_titulo_reporte(tipo_reporte)
-            story.append(Paragraph(titulo_reporte, titulo_style))
+            # === ENCABEZADO MANUAL ===
+            story.append(self._crear_encabezado_profesional(titulo_reporte, fecha_desde, fecha_hasta))
+            story.append(Spacer(1, 10*mm))
             
-            # Línea separadora
-            story.append(Spacer(1, 2*mm))
-            
-            # Información del período
-            fecha_actual = datetime.now().strftime("%d/%m/%Y")
-            periodo_text = f"PERÍODO: {fecha_desde} al {fecha_hasta}"
-            fecha_text = f"Fecha: {fecha_actual}"
-            
-            story.append(Paragraph(periodo_text, subtitulo_style))
-            story.append(Paragraph(fecha_text, subtitulo_style))
-            story.append(Spacer(1, 4*mm))  # Reducido
-            
-            # === TABLA DE DATOS ===
+            # === CONTENIDO PRINCIPAL ===
             if datos and len(datos) > 0:
-                # Obtener definición de columnas OPTIMIZADA para carta
-                columnas_def = self._obtener_columnas_reporte_carta(tipo_reporte)
-                
-                # Crear encabezados de tabla
-                encabezados = [col[0] for col in columnas_def]
-                anchos_columnas = [col[1] for col in columnas_def]
-                
-                # Preparar datos para la tabla
-                tabla_datos = [encabezados]
-                
-                total_valor = 0
-                
-                # Agregar filas de datos
-                for registro in datos:
-                    fila = []
-                    for i, (campo, ancho) in enumerate(columnas_def):
-                        valor = self._obtener_valor_campo(registro, campo, tipo_reporte)
-                        # Truncar texto largo para ajustarse a carta
-                        if len(str(valor)) > 25 and i == 1:  # Descripción/Producto
-                            valor = str(valor)[:22] + "..."
-                        fila.append(valor)
-                    
-                    tabla_datos.append(fila)
-                    
-                    # Sumar valores para total
-                    if 'valor' in registro:
-                        try:
-                            total_valor += float(registro['valor'])
-                        except:
-                            pass
-                
-                # Fila de total
-                fila_total = [""] * (len(columnas_def) - 2)
-                fila_total.append("TOTAL GENERAL:")
-                fila_total.append(f"{total_valor:.2f}")
-                tabla_datos.append(fila_total)
-                
-                # Crear tabla con anchos optimizados para carta
-                tabla = Table(tabla_datos, colWidths=[w*mm for w in anchos_columnas])
-                
-                # Aplicar estilos a la tabla (optimizados para carta)
-                tabla.setStyle(TableStyle([
-                    # Estilo para encabezados
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 8),  # Reducido para carta
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                    
-                    # Estilo para datos
-                    ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-                    ('FONTSIZE', (0, 1), (-1, -2), 7),  # Reducido para carta
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.beige]),
-                    ('TOPPADDING', (0, 1), (-1, -2), 3),
-                    ('BOTTOMPADDING', (0, 1), (-1, -2), 3),
-                    
-                    # Estilo para fila de total
-                    ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-                    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, -1), (-1, -1), 8),
-                    ('ALIGN', (-2, -1), (-1, -1), 'RIGHT'),
-                    
-                    # Bordes
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # Bordes más finos
-                    ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black),
-                    ('LINEABOVE', (0, -1), (-1, -1), 1.5, colors.black),
-                ]))
-                
+                # Crear tabla con paginación automática
+                tabla = self._crear_tabla_profesional(datos, tipo_reporte)
                 story.append(tabla)
-                story.append(Spacer(1, 4*mm))
                 
-                # === RESUMEN ===
-                resumen_text = f"""
-                <b>Total de Registros:</b> {len(datos)}<br/>
-                <b>Valor Total:</b> Bs {total_valor:.2f}
-                """
+                # Espaciador
+                story.append(Spacer(1, 5*mm))
                 
-                resumen_style = ParagraphStyle(
-                    'ResumenStyle',
-                    parent=styles['Normal'],
-                    fontSize=8,  # Reducido
-                    spaceBefore=2*mm,
-                    alignment=TA_LEFT
-                )
-                
-                story.append(Paragraph(resumen_text, resumen_style))
+                # Resumen
+                resumen = self._crear_resumen_profesional(datos)
+                story.append(resumen)
                 
             else:
                 # Sin datos
-                story.append(Paragraph("No se encontraron datos para el período seleccionado.", styles['Normal']))
+                styles = getSampleStyleSheet()
+                sin_datos_style = ParagraphStyle(
+                    'SinDatos',
+                    parent=styles['Normal'],
+                    fontSize=12,
+                    spaceAfter=20*mm,
+                    alignment=TA_CENTER,
+                    textColor=colors.grey
+                )
+                story.append(Paragraph("No se encontraron datos para el período seleccionado.", 
+                                     sin_datos_style))
             
-            story.append(Spacer(1, 8*mm))
-            
-            # === PIE DE PÁGINA ===
-            pie_texto = """
-            <b>Sistema de Gestión Médica - Clínica María Inmaculada</b><br/>
-            Villa Yapacaní, Santa Cruz - Bolivia<br/>
-            Documento generado automáticamente el %s
-            """ % datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            
-            pie_style = ParagraphStyle(
-                'PieStyle',
-                parent=styles['Normal'],
-                fontSize=7,  # Reducido
-                alignment=TA_CENTER,
-                textColor=colors.grey
-            )
-            
-            story.append(Paragraph(pie_texto, pie_style))
+            # === PIE DE PÁGINA MANUAL ===
+            story.append(Spacer(1, 10*mm))
+            story.append(self._crear_pie_pagina_manual())
             
             # Construir el PDF
             doc.build(story)
@@ -360,10 +289,306 @@ class GeneradorReportesPDF:
             return True
             
         except Exception as e:
-            print(f"❌ Error creando PDF: {e}")
+            print(f"❌ Error creando PDF profesional: {e}")
             import traceback
             traceback.print_exc()
             return False
+    
+    def _crear_encabezado_profesional(self, titulo_reporte, fecha_desde, fecha_hasta):
+        """Crea el encabezado del reporte con logo real o texto profesional"""
+        from reportlab.platypus import Table, TableStyle
+        
+        # Crear tabla para el encabezado
+        encabezado_data = []
+        
+        # Fila 1: Logo + Información de la clínica
+        if self.logo_path and os.path.exists(self.logo_path):
+            # Usar imagen real del logo
+            try:
+                # Crear imagen con tamaño apropiado para el encabezado
+                logo_img = Image(self.logo_path, width=45*mm, height=18*mm)
+                fila_logo = [
+                    logo_img,
+                    "",
+                    "CLÍNICA MARÍA INMACULADA\nVilla Yapacaní, Santa Cruz - Bolivia"
+                ]
+                print(f"✅ Logo cargado correctamente: {self.logo_path}")
+            except Exception as e:
+                print(f"⚠️ Error cargando imagen del logo: {e}")
+                # Fallback a texto profesional
+                fila_logo = [
+                    self._crear_logo_texto_profesional(),
+                    "",
+                    "CLÍNICA MARÍA INMACULADA\nVilla Yapacaní, Santa Cruz - Bolivia"
+                ]
+        else:
+            # Usar logo de texto profesional
+            fila_logo = [
+                self._crear_logo_texto_profesional(),
+                "",
+                "CLÍNICA MARÍA INMACULADA\nVilla Yapacaní, Santa Cruz - Bolivia"
+            ]
+        
+        encabezado_data.append(fila_logo)
+        
+        # Fila 2: Título del reporte (spanning)
+        fila_titulo = [titulo_reporte, "", ""]
+        encabezado_data.append(fila_titulo)
+        
+        # Fila 3: Período
+        fila_periodo = [f"PERÍODO: {fecha_desde} al {fecha_hasta}", "", ""]
+        encabezado_data.append(fila_periodo)
+        
+        # Crear tabla
+        encabezado_tabla = Table(encabezado_data, colWidths=[50*mm, 80*mm, 60*mm])
+        
+        # Aplicar estilos
+        encabezado_tabla.setStyle(TableStyle([
+            # Logo
+            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            
+            # Información clínica
+            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+            ('FONTNAME', (2, 0), (2, 0), 'Helvetica'),
+            ('FONTSIZE', (2, 0), (2, 0), 9),
+            ('TEXTCOLOR', (2, 0), (2, 0), colors.grey),
+            ('VALIGN', (2, 0), (2, 0), 'MIDDLE'),
+            
+            # Título (spanning)
+            ('SPAN', (0, 1), (2, 1)),
+            ('ALIGN', (0, 1), (2, 1), 'CENTER'),
+            ('FONTNAME', (0, 1), (2, 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 1), (2, 1), 16),
+            ('TEXTCOLOR', (0, 1), (2, 1), colors.black),
+            ('TOPPADDING', (0, 1), (2, 1), 8),
+            ('BOTTOMPADDING', (0, 1), (2, 1), 8),
+            
+            # Período (spanning)
+            ('SPAN', (0, 2), (2, 2)),
+            ('ALIGN', (0, 2), (2, 2), 'CENTER'),
+            ('FONTNAME', (0, 2), (2, 2), 'Helvetica'),
+            ('FONTSIZE', (0, 2), (2, 2), 10),
+            ('TEXTCOLOR', (0, 2), (2, 2), colors.black),
+            ('TOPPADDING', (0, 2), (2, 2), 4),
+            ('BOTTOMPADDING', (0, 2), (2, 2), 8),
+            
+            # Línea separadora debajo
+            ('LINEBELOW', (0, 2), (2, 2), 2, colors.black),
+            
+            # Sin bordes internos
+            ('GRID', (0, 0), (2, 2), 0, colors.white),
+        ]))
+        
+        return encabezado_tabla
+    
+    def _crear_logo_texto_profesional(self):
+        """Crea un logo profesional usando solo texto"""
+        logo_style = ParagraphStyle(
+            'LogoStyleProfesional',
+            fontSize=14,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold',
+            textColor=colors.Color(0.17, 0.24, 0.31),  # Color CMI #2C3E50
+            leading=16,
+            leftIndent=5,
+            rightIndent=5,
+            spaceBefore=5,
+            spaceAfter=5
+        )
+        
+        # Logo más profesional con mejor formato
+        logo_html = """
+        <para align="center">
+        <font name="Helvetica-Bold" size="16" color="#2C3E50">CMI</font><br/>
+        <font name="Helvetica" size="8" color="#2C3E50">CLÍNICA MARÍA</font><br/>
+        <font name="Helvetica" size="8" color="#2C3E50">INMACULADA</font>
+        </para>
+        """
+        
+        return Paragraph(logo_html, logo_style)
+    
+    def _crear_pie_pagina_manual(self):
+        """Crea el pie de página manualmente"""
+        from datetime import datetime
+        
+        # Información del pie
+        fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M")
+        
+        pie_data = [
+            ["Página 1", f"Generado el {fecha_generacion}"],
+            ["", "Sistema de Gestión Médica - Documento generado automáticamente"]
+        ]
+        
+        pie_tabla = Table(pie_data, colWidths=[95*mm, 95*mm])
+        
+        pie_tabla.setStyle(TableStyle([
+            # Línea separadora arriba
+            ('LINEABOVE', (0, 0), (1, 0), 1, colors.black),
+            
+            # Primera fila
+            ('FONTNAME', (0, 0), (1, 0), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (1, 0), 9),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('TOPPADDING', (0, 0), (1, 0), 6),
+            
+            # Segunda fila
+            ('SPAN', (0, 1), (1, 1)),
+            ('ALIGN', (0, 1), (1, 1), 'CENTER'),
+            ('FONTNAME', (0, 1), (1, 1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (1, 1), 8),
+            ('TEXTCOLOR', (0, 1), (1, 1), colors.grey),
+            ('TOPPADDING', (0, 1), (1, 1), 2),
+            
+            # Sin bordes
+            ('GRID', (0, 0), (1, 1), 0, colors.white),
+        ]))
+        
+        return pie_tabla
+    
+    def _crear_tabla_profesional(self, datos, tipo_reporte):
+        """Crea tabla con estilo profesional y zebra striping"""
+        # Obtener definición de columnas
+        columnas_def = self._obtener_columnas_reporte(tipo_reporte)
+        
+        # Crear encabezados
+        encabezados = [col[0] for col in columnas_def]
+        anchos_columnas = [col[1]*mm for col in columnas_def]
+        
+        # Preparar datos para la tabla
+        tabla_datos = [encabezados]
+        total_valor = 0
+        
+        # Agregar filas de datos
+        for registro in datos:
+            fila = []
+            for col_titulo, ancho, alineacion in columnas_def:
+                valor = self._obtener_valor_campo(registro, col_titulo, tipo_reporte)
+                fila.append(valor)
+            
+            tabla_datos.append(fila)
+            
+            # Sumar valores para total
+            if 'valor' in registro:
+                try:
+                    total_valor += float(registro['valor'])
+                except:
+                    pass
+        
+        # Fila de total
+        fila_total = [""] * (len(columnas_def) - 2)
+        fila_total.append("TOTAL GENERAL:")
+        fila_total.append(f"Bs {total_valor:,.2f}")
+        tabla_datos.append(fila_total)
+        
+        # Crear tabla
+        tabla = Table(tabla_datos, colWidths=anchos_columnas, repeatRows=1)
+        
+        # Aplicar estilos profesionales
+        estilos_tabla = [
+            # Encabezado
+            ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            
+            # Datos (zebra striping)
+            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -2), 9),
+            ('TOPPADDING', (0, 1), (-1, -2), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -2), 4),
+            ('LEFTPADDING', (0, 1), (-1, -2), 6),
+            ('RIGHTPADDING', (0, 1), (-1, -2), 6),
+            
+            # Fila de total
+            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, -1), (-1, -1), 10),
+            ('TOPPADDING', (0, -1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 6),
+            ('ALIGN', (-2, -1), (-1, -1), 'RIGHT'),
+            
+            # Bordes horizontales únicamente
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.black),
+            ('LINEABOVE', (0, -1), (-1, -1), 1, colors.black),
+        ]
+        
+        # Aplicar zebra striping (filas alternadas)
+        for i in range(1, len(tabla_datos) - 1):
+            if i % 2 == 0:  # Filas pares
+                estilos_tabla.append(('BACKGROUND', (0, i), (-1, i), colors.Color(0.95, 0.95, 0.95)))
+        
+        # Aplicar alineaciones específicas por columna
+        for col_idx, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
+            align_map = {'LEFT': 'LEFT', 'RIGHT': 'RIGHT', 'CENTER': 'CENTER'}
+            tabla_align = align_map.get(alineacion, 'LEFT')
+            estilos_tabla.append(('ALIGN', (col_idx, 1), (col_idx, -2), tabla_align))
+        
+        tabla.setStyle(TableStyle(estilos_tabla))
+        
+        return tabla
+    
+    def _crear_resumen_profesional(self, datos):
+        """Crea sección de resumen profesional"""
+        styles = getSampleStyleSheet()
+        
+        # Calcular totales
+        total_registros = len(datos)
+        total_valor = sum(float(item.get('valor', 0)) for item in datos)
+        valor_promedio = total_valor / total_registros if total_registros > 0 else 0
+        
+        # Estilo para resumen
+        resumen_style = ParagraphStyle(
+            'ResumenProfesional',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceBefore=5*mm,
+            spaceAfter=5*mm,
+            alignment=TA_LEFT,
+            fontName='Helvetica'
+        )
+        
+        # Crear tabla de resumen
+        resumen_datos = [
+            ['RESUMEN EJECUTIVO', ''],
+            ['Total de Registros:', f'{total_registros:,}'],
+            ['Valor Total:', f'Bs {total_valor:,.2f}'],
+            ['Valor Promedio:', f'Bs {valor_promedio:,.2f}']
+        ]
+        
+        resumen_tabla = Table(resumen_datos, colWidths=[60*mm, 40*mm])
+        resumen_tabla.setStyle(TableStyle([
+            # Primera fila (título)
+            ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('SPAN', (0, 0), (-1, 0)),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            
+            # Filas de datos
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 1), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 1), (-1, -1), 8),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
+            
+            # Bordes
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.Color(0.98, 0.98, 0.98))
+        ]))
+        
+        return resumen_tabla
     
     def _obtener_valor_campo(self, registro, campo_titulo, tipo_reporte):
         """Extrae el valor correcto del registro según el campo y tipo de reporte"""
@@ -373,7 +598,6 @@ class GeneradorReportesPDF:
             "FECHA": "fecha",
             "N° VENTA": "numeroVenta", 
             "N° COMPRA": "numeroCompra",
-            "CLIENTE/DESCRIPCIÓN": "descripcion",
             "DESCRIPCIÓN": "descripcion",
             "PRODUCTO": "descripcion",
             "PROVEEDOR": "descripcion",
@@ -399,51 +623,47 @@ class GeneradorReportesPDF:
         }
         
         campo_dato = mapeo_campos.get(campo_titulo, campo_titulo.lower())
-        
-        # Obtener valor del registro
         valor = registro.get(campo_dato, "")
         
         # Formatear valores especiales
         if "valor" in campo_dato.lower() or "monto" in campo_dato.lower() or "total" in campo_dato.lower():
             try:
-                return f"{float(valor):.2f}"
+                return f"Bs {float(valor):,.2f}"
             except:
-                return "0.00"
-        elif campo_dato == "cantidad":
+                return "Bs 0.00"
+        elif campo_dato == "cantidad" or campo_dato == "registros":
             try:
-                return str(int(float(valor)))
+                return f"{int(float(valor)):,}"
             except:
                 return "0"
         elif campo_dato == "precioUnitario":
             try:
-                return f"{float(valor):.2f}"
+                return f"Bs {float(valor):,.2f}"
             except:
-                return "0.00"
+                return "Bs 0.00"
         
         # Valores por defecto si no existen
         if not valor:
-            if campo_dato == "numeroVenta":
-                return f"V{registro.get('id', '001')}"
-            elif campo_dato == "numeroCompra": 
-                return f"C{registro.get('id', '001')}"
-            elif campo_dato == "codigo":
-                return f"COD{registro.get('id', '001')}"
-            elif campo_dato == "unidad":
-                return "UND"
-            elif campo_dato == "especialidad":
-                return "General"
-            elif campo_dato == "paciente":
-                return "Paciente"
-            elif campo_dato == "estado":
-                return "Procesado"
-            elif campo_dato == "categoria":
-                return "General"
-            elif campo_dato == "tipo":
-                return "INGRESO" if float(registro.get('valor', 0)) >= 0 else "EGRESO"
+            defaults = {
+                "numeroVenta": f"V{registro.get('id', '001')}",
+                "numeroCompra": f"C{registro.get('id', '001')}", 
+                "codigo": f"COD{registro.get('id', '001')}",
+                "unidad": "UND",
+                "especialidad": "General",
+                "paciente": "Paciente",
+                "estado": "Procesado",
+                "categoria": "General",
+                "tipo": "INGRESO" if float(registro.get('valor', 0)) >= 0 else "EGRESO"
+            }
+            valor = defaults.get(campo_dato, "")
+        
+        # Truncar texto largo para evitar desbordamiento
+        if isinstance(valor, str) and len(valor) > 50:
+            return valor[:47] + "..."
         
         return str(valor)
 
-# Funciones de utilidad para usar desde otros módulos
+# Funciones de utilidad
 def crear_generador_pdf():
     """Función factoría para crear una instancia del generador de PDFs"""
     return GeneradorReportesPDF()
