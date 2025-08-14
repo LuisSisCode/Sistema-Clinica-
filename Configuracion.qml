@@ -6,564 +6,1047 @@ Item {
     id: configuracionRoot
     objectName: "configuracionRoot"
     
-    // Paleta de colores minimalista
-    readonly property color primaryColor: "#4F46E5"
-    readonly property color backgroundColor: "#FFFFFF"
-    readonly property color surfaceColor: "#F8FAFC"
-    readonly property color borderColor: "#E2E8F0"
-    readonly property color textColor: "#1F2937"
-    readonly property color textSecondaryColor: "#6B7280"
-    readonly property color successColor: "#10B981"
-    readonly property color warningColor: "#F59E0B"
+    // ===== SISTEMA DE ESCALADO RESPONSIVO =====
+    readonly property real baseUnit: Math.min(width, height) / 100
+    readonly property real fontTiny: baseUnit * 1.2
+    readonly property real fontSmall: baseUnit * 1.5
+    readonly property real fontBase: baseUnit * 2.0
+    readonly property real fontMedium: baseUnit * 2.5
+    readonly property real fontLarge: baseUnit * 3.0
+    readonly property real fontTitle: baseUnit * 4.0
     
-    // Estados de la aplicación
-    property bool isLoading: false
+    readonly property real marginTiny: baseUnit * 0.5
+    readonly property real marginSmall: baseUnit * 1
+    readonly property real marginMedium: baseUnit * 2
+    readonly property real marginLarge: baseUnit * 3
+    readonly property real marginExtraLarge: baseUnit * 4
+    
+    readonly property real radiusSmall: baseUnit * 0.8
+    readonly property real radiusMedium: baseUnit * 1.5
+    readonly property real radiusLarge: baseUnit * 2
+    
+    // ===== PALETA DE COLORES MEJORADA =====
+    readonly property string primaryColor: "#6366F1"
+    readonly property string backgroundColor: "#FFFFFF"
+    readonly property string surfaceColor: "#F8FAFC"
+    readonly property string borderColor: "#E5E7EB"
+    readonly property string textColor: "#111827"
+    readonly property string textSecondaryColor: "#6B7280"
+    readonly property string successColor: "#059669"
+    readonly property string warningColor: "#D97706"
+    readonly property string dangerColor: "#DC2626"
+    readonly property string infoColor: "#2563EB"
+    
+    // ===== COLORES ESPECÍFICOS PARA MÓDULOS MEJORADOS =====
+    readonly property string laboratorioColor: "#8B5CF6"
+    readonly property string enfermeriaColor: "#EC4899"
+    readonly property string consultasColor: "#06B6D4"
+    readonly property string serviciosColor: "#65A30D"
+    readonly property string usuariosColor: "#EA580C"
+    readonly property string personalColor: "#7C3AED"
+    
+    // ===== ESTADOS DE LA APLICACIÓN =====
+    property string currentView: "main"
+    property bool showChangePasswordDialog: false
+    
+    // ===== DATOS DEL USUARIO =====
     property string currentUser: "Dr. María González"
     property string currentUserInitials: "MG"
     property string currentUserRole: "Médico General"
     property string currentUserEmail: "maria.gonzalez@mariainmaculada.com"
     property string currentUsername: "dr.maria"
     
-    // Función para mostrar notificaciones
+    // ===== FUNCIONES =====
     function showNotification(title, message, type) {
         notificationBanner.show(title, message, type)
     }
     
-    ScrollView {
-        id: mainScrollView
-        anchors.fill: parent
-        anchors.margins: 24
-        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        
-        ColumnLayout {
-            width: configuracionRoot.width - 48
-            spacing: 24
-            
-            // Header principal simplificado
-            Label {
-                text: "Configuración del Sistema"
-                color: textColor
-                font.pixelSize: 20
-                font.bold: true
-                Layout.topMargin: 8
-            }
-            
-            Label {
-                text: "Gestiona las preferencias del sistema"
-                color: textSecondaryColor
-                font.pixelSize: 14
-                Layout.bottomMargin: 8
-            }
-
-            // Tarjeta única con toda la información
-            Rectangle {
-                id: mainCard
-                Layout.fillWidth: true
-                Layout.preferredHeight: 400
-                color: backgroundColor
-                radius: 8
-                border.color: borderColor
-                border.width: 1
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 24
-                    spacing: 32
-                    
-                    // Sección Mi Perfil
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 20
-                        
-                        Label {
-                            text: "Mi Perfil"
-                            color: textColor
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-                        
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 24
-                            
-                            // Avatar simple
-                            Rectangle {
-                                Layout.preferredWidth: 60
-                                Layout.preferredHeight: 60
-                                radius: 30
-                                color: primaryColor
-                                
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: currentUserInitials
-                                    font.pixelSize: 20
-                                    font.bold: true
-                                    color: "white"
-                                }
-                            }
-                            
-                            // Información del usuario
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 2
-                                columnSpacing: 32
-                                rowSpacing: 12
-                                
-                                ProfileField {
-                                    Layout.fillWidth: true
-                                    label: "Nombre"
-                                    value: currentUser
-                                }
-                                
-                                ProfileField {
-                                    Layout.fillWidth: true
-                                    label: "Especialidad"
-                                    value: currentUserRole
-                                }
-                                
-                                ProfileField {
-                                    Layout.fillWidth: true
-                                    label: "Usuario"
-                                    value: currentUsername
-                                }
-                                
-                                ProfileField {
-                                    Layout.fillWidth: true
-                                    label: "Email"
-                                    value: currentUserEmail
-                                }
-                            }
-                            
-                            // Botón de cambiar contraseña
-                            Button {
-                                text: "Cambiar Contraseña"
-                                Layout.preferredHeight: 36
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                    radius: 6
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: "white"
-                                    font.pixelSize: 13
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: changePasswordDialog.open()
-                            }
-                        }
-                    }
-                    
-                    // Sección Información del Sistema
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 20
-                        
-                        Label {
-                            text: "Información del Sistema"
-                            color: textColor
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-                        
-                        GridLayout {
-                            Layout.fillWidth: true
-                            columns: 2
-                            columnSpacing: 48
-                            rowSpacing: 16
-                            
-                            SystemField {
-                                Layout.fillWidth: true
-                                label: "Versión"
-                                value: "1.0"
-                            }
-                            
-                            SystemField {
-                                Layout.fillWidth: true
-                                label: "Desarrollado por"
-                                value: "DeTNova"
-                            }
-                            
-                            SystemField {
-                                Layout.fillWidth: true
-                                label: "Última Actualización"
-                                value: "08 de Julio, 2025"
-                            }
-                            
-                            SystemField {
-                                Layout.fillWidth: true
-                                label: "Clínica"
-                                value: "María Inmaculada"
-                            }
-                        }
-                    }
-                }
-            }
+    function changeView(newView) {
+        currentView = newView
+    }
+    
+    function getModuleColor(moduleId) {
+        switch(moduleId) {
+            case "laboratorio": return laboratorioColor
+            case "enfermeria": return enfermeriaColor
+            case "consultas": return consultasColor
+            case "servicios": return serviciosColor
+            case "usuarios": return usuariosColor
+            case "personal": return personalColor
+            default: return primaryColor
         }
     }
-
-    // Diálogo simplificado para cambiar contraseña
-    Dialog {
-        id: changePasswordDialog
-        title: "Cambiar Contraseña"
-        modal: true
-        width: 400
-        height: 420
-        anchors.centerIn: parent
-        standardButtons: Dialog.NoButton
-
-        background: Rectangle {
-            color: backgroundColor
-            radius: 8
-            border.color: borderColor
-            border.width: 1
+    
+    // ===== DATOS DE LOS MÓDULOS MEJORADOS =====
+    readonly property var modulesData: [
+        {
+            id: "laboratorio",
+            title: "Laboratorio",
+            icon: "🧪",
+            description: "Configura tipos de análisis, equipos y parámetros de laboratorio clínico"
+        },
+        {
+            id: "enfermeria",
+            title: "Enfermería",
+            icon: "💉",
+            description: "Gestiona protocolos de cuidados, procedimientos y planes de enfermería"
+        },
+        {
+            id: "consultas",
+            title: "Consultas",
+            icon: "🩺",
+            description: "Administra especialidades médicas, tipos de consulta y horarios"
+        },
+        {
+            id: "servicios",
+            title: "Servicios Básicos",
+            icon: "💰",
+            description: "Controla gastos operativos, categorías financieras y configuraciones"
+        },
+        {
+            id: "usuarios",
+            title: "Usuarios",
+            icon: "👤",
+            description: "Define roles, permisos de acceso y políticas de seguridad del sistema"
+        },
+        {
+            id: "personal",
+            title: "Personal",
+            icon: "👥",
+            description: "Organiza departamentos, especialidades y estructura organizacional"
         }
-
-        onClosed: {
-            currentPasswordInput.text = ""
-            newPasswordInput.text = ""
-            confirmPasswordInput.text = ""
-            clearErrors()
-        }
+    ]
+    
+    // ===== VISTA PRINCIPAL =====
+    ScrollView {
+        id: mainView
+        anchors.fill: parent
+        visible: currentView === "main"
+        clip: true
         
-        function clearErrors() {
-            currentPasswordInput.hasError = false
-            newPasswordInput.hasError = false
-            confirmPasswordInput.hasError = false
-            currentPasswordError.visible = false
-            newPasswordError.visible = false
-            confirmPasswordError.visible = false
-        }
-        
-        contentItem: ColumnLayout {
-            width: parent.width
-            spacing: 20
-            anchors.margins: 24
-
-            Label {
-                text: "Introduce tu contraseña actual y establece una nueva contraseña."
-                wrapMode: Text.WordWrap
-                color: textSecondaryColor
-                font.pixelSize: 14
-                Layout.fillWidth: true
-            }
-
-            // Contraseña Actual
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                
-                Label {
-                    text: "Contraseña Actual"
-                    color: textColor
-                    font.pixelSize: 13
-                    font.bold: true
-                }
-                
-                SecureTextField {
-                    id: currentPasswordInput
-                    Layout.fillWidth: true
-                    placeholderText: "Contraseña actual"
-                }
-                
-                Label {
-                    id: currentPasswordError
-                    text: "La contraseña actual es requerida"
-                    color: warningColor
-                    font.pixelSize: 11
-                    visible: false
-                }
-            }
-
-            // Nueva Contraseña
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                
-                Label {
-                    text: "Nueva Contraseña"
-                    color: textColor
-                    font.pixelSize: 13
-                    font.bold: true
-                }
-                
-                SecureTextField {
-                    id: newPasswordInput
-                    Layout.fillWidth: true
-                    placeholderText: "Mínimo 8 caracteres"
-                    
-                    onTextChanged: {
-                        if (confirmPasswordInput.text.length > 0) {
-                            if (text === confirmPasswordInput.text) {
-                                confirmPasswordInput.hasError = false
-                                confirmPasswordError.visible = false
-                            } else {
-                                confirmPasswordInput.hasError = true
-                                confirmPasswordError.visible = true
-                            }
-                        }
-                    }
-                }
-                
-                Label {
-                    id: newPasswordError
-                    text: "La contraseña debe tener al menos 8 caracteres"
-                    color: warningColor
-                    font.pixelSize: 11
-                    visible: false
-                }
-            }
-
-            // Confirmar Contraseña
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                
-                Label {
-                    text: "Confirmar Nueva Contraseña"
-                    color: textColor
-                    font.pixelSize: 13
-                    font.bold: true
-                }
-                
-                SecureTextField {
-                    id: confirmPasswordInput
-                    Layout.fillWidth: true
-                    placeholderText: "Confirma la nueva contraseña"
-                    
-                    onTextChanged: {
-                        if (text === newPasswordInput.text && text.length > 0) {
-                            hasError = false
-                            confirmPasswordError.visible = false
-                        } else if (text.length > 0) {
-                            hasError = true
-                            confirmPasswordError.visible = true
-                        }
-                    }
-                }
-                
-                Label {
-                    id: confirmPasswordError
-                    text: "Las contraseñas no coinciden"
-                    color: warningColor
-                    font.pixelSize: 11
-                    visible: false
-                }
-            }
-        }
-
-        footer: RowLayout {
-            width: parent.width
-            spacing: 12
-
-            Button {
-                text: "Cancelar"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 40
-                
-                onClicked: changePasswordDialog.close()
-                
-                background: Rectangle { 
-                    color: parent.pressed ? Qt.darker(borderColor, 1.2) : surfaceColor
-                    radius: 6
-                    border.color: borderColor
-                    border.width: 1
-                }
-                
-                contentItem: Label { 
-                    text: parent.text
-                    color: textColor
-                    font.pixelSize: 13
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-
-            Button {
-                text: "Confirmar"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 40
-                
-                onClicked: validateAndChangePassword()
-                
-                background: Rectangle { 
-                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                    radius: 6
-                }
-                
-                contentItem: Label { 
-                    text: parent.text
-                    color: "white"
-                    font.pixelSize: 13
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-        }
-        
-        function validateAndChangePassword() {
-            var hasErrors = false
+        ColumnLayout {
+            width: configuracionRoot.width
+            spacing: marginMedium
             
-            if (currentPasswordInput.text === "") {
-                currentPasswordInput.hasError = true
-                currentPasswordError.visible = true
-                hasErrors = true
+            // Header Principal
+            HeaderSection {
+                Layout.fillWidth: true
+                title: "Centro de Configuraciones"
+                subtitle: "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
+                icon: "⚙️"
+                color: primaryColor
             }
             
-            if (newPasswordInput.text === "") {
-                newPasswordInput.hasError = true
-                newPasswordError.text = "La nueva contraseña es requerida"
-                newPasswordError.visible = true
-                hasErrors = true
-            } else if (newPasswordInput.text.length < 8) {
-                newPasswordInput.hasError = true
-                newPasswordError.text = "La contraseña debe tener al menos 8 caracteres"
-                newPasswordError.visible = true
-                hasErrors = true
+            // Sección de Módulos
+            ModulesSection {
+                Layout.fillWidth: true
+                Layout.margins: marginMedium
             }
             
-            if (confirmPasswordInput.text === "") {
-                confirmPasswordInput.hasError = true
-                confirmPasswordError.text = "Confirma la nueva contraseña"
-                confirmPasswordError.visible = true
-                hasErrors = true
-            } else if (newPasswordInput.text !== confirmPasswordInput.text) {
-                confirmPasswordInput.hasError = true
-                confirmPasswordError.text = "Las contraseñas no coinciden"
-                confirmPasswordError.visible = true
-                hasErrors = true
+            // Divisor elegante
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 2
+                Layout.margins: marginMedium
+                radius: 1
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: "transparent" }
+                    GradientStop { position: 0.5; color: borderColor }
+                    GradientStop { position: 1.0; color: "transparent" }
+                }
             }
             
-            if (!hasErrors) {
-                isLoading = true
-                passwordChangeTimer.start()
+            // Configuraciones Generales - DIVIDIDO EN DOS COLUMNAS
+            GeneralConfigSection {
+                Layout.fillWidth: true
+                Layout.margins: marginMedium
+            }
+            
+            // Espacio final
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: marginMedium
             }
         }
     }
     
-    Timer {
-        id: passwordChangeTimer
-        interval: 1500
-        onTriggered: {
-            isLoading = false
-            showNotification("Contraseña", "Contraseña actualizada exitosamente", "success")
-            changePasswordDialog.close()
+    // ===== VISTAS DE CONFIGURACIÓN ESPECÍFICAS =====
+    Loader {
+        id: configViewLoader
+        anchors.fill: parent
+        visible: currentView !== "main"
+        
+        sourceComponent: {
+            switch(currentView) {
+                case "laboratorio": return laboratorioConfigComponent
+                case "enfermeria": return enfermeriaConfigComponent
+                case "consultas": return consultasConfigComponent
+                case "servicios": return serviciosConfigComponent
+                case "usuarios": return usuariosConfigComponent
+                case "personal": return personalConfigComponent
+                default: return null
+            }
         }
     }
-
-    // Banner de notificaciones simplificado
+    
+    // ===== DIÁLOGO DE CAMBIO DE CONTRASEÑA =====
+    PasswordChangeDialog {
+        id: passwordDialog
+        visible: showChangePasswordDialog
+        onClosed: showChangePasswordDialog = false
+        onPasswordChanged: {
+            showChangePasswordDialog = false
+            showNotification("Contraseña", "Contraseña actualizada exitosamente", "success")
+        }
+    }
+    
+    // ===== BANNER DE NOTIFICACIONES =====
     NotificationBanner {
         id: notificationBanner
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: 24
-        z: 1000
+        anchors.margins: marginLarge
+        z: 2000
     }
-
-    // Overlay de carga
-    Rectangle {
-        anchors.fill: parent
-        color: "#80000000"
-        visible: isLoading
-        z: 999
+    
+    // ===== COMPONENTES REUTILIZABLES =====
+    
+    component HeaderSection: Rectangle {
+        property string title: ""
+        property string subtitle: ""
+        property string icon: ""
+        property string color: primaryColor
         
+        Layout.preferredHeight: Math.max(120, baseUnit * 15)
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: color }
+            GradientStop { position: 1.0; color: Qt.darker(color, 1.1) }
+        }
+        radius: radiusLarge
+        
+        // Efecto de sombra sutil
         Rectangle {
-            anchors.centerIn: parent
-            width: 120
-            height: 80
-            color: backgroundColor
-            radius: 8
+            anchors.fill: parent
+            anchors.topMargin: 4
+            radius: parent.radius
+            color: "black"
+            opacity: 0.1
+            z: -1
+        }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: marginLarge
+            spacing: marginMedium
             
-            ColumnLayout {
-                anchors.centerIn: parent
-                spacing: 12
+            Rectangle {
+                Layout.preferredWidth: baseUnit * 10
+                Layout.preferredHeight: baseUnit * 10
+                color: backgroundColor
+                radius: baseUnit * 5
                 
-                BusyIndicator {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: 32
-                    Layout.preferredHeight: 32
+                // Sombra interna
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    radius: parent.radius - 2
+                    color: "transparent"
+                    border.color: Qt.lighter(color, 1.1)
+                    border.width: 1
                 }
                 
                 Label {
-                    text: "Procesando..."
-                    font.pixelSize: 12
-                    color: textColor
-                    Layout.alignment: Qt.AlignHCenter
+                    anchors.centerIn: parent
+                    text: icon
+                    font.pixelSize: fontTitle * 1.5
+                }
+            }
+            
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: marginSmall
+                
+                Label {
+                    text: title
+                    color: backgroundColor
+                    font.pixelSize: fontTitle
+                    font.bold: true
+                    font.family: "Segoe UI"
+                }
+                
+                Label {
+                    text: subtitle
+                    color: backgroundColor
+                    font.pixelSize: fontBase
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    opacity: 0.95
+                    font.family: "Segoe UI"
                 }
             }
         }
     }
-
-    // Componentes personalizados simplificados
-    component ProfileField: ColumnLayout {
-        property string label: ""
-        property string value: ""
+    
+    component ModulesSection: ColumnLayout {
+        spacing: marginMedium
         
-        spacing: 4
-        
-        Label {
-            text: label
-            color: textSecondaryColor
-            font.pixelSize: 11
-            font.bold: true
+        SectionHeader {
+            Layout.fillWidth: true
+            title: "Configuraciones por Módulo"
+            subtitle: "Accede y personaliza las configuraciones específicas de cada área del sistema médico"
+            barColor: primaryColor
         }
         
-        Label {
-            text: value
-            color: textColor
-            font.pixelSize: 13
-            wrapMode: Text.WordWrap
-        }
-    }
-
-    component SystemField: ColumnLayout {
-        property string label: ""
-        property string value: ""
-        
-        spacing: 4
-        
-        Label {
-            text: label
-            color: textSecondaryColor
-            font.pixelSize: 11
-            font.bold: true
-        }
-        
-        Label {
-            text: value
-            color: textColor
-            font.pixelSize: 13
-            wrapMode: Text.WordWrap
+        Grid {
+            Layout.fillWidth: true
+            columns: width < 600 ? 1 : (width < 900 ? 2 : (width < 1400 ? 3 : 4))
+            spacing: marginMedium
+            
+            Repeater {
+                model: modulesData
+                
+                ModuleCard {
+                    moduleData: modelData
+                    cardWidth: {
+                        var cols = parent.columns
+                        var availableWidth = configuracionRoot.width - marginLarge * 2
+                        var spacingTotal = (cols - 1) * marginMedium
+                        return (availableWidth - spacingTotal) / cols
+                    }
+                    onClicked: changeView(moduleData.id)
+                }
+            }
         }
     }
-
-    component SecureTextField: TextField {
-        property bool hasError: false
+    
+    component GeneralConfigSection: ColumnLayout {
+        spacing: marginMedium
         
-        Layout.preferredHeight: 40
-        echoMode: TextInput.Password
-        font.pixelSize: 13
+        SectionHeader {
+            Layout.fillWidth: true
+            title: "Configuraciones Generales"
+            subtitle: "Información del sistema y configuración del perfil de usuario"
+            barColor: infoColor
+        }
         
-        background: Rectangle {
+        // DIVIDIDO EN DOS COLUMNAS
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: marginLarge
+            
+            // COLUMNA IZQUIERDA - INFORMACIÓN DEL SISTEMA
+            SystemInfoCard {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(320, baseUnit * 40)
+            }
+            
+            // COLUMNA DERECHA - CONFIGURACIÓN GENERAL (MI PERFIL)
+            ProfileCard {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(320, baseUnit * 40)
+            }
+        }
+    }
+    
+    component SectionHeader: RowLayout {
+        property string title: ""
+        property string subtitle: ""
+        property string barColor: primaryColor
+        
+        spacing: marginSmall
+        
+        Rectangle {
+            Layout.preferredWidth: baseUnit * 0.6
+            Layout.preferredHeight: fontLarge * 1.2
+            color: barColor
+            radius: baseUnit * 0.3
+        }
+        
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: marginTiny
+            
+            Label {
+                text: title
+                font.pixelSize: fontLarge
+                font.bold: true
+                color: textColor
+                font.family: "Segoe UI"
+            }
+            
+            Label {
+                text: subtitle
+                color: textSecondaryColor
+                font.pixelSize: fontBase
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component ModuleCard: Rectangle {
+        property var moduleData
+        property real cardWidth: 300
+        signal clicked()
+        
+        width: cardWidth
+        height: Math.max(140, baseUnit * 18)
+        radius: radiusMedium
+        border.color: borderColor
+        border.width: 1
+        
+        property string moduleColor: getModuleColor(moduleData.id)
+        
+        // Efecto de elevación
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: mouseArea.containsMouse ? 2 : 4
+            radius: parent.radius
+            color: "black"
+            opacity: mouseArea.containsMouse ? 0.15 : 0.08
+            z: -1
+        }
+        
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: moduleColor }
+            GradientStop { position: 1.0; color: Qt.darker(moduleColor, 1.08) }
+        }
+        
+        scale: mouseArea.containsMouse ? 1.02 : 1.0
+        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: marginMedium
+            spacing: marginMedium
+            
+            Rectangle {
+                Layout.preferredWidth: baseUnit * 6
+                Layout.preferredHeight: baseUnit * 6
+                color: backgroundColor
+                radius: baseUnit * 3
+                
+                // Borde sutil
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    radius: parent.radius - 1
+                    color: "transparent"
+                    border.color: Qt.lighter(moduleColor, 1.2)
+                    border.width: 1
+                }
+                
+                Label {
+                    anchors.centerIn: parent
+                    text: moduleData.icon
+                    font.pixelSize: fontLarge
+                }
+            }
+            
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: marginTiny
+                
+                Label {
+                    text: moduleData.title
+                    color: backgroundColor
+                    font.pixelSize: fontMedium
+                    font.bold: true
+                    font.family: "Segoe UI"
+                }
+                
+                Label {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: moduleData.description
+                    color: backgroundColor
+                    font.pixelSize: fontSmall
+                    wrapMode: Text.WordWrap
+                    verticalAlignment: Text.AlignTop
+                    opacity: 0.9
+                    font.family: "Segoe UI"
+                }
+                
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 3
+                    color: backgroundColor
+                    radius: radiusSmall
+                    opacity: 0.9
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "Configurar"
+                        color: moduleColor
+                        font.pixelSize: fontSmall
+                        font.bold: true
+                        font.family: "Segoe UI"
+                    }
+                }
+            }
+        }
+        
+        MouseArea {
+            id: mouseArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: parent.clicked()
+        }
+    }
+    
+    // NUEVA TARJETA PARA INFORMACIÓN DEL SISTEMA
+    component SystemInfoCard: Rectangle {
+        color: backgroundColor
+        radius: radiusMedium
+        border.color: borderColor
+        border.width: 1
+        
+        // Efecto de sombra
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 3
+            radius: parent.radius
+            color: "black"
+            opacity: 0.05
+            z: -1
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: marginMedium
+            spacing: marginMedium
+            
+            // Header de la tarjeta
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: marginSmall
+                
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 4.5
+                    Layout.preferredHeight: baseUnit * 4.5
+                    color: infoColor
+                    radius: baseUnit * 2.25
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "💻"
+                        font.pixelSize: fontMedium
+                    }
+                }
+                
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    
+                    Label {
+                        text: "Información del Sistema"
+                        color: textColor
+                        font.pixelSize: fontMedium
+                        font.bold: true
+                        font.family: "Segoe UI"
+                    }
+                    
+                    Label {
+                        text: "Detalles técnicos y versión"
+                        color: textSecondaryColor
+                        font.pixelSize: fontSmall
+                        font.family: "Segoe UI"
+                    }
+                }
+            }
+            
+            // Contenido de información del sistema
+            GridLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                columns: 1
+                rowSpacing: marginSmall
+                
+                SystemField { 
+                    label: "Versión del Sistema"
+                    value: "1.0.0"
+                    icon: "🔢"
+                }
+                
+                SystemField { 
+                    label: "Desarrollado por"
+                    value: "DeTNova"
+                    icon: "👨‍💻"
+                }
+                
+                SystemField { 
+                    label: "Última Actualización"
+                    value: "08 de Julio, 2025"
+                    icon: "📅"
+                }
+                
+                SystemField { 
+                    label: "Institución"
+                    value: "Clínica María Inmaculada"
+                    icon: "🏥"
+                }
+            }
+        }
+    }
+    
+    // NUEVA TARJETA PARA PERFIL DE USUARIO
+    component ProfileCard: Rectangle {
+        color: backgroundColor
+        radius: radiusMedium
+        border.color: borderColor
+        border.width: 1
+        
+        // Efecto de sombra
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 3
+            radius: parent.radius
+            color: "black"
+            opacity: 0.05
+            z: -1
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: marginMedium
+            spacing: marginMedium
+            
+            // Header de la tarjeta
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: marginSmall
+                
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 4.5
+                    Layout.preferredHeight: baseUnit * 4.5
+                    color: primaryColor
+                    radius: baseUnit * 2.25
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "👤"
+                        font.pixelSize: fontMedium
+                    }
+                }
+                
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    
+                    Label {
+                        text: "Mi Perfil"
+                        color: textColor
+                        font.pixelSize: fontMedium
+                        font.bold: true
+                        font.family: "Segoe UI"
+                    }
+                    
+                    Label {
+                        text: "Información personal y configuración"
+                        color: textSecondaryColor
+                        font.pixelSize: fontSmall
+                        font.family: "Segoe UI"
+                    }
+                }
+            }
+            
+            // Avatar y datos básicos compactos
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: marginMedium
+                
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 7
+                    Layout.preferredHeight: baseUnit * 7
+                    radius: baseUnit * 3.5
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: primaryColor }
+                        GradientStop { position: 1.0; color: Qt.darker(primaryColor, 1.1) }
+                    }
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: currentUserInitials
+                        font.pixelSize: fontLarge
+                        font.bold: true
+                        color: backgroundColor
+                        font.family: "Segoe UI"
+                    }
+                }
+                
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: marginTiny
+                    
+                    Label {
+                        text: currentUser
+                        color: textColor
+                        font.pixelSize: fontMedium
+                        font.bold: true
+                        font.family: "Segoe UI"
+                    }
+                    
+                    Label {
+                        text: currentUserRole
+                        color: textSecondaryColor
+                        font.pixelSize: fontSmall
+                        font.family: "Segoe UI"
+                    }
+                }
+            }
+            
+            // Información detallada compacta
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 1
+                rowSpacing: marginSmall
+                
+                ProfileField { 
+                    label: "Usuario"
+                    value: currentUsername
+                    icon: "🔑"
+                }
+                
+                ProfileField { 
+                    label: "Email"
+                    value: currentUserEmail
+                    icon: "📧"
+                }
+            }
+            
+            // Botón de cambio de contraseña compacto
+            Button {
+                Layout.fillWidth: true
+                Layout.preferredHeight: baseUnit * 4.5
+                text: "Cambiar Contraseña"
+                
+                background: Rectangle {
+                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                    radius: radiusSmall
+                    
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        radius: parent.radius - 1
+                        color: "transparent"
+                        border.color: Qt.lighter(successColor, 1.2)
+                        border.width: 1
+                    }
+                }
+                
+                contentItem: RowLayout {
+                    spacing: marginTiny
+                    
+                    Label {
+                        text: "🔒"
+                        font.pixelSize: fontSmall
+                        color: backgroundColor
+                    }
+                    
+                    Label {
+                        text: parent.parent.text
+                        color: backgroundColor
+                        font.pixelSize: fontSmall
+                        font.bold: true
+                        font.family: "Segoe UI"
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+                
+                onClicked: showChangePasswordDialog = true
+            }
+        }
+    }
+    
+    component ProfileField: RowLayout {
+        property string label: ""
+        property string value: ""
+        property string icon: ""
+        
+        Layout.fillWidth: true
+        spacing: marginSmall
+        
+        Label {
+            text: icon
+            font.pixelSize: fontSmall
+            Layout.preferredWidth: baseUnit * 2.5
+        }
+        
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 2
+            
+            Label {
+                text: label
+                color: textSecondaryColor
+                font.pixelSize: fontTiny
+                font.bold: true
+                font.family: "Segoe UI"
+            }
+            
+            Label {
+                text: value
+                color: textColor
+                font.pixelSize: fontSmall
+                wrapMode: Text.WordWrap
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component SystemField: RowLayout {
+        property string label: ""
+        property string value: ""
+        property string icon: ""
+        
+        Layout.fillWidth: true
+        spacing: marginSmall
+        
+        Label {
+            text: icon
+            font.pixelSize: fontSmall
+            Layout.preferredWidth: baseUnit * 2.5
+        }
+        
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 2
+            
+            Label {
+                text: label
+                color: textSecondaryColor
+                font.pixelSize: fontTiny
+                font.bold: true
+                font.family: "Segoe UI"
+            }
+            
+            Label {
+                text: value
+                color: textColor
+                font.pixelSize: fontSmall
+                wrapMode: Text.WordWrap
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component PasswordChangeDialog: Rectangle {
+        signal closed()
+        signal passwordChanged()
+        
+        anchors.fill: parent
+        color: "transparent"
+        z: 1000
+        
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            opacity: 0.5
+            
+            MouseArea {
+                anchors.fill: parent
+                onClicked: closed()
+            }
+        }
+        
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(500, configuracionRoot.width * 0.9)
+            height: Math.min(600, configuracionRoot.height * 0.8)
             color: backgroundColor
-            border.color: parent.hasError ? warningColor : (parent.activeFocus ? primaryColor : borderColor)
+            radius: radiusMedium
+            border.color: borderColor
             border.width: 1
-            radius: 6
+            
+            // Sombra del diálogo
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 8
+                radius: parent.radius
+                color: "black"
+                opacity: 0.2
+                z: -1
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: marginLarge
+                spacing: marginMedium
+                
+                Label {
+                    Layout.fillWidth: true
+                    text: "Cambiar Contraseña"
+                    font.pixelSize: fontTitle
+                    font.bold: true
+                    color: textColor
+                    horizontalAlignment: Text.AlignHCenter
+                    font.family: "Segoe UI"
+                }
+                
+                Label {
+                    Layout.fillWidth: true
+                    text: "Introduce tu contraseña actual y establece una nueva contraseña segura."
+                    wrapMode: Text.WordWrap
+                    color: textSecondaryColor
+                    font.pixelSize: fontBase
+                    font.family: "Segoe UI"
+                }
+                
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: marginMedium
+                    
+                    PasswordField { 
+                        id: currentPasswordField
+                        label: "Contraseña Actual"
+                        placeholder: "Contraseña actual"
+                    }
+                    
+                    PasswordField { 
+                        id: newPasswordField
+                        label: "Nueva Contraseña"
+                        placeholder: "Mínimo 8 caracteres"
+                    }
+                    
+                    PasswordField { 
+                        id: confirmPasswordField
+                        label: "Confirmar Nueva Contraseña"
+                        placeholder: "Confirma la nueva contraseña"
+                    }
+                }
+                
+                Item { Layout.fillHeight: true }
+                
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: marginMedium
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        text: "Cancelar"
+                        Layout.preferredHeight: baseUnit * 5
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                            radius: radiusSmall
+                            border.color: borderColor
+                            border.width: 1
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: textColor
+                            font.pixelSize: fontBase
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            font.family: "Segoe UI"
+                        }
+                        
+                        onClicked: {
+                            currentPasswordField.clear()
+                            newPasswordField.clear()
+                            confirmPasswordField.clear()
+                            closed()
+                        }
+                    }
+                    
+                    Button {
+                        text: "Actualizar"
+                        Layout.preferredHeight: baseUnit * 5
+                        enabled: currentPasswordField.isValid && 
+                                newPasswordField.isValid && 
+                                confirmPasswordField.isValid &&
+                                newPasswordField.text === confirmPasswordField.text
+                        
+                        background: Rectangle {
+                            color: parent.enabled ? 
+                                   (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                                   Qt.lighter(successColor, 1.5)
+                            radius: radiusSmall
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: backgroundColor
+                            font.bold: true
+                            font.pixelSize: fontBase
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            font.family: "Segoe UI"
+                        }
+                        
+                        onClicked: {
+                            currentPasswordField.clear()
+                            newPasswordField.clear()
+                            confirmPasswordField.clear()
+                            passwordChanged()
+                        }
+                    }
+                }
+            }
         }
     }
-
+    
+    component PasswordField: ColumnLayout {
+        property string label: ""
+        property string placeholder: ""
+        property alias text: textField.text
+        property bool isValid: text.length >= (label.includes("Nueva") ? 8 : 1)
+        
+        function clear() { textField.text = "" }
+        
+        spacing: marginSmall
+        Layout.fillWidth: true
+        
+        Label {
+            text: label
+            color: textColor
+            font.pixelSize: fontBase
+            font.bold: true
+            font.family: "Segoe UI"
+        }
+        
+        TextField {
+            id: textField
+            Layout.fillWidth: true
+            Layout.preferredHeight: baseUnit * 5
+            placeholderText: placeholder
+            echoMode: TextInput.Password
+            font.pixelSize: fontBase
+            font.family: "Segoe UI"
+            
+            background: Rectangle {
+                color: backgroundColor
+                border.color: borderColor
+                border.width: 1
+                radius: radiusSmall
+            }
+        }
+    }
+    
     component NotificationBanner: Rectangle {
         id: banner
         height: 0
         color: backgroundColor
-        radius: 6
+        radius: radiusMedium
         border.color: borderColor
         border.width: 1
         clip: true
+        
+        // Sombra del banner
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 2
+            radius: parent.radius
+            color: "black"
+            opacity: 0.1
+            z: -1
+        }
         
         property string notificationTitle: ""
         property string notificationMessage: ""
@@ -573,63 +1056,64 @@ Item {
             notificationTitle = title
             notificationMessage = message
             notificationType = type
-            
             showAnimation.start()
             hideTimer.start()
         }
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 16
-            spacing: 12
+            anchors.margins: marginMedium
+            spacing: marginMedium
             
             Rectangle {
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                radius: 12
+                Layout.preferredWidth: baseUnit * 4
+                Layout.preferredHeight: baseUnit * 4
+                radius: baseUnit * 2
                 color: notificationType === "success" ? successColor : primaryColor
                 
                 Label {
                     anchors.centerIn: parent
                     text: notificationType === "success" ? "✓" : "i"
-                    font.pixelSize: 12
+                    font.pixelSize: fontBase
                     font.bold: true
-                    color: "white"
+                    color: backgroundColor
                 }
             }
             
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: marginTiny
                 
                 Label {
                     text: notificationTitle
                     font.bold: true
-                    font.pixelSize: 13
+                    font.pixelSize: fontBase
                     color: textColor
+                    font.family: "Segoe UI"
                 }
                 
                 Label {
                     text: notificationMessage
-                    font.pixelSize: 12
+                    font.pixelSize: fontSmall
                     color: textSecondaryColor
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
+                    font.family: "Segoe UI"
                 }
             }
             
             Button {
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
+                Layout.preferredWidth: baseUnit * 3
+                Layout.preferredHeight: baseUnit * 3
                 
                 background: Rectangle {
                     color: "transparent"
-                    radius: 12
+                    radius: baseUnit * 1.5
                 }
                 
                 contentItem: Label {
                     text: "×"
-                    font.pixelSize: 14
+                    font.pixelSize: fontBase
                     color: textSecondaryColor
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -643,7 +1127,7 @@ Item {
             id: showAnimation
             target: banner
             property: "height"
-            to: 60
+            to: baseUnit * 8
             duration: 300
             easing.type: Easing.OutCubic
         }
@@ -661,6 +1145,305 @@ Item {
             id: hideTimer
             interval: 3000
             onTriggered: hideAnimation.start()
+        }
+    }
+    
+    // ===== COMPONENTES DE CONFIGURACIÓN ESPECÍFICA =====
+    
+    Component {
+        id: laboratorioConfigComponent
+        GenericConfigView {
+            moduleId: "laboratorio"
+            moduleTitle: "Laboratorio"
+            moduleIcon: "🧪"
+            moduleColor: laboratorioColor
+            
+            configContent: LaboratorioConfig {
+                anchors.fill: parent
+            }
+        }
+    }
+    
+    Component {
+        id: enfermeriaConfigComponent
+        GenericConfigView {
+            moduleId: "enfermeria"
+            moduleTitle: "Enfermería"
+            moduleIcon: "💉"
+            moduleColor: enfermeriaColor
+            
+            configContent: EnfermeriaConfig {
+                anchors.fill: parent
+            }
+        }
+    }
+    
+    Component {
+        id: consultasConfigComponent
+        GenericConfigView {
+            moduleId: "consultas"
+            moduleTitle: "Consultas"
+            moduleIcon: "🩺"
+            moduleColor: consultasColor
+            
+            configContent: ConsultasConfig {
+                anchors.fill: parent
+            }
+        }
+    }
+    
+    Component {
+        id: serviciosConfigComponent
+        GenericConfigView {
+            moduleId: "servicios"
+            moduleTitle: "Servicios Básicos"
+            moduleIcon: "💰"
+            moduleColor: serviciosColor
+            
+            configContent: ServiciosConfig {
+                anchors.fill: parent
+            }
+        }
+    }
+    
+    Component {
+        id: usuariosConfigComponent
+        GenericConfigView {
+            moduleId: "usuarios"
+            moduleTitle: "Usuarios"
+            moduleIcon: "👤"
+            moduleColor: usuariosColor
+            
+            configContent: UsuariosConfig {
+                anchors.fill: parent
+            }
+        }
+    }
+    
+    Component {
+        id: personalConfigComponent
+        GenericConfigView {
+            moduleId: "personal"
+            moduleTitle: "Personal"
+            moduleIcon: "👥"
+            moduleColor: personalColor
+            
+            configContent: PersonalConfig {
+                anchors.fill: parent
+            }
+        }
+    }
+    
+    component GenericConfigView: Rectangle {
+        property string moduleId: ""
+        property string moduleTitle: ""
+        property string moduleIcon: ""
+        property string moduleColor: primaryColor
+        property Component configContent
+        
+        color: surfaceColor
+        
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+            
+            // Header con navegación
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(80, baseUnit * 10)
+                color: moduleColor
+                
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: marginLarge
+                    spacing: marginMedium
+                    
+                    Button {
+                        Layout.preferredWidth: baseUnit * 5
+                        Layout.preferredHeight: baseUnit * 5
+                        text: "←"
+                        
+                        background: Rectangle {
+                            color: backgroundColor
+                            radius: radiusSmall
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: moduleColor
+                            font.pixelSize: fontMedium
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: changeView("main")
+                    }
+                    
+                    Rectangle {
+                        Layout.preferredWidth: baseUnit * 6
+                        Layout.preferredHeight: baseUnit * 6
+                        color: backgroundColor
+                        radius: baseUnit * 3
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: moduleIcon
+                            font.pixelSize: fontLarge
+                        }
+                    }
+                    
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: marginTiny
+                        
+                        Label {
+                            text: "Configuraciones de " + moduleTitle
+                            color: backgroundColor
+                            font.pixelSize: fontLarge
+                            font.bold: true
+                            font.family: "Segoe UI"
+                        }
+                        
+                        Label {
+                            text: "Gestiona las configuraciones específicas de este módulo"
+                            color: backgroundColor
+                            font.pixelSize: fontBase
+                            opacity: 0.9
+                            font.family: "Segoe UI"
+                        }
+                    }
+                }
+            }
+            
+            // Contenido específico del módulo
+            Loader {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: configContent
+            }
+        }
+    }
+    
+    // ===== CONFIGURACIONES ESPECÍFICAS SIMPLIFICADAS =====
+    
+    component LaboratorioConfig: ScrollView {
+        clip: true
+        
+        ColumnLayout {
+            width: parent.width - marginLarge * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Configuración de Laboratorio implementada aquí"
+                font.pixelSize: fontLarge
+                color: textColor
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component EnfermeriaConfig: ScrollView {
+        clip: true
+        
+        ColumnLayout {
+            width: parent.width - marginLarge * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Configuración de Enfermería implementada aquí"
+                font.pixelSize: fontLarge
+                color: textColor
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component ConsultasConfig: ScrollView {
+        clip: true
+        
+        ColumnLayout {
+            width: parent.width - marginLarge * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Configuración de Consultas implementada aquí"
+                font.pixelSize: fontLarge
+                color: textColor
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component ServiciosConfig: ScrollView {
+        clip: true
+        
+        ColumnLayout {
+            width: parent.width - marginLarge * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Configuración de Servicios implementada aquí"
+                font.pixelSize: fontLarge
+                color: textColor
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component UsuariosConfig: ScrollView {
+        clip: true
+        
+        ColumnLayout {
+            width: parent.width - marginLarge * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Configuración de Usuarios implementada aquí"
+                font.pixelSize: fontLarge
+                color: textColor
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Segoe UI"
+            }
+        }
+    }
+    
+    component PersonalConfig: ScrollView {
+        clip: true
+        
+        ColumnLayout {
+            width: parent.width - marginLarge * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Configuración de Personal implementada aquí"
+                font.pixelSize: fontLarge
+                color: textColor
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Segoe UI"
+            }
         }
     }
 }
