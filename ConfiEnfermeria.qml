@@ -5,11 +5,11 @@ import QtQuick.Layouts 1.15
 Item {
     id: configProcedimientosRoot
     
-    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
-    property alias procedimientos: configProcedimientosRoot.procedimientosData
+    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA - CORREGIDO =====
+    property alias tiposProcedimientos: configProcedimientosRoot.tiposProcedimientosData
     
     // ===== DATOS INTERNOS =====
-    property var procedimientosData: []
+    property var tiposProcedimientosData: []
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -57,8 +57,8 @@ Item {
     }
     
     function editarProcedimiento(index) {
-        if (index >= 0 && index < procedimientosData.length) {
-            var procedimiento = procedimientosData[index]
+        if (index >= 0 && index < tiposProcedimientosData.length) {
+            var procedimiento = tiposProcedimientosData[index]
             nuevoProcedimientoNombre.text = procedimiento.nombre
             nuevoProcedimientoDescripcion.text = procedimiento.descripcion
             nuevoProcedimientoPrecioNormal.text = procedimiento.precioNormal.toString()
@@ -69,14 +69,25 @@ Item {
     }
     
     function eliminarProcedimiento(index) {
-        if (index >= 0 && index < procedimientosData.length) {
-            procedimientosData.splice(index, 1)
-            configProcedimientosRoot.procedimientos = procedimientosData
+        // ===== AGREGAR ESTA VERIFICACIÓN =====
+        if (!tiposProcedimientosData) {
+            tiposProcedimientosData = []
+            return
+        }
+        
+        if (index >= 0 && index < tiposProcedimientosData.length) {
+            tiposProcedimientosData.splice(index, 1)
+            configProcedimientosRoot.tiposProcedimientos = tiposProcedimientosData
             console.log("🗑️ Procedimiento eliminado en índice:", index)
         }
     }
     
     function guardarProcedimiento() {
+        // ===== AGREGAR ESTA VERIFICACIÓN =====
+        if (!tiposProcedimientosData) {
+            tiposProcedimientosData = []
+        }
+        
         var nuevoProcedimiento = {
             nombre: nuevoProcedimientoNombre.text,
             descripcion: nuevoProcedimientoDescripcion.text,
@@ -86,16 +97,16 @@ Item {
         
         if (isEditMode && editingIndex >= 0) {
             // Editar procedimiento existente
-            procedimientosData[editingIndex] = nuevoProcedimiento
+            tiposProcedimientosData[editingIndex] = nuevoProcedimiento
             console.log("✏️ Procedimiento editado:", JSON.stringify(nuevoProcedimiento))
         } else {
             // Agregar nuevo procedimiento
-            procedimientosData.push(nuevoProcedimiento)
+            tiposProcedimientosData.push(nuevoProcedimiento)
             console.log("➕ Nuevo procedimiento agregado:", JSON.stringify(nuevoProcedimiento))
         }
         
         // Actualizar el modelo y limpiar
-        configProcedimientosRoot.procedimientos = procedimientosData
+        configProcedimientosRoot.tiposProcedimientos = tiposProcedimientosData
         limpiarFormulario()
     }
     
@@ -488,7 +499,7 @@ Item {
                     
                     ListView {
                         id: procedimientosList
-                        model: procedimientosData
+                        model: tiposProcedimientosData
                         
                         delegate: Rectangle {
                             width: ListView.view.width
@@ -630,7 +641,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: "transparent"
-                    visible: procedimientosData.length === 0
+                    visible: tiposProcedimientosData.length === 0
                     
                     ColumnLayout {
                         anchors.centerIn: parent
@@ -668,14 +679,14 @@ Item {
     }
     
     // ===== EVENTOS =====
-    onProcedimientosChanged: {
-        if (procedimientos && procedimientos !== procedimientosData) {
-            procedimientosData = procedimientos
-            console.log("🔄 Datos de procedimientos actualizados desde exterior")
+    onTiposProcedimientosChanged: {
+        if (tiposProcedimientos && tiposProcedimientos !== tiposProcedimientosData) {
+            tiposProcedimientosData = tiposProcedimientos
+            console.log("🔄 Datos de tipos de procedimientos actualizados desde exterior")
         }
     }
     
     Component.onCompleted: {
-        console.log("🩹 Componente de configuración de procedimientos iniciado")
+        console.log("🩹 Componente de configuración de tipos de procedimientos iniciado")
     }
 }
