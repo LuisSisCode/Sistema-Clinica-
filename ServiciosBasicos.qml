@@ -7,6 +7,9 @@ Item {
     id: serviciosBasicosRoot
     objectName: "serviciosBasicosRoot"
     
+    // ===== NUEVA SEÑAL PARA NAVEGACIÓN A CONFIGURACIÓN =====
+    signal irAConfigServiciosBasicos()
+    
     // Acceso a colores
     readonly property color primaryColor: "#3498DB"
     readonly property color successColor: "#27ae60"
@@ -20,7 +23,7 @@ Item {
     
     // Propiedades para los diálogos
     property bool showNewGastoDialog: false
-    property bool showConfigTiposGastosDialog: false
+    // ===== ELIMINADA: property bool showConfigTiposGastosDialog: false =====
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
@@ -28,6 +31,10 @@ Item {
     property int itemsPerPageServicios: 10
     property int currentPageServicios: 0
     property int totalPagesServicios: 0
+    
+    // ===== PROPIEDAD PARA EXPONER EL MODELO DE DATOS =====
+    property alias tiposGastosModel: tiposGastosModel
+    
     // Modelo de tipos de gastos - CAMBIADO A ListModel
     ListModel {
         id: tiposGastosModel
@@ -252,7 +259,8 @@ Item {
                                 
                                 MenuItem {
                                     text: "💰 Configuración de Tipos de Gastos"
-                                    onTriggered: showConfigTiposGastosDialog = true
+                                    // ===== MODIFICADO: EMITIR SEÑAL EN LUGAR DE CAMBIAR BOOLEANO =====
+                                    onTriggered: serviciosBasicosRoot.irAConfigServiciosBasicos()
                                 }
                             }
                         }
@@ -1118,6 +1126,9 @@ Item {
             }
         }
     }
+    
+    // ===== ELIMINADOS: configTiposGastosBackground y configTiposGastosDialog =====
+    
     // Función para aplicar filtros (SIN FILTRO DE ESTADO)
     function aplicarFiltros() {
         var hoy = new Date()
@@ -1184,348 +1195,6 @@ Item {
         // Agregar solo los elementos de la página actual
         for (var j = startIndex; j < endIndex; j++) {
             gastosListModel.append(filteredGastos[j])
-        }
-    }
-
-    // Diálogo Configuración de Tipos de Gastos (Editable)
-    Rectangle {
-        id: configTiposGastosBackground
-        anchors.fill: parent
-        color: "black"
-        opacity: showConfigTiposGastosDialog ? 0.5 : 0
-        visible: opacity > 0
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: showConfigTiposGastosDialog = false
-        }
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-    
-    Rectangle {
-        id: configTiposGastosDialog
-        anchors.centerIn: parent
-        width: 800
-        height: 700
-        color: whiteColor
-        radius: 20
-        border.color: lightGrayColor
-        border.width: 2
-        visible: showConfigTiposGastosDialog
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            
-            // Header fijo para título y formulario
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 450
-                color: whiteColor
-                radius: 20
-                z: 10
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 30
-                    spacing: 20
-                    
-                    Label {
-                        Layout.fillWidth: true
-                        text: "💰 Configuración de Tipos de Gastos"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    
-                    // Formulario para agregar nuevo tipo de gasto
-                    GroupBox {
-                        Layout.fillWidth: true
-                        title: "Agregar Nuevo Tipo de Gasto"
-                        
-                        background: Rectangle {
-                            color: "#f8f9fa"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: 8
-                        }
-                        
-                        GridLayout {
-                            anchors.fill: parent
-                            columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 10
-                            
-                            Label {
-                                text: "Nombre:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoTipoGastoNombre
-                                Layout.fillWidth: true
-                                placeholderText: "Ej: Servicios Públicos"
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Descripción:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            ScrollView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 60
-                                
-                                TextArea {
-                                    id: nuevoTipoGastoDescripcion
-                                    placeholderText: "Descripción del tipo de gasto..."
-                                    wrapMode: TextArea.Wrap
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        border.color: lightGrayColor
-                                        border.width: 1
-                                        radius: 6
-                                    }
-                                }
-                            }
-                            
-                            Label {
-                                text: "Ejemplos:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoTipoGastoEjemplos
-                                Layout.fillWidth: true
-                                placeholderText: "Ej: Agua, Luz, Gas (separados por comas)"
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Color:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-                                
-                                ComboBox {
-                                    id: nuevoTipoGastoColor
-                                    Layout.fillWidth: true
-                                    model: [
-                                        { text: "Azul (Servicios)", value: infoColor },
-                                        { text: "Violeta (Personal)", value: violetColor },
-                                        { text: "Verde (Alimentación)", value: successColor },
-                                        { text: "Amarillo (Mantenimiento)", value: warningColor },
-                                        { text: "Azul Oscuro (Administrativos)", value: primaryColor },
-                                        { text: "Naranja (Suministros)", value: "#e67e22" },
-                                        { text: "Gris (Otros)", value: "#95a5a6" },
-                                        { text: "Rojo (Emergencias)", value: dangerColor }
-                                    ]
-                                    
-                                    textRole: "text"
-                                    valueRole: "value"
-                                    
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        border.color: lightGrayColor
-                                        border.width: 1
-                                        radius: 6
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
-                                    color: nuevoTipoGastoColor.currentValue || "#95a5a6"
-                                    radius: 6
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                }
-                            }
-                            
-                            Item { }
-                            Button {
-                                Layout.alignment: Qt.AlignRight
-                                text: "➕ Agregar Tipo de Gasto"
-                                background: Rectangle {
-                                    color: successColor
-                                    radius: 8
-                                }
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                onClicked: {
-                                    if (nuevoTipoGastoNombre.text && nuevoTipoGastoDescripcion.text && nuevoTipoGastoEjemplos.text) {
-                                        
-                                        var ejemplosTexto = nuevoTipoGastoEjemplos.text
-                                        var ejemplosArray = ejemplosTexto.split(',')
-                                        
-                                        // Limpiar espacios de cada ejemplo
-                                        for (var i = 0; i < ejemplosArray.length; i++) {
-                                            ejemplosArray[i] = ejemplosArray[i].trim()
-                                        }
-                                        
-                                        // USAR APPEND DEL LISTMODEL EN LUGAR DE PUSH
-                                        tiposGastosModel.append({
-                                            nombre: nuevoTipoGastoNombre.text,
-                                            descripcion: nuevoTipoGastoDescripcion.text,
-                                            ejemplos: ejemplosArray,
-                                            color: nuevoTipoGastoColor.currentValue || "#95a5a6"
-                                        })
-                                        
-                                        // Actualizar los ComboBox que dependen de tiposGastosModel
-                                        filtroTipoGasto.model = getTiposGastosNombres()
-                                        if (gastoForm.visible) {
-                                            tipoGastoCombo.model = getTiposGastosParaCombo()
-                                        }
-                                        
-                                        // Limpiar campos
-                                        nuevoTipoGastoNombre.text = ""
-                                        nuevoTipoGastoDescripcion.text = ""
-                                        nuevoTipoGastoEjemplos.text = ""
-                                        nuevoTipoGastoColor.currentIndex = 0
-                                        
-                                        console.log("Nuevo tipo de gasto agregado. Total tipos:", tiposGastosModel.count)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Lista de tipos de gastos existentes con scroll - OPTIMIZADA PARA MENOS ESPACIO
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: 20  // Reducido de 30 a 20
-                Layout.topMargin: 0
-                color: "transparent"
-                
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
-                    
-                    ListView {
-                        model: tiposGastosModel
-                        spacing: 2  // Espacio reducido entre elementos
-                        
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: 65  // Reducido de 120 a 85
-                            color: index % 2 === 0 ? "transparent" : "#fafafa"
-                            border.color: "#e8e8e8"
-                            border.width: 1
-                            radius: 6  // Reducido de 8 a 6
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10  // Reducido de 15 a 10
-                                spacing: 12  // Reducido de 15 a 12
-                                
-                                // Contenido principal
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 4  // Reducido de 8 a 4
-                                    
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 140  // Reducido de 160 a 140
-                                            Layout.preferredHeight: 24   // Reducido de 28 a 24
-                                            color: model.color || "#95a5a6"
-                                            radius: 12  // Reducido de 14 a 12
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: model.nombre
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 11  // Reducido de 12 a 11
-                                            }
-                                        }
-                                        
-                                        Item { Layout.fillWidth: true }
-                                    }
-                                    
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: model.descripcion
-                                        color: textColor
-                                        font.pixelSize: 11  // Reducido de 12 a 11
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 2  // Limitar a máximo 2 líneas
-                                        elide: Text.ElideRight
-                                    }
-                                    
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: "Ejemplos: " + (model.ejemplos ? model.ejemplos.join(", ") : "")
-                                        color: "#7f8c8d"
-                                        font.pixelSize: 10  // Reducido de 11 a 10
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 1  // Limitar a 1 línea
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                                
-                                // Botón eliminar
-                                Button {
-                                    Layout.preferredWidth: 30   // Reducido de 35 a 30
-                                    Layout.preferredHeight: 30  // Reducido de 35 a 30
-                                    text: "🗑️"
-                                    background: Rectangle {
-                                        color: dangerColor
-                                        radius: 6  // Reducido de 8 a 6
-                                    }
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: whiteColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                        font.pixelSize: 12  // Reducido de 14 a 12
-                                    }
-                                    onClicked: {
-                                        // USAR REMOVE DEL LISTMODEL EN LUGAR DE SPLICE
-                                        tiposGastosModel.remove(index)
-                                        
-                                        // Actualizar los ComboBox que dependen de tiposGastosModel
-                                        filtroTipoGasto.model = getTiposGastosNombres()
-                                        if (gastoForm.visible) {
-                                            tipoGastoCombo.model = getTiposGastosParaCombo()
-                                        }
-                                        
-                                        console.log("Tipo de gasto eliminado en índice:", index)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }

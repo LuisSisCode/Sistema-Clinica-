@@ -9,6 +9,9 @@ Item {
     // ===== NUEVA PROPIEDAD PARA RECIBIR DATOS DE MAIN.QML =====
     property var especialidadesModel: []
     
+    // ===== NUEVA PROPIEDAD PARA TIPOS DE GASTOS DESDE MAIN.QML =====
+    property var tiposGastosModel: []
+    
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
     readonly property real fontTiny: baseUnit * 1.2
@@ -186,7 +189,7 @@ Item {
                 case "laboratorio": return laboratorioConfigComponent
                 case "enfermeria": return enfermeriaConfigComponent
                 case "consultas": return consultasConfigComponent
-                case "servicios": return serviciosConfigComponent
+                case "servicios": return serviciosConfigComponent  // ===== NUEVO CASE PARA SERVICIOS =====
                 case "usuarios": return usuariosConfigComponent
                 case "personal": return personalConfigComponent
                 default: return null
@@ -711,7 +714,7 @@ Item {
                 ProfileField { 
                     label: "Usuario"
                     value: currentUsername
-                    icon: "🔑"
+                    icon: "🔐"
                 }
                 
                 ProfileField { 
@@ -745,7 +748,7 @@ Item {
                     spacing: marginTiny
                     
                     Label {
-                        text: "🔒"
+                        text: "🔑"
                         font.pixelSize: fontSmall
                         color: backgroundColor
                     }
@@ -1215,6 +1218,7 @@ Item {
         }
     }
     
+    // ===== NUEVO COMPONENTE DE SERVICIOS BÁSICOS =====
     Component {
         id: serviciosConfigComponent
         GenericConfigView {
@@ -1223,8 +1227,26 @@ Item {
             moduleIcon: "💰"
             moduleColor: serviciosColor
             
-            configContent: ServiciosConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL NUEVO COMPONENTE ConfiServiciosBasicos =====
+                ConfiServiciosBasicos {
+                    id: configServiciosBasicosComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    tiposGastos: configuracionRoot.tiposGastosModel
+                    
+                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onTiposGastosChanged: {
+                        if (tiposGastos && tiposGastos !== configuracionRoot.tiposGastosModel) {
+                            configuracionRoot.tiposGastosModel = tiposGastos
+                            console.log("🔄 Tipos de gastos actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1390,26 +1412,6 @@ Item {
         }
     }
     
-    component ServiciosConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Servicios implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
     component UsuariosConfig: ScrollView {
         clip: true
         
@@ -1453,6 +1455,13 @@ Item {
     // ===== IMPORTAR EL COMPONENTE ConfiConsultas =====
     ConfiConsultas {
         id: hiddenConfiConsultas
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    // ===== IMPORTAR EL COMPONENTE ConfiServiciosBasicos =====
+    ConfiServiciosBasicos {
+        id: hiddenConfiServiciosBasicos
         visible: false
         // Componente oculto solo para cargar el tipo en memoria
     }

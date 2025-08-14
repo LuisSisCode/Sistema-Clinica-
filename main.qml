@@ -798,7 +798,7 @@ ApplicationWindow {
             }
         }
         
-        // ===== ÁREA DE CONTENIDO PRINCIPAL CON NUEVA CONEXIÓN =====
+        // ===== ÁREA DE CONTENIDO PRINCIPAL CON NUEVAS CONEXIONES =====
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -869,13 +869,46 @@ ApplicationWindow {
                 layer.enabled: true
             }
             
-            // Servicios Básicos Page
+            // ===== SERVICIOS BÁSICOS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
             ServiciosBasicos {
                 id: serviciosPage
                 objectName: "serviciosPage"
                 anchors.fill: parent
                 visible: currentIndex === 5
                 layer.enabled: true
+                
+                // ===== NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN A CONFIGURACIÓN =====
+                onIrAConfigServiciosBasicos: {
+                    console.log("🚀 Señal irAConfigServiciosBasicos recibida desde ServiciosBasicos")
+                    
+                    // ===== PASO 4a: OBTENER MODELO DE DATOS DESDE SERVICIOS BÁSICOS =====
+                    var tiposGastosData = []
+                    
+                    // Convertir ListModel a Array para transferencia
+                    for (var i = 0; i < serviciosPage.tiposGastosModel.count; i++) {
+                        var item = serviciosPage.tiposGastosModel.get(i)
+                        tiposGastosData.push({
+                            nombre: item.nombre,
+                            descripcion: item.descripcion,
+                            ejemplos: item.ejemplos,
+                            color: item.color
+                        })
+                    }
+                    
+                    console.log("📊 Datos de tipos de gastos obtenidos:", JSON.stringify(tiposGastosData))
+                    
+                    // ===== PASO 4b: ASIGNAR DATOS AL MÓDULO CONFIGURACIÓN =====
+                    configuracionPage.tiposGastosModel = tiposGastosData
+                    console.log("📤 Datos transferidos a configuracionPage.tiposGastosModel")
+                    
+                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN =====
+                    configuracionPage.changeView("servicios")
+                    console.log("🔄 Vista de configuración cambiada a: servicios")
+                    
+                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN =====
+                    switchToPage(9)
+                    console.log("🎯 Navegación completada hacia módulo Configuración")
+                }
             }
             
             // Usuario Page
@@ -904,7 +937,7 @@ ApplicationWindow {
                 layer.enabled: true
             }
             
-            // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPERTY ESPECIALIDADESMODEL =====
+            // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPIEDADES DE MODELOS =====
             Configuracion {
                 id: configuracionPage
                 objectName: "configuracionPage"
@@ -912,8 +945,8 @@ ApplicationWindow {
                 visible: currentIndex === 9
                 layer.enabled: true
                 
-                // ===== LA PROPIEDAD especialidadesModel YA ESTÁ DEFINIDA EN Configuracion.qml =====
-                // ===== SE CONECTARÁ AUTOMÁTICAMENTE CUANDO SE ASIGNE DESDE EL HANDLER =====
+                // ===== LAS PROPIEDADES especialidadesModel Y tiposGastosModel YA ESTÁN DEFINIDAS EN Configuracion.qml =====
+                // ===== SE CONECTARÁN AUTOMÁTICAMENTE CUANDO SE ASIGNEN DESDE LOS HANDLERS =====
             }
         }
     }
