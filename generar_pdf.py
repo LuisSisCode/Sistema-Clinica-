@@ -374,20 +374,12 @@ class GeneradorReportesPDF:
         else:
             # Logo de texto profesional
             self._dibujar_logo_texto(canvas, 20*mm, letter[1]-40*mm)
-        
-        # Información de la empresa (centro-derecha)
-        canvas.setFont("Helvetica-Bold", 12)
-        canvas.setFillColor(colors.black)
-        
-        # Nombre de la clínica
-        text_width = canvas.stringWidth("CLÍNICA MARÍA INMACULADA", "Helvetica-Bold", 12)
-        canvas.drawString(letter[0] - 20*mm - text_width, letter[1]-30*mm, "CLÍNICA MARÍA INMACULADA")
-        
-        # Dirección
-        canvas.setFont("Helvetica", 9)
+                
+        # Información de la empresa (centro-derecha) - Solo ubicación
+        canvas.setFont("Helvetica", 10)  # Puedes hacer la fuente un poco más grande
         canvas.setFillColor(colors.grey)
-        text_width = canvas.stringWidth("Villa Yapacaní, Santa Cruz - Bolivia", "Helvetica", 9)
-        canvas.drawString(letter[0] - 20*mm - text_width, letter[1]-38*mm, "Villa Yapacaní, Santa Cruz - Bolivia")
+        text_width = canvas.stringWidth("Villa Yapacaní, Santa Cruz - Bolivia", "Helvetica", 10)
+        canvas.drawString(letter[0] - 20*mm - text_width, letter[1]-35*mm, "Villa Yapacaní, Santa Cruz - Bolivia")
         
         # Línea separadora del encabezado
         canvas.setStrokeColor(colors.black)
