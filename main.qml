@@ -798,7 +798,7 @@ ApplicationWindow {
             }
         }
         
-        // ÁREA DE CONTENIDO PRINCIPAL
+        // ===== ÁREA DE CONTENIDO PRINCIPAL CON NUEVA CONEXIÓN =====
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -821,13 +821,34 @@ ApplicationWindow {
                 layer.enabled: true
             }
             
-            // Consultas Page
+            // ===== CONSULTAS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
             Consultas {
                 id: consultasPage
                 objectName: "consultasPage"
                 anchors.fill: parent
                 visible: currentIndex === 2
                 layer.enabled: true
+                
+                // ===== NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN =====
+                onIrAConfiguracion: {
+                    console.log("🚀 Señal irAConfiguracion recibida desde Consultas")
+                    
+                    // ===== PASO 4a: OBTENER MODELO DE DATOS DESDE CONSULTAS =====
+                    var especialidadesData = consultasPage.especialidades
+                    console.log("📊 Datos de especialidades obtenidos:", JSON.stringify(especialidadesData))
+                    
+                    // ===== PASO 4b: ASIGNAR DATOS AL MÓDULO CONFIGURACIÓN =====
+                    configuracionPage.especialidadesModel = especialidadesData
+                    console.log("📤 Datos transferidos a configuracionPage.especialidadesModel")
+                    
+                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN =====
+                    configuracionPage.changeView("consultas")
+                    console.log("🔄 Vista de configuración cambiada a: consultas")
+                    
+                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN =====
+                    switchToPage(9)
+                    console.log("🎯 Navegación completada hacia módulo Configuración")
+                }
             }
             
             // Laboratorio Page
@@ -865,7 +886,7 @@ ApplicationWindow {
                 visible: currentIndex === 6
                 layer.enabled: true
             }
-            
+
             Trabajadores {
                 id: trabajadoresPage
                 objectName: "trabajadoresPage"
@@ -883,18 +904,21 @@ ApplicationWindow {
                 layer.enabled: true
             }
             
-            // Configuración Page
+            // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPERTY ESPECIALIDADESMODEL =====
             Configuracion {
                 id: configuracionPage
                 objectName: "configuracionPage"
                 anchors.fill: parent
                 visible: currentIndex === 9
                 layer.enabled: true
+                
+                // ===== LA PROPIEDAD especialidadesModel YA ESTÁ DEFINIDA EN Configuracion.qml =====
+                // ===== SE CONECTARÁ AUTOMÁTICAMENTE CUANDO SE ASIGNE DESDE EL HANDLER =====
             }
         }
     }
     
-    // ===== FUNCIONES (mantener todas como están) =====
+    // ===== FUNCIONES (mantener todas) =====
     function actualizarNotificaciones() {
         console.log("🔔 Actualizando notificaciones...")
         fechaActual = new Date()
@@ -1114,6 +1138,26 @@ ApplicationWindow {
             "Servicios Básicos", "Usuarios", "Trabajadores", "Reportes", "Configuración"
         ]
         return pageNames[currentIndex] || "Dashboard"
+    }
+
+    // ===== FUNCIONES AUXILIARES PARA DEBUG Y MONITOREO =====
+
+    // ===== FUNCIÓN AUXILIAR PARA MONITOREAR EL FLUJO DE DATOS =====
+    function logEspecialidadesSync() {
+        if (consultasPage && configuracionPage) {
+            console.log("📊 Estado de sincronización de especialidades:")
+            console.log("   - Consultas tiene:", consultasPage.especialidades ? consultasPage.especialidades.length : 0, "especialidades")
+            console.log("   - Configuración tiene:", configuracionPage.especialidadesModel ? configuracionPage.especialidadesModel.length : 0, "especialidades")
+        }
+    }
+    
+    // ===== FUNCIÓN AUXILIAR PARA SINCRONIZACIÓN BIDIRECCIONAL (OPCIONAL) =====
+    function syncEspecialidadesFromConfig() {
+        if (configuracionPage && consultasPage && configuracionPage.especialidadesModel) {
+            // Sincronizar cambios desde configuración hacia consultas
+            consultasPage.especialidades = configuracionPage.especialidadesModel
+            console.log("🔄 Especialidades sincronizadas desde Configuración hacia Consultas")
+        }
     }
 
     // ===== COMPONENTES ADAPTATIVOS =====
@@ -1384,6 +1428,17 @@ ApplicationWindow {
         }
     }
     
+    // ===== CONEXIONES ADICIONALES PARA MONITOREO (OPCIONAL) =====
+
+    // Timer para monitoreo periódico de sincronización (solo en desarrollo)
+    Timer {
+        id: syncMonitorTimer
+        interval: 10000 // 10 segundos
+        running: false // Cambiar a true solo para debug
+        repeat: true
+        onTriggered: logEspecialidadesSync()
+    }
+    
     Timer {
         id: notificationTimer
         interval: 300000 // 5 minutos
@@ -1394,8 +1449,15 @@ ApplicationWindow {
     
     Component.onCompleted: {
         console.log("🔔 Sistema de notificaciones iniciado")
+        console.log("🔗 Conexión de navegación Consultas -> Configuración establecida")
         Qt.callLater(function() {
             actualizarNotificaciones()
+            // Verificar que las conexiones están establecidas
+            if (consultasPage.irAConfiguracion) {
+                console.log("✅ Señal irAConfiguracion conectada correctamente")
+            } else {
+                console.log("❌ Error: Señal irAConfiguracion no encontrada")
+            }
         })
     }
 }

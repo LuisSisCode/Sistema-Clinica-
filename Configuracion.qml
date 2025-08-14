@@ -6,6 +6,9 @@ Item {
     id: configuracionRoot
     objectName: "configuracionRoot"
     
+    // ===== NUEVA PROPIEDAD PARA RECIBIR DATOS DE MAIN.QML =====
+    property var especialidadesModel: []
+    
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
     readonly property real fontTiny: baseUnit * 1.2
@@ -63,6 +66,7 @@ Item {
     
     function changeView(newView) {
         currentView = newView
+        console.log("🔄 Vista cambiada a:", newView)
     }
     
     function getModuleColor(moduleId) {
@@ -95,7 +99,7 @@ Item {
             id: "consultas",
             title: "Consultas",
             icon: "🩺",
-            description: "Administra especialidades médicas, tipos de consulta y horarios"
+            description: "Administra especialidades médicas,precios de consultas"
         },
         {
             id: "servicios",
@@ -1178,6 +1182,7 @@ Item {
         }
     }
     
+    // ===== COMPONENTE DE CONSULTAS MODIFICADO =====
     Component {
         id: consultasConfigComponent
         GenericConfigView {
@@ -1186,8 +1191,26 @@ Item {
             moduleIcon: "🩺"
             moduleColor: consultasColor
             
-            configContent: ConsultasConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL NUEVO COMPONENTE ConfiConsultas =====
+                ConfiConsultas {
+                    id: configConsultasComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    especialidades: configuracionRoot.especialidadesModel
+                    
+                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onEspecialidadesChanged: {
+                        if (especialidades && especialidades !== configuracionRoot.especialidadesModel) {
+                            configuracionRoot.especialidadesModel = especialidades
+                            console.log("🔄 Especialidades actualizadas hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1367,26 +1390,6 @@ Item {
         }
     }
     
-    component ConsultasConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Consultas implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
     component ServiciosConfig: ScrollView {
         clip: true
         
@@ -1445,5 +1448,12 @@ Item {
                 font.family: "Segoe UI"
             }
         }
+    }
+    
+    // ===== IMPORTAR EL COMPONENTE ConfiConsultas =====
+    ConfiConsultas {
+        id: hiddenConfiConsultas
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
     }
 }

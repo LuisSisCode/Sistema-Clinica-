@@ -7,6 +7,9 @@ Item {
     id: consultasRoot
     objectName: "consultasRoot"
     
+    // ===== NUEVA SEÑAL PARA IR A CONFIGURACIÓN =====
+    signal irAConfiguracion()
+    
     // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
     readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
@@ -21,9 +24,9 @@ Item {
     readonly property color textColor: "#2c3e50"
     readonly property color whiteColor: "#FFFFFF"
     
-    // Propiedades para los diálogos (mantener)
+    // Propiedades para los diálogos (mantener solo nuevo paciente)
     property bool showNewConsultationDialog: false
-    property bool showConfigEspecialidadesDialog: false
+    // ===== ELIMINADO: property bool showConfigEspecialidadesDialog: false =====
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
@@ -286,36 +289,6 @@ Item {
                             }
                         }
                         
-                        Button {
-                            id: configButton
-                            text: "⚙️"
-                            Layout.preferredWidth: baseUnit * 4.5
-                            Layout.preferredHeight: baseUnit * 4.5
-                            
-                            background: Rectangle {
-                                color: "#6c757d"
-                                radius: baseUnit
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.pixelSize: fontBaseSize * 1.1
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            
-                            onClicked: configMenu.open()
-                            
-                            Menu {
-                                id: configMenu
-                                y: parent.height
-                                
-                                MenuItem {
-                                    text: "🏥 Configuración de Especialidades"
-                                    onTriggered: showConfigEspecialidadesDialog = true
-                                }
-                            }
-                        }
                     }
                 }
                 
@@ -953,7 +926,7 @@ Item {
         }
     }
 
-    // ===== DIÁLOGOS (mantener originales pero con tamaños adaptativos) =====
+    // ===== DIÁLOGO DE NUEVA CONSULTA (MANTENER) =====
     
     // Fondo del diálogo
     Rectangle {
@@ -1404,313 +1377,6 @@ Item {
                     }
                 }
             }
-        }
-    }
-    
-    // === DIÁLOGO DE CONFIGURACIÓN (mantener con ajustes adaptativos) ===
-    Rectangle {
-        id: configEspecialidadesBackground
-        anchors.fill: parent
-        color: "black"
-        opacity: showConfigEspecialidadesDialog ? 0.5 : 0
-        visible: opacity > 0
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: showConfigEspecialidadesDialog = false
-        }
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-    
-    Rectangle {
-        id: configEspecialidadesDialog
-        anchors.centerIn: parent
-        width: Math.min(700, parent.width * 0.95)
-        height: Math.min(600, parent.height * 0.9)
-        color: whiteColor
-        radius: baseUnit * 2
-        border.color: lightGrayColor
-        border.width: 2
-        visible: showConfigEspecialidadesDialog
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: baseUnit * 35
-                color: whiteColor
-                radius: baseUnit * 2
-                z: 10
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: baseUnit * 3
-                    spacing: baseUnit * 2
-                    
-                    Label {
-                        Layout.fillWidth: true
-                        text: "🏥 Configuración de Especialidades"
-                        font.pixelSize: fontBaseSize * 1.6
-                        font.bold: true
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    
-                    GroupBox {
-                        Layout.fillWidth: true
-                        title: "Agregar Nueva Especialidad"
-                        
-                        background: Rectangle {
-                            color: "#f8f9fa"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: baseUnit
-                        }
-                        
-                        GridLayout {
-                            anchors.fill: parent
-                            columns: 2
-                            rowSpacing: baseUnit
-                            columnSpacing: baseUnit
-                            
-                            Label {
-                                text: "Especialidad:"
-                                font.bold: true
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
-                            }
-                            TextField {
-                                id: nuevaEspecialidadNombre
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "Ej: Dermatología"
-                                font.pixelSize: fontBaseSize * 0.9
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Doctor:"
-                                font.bold: true
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
-                            }
-                            TextField {
-                                id: nuevaEspecialidadDoctor
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "Ej: Dr. Ana María García"
-                                font.pixelSize: fontBaseSize * 0.9
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Precio Normal:"
-                                font.bold: true
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
-                            }
-                            TextField {
-                                id: nuevaEspecialidadPrecioNormal
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "0.00"
-                                validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                                font.pixelSize: fontBaseSize * 0.9
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Precio Emergencia:"
-                                font.bold: true
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
-                            }
-                            TextField {
-                                id: nuevaEspecialidadPrecioEmergencia
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "0.00"
-                                validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                                font.pixelSize: fontBaseSize * 0.9
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.6
-                                }
-                            }
-                            
-                            Item { }
-                            Button {
-                                Layout.alignment: Qt.AlignRight
-                                Layout.preferredHeight: baseUnit * 4
-                                text: "➕ Agregar Especialidad"
-                                background: Rectangle {
-                                    color: successColor
-                                    radius: baseUnit
-                                }
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize * 0.9
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                onClicked: {
-                                    if (nuevaEspecialidadNombre.text && nuevaEspecialidadDoctor.text && 
-                                        nuevaEspecialidadPrecioNormal.text && nuevaEspecialidadPrecioEmergencia.text) {
-                                        
-                                        var nuevaEspecialidad = {
-                                            nombre: nuevaEspecialidadNombre.text,
-                                            doctor: nuevaEspecialidadDoctor.text,
-                                            precioNormal: parseFloat(nuevaEspecialidadPrecioNormal.text),
-                                            precioEmergencia: parseFloat(nuevaEspecialidadPrecioEmergencia.text)
-                                        }
-                                        
-                                        especialidades.push(nuevaEspecialidad)
-                                        consultasRoot.especialidades = especialidades
-                                        
-                                        nuevaEspecialidadNombre.text = ""
-                                        nuevaEspecialidadDoctor.text = ""
-                                        nuevaEspecialidadPrecioNormal.text = ""
-                                        nuevaEspecialidadPrecioEmergencia.text = ""
-                                        
-                                        console.log("Nueva especialidad agregada:", JSON.stringify(nuevaEspecialidad))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: baseUnit * 3
-                Layout.topMargin: 0
-                color: "transparent"
-                
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
-                    
-                    ListView {
-                        model: especialidades
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: baseUnit * 8
-                            color: index % 2 === 0 ? "transparent" : "#fafafa"
-                            border.color: "#e8e8e8"
-                            border.width: 1
-                            radius: baseUnit
-                            
-                            GridLayout {
-                                anchors.fill: parent
-                                anchors.margins: baseUnit
-                                columns: 4
-                                rowSpacing: baseUnit * 0.6
-                                columnSpacing: baseUnit
-                                
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: baseUnit * 0.4
-                                    
-                                    Label {
-                                        text: modelData.nombre
-                                        font.bold: true
-                                        color: primaryColor
-                                        font.pixelSize: fontBaseSize * 0.95
-                                    }
-                                    Label {
-                                        text: modelData.doctor
-                                        color: textColor
-                                        font.pixelSize: fontBaseSize * 0.8
-                                    }
-                                }
-                                
-                                ColumnLayout {
-                                    Layout.preferredWidth: baseUnit * 10
-                                    spacing: baseUnit * 0.4
-                                    
-                                    Label {
-                                        text: "Normal"
-                                        font.bold: true
-                                        color: successColor
-                                        font.pixelSize: fontBaseSize * 0.8
-                                    }
-                                    Label {
-                                        text: "Bs" + modelData.precioNormal.toFixed(2)
-                                        color: successColor
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.95
-                                    }
-                                }
-                                
-                                ColumnLayout {
-                                    Layout.preferredWidth: baseUnit * 10
-                                    spacing: baseUnit * 0.4
-                                    
-                                    Label {
-                                        text: "Emergencia"
-                                        font.bold: true
-                                        color: "#e67e22"
-                                        font.pixelSize: fontBaseSize * 0.8
-                                    }
-                                    Label {
-                                        text: "Bs" + modelData.precioEmergencia.toFixed(2)
-                                        color: "#e67e22"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.95
-                                    }
-                                }
-                                
-                                Button {
-                                    Layout.preferredWidth: baseUnit * 3.5
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    text: "🗑️"
-                                    background: Rectangle {
-                                        color: dangerColor
-                                        radius: baseUnit * 0.6
-                                    }
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: whiteColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                        font.pixelSize: fontBaseSize * 0.8
-                                    }
-                                    onClicked: {
-                                        especialidades.splice(index, 1)
-                                        consultasRoot.especialidades = especialidades
-                                        console.log("Especialidad eliminada en índice:", index)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }      
         }
     }
 
