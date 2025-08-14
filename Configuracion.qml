@@ -1179,8 +1179,26 @@ Item {
             moduleIcon: "💉"
             moduleColor: enfermeriaColor
             
-            configContent: EnfermeriaConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL COMPONENTE ConfiEnfermeria =====
+                ConfiEnfermeria {
+                    id: configEnfermeriaComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR CON EL NOMBRE CORRECTO =====
+                    tiposProcedimientos: configuracionRoot.tiposProcedimientosModel
+                    
+                    // ===== CONECTAR AL EVENTO CORRECTO =====
+                    onTiposProcedimientosChanged: {
+                        if (tiposProcedimientos && tiposProcedimientos !== configuracionRoot.tiposProcedimientosModel) {
+                            configuracionRoot.tiposProcedimientosModel = tiposProcedimientos
+                            console.log("🔄 Tipos de procedimientos actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1462,6 +1480,11 @@ Item {
     // ===== IMPORTAR EL COMPONENTE ConfiServiciosBasicos =====
     ConfiServiciosBasicos {
         id: hiddenConfiServiciosBasicos
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+        ConfiEnfermeria {
+        id: hiddenConfiEnfermeria
         visible: false
         // Componente oculto solo para cargar el tipo en memoria
     }

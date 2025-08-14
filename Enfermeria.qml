@@ -40,9 +40,10 @@ Item {
     readonly property string currentUser: "Enfermera Ana María González"
     readonly property string currentUserRole: "Enfermera Jefe"
     
-    // Propiedades para los diálogos
-    property bool showNewProcedureDialog: false
-    property bool showConfigProceduresDialog: false
+    // ✅ SEÑAL PARA NAVEGACIÓN A CONFIGURACIÓN (REFACTORIZADO)
+    signal irAConfigEnfermeria()
+    
+    // Propiedades para los diálogos del procedimiento
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
@@ -362,7 +363,7 @@ Item {
                             }
                         } 
                         
-                        // ✅ BOTÓN DE CONFIGURACIÓN RESPONSIVO
+                        // ✅ BOTÓN DE CONFIGURACIÓN RESPONSIVO - LIMPIO
                         Button {
                             id: configButton
                             text: "⚙️"
@@ -389,13 +390,16 @@ Item {
                                 
                                 MenuItem {
                                     text: "🩺 Configuración de Procedimientos"
-                                    onTriggered: showConfigProceduresDialog = true
+                                    onTriggered: {
+                                        console.log("🚀 Navegando a configuración de procedimientos desde Enfermería")
+                                        // ✅ EMISIÓN DE SEÑAL PARA NAVEGACIÓN DESACOPLADA
+                                        irAConfigEnfermeria()
+                                    }
                                 }
                             }
                         }           
                     }
                 }
-                
                 // ✅ FILTROS RESPONSIVOS
                 Rectangle {
                     Layout.fillWidth: true
