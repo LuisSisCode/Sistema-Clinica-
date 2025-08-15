@@ -47,6 +47,7 @@ Item {
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
+    property bool showNewProcedureDialog: false  // ✅ AGREGADO - PROPIEDAD FALTANTE
 
     // ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
     property int itemsPerPageEnfermeria: 10
@@ -113,165 +114,8 @@ Item {
         }
     ]
 
-    // ✅ DATOS AMPLIADOS PARA PROBAR PAGINACIÓN (12 procedimientos)
-    property var procedimientosModelData: [
-        {
-            procedimientoId: "1",
-            paciente: "María Elena López",
-            tipoProcedimiento: "Curación Simple",
-            cantidad: 1,
-            tipo: "Normal",
-            precioUnitario: "25.00",
-            precioTotal: "25.00",
-            fecha: "2025-06-15",
-            trabajadorRealizador: "Lic. Ana González",
-            registradoPor: "Luis López",
-            observaciones: "Herida en proceso de cicatrización, evolución favorable"
-        },
-        {
-            procedimientoId: "2",
-            paciente: "Carlos Eduardo Martínez",
-            tipoProcedimiento: "Inyección Intramuscular",
-            cantidad: 3,
-            tipo: "Normal",
-            precioUnitario: "15.00",
-            precioTotal: "45.00",
-            fecha: "2025-06-16",
-            trabajadorRealizador: "Lic. José Pérez",
-            registradoPor: "Luis López",
-            observaciones: "3 dosis de diclofenaco 75mg aplicadas durante el día, sin reacciones adversas"
-        },
-        {
-            procedimientoId: "3",
-            paciente: "Elena Isabel Vargas",
-            tipoProcedimiento: "Control de Signos Vitales",
-            cantidad: 2,
-            tipo: "Emergencia",
-            precioUnitario: "18.00",
-            precioTotal: "36.00",
-            fecha: "2025-06-17",
-            trabajadorRealizador: "Lic. Ana González",
-            registradoPor: "Luis López",
-            observaciones: "Controles cada 4 horas - PA: 120/80, FC: 72, Temp: 36.5°C - Valores estables"
-        },
-        {
-            procedimientoId: "4",
-            paciente: "Roberto Silva",
-            tipoProcedimiento: "Nebulización",
-            cantidad: 2,
-            tipo: "Normal",
-            precioUnitario: "18.00",
-            precioTotal: "36.00",
-            fecha: "2025-06-17",
-            trabajadorRealizador: "Lic. Miguel Torres",
-            registradoPor: "Luis López",
-            observaciones: "2 sesiones de nebulización con salbutamol, mejoría en función respiratoria"
-        },
-        {
-            procedimientoId: "5",
-            paciente: "Ana Patricia Morales",
-            tipoProcedimiento: "Curación Avanzada",
-            cantidad: 1,
-            tipo: "Emergencia",
-            precioUnitario: "70.00",
-            precioTotal: "70.00",
-            fecha: "2025-06-18",
-            trabajadorRealizador: "Dra. María Fernández",
-            registradoPor: "Luis López",
-            observaciones: "Curación post-quirúrgica de emergencia, cambio de apósitos estériles"
-        },
-        {
-            procedimientoId: "6",
-            paciente: "José Antonio Morales",
-            tipoProcedimiento: "Inyección Intravenosa",
-            cantidad: 1,
-            tipo: "Emergencia",
-            precioUnitario: "35.00",
-            precioTotal: "35.00",
-            fecha: "2025-06-19",
-            trabajadorRealizador: "Lic. José Pérez",
-            registradoPor: "Luis López",
-            observaciones: "Administración de antibiótico IV de urgencia"
-        },
-        {
-            procedimientoId: "7",
-            paciente: "Carmen Rosa Delgado",
-            tipoProcedimiento: "Colocación de Sonda",
-            cantidad: 1,
-            tipo: "Normal",
-            precioUnitario: "35.00",
-            precioTotal: "35.00",
-            fecha: "2025-06-20",
-            trabajadorRealizador: "Lic. Ana González",
-            registradoPor: "Luis López",
-            observaciones: "Sonda vesical colocada sin complicaciones"
-        },
-        {
-            procedimientoId: "8",
-            paciente: "Ricardo Herrera",
-            tipoProcedimiento: "Curación Avanzada",
-            cantidad: 1,
-            tipo: "Emergencia",
-            precioUnitario: "70.00",
-            precioTotal: "70.00",
-            fecha: "2025-06-21",
-            trabajadorRealizador: "Dra. María Fernández",
-            registradoPor: "Luis López",
-            observaciones: "Curación de quemadura de segundo grado"
-        },
-        {
-            procedimientoId: "9",
-            paciente: "Patricia Sánchez",
-            tipoProcedimiento: "Control de Signos Vitales",
-            cantidad: 4,
-            tipo: "Normal",
-            precioUnitario: "10.00",
-            precioTotal: "40.00",
-            fecha: "2025-06-22",
-            trabajadorRealizador: "Enf. Elena Vargas",
-            registradoPor: "Luis López",
-            observaciones: "Monitoreo post-operatorio cada 2 horas"
-        },
-        {
-            procedimientoId: "10",
-            paciente: "Fernando Gómez",
-            tipoProcedimiento: "Nebulización",
-            cantidad: 3,
-            tipo: "Normal",
-            precioUnitario: "18.00",
-            precioTotal: "54.00",
-            fecha: "2025-06-23",
-            trabajadorRealizador: "Lic. Miguel Torres",
-            registradoPor: "Luis López",
-            observaciones: "Terapia respiratoria intensiva"
-        },
-        {
-            procedimientoId: "11",
-            paciente: "Isabella Ramírez",
-            tipoProcedimiento: "Inyección Intramuscular",
-            cantidad: 2,
-            tipo: "Emergencia",
-            precioUnitario: "25.00",
-            precioTotal: "50.00",
-            fecha: "2025-06-24",
-            trabajadorRealizador: "Lic. José Pérez",
-            registradoPor: "Luis López",
-            observaciones: "Analgésicos de emergencia para dolor severo"
-        },
-        {
-            procedimientoId: "12",
-            paciente: "Miguel Ángel Torres",
-            tipoProcedimiento: "Curación Simple",
-            cantidad: 1,
-            tipo: "Normal",
-            precioUnitario: "25.00",
-            precioTotal: "25.00",
-            fecha: "2025-06-25",
-            trabajadorRealizador: "Lic. Ana González",
-            registradoPor: "Luis López",
-            observaciones: "Cambio de vendaje rutinario"
-        }
-    ]
+    // ✅ DATOS LIMPIOS - SIN EJEMPLOS
+    property var procedimientosModelData: []
 
     // ✅ MODELOS SEPARADOS PARA PAGINACIÓN
     ListModel {
@@ -361,43 +205,7 @@ Item {
                                 editingIndex = -1
                                 showNewProcedureDialog = true
                             }
-                        } 
-                        
-                        // ✅ BOTÓN DE CONFIGURACIÓN RESPONSIVO - LIMPIO
-                        Button {
-                            id: configButton
-                            text: "⚙️"
-                            font.pixelSize: fontMedium
-                            Layout.preferredWidth: Math.max(40, screenWidth * 0.04)
-                            Layout.preferredHeight: Math.max(36, screenHeight * 0.045)
-                            
-                            background: Rectangle {
-                                color: "#6c757d"
-                                radius: baseUnit * 0.3
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            
-                            onClicked: configMenu.open()
-                            
-                            Menu {
-                                id: configMenu
-                                y: parent.height
-                                
-                                MenuItem {
-                                    text: "🩺 Configuración de Procedimientos"
-                                    onTriggered: {
-                                        console.log("🚀 Navegando a configuración de procedimientos desde Enfermería")
-                                        // ✅ EMISIÓN DE SEÑAL PARA NAVEGACIÓN DESACOPLADA
-                                        irAConfigEnfermeria()
-                                    }
-                                }
-                            }
-                        }           
+                        }            
                     }
                 }
                 // ✅ FILTROS RESPONSIVOS
@@ -1005,6 +813,50 @@ Item {
                                     }
                                 }
                             }
+                        }
+                        
+                        // ✅ ESTADO VACÍO PARA TABLA SIN DATOS
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            visible: procedimientosPaginadosModel.count === 0
+                            spacing: marginLarge
+                            
+                            Item { Layout.fillHeight: true }
+                            
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignHCenter
+                                spacing: marginMedium
+                                
+                                Label {
+                                    text: "🩹"
+                                    font.pixelSize: fontTitle * 3
+                                    color: "#E5E7EB"
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: "No hay procedimientos registrados"
+                                    color: textColor
+                                    font.bold: true
+                                    font.pixelSize: fontLarge
+                                    Layout.alignment: Qt.AlignHCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Label {
+                                    text: "Registra el primer procedimiento haciendo clic en \"➕ Nuevo Procedimiento\""
+                                    color: "#6B7280"
+                                    font.pixelSize: fontBase
+                                    Layout.alignment: Qt.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    horizontalAlignment: Text.AlignHCenter
+                                    font.family: "Segoe UI"
+                                    Layout.maximumWidth: 400
+                                }
+                            }
+                            
+                            Item { Layout.fillHeight: true }
                         }
                     }
                 }
@@ -1810,19 +1662,11 @@ Item {
         return procedimientosOriginales.length
     }
     
-    // ✅ INICIALIZACIÓN AL CARGAR EL COMPONENTE
+    // ✅ INICIALIZACIÓN AL CARGAR EL COMPONENTE - SIN DATOS DE EJEMPLO
     Component.onCompleted: {
         console.log("🩹 Módulo Enfermería iniciado")
-        
-        // Cargar datos originales
-        for (var i = 0; i < procedimientosModelData.length; i++) {
-            procedimientosOriginales.push(procedimientosModelData[i])
-            procedimientosListModel.append(procedimientosModelData[i])
-        }
-        
-        // Inicializar paginación
         updatePaginatedModel()
         
-        console.log("✅ Procedimientos cargados:", procedimientosOriginales.length)
+        console.log("✅ Módulo iniciado sin datos - Listo para agregar procedimientos")
     }
 }

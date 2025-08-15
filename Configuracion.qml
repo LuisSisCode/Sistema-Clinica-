@@ -12,6 +12,12 @@ Item {
     // ===== NUEVA PROPIEDAD PARA TIPOS DE GASTOS DESDE MAIN.QML =====
     property var tiposGastosModel: []
     
+    // ===== NUEVA PROPIEDAD PARA TIPOS DE PROCEDIMIENTOS DESDE MAIN.QML =====
+    property var tiposProcedimientosModel: []
+  
+    // ===== NUEVA PROPIEDAD PARA TIPOS DE ANÁLISIS DESDE MAIN.QML =====
+    property var tiposAnalisisModel: []
+    
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
     readonly property real fontTiny: baseUnit * 1.2
@@ -189,7 +195,7 @@ Item {
                 case "laboratorio": return laboratorioConfigComponent
                 case "enfermeria": return enfermeriaConfigComponent
                 case "consultas": return consultasConfigComponent
-                case "servicios": return serviciosConfigComponent  // ===== NUEVO CASE PARA SERVICIOS =====
+                case "servicios": return serviciosConfigComponent
                 case "usuarios": return usuariosConfigComponent
                 case "personal": return personalConfigComponent
                 default: return null
@@ -1157,6 +1163,7 @@ Item {
     
     // ===== COMPONENTES DE CONFIGURACIÓN ESPECÍFICA =====
     
+    // ===== COMPONENTE DE LABORATORIO CON ConfiLaboratorio =====
     Component {
         id: laboratorioConfigComponent
         GenericConfigView {
@@ -1165,8 +1172,26 @@ Item {
             moduleIcon: "🧪"
             moduleColor: laboratorioColor
             
-            configContent: LaboratorioConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL COMPONENTE ConfiLaboratorio =====
+                ConfiLaboratorio {
+                    id: configLaboratorioComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    tiposAnalisis: configuracionRoot.tiposAnalisisModel
+                    
+                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onTiposAnalisisChanged: {
+                        if (tiposAnalisis && tiposAnalisis !== configuracionRoot.tiposAnalisisModel) {
+                            configuracionRoot.tiposAnalisisModel = tiposAnalisis
+                            console.log("🔄 Tipos de análisis actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1189,7 +1214,7 @@ Item {
                     anchors.margins: marginMedium
                     
                     // ===== CONECTAR CON EL NOMBRE CORRECTO =====
-                    tiposProcedimientos: configuracionRoot.tiposProcedimientosModel
+                    tiposProcedimientosData: configuracionRoot.tiposProcedimientosModel
                     
                     // ===== CONECTAR AL EVENTO CORRECTO =====
                     onTiposProcedimientosChanged: {
@@ -1390,46 +1415,6 @@ Item {
     
     // ===== CONFIGURACIONES ESPECÍFICAS SIMPLIFICADAS =====
     
-    component LaboratorioConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Laboratorio implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
-    component EnfermeriaConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Enfermería implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
     component UsuariosConfig: ScrollView {
         clip: true
         
@@ -1470,21 +1455,28 @@ Item {
         }
     }
     
-    // ===== IMPORTAR EL COMPONENTE ConfiConsultas =====
+    // ===== IMPORTAR LOS COMPONENTES DE CONFIGURACIÓN =====
     ConfiConsultas {
         id: hiddenConfiConsultas
         visible: false
         // Componente oculto solo para cargar el tipo en memoria
     }
     
-    // ===== IMPORTAR EL COMPONENTE ConfiServiciosBasicos =====
     ConfiServiciosBasicos {
         id: hiddenConfiServiciosBasicos
         visible: false
         // Componente oculto solo para cargar el tipo en memoria
     }
-        ConfiEnfermeria {
+    
+    ConfiEnfermeria {
         id: hiddenConfiEnfermeria
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    // ===== IMPORTAR EL COMPONENTE ConfiLaboratorio =====
+    ConfiLaboratorio {
+        id: hiddenConfiLaboratorio
         visible: false
         // Componente oculto solo para cargar el tipo en memoria
     }
