@@ -6,6 +6,21 @@ Item {
     id: configuracionRoot
     objectName: "configuracionRoot"
     
+    // ===== NUEVA PROPIEDAD PARA RECIBIR DATOS DE MAIN.QML =====
+    property var especialidadesModel: []
+    
+    // ===== NUEVA PROPIEDAD PARA TIPOS DE GASTOS DESDE MAIN.QML =====
+    property var tiposGastosModel: []
+    
+    // ===== NUEVA PROPIEDAD PARA TIPOS DE PROCEDIMIENTOS DESDE MAIN.QML =====
+    property var tiposProcedimientosModel: []
+  
+    // ===== NUEVA PROPIEDAD PARA TIPOS DE ANÁLISIS DESDE MAIN.QML =====
+    property var tiposAnalisisModel: []
+    
+    // ===== PASO 2b: NUEVA PROPIEDAD PARA TIPOS DE TRABAJADORES DESDE MAIN.QML =====
+    property var tiposTrabajadoresModel: []
+    
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
     readonly property real fontTiny: baseUnit * 1.2
@@ -63,6 +78,7 @@ Item {
     
     function changeView(newView) {
         currentView = newView
+        console.log("🔄 Vista cambiada a:", newView)
     }
     
     function getModuleColor(moduleId) {
@@ -95,7 +111,7 @@ Item {
             id: "consultas",
             title: "Consultas",
             icon: "🩺",
-            description: "Administra especialidades médicas, tipos de consulta y horarios"
+            description: "Administra especialidades médicas,precios de consultas"
         },
         {
             id: "servicios",
@@ -707,7 +723,7 @@ Item {
                 ProfileField { 
                     label: "Usuario"
                     value: currentUsername
-                    icon: "🔑"
+                    icon: "🔒"
                 }
                 
                 ProfileField { 
@@ -741,7 +757,7 @@ Item {
                     spacing: marginTiny
                     
                     Label {
-                        text: "🔒"
+                        text: "🔐"
                         font.pixelSize: fontSmall
                         color: backgroundColor
                     }
@@ -1150,6 +1166,7 @@ Item {
     
     // ===== COMPONENTES DE CONFIGURACIÓN ESPECÍFICA =====
     
+    // ===== COMPONENTE DE LABORATORIO CON ConfiLaboratorio =====
     Component {
         id: laboratorioConfigComponent
         GenericConfigView {
@@ -1158,8 +1175,26 @@ Item {
             moduleIcon: "🧪"
             moduleColor: laboratorioColor
             
-            configContent: LaboratorioConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL COMPONENTE ConfiLaboratorio =====
+                ConfiLaboratorio {
+                    id: configLaboratorioComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    tiposAnalisis: configuracionRoot.tiposAnalisisModel
+                    
+                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onTiposAnalisisChanged: {
+                        if (tiposAnalisis && tiposAnalisis !== configuracionRoot.tiposAnalisisModel) {
+                            configuracionRoot.tiposAnalisisModel = tiposAnalisis
+                            console.log("🔄 Tipos de análisis actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1172,12 +1207,31 @@ Item {
             moduleIcon: "💉"
             moduleColor: enfermeriaColor
             
-            configContent: EnfermeriaConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL COMPONENTE ConfiEnfermeria =====
+                ConfiEnfermeria {
+                    id: configEnfermeriaComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR CON EL NOMBRE CORRECTO =====
+                    tiposProcedimientosData: configuracionRoot.tiposProcedimientosModel
+                    
+                    // ===== CONECTAR AL EVENTO CORRECTO =====
+                    onTiposProcedimientosChanged: {
+                        if (tiposProcedimientos && tiposProcedimientos !== configuracionRoot.tiposProcedimientosModel) {
+                            configuracionRoot.tiposProcedimientosModel = tiposProcedimientos
+                            console.log("🔄 Tipos de procedimientos actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
     
+    // ===== COMPONENTE DE CONSULTAS MODIFICADO =====
     Component {
         id: consultasConfigComponent
         GenericConfigView {
@@ -1186,12 +1240,31 @@ Item {
             moduleIcon: "🩺"
             moduleColor: consultasColor
             
-            configContent: ConsultasConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL NUEVO COMPONENTE ConfiConsultas =====
+                ConfiConsultas {
+                    id: configConsultasComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    especialidades: configuracionRoot.especialidadesModel
+                    
+                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onEspecialidadesChanged: {
+                        if (especialidades && especialidades !== configuracionRoot.especialidadesModel) {
+                            configuracionRoot.especialidadesModel = especialidades
+                            console.log("🔄 Especialidades actualizadas hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
     
+    // ===== NUEVO COMPONENTE DE SERVICIOS BÁSICOS =====
     Component {
         id: serviciosConfigComponent
         GenericConfigView {
@@ -1200,8 +1273,26 @@ Item {
             moduleIcon: "💰"
             moduleColor: serviciosColor
             
-            configContent: ServiciosConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== INSTANCIAR EL NUEVO COMPONENTE ConfiServiciosBasicos =====
+                ConfiServiciosBasicos {
+                    id: configServiciosBasicosComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    tiposGastos: configuracionRoot.tiposGastosModel
+                    
+                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onTiposGastosChanged: {
+                        if (tiposGastos && tiposGastos !== configuracionRoot.tiposGastosModel) {
+                            configuracionRoot.tiposGastosModel = tiposGastos
+                            console.log("🔄 Tipos de gastos actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1220,6 +1311,7 @@ Item {
         }
     }
     
+    // ===== PASO 2c: COMPONENTE DE PERSONAL MODIFICADO CON ConfiTrabajadores =====
     Component {
         id: personalConfigComponent
         GenericConfigView {
@@ -1228,8 +1320,26 @@ Item {
             moduleIcon: "👥"
             moduleColor: personalColor
             
-            configContent: PersonalConfig {
+            configContent: Item {
                 anchors.fill: parent
+                
+                // ===== PASO 2c: INSTANCIAR EL NUEVO COMPONENTE ConfiTrabajadores =====
+                ConfiTrabajadores {
+                    id: configTrabajadoresComponent
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    
+                    // ===== PASO 2d: CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
+                    tiposTrabajadores: configuracionRoot.tiposTrabajadoresModel
+                    
+                    // ===== PASO 2e: PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
+                    onTiposTrabajadoresChanged: {
+                        if (tiposTrabajadores && tiposTrabajadores !== configuracionRoot.tiposTrabajadoresModel) {
+                            configuracionRoot.tiposTrabajadoresModel = tiposTrabajadores
+                            console.log("🔄 Tipos de trabajadores actualizados hacia el modelo padre")
+                        }
+                    }
+                }
             }
         }
     }
@@ -1327,86 +1437,6 @@ Item {
     
     // ===== CONFIGURACIONES ESPECÍFICAS SIMPLIFICADAS =====
     
-    component LaboratorioConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Laboratorio implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
-    component EnfermeriaConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Enfermería implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
-    component ConsultasConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Consultas implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
-    component ServiciosConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Servicios implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
     component UsuariosConfig: ScrollView {
         clip: true
         
@@ -1427,23 +1457,36 @@ Item {
         }
     }
     
-    component PersonalConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Personal implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
+    // ===== IMPORTAR LOS COMPONENTES DE CONFIGURACIÓN =====
+    ConfiConsultas {
+        id: hiddenConfiConsultas
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    ConfiServiciosBasicos {
+        id: hiddenConfiServiciosBasicos
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    ConfiEnfermeria {
+        id: hiddenConfiEnfermeria
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    // ===== IMPORTAR EL COMPONENTE ConfiLaboratorio =====
+    ConfiLaboratorio {
+        id: hiddenConfiLaboratorio
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    // ===== PASO 2a: IMPORTAR EL NUEVO COMPONENTE ConfiTrabajadores =====
+    ConfiTrabajadores {
+        id: hiddenConfiTrabajadores
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
     }
 }

@@ -7,43 +7,47 @@ Item {
     id: trabajadoresRoot
     objectName: "trabajadoresRoot"
     
-    // ===== SISTEMA DE MEDIDAS RESPONSIVAS =====
-    readonly property real baseUnit: Math.min(width, height) / 100
-    readonly property real smallMargin: baseUnit * 1
-    readonly property real mediumMargin: baseUnit * 2
-    readonly property real largeMargin: baseUnit * 3
-    readonly property real extraLargeMargin: baseUnit * 4
+    // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
+    readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
+    readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
+    readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
     
-    readonly property real smallFont: baseUnit * 1.5
-    readonly property real mediumFont: baseUnit * 2.0
-    readonly property real largeFont: baseUnit * 3.0
-    readonly property real titleFont: baseUnit * 4.0
-    
-    readonly property real smallRadius: baseUnit * 0.8
-    readonly property real mediumRadius: baseUnit * 1.2
-    readonly property real largeRadius: baseUnit * 2
-    
-    readonly property real rowHeight: baseUnit * 6 // Altura responsiva para filas
-    readonly property real headerHeight: baseUnit * 6
-    readonly property real buttonHeight: baseUnit * 4
-    
-    // ===== COLORES =====
+    // ===== COLORES MODERNOS =====
     readonly property color primaryColor: "#3498DB"
-    readonly property color successColor: "#27ae60"
+    readonly property color successColor: "#10B981"
+    readonly property color successColorLight: "#D1FAE5"
     readonly property color dangerColor: "#E74C3C"
+    readonly property color dangerColorLight: "#FEE2E2"
     readonly property color warningColor: "#f39c12"
-    readonly property color lightGrayColor: "#ECF0F1"
+    readonly property color warningColorLight: "#FEF3C7"
+    readonly property color lightGrayColor: "#F8F9FA"
     readonly property color textColor: "#2c3e50"
+    readonly property color textColorLight: "#6B7280"
     readonly property color whiteColor: "#FFFFFF"
-    readonly property color infoColor: "#17a2b8"
+    readonly property color borderColor: "#e0e0e0"
+    readonly property color accentColor: "#10B981"
+    readonly property color lineColor: "#D1D5DB" // Color para líneas verticales
     readonly property color violetColor: "#9b59b6"
+    readonly property color infoColor: "#17a2b8"
     
     // ===== PROPIEDADES PARA DIÁLOGOS =====
     property bool showNewWorkerDialog: false
-    property bool showConfigTiposDialog: false
+    // ===== PASO 3a: ELIMINADA PROPIEDAD showConfigTiposDialog =====
+    // property bool showConfigTiposDialog: false  // REMOVIDO
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
+    
+    // ===== PASO 3c: NUEVA SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
+    signal irAConfigPersonal()
+    
+    // Distribución de columnas responsive
+    readonly property real colId: 0.08
+    readonly property real colNombre: 0.25
+    readonly property real colTipo: 0.22
+    readonly property real colEspecialidad: 0.20
+    readonly property real colMatricula: 0.15
+    readonly property real colFecha: 0.10
     
     // ===== MODELO DE TIPOS DE TRABAJADORES =====
     ListModel {
@@ -136,60 +140,63 @@ Item {
         }
     ]
 
+    // MODELOS
+    ListModel {
+        id: trabajadoresListModel
+    }
+
     // ===== LAYOUT PRINCIPAL RESPONSIVO =====
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: largeMargin
-        spacing: mediumMargin
+        anchors.margins: baseUnit * 4
+        spacing: baseUnit * 3
         
         // ===== CONTENIDO PRINCIPAL =====
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: whiteColor
-            radius: largeRadius
-            border.color: "#e0e0e0"
+            radius: baseUnit * 2
+            border.color: borderColor
             border.width: 1
             
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
                 
-                // ===== HEADER RESPONSIVO =====
+                // ===== HEADER MODERNO =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: headerHeight
-                    color: "#f8f9fa"
-                    border.color: "#e0e0e0"
+                    Layout.preferredHeight: baseUnit * 8
+                    color: lightGrayColor
+                    border.color: borderColor
                     border.width: 1
-                    radius: largeRadius
                     
                     Rectangle {
                         anchors.fill: parent
-                        anchors.bottomMargin: mediumMargin
+                        anchors.bottomMargin: baseUnit * 2
                         color: parent.color
                         radius: parent.radius
                     }
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: mediumMargin
-                        spacing: mediumMargin
+                        anchors.margins: baseUnit * 1.5
                         
-                        // Título y icono
                         RowLayout {
-                            spacing: smallMargin
+                            spacing: baseUnit
                             
                             Label {
                                 text: "👥"
-                                font.pixelSize: titleFont
+                                font.pixelSize: fontBaseSize * 1.8
                                 color: primaryColor
                             }
                             
                             Label {
                                 text: "Gestión de Trabajadores"
-                                font.pixelSize: largeFont
+                                font.pixelSize: fontBaseSize * 1.4
                                 font.bold: true
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 color: textColor
                             }
                         }
@@ -200,20 +207,20 @@ Item {
                         Button {
                             objectName: "newWorkerButton"
                             text: "➕ Nuevo Trabajador"
-                            Layout.preferredHeight: buttonHeight
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: primaryColor
-                                radius: mediumRadius
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: mediumFont
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: {
@@ -227,13 +234,13 @@ Item {
                         Button {
                             id: configButton
                             text: "⚙️"
-                            Layout.preferredWidth: buttonHeight
-                            Layout.preferredHeight: buttonHeight
-                            font.pixelSize: mediumFont
+                            Layout.preferredWidth: baseUnit * 4.5
+                            Layout.preferredHeight: baseUnit * 4.5
+                            font.pixelSize: fontBaseSize
                             
                             background: Rectangle {
                                 color: "#6c757d"
-                                radius: mediumRadius
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
@@ -249,407 +256,548 @@ Item {
                                 id: configMenu
                                 y: parent.height
                                 
+                                // ===== PASO 3d: MODIFICAR MENUITEM PARA EMITIR SEÑAL =====
                                 MenuItem {
                                     text: "👥 Configuración de Tipos de Trabajadores"
-                                    onTriggered: showConfigTiposDialog = true
+                                    onTriggered: {
+                                        console.log("🔄 Emitiendo señal irAConfigPersonal")
+                                        irAConfigPersonal()
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 
-                // ===== FILTROS RESPONSIVOS =====
+                // ===== FILTROS ADAPTATIVOS =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: headerHeight * 0.8
+                    Layout.preferredHeight: width < 1000 ? baseUnit * 16 : baseUnit * 8
                     color: "transparent"
                     z: 10
                     
-                    RowLayout {
+                    GridLayout {
                         anchors.fill: parent
-                        anchors.margins: mediumMargin
-                        spacing: mediumMargin
+                        anchors.margins: baseUnit * 3
+                        anchors.bottomMargin: baseUnit * 1.5
                         
-                        Label {
-                            text: "Filtrar por:"
-                            font.bold: true
-                            font.pixelSize: mediumFont
-                            color: textColor
-                        }
+                        columns: width < 1000 ? 2 : 3
+                        rowSpacing: baseUnit
+                        columnSpacing: baseUnit * 2
                         
-                        ComboBox {
-                            id: filtroTipo
-                            Layout.preferredWidth: width > 0 ? Math.max(120, parent.width * 0.2) : 120
-                            Layout.preferredHeight: buttonHeight
-                            model: getTiposTrabajadoresNombres()
-                            currentIndex: 0
-                            font.pixelSize: smallFont*1.3
-                            onCurrentIndexChanged: aplicarFiltros()
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            Label {
+                                text: "Filtrar por:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            ComboBox {
+                                id: filtroTipo
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                model: getTiposTrabajadoresNombres()
+                                currentIndex: 0
+                                onCurrentIndexChanged: aplicarFiltros()
+                                
+                                contentItem: Label {
+                                    text: filtroTipo.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
+                            }
                         }
                         
                         Item { Layout.fillWidth: true }
                         
                         TextField {
                             id: campoBusqueda
-                            Layout.preferredWidth: Math.max(150, parent.width * 0.25)
-                            Layout.preferredHeight: buttonHeight
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Buscar trabajador..."
-                            font.pixelSize: smallFont*1.3
                             onTextChanged: aplicarFiltros()
                             
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: "#e0e0e0"
+                                border.color: borderColor
                                 border.width: 1
-                                radius: smallRadius
+                                radius: baseUnit * 0.8
                             }
+                            
+                            leftPadding: baseUnit * 1.5
+                            rightPadding: baseUnit * 1.5
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                     }
                 }
                
-                // ===== TABLA RESPONSIVA =====
-                Item {
+                // ===== TABLA MODERNA CON LÍNEAS VERTICALES =====
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.margins: mediumMargin
+                    Layout.margins: baseUnit * 3
+                    Layout.topMargin: 0
+                    color: whiteColor
+                    border.color: borderColor
+                    border.width: 1
+                    radius: baseUnit
                     
-                    ScrollView {
+                    ColumnLayout {
                         anchors.fill: parent
-                        clip: true
+                        anchors.margins: 0
+                        spacing: 0
                         
-                        ListView {
-                            id: trabajadoresListView
-                            model: ListModel {
-                                id: trabajadoresListModel
-                                Component.onCompleted: {
-                                    for (var i = 0; i < trabajadoresModel.length; i++) {
-                                        append(trabajadoresModel[i])
+                        // HEADER CON LÍNEAS VERTICALES
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 5
+                            color: lightGrayColor
+                            border.color: borderColor
+                            border.width: 1
+                            z: 5
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: baseUnit * 1.5
+                                anchors.rightMargin: baseUnit * 1.5
+                                spacing: 0
+                                
+                                // ID COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colId
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "ID"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // NOMBRE COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colNombre
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "NOMBRE COMPLETO"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // TIPO COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colTipo
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "TIPO TRABAJADOR"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // ESPECIALIDAD COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colEspecialidad
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "ESPECIALIDAD"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // MATRÍCULA COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colMatricula
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "MATRÍCULA"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // FECHA COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colFecha
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "FECHA"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                             }
+                        }
+                        
+                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
                             
-                            // ===== HEADER DE LA TABLA =====
-                            header: Rectangle {
-                                width: parent.width
-                                height: rowHeight * 0.8
-                                color: "#f5f5f5"
-                                border.color: "#d0d0d0"
-                                border.width: 1
-                                z: 5
+                            ListView {
+                                id: trabajadoresListView
+                                model: trabajadoresListModel
                                 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
+                                delegate: Rectangle {
+                                    width: ListView.view.width
+                                    height: baseUnit * 5
+                                    color: {
+                                        if (selectedRowIndex === index) return "#F8F9FA"
+                                        return index % 2 === 0 ? whiteColor : "#FAFAFA"
+                                    }
                                     
+                                    // Borde horizontal sutil
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(40, parent.width * 0.08)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
+                                        anchors.bottom: parent.bottom
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        height: 1
+                                        color: borderColor
+                                    }
+                                    
+                                    // Borde vertical de selección
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: baseUnit * 0.4
+                                        color: selectedRowIndex === index ? accentColor : "transparent"
+                                        radius: baseUnit * 0.2
+                                        visible: selectedRowIndex === index
+                                    }
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: baseUnit * 1.5
+                                        anchors.rightMargin: baseUnit * 1.5
+                                        spacing: 0
                                         
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "ID"
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            color: textColor
+                                        // ID COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colId
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                text: model.trabajadorId
+                                                color: textColor
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // NOMBRE COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colNombre
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.nombreCompleto
+                                                color: primaryColor
+                                                font.bold: true
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // TIPO COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colTipo
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.tipoTrabajador
+                                                color: textColor
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                wrapMode: Text.WordWrap
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 2
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // ESPECIALIDAD COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colEspecialidad
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.especialidad
+                                                color: textColorLight
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                wrapMode: Text.WordWrap
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 2
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // MATRÍCULA COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colMatricula
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.matricula || "Sin matrícula"
+                                                color: model.matricula ? textColor : "#95a5a6"
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.8
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // FECHA COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colFecha
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                text: model.fechaRegistro
+                                                color: textColor
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                            }
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.25)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "NOMBRE COMPLETO"
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            color: textColor
+                                    // LÍNEAS VERTICALES CONTINUAS
+                                    Repeater {
+                                        model: 5 // Número de líneas verticales (todas menos la última columna)
+                                        Rectangle {
+                                            property real xPos: {
+                                                var w = parent.width - baseUnit * 3
+                                                switch(index) {
+                                                    case 0: return baseUnit * 1.5 + w * colId
+                                                    case 1: return baseUnit * 1.5 + w * (colId + colNombre)
+                                                    case 2: return baseUnit * 1.5 + w * (colId + colNombre + colTipo)
+                                                    case 3: return baseUnit * 1.5 + w * (colId + colNombre + colTipo + colEspecialidad)
+                                                    case 4: return baseUnit * 1.5 + w * (colId + colNombre + colTipo + colEspecialidad + colMatricula)
+                                                }
+                                            }
+                                            x: xPos
+                                            width: 1
+                                            height: parent.height
+                                            color: lineColor
+                                            z: 1
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(100, parent.width * 0.22)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "TIPO TRABAJADOR"
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            color: textColor
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(80, parent.width * 0.20)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "ESPECIALIDAD"
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            color: textColor
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(80, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "MATRÍCULA"
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            color: textColor
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "FECHA"
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            color: textColor
-                                        }
-                                    }                                   
-                                }
-                            }
-                            
-                            // ===== FILAS DE LA TABLA (ALTURA REDUCIDA) =====
-                            delegate: Rectangle {
-                                width: ListView.view.width
-                                height: rowHeight  // Altura responsiva reducida
-                                color: {
-                                    if (selectedRowIndex === index) return "#e3f2fd"
-                                    return index % 2 === 0 ? "transparent" : "#fafafa"
-                                }
-                                border.color: selectedRowIndex === index ? primaryColor : "#e8e8e8"
-                                border.width: selectedRowIndex === index ? 2 : 1
-                                
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(40, parent.width * 0.08)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: model.trabajadorId
-                                            color: textColor
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.25)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: smallMargin
-                                            text: model.nombreCompleto
-                                            color: primaryColor
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(100, parent.width * 0.22)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: smallMargin
-                                            text: model.tipoTrabajador
-                                            color: textColor
-                                            font.bold: true
-                                            font.pixelSize: smallFont*1.3
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(80, parent.width * 0.20)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: smallMargin
-                                            text: model.especialidad
-                                            color: "#7f8c8d"
-                                            font.pixelSize: smallFont
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(80, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: smallMargin
-                                            text: model.matricula || "Sin matrícula"
-                                            color: model.matricula ? textColor : "#95a5a6"
-                                            font.pixelSize: smallFont * 0.9
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                                                        
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label {  // ✅ Nuevo Label para mostrar la fecha
-                                            anchors.fill: parent
-                                            anchors.margins: smallMargin
-                                            text: model.fechaRegistro  // Asegúrate de que el modelo tenga este campo
-                                            color: textColor
-                                            font.pixelSize: smallFont * 0.9
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.NoWrap
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-
-                                }
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: {
-                                        selectedRowIndex = index
-                                        console.log("Seleccionado trabajador ID:", model.trabajadorId)
-                                    }
-                                }
-                                
-                                // ===== BOTONES DE ACCIÓN RESPONSIVOS =====
-                                RowLayout {
-                                    anchors.top: parent.top
-                                    anchors.right: parent.right
-                                    anchors.margins: smallMargin
-                                    spacing: smallMargin / 2
-                                    visible: selectedRowIndex === index
-                                    z: 10
-                                    
-                                    Button {
-                                        id: editButton
-                                        width: buttonHeight * 0.8
-                                        height: buttonHeight * 0.8
-                                        text: "✏️"
-                                        
-                                        background: Rectangle {
-                                            color: warningColor
-                                            radius: smallRadius
-                                            border.color: "#f1c40f"
-                                            border.width: 1
-                                        }
-                                        
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: whiteColor
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: smallFont
-                                        }
-                                        
+                                    MouseArea {
+                                        anchors.fill: parent
                                         onClicked: {
-                                            isEditMode = true
-                                            editingIndex = index
-                                            var trabajador = trabajadoresListModel.get(index)
-                                            console.log("Editando trabajador:", JSON.stringify(trabajador))
-                                            showNewWorkerDialog = true
+                                            selectedRowIndex = selectedRowIndex === index ? -1 : index
+                                            console.log("Seleccionado trabajador ID:", model.trabajadorId)
                                         }
                                     }
                                     
-                                    Button {
-                                        id: deleteButton
-                                        width: buttonHeight * 0.8
-                                        height: buttonHeight * 0.8
-                                        text: "🗑️"
+                                    // ===== BOTONES DE ACCIÓN MODERNOS =====
+                                    RowLayout {
+                                        anchors.top: parent.top
+                                        anchors.right: parent.right
+                                        anchors.margins: baseUnit * 0.8
+                                        spacing: baseUnit * 0.5
+                                        visible: selectedRowIndex === index
+                                        z: 10
                                         
-                                        background: Rectangle {
-                                            color: dangerColor
-                                            radius: smallRadius
-                                            border.color: "#c0392b"
-                                            border.width: 1
+                                        Button {
+                                            id: editButton
+                                            width: baseUnit * 3.5
+                                            height: baseUnit * 3.5
+                                            text: "✏️"
+                                            
+                                            background: Rectangle {
+                                                color: warningColor
+                                                radius: baseUnit * 0.8
+                                                border.color: "#e67e22"
+                                                border.width: 1
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: whiteColor
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                font.pixelSize: fontBaseSize * 0.85
+                                            }
+                                            
+                                            onClicked: {
+                                                isEditMode = true
+                                                editingIndex = index
+                                                var trabajador = trabajadoresListModel.get(index)
+                                                console.log("Editando trabajador:", JSON.stringify(trabajador))
+                                                showNewWorkerDialog = true
+                                            }
                                         }
                                         
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: whiteColor
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: smallFont
-                                        }
-                                        
-                                        onClicked: {
-                                            trabajadoresListModel.remove(index)
-                                            selectedRowIndex = -1
-                                            console.log("Trabajador eliminado en índice:", index)
+                                        Button {
+                                            id: deleteButton
+                                            width: baseUnit * 3.5
+                                            height: baseUnit * 3.5
+                                            text: "🗑️"
+                                            
+                                            background: Rectangle {
+                                                color: dangerColor
+                                                radius: baseUnit * 0.8
+                                                border.color: "#c0392b"
+                                                border.width: 1
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: whiteColor
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                font.pixelSize: fontBaseSize * 0.85
+                                            }
+                                            
+                                            onClicked: {
+                                                trabajadoresListModel.remove(index)
+                                                selectedRowIndex = -1
+                                                console.log("Trabajador eliminado en índice:", index)
+                                            }
                                         }
                                     }
                                 }
@@ -722,7 +870,7 @@ Item {
         width: Math.min(parent.width * 0.8, 600)
         height: Math.min(parent.height * 0.8, 550)
         color: whiteColor
-        radius: largeRadius
+        radius: baseUnit * 2
         border.color: lightGrayColor
         border.width: 2
         visible: showNewWorkerDialog
@@ -783,8 +931,9 @@ Item {
             Label {
                 Layout.fillWidth: true
                 text: isEditMode ? "Editar Trabajador" : "Nuevo Trabajador"
-                font.pixelSize: 24
+                font.pixelSize: fontBaseSize * 1.6
                 font.bold: true
+                font.family: "Segoe UI, Arial, sans-serif"
                 color: textColor
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -795,7 +944,7 @@ Item {
                 title: "Datos Personales"
                 
                 background: Rectangle {
-                    color: "#f8f9fa"
+                    color: lightGrayColor
                     border.color: lightGrayColor
                     border.width: 1
                     radius: 8
@@ -854,7 +1003,7 @@ Item {
                 title: "Información Profesional"
                 
                 background: Rectangle {
-                    color: "#f8f9fa"
+                    color: lightGrayColor
                     border.color: lightGrayColor
                     border.width: 1
                     radius: 8
@@ -1025,326 +1174,21 @@ Item {
         }
     }
 
-    // Diálogo Configuración de Tipos de Trabajadores (Editable)
-    Rectangle {
-        id: configTiposBackground
-        anchors.fill: parent
-        color: "black"
-        opacity: showConfigTiposDialog ? 0.5 : 0
-        visible: opacity > 0
+    // ===== PASO 3b: REMOVIDOS POR COMPLETO LOS RECTÁNGULOS DEL DIÁLOGO DE CONFIGURACIÓN =====
+    // Los siguientes elementos han sido completamente eliminados:
+    // - configTiposBackground
+    // - configTiposDialog
+    // Y toda su lógica asociada
+
+    // ===== INICIALIZACIÓN =====
+    Component.onCompleted: {
+        console.log("👥 Módulo Trabajadores iniciado")
         
-        MouseArea {
-            anchors.fill: parent
-            onClicked: showConfigTiposDialog = false
+        for (var i = 0; i < trabajadoresModel.length; i++) {
+            trabajadoresListModel.append(trabajadoresModel[i])
         }
         
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-    
-    Rectangle {
-        id: configTiposDialog
-        anchors.centerIn: parent
-        width: 800
-        height: 700
-        color: whiteColor
-        radius: 20
-        border.color: lightGrayColor
-        border.width: 2
-        visible: showConfigTiposDialog
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            
-            // Header fijo para título y formulario
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 450
-                color: whiteColor
-                radius: 20
-                z: 10
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 30
-                    spacing: 20
-                    
-                    Label {
-                        Layout.fillWidth: true
-                        text: "👥 Configuración de Tipos de Trabajadores"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    
-                    // Formulario para agregar nuevo tipo de trabajador
-                    GroupBox {
-                        Layout.fillWidth: true
-                        title: "Agregar Nuevo Tipo de Trabajador"
-                        
-                        background: Rectangle {
-                            color: "#f8f9fa"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: 8
-                        }
-                        
-                        GridLayout {
-                            anchors.fill: parent
-                            columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 10
-                            
-                            Label {
-                                text: "Nombre:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoTipoNombre
-                                Layout.fillWidth: true
-                                placeholderText: "Ej: Médico General"
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Descripción:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            ScrollView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 60
-                                
-                                TextArea {
-                                    id: nuevoTipoDescripcion
-                                    placeholderText: "Descripción del tipo de trabajador..."
-                                    wrapMode: TextArea.Wrap
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        border.color: lightGrayColor
-                                        border.width: 1
-                                        radius: 6
-                                    }
-                                }
-                            }
-                            
-                            Label {
-                                text: "Especialidades:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoTipoEspecialidades
-                                Layout.fillWidth: true
-                                placeholderText: "Ej: Medicina General, Medicina Familiar (separadas por comas)"
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                            }
-                            
-                            Label {
-                                text: "Requiere Matrícula:"
-                                font.bold: true
-                                color: textColor
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-                                
-                                CheckBox {
-                                    id: requiereMatriculaCheck
-                                    text: "Sí, requiere matrícula profesional"
-                                    checked: true
-                                }
-                                
-                                Item { Layout.fillWidth: true }
-                            }
-                            
-                            Item { }
-                            Button {
-                                Layout.alignment: Qt.AlignRight
-                                text: "➕ Agregar Tipo de Trabajador"
-                                background: Rectangle {
-                                    color: successColor
-                                    radius: 8
-                                }
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                onClicked: {
-                                    if (nuevoTipoNombre.text && nuevoTipoDescripcion.text && nuevoTipoEspecialidades.text) {
-                                        
-                                        var especialidadesTexto = nuevoTipoEspecialidades.text
-                                        var especialidadesArray = especialidadesTexto.split(',')
-                                        
-                                        // Limpiar espacios de cada especialidad
-                                        for (var i = 0; i < especialidadesArray.length; i++) {
-                                            especialidadesArray[i] = especialidadesArray[i].trim()
-                                        }
-                                        
-                                        // USAR APPEND DEL LISTMODEL
-                                        tiposTrabajadoresModel.append({
-                                            nombre: nuevoTipoNombre.text,
-                                            descripcion: nuevoTipoDescripcion.text,
-                                            requiereMatricula: requiereMatriculaCheck.checked,
-                                            especialidades: especialidadesArray
-                                        })
-                                        
-                                        // Actualizar los ComboBox que dependen de tiposTrabajadoresModel
-                                        filtroTipo.model = getTiposTrabajadoresNombres()
-                                        if (workerForm.visible) {
-                                            tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
-                                        }
-                                        
-                                        // Limpiar campos
-                                        nuevoTipoNombre.text = ""
-                                        nuevoTipoDescripcion.text = ""
-                                        nuevoTipoEspecialidades.text = ""
-                                        requiereMatriculaCheck.checked = true
-                                        
-                                        console.log("Nuevo tipo de trabajador agregado. Total tipos:", tiposTrabajadoresModel.count)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Lista de tipos de trabajadores existentes con scroll
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: 20
-                Layout.topMargin: 0
-                color: "transparent"
-                
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
-                    
-                    ListView {
-                        model: tiposTrabajadoresModel
-                        spacing: 2
-                        
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: 100
-                            color: index % 2 === 0 ? "transparent" : "#fafafa"
-                            border.color: "#e8e8e8"
-                            border.width: 1
-                            radius: 6
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 12
-                                
-                                // Contenido principal
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 4
-                                    
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        
-                                        Label {
-                                            text: model.nombre
-                                            font.bold: true
-                                            color: primaryColor
-                                            font.pixelSize: 14
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 80
-                                            Layout.preferredHeight: 20
-                                            color: model.requiereMatricula ? infoColor : "#95a5a6"
-                                            radius: 10
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: model.requiereMatricula ? "Matrícula" : "Sin Matrícula"
-                                                color: whiteColor
-                                                font.pixelSize: 9
-                                                font.bold: true
-                                            }
-                                        }
-                                        
-                                        Item { Layout.fillWidth: true }
-                                    }
-                                    
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: model.descripcion
-                                        color: textColor
-                                        font.pixelSize: 11
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 2
-                                        elide: Text.ElideRight
-                                    }
-                                    
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: "Especialidades: " + (model.especialidades ? model.especialidades.join(", ") : "")
-                                        color: "#7f8c8d"
-                                        font.pixelSize: 10
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 2
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                                
-                                // Botón eliminar
-                                Button {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
-                                    text: "🗑️"
-                                    background: Rectangle {
-                                        color: dangerColor
-                                        radius: 6
-                                    }
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: whiteColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                        font.pixelSize: 12
-                                    }
-                                    onClicked: {
-                                        // USAR REMOVE DEL LISTMODEL
-                                        tiposTrabajadoresModel.remove(index)
-                                        
-                                        // Actualizar los ComboBox que dependen de tiposTrabajadoresModel
-                                        filtroTipo.model = getTiposTrabajadoresNombres()
-                                        if (workerForm.visible) {
-                                            tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
-                                        }
-                                        
-                                        console.log("Tipo de trabajador eliminado en índice:", index)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        console.log("✅ Trabajadores cargados:", trabajadoresModel.length)
+        console.log("🔗 Señal irAConfigPersonal configurada para navegación")
     }
 }

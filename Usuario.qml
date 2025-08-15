@@ -7,14 +7,26 @@ Item {
     id: usuariosRoot
     objectName: "usuariosRoot"
     
-    // Acceso a colores
+    // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
+    readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
+    readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
+    readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
+    
+    // ===== COLORES MODERNOS =====
     readonly property color primaryColor: "#3498DB"
-    readonly property color successColor: "#27ae60"
+    readonly property color successColor: "#10B981"
+    readonly property color successColorLight: "#D1FAE5"
     readonly property color dangerColor: "#E74C3C"
+    readonly property color dangerColorLight: "#FEE2E2"
     readonly property color warningColor: "#f39c12"
-    readonly property color lightGrayColor: "#ECF0F1"
+    readonly property color warningColorLight: "#FEF3C7"
+    readonly property color lightGrayColor: "#F8F9FA"
     readonly property color textColor: "#2c3e50"
+    readonly property color textColorLight: "#6B7280"
     readonly property color whiteColor: "#FFFFFF"
+    readonly property color borderColor: "#e0e0e0"
+    readonly property color accentColor: "#10B981"
+    readonly property color lineColor: "#D1D5DB" // Color para líneas verticales
     readonly property color infoColor: "#17a2b8"
     readonly property color violetColor: "#9b59b6"
     
@@ -37,6 +49,15 @@ Item {
     ListModel {
         id: usuariosFiltradosModel
     }
+    
+    // Distribución de columnas responsive
+    readonly property real colId: 0.08
+    readonly property real colNombre: 0.22
+    readonly property real colUsuario: 0.15
+    readonly property real colCorreo: 0.20
+    readonly property real colRol: 0.15
+    readonly property real colEstado: 0.10
+    readonly property real colAcciones: 0.10
     
     // Inicialización cuando el model esté disponible
     Component.onCompleted: {
@@ -135,63 +156,65 @@ Item {
         aplicarFiltros()
     }
 
+    // ===== LAYOUT PRINCIPAL RESPONSIVO =====
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 32
+        anchors.margins: baseUnit * 4
+        spacing: baseUnit * 3
         
-        // Contenido principal
+        // ===== CONTENIDO PRINCIPAL =====
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: whiteColor
-            radius: 20
-            border.color: "#e0e0e0"
+            radius: baseUnit * 2
+            border.color: borderColor
             border.width: 1
             
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
                 
-                // Header de Usuarios - FIJO
+                // ===== HEADER MODERNO =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
-                    color: "#f8f9fa"
-                    border.color: "#e0e0e0"
+                    Layout.preferredHeight: baseUnit * 8
+                    color: lightGrayColor
+                    border.color: borderColor
                     border.width: 1
-                    z: 10
+                    
                     Rectangle {
                         anchors.fill: parent
-                        anchors.bottomMargin: 20
+                        anchors.bottomMargin: baseUnit * 2
                         color: parent.color
                         radius: parent.radius
                     }
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 16
+                        anchors.margins: baseUnit * 1.5
                         
                         RowLayout {
-                            spacing: 12
+                            spacing: baseUnit
                             
                             Label {
                                 text: "👤"
-                                font.pixelSize: 24
+                                font.pixelSize: fontBaseSize * 1.8
                                 color: primaryColor
                             }
                             
                             Label {
                                 text: "Gestión de Usuarios del Sistema"
-                                font.pixelSize: 20
+                                font.pixelSize: fontBaseSize * 1.4
                                 font.bold: true
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 color: textColor
                             }
                             
                             // Loading indicator
                             BusyIndicator {
-                                Layout.preferredWidth: 24
-                                Layout.preferredHeight: 24
+                                Layout.preferredWidth: baseUnit * 2.5
+                                Layout.preferredHeight: baseUnit * 2.5
                                 visible: usuarioModel ? usuarioModel.loading : false
                                 running: visible
                             }
@@ -202,16 +225,19 @@ Item {
                         Button {
                             objectName: "newUserButton"
                             text: "➕ Nuevo Usuario"
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: primaryColor
-                                radius: 12
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -225,16 +251,19 @@ Item {
                         
                         Button {
                             text: "🔄 Recargar"
+                            Layout.preferredHeight: baseUnit * 4.5
                             
                             background: Rectangle {
                                 color: infoColor
-                                radius: 12
+                                radius: baseUnit
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -247,580 +276,623 @@ Item {
                     }
                 }
                 
-                // Filtros y búsqueda mejorados - FIJO
+                // ===== FILTROS ADAPTATIVOS =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 120  // Aumentado para dar más espacio
-                    color: "#f8f9fa"
-                    border.color: "#e9ecef"
-                    border.width: 1
+                    Layout.preferredHeight: width < 1000 ? baseUnit * 16 : baseUnit * 8
+                    color: "transparent"
                     z: 10
                     
-                    ColumnLayout {
+                    GridLayout {
                         anchors.fill: parent
-                        anchors.margins: 24
-                        spacing: 16
+                        anchors.margins: baseUnit * 3
+                        anchors.bottomMargin: baseUnit * 1.5
                         
-                        // Fila superior - Título de filtros
+                        columns: width < 1000 ? 2 : 4
+                        rowSpacing: baseUnit
+                        columnSpacing: baseUnit * 2
+                        
                         RowLayout {
                             Layout.fillWidth: true
+                            spacing: baseUnit
                             
                             Label {
-                                text: "🔍 Filtros y Búsqueda"
+                                text: "Filtrar por:"
                                 font.bold: true
-                                font.pixelSize: 16
                                 color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
-                            Item { Layout.fillWidth: true }
-                            
-                            // ✅ CONTADOR ACTUALIZADO PARA DATOS LOCALES
-                            Rectangle {
-                                Layout.preferredWidth: 120
-                                Layout.preferredHeight: 32
-                                color: primaryColor
-                                radius: 16
+                            ComboBox {
+                                id: filtroRol
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                model: rolesDisponibles
+                                currentIndex: 0
+                                onCurrentTextChanged: aplicarFiltros()
                                 
-                                RowLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 6
-                                    
-                                    Label {
-                                        text: "👥"
-                                        color: whiteColor
-                                        font.pixelSize: 14
-                                    }
-                                    
-                                    Label {
-                                        text: usuariosFiltradosModel.count + " usuarios"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                        color: whiteColor
-                                    }
+                                contentItem: Label {
+                                    text: filtroRol.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
                                 }
                             }
                         }
                         
-                        // Fila inferior - Controles de filtro
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 20
+                            spacing: baseUnit
                             
-                            // Filtro por Rol
-                            ColumnLayout {
-                                spacing: 4
-                                
-                                Label {
-                                    text: "Rol/Perfil"
-                                    font.bold: true
-                                    font.pixelSize: 12
-                                    color: textColor
-                                }
-                                
-                                ComboBox {
-                                    id: filtroRol
-                                    Layout.preferredWidth: 160
-                                    Layout.preferredHeight: 36
-                                    model: rolesDisponibles
-                                    currentIndex: 0
-                                    onCurrentTextChanged: aplicarFiltros()
-                                    
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        border.color: "#dee2e6"
-                                        border.width: 1
-                                        radius: 8
-                                    }
-                                    
-                                    contentItem: Text {
-                                        text: parent.displayText
-                                        font.pixelSize: 12
-                                        color: textColor
-                                        verticalAlignment: Text.AlignVCenter
-                                        leftPadding: 12
-                                    }
-                                }
+                            Label {
+                                text: "Estado:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
-                            // Filtro por Estado
-                            ColumnLayout {
-                                spacing: 4
+                            ComboBox {
+                                id: filtroEstado
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                model: ["Todos", "Activo", "Inactivo"]
+                                currentIndex: 0
+                                onCurrentTextChanged: aplicarFiltros()
                                 
-                                Label {
-                                    text: "Estado"
-                                    font.bold: true
-                                    font.pixelSize: 12
+                                contentItem: Label {
+                                    text: filtroEstado.displayText
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     color: textColor
-                                }
-                                
-                                ComboBox {
-                                    id: filtroEstado
-                                    Layout.preferredWidth: 140
-                                    Layout.preferredHeight: 36
-                                    model: ["Todos", "Activo", "Inactivo"]
-                                    currentIndex: 0
-                                    onCurrentTextChanged: aplicarFiltros()
-                                    
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        border.color: "#dee2e6"
-                                        border.width: 1
-                                        radius: 8
-                                    }
-                                    
-                                    contentItem: Text {
-                                        text: parent.displayText
-                                        font.pixelSize: 12
-                                        color: textColor
-                                        verticalAlignment: Text.AlignVCenter
-                                        leftPadding: 12
-                                    }
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
                                 }
                             }
+                        }
+                        
+                        Item { Layout.fillWidth: true }
+                        
+                        TextField {
+                            id: campoBusqueda
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
+                            placeholderText: "Buscar usuario..."
+                            onTextChanged: aplicarFiltros()
                             
-                            // Espaciador flexible
-                            Item { Layout.fillWidth: true }
-                            
-                            // Campo de búsqueda mejorado
-                            ColumnLayout {
-                                spacing: 4
-                                
-                                Label {
-                                    text: "Búsqueda rápida"
-                                    font.bold: true
-                                    font.pixelSize: 12
-                                    color: textColor
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 280
-                                    Layout.preferredHeight: 36
-                                    color: whiteColor
-                                    border.color: campoBusqueda.activeFocus ? primaryColor : "#dee2e6"
-                                    border.width: campoBusqueda.activeFocus ? 2 : 1
-                                    radius: 8
-                                    
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 8
-                                        spacing: 8
-                                        
-                                        Label {
-                                            text: "🔍"
-                                            color: "#6c757d"
-                                            font.pixelSize: 14
-                                        }
-                                        
-                                        TextField {
-                                            id: campoBusqueda
-                                            Layout.fillWidth: true
-                                            placeholderText: "Buscar por nombre, usuario o correo..."
-                                            font.pixelSize: 12
-                                            color: textColor
-                                            onTextChanged: aplicarFiltros()
-                                            
-                                            background: Rectangle {
-                                                color: "transparent"
-                                            }
-                                        }
-                                        
-                                        // Botón limpiar
-                                        Button {
-                                            Layout.preferredWidth: 20
-                                            Layout.preferredHeight: 20
-                                            visible: campoBusqueda.text.length > 0
-                                            text: "✕"
-                                            
-                                            background: Rectangle {
-                                                color: "transparent"
-                                                radius: 10
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: "#6c757d"
-                                                font.pixelSize: 10
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                campoBusqueda.text = ""
-                                                campoBusqueda.focus = true
-                                            }
-                                        }
-                                    }
-                                }
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: borderColor
+                                border.width: 1
+                                radius: baseUnit * 0.8
                             }
+                            
+                            leftPadding: baseUnit * 1.5
+                            rightPadding: baseUnit * 1.5
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                     }
                 }
                
-                // Contenedor para tabla con scroll limitado
-                Item {
+                // ===== TABLA MODERNA CON LÍNEAS VERTICALES =====
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.margins: 32
+                    Layout.margins: baseUnit * 3
+                    Layout.topMargin: 0
+                    color: whiteColor
+                    border.color: borderColor
+                    border.width: 1
+                    radius: baseUnit
                     
-                    ScrollView {
+                    ColumnLayout {
                         anchors.fill: parent
-                        clip: true
+                        anchors.margins: 0
+                        spacing: 0
                         
-                        ListView {
-                            id: usuariosListView
-                            // ✅ CAMBIO CRÍTICO: USAR MODELO FILTRADO EN LUGAR DEL BACKEND
-                            model: usuariosFiltradosModel
+                        // HEADER CON LÍNEAS VERTICALES
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 5
+                            color: lightGrayColor
+                            border.color: borderColor
+                            border.width: 1
+                            z: 5
                             
-                            header: Rectangle {
-                                width: parent.width
-                                height: 40
-                                color: "#f5f5f5"
-                                border.color: "#d0d0d0"
-                                border.width: 1
-                                z: 5
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: baseUnit * 1.5
+                                anchors.rightMargin: baseUnit * 1.5
+                                spacing: 0
                                 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
+                                // ID COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colId
+                                    Layout.fillHeight: true
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(50, parent.width * 0.08)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "ID"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "ID"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(160, parent.width * 0.22)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "NOMBRE COMPLETO"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // NOMBRE COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colNombre
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "NOMBRE COMPLETO"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "USUARIO"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // USUARIO COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colUsuario
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "USUARIO"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(180, parent.width * 0.20)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "CORREO ELECTRÓNICO"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // CORREO COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colCorreo
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "CORREO ELECTRÓNICO"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "ROL/PERFIL"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // ROL COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colRol
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "ROL/PERFIL"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(80, parent.width * 0.10)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "ESTADO"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // ESTADO COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colEstado
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "ESTADO"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     
                                     Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: "ACCIONES"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            color: textColor
-                                        }
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // ACCIONES COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colAcciones
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "ACCIONES"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                             }
+                        }
+                        
+                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
                             
-                            delegate: Rectangle {
-                                width: ListView.view.width
-                                height: 80
-                                color: {
-                                    if (selectedRowIndex === index) return "#e3f2fd"
-                                    return index % 2 === 0 ? "transparent" : "#fafafa"
-                                }
-                                border.color: selectedRowIndex === index ? primaryColor : "#e8e8e8"
-                                border.width: selectedRowIndex === index ? 2 : 1
+                            ListView {
+                                id: usuariosListView
+                                // ✅ CAMBIO CRÍTICO: USAR MODELO FILTRADO EN LUGAR DEL BACKEND
+                                model: usuariosFiltradosModel
                                 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(50, parent.width * 0.08)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.centerIn: parent
-                                            text: model.id || ""
-                                            color: textColor
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
+                                delegate: Rectangle {
+                                    width: ListView.view.width
+                                    height: baseUnit * 5
+                                    color: {
+                                        if (selectedRowIndex === index) return "#F8F9FA"
+                                        return index % 2 === 0 ? whiteColor : "#FAFAFA"
                                     }
                                     
+                                    // Borde horizontal sutil
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(160, parent.width * 0.22)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: 4
-                                            text: (model.Nombre + " " + model.Apellido_Paterno + " " + model.Apellido_Materno) || ""
-                                            color: primaryColor
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
+                                        anchors.bottom: parent.bottom
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        height: 1
+                                        color: borderColor
                                     }
                                     
+                                    // Borde vertical de selección
                                     Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: 4
-                                            text: model.correo ? model.correo.split('@')[0] : ""
-                                            color: "#7f8c8d"
-                                            font.pixelSize: 11
-                                            font.bold: true
-                                            elide: Text.ElideRight
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: baseUnit * 0.4
+                                        color: selectedRowIndex === index ? accentColor : "transparent"
+                                        radius: baseUnit * 0.2
+                                        visible: selectedRowIndex === index
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(180, parent.width * 0.20)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: baseUnit * 1.5
+                                        anchors.rightMargin: baseUnit * 1.5
+                                        spacing: 0
                                         
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: 4
-                                            text: model.correo || ""
-                                            color: textColor
-                                            font.pixelSize: 11
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(120, parent.width * 0.15)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Label { 
-                                            anchors.fill: parent
-                                            anchors.margins: 4
-                                            text: model.rol_nombre || ""
-                                            color: textColor
-                                            font.pixelSize: 11
-                                            font.bold: true
-                                            elide: Text.ElideRight
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            verticalAlignment: Text.AlignVCenter
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: Math.max(80, parent.width * 0.10)
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
-                                        
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: 65
-                                            height: 20
-                                            color: {
-                                                switch(model.Estado ? "Activo" : "Inactivo") {
-                                                    case "Activo": return successColor
-                                                    case "Inactivo": return "#95a5a6"
-                                                    case "Bloqueado": return dangerColor
-                                                    default: return "#95a5a6"
-                                                }
-                                            }
-                                            radius: 12
+                                        // ID COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colId
+                                            Layout.fillHeight: true
                                             
                                             Label {
-                                                anchors.centerIn: parent
-                                                text: model.Estado ? "Activo" : "Inactivo"
-                                                color: whiteColor
-                                                font.pixelSize: 9
-                                                font.bold: true
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                text: model.id || ""
+                                                color: textColor
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
                                             }
                                         }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#d0d0d0"
-                                        border.width: 1
                                         
-                                        RowLayout {
-                                            anchors.centerIn: parent
-                                            spacing: 4
+                                        // NOMBRE COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colNombre
+                                            Layout.fillHeight: true
                                             
-                                            Button {
-                                                width: 32
-                                                height: 32
-                                                text: "✏️"
-                                                
-                                                background: Rectangle {
-                                                    color: warningColor
-                                                    radius: 6
-                                                    border.color: "#f1c40f"
-                                                    border.width: 1
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: (model.Nombre + " " + model.Apellido_Paterno + " " + model.Apellido_Materno) || ""
+                                                color: primaryColor
+                                                font.bold: true
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // USUARIO COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colUsuario
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.correo ? model.correo.split('@')[0] : ""
+                                                color: textColorLight
+                                                font.bold: true
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // CORREO COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colCorreo
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.correo || ""
+                                                color: textColor
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // ROL COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colRol
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.rol_nombre || ""
+                                                color: textColor
+                                                font.bold: true
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // ESTADO COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colEstado
+                                            Layout.fillHeight: true
+                                            
+                                            Rectangle {
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 6.5
+                                                height: baseUnit * 2.5
+                                                color: {
+                                                    switch(model.Estado ? "Activo" : "Inactivo") {
+                                                        case "Activo": return successColorLight
+                                                        case "Inactivo": return "#F3F4F6"
+                                                        case "Bloqueado": return dangerColorLight
+                                                        default: return "#F3F4F6"
+                                                    }
                                                 }
+                                                radius: height / 2
                                                 
-                                                contentItem: Label {
-                                                    text: parent.text
-                                                    color: whiteColor
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    font.pixelSize: 12
-                                                }
-                                                
-                                                onClicked: {
-                                                    // ✅ USAR DATOS DEL MODELO FILTRADO
-                                                    isEditMode = true
-                                                    editingIndex = index
-                                                    editingUser = usuariosFiltradosModel.get(index)
-                                                    selectedRowIndex = index
-                                                    showNewUserDialog = true
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: model.Estado ? "Activo" : "Inactivo"
+                                                    color: {
+                                                        switch(model.Estado ? "Activo" : "Inactivo") {
+                                                            case "Activo": return "#047857"
+                                                            case "Inactivo": return "#6B7280"
+                                                            case "Bloqueado": return "#DC2626"
+                                                            default: return "#6B7280"
+                                                        }
+                                                    }
+                                                    font.pixelSize: fontBaseSize * 0.7
+                                                    font.bold: false
+                                                    font.family: "Segoe UI, Arial, sans-serif"
                                                 }
                                             }
                                             
-                                            Button {
-                                                width: 32
-                                                height: 32
-                                                text: "🗑️"
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // ACCIONES COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colAcciones
+                                            Layout.fillHeight: true
+                                            
+                                            RowLayout {
+                                                anchors.centerIn: parent
+                                                spacing: baseUnit * 0.5
                                                 
-                                                background: Rectangle {
-                                                    color: dangerColor
-                                                    radius: 6
-                                                    border.color: "#c0392b"
-                                                    border.width: 1
+                                                Button {
+                                                    width: baseUnit * 3.5
+                                                    height: baseUnit * 3.5
+                                                    text: "✏️"
+                                                    
+                                                    background: Rectangle {
+                                                        color: warningColor
+                                                        radius: baseUnit * 0.8
+                                                        border.color: "#e67e22"
+                                                        border.width: 1
+                                                    }
+                                                    
+                                                    contentItem: Label {
+                                                        text: parent.text
+                                                        color: whiteColor
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        verticalAlignment: Text.AlignVCenter
+                                                        font.pixelSize: fontBaseSize * 0.85
+                                                    }
+                                                    
+                                                    onClicked: {
+                                                        // ✅ USAR DATOS DEL MODELO FILTRADO
+                                                        isEditMode = true
+                                                        editingIndex = index
+                                                        editingUser = usuariosFiltradosModel.get(index)
+                                                        selectedRowIndex = index
+                                                        showNewUserDialog = true
+                                                    }
                                                 }
                                                 
-                                                contentItem: Label {
-                                                    text: parent.text
-                                                    color: whiteColor
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    font.pixelSize: 12
-                                                }
-                                                
-                                                onClicked: {
-                                                    // ✅ USAR DATOS DEL MODELO FILTRADO
-                                                    var usuario = usuariosFiltradosModel.get(index)
-                                                    if (usuarioModel && usuario.id) {
-                                                        usuarioModel.eliminarUsuario(usuario.id.toString())
+                                                Button {
+                                                    width: baseUnit * 3.5
+                                                    height: baseUnit * 3.5
+                                                    text: "🗑️"
+                                                    
+                                                    background: Rectangle {
+                                                        color: dangerColor
+                                                        radius: baseUnit * 0.8
+                                                        border.color: "#c0392b"
+                                                        border.width: 1
+                                                    }
+                                                    
+                                                    contentItem: Label {
+                                                        text: parent.text
+                                                        color: whiteColor
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        verticalAlignment: Text.AlignVCenter
+                                                        font.pixelSize: fontBaseSize * 0.85
+                                                    }
+                                                    
+                                                    onClicked: {
+                                                        // ✅ USAR DATOS DEL MODELO FILTRADO
+                                                        var usuario = usuariosFiltradosModel.get(index)
+                                                        if (usuarioModel && usuario.id) {
+                                                            usuarioModel.eliminarUsuario(usuario.id.toString())
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: {
-                                        selectedRowIndex = index
-                                        console.log("Seleccionado usuario ID:", usuariosFiltradosModel.get(index).id)
+                                    
+                                    // LÍNEAS VERTICALES CONTINUAS
+                                    Repeater {
+                                        model: 6 // Número de líneas verticales (todas menos la última columna)
+                                        Rectangle {
+                                            property real xPos: {
+                                                var w = parent.width - baseUnit * 3
+                                                switch(index) {
+                                                    case 0: return baseUnit * 1.5 + w * colId
+                                                    case 1: return baseUnit * 1.5 + w * (colId + colNombre)
+                                                    case 2: return baseUnit * 1.5 + w * (colId + colNombre + colUsuario)
+                                                    case 3: return baseUnit * 1.5 + w * (colId + colNombre + colUsuario + colCorreo)
+                                                    case 4: return baseUnit * 1.5 + w * (colId + colNombre + colUsuario + colCorreo + colRol)
+                                                    case 5: return baseUnit * 1.5 + w * (colId + colNombre + colUsuario + colCorreo + colRol + colEstado)
+                                                }
+                                            }
+                                            x: xPos
+                                            width: 1
+                                            height: parent.height
+                                            color: lineColor
+                                            z: 1
+                                        }
+                                    }
+                                    
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: {
+                                            selectedRowIndex = selectedRowIndex === index ? -1 : index
+                                            console.log("Seleccionado usuario ID:", usuariosFiltradosModel.get(index).id)
+                                        }
                                     }
                                 }
                             }
@@ -833,17 +905,17 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     visible: usuariosFiltradosModel.count === 0 && usuariosOriginales.length === 0
-                    spacing: 32
+                    spacing: baseUnit * 3
                     
                     Item { Layout.fillHeight: true }
                     
                     ColumnLayout {
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: 16
+                        spacing: baseUnit * 1.5
                         
                         Label {
                             text: "👤"
-                            font.pixelSize: 64
+                            font.pixelSize: fontBaseSize * 4
                             color: "#E5E7EB"
                             Layout.alignment: Qt.AlignHCenter
                         }
@@ -852,18 +924,20 @@ Item {
                             text: "No hay usuarios registrados"
                             color: textColor
                             font.bold: true
-                            font.pixelSize: 18
+                            font.pixelSize: fontBaseSize * 1.2
+                            font.family: "Segoe UI, Arial, sans-serif"
                             Layout.alignment: Qt.AlignHCenter
                         }
                         
                         Label {
                             text: "Crea el primer usuario haciendo clic en \"➕ Nuevo Usuario\""
-                            color: "#6B7280"
-                            font.pixelSize: 14
+                            color: textColorLight
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             Layout.alignment: Qt.AlignHCenter
                             wrapMode: Text.WordWrap
                             horizontalAlignment: Text.AlignHCenter
-                            Layout.maximumWidth: 400
+                            Layout.maximumWidth: baseUnit * 40
                         }
                     }
                     
@@ -875,17 +949,17 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     visible: usuariosFiltradosModel.count === 0 && usuariosOriginales.length > 0
-                    spacing: 32
+                    spacing: baseUnit * 3
                     
                     Item { Layout.fillHeight: true }
                     
                     ColumnLayout {
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: 16
+                        spacing: baseUnit * 1.5
                         
                         Label {
                             text: "🔍"
-                            font.pixelSize: 64
+                            font.pixelSize: fontBaseSize * 4
                             color: "#E5E7EB"
                             Layout.alignment: Qt.AlignHCenter
                         }
@@ -894,14 +968,16 @@ Item {
                             text: "No hay usuarios que coincidan con los filtros"
                             color: textColor
                             font.bold: true
-                            font.pixelSize: 18
+                            font.pixelSize: fontBaseSize * 1.2
+                            font.family: "Segoe UI, Arial, sans-serif"
                             Layout.alignment: Qt.AlignHCenter
                         }
                         
                         Label {
                             text: "Prueba cambiando los filtros o limpiando la búsqueda"
-                            color: "#6B7280"
-                            font.pixelSize: 14
+                            color: textColorLight
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             Layout.alignment: Qt.AlignHCenter
                         }
                     }
@@ -936,10 +1012,10 @@ Item {
     Rectangle {
         id: userForm
         anchors.centerIn: parent
-        width: 800
-        height: 550
+        width: Math.min(800, parent.width * 0.9)
+        height: Math.min(550, parent.height * 0.9)
         color: whiteColor
-        radius: 12
+        radius: baseUnit * 1.5
         border.color: lightGrayColor
         border.width: 1
         visible: showNewUserDialog
@@ -999,15 +1075,16 @@ Item {
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 25
-            spacing: 15
+            anchors.margins: baseUnit * 3
+            spacing: baseUnit * 1.5
             
             // Título
             Label {
                 Layout.fillWidth: true
                 text: isEditMode ? "Editar Usuario" : "Nuevo Usuario"
-                font.pixelSize: 20
+                font.pixelSize: fontBaseSize * 1.6
                 font.bold: true
+                font.family: "Segoe UI, Arial, sans-serif"
                 color: textColor
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -1016,26 +1093,27 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 20
+                spacing: baseUnit * 2
                 
                 // COLUMNA IZQUIERDA - Datos del Usuario
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#f8f9fa"
-                    radius: 8
-                    border.color: lightGrayColor
+                    color: lightGrayColor
+                    radius: baseUnit
+                    border.color: borderColor
                     border.width: 1
                     
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 15
-                        spacing: 12
+                        anchors.margins: baseUnit * 1.5
+                        spacing: baseUnit
                         
                         Label {
                             text: "Datos del Usuario"
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: fontBaseSize * 1.1
+                            font.family: "Segoe UI, Arial, sans-serif"
                             color: textColor
                         }
                         
@@ -1043,12 +1121,15 @@ Item {
                         TextField {
                             id: nombreCompleto
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Nombre"
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
-                                radius: 4
+                                radius: baseUnit * 0.5
                             }
                         }
                         
@@ -1056,12 +1137,15 @@ Item {
                         TextField {
                             id: apellidoPaterno
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido Paterno"
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
-                                radius: 4
+                                radius: baseUnit * 0.5
                             }
                         }
                         
@@ -1069,12 +1153,15 @@ Item {
                         TextField {
                             id: apellidoMaterno
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido Materno"
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
-                                radius: 4
+                                radius: baseUnit * 0.5
                             }
                         }
                         
@@ -1082,12 +1169,15 @@ Item {
                         TextField {
                             id: correoElectronico
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "correo@clinica.com"
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
-                                radius: 4
+                                radius: baseUnit * 0.5
                             }
                         }
                         
@@ -1095,28 +1185,34 @@ Item {
                         TextField {
                             id: contrasenaField
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Contraseña"
                             echoMode: TextInput.Password
                             visible: !isEditMode
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
-                                radius: 4
+                                radius: baseUnit * 0.5
                             }
                         }
                         
                         TextField {
                             id: confirmarContrasenaField
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Confirmar contraseña"
                             echoMode: TextInput.Password
                             visible: !isEditMode
+                            font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
-                                radius: 4
+                                radius: baseUnit * 0.5
                             }
                         }
                         
@@ -1124,8 +1220,26 @@ Item {
                         ComboBox {
                             id: rolComboBox
                             Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4
                             model: rolesDisponibles.filter(rol => rol !== "Todos los roles")
                             displayText: currentIndex >= 0 ? model[currentIndex] : "Seleccione rol"
+                            
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: borderColor
+                                border.width: 1
+                                radius: baseUnit * 0.5
+                            }
+                            
+                            contentItem: Label {
+                                text: rolComboBox.displayText
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                color: textColor
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: baseUnit
+                                elide: Text.ElideRight
+                            }
                         }
                         
                         Item { Layout.fillHeight: true }
@@ -1136,44 +1250,75 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#f8f9fa"
-                    radius: 8
-                    border.color: lightGrayColor
+                    color: lightGrayColor
+                    radius: baseUnit
+                    border.color: borderColor
                     border.width: 1
                     
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 15
-                        spacing: 12
+                        anchors.margins: baseUnit * 1.5
+                        spacing: baseUnit
                         
                         Label {
                             text: "Estado del Usuario"
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: fontBaseSize * 1.1
+                            font.family: "Segoe UI, Arial, sans-serif"
                             color: textColor
                         }
                         
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 6
+                            spacing: baseUnit * 0.5
                             
                             RadioButton {
                                 id: activoRadio
                                 text: "Activo"
                                 checked: true
-                                font.pixelSize: 13
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                contentItem: Label {
+                                    text: activoRadio.text
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    leftPadding: activoRadio.indicator.width + activoRadio.spacing
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
                             
                             RadioButton {
                                 id: inactivoRadio
                                 text: "Inactivo"
-                                font.pixelSize: 13
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                contentItem: Label {
+                                    text: inactivoRadio.text
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    leftPadding: inactivoRadio.indicator.width + inactivoRadio.spacing
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
                             
                             RadioButton {
                                 id: bloqueadoRadio
                                 text: "Bloqueado"
-                                font.pixelSize: 13
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                contentItem: Label {
+                                    text: bloqueadoRadio.text
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    leftPadding: bloqueadoRadio.indicator.width + bloqueadoRadio.spacing
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
                         }
                         
@@ -1190,16 +1335,18 @@ Item {
                 
                 Button {
                     text: "Cancelar"
-                    Layout.preferredWidth: 100
+                    Layout.preferredWidth: baseUnit * 10
+                    Layout.preferredHeight: baseUnit * 4
                     background: Rectangle {
                         color: lightGrayColor
-                        radius: 6
+                        radius: baseUnit * 0.8
                     }
                     contentItem: Label {
                         text: parent.text
                         color: textColor
                         horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: 13
+                        font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                     }
                     onClicked: {
                         showNewUserDialog = false
@@ -1212,7 +1359,8 @@ Item {
                 
                 Button {
                     text: isEditMode ? "Actualizar" : "Guardar"
-                    Layout.preferredWidth: 100
+                    Layout.preferredWidth: baseUnit * 10
+                    Layout.preferredHeight: baseUnit * 4
                     enabled: nombreCompleto.text.length > 0 &&
                             apellidoPaterno.text.length > 0 &&
                             apellidoMaterno.text.length > 0 &&
@@ -1221,14 +1369,15 @@ Item {
                             (isEditMode || (contrasenaField.text.length > 0 && contrasenaField.text === confirmarContrasenaField.text))
                     background: Rectangle {
                         color: parent.enabled ? primaryColor : "#bdc3c7"
-                        radius: 6
+                        radius: baseUnit * 0.8
                     }
                     contentItem: Label {
                         text: parent.text
                         color: whiteColor
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: 13
+                        font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                     }
                     onClicked: {
                         if (!usuarioModel) return
@@ -1274,11 +1423,11 @@ Item {
         id: notificationArea
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.margins: 20
-        width: 300
-        height: 80
+        anchors.margins: baseUnit * 2
+        width: baseUnit * 30
+        height: baseUnit * 8
         color: successColor
-        radius: 8
+        radius: baseUnit
         visible: false
         z: 1000
         
@@ -1287,22 +1436,24 @@ Item {
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 4
+            anchors.margins: baseUnit
+            spacing: baseUnit * 0.5
             
             Label {
                 id: notificationTitle
                 Layout.fillWidth: true
                 font.bold: true
                 color: whiteColor
-                font.pixelSize: 14
+                font.pixelSize: fontBaseSize * 1.1
+                font.family: "Segoe UI, Arial, sans-serif"
             }
             
             Label {
                 id: notificationLabel
                 Layout.fillWidth: true
                 color: whiteColor
-                font.pixelSize: 12
+                font.pixelSize: fontBaseSize * 0.9
+                font.family: "Segoe UI, Arial, sans-serif"
                 wrapMode: Text.WordWrap
             }
         }

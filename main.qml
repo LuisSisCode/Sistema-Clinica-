@@ -888,7 +888,8 @@ ApplicationWindow {
                     switchToPage(9)
                     console.log("🎯 Navegación completada hacia módulo Configuración - Enfermería")
                 }            
-}   
+            }   
+            
             // ===== SERVICIOS BÁSICOS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
             ServiciosBasicos {
                 id: serviciosPage
@@ -940,12 +941,46 @@ ApplicationWindow {
                 layer.enabled: true
             }
 
+            // ===== TRABAJADORES PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
             Trabajadores {
                 id: trabajadoresPage
                 objectName: "trabajadoresPage"
                 anchors.fill: parent
                 visible: currentIndex === 7
                 layer.enabled: true
+                
+                // ===== PASO 4: NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN Y PASO DE DATOS =====
+                onIrAConfigPersonal: {
+                    console.log("🚀 Señal irAConfigPersonal recibida desde Trabajadores")
+                    
+                    // ===== PASO 4a: OBTENER Y CONVERTIR EL MODELO DE DATOS =====
+                    var tiposTrabajadoresData = []
+                    
+                    // El ListModel no se puede pasar directamente, convertir a array de objetos JavaScript
+                    for (var i = 0; i < trabajadoresPage.tiposTrabajadoresModel.count; i++) {
+                        var item = trabajadoresPage.tiposTrabajadoresModel.get(i)
+                        tiposTrabajadoresData.push({
+                            nombre: item.nombre,
+                            descripcion: item.descripcion,
+                            requiereMatricula: item.requiereMatricula,
+                            especialidades: item.especialidades
+                        })
+                    }
+                    
+                    console.log("📊 Datos de tipos de trabajadores obtenidos:", JSON.stringify(tiposTrabajadoresData))
+                    
+                    // ===== PASO 4b: ASIGNAR DATOS CONVERTIDOS AL MÓDULO CONFIGURACIÓN =====
+                    configuracionPage.tiposTrabajadoresModel = tiposTrabajadoresData
+                    console.log("📤 Datos transferidos a configuracionPage.tiposTrabajadoresModel")
+                    
+                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN A "PERSONAL" =====
+                    configuracionPage.changeView("personal")
+                    console.log("🔄 Vista de configuración cambiada a: personal")
+                    
+                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN (PÁGINA 9) =====
+                    switchToPage(9)
+                    console.log("🎯 Navegación completada hacia módulo Configuración - Personal")
+                }
             }
             
             // Reportes Page
@@ -1204,12 +1239,30 @@ ApplicationWindow {
         }
     }
     
+    // ===== FUNCIÓN AUXILIAR PARA MONITOREAR EL FLUJO DE DATOS DE TRABAJADORES =====
+    function logTiposTrabajadoresSync() {
+        if (trabajadoresPage && configuracionPage) {
+            console.log("📊 Estado de sincronización de tipos de trabajadores:")
+            console.log("   - Trabajadores tiene:", trabajadoresPage.tiposTrabajadoresModel ? trabajadoresPage.tiposTrabajadoresModel.count : 0, "tipos")
+            console.log("   - Configuración tiene:", configuracionPage.tiposTrabajadoresModel ? configuracionPage.tiposTrabajadoresModel.length : 0, "tipos")
+        }
+    }
+    
     // ===== FUNCIÓN AUXILIAR PARA SINCRONIZACIÓN BIDIRECCIONAL (OPCIONAL) =====
     function syncEspecialidadesFromConfig() {
         if (configuracionPage && consultasPage && configuracionPage.especialidadesModel) {
             // Sincronizar cambios desde configuración hacia consultas
             consultasPage.especialidades = configuracionPage.especialidadesModel
             console.log("🔄 Especialidades sincronizadas desde Configuración hacia Consultas")
+        }
+    }
+
+    // ===== FUNCIÓN AUXILIAR PARA SINCRONIZACIÓN BIDIRECCIONAL DE TRABAJADORES (OPCIONAL) =====
+    function syncTiposTrabajadoresFromConfig() {
+        if (configuracionPage && trabajadoresPage && configuracionPage.tiposTrabajadoresModel) {
+            // Esta función puede ser utilizada para sincronizar cambios desde configuración hacia trabajadores
+            // en caso de que se requiera sincronización bidireccional en el futuro
+            console.log("🔄 Tipos de trabajadores podrían sincronizarse desde Configuración hacia Trabajadores")
         }
     }
 
@@ -1489,7 +1542,10 @@ ApplicationWindow {
         interval: 10000 // 10 segundos
         running: false // Cambiar a true solo para debug
         repeat: true
-        onTriggered: logEspecialidadesSync()
+        onTriggered: {
+            logEspecialidadesSync()
+            logTiposTrabajadoresSync()
+        }
     }
     
     Timer {
@@ -1503,13 +1559,22 @@ ApplicationWindow {
     Component.onCompleted: {
         console.log("🔔 Sistema de notificaciones iniciado")
         console.log("🔗 Conexión de navegación Consultas -> Configuración establecida")
+        console.log("🔗 Conexión de navegación Trabajadores -> Configuración establecida") // NUEVA LÍNEA
         Qt.callLater(function() {
             actualizarNotificaciones()
-            // Verificar que las conexiones están establecidas
+            
+            // Verificar que las conexiones estén establecidas
             if (consultasPage.irAConfiguracion) {
                 console.log("✅ Señal irAConfiguracion conectada correctamente")
             } else {
                 console.log("❌ Error: Señal irAConfiguracion no encontrada")
+            }
+            
+            // ===== NUEVA VERIFICACIÓN PARA TRABAJADORES =====
+            if (trabajadoresPage.irAConfigPersonal) {
+                console.log("✅ Señal irAConfigPersonal conectada correctamente")
+            } else {
+                console.log("❌ Error: Señal irAConfigPersonal no encontrada")
             }
         })
     }
