@@ -1,0 +1,259 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+// Contenedor principal que maneja la navegación entre Ventas y CrearVenta usando StackView
+Item {
+    id: ventasMainRoot
+    
+    // Propiedades heredadas del componente padre
+    property var inventarioModel: parent.inventarioModel
+    property var ventaModel: parent.ventaModel
+    property var compraModel: parent.compraModel
+    
+    // SISTEMA DE MÉTRICAS COHERENTE
+    readonly property real scaleFactor: Math.min(width / 1400, height / 900)
+    readonly property real baseUnit: Math.max(8, height / 100)
+    readonly property real fontBaseSize: Math.max(12, height / 70)
+
+    // StackView para manejar la navegación
+    StackView {
+        id: stackView
+        anchors.fill: parent
+        
+        // Propiedades de animación
+        pushEnter: Transition {
+            PropertyAnimation {
+                property: "x"
+                from: stackView.width
+                to: 0
+                duration: 300
+                easing.type: Easing.OutCubic
+            }
+            PropertyAnimation {
+                property: "opacity"
+                from: 0
+                to: 1
+                duration: 300
+            }
+        }
+        
+        pushExit: Transition {
+            PropertyAnimation {
+                property: "x"
+                from: 0
+                to: -stackView.width
+                duration: 300
+                easing.type: Easing.OutCubic
+            }
+        }
+        
+        popEnter: Transition {
+            PropertyAnimation {
+                property: "x"
+                from: -stackView.width
+                to: 0
+                duration: 300
+                easing.type: Easing.OutCubic
+            }
+        }
+        
+        popExit: Transition {
+            PropertyAnimation {
+                property: "x"
+                from: 0
+                to: stackView.width
+                duration: 300
+                easing.type: Easing.OutCubic
+            }
+            PropertyAnimation {
+                property: "opacity"
+                from: 1
+                to: 0
+                duration: 300
+            }
+        }
+        
+        // Componente inicial - Lista de Ventas
+        initialItem: Component {
+            Item {
+                // Instancia del componente Ventas simplificado
+                Loader {
+                    id: ventasLoader
+                    anchors.fill: parent
+                    
+                    sourceComponent: Component {
+                        Item {
+                            id: ventasWrapper
+                            
+                            // Propiedades para el componente de ventas
+                            property var inventarioModel: ventasMainRoot.inventarioModel
+                            property var ventaModel: ventasMainRoot.ventaModel
+                            property var compraModel: ventasMainRoot.compraModel
+                            
+                            // Vista de ventas simplificada (inline por simplicidad)
+                            Ventas {
+                                anchors.fill: parent
+                                inventarioModel: ventasWrapper.inventarioModel
+                                ventaModel: ventasWrapper.ventaModel
+                                compraModel: ventasWrapper.compraModel
+                                
+                                // Conexión de señales
+                                onNavegarACrearVenta: {
+                                    console.log("📱 Señal recibida: Navegar a CrearVenta")
+                                    ventasMainRoot.irACrearVenta()
+                                }
+                            }
+                        }
+                    }
+                    
+                    onLoaded: {
+                        console.log("✅ Ventas.qml cargado correctamente")
+                    }
+                    
+                    onStatusChanged: {
+                        if (status === Loader.Error) {
+                            console.log("❌ Error al cargar Ventas.qml")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // FUNCIONES DE NAVEGACIÓN
+    
+    // Función para navegar a CrearVenta
+    function irACrearVenta() {
+        console.log("🚀 VentasMain: Navegando a CrearVenta")
+        
+        var crearVentaComponent = Qt.createComponent("CrearVenta.qml")
+        
+        if (crearVentaComponent.status === Component.Ready) {
+            var crearVentaItem = crearVentaComponent.createObject(stackView, {
+               "inventarioModel": inventarioModel,
+                "ventaModel": ventaModel,
+                "compraModel": compraModel
+            })
+            
+            if (crearVentaItem) {
+                // Conectar señales del componente CrearVenta
+                crearVentaItem.ventaCompletada.connect(function() {
+                    console.log("✅ Venta completada, regresando a lista")
+                    regresarAVentas()
+                })
+                
+                crearVentaItem.cancelarVenta.connect(function() {
+                    console.log("❌ Venta cancelada, regresando a lista")
+                    regresarAVentas()
+                })
+                
+                stackView.push(crearVentaItem)
+                console.log("✅ CrearVenta agregado al stack")
+            } else {
+                console.log("❌ Error al crear instancia de CrearVenta")
+            }
+        } else if (crearVentaComponent.status === Component.Error) {
+            console.log("❌ Error al cargar CrearVenta.qml:", crearVentaComponent.errorString())
+            
+            // Fallback: usar componente inline
+            var fallbackComponent = Qt.createComponent("CrearVenta.qml");
+            if (fallbackComponent.status === Component.Ready) {
+                var crearVentaItem = fallbackComponent.createObject(stackView, {
+                    "inventarioModel": ventasMainRoot.inventarioModel,
+                    "ventaModel": ventasMainRoot.ventaModel,
+                    "compraModel": ventasMainRoot.compraModel
+                });
+                if (crearVentaItem) {
+                    crearVentaItem.ventaCompletada.connect(function() {
+                        console.log("✅ Venta completada (fallback)");
+                        ventasMainRoot.regresarAVentas();
+                    });
+                    crearVentaItem.cancelarVenta.connect(function() {
+                        console.log("❌ Venta cancelada (fallback)");
+                        ventasMainRoot.regresarAVentas();
+                    });
+                    stackView.push(crearVentaItem);
+                    console.log("✅ CrearVenta cargado con fallback");
+                } else {
+                    console.log("❌ Error al crear instancia de fallback CrearVenta");
+                }
+            } else {
+                console.log("❌ Error al cargar fallback CrearVenta.qml:", fallbackComponent.errorString());
+            }
+        }
+    }
+    
+    // Función para regresar a la lista de ventas
+    function regresarAVentas() {
+        console.log("🔙 VentasMain: Regresando a lista de ventas")
+        
+        if (stackView.depth > 1) {
+            stackView.pop()
+            console.log("✅ Stack popped, regresado a Ventas")
+            
+            // Actualizar datos en la vista de ventas
+            Qt.callLater(function() {
+                if (ventaModel) {
+                    console.log("🔄 Actualizando datos de ventas...")
+                    ventaModel.refresh_ventas_hoy()
+                    ventaModel.refresh_estadisticas()
+                }
+            })
+        }
+    }
+    
+    // MANEJO DE TECLAS PARA NAVEGACIÓN
+    focus: true
+    Keys.onEscapePressed: {
+        if (stackView.depth > 1) {
+            console.log("🔙 Escape presionado, regresando")
+            regresarAVentas()
+        }
+    }
+    
+    // CONEXIONES CON DATOS CENTRALES
+    Connections {
+        target: ventaModel
+        function onVentasHoyChanged() {
+            console.log("🔄 VentasMain: Ventas actualizadas")
+        }
+    }
+    
+    // FUNCIONES DE DEPURACIÓN
+    function obtenerEstadoNavegacion() {
+        return {
+            profundidad: stackView.depth,
+            vistaActual: stackView.depth === 1 ? "Ventas" : "CrearVenta",
+            modelsDisponibles: !!(inventarioModel && ventaModel && compraModel)
+        }
+    }
+    
+    function imprimirEstado() {
+        var estado = obtenerEstadoNavegacion()
+        console.log("📊 Estado de VentasMain:")
+        console.log("   - Profundidad del stack:", estado.profundidad)
+        console.log("   - Vista actual:", estado.vistaActual)
+        console.log("   - farmaciaData disponible:", estado.farmaciaDataDisponible)
+    }
+    
+    // INICIALIZACIÓN
+    Component.onCompleted: {
+        console.log("=== VENTAS MAIN CONTAINER INICIALIZADO ===")
+        console.log("🏗️ StackView configurado")
+        console.log("📱 Navegación lista")
+        
+        if (!inventarioModel || !ventaModel || !compraModel) {
+            console.log("⚠️ ADVERTENCIA: Models no están disponibles")
+        } else {
+            console.log("✅ Models conectados correctamente")
+        }
+        
+        imprimirEstado()
+        console.log("=== CONTAINER LISTO ===")
+    }
+    
+    // LIMPIEZA AL DESTRUIR
+    Component.onDestruction: {
+        console.log("🧹 VentasMain: Limpiando recursos...")
+    }
+}

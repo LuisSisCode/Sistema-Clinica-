@@ -555,7 +555,7 @@ Item {
                                             horizontalAlignment: Text.AlignHCenter
                                         }
                                     }
-                                    
+                                                                        
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
@@ -563,20 +563,19 @@ Item {
                                         border.color: "#d0d0d0"
                                         border.width: 1
                                         
-                                        TextField {
+                                        Label {  // ✅ Nuevo Label para mostrar la fecha
                                             anchors.fill: parent
                                             anchors.margins: smallMargin
-                                            placeholderText: "DD/MM/YYYY"
-                                            text: ""
+                                            text: model.fechaRegistro  // Asegúrate de que el modelo tenga este campo
+                                            color: textColor
                                             font.pixelSize: smallFont * 0.9
-                                            background: Rectangle {
-                                                color: "transparent"
-                                                border.color: "transparent"
-                                            }
-                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                            wrapMode: Text.NoWrap
                                             verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
                                         }
-                                    }                                    
+                                    }
+
                                 }
                                 
                                 MouseArea {

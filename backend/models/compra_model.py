@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime, timedelta
 from decimal import Decimal
-
+from PySide6.QtCore import QTimer 
 from ..repositories.compra_repository import CompraRepository
 from ..repositories.producto_repository import ProductoRepository
 from ..core.excepciones import (
@@ -70,6 +70,7 @@ class CompraModel(QObject):
         
         # Cargar datos iniciales
         self._cargar_compras_recientes()
+        print(f"🔍 DEBUG: Compras cargadas en __init__: {len(self._compras_recientes)}")
         self._cargar_proveedores()
         self._cargar_estadisticas()
         
@@ -82,6 +83,7 @@ class CompraModel(QObject):
     @Property(list, notify=comprasRecientesChanged)
     def compras_recientes(self):
         """Lista de compras recientes"""
+        print(f"🔍 DEBUG Property: compras_recientes leída - Total: {len(self._compras_recientes)}")
         return self._compras_recientes
     
     @Property('QVariant', notify=compraActualChanged)
@@ -148,6 +150,13 @@ class CompraModel(QObject):
     def total_proveedores(self):
         """Total de proveedores activos"""
         return len(self._proveedores)
+    
+    @Property(int, notify=comprasRecientesChanged)
+    def total_compras_mes(self):
+        """Total de compras del mes"""
+        total = len(self._compras_recientes)
+        print(f"🔍 DEBUG Property: total_compras_mes = {total}")
+        return total
     
     # ===============================
     # SLOTS PARA QML - CONFIGURACIÓN
@@ -572,19 +581,51 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error en reporte gastos: {str(e)}")
             return {}
     
+    @Slot()
+    def force_refresh_compras(self):
+        """Fuerza refresh de compras desde QML"""
+        print("🔄 Force refresh compras desde QML")
+        self._cargar_compras_recientes()
+        self._cargar_estadisticas()
+    
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
     
     def _cargar_compras_recientes(self):
-        """Carga compras recientes"""
+        """Carga compras recientes CON TRANSFORMACIÓN DE DATOS"""
         try:
-            compras = safe_execute(self.compra_repo.get_active)
-            self._compras_recientes = compras or []
+            compras_raw = safe_execute(self.compra_repo.get_active)
+            
+            if compras_raw and len(compras_raw) > 0:
+                print("🔍 DEBUG COMPRA MODEL - Datos desde Repository:")
+                primer_registro = compras_raw[0]
+                for key, value in primer_registro.items():
+                    print(f"   RAW: {key}: {value} (tipo: {type(value)})")
+            
+            # TRANSFORMAR DATOS PARA QML
+            compras_transformadas = []
+            
+            for compra_raw in compras_raw or []:
+                compra_qml = self._format_compra_for_qml(compra_raw)
+                compras_transformadas.append(compra_qml)
+            
+            # ASIGNAR Y EMITIR SIGNAL
+            self._compras_recientes = compras_transformadas
+            
+            # ✅ FORZAR EMISIÓN DE SIGNAL MÚLTIPLE
             self.comprasRecientesChanged.emit()
+            print(f"📡 Signal emitido: comprasRecientesChanged - {len(compras_transformadas)} compras")
+            
+            # Forzar emisión adicional después de un momento
+            QTimer.singleShot(100, lambda: self.comprasRecientesChanged.emit())
+            
+            print(f"✅ Compras recientes cargadas y transformadas: {len(compras_transformadas)}")
             
         except Exception as e:
             print(f"❌ Error cargando compras recientes: {e}")
+            self._compras_recientes = []
+            self.comprasRecientesChanged.emit()
     
     def _cargar_proveedores(self):
         """Carga lista de proveedores"""
@@ -642,6 +683,36 @@ class CompraModel(QObject):
         if self._procesando_compra != procesando:
             self._procesando_compra = procesando
             self.procesandoCompraChanged.emit()
+    # Funcione para formatear compra a QML
+    def _format_compra_for_qml(self, compra_raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Transforma datos de Repository a formato QML"""
+        # Procesar fecha
+        fecha_completa = compra_raw.get('Fecha', datetime.now())
+        if isinstance(fecha_completa, str):
+            try:
+                fecha_completa = datetime.fromisoformat(fecha_completa.replace('T', ' '))
+            except:
+                fecha_completa = datetime.now()
+        elif not isinstance(fecha_completa, datetime):
+            fecha_completa = datetime.now()
+        
+        # Formatear datos para QML
+        return {
+            'id': compra_raw.get('id', 0),
+            'proveedor': compra_raw.get('Proveedor_Nombre', 'Sin proveedor'),
+            'usuario': compra_raw.get('Usuario', 'Sin usuario'),
+            'fecha': fecha_completa.strftime('%d/%m/%Y'),
+            'hora': fecha_completa.strftime('%H:%M'),
+            'total': float(compra_raw.get('Total', 0)),
+            
+            # Campos originales para compatibilidad
+            'Proveedor_Nombre': compra_raw.get('Proveedor_Nombre', ''),
+            'Usuario': compra_raw.get('Usuario', ''),
+            'Total': float(compra_raw.get('Total', 0)),
+            'Fecha': compra_raw.get('Fecha', ''),
+            'Id_Proveedor': compra_raw.get('Id_Proveedor', 0),
+            'Id_Usuario': compra_raw.get('Id_Usuario', 0)
+        }
 
 # Registrar el tipo para QML
 def register_compra_model():
