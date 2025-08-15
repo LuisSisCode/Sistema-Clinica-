@@ -374,7 +374,7 @@ Item {
                         // HEADER CON LÍNEAS VERTICALES
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 6
+                            Layout.preferredHeight: baseUnit * 5
                             color: lightGrayColor
                             border.color: borderColor
                             border.width: 1
@@ -393,7 +393,7 @@ Item {
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ID"
+                                        text: "CÓDIGO"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -554,7 +554,7 @@ Item {
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: baseUnit * 5.5
+                                    height: baseUnit * 5
                                     color: {
                                         if (selectedRowIndex === index) return "#F8F9FA"
                                         return index % 2 === 0 ? whiteColor : "#FAFAFA"
