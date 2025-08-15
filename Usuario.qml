@@ -30,6 +30,14 @@ Item {
     property var usuarioModel: null
     property var rolesDisponibles: []
     
+    // ✅ NUEVA PROPIEDAD PARA DATOS ORIGINALES - PATRÓN DE DOS CAPAS
+    property var usuariosOriginales: []
+    
+    // ✅ NUEVO LISTMODEL PARA DATOS FILTRADOS
+    ListModel {
+        id: usuariosFiltradosModel
+    }
+    
     // Inicialización cuando el model esté disponible
     Component.onCompleted: {
         if (appController && appController.usuario_model_instance) {
@@ -46,6 +54,9 @@ Item {
                 usuarioModel = appController.usuario_model_instance
                 rolesDisponibles = usuarioModel.obtenerRolesDisponibles()
                 console.log("UsuarioModel conectado:", usuarioModel.totalUsuarios, "usuarios")
+                
+                // ✅ CARGAR DATOS INICIALES AL ARRAY LOCAL
+                cargarDatosOriginales()
             }
         }
     }
@@ -59,6 +70,8 @@ Item {
                 showNewUserDialog = false
                 mostrarNotificacion("Éxito", message, successColor)
                 limpiarFormulario()
+                // ✅ RECARGAR DATOS DESPUÉS DE CREAR
+                usuarioModel.recargarDatos()
             } else {
                 mostrarNotificacion("Error", message, dangerColor)
             }
@@ -70,6 +83,8 @@ Item {
                 mostrarNotificacion("Éxito", message, successColor)
                 limpiarFormulario()
                 selectedRowIndex = -1
+                // ✅ RECARGAR DATOS DESPUÉS DE ACTUALIZAR
+                usuarioModel.recargarDatos()
             } else {
                 mostrarNotificacion("Error", message, dangerColor)
             }
@@ -79,6 +94,8 @@ Item {
             if (success) {
                 mostrarNotificacion("Éxito", message, successColor)
                 selectedRowIndex = -1
+                // ✅ RECARGAR DATOS DESPUÉS DE ELIMINAR
+                usuarioModel.recargarDatos()
             } else {
                 mostrarNotificacion("Error", message, dangerColor)
             }
@@ -91,6 +108,31 @@ Item {
         function onSuccessMessage(message) {
             mostrarNotificacion("Éxito", message, successColor)
         }
+        
+        // ✅ NUEVA CONEXIÓN PARA RECARGAR DATOS LOCALES
+        function onDatosRecargados() {
+            cargarDatosOriginales()
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN PARA CARGAR DATOS ORIGINALES
+    function cargarDatosOriginales() {
+        if (!usuarioModel || !usuarioModel.usuarios) return
+        
+        console.log("🔄 Cargando datos originales de usuarios...")
+        
+        // Limpiar array original
+        usuariosOriginales = []
+        
+        // Copiar todos los datos del backend al array local
+        for (var i = 0; i < usuarioModel.usuarios.length; i++) {
+            usuariosOriginales.push(usuarioModel.usuarios[i])
+        }
+        
+        console.log("✅ Usuarios originales cargados:", usuariosOriginales.length)
+        
+        // Aplicar filtros iniciales para poblar la vista
+        aplicarFiltros()
     }
 
     ColumnLayout {
@@ -232,7 +274,7 @@ Item {
                             
                             Item { Layout.fillWidth: true }
                             
-                            // Contador de usuarios mejorado
+                            // ✅ CONTADOR ACTUALIZADO PARA DATOS LOCALES
                             Rectangle {
                                 Layout.preferredWidth: 120
                                 Layout.preferredHeight: 32
@@ -250,7 +292,7 @@ Item {
                                     }
                                     
                                     Label {
-                                        text: usuarioModel ? `${usuarioModel.totalUsuarios} usuarios` : "0 usuarios"
+                                        text: usuariosFiltradosModel.count + " usuarios"
                                         font.bold: true
                                         font.pixelSize: 12
                                         color: whiteColor
@@ -315,7 +357,7 @@ Item {
                                     id: filtroEstado
                                     Layout.preferredWidth: 140
                                     Layout.preferredHeight: 36
-                                    model: usuarioModel ? usuarioModel.obtenerEstadosDisponibles() : ["Todos"]
+                                    model: ["Todos", "Activo", "Inactivo"]
                                     currentIndex: 0
                                     onCurrentTextChanged: aplicarFiltros()
                                     
@@ -426,7 +468,8 @@ Item {
                         
                         ListView {
                             id: usuariosListView
-                            model: usuarioModel ? usuarioModel.usuarios : []
+                            // ✅ CAMBIO CRÍTICO: USAR MODELO FILTRADO EN LUGAR DEL BACKEND
+                            model: usuariosFiltradosModel
                             
                             header: Rectangle {
                                 width: parent.width
@@ -577,7 +620,7 @@ Item {
                                         
                                         Label { 
                                             anchors.centerIn: parent
-                                            text: modelData.id || ""
+                                            text: model.id || ""
                                             color: textColor
                                             font.bold: true
                                             font.pixelSize: 12
@@ -594,7 +637,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: (modelData.Nombre + " " + modelData.Apellido_Paterno + " " + modelData.Apellido_Materno) || ""
+                                            text: (model.Nombre + " " + model.Apellido_Paterno + " " + model.Apellido_Materno) || ""
                                             color: primaryColor
                                             font.bold: true
                                             font.pixelSize: 12
@@ -616,7 +659,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: modelData.correo ? modelData.correo.split('@')[0] : ""
+                                            text: model.correo ? model.correo.split('@')[0] : ""
                                             color: "#7f8c8d"
                                             font.pixelSize: 11
                                             font.bold: true
@@ -636,7 +679,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: modelData.correo || ""
+                                            text: model.correo || ""
                                             color: textColor
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -657,7 +700,7 @@ Item {
                                         Label { 
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            text: modelData.rol_nombre || ""
+                                            text: model.rol_nombre || ""
                                             color: textColor
                                             font.pixelSize: 11
                                             font.bold: true
@@ -681,7 +724,7 @@ Item {
                                             width: 65
                                             height: 20
                                             color: {
-                                                switch(modelData.Estado ? "Activo" : "Inactivo") {
+                                                switch(model.Estado ? "Activo" : "Inactivo") {
                                                     case "Activo": return successColor
                                                     case "Inactivo": return "#95a5a6"
                                                     case "Bloqueado": return dangerColor
@@ -692,7 +735,7 @@ Item {
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: modelData.Estado ? "Activo" : "Inactivo"
+                                                text: model.Estado ? "Activo" : "Inactivo"
                                                 color: whiteColor
                                                 font.pixelSize: 9
                                                 font.bold: true
@@ -732,9 +775,10 @@ Item {
                                                 }
                                                 
                                                 onClicked: {
+                                                    // ✅ USAR DATOS DEL MODELO FILTRADO
                                                     isEditMode = true
                                                     editingIndex = index
-                                                    editingUser = modelData
+                                                    editingUser = usuariosFiltradosModel.get(index)
                                                     selectedRowIndex = index
                                                     showNewUserDialog = true
                                                 }
@@ -761,8 +805,10 @@ Item {
                                                 }
                                                 
                                                 onClicked: {
-                                                    if (usuarioModel && modelData.id) {
-                                                        usuarioModel.eliminarUsuario(modelData.id.toString())
+                                                    // ✅ USAR DATOS DEL MODELO FILTRADO
+                                                    var usuario = usuariosFiltradosModel.get(index)
+                                                    if (usuarioModel && usuario.id) {
+                                                        usuarioModel.eliminarUsuario(usuario.id.toString())
                                                     }
                                                 }
                                             }
@@ -774,12 +820,93 @@ Item {
                                     anchors.fill: parent
                                     onClicked: {
                                         selectedRowIndex = index
-                                        console.log("Seleccionado usuario ID:", modelData.id)
+                                        console.log("Seleccionado usuario ID:", usuariosFiltradosModel.get(index).id)
                                     }
                                 }
                             }
                         }
                     }
+                }
+                
+                // ✅ ESTADO VACÍO PARA TABLA SIN DATOS
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: usuariosFiltradosModel.count === 0 && usuariosOriginales.length === 0
+                    spacing: 32
+                    
+                    Item { Layout.fillHeight: true }
+                    
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 16
+                        
+                        Label {
+                            text: "👤"
+                            font.pixelSize: 64
+                            color: "#E5E7EB"
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        
+                        Label {
+                            text: "No hay usuarios registrados"
+                            color: textColor
+                            font.bold: true
+                            font.pixelSize: 18
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        
+                        Label {
+                            text: "Crea el primer usuario haciendo clic en \"➕ Nuevo Usuario\""
+                            color: "#6B7280"
+                            font.pixelSize: 14
+                            Layout.alignment: Qt.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.maximumWidth: 400
+                        }
+                    }
+                    
+                    Item { Layout.fillHeight: true }
+                }
+                
+                // ✅ MENSAJE DE NO RESULTADOS PARA FILTROS
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: usuariosFiltradosModel.count === 0 && usuariosOriginales.length > 0
+                    spacing: 32
+                    
+                    Item { Layout.fillHeight: true }
+                    
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 16
+                        
+                        Label {
+                            text: "🔍"
+                            font.pixelSize: 64
+                            color: "#E5E7EB"
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        
+                        Label {
+                            text: "No hay usuarios que coincidan con los filtros"
+                            color: textColor
+                            font.bold: true
+                            font.pixelSize: 18
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        
+                        Label {
+                            text: "Prueba cambiando los filtros o limpiando la búsqueda"
+                            color: "#6B7280"
+                            font.pixelSize: 14
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                    }
+                    
+                    Item { Layout.fillHeight: true }
                 }
             }
         }
@@ -1187,15 +1314,55 @@ Item {
         }
     }
 
-    // Funciones auxiliares
+    // ✅ NUEVA FUNCIÓN DE FILTRADO DEL LADO DEL CLIENTE
     function aplicarFiltros() {
-        if (usuarioModel) {
-            usuarioModel.aplicarFiltros(
-                filtroRol.currentText,
-                filtroEstado.currentText,
-                campoBusqueda.text
-            )
+        console.log("🔍 Aplicando filtros en el cliente...")
+        
+        // Limpiar el modelo filtrado
+        usuariosFiltradosModel.clear()
+        
+        var textoBusqueda = campoBusqueda.text.toLowerCase()
+        var rolSeleccionado = filtroRol.currentText
+        var estadoSeleccionado = filtroEstado.currentText
+        
+        for (var i = 0; i < usuariosOriginales.length; i++) {
+            var usuario = usuariosOriginales[i]
+            var mostrar = true
+            
+            // Filtro por rol
+            if (rolSeleccionado !== "Todos los roles" && mostrar) {
+                if (usuario.rol_nombre !== rolSeleccionado) {
+                    mostrar = false
+                }
+            }
+            
+            // Filtro por estado
+            if (estadoSeleccionado !== "Todos" && mostrar) {
+                var estadoUsuario = usuario.Estado ? "Activo" : "Inactivo"
+                if (estadoUsuario !== estadoSeleccionado) {
+                    mostrar = false
+                }
+            }
+            
+            // Búsqueda por texto en nombre, apellidos o correo
+            if (textoBusqueda.length > 0 && mostrar) {
+                var nombreCompleto = (usuario.Nombre + " " + usuario.Apellido_Paterno + " " + usuario.Apellido_Materno).toLowerCase()
+                var correo = (usuario.correo || "").toLowerCase()
+                var usuarioNombre = correo.split('@')[0] || ""
+                
+                if (!nombreCompleto.includes(textoBusqueda) &&
+                    !correo.includes(textoBusqueda) &&
+                    !usuarioNombre.includes(textoBusqueda)) {
+                    mostrar = false
+                }
+            }
+            
+            if (mostrar) {
+                usuariosFiltradosModel.append(usuario)
+            }
         }
+        
+        console.log("✅ Filtros aplicados. Usuarios mostrados:", usuariosFiltradosModel.count, "de", usuariosOriginales.length)
     }
     
     function limpiarFormulario() {
