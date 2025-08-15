@@ -15,18 +15,24 @@ Item {
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
     readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
     
-    // Colores (mantener)
+    // Colores modernos
     readonly property color primaryColor: "#3498DB"
-    readonly property color successColor: "#27ae60"
+    readonly property color successColor: "#10B981"
+    readonly property color successColorLight: "#D1FAE5"
     readonly property color dangerColor: "#E74C3C"
+    readonly property color dangerColorLight: "#FEE2E2"
     readonly property color warningColor: "#f39c12"
-    readonly property color lightGrayColor: "#ECF0F1"
+    readonly property color warningColorLight: "#FEF3C7"
+    readonly property color lightGrayColor: "#F8F9FA"
     readonly property color textColor: "#2c3e50"
+    readonly property color textColorLight: "#6B7280"
     readonly property color whiteColor: "#FFFFFF"
+    readonly property color borderColor: "#e0e0e0"
+    readonly property color accentColor: "#10B981"
+    readonly property color lineColor: "#D1D5DB" // Color para líneas verticales
     
-    // Propiedades para los diálogos (mantener solo nuevo paciente)
+    // Propiedades para los diálogos
     property bool showNewConsultationDialog: false
-    // ===== ELIMINADO: property bool showConfigEspecialidadesDialog: false =====
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
@@ -36,10 +42,19 @@ Item {
     property int currentPageConsultas: 0
     property int totalPagesConsultas: 0
     
-    // Datos originales (mantener)
+    // Datos originales
     property var consultasOriginales: []
     
-    // Modelo de especialidades (mantener)
+    // Distribución de columnas responsive
+    readonly property real colId: 0.06
+    readonly property real colPaciente: 0.18
+    readonly property real colDetalle: 0.22
+    readonly property real colEspecialidad: 0.24
+    readonly property real colTipo: 0.10
+    readonly property real colPrecio: 0.10
+    readonly property real colFecha: 0.10
+    
+    // Modelo de especialidades
     property var especialidades: [
         { 
             nombre: "Cardiología", 
@@ -67,7 +82,7 @@ Item {
         }
     ]
 
-    // Datos de ejemplo (mantener)
+    // Datos de ejemplo
     property var consultasModelData: [
         {
             consultaId: "1",
@@ -86,100 +101,10 @@ Item {
             precio: "85.00",
             fecha: "2025-06-16",
             detalles: "Seguimiento de migrañas recurrentes"
-        },
-        {
-            consultaId: "3",
-            paciente: "Elena Isabel Vargas",
-            especialidadDoctor: "Pediatría - Dr. Pedro Antonio Martínez",
-            tipo: "Normal",
-            precio: "40.00",
-            fecha: "2025-06-17",
-            detalles: "Control de crecimiento y desarrollo"
-        },
-        {
-            consultaId: "4",
-            paciente: "Roberto Silva",
-            especialidadDoctor: "Cardiología - Dr. Juan Carlos García",
-            tipo: "Normal",
-            precio: "45.00",
-            fecha: "2025-06-17",
-            detalles: "Evaluación post-operatoria"
-        },
-        {
-            consultaId: "5",
-            paciente: "María José Fernández",
-            especialidadDoctor: "Medicina General - Dr. Luis Fernández",
-            tipo: "Normal",
-            precio: "35.00",
-            fecha: "2025-06-18",
-            detalles: "Consulta por síntomas gripales"
-        },
-        {
-            consultaId: "6",
-            paciente: "José Antonio Morales",
-            especialidadDoctor: "Neurología - Dra. María Elena Rodríguez",
-            tipo: "Emergencia",
-            precio: "85.00",
-            fecha: "2025-06-19",
-            detalles: "Dolor de cabeza severo y persistente"
-        },
-        {
-            consultaId: "7",
-            paciente: "Carmen Rosa Delgado",
-            especialidadDoctor: "Pediatría - Dr. Pedro Antonio Martínez",
-            tipo: "Normal",
-            precio: "40.00",
-            fecha: "2025-06-20",
-            detalles: "Vacunación infantil programada"
-        },
-        {
-            consultaId: "8",
-            paciente: "Ricardo Herrera",
-            especialidadDoctor: "Cardiología - Dr. Juan Carlos García",
-            tipo: "Emergencia",
-            precio: "80.00",
-            fecha: "2025-06-21",
-            detalles: "Dolor en el pecho y dificultad respiratoria"
-        },
-        {
-            consultaId: "9",
-            paciente: "Patricia Sánchez",
-            especialidadDoctor: "Medicina General - Dr. Luis Fernández",
-            tipo: "Normal",
-            precio: "35.00",
-            fecha: "2025-06-22",
-            detalles: "Control de presión arterial"
-        },
-        {
-            consultaId: "10",
-            paciente: "Fernando Gómez",
-            especialidadDoctor: "Neurología - Dra. María Elena Rodríguez",
-            tipo: "Normal",
-            precio: "50.00",
-            fecha: "2025-06-23",
-            detalles: "Seguimiento de tratamiento neurológico"
-        },
-        {
-            consultaId: "11",
-            paciente: "Isabella Ramírez",
-            especialidadDoctor: "Pediatría - Dr. Pedro Antonio Martínez",
-            tipo: "Emergencia",
-            precio: "70.00",
-            fecha: "2025-06-24",
-            detalles: "Fiebre alta en menor de edad"
-        },
-        {
-            consultaId: "12",
-            paciente: "Miguel Ángel Torres",
-            especialidadDoctor: "Cardiología - Dr. Juan Carlos García",
-            tipo: "Normal",
-            precio: "45.00",
-            fecha: "2025-06-25",
-            detalles: "Revisión de medicación cardiológica"
         }
     ]
 
-    // Modelos (mantener)
+    // Modelos
     ListModel {
         id: consultasListModel
     }
@@ -190,12 +115,11 @@ Item {
 
     // FUNCIÓN PARA CALCULAR ELEMENTOS POR PÁGINA ADAPTATIVAMENTE
     function calcularElementosPorPagina() {
-        var alturaDisponible = height - baseUnit * 25 // Headers, filtros, paginación
-        var alturaFila = baseUnit * 6
+        var alturaDisponible = height - baseUnit * 25
+        var alturaFila = baseUnit * 7
         var elementosCalculados = Math.floor(alturaDisponible / alturaFila)
         
-        // Límites inteligentes: mínimo 8, máximo 20
-        return Math.max(8, Math.min(elementosCalculados, 20))
+        return Math.max(6, Math.min(elementosCalculados, 15))
     }
 
     // RECALCULAR PAGINACIÓN CUANDO CAMBIE EL TAMAÑO
@@ -219,7 +143,7 @@ Item {
             Layout.fillHeight: true
             color: whiteColor
             radius: baseUnit * 2
-            border.color: "#e0e0e0"
+            border.color: borderColor
             border.width: 1
             
             ColumnLayout {
@@ -230,8 +154,8 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 8
-                    color: "#f8f9fa"
-                    border.color: "#e0e0e0"
+                    color: lightGrayColor
+                    border.color: borderColor
                     border.width: 1
                     
                     Rectangle {
@@ -258,6 +182,7 @@ Item {
                                 text: "Registro de Consultas Médicas"
                                 font.pixelSize: fontBaseSize * 1.4
                                 font.bold: true
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 color: textColor
                             }
                         }
@@ -279,6 +204,7 @@ Item {
                                 color: whiteColor
                                 font.bold: true
                                 font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             
@@ -288,7 +214,6 @@ Item {
                                 showNewConsultationDialog = true
                             }
                         }
-                        
                     }
                 }
                 
@@ -299,7 +224,6 @@ Item {
                     color: "transparent"
                     z: 10
                     
-                    // Layout adaptativo: una fila en pantallas grandes, dos en pequeñas
                     GridLayout {
                         anchors.fill: parent
                         anchors.margins: baseUnit * 3
@@ -309,7 +233,6 @@ Item {
                         rowSpacing: baseUnit
                         columnSpacing: baseUnit * 2
                         
-                        // Primera fila/grupo de filtros
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: baseUnit
@@ -319,6 +242,7 @@ Item {
                                 font.bold: true
                                 color: textColor
                                 font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             ComboBox {
@@ -332,6 +256,7 @@ Item {
                                 contentItem: Label {
                                     text: filtroFecha.displayText
                                     font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     color: textColor
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
@@ -348,6 +273,7 @@ Item {
                                 font.bold: true
                                 color: textColor
                                 font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             ComboBox {
@@ -367,6 +293,7 @@ Item {
                                 contentItem: Label {
                                     text: filtroEspecialidad.displayText
                                     font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     color: textColor
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
@@ -384,6 +311,7 @@ Item {
                                 font.bold: true
                                 color: textColor
                                 font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             ComboBox {
@@ -397,6 +325,7 @@ Item {
                                 contentItem: Label {
                                     text: filtroTipo.displayText
                                     font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     color: textColor
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
@@ -404,7 +333,6 @@ Item {
                             }
                         }
                         
-                        // Campo de búsqueda
                         TextField {
                             id: campoBusqueda
                             Layout.fillWidth: true
@@ -414,7 +342,7 @@ Item {
                             
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: "#e0e0e0"
+                                border.color: borderColor
                                 border.width: 1
                                 radius: baseUnit * 0.8
                             }
@@ -422,18 +350,19 @@ Item {
                             leftPadding: baseUnit * 1.5
                             rightPadding: baseUnit * 1.5
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                     }
                 }
                 
-                // TABLA ADAPTATIVA CON COLUMNAS PORCENTUALES
+                // TABLA MODERNA CON LÍNEAS VERTICALES
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.margins: baseUnit * 3
                     Layout.topMargin: 0
-                    color: "#FFFFFF"
-                    border.color: "#D5DBDB"
+                    color: whiteColor
+                    border.color: borderColor
                     border.width: 1
                     radius: baseUnit
                     
@@ -442,134 +371,178 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER DE TABLA CON PORCENTAJES
+                        // HEADER CON LÍNEAS VERTICALES
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 5
-                            color: "#f5f5f5"
-                            border.color: "#d0d0d0"
+                            Layout.preferredHeight: baseUnit * 6
+                            color: lightGrayColor
+                            border.color: borderColor
                             border.width: 1
                             z: 5
                             
                             RowLayout {
                                 anchors.fill: parent
+                                anchors.leftMargin: baseUnit * 1.5
+                                anchors.rightMargin: baseUnit * 1.5
                                 spacing: 0
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.06 // 6% para ID
+                                // ID COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colId
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "ID"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.18 // 18% para PACIENTE
+                                // PACIENTE COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colPaciente
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "PACIENTE"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.22 // 22% para DETALLE
+                                // DETALLE COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colDetalle
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "DETALLE"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.25 // 25% para ESPECIALIDAD
+                                // ESPECIALIDAD COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colEspecialidad
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "ESPECIALIDAD - DOCTOR"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.11 // 11% para TIPO
+                                // TIPO COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colTipo
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "TIPO"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.09 // 9% para PRECIO
+                                // PRECIO COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colPrecio
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "PRECIO"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.09 // 9% para FECHA
+                                // FECHA COLUMN
+                                Item {
+                                    Layout.preferredWidth: parent.width * colFecha
                                     Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
                                     
-                                    Label { 
+                                    Label {
                                         anchors.centerIn: parent
                                         text: "FECHA"
                                         font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                             }
                         }
                         
-                        // CONTENIDO DE TABLA CON SCROLL
+                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -581,176 +554,269 @@ Item {
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: baseUnit * 6
+                                    height: baseUnit * 5.5
                                     color: {
-                                        if (selectedRowIndex === index) return "#e3f2fd"
-                                        return index % 2 === 0 ? "transparent" : "#fafafa"
+                                        if (selectedRowIndex === index) return "#F8F9FA"
+                                        return index % 2 === 0 ? whiteColor : "#FAFAFA"
                                     }
-                                    border.color: selectedRowIndex === index ? primaryColor : "#e8e8e8"
-                                    border.width: selectedRowIndex === index ? 2 : 1
+                                    
+                                    // Borde horizontal sutil
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        height: 1
+                                        color: borderColor
+                                    }
+                                    
+                                    // Borde vertical de selección
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: baseUnit * 0.4
+                                        color: selectedRowIndex === index ? accentColor : "transparent"
+                                        radius: baseUnit * 0.2
+                                        visible: selectedRowIndex === index
+                                    }
                                     
                                     RowLayout {
                                         anchors.fill: parent
+                                        anchors.leftMargin: baseUnit * 1.5
+                                        anchors.rightMargin: baseUnit * 1.5
                                         spacing: 0
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.06
+                                        // ID COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colId
                                             Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
-                                            Label { 
-                                                anchors.centerIn: parent
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
                                                 text: model.consultaId
                                                 color: textColor
-                                                font.bold: true
-                                                font.pixelSize: fontBaseSize * 0.8
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
                                             }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.18
+                                        // PACIENTE COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colPaciente
                                             Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
-                                            Label { 
-                                                anchors.centerIn: parent
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
                                                 text: model.paciente
                                                 color: textColor
-                                                font.bold: true
-                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
                                                 elide: Text.ElideRight
-                                                maximumLineCount: 1
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
                                             }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.22
+                                        // DETALLE COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colDetalle
                                             Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
-                                            Label { 
-                                                anchors.fill: parent
-                                                anchors.margins: baseUnit * 0.5
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
                                                 text: model.detalles
-                                                color: "#7f8c8d"
-                                                font.pixelSize: fontBaseSize * 0.75
+                                                color: textColor // Mismo color que paciente
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
                                                 wrapMode: Text.WordWrap
                                                 elide: Text.ElideRight
                                                 maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
                                             }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.25
+                                        // ESPECIALIDAD COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colEspecialidad
                                             Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
-                                            Label { 
-                                                anchors.fill: parent
-                                                anchors.margins: baseUnit * 0.6
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
                                                 text: model.especialidadDoctor
                                                 color: primaryColor
-                                                font.bold: true
-                                                font.pixelSize: fontBaseSize * 0.75
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
                                                 wrapMode: Text.WordWrap
                                                 elide: Text.ElideRight
                                                 maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
                                             }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.11
+                                        // TIPO COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colTipo
                                             Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: baseUnit * 5
-                                                height: baseUnit * 2
-                                                color: model.tipo === "Emergencia" ? "#e67e22" : successColor
-                                                radius: baseUnit
+                                                width: baseUnit * 7
+                                                height: baseUnit * 2.5
+                                                color: model.tipo === "Emergencia" ? warningColorLight : successColorLight
+                                                radius: height / 2
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: model.tipo
-                                                    color: whiteColor
-                                                    font.pixelSize: fontBaseSize * 0.7
-                                                    font.bold: true
+                                                    color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
+                                                    font.pixelSize: fontBaseSize * 0.75
+                                                    font.bold: false
+                                                    font.family: "Segoe UI, Arial, sans-serif"
                                                 }
                                             }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.09
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
-                                            Label { 
-                                                anchors.centerIn: parent
-                                                text: "Bs" + model.precio
-                                                color: model.tipo === "Emergencia" ? "#e67e22" : successColor
-                                                font.bold: true
-                                                font.pixelSize: fontBaseSize * 0.8
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
                                             }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.09
+                                        // PRECIO COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colPrecio
                                             Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
                                             
-                                            Label { 
-                                                anchors.centerIn: parent
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                text: "Bs "+ model.precio
+                                                color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.9
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // FECHA COLUMN
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colFecha
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
                                                 text: model.fecha
-                                                color: textColor
-                                                font.pixelSize: fontBaseSize * 0.75
+                                                color: textColor // Mismo color que paciente
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
                                             }
+                                        }
+                                    }
+                                    
+                                    // LÍNEAS VERTICALES CONTINUAS
+                                    Repeater {
+                                        model: 6 // Número de líneas verticales (todas menos la última columna)
+                                        Rectangle {
+                                            property real xPos: {
+                                                var w = parent.width - baseUnit * 3
+                                                switch(index) {
+                                                    case 0: return baseUnit * 1.5 + w * colId
+                                                    case 1: return baseUnit * 1.5 + w * (colId + colPaciente)
+                                                    case 2: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle)
+                                                    case 3: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad)
+                                                    case 4: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad + colTipo)
+                                                    case 5: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad + colTipo + colPrecio)
+                                                }
+                                            }
+                                            x: xPos
+                                            width: 1
+                                            height: parent.height
+                                            color: lineColor
+                                            z: 1
                                         }
                                     }
                                     
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
-                                            selectedRowIndex = index
+                                            selectedRowIndex = selectedRowIndex === index ? -1 : index
                                             console.log("Seleccionada consulta ID:", model.consultaId)
                                         }
                                     }
                                     
-                                    // BOTONES DE ACCIÓN ADAPTATIVOS
+                                    // BOTONES DE ACCIÓN MODERNOS
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
-                                        anchors.margins: baseUnit * 0.6
-                                        spacing: baseUnit * 0.3
+                                        anchors.margins: baseUnit * 0.8
+                                        spacing: baseUnit * 0.5
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
                                         Button {
                                             id: editButton
-                                            width: baseUnit * 3
-                                            height: baseUnit * 3
+                                            width: baseUnit * 3.5
+                                            height: baseUnit * 3.5
                                             text: "✏️"
                                             
                                             background: Rectangle {
                                                 color: warningColor
-                                                radius: baseUnit * 0.6
-                                                border.color: "#f1c40f"
+                                                radius: baseUnit * 0.8
+                                                border.color: "#e67e22"
                                                 border.width: 1
                                             }
                                             
@@ -759,7 +825,7 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontBaseSize * 0.8
+                                                font.pixelSize: fontBaseSize * 0.85
                                             }
                                             
                                             onClicked: {
@@ -783,13 +849,13 @@ Item {
                                         
                                         Button {
                                             id: deleteButton
-                                            width: baseUnit * 3
-                                            height: baseUnit * 3
+                                            width: baseUnit * 3.5
+                                            height: baseUnit * 3.5
                                             text: "🗑️"
                                             
                                             background: Rectangle {
                                                 color: dangerColor
-                                                radius: baseUnit * 0.6
+                                                radius: baseUnit * 0.8
                                                 border.color: "#c0392b"
                                                 border.width: 1
                                             }
@@ -799,7 +865,7 @@ Item {
                                                 color: whiteColor
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontBaseSize * 0.8
+                                                font.pixelSize: fontBaseSize * 0.85
                                             }
                                             
                                             onClicked: {
@@ -831,14 +897,14 @@ Item {
                     }
                 }
                 
-                // PAGINACIÓN ADAPTATIVA
+                // PAGINACIÓN MODERNA
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 6
                     Layout.margins: baseUnit * 3
                     Layout.topMargin: 0
-                    color: "#F8F9FA"
-                    border.color: "#D5DBDB"
+                    color: lightGrayColor
+                    border.color: borderColor
                     border.width: 1
                     radius: baseUnit
                     
@@ -854,7 +920,7 @@ Item {
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
-                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
+                                    (parent.pressed ? Qt.darker(successColor, 1.1) : successColor) : 
                                     "#E5E7EB"
                                 radius: baseUnit * 2
                                 
@@ -865,9 +931,10 @@ Item {
                             
                             contentItem: Label {
                                 text: parent.text
-                                color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
+                                color: parent.enabled ? whiteColor : "#9CA3AF"
                                 font.bold: true
                                 font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -882,8 +949,9 @@ Item {
                         
                         Label {
                             text: "Página " + (currentPageConsultas + 1) + " de " + Math.max(1, totalPagesConsultas)
-                            color: "#374151"
+                            color: textColor
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             font.weight: Font.Medium
                         }
                         
@@ -895,7 +963,7 @@ Item {
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
-                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
+                                    (parent.pressed ? Qt.darker(successColor, 1.1) : successColor) : 
                                     "#E5E7EB"
                                 radius: baseUnit * 2
                                 
@@ -906,9 +974,10 @@ Item {
                             
                             contentItem: Label {
                                 text: parent.text
-                                color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
+                                color: parent.enabled ? whiteColor : "#9CA3AF"
                                 font.bold: true
                                 font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -1023,6 +1092,7 @@ Item {
                 text: isEditMode ? "Editar Consulta" : "Nueva Consulta"
                 font.pixelSize: fontBaseSize * 1.6
                 font.bold: true
+                font.family: "Segoe UI, Arial, sans-serif"
                 color: textColor
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -1032,8 +1102,8 @@ Item {
                 title: "Datos del Paciente"
                 
                 background: Rectangle {
-                    color: "#f8f9fa"
-                    border.color: lightGrayColor
+                    color: lightGrayColor
+                    border.color: borderColor
                     border.width: 1
                     radius: baseUnit
                 }
@@ -1048,9 +1118,10 @@ Item {
                         Layout.preferredHeight: baseUnit * 4
                         placeholderText: "Nombre del paciente"
                         font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                         background: Rectangle {
                             color: whiteColor
-                            border.color: lightGrayColor
+                            border.color: borderColor
                             border.width: 1
                             radius: baseUnit * 0.6
                         }
@@ -1064,9 +1135,10 @@ Item {
                             Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido paterno"
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
                                 radius: baseUnit * 0.6
                             }
@@ -1078,9 +1150,10 @@ Item {
                             Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Apellido materno"
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
                                 radius: baseUnit * 0.6
                             }
@@ -1095,6 +1168,7 @@ Item {
                             font.bold: true
                             color: textColor
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                         TextField {
                             id: edadPaciente
@@ -1103,9 +1177,10 @@ Item {
                             placeholderText: "0"
                             validator: IntValidator { bottom: 0; top: 120 }
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: borderColor
                                 border.width: 1
                                 radius: baseUnit * 0.6
                             }
@@ -1114,6 +1189,7 @@ Item {
                             text: "años"
                             color: textColor
                             font.pixelSize: fontBaseSize * 0.9
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                         Item { Layout.fillWidth: true }
                     }
@@ -1128,6 +1204,7 @@ Item {
                     font.bold: true
                     color: textColor
                     font.pixelSize: fontBaseSize * 0.9
+                    font.family: "Segoe UI, Arial, sans-serif"
                 }
                 ComboBox {
                     id: especialidadCombo
@@ -1158,6 +1235,7 @@ Item {
                     contentItem: Label {
                         text: especialidadCombo.displayText
                         font.pixelSize: fontBaseSize * 0.8
+                        font.family: "Segoe UI, Arial, sans-serif"
                         color: textColor
                         verticalAlignment: Text.AlignVCenter
                         leftPadding: baseUnit
@@ -1174,6 +1252,7 @@ Item {
                     font.bold: true
                     color: textColor
                     font.pixelSize: fontBaseSize * 0.9
+                    font.family: "Segoe UI, Arial, sans-serif"
                 }
                 
                 RadioButton {
@@ -1193,6 +1272,7 @@ Item {
                     contentItem: Label {
                         text: normalRadio.text
                         font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                         color: textColor
                         leftPadding: normalRadio.indicator.width + normalRadio.spacing
                         verticalAlignment: Text.AlignVCenter
@@ -1215,6 +1295,7 @@ Item {
                     contentItem: Label {
                         text: emergenciaRadio.text
                         font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                         color: textColor
                         leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
                         verticalAlignment: Text.AlignVCenter
@@ -1231,13 +1312,15 @@ Item {
                     font.bold: true
                     color: textColor
                     font.pixelSize: fontBaseSize * 0.9
+                    font.family: "Segoe UI, Arial, sans-serif"
                 }
                 Label {
                     text: consultationForm.selectedEspecialidadIndex >= 0 ? 
                           "Bs" + consultationForm.calculatedPrice.toFixed(2) : "Seleccione especialidad"
                     font.bold: true
                     font.pixelSize: fontBaseSize * 1.1
-                    color: consultationForm.consultationType === "Emergencia" ? "#e67e22" : successColor
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: consultationForm.consultationType === "Emergencia" ? "#92400E" : "#047857"
                 }
                 Item { Layout.fillWidth: true }
             }
@@ -1251,6 +1334,7 @@ Item {
                     font.bold: true
                     color: textColor
                     font.pixelSize: fontBaseSize * 0.9
+                    font.family: "Segoe UI, Arial, sans-serif"
                 }
                 
                 ScrollView {
@@ -1263,9 +1347,10 @@ Item {
                         placeholderText: "Descripción de la consulta, síntomas, observaciones..."
                         wrapMode: TextArea.Wrap
                         font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                         background: Rectangle {
                             color: whiteColor
-                            border.color: lightGrayColor
+                            border.color: borderColor
                             border.width: 1
                             radius: baseUnit
                         }
@@ -1288,6 +1373,7 @@ Item {
                         text: parent.text
                         color: textColor
                         font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
@@ -1319,6 +1405,7 @@ Item {
                         color: whiteColor
                         font.bold: true
                         font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
