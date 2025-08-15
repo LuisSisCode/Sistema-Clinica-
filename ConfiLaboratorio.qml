@@ -3,13 +3,13 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Item {
-    id: configProcedimientosRoot
+    id: configAnalisisRoot
     
-    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA - CORREGIDO =====
-    property alias tiposProcedimientos: configProcedimientosRoot.tiposProcedimientosData
+    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
+    property alias tiposAnalisis: configAnalisisRoot.tiposAnalisisData
     
     // ===== DATOS INTERNOS =====
-    property var tiposProcedimientosData: []
+    property var tiposAnalisisData: []
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -48,54 +48,63 @@ Item {
     
     // ===== FUNCIONES =====
     function limpiarFormulario() {
-        nuevoProcedimientoNombre.text = ""
-        nuevoProcedimientoDescripcion.text = ""
-        nuevoProcedimientoPrecioNormal.text = ""
-        nuevoProcedimientoPrecioEmergencia.text = ""
+        nuevoAnalisisNombre.text = ""
+        nuevoAnalisisTipo.text = ""
+        nuevoAnalisisDescripcion.text = ""
+        nuevoAnalisisPrecioNormal.text = ""
+        nuevoAnalisisPrecioEmergencia.text = ""
         isEditMode = false
         editingIndex = -1
     }
     
-    function editarProcedimiento(index) {
-        if (index >= 0 && index < tiposProcedimientosData.length) {
-            var procedimiento = tiposProcedimientosData[index]
-            nuevoProcedimientoNombre.text = procedimiento.nombre
-            nuevoProcedimientoDescripcion.text = procedimiento.descripcion
-            nuevoProcedimientoPrecioNormal.text = procedimiento.precioNormal.toString()
-            nuevoProcedimientoPrecioEmergencia.text = procedimiento.precioEmergencia.toString()
+    function editarAnalisis(index) {
+        if (index >= 0 && index < tiposAnalisisData.length) {
+            var analisis = tiposAnalisisData[index]
+            nuevoAnalisisNombre.text = analisis.nombre
+            nuevoAnalisisTipo.text = analisis.tipo
+            nuevoAnalisisDescripcion.text = analisis.descripcion
+            nuevoAnalisisPrecioNormal.text = analisis.precioNormal.toString()
+            nuevoAnalisisPrecioEmergencia.text = analisis.precioEmergencia.toString()
             isEditMode = true
             editingIndex = index
         }
     }
     
-    function eliminarProcedimiento(index) {
-        if (index >= 0 && index < tiposProcedimientosData.length) {
-            tiposProcedimientosData.splice(index, 1)
-            configProcedimientosRoot.tiposProcedimientos = tiposProcedimientosData
-            console.log("🗑️ Procedimiento eliminado en índice:", index)
+    function eliminarAnalisis(index) {
+        if (!tiposAnalisisData) {
+            tiposAnalisisData = []
+            return
+        }
+        
+        if (index >= 0 && index < tiposAnalisisData.length) {
+            tiposAnalisisData.splice(index, 1)
+            configAnalisisRoot.tiposAnalisis = tiposAnalisisData
+            console.log("🗑️ Análisis eliminado en índice:", index)
         }
     }
     
-    function guardarProcedimiento() {
-        var nuevoProcedimiento = {
-            nombre: nuevoProcedimientoNombre.text,
-            descripcion: nuevoProcedimientoDescripcion.text,
-            precioNormal: parseFloat(nuevoProcedimientoPrecioNormal.text),
-            precioEmergencia: parseFloat(nuevoProcedimientoPrecioEmergencia.text)
+    function guardarAnalisis() {
+        if (!tiposAnalisisData) {
+            tiposAnalisisData = []
+        }
+        
+        var nuevoAnalisis = {
+            nombre: nuevoAnalisisNombre.text,
+            tipo: nuevoAnalisisTipo.text,
+            descripcion: nuevoAnalisisDescripcion.text,
+            precioNormal: parseFloat(nuevoAnalisisPrecioNormal.text),
+            precioEmergencia: parseFloat(nuevoAnalisisPrecioEmergencia.text)
         }
         
         if (isEditMode && editingIndex >= 0) {
-            // Editar procedimiento existente
-            tiposProcedimientosData[editingIndex] = nuevoProcedimiento
-            console.log("✏️ Procedimiento editado:", JSON.stringify(nuevoProcedimiento))
+            tiposAnalisisData[editingIndex] = nuevoAnalisis
+            console.log("✏️ Análisis editado:", JSON.stringify(nuevoAnalisis))
         } else {
-            // Agregar nuevo procedimiento
-            tiposProcedimientosData.push(nuevoProcedimiento)
-            console.log("➕ Nuevo procedimiento agregado:", JSON.stringify(nuevoProcedimiento))
+            tiposAnalisisData.push(nuevoAnalisis)
+            console.log("➕ Nuevo análisis agregado:", JSON.stringify(nuevoAnalisis))
         }
         
-        // Actualizar el modelo y limpiar
-        configProcedimientosRoot.tiposProcedimientos = tiposProcedimientosData
+        configAnalisisRoot.tiposAnalisis = tiposAnalisisData
         limpiarFormulario()
     }
     
@@ -118,7 +127,7 @@ Item {
                 
                 Label {
                     anchors.centerIn: parent
-                    text: "🩹"
+                    text: "🧪"
                     font.pixelSize: fontLarge
                     color: "white"
                 }
@@ -129,7 +138,7 @@ Item {
                 spacing: marginTiny
                 
                 Label {
-                    text: "Configuración de Procedimientos de Enfermería"
+                    text: "Configuración de Tipos de Análisis de Laboratorio"
                     font.pixelSize: fontTitle
                     font.bold: true
                     color: textColor
@@ -137,7 +146,7 @@ Item {
                 }
                 
                 Label {
-                    text: "Gestiona los tipos de procedimientos, descripciones y precios de enfermería"
+                    text: "Gestiona los tipos de análisis de laboratorio, categorías y precios"
                     color: textSecondaryColor
                     font.pixelSize: fontBase
                     font.family: "Segoe UI"
@@ -148,7 +157,7 @@ Item {
         // ===== FORMULARIO =====
         GroupBox {
             Layout.fillWidth: true
-            title: isEditMode ? "Editar Procedimiento" : "Agregar Nuevo Procedimiento"
+            title: isEditMode ? "Editar Tipo de Análisis" : "Agregar Nuevo Tipo de Análisis"
             
             background: Rectangle {
                 color: surfaceColor
@@ -169,29 +178,28 @@ Item {
                 anchors.fill: parent
                 spacing: marginMedium
                 
-                // CAMPOS PRINCIPALES
-                GridLayout {
+                // ===== PRIMERA FILA: NOMBRE Y TIPO/CATEGORÍA =====
+                RowLayout {
                     Layout.fillWidth: true
-                    columns: width < baseUnit * 80 ? 1 : 2
-                    rowSpacing: marginMedium
-                    columnSpacing: marginLarge
+                    spacing: marginLarge
                     
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.preferredWidth: parent.width * 0.5
                         spacing: marginSmall
                         
                         Label {
-                            text: "Nombre del Procedimiento:"
+                            text: "Nombre del Análisis:"
                             font.bold: true
                             color: textColor
                             font.pixelSize: fontBase
                             font.family: "Segoe UI"
                         }
                         TextField {
-                            id: nuevoProcedimientoNombre
+                            id: nuevoAnalisisNombre
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Ej: Curación Simple"
+                            placeholderText: "Ej: Hemograma Completo"
                             font.pixelSize: fontBase
                             font.family: "Segoe UI"
                             background: Rectangle {
@@ -205,20 +213,21 @@ Item {
                     
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.preferredWidth: parent.width * 0.5
                         spacing: marginSmall
                         
                         Label {
-                            text: "Descripción:"
+                            text: "Tipo/Categoría:"
                             font.bold: true
                             color: textColor
                             font.pixelSize: fontBase
                             font.family: "Segoe UI"
                         }
                         TextField {
-                            id: nuevoProcedimientoDescripcion
+                            id: nuevoAnalisisTipo
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Ej: Limpieza y vendaje básico"
+                            placeholderText: "Ej: Hematología"
                             font.pixelSize: fontBase
                             font.family: "Segoe UI"
                             background: Rectangle {
@@ -231,12 +240,43 @@ Item {
                     }
                 }
                 
-                // PRECIOS Y BOTONES
+                // ===== SEGUNDA FILA: DESCRIPCIÓN, PRECIOS Y BOTONES =====
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: marginMedium
                     
+                    // DESCRIPCIÓN (más ancha)
                     ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: parent.width * 0.4
+                        spacing: marginSmall
+                        
+                        Label {
+                            text: "Descripción/Detalles:"
+                            font.bold: true
+                            color: textColor
+                            font.pixelSize: fontBase
+                            font.family: "Segoe UI"
+                        }
+                        TextField {
+                            id: nuevoAnalisisDescripcion
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 4.5
+                            placeholderText: "Descripción detallada del análisis de laboratorio..."
+                            font.pixelSize: fontBase
+                            font.family: "Segoe UI"
+                            background: Rectangle {
+                                color: backgroundColor
+                                border.color: borderColor
+                                border.width: 1
+                                radius: radiusSmall
+                            }
+                        }
+                    }
+                    
+                    // PRECIO NORMAL (más pequeño)
+                    ColumnLayout {
+                        Layout.preferredWidth: baseUnit * 18
                         spacing: marginSmall
                         
                         Label {
@@ -247,8 +287,8 @@ Item {
                             font.family: "Segoe UI"
                         }
                         TextField {
-                            id: nuevoProcedimientoPrecioNormal
-                            Layout.preferredWidth: baseUnit * 15
+                            id: nuevoAnalisisPrecioNormal
+                            Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 4.5
                             placeholderText: "0.00"
                             validator: DoubleValidator { bottom: 0.0; decimals: 2 }
@@ -264,7 +304,9 @@ Item {
                         }
                     }
                     
+                    // PRECIO EMERGENCIA (más pequeño)
                     ColumnLayout {
+                        Layout.preferredWidth: baseUnit * 18
                         spacing: marginSmall
                         
                         Label {
@@ -275,8 +317,8 @@ Item {
                             font.family: "Segoe UI"
                         }
                         TextField {
-                            id: nuevoProcedimientoPrecioEmergencia
-                            Layout.preferredWidth: baseUnit * 15
+                            id: nuevoAnalisisPrecioEmergencia
+                            Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 4.5
                             placeholderText: "0.00"
                             validator: DoubleValidator { bottom: 0.0; decimals: 2 }
@@ -292,68 +334,78 @@ Item {
                         }
                     }
                     
-                    Item { Layout.fillWidth: true }
-                    
-                    RowLayout {
-                        spacing: marginMedium
+                    // BOTONES
+                    ColumnLayout {
+                        Layout.preferredWidth: baseUnit * 20
+                        spacing: marginSmall
                         
-                        Button {
-                            text: "Cancelar"
-                            Layout.preferredWidth: baseUnit * 12
-                            Layout.preferredHeight: baseUnit * 4.5
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
-                                radius: radiusSmall
-                                border.color: borderColor
-                                border.width: 1
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: textColor
-                                font.pixelSize: fontSmall
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.family: "Segoe UI"
-                            }
-                            
-                            onClicked: limpiarFormulario()
+                        Label {
+                            text: " " // Espaciador para alinear con otros campos
+                            font.pixelSize: fontSmall
                         }
                         
-                        Button {
-                            text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                            enabled: nuevoProcedimientoNombre.text && nuevoProcedimientoDescripcion.text && 
-                                    nuevoProcedimientoPrecioNormal.text && nuevoProcedimientoPrecioEmergencia.text
-                            Layout.preferredWidth: baseUnit * 15
-                            Layout.preferredHeight: baseUnit * 4.5
+                        RowLayout {
+                            spacing: marginSmall
                             
-                            background: Rectangle {
-                                color: parent.enabled ? 
-                                       (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
-                                       Qt.lighter(successColor, 1.5)
-                                radius: radiusSmall
+                            Button {
+                                text: "Cancelar"
+                                Layout.preferredWidth: baseUnit * 9
+                                Layout.preferredHeight: baseUnit * 4.5
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                                    radius: radiusSmall
+                                    border.color: borderColor
+                                    border.width: 1
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: textColor
+                                    font.pixelSize: fontTiny
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                onClicked: limpiarFormulario()
                             }
                             
-                            contentItem: Label {
-                                text: parent.text
-                                color: backgroundColor
-                                font.bold: true
-                                font.pixelSize: fontSmall
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.family: "Segoe UI"
+                            Button {
+                                text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
+                                enabled: nuevoAnalisisNombre.text && nuevoAnalisisTipo.text && 
+                                        nuevoAnalisisDescripcion.text && nuevoAnalisisPrecioNormal.text && 
+                                        nuevoAnalisisPrecioEmergencia.text
+                                Layout.preferredWidth: baseUnit * 11
+                                Layout.preferredHeight: baseUnit * 4.5
+                                
+                                background: Rectangle {
+                                    color: parent.enabled ? 
+                                           (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                                           Qt.lighter(successColor, 1.5)
+                                    radius: radiusSmall
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: backgroundColor
+                                    font.bold: true
+                                    font.pixelSize: fontTiny
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                onClicked: guardarAnalisis()
                             }
-                            
-                            onClicked: guardarProcedimiento()
                         }
                     }
                 }
             }
         }
         
-        // ===== TABLA DE PROCEDIMIENTOS =====
+        // ===== TABLA DE ANÁLISIS =====
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -381,7 +433,7 @@ Item {
                     
                     Label {
                         anchors.centerIn: parent
-                        text: "📋 Procedimientos Registrados"
+                        text: "🧪 Tipos de Análisis Registrados"
                         font.pixelSize: fontMedium
                         font.bold: true
                         color: textColor
@@ -389,7 +441,7 @@ Item {
                     }
                 }
                 
-                // ENCABEZADOS
+                // ENCABEZADOS - AJUSTADOS PARA NO DESBORDARSE
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 6
@@ -400,48 +452,56 @@ Item {
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: marginSmall
-                        spacing: marginSmall
+                        spacing: 1
+                        
+                        Label {
+                            Layout.preferredWidth: parent.width * 0.22
+                            Layout.fillHeight: true
+                            text: "ANÁLISIS"
+                            font.bold: true
+                            font.pixelSize: fontTiny
+                            color: textColor
+                            font.family: "Segoe UI"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.WordWrap
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 1
+                            Layout.fillHeight: true
+                            color: borderColor
+                        }
+                        
+                        Label {
+                            Layout.preferredWidth: parent.width * 0.18
+                            Layout.fillHeight: true
+                            text: "TIPO"
+                            font.bold: true
+                            font.pixelSize: fontTiny
+                            color: textColor
+                            font.family: "Segoe UI"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.WordWrap
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 1
+                            Layout.fillHeight: true
+                            color: borderColor
+                        }
                         
                         Label {
                             Layout.preferredWidth: parent.width * 0.25
-                            text: "PROCEDIMIENTO"
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 1
                             Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.30
                             text: "DESCRIPCIÓN"
                             font.bold: true
-                            font.pixelSize: fontSmall
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 1
-                            Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.15
-                            text: "PRECIO NORMAL"
-                            font.bold: true
                             font.pixelSize: fontTiny
                             color: textColor
                             font.family: "Segoe UI"
                             horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                             wrapMode: Text.WordWrap
                         }
                         
@@ -452,13 +512,15 @@ Item {
                         }
                         
                         Label {
-                            Layout.preferredWidth: parent.width * 0.15
-                            text: "PRECIO EMERGENCIA"
+                            Layout.preferredWidth: parent.width * 0.12
+                            Layout.fillHeight: true
+                            text: "P. NORMAL"
                             font.bold: true
                             font.pixelSize: fontTiny
                             color: textColor
                             font.family: "Segoe UI"
                             horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                             wrapMode: Text.WordWrap
                         }
                         
@@ -469,13 +531,35 @@ Item {
                         }
                         
                         Label {
-                            Layout.preferredWidth: parent.width * 0.15
+                            Layout.preferredWidth: parent.width * 0.12
+                            Layout.fillHeight: true
+                            text: "P. EMERG."
+                            font.bold: true
+                            font.pixelSize: fontTiny
+                            color: textColor
+                            font.family: "Segoe UI"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.WordWrap
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 1
+                            Layout.fillHeight: true
+                            color: borderColor
+                        }
+                        
+                        Label {
+                            Layout.preferredWidth: parent.width * 0.11
+                            Layout.fillHeight: true
                             text: "ACCIONES"
                             font.bold: true
-                            font.pixelSize: fontSmall
+                            font.pixelSize: fontTiny
                             color: textColor
                             font.family: "Segoe UI"
                             horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }
@@ -487,8 +571,8 @@ Item {
                     clip: true
                     
                     ListView {
-                        id: procedimientosList
-                        model: tiposProcedimientosData
+                        id: analisisList
+                        model: tiposAnalisisData
                         
                         delegate: Rectangle {
                             width: ListView.view.width
@@ -500,19 +584,21 @@ Item {
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: marginSmall
-                                spacing: marginSmall
+                                spacing: 1
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.25
+                                    Layout.preferredWidth: parent.width * 0.22
+                                    Layout.fillHeight: true
                                     text: modelData.nombre
                                     font.bold: true
                                     color: primaryColor
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontSmall
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     wrapMode: Text.WordWrap
                                     elide: Text.ElideRight
+                                    maximumLineCount: 2
                                 }
                                 
                                 Rectangle {
@@ -522,8 +608,9 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.30
-                                    text: modelData.descripcion
+                                    Layout.preferredWidth: parent.width * 0.18
+                                    Layout.fillHeight: true
+                                    text: modelData.tipo
                                     color: textColor
                                     font.pixelSize: fontSmall
                                     font.family: "Segoe UI"
@@ -541,11 +628,32 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.15
+                                    Layout.preferredWidth: parent.width * 0.25
+                                    Layout.fillHeight: true
+                                    text: modelData.descripcion
+                                    color: textColor
+                                    font.pixelSize: fontTiny
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    wrapMode: Text.WordWrap
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 3
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: borderColor
+                                }
+                                
+                                Label {
+                                    Layout.preferredWidth: parent.width * 0.12
+                                    Layout.fillHeight: true
                                     text: "Bs " + modelData.precioNormal.toFixed(2)
                                     color: successColor
                                     font.bold: true
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontTiny
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -558,11 +666,12 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.15
+                                    Layout.preferredWidth: parent.width * 0.12
+                                    Layout.fillHeight: true
                                     text: "Bs " + modelData.precioEmergencia.toFixed(2)
                                     color: warningColor
                                     font.bold: true
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontTiny
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -575,12 +684,13 @@ Item {
                                 }
                                 
                                 RowLayout {
-                                    Layout.preferredWidth: parent.width * 0.15
-                                    spacing: marginSmall
+                                    Layout.preferredWidth: parent.width * 0.11
+                                    Layout.fillHeight: true
+                                    spacing: marginTiny
                                     
                                     Button {
-                                        Layout.preferredWidth: baseUnit * 3.5
-                                        Layout.preferredHeight: baseUnit * 3.5
+                                        Layout.preferredWidth: baseUnit * 3
+                                        Layout.preferredHeight: baseUnit * 3
                                         text: "✏️"
                                         
                                         background: Rectangle {
@@ -591,17 +701,17 @@ Item {
                                         contentItem: Label {
                                             text: parent.text
                                             color: backgroundColor
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontTiny
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
                                         
-                                        onClicked: editarProcedimiento(index)
+                                        onClicked: editarAnalisis(index)
                                     }
                                     
                                     Button {
-                                        Layout.preferredWidth: baseUnit * 3.5
-                                        Layout.preferredHeight: baseUnit * 3.5
+                                        Layout.preferredWidth: baseUnit * 3
+                                        Layout.preferredHeight: baseUnit * 3
                                         text: "🗑️"
                                         
                                         background: Rectangle {
@@ -612,12 +722,12 @@ Item {
                                         contentItem: Label {
                                             text: parent.text
                                             color: backgroundColor
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontTiny
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
                                         
-                                        onClicked: eliminarProcedimiento(index)
+                                        onClicked: eliminarAnalisis(index)
                                     }
                                 }
                             }
@@ -630,21 +740,21 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: "transparent"
-                    visible: tiposProcedimientosData.length === 0
+                    visible: tiposAnalisisData.length === 0
                     
                     ColumnLayout {
                         anchors.centerIn: parent
                         spacing: marginMedium
                         
                         Label {
-                            text: "🩹"
+                            text: "🧪"
                             font.pixelSize: fontTitle * 2
                             color: textSecondaryColor
                             Layout.alignment: Qt.AlignHCenter
                         }
                         
                         Label {
-                            text: "No hay procedimientos registrados"
+                            text: "No hay tipos de análisis registrados"
                             color: textColor
                             font.bold: true
                             font.pixelSize: fontMedium
@@ -653,7 +763,7 @@ Item {
                         }
                         
                         Label {
-                            text: "Agrega el primer procedimiento usando el formulario superior"
+                            text: "Agrega el primer tipo de análisis usando el formulario superior"
                             color: textSecondaryColor
                             font.pixelSize: fontBase
                             Layout.alignment: Qt.AlignHCenter
@@ -668,14 +778,14 @@ Item {
     }
     
     // ===== EVENTOS =====
-    onTiposProcedimientosChanged: {
-        if (tiposProcedimientos && tiposProcedimientos !== tiposProcedimientosData) {
-            tiposProcedimientosData = tiposProcedimientos
-            console.log("🔄 Datos de tipos de procedimientos actualizados desde exterior")
+    onTiposAnalisisChanged: {
+        if (tiposAnalisis && tiposAnalisis !== tiposAnalisisData) {
+            tiposAnalisisData = tiposAnalisis
+            console.log("🔄 Datos de tipos de análisis actualizados desde exterior")
         }
     }
     
     Component.onCompleted: {
-        console.log("🩹 Componente de configuración de tipos de procedimientos iniciado")
+        console.log("🧪 Componente de configuración de tipos de análisis iniciado")
     }
 }

@@ -99,62 +99,7 @@ Item {
     }
 
     // Modelo para gastos existentes
-    property var gastosModel: [
-        {
-            gastoId: "1",
-            tipoGasto: "Servicios Públicos",
-            descripcion: "Factura de energía eléctrica - Enero 2025",
-            monto: "450.00",
-            fechaGasto: "2025-01-31",
-            proveedorEmpresa: "DELAPAZ S.A.",
-            registradoPor: "Luis López"
-        },
-        {
-            gastoId: "2",
-            tipoGasto: "Personal",
-            descripcion: "Pago quincenal - Personal administrativo",
-            monto: "12500.00",
-            fechaGasto: "2025-06-15",
-            proveedorEmpresa: "Clínica San Rafael",
-            registradoPor: "Luis López"
-        },
-        {
-            gastoId: "3",
-            tipoGasto: "Alimentación",
-            descripcion: "Refrigerios para personal - Semana 25",
-            monto: "280.50",
-            fechaGasto: "2025-06-20",
-            proveedorEmpresa: "Panadería Central",
-            registradoPor: "Luis López"
-        },
-        {
-            gastoId: "4",
-            tipoGasto: "Mantenimiento",
-            descripcion: "Reparación de aire acondicionado - Consulta 2",
-            monto: "350.00",
-            fechaGasto: "2025-06-18",
-            proveedorEmpresa: "Refrigeración López",
-            registradoPor: "Luis López"
-        },
-        {
-            gastoId: "5",
-            tipoGasto: "Administrativos",
-            descripcion: "Renovación licencia software de gestión",
-            monto: "890.00",
-            fechaGasto: "2025-06-10",
-            proveedorEmpresa: "TechSoft Bolivia",
-            registradoPor: "Luis López"
-        },
-        {
-            gastoId: "6",
-            tipoGasto: "Suministros Médicos",
-            descripcion: "Compra de insumos médicos - Mes de junio",
-            monto: "650.75",
-            fechaGasto: "2025-06-19",
-            proveedorEmpresa: "Farmacéutica del Sur",
-            registradoPor: "Luis López"
-        }
-    ]
+    property var gastosModel: []
 
     ColumnLayout {
         anchors.fill: parent
@@ -231,37 +176,6 @@ Item {
                                 isEditMode = false
                                 editingIndex = -1
                                 showNewGastoDialog = true
-                            }
-                        }
-                        
-                        // Botón de configuración (engranaje)
-                        Button {
-                            id: configButton
-                            text: "⚙️"
-                            font.pixelSize: 18
-                            
-                            background: Rectangle {
-                                color: "#6c757d"
-                                radius: 12
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            
-                            onClicked: configMenu.open()
-                            
-                            Menu {
-                                id: configMenu
-                                y: parent.height
-                                
-                                MenuItem {
-                                    text: "💰 Configuración de Tipos de Gastos"
-                                    // ===== MODIFICADO: EMITIR SEÑAL EN LUGAR DE CAMBIAR BOOLEANO =====
-                                    onTriggered: serviciosBasicosRoot.irAConfigServiciosBasicos()
-                                }
                             }
                         }
                     }
@@ -1127,7 +1041,6 @@ Item {
         }
     }
     
-    // ===== ELIMINADOS: configTiposGastosBackground y configTiposGastosDialog =====
     
     // Función para aplicar filtros (SIN FILTRO DE ESTADO)
     function aplicarFiltros() {
