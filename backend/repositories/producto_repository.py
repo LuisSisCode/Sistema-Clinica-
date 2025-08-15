@@ -351,19 +351,26 @@ class ProductoRepository(BaseRepository):
         ]
         
         # Ejecutar transacción
-        success = self.execute_transaction(operaciones)
-        
-        if success:
-            # Obtener ID del lote creado
-            lote_result = self._execute_query(lote_query, (producto_id, cantidad_caja, cantidad_unitario, fecha_vencimiento), fetch_one=True)
-            lote_id = lote_result['id'] if lote_result else None
+        # Crear el lote primero para obtener su ID
+        lote_result = self._execute_query(lote_query, (producto_id, cantidad_caja, cantidad_unitario, fecha_vencimiento), fetch_one=True)
+
+        if lote_result and isinstance(lote_result, dict) and 'id' in lote_result:
+            lote_id = lote_result['id']
             
-            print(f"📈 Stock aumentado - Producto ID: {producto_id}, Lote ID: {lote_id}")
-            print(f"📦 Cajas: +{cantidad_caja}, Unitarios: +{cantidad_unitario}")
+            # Ahora actualizar el producto
+            producto_query_params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id) if precio_compra else (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
+            success = self._execute_query(producto_query, producto_query_params, fetch_all=False, use_cache=False)
             
-            return lote_id
-        
-        return None
+            if success:
+                print(f"📈 Stock aumentado - Producto ID: {producto_id}, Lote ID: {lote_id}")
+                print(f"📦 Cajas: +{cantidad_caja}, Unitarios: +{cantidad_unitario}")
+                return lote_id
+            else:
+                print(f"❌ ERROR: No se pudo actualizar stock del producto {producto_id}")
+                return None
+        else:
+            print(f"❌ ERROR: No se pudo crear lote para producto {producto_id}")
+            return None
     
     # ===============================
     # REPORTES Y ESTADÍSTICAS

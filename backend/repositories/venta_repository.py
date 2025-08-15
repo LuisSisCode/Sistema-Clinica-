@@ -1,11 +1,13 @@
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
+import pyodbc
 
 from ..core.base_repository import BaseRepository
 from ..core.excepciones import (
     VentaError, StockInsuficienteError, ProductoNotFoundError,
-    ValidationError, ExceptionHandler, validate_required, validate_positive_number
+    ValidationError, ExceptionHandler, validate_required, validate_positive_number,
+    DatabaseTransactionError
 )
 from .producto_repository import ProductoRepository
 
@@ -19,6 +21,7 @@ class VentaRepository(BaseRepository):
     
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene ventas del día actual"""
+        print("🐛 DEBUG: get_active() llamado para ventas del día")
         query = """
         SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
         FROM Ventas v
@@ -26,7 +29,13 @@ class VentaRepository(BaseRepository):
         WHERE CAST(v.Fecha AS DATE) = CAST(GETDATE() AS DATE)
         ORDER BY v.Fecha DESC
         """
-        return self._execute_query(query)
+        resultado = self._execute_query(query)
+        print(f"🐛 DEBUG: get_active() encontró {len(resultado) if resultado else 0} ventas del día")
+        
+        if resultado:
+            print(f"🐛 DEBUG: Primera venta: {resultado[0]}")
+        
+        return resultado
     
     def get_ventas_con_detalles(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
         """Obtiene ventas con sus detalles en período específico"""
@@ -62,6 +71,8 @@ class VentaRepository(BaseRepository):
     
     def get_venta_completa(self, venta_id: int) -> Dict[str, Any]:
         """Obtiene venta con todos sus detalles"""
+        print(f"🐛 DEBUG: get_venta_completa llamado con venta_id: {venta_id} (tipo: {type(venta_id)})")
+
         validate_required(venta_id, "venta_id")
         
         # Obtener datos principales de la venta
@@ -72,9 +83,12 @@ class VentaRepository(BaseRepository):
         INNER JOIN Usuario u ON v.Id_Usuario = u.id
         WHERE v.id = ?
         """
+        print(f"🐛 DEBUG: Ejecutando query con parámetro: {venta_id}")
         venta = self._execute_query(venta_query, (venta_id,), fetch_one=True)
+        print(f"🐛 DEBUG: Resultado de query venta: {venta} (tipo: {type(venta)})")
         
         if not venta:
+            print(f"❌ DEBUG: Venta no encontrada para ID: {venta_id}")
             raise VentaError(f"Venta no encontrada: {venta_id}", venta_id)
         
         # Obtener detalles de la venta
@@ -122,23 +136,16 @@ class VentaRepository(BaseRepository):
         return self._execute_query(query, use_cache=False)
     
     # ===============================
-    # CREACIÓN DE VENTAS CON FIFO
+    # CREACIÓN DE VENTAS CON FIFO - VERSIÓN CORREGIDA
     # ===============================
     
     @ExceptionHandler.handle_exception
     def crear_venta(self, usuario_id: int, items_venta: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Crea una nueva venta con validación y aplicación automática de FIFO
-        
-        Args:
-            usuario_id: ID del usuario vendedor
-            items_venta: Lista de items [{'codigo': str, 'cantidad': int, 'precio': float}]
-            
-        Returns:
-            Información completa de la venta creada
+        Crea una venta completa usando transacciones para evitar problemas de FK
         """
-        validate_required(usuario_id, "usuario_id")
-        validate_required(items_venta, "items_venta")
+        print(f"🐛 DEBUG: Iniciando crear_venta - usuario_id: {usuario_id}")
+        print(f"🐛 DEBUG: items_venta recibidos: {items_venta}")
         
         if not items_venta:
             raise VentaError("No se proporcionaron items para la venta")
@@ -149,135 +156,199 @@ class VentaRepository(BaseRepository):
         items_preparados = []
         total_venta = Decimal('0.00')
         
-        for item in items_venta:
-            item_preparado = self._validar_y_preparar_item(item)
-            items_preparados.append(item_preparado)
-            total_venta += item_preparado['subtotal']
+        try:
+            for i, item in enumerate(items_venta):
+                print(f"🔍 DEBUG: Procesando item {i}: {item}")
+                item_preparado = self._validar_y_preparar_item(item)
+                items_preparados.append(item_preparado)
+                total_venta += item_preparado['subtotal']
+            
+            print(f"🔍 DEBUG: Items preparados exitosamente: {len(items_preparados)}")
+            
+        except Exception as e:
+            print(f"❌ ERROR en preparación de items: {e}")
+            raise e
         
-        # 2. Crear venta principal
-        venta_data = {
-            'Id_Usuario': usuario_id,
-            'Fecha': datetime.now(),
-            'Total': float(total_venta)
-        }
+        # 2. USAR TRANSACCIÓN COMPLETA para crear venta + detalles
+        return self._crear_venta_con_transaccion(usuario_id, items_preparados, total_venta)
+    
+    def _crear_venta_con_transaccion(self, usuario_id: int, items_preparados: List[Dict], total_venta: Decimal) -> Dict[str, Any]:
+        """
+        Crea venta usando una sola transacción para venta principal + todos los detalles
+        """
+        conn = None
+        venta_id = None
         
-        venta_id = self.insert(venta_data)
-        if not venta_id:
-            raise VentaError("Error creando venta principal")
+        try:
+            # Obtener conexión única para toda la transacción
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            print("🔄 Iniciando transacción completa de venta...")
+            
+            # PASO 1: Insertar venta principal
+            venta_query = """
+            INSERT INTO Ventas (Id_Usuario, Fecha, Total) 
+            OUTPUT INSERTED.id 
+            VALUES (?, ?, ?)
+            """
+            
+            cursor.execute(venta_query, (usuario_id, datetime.now(), float(total_venta)))
+            venta_result = cursor.fetchone()
+            
+            if not venta_result:
+                raise VentaError("Error creando venta principal")
+            
+            venta_id = venta_result[0]
+            print(f"💰 Venta creada en transacción - ID: {venta_id}, Total: ${total_venta}")
+            
+            # PASO 2: Procesar todos los items y crear detalles
+            todos_los_detalles = []
+            
+            for i, item in enumerate(items_preparados):
+                print(f"🔄 Procesando item {i} en transacción...")
+                
+                # Reducir stock FIFO (esto usa su propia transacción)
+                lotes_afectados = self.producto_repo.reducir_stock_fifo(
+                    item['producto_id'], 
+                    item['cantidad']
+                )
+                print(f"📦 Stock reducido - Lotes afectados: {len(lotes_afectados)}")
+                
+                # Crear detalles para cada lote
+                for lote_info in lotes_afectados:
+                    detalle_query = """
+                    INSERT INTO DetallesVentas (Id_Venta, Id_Lote, Cantidad_Unitario, Precio_Unitario, Detalles)
+                    OUTPUT INSERTED.id
+                    VALUES (?, ?, ?, ?, ?)
+                    """
+                    
+                    detalle_data = f"Venta automática FIFO - {item['producto_nombre']}"
+                    
+                    cursor.execute(detalle_query, (
+                        venta_id,
+                        lote_info['lote_id'],
+                        lote_info['cantidad_reducida'],
+                        item['precio'],
+                        detalle_data
+                    ))
+                    
+                    detalle_result = cursor.fetchone()
+                    if detalle_result:
+                        detalle_id = detalle_result[0]
+                        todos_los_detalles.append({
+                            'detalle_id': detalle_id,
+                            'lote_id': lote_info['lote_id'],
+                            'cantidad': lote_info['cantidad_reducida'],
+                            'precio': item['precio']
+                        })
+                        print(f"✅ Detalle creado - ID: {detalle_id}")
+                    else:
+                        raise VentaError(f"Error creando detalle para lote {lote_info['lote_id']}")
+            
+            # PASO 3: Commit de toda la transacción
+            conn.commit()
+            print(f"✅ Transacción completada - Venta: {venta_id}, Detalles: {len(todos_los_detalles)}")
+            
+            # Invalidar cache después de commit exitoso
+            self._invalidate_cache_after_modification()
+            
+            # PASO 4: Retornar venta completa
+            return self.get_venta_completa(venta_id)
+            
+        except Exception as e:
+            print(f"❌ ERROR en transacción de venta: {e}")
+            if conn:
+                conn.rollback()
+                print("🔄 Rollback realizado")
+            
+            # Si se creó la venta pero falló después, intentar limpiar
+            if venta_id:
+                try:
+                    self._limpiar_venta_fallida(venta_id)
+                except:
+                    pass
+            
+            raise VentaError(f"Error creando venta: {str(e)}")
         
-        print(f"💰 Venta creada - ID: {venta_id}, Total: ${total_venta}")
-        
-        # 3. Procesar items con FIFO y crear detalles
-        detalles_creados = []
-        operaciones_stock = []
-        
-        for item in items_preparados:
-            detalles_item = self._procesar_item_con_fifo(venta_id, item)
-            detalles_creados.extend(detalles_item)
-        
-        # 4. Verificar que se crearon detalles
-        if not detalles_creados:
-            # Eliminar venta si no se pudieron crear detalles
-            self.delete(venta_id)
-            raise VentaError("No se pudieron procesar los items de la venta")
-        
-        # 5. Retornar venta completa
-        venta_completa = self.get_venta_completa(venta_id)
-        
-        print(f"✅ Venta completada - ID: {venta_id}, Detalles: {len(detalles_creados)}")
-        
-        return venta_completa
+        finally:
+            if conn:
+                conn.close()
+    
+    def _limpiar_venta_fallida(self, venta_id: int):
+        """Limpia una venta que falló durante la creación"""
+        try:
+            operaciones = [
+                ("DELETE FROM DetallesVentas WHERE Id_Venta = ?", (venta_id,)),
+                ("DELETE FROM Ventas WHERE id = ?", (venta_id,))
+            ]
+            
+            success = self.execute_transaction(operaciones)
+            if success:
+                print(f"🗑️ Venta fallida limpiada: {venta_id}")
+        except Exception as e:
+            print(f"⚠️ Error limpiando venta fallida {venta_id}: {e}")
     
     def _validar_y_preparar_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """Valida y prepara un item para la venta"""
-        # Validaciones básicas
-        codigo = item.get('codigo', '').strip()
-        cantidad = item.get('cantidad', 0)
-        precio = item.get('precio')
+        print(f"🔍 DEBUG: _validar_y_preparar_item recibió: {item} (tipo: {type(item)})")
         
-        validate_required(codigo, "codigo")
-        validate_positive_number(cantidad, "cantidad")
-        
-        # Obtener producto
-        producto = self.producto_repo.get_by_codigo(codigo)
-        if not producto:
-            raise ProductoNotFoundError(codigo=codigo)
-        
-        # Verificar disponibilidad FIFO
-        disponibilidad = self.producto_repo.verificar_disponibilidad_fifo(
-            producto['id'], cantidad
-        )
-        
-        if not disponibilidad['disponible']:
-            raise StockInsuficienteError(
-                codigo, 
-                disponibilidad['cantidad_total_disponible'], 
-                cantidad
+        try:
+            # Validaciones básicas
+            codigo = item.get('codigo', '').strip()
+            cantidad = item.get('cantidad', 0)
+            precio = item.get('precio')
+            
+            print(f"🔍 DEBUG: Valores extraídos - codigo: {codigo}, cantidad: {cantidad}, precio: {precio}")
+            
+            validate_required(codigo, "codigo")
+            validate_positive_number(cantidad, "cantidad")
+            
+            # Obtener producto
+            producto = self.producto_repo.get_by_codigo(codigo)
+            if not producto:
+                raise ProductoNotFoundError(codigo=codigo)
+            
+            print(f"🔍 DEBUG: Producto encontrado: {producto['id']} - {producto['Nombre']}")
+            
+            # Verificar disponibilidad FIFO
+            disponibilidad = self.producto_repo.verificar_disponibilidad_fifo(
+                producto['id'], cantidad
             )
-        
-        # Usar precio del producto si no se especifica
-        if precio is None:
-            precio = float(producto['Precio_venta'])
-        else:
-            validate_positive_number(precio, "precio")
-        
-        subtotal = Decimal(str(cantidad)) * Decimal(str(precio))
-        
-        return {
-            'codigo': codigo,
-            'producto_id': producto['id'],
-            'producto_nombre': producto['Nombre'],
-            'cantidad': cantidad,
-            'precio': precio,
-            'subtotal': subtotal,
-            'disponibilidad': disponibilidad
-        }
-    
-    def _procesar_item_con_fifo(self, venta_id: int, item: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Procesa un item aplicando FIFO y creando detalles de venta"""
-        detalles_creados = []
-        
-        # Reducir stock usando FIFO
-        lotes_afectados = self.producto_repo.reducir_stock_fifo(
-            item['producto_id'], 
-            item['cantidad']
-        )
-        
-        # Crear detalle de venta por cada lote usado
-        for lote_info in lotes_afectados:
-            detalle_data = {
-                'Id_Venta': venta_id,
-                'Id_Lote': lote_info['lote_id'],
-                'Cantidad_Unitario': lote_info['cantidad_reducida'],
-                'Precio_Unitario': item['precio'],
-                'Detalles': f"Venta automática FIFO - {item['producto_nombre']}"
+            
+            print(f"🔍 DEBUG: Disponibilidad: {disponibilidad}")
+            
+            if not disponibilidad['disponible']:
+                raise StockInsuficienteError(
+                    codigo, 
+                    disponibilidad['cantidad_total_disponible'], 
+                    cantidad
+                )
+            
+            # Usar precio del producto si no se especifica
+            if precio is None:
+                precio = float(producto['Precio_venta'])
+            else:
+                validate_positive_number(precio, "precio")
+            
+            subtotal = Decimal(str(cantidad)) * Decimal(str(precio))
+            
+            item_preparado = {
+                'codigo': codigo,
+                'producto_id': producto['id'],
+                'producto_nombre': producto['Nombre'],
+                'cantidad': cantidad,
+                'precio': precio,
+                'subtotal': subtotal,
+                'disponibilidad': disponibilidad
             }
             
-            # Insertar detalle
-            detalle_query = """
-            INSERT INTO DetallesVentas (Id_Venta, Id_Lote, Cantidad_Unitario, Precio_Unitario, Detalles)
-            OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?, ?)
-            """
+            print(f"🔍 DEBUG: Item preparado exitosamente: {item_preparado}")
+            return item_preparado
             
-            detalle_result = self._execute_query(
-                detalle_query, 
-                (venta_id, lote_info['lote_id'], lote_info['cantidad_reducida'], 
-                 item['precio'], detalle_data['Detalles']),
-                fetch_one=True
-            )
-            
-            if detalle_result:
-                detalle_id = detalle_result['id']
-                detalles_creados.append({
-                    'detalle_id': detalle_id,
-                    'lote_id': lote_info['lote_id'],
-                    'cantidad': lote_info['cantidad_reducida'],
-                    'precio': item['precio']
-                })
-                print(f"📝 Detalle creado - ID: {detalle_id}, Lote: {lote_info['lote_id']}")
-        
-        return detalles_creados
+        except Exception as e:
+            print(f"❌ ERROR en _validar_y_preparar_item: {e}")
+            raise e
     
     # ===============================
     # ANULACIÓN DE VENTAS
@@ -287,13 +358,6 @@ class VentaRepository(BaseRepository):
     def anular_venta(self, venta_id: int, motivo: str = "Anulación manual") -> bool:
         """
         Anula una venta y restaura el stock usando FIFO inverso
-        
-        Args:
-            venta_id: ID de la venta a anular
-            motivo: Motivo de la anulación
-            
-        Returns:
-            True si se anuló correctamente
         """
         validate_required(venta_id, "venta_id")
         
@@ -341,7 +405,7 @@ class VentaRepository(BaseRepository):
         return success
     
     # ===============================
-    # REPORTES Y ESTADÍSTICAS
+    # REPORTES Y ESTADÍSTICAS (sin cambios)
     # ===============================
     
     def get_ventas_del_dia(self, fecha: str = None) -> Dict[str, Any]:

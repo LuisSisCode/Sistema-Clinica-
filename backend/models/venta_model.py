@@ -294,12 +294,16 @@ class VentaModel(QObject):
         self.operacionExitosa.emit("Carrito limpiado")
     
     # ===============================
-    # SLOTS PARA QML - VENTAS
+    # SLOTS PARA QML - VENTAS (VERSIÓN MEJORADA)
     # ===============================
     
     @Slot(result=bool)
     def procesar_venta_carrito(self):
-        """Procesa la venta con los items del carrito"""
+        """Procesa la venta con los items del carrito - VERSIÓN MEJORADA"""
+        print(f"🐛 DEBUG VentaModel: Iniciando procesar_venta_carrito")
+        print(f"🐛 DEBUG VentaModel: Items en carrito: {len(self._carrito_items)}")
+        print(f"🐛 DEBUG VentaModel: Usuario actual: {self._usuario_actual}")
+        
         if not self._carrito_items:
             self.operacionError.emit("Carrito vacío")
             return False
@@ -311,45 +315,89 @@ class VentaModel(QObject):
         self._set_procesando_venta(True)
         
         try:
-            # Preparar items para venta
+            # Preparar items para venta con validación estricta
             items_venta = []
-            for item in self._carrito_items:
-                items_venta.append({
-                    'codigo': item['codigo'],
-                    'cantidad': item['cantidad'],
-                    'precio': item['precio']
-                })
+            for i, item in enumerate(self._carrito_items):
+                print(f"🐛 DEBUG VentaModel: Preparando item {i}: {item}")
+                
+                # Validar que el item sea un diccionario válido
+                if not isinstance(item, dict):
+                    raise VentaError(f"Item {i} del carrito está corrupto")
+                
+                # Validar claves requeridas
+                required_keys = ['codigo', 'cantidad', 'precio']
+                missing_keys = [key for key in required_keys if key not in item]
+                if missing_keys:
+                    raise VentaError(f"Item {i} incompleto: faltan {missing_keys}")
+                
+                # Crear item para venta con validación de tipos
+                try:
+                    codigo = str(item['codigo']).strip()
+                    cantidad = int(item['cantidad'])
+                    precio = float(item['precio'])
+                    
+                    if not codigo:
+                        raise VentaError(f"Código vacío en item {i}")
+                    if cantidad <= 0:
+                        raise VentaError(f"Cantidad inválida en item {i}: {cantidad}")
+                    if precio <= 0:
+                        raise VentaError(f"Precio inválido en item {i}: {precio}")
+                    
+                    item_venta = {
+                        'codigo': codigo,
+                        'cantidad': cantidad,
+                        'precio': precio
+                    }
+                    items_venta.append(item_venta)
+                    
+                except (ValueError, TypeError) as e:
+                    raise VentaError(f"Datos inválidos en item {i}: {e}")
             
-            # Procesar venta
-            venta = safe_execute(
-                self.venta_repo.crear_venta, 
-                self._usuario_actual, 
-                items_venta
-            )
-            
-            if venta:
-                # Limpiar carrito
-                self.limpiar_carrito()
+            print(f"🐛 DEBUG VentaModel: Items preparados para repository: {items_venta}")
+        
+            # PROCESAR VENTA EN REPOSITORY CON MANEJO ROBUSTO
+            try:
+                venta = self.venta_repo.crear_venta(self._usuario_actual, items_venta)
+                print(f"✅ Venta creada exitosamente: {venta}")
                 
-                # Actualizar datos
-                self._cargar_ventas_hoy()
-                self._cargar_estadisticas()
-                
-                # Establecer venta actual
-                self._venta_actual = venta
-                self.ventaActualChanged.emit()
-                
-                # Emitir signals
-                self.ventaCreada.emit(venta['id'], float(venta['Total']))
-                self.operacionExitosa.emit(f"Venta procesada: ${venta['Total']:.2f}")
-                
-                print(f"✅ Venta exitosa - ID: {venta['id']}, Total: ${venta['Total']}")
-                return True
-            else:
-                raise VentaError("Error procesando venta")
+                if venta and isinstance(venta, dict) and 'id' in venta:
+                    # Limpiar carrito
+                    self.limpiar_carrito()
+                    
+                    # Actualizar datos
+                    self._cargar_ventas_hoy()
+                    self._cargar_estadisticas()
+                    
+                    # Establecer venta actual
+                    self._venta_actual = venta
+                    self.ventaActualChanged.emit()
+                    
+                    # Emitir signals
+                    self.ventaCreada.emit(int(venta['id']), float(venta['Total']))
+                    self.operacionExitosa.emit(f"Venta procesada: ${venta['Total']:.2f}")
+                    
+                    print(f"✅ Venta exitosa - ID: {venta['id']}, Total: ${venta['Total']}")
+                    return True
+                else:
+                    raise VentaError("Respuesta inválida del repository")
+                    
+            except Exception as repo_error:
+                print(f"❌ ERROR del repository: {repo_error}")
+                raise VentaError(f"Error en repository: {str(repo_error)}")
                 
         except Exception as e:
-            self.operacionError.emit(f"Error en venta: {str(e)}")
+            print(f"❌ ERROR en procesar_venta_carrito: {e}")
+            error_msg = str(e)
+            
+            # Mejorar mensajes de error para el usuario
+            if "Foreign Key" in error_msg or "FK__" in error_msg:
+                error_msg = "Error de integridad en base de datos. Contacte al administrador."
+            elif "Stock insuficiente" in error_msg:
+                error_msg = "Stock insuficiente para uno o más productos."
+            elif "No se proporcionaron items" in error_msg:
+                error_msg = "No hay items en el carrito para procesar."
+            
+            self.operacionError.emit(f"Error en venta: {error_msg}")
             return False
         finally:
             self._set_procesando_venta(False)
@@ -435,8 +483,115 @@ class VentaModel(QObject):
             self._set_loading(False)
     
     # ===============================
-    # SLOTS PARA QML - CONSULTAS
+    # SLOTS PARA QML - CONSULTAS (MEJORADO)
     # ===============================
+    
+    @Slot(int, result='QVariantMap')
+    def obtener_detalle_venta(self, venta_id: int):
+        """Obtiene el detalle completo de una venta específica - VERSIÓN MEJORADA"""
+        try:
+            print(f"🔍 VentaModel: Obteniendo detalle de venta {venta_id}")
+            
+            # Validar parámetro
+            if not isinstance(venta_id, int) or venta_id <= 0:
+                print(f"❌ VentaModel: ID de venta inválido: {venta_id}")
+                return {}
+            
+            # Obtener detalle del repository con manejo robusto
+            try:
+                detalle = self.venta_repo.get_venta_completa(venta_id)
+                print(f"🔍 VentaModel: Detalle obtenido del repository")
+                
+                if not detalle:
+                    print(f"❌ VentaModel: No se encontró venta con ID {venta_id}")
+                    return {}
+                
+                # Validar estructura del detalle
+                if not isinstance(detalle, dict):
+                    print(f"❌ VentaModel: Detalle no es diccionario: {type(detalle)}")
+                    return {}
+                
+                # Verificar claves requeridas
+                required_keys = ['id', 'Fecha', 'Total']
+                missing_keys = [key for key in required_keys if key not in detalle]
+                if missing_keys:
+                    print(f"❌ VentaModel: Detalle falta claves: {missing_keys}")
+                    return {}
+                
+                # Formatear fecha de manera segura
+                fecha_formateada = "Fecha no disponible"
+                try:
+                    if hasattr(detalle['Fecha'], 'strftime'):
+                        fecha_formateada = detalle['Fecha'].strftime('%Y-%m-%d %H:%M')
+                    else:
+                        fecha_formateada = str(detalle['Fecha'])
+                except Exception as e:
+                    print(f"⚠️ VentaModel: Error formateando fecha: {e}")
+                
+                # Obtener vendedor de manera segura
+                vendedor = detalle.get('Vendedor', 'Usuario desconocido')
+                if not isinstance(vendedor, str):
+                    vendedor = str(vendedor) if vendedor is not None else 'Usuario desconocido'
+                
+                # Validar y formatear total
+                try:
+                    total = float(detalle['Total'])
+                except (ValueError, TypeError):
+                    print(f"⚠️ VentaModel: Error convirtiendo total: {detalle['Total']}")
+                    total = 0.0
+                
+                # Procesar detalles de productos de manera segura
+                detalles_productos = detalle.get('detalles', [])
+                if not isinstance(detalles_productos, list):
+                    print(f"⚠️ VentaModel: detalles no es lista: {type(detalles_productos)}")
+                    detalles_productos = []
+                
+                # Formatear detalles para QML
+                detalles_formateados = []
+                for i, item_detalle in enumerate(detalles_productos):
+                    try:
+                        if isinstance(item_detalle, dict):
+                            detalle_formateado = {
+                                'codigo': str(item_detalle.get('Producto_Codigo', 'N/A')),
+                                'nombre': str(item_detalle.get('Producto_Nombre', 'Producto desconocido')),
+                                'cantidad': float(item_detalle.get('Cantidad_Unitario', 0)),
+                                'precio': float(item_detalle.get('Precio_Unitario', 0)),
+                                'subtotal': float(item_detalle.get('Subtotal', 0))
+                            }
+                            detalles_formateados.append(detalle_formateado)
+                        else:
+                            print(f"⚠️ VentaModel: Detalle {i} no es dict: {type(item_detalle)}")
+                    except Exception as e:
+                        print(f"⚠️ VentaModel: Error procesando detalle {i}: {e}")
+                
+                # Resultado final formateado para QML
+                resultado = {
+                    'id': int(detalle['id']),
+                    'fecha': fecha_formateada,
+                    'vendedor': vendedor,
+                    'total': total,
+                    'detalles': detalles_formateados,
+                    'total_items': len(detalles_formateados)
+                }
+                
+                print(f"📋 VentaModel: Detalle formateado exitosamente: {len(detalles_formateados)} items")
+                return resultado
+                
+            except Exception as repo_error:
+                print(f"❌ VentaModel: Error del repository: {repo_error}")
+                return {
+                    'id': venta_id,
+                    'fecha': 'Error',
+                    'vendedor': 'Error',
+                    'total': 0.0,
+                    'detalles': [],
+                    'total_items': 0,
+                    'error': str(repo_error)
+                }
+            
+        except Exception as e:
+            print(f"❌ VentaModel: Error general obteniendo detalle: {e}")
+            return {}
     
     @Slot(int, result='QVariant')
     def get_venta_detalle(self, venta_id: int):
@@ -520,13 +675,40 @@ class VentaModel(QObject):
     
     def _cargar_ventas_hoy(self):
         """Carga ventas del día actual"""
+        print("🐛 DEBUG VentaModel: _cargar_ventas_hoy() iniciado")
         try:
             ventas = safe_execute(self.venta_repo.get_active)
-            self._ventas_hoy = ventas or []
+            print(f"🐛 DEBUG VentaModel: Ventas desde repository: {ventas}")
+            
+            # ✅ CONVERTIR A FORMATO QML-COMPATIBLE
+            ventas_formateadas = []
+            if ventas:
+                for venta in ventas:
+                    try:
+                        venta_formateada = {
+                            'id': int(venta['id']),
+                            'idVenta': str(venta['id']),
+                            'usuario': str(venta.get('Vendedor', 'Usuario desconocido')),
+                            'tipoUsuario': 'Vendedor',
+                            'total': float(venta['Total']),
+                            'fecha': venta['Fecha'].strftime('%Y-%m-%d') if hasattr(venta['Fecha'], 'strftime') else str(venta['Fecha']),
+                            'hora': venta['Fecha'].strftime('%H:%M') if hasattr(venta['Fecha'], 'strftime') else '00:00',
+                            'fechaCompleta': venta['Fecha'].isoformat() if hasattr(venta['Fecha'], 'isoformat') else str(venta['Fecha'])
+                        }
+                        ventas_formateadas.append(venta_formateada)
+                    except Exception as e:
+                        print(f"⚠️ Error formateando venta: {e}")
+                        continue
+            
+            print(f"🐛 DEBUG VentaModel: Ventas formateadas: {len(ventas_formateadas)}")
+            
+            self._ventas_hoy = ventas_formateadas
             self.ventasHoyChanged.emit()
             
         except Exception as e:
             print(f"❌ Error cargando ventas hoy: {e}")
+            self._ventas_hoy = []
+            self.ventasHoyChanged.emit()
     
     def _cargar_estadisticas(self):
         """Carga estadísticas del día"""

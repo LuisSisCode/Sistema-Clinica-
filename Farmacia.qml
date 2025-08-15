@@ -28,20 +28,20 @@ Item {
     property var compraModel: null
     
     // Estado de conectividad
-    property bool modelsReady: inventarioModel !== null && ventaModel !== null && compraModel !== null
+    property bool modelsReady: appController && appController.inventario_model_instance !== null && appController.venta_model_instance !== null && appController.compra_model_instance !== null
     property bool dataLoading: false
 
     // Properties para acceso reactivo a models QObject (SIN FALLBACK)
-    property var proveedoresModel: modelsReady ? (compraModel.proveedores || []) : []
-    property var lotesModel: modelsReady ? (inventarioModel.lotes_activos || []) : []
-    property var ventasModel: modelsReady ? (ventaModel.ventas_hoy || []) : []
-    property var productosUnicosModel: modelsReady ? (inventarioModel.productos || []) : []
-    property var comprasModel: modelsReady ? (compraModel.compras_recientes || []) : []
+    property var proveedoresModel: compraModel ? compraModel.proveedores : []
+    property var lotesModel: inventarioModel ? inventarioModel.lotes_activos : []
+    property var ventasModel: ventaModel ? ventaModel.ventas_hoy : []
+    property var productosUnicosModel: inventarioModel ? inventarioModel.productos : []
+    property var comprasModel: compraModel ? compraModel.compras_recientes : []
 
     // Properties adicionales de estado
-    property var searchResults: modelsReady ? (inventarioModel.search_results || []) : []
-    property var alertas: modelsReady ? (inventarioModel.alertas || []) : []
-    property var carritoItems: modelsReady ? (ventaModel.carrito_items || []) : []
+    property var searchResults: inventarioModel ? inventarioModel.search_results : []
+    property var alertas: inventarioModel ? inventarioModel.alertas : []
+    property var carritoItems: ventaModel ? ventaModel.carrito_items : []
 
     // ===== INICIALIZACIÓN Y CONEXIÓN DE MODELS =====
     
@@ -54,16 +54,13 @@ Item {
             ventaModel = appController.venta_model_instance
             compraModel = appController.compra_model_instance
             
-            // Configurar usuario actual (hardcoded por ahora)
-            if (ventaModel) {
-                ventaModel.set_usuario_actual(1) // Usuario ID 1
-            }
-            if (compraModel) {
-                compraModel.set_usuario_actual(1) // Usuario ID 1
-            }
-            
             console.log("✅ Models conectados a Farmacia")
-            
+            // Actualizar estado de conectividad
+            if (compraModel) {
+                console.log("🔄 Forzando refresh de CompraModel...")
+                compraModel.force_refresh_compras()
+            }
+
             // Cargar datos iniciales
             if (inventarioModel) {
                 inventarioModel.refresh_productos()
@@ -278,7 +275,6 @@ Item {
     // Función para obtener productos únicos para la vista principal (CON DATOS REALES)
     function obtenerProductosParaVista() {
         if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
             return []
         }
         
@@ -650,7 +646,9 @@ Item {
                 
                 // Propiedades que se pasan a los componentes cargados
                 property int subsection: currentSubSection
-                property var farmaciaData: farmaciaRoot // Referencia al componente principal
+                property var inventarioModel: farmaciaRoot.inventarioModel
+                property var ventaModel: farmaciaRoot.ventaModel  
+                property var compraModel: farmaciaRoot.compraModel
                 
                 function updateSource() {
                     var newSource = getSourceForSubsection(currentSubSection)
@@ -661,10 +659,10 @@ Item {
                 
                 function getSourceForSubsection(subsection) {
                     switch(subsection) {
-                        case 0: return "Ventas.qml"
+                        case 0: return "VentasMain.qml"
                         case 1: return "Productos.qml"
-                        case 2: return "Compras.qml"
-                        default: return "Ventas.qml"
+                        case 2: return "ComprasMain.qml"
+                        default: return "VentasMain.qml" 
                     }
                 }
                 
@@ -792,7 +790,7 @@ Item {
     }
     
     function getCurrentSubSectionFile() {
-        const files = ["Ventas.qml", "Productos.qml", "Compras.qml"]
+        const files = ["VentasMain.qml", "Productos.qml", "ComprasMain.qml"]  // ← CAMBIADO
         return files[currentSubSection] || "Archivo.qml"
     }
     
@@ -809,19 +807,14 @@ Item {
             console.log("🚀 Models conectados:")
             console.log("📦 Productos disponibles:", productosUnicosModel.length)
             console.log("🏢 Proveedores:", proveedoresModel.length) 
-            console.log("🛒 Compras recientes:", comprasModel.length)
-            console.log("💰 Ventas del día:", ventasModel.length)
-            
-            // Debug de un producto específico
-            if (productosUnicosModel.length > 0) {
-                var primerProducto = productosUnicosModel[0]
-                console.log("🔍 Debug primer producto:", JSON.stringify(primerProducto))
-                
-                if (primerProducto.Codigo) {
-                    debugProductoData(primerProducto.Codigo)
-                }
+
+            // DEBUG ESPECÍFICO PARA COMPRAS
+            if (compraModel) {
+                console.log("🛒 CompraModel disponible:", !!compraModel)
+                console.log("🛒 Compras recientes (direct):", compraModel.compras_recientes ? compraModel.compras_recientes.length : "undefined")
+                console.log("🛒 Total compras mes (property):", compraModel.total_compras_mes)
             }
-            
+            console.log("💰 Ventas del día:", ventasModel.length)
             // Configurar alertas automáticas
             if (inventarioModel) {
                 inventarioModel.configurar_stock_minimo(10)

@@ -59,13 +59,29 @@ class BaseRepository(ABC):
                 return cached_result
         
         with self._lock:
+            conn = None
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 
+                # Debug: Imprimir query y parámetros
+                print(f"🔍 DEBUG SQL: {query[:100]}...")
+                print(f"🔍 DEBUG PARAMS: {params}")
+                
+                # Debug: Mostrar análisis de la query
+                query_upper = query.strip().upper()
+                is_select = query_upper.startswith('SELECT')
+                has_output = 'OUTPUT INSERTED' in query_upper
+                has_insert = 'INSERT' in query_upper
+                print(f"🔍 DEBUG QUERY ANALYSIS:")
+                print(f"   - Es SELECT: {is_select}")
+                print(f"   - Tiene OUTPUT INSERTED: {has_output}")
+                print(f"   - Tiene INSERT: {has_insert}")
+                print(f"   - Query path: {'SELECT' if is_select else 'OUTPUT INSERT' if (has_output and has_insert) else 'NORMAL'}")
+                
                 cursor.execute(query, params)
                 
-                if query.strip().upper().startswith('SELECT'):
+                if query_upper.startswith('SELECT'):
                     # SELECT queries
                     if fetch_one:
                         row = cursor.fetchone()
@@ -79,27 +95,74 @@ class BaseRepository(ABC):
                         self.cache.set(query, result, params, self.cache_type)
                     
                     return result
+                    
+                elif has_output and has_insert:
+                    # INSERT con OUTPUT - MANEJO ESPECÍFICO PARA SQL SERVER
+                    print(f"🔍 DEBUG: Procesando INSERT con OUTPUT...")
+                    
+                    # En SQL Server, después de INSERT con OUTPUT, necesitamos fetchone()
+                    try:
+                        row = cursor.fetchone()
+                        print(f"🔍 DEBUG: Row obtenida: {row} (tipo: {type(row)})")
+                        
+                        if row is not None:
+                            # Convertir la fila a diccionario
+                            columns = [column[0] for column in cursor.description]
+                            result = {}
+                            
+                            for column, value in zip(columns, row):
+                                result[column] = value
+                                
+                            print(f"🔍 DEBUG: Resultado convertido: {result}")
+                            
+                            # Verificar que tenemos el ID
+                            if 'id' in result and result['id'] is not None:
+                                conn.commit()
+                                self._invalidate_cache_after_modification()
+                                print(f"✅ INSERT con OUTPUT exitoso - ID: {result['id']}")
+                                return result
+                            else:
+                                print(f"❌ ERROR: ID no encontrado en resultado: {result}")
+                                conn.rollback()
+                                return None
+                        else:
+                            print(f"❌ ERROR: cursor.fetchone() retornó None")
+                            conn.rollback()
+                            return None
+                            
+                    except Exception as fetch_error:
+                        print(f"❌ ERROR en fetchone(): {fetch_error}")
+                        conn.rollback()
+                        return None
+                        
                 else:
-                    # INSERT, UPDATE, DELETE queries
+                    # UPDATE, DELETE queries normales
+                    print(f"🔍 DEBUG: Procesando query normal (UPDATE/DELETE)...")
                     affected_rows = cursor.rowcount
                     conn.commit()
                     
                     # Invalidar caché después de operaciones CUD
                     self._invalidate_cache_after_modification()
                     
+                    print(f"✅ {query.split()[0]} completado - Filas afectadas: {affected_rows}")
                     return affected_rows
                     
             except pyodbc.Error as e:
-                if 'conn' in locals():
+                if conn:
                     conn.rollback()
+                print(f"❌ ERROR SQL: {str(e)}")
+                print(f"🔍 Query problemática: {query}")
+                print(f"🔍 Parámetros: {params}")
                 raise DatabaseQueryError(f"Error SQL: {str(e)}", query, params)
             except Exception as e:
-                if 'conn' in locals():
+                if conn:
                     conn.rollback()
+                print(f"❌ ERROR INESPERADO: {str(e)}")
                 raise DatabaseQueryError(f"Error inesperado: {str(e)}", query, params)
             finally:
-                if 'conn' in locals():
+                if conn:
                     conn.close()
+
     
     def _row_to_dict(self, cursor: pyodbc.Cursor, row: pyodbc.Row) -> Dict[str, Any]:
         """Convierte fila de SQL a diccionario"""
@@ -170,15 +233,6 @@ class BaseRepository(ABC):
         return result['count'] if result else 0
     
     def insert(self, data: Dict[str, Any]) -> int:
-        """
-        Inserta nuevo registro
-        
-        Args:
-            data: Diccionario con datos a insertar
-            
-        Returns:
-            ID del registro insertado
-        """
         validate_required(data, "data")
         
         fields = list(data.keys())
@@ -192,12 +246,22 @@ class BaseRepository(ABC):
         VALUES ({placeholders})
         """
         
-        result = self._execute_query(query, values, fetch_one=True)
-        inserted_id = result['id'] if result else None
+        print(f"🔍 DEBUG INSERT: Tabla {self.table_name}")
+        print(f"🔍 DEBUG INSERT: Campos {fields}")
+        print(f"🔍 DEBUG INSERT: Valores {values}")
         
-        print(f"✅ INSERT {self.table_name}: ID {inserted_id}")
-        return inserted_id
-    
+        result = self._execute_query(query, values, fetch_one=True)
+        
+        # Manejo mejorado del resultado
+        if result and isinstance(result, dict) and 'id' in result:
+            inserted_id = result['id']
+            print(f"✅ INSERT {self.table_name}: ID {inserted_id}")
+            return inserted_id
+        else:
+            print(f"❌ ERROR: INSERT falló para {self.table_name}")
+            print(f"❌ Resultado obtenido: {result} (tipo: {type(result)})")
+            return None
+
     def update(self, record_id: int, data: Dict[str, Any]) -> bool:
         """
         Actualiza registro existente

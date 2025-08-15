@@ -71,7 +71,7 @@ class CompraRepository(BaseRepository):
         # Datos principales de la compra
         compra_query = """
         SELECT c.*, p.Nombre as Proveedor_Nombre, p.Direccion as Proveedor_Direccion,
-               u.Nombre + ' ' + u.Apellido_Paterno as Usuario
+            u.Nombre + ' ' + u.Apellido_Paterno as Usuario
         FROM Compra c
         INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
@@ -82,7 +82,7 @@ class CompraRepository(BaseRepository):
         if not compra:
             raise CompraError(f"Compra no encontrada: {compra_id}", compra_id=compra_id)
         
-        # Detalles de la compra
+        # Detalles de la compra - CORRECCIÓN APLICADA
         detalles_query = """
         SELECT 
             dc.*,
@@ -95,7 +95,7 @@ class CompraRepository(BaseRepository):
         FROM DetalleCompra dc
         INNER JOIN Lote l ON dc.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
-        INNER JOIN Marca m ON p.ID_Marca = m.id
+        LEFT JOIN Marca m ON p.ID_Marca = m.id
         WHERE dc.Id_Compra = ?
         ORDER BY dc.id
         """
@@ -176,10 +176,14 @@ class CompraRepository(BaseRepository):
             'Total': float(total_compra)
         }
         
+        print(f"🔍 DEBUG: Datos de compra a insertar: {compra_data}")
         compra_id = self.insert(compra_data)
+        print(f"🔍 DEBUG: ID de compra retornado: {compra_id} (tipo: {type(compra_id)})")
+
         if not compra_id:
+            print(f"❌ ERROR: No se pudo crear la compra principal")
             raise CompraError("Error creando compra principal")
-        
+
         print(f"🛒 Compra creada - ID: {compra_id}, Total: ${total_compra}")
         
         # 3. Procesar items y crear lotes + detalles
@@ -512,3 +516,27 @@ class CompraRepository(BaseRepository):
             'total_db': compra['Total'],
             'total_calculado': total_calculado
         }
+    def get_active(self) -> List[Dict[str, Any]]:
+        """Obtiene compras del mes actual"""
+        query = """
+        SELECT c.*, p.Nombre as Proveedor_Nombre, u.Nombre + ' ' + u.Apellido_Paterno as Usuario
+        FROM Compra c
+        INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
+        INNER JOIN Usuario u ON c.Id_Usuario = u.id
+        WHERE MONTH(c.Fecha) = MONTH(GETDATE()) AND YEAR(c.Fecha) = YEAR(GETDATE())
+        ORDER BY c.Fecha DESC
+        """
+        
+        result = self._execute_query(query)
+        
+        # 🔍 DEBUG TEMPORAL - VER ESTRUCTURA EXACTA
+        if result and len(result) > 0:
+            print("🔍 DEBUG COMPRAS - Primer registro completo:")
+            primer_registro = result[0]
+            for key, value in primer_registro.items():
+                print(f"   {key}: {value} (tipo: {type(value)})")
+            print(f"🔍 TOTAL COMPRAS ENCONTRADAS: {len(result)}")
+        else:
+            print("❌ No se encontraron compras o resultado vacío")
+        
+        return result
