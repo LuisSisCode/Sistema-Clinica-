@@ -6,6 +6,9 @@ import QtQuick.Controls 2.15
 Item {
     id: farmaciaRoot
     objectName: "farmaciaRoot"
+
+    // Conexiones para navegación de productos
+
     
     // Propiedades de colores consistentes
     readonly property color primaryColor: "#273746"
@@ -27,18 +30,23 @@ Item {
     property var ventaModel: null 
     property var compraModel: null
     
-    // Estado de conectividad
-    property bool modelsReady: appController && appController.inventario_model_instance !== null && appController.venta_model_instance !== null && appController.compra_model_instance !== null
+    // Estado de conectividad mejorado
+    property bool modelsReady: {
+        return appController && 
+               appController.inventario_model_instance !== null && 
+               appController.venta_model_instance !== null && 
+               appController.compra_model_instance !== null
+    }
     property bool dataLoading: false
 
-    // Properties para acceso reactivo a models QObject (SIN FALLBACK)
+    // Properties para acceso reactivo a models QObject (CONECTADOS A BD)
     property var proveedoresModel: compraModel ? compraModel.proveedores : []
     property var lotesModel: inventarioModel ? inventarioModel.lotes_activos : []
     property var ventasModel: ventaModel ? ventaModel.ventas_hoy : []
     property var productosUnicosModel: inventarioModel ? inventarioModel.productos : []
     property var comprasModel: compraModel ? compraModel.compras_recientes : []
 
-    // Properties adicionales de estado
+    // Properties adicionales de estado (DATOS REALES)
     property var searchResults: inventarioModel ? inventarioModel.search_results : []
     property var alertas: inventarioModel ? inventarioModel.alertas : []
     property var carritoItems: ventaModel ? ventaModel.carrito_items : []
@@ -49,65 +57,72 @@ Item {
     Connections {
         target: appController
         function onModelsReady() {
-            console.log("🔗 Conectando Models QObject a Farmacia.qml")
+            console.log("🔗 Farmacia: Conectando Models QObject a BD")
             inventarioModel = appController.inventario_model_instance
             ventaModel = appController.venta_model_instance
             compraModel = appController.compra_model_instance
             
-            console.log("✅ Models conectados a Farmacia")
-            // Actualizar estado de conectividad
+            console.log("✅ Farmacia: Models conectados exitosamente")
+            
+            // Verificar conexión de cada model
+            if (inventarioModel) {
+                console.log("📦 InventarioModel disponible - Productos:", inventarioModel.total_productos)
+            }
+            if (ventaModel) {
+                console.log("💰 VentaModel disponible")
+            }
             if (compraModel) {
-                console.log("🔄 Forzando refresh de CompraModel...")
+                console.log("🛒 CompraModel disponible")
                 compraModel.force_refresh_compras()
             }
 
-            // Cargar datos iniciales
-            if (inventarioModel) {
-                inventarioModel.refresh_productos()
-                inventarioModel.actualizar_alertas()
-            }
-            if (ventaModel) {
-                ventaModel.refresh_ventas_hoy()
-                ventaModel.refresh_estadisticas()
-            }
-            if (compraModel) {
-                compraModel.refresh_compras()
-                compraModel.refresh_proveedores()
-            }
+            // Cargar datos iniciales desde BD
+            refrescarTodosLosDatos()
         }
     }
 
-    // ===== CONNECTIONS PARA SIGNALS DE MODELS =====
+    // ===== CONNECTIONS PARA SIGNALS DE MODELS (BD) =====
     
     // Conectar signals de InventarioModel
     Connections {
         target: inventarioModel
         function onOperacionExitosa(mensaje) {
-            console.log("✅ Inventario:", mensaje)
+            console.log("✅ Inventario BD:", mensaje)
             mostrarNotificacion(mensaje, "success")
         }
         function onOperacionError(mensaje) {
-            console.log("❌ Error Inventario:", mensaje)
+            console.log("❌ Error Inventario BD:", mensaje)
             mostrarNotificacion(mensaje, "error")
         }
         function onStockBajoAlert(codigo, stock) {
-            console.log("⚠️ Stock bajo:", codigo, "-", stock, "unidades")
+            console.log("⚠️ Stock bajo BD:", codigo, "-", stock, "unidades")
             mostrarNotificacion(`Stock bajo: ${codigo} (${stock} unidades)`, "warning")
         }
         function onProductoVencidoAlert(codigo, fechaVencimiento) {
-            console.log("⏰ Producto por vencer:", codigo, "-", fechaVencimiento)
+            console.log("⏰ Producto por vencer BD:", codigo, "-", fechaVencimiento)
             mostrarNotificacion(`Por vencer: ${codigo} (${fechaVencimiento})`, "warning")
         }
         function onProductosChanged() {
-            console.log("📦 Productos actualizados")
-            // Emitir signal para actualizar vistas dependientes
+            console.log("📦 Productos actualizados desde BD")
             datosActualizados()
         }
         function onSearchResultsChanged() {
-            console.log("🔍 Resultados de búsqueda actualizados")
+            console.log("🔍 Resultados de búsqueda BD actualizados")
         }
         function onLoadingChanged() {
             dataLoading = inventarioModel.loading
+        }
+        function onProductoCreado(codigo, datos) {
+            console.log("✅ Producto creado en BD:", codigo)
+            mostrarNotificacion(`Producto ${codigo} creado exitosamente`, "success")
+        }
+        function onProductoActualizado(codigo) {
+            console.log("✅ Producto actualizado en BD:", codigo)
+            mostrarNotificacion(`Producto ${codigo} actualizado`, "success")
+        }
+        function onProductoEliminado(codigo) {
+            console.log("🗑️ Producto eliminado de BD:", codigo)
+            mostrarNotificacion(`Producto ${codigo} eliminado`, "warning")
         }
     }
 
@@ -115,7 +130,7 @@ Item {
     Connections {
         target: ventaModel
         function onVentaCreada(ventaId, total) {
-            console.log("💰 Venta creada:", ventaId, "Total:", total)
+            console.log("💰 Venta creada en BD:", ventaId, "Total:", total)
             mostrarNotificacion(`Venta creada: $${total.toFixed(2)}`, "success")
             // Refrescar inventario automáticamente
             if (inventarioModel) {
@@ -123,15 +138,15 @@ Item {
             }
         }
         function onOperacionError(mensaje) {
-            console.log("❌ Error Venta:", mensaje)
+            console.log("❌ Error Venta BD:", mensaje)
             mostrarNotificacion(mensaje, "error")
         }
         function onOperacionExitosa(mensaje) {
-            console.log("✅ Venta:", mensaje)
+            console.log("✅ Venta BD:", mensaje)
             mostrarNotificacion(mensaje, "success")
         }
         function onVentasHoyChanged() {
-            console.log("💰 Ventas del día actualizadas")
+            console.log("💰 Ventas del día actualizadas desde BD")
             datosActualizados()
         }
         function onCarritoCambiado() {
@@ -143,7 +158,7 @@ Item {
     Connections {
         target: compraModel
         function onCompraCreada(compraId, total) {
-            console.log("📦 Compra creada:", compraId, "Total:", total)
+            console.log("📦 Compra creada en BD:", compraId, "Total:", total)
             mostrarNotificacion(`Compra registrada: $${total.toFixed(2)}`, "success")
             // Refrescar inventario automáticamente
             if (inventarioModel) {
@@ -151,25 +166,41 @@ Item {
             }
         }
         function onOperacionError(mensaje) {
-            console.log("❌ Error Compra:", mensaje)
+            console.log("❌ Error Compra BD:", mensaje)
             mostrarNotificacion(mensaje, "error")
         }
         function onOperacionExitosa(mensaje) {
-            console.log("✅ Compra:", mensaje)
+            console.log("✅ Compra BD:", mensaje)
             mostrarNotificacion(mensaje, "success")
         }
         function onComprasRecientesChanged() {
-            console.log("📦 Compras recientes actualizadas")
+            console.log("📦 Compras recientes actualizadas desde BD")
             datosActualizados()
         }
         function onProveedoresChanged() {
-            console.log("🏢 Proveedores actualizados")
+            console.log("🏢 Proveedores actualizados desde BD")
         }
     }
-    
+
+    Connections {
+        target: contentLoader.item
+        function onMostrarCrearProducto() {
+            console.log("🚀 Navegando a CrearProducto")
+            contentLoader.sourceComponent = crearProductoComponent
+        }
+        function onMostrarDetalleProducto(producto) {
+            console.log("🔍 Navegando a DetalleProducto:", producto.codigo)
+            contentLoader.sourceComponent = detalleProductoComponent
+            if (contentLoader.item) {
+                contentLoader.item.productoData = producto
+                contentLoader.item.inventarioModel = farmaciaRoot.inventarioModel
+            }
+        }
+    }
+
     // ===== FUNCIONES CENTRALES DE GESTIÓN DE DATOS (CONECTADAS A BD) =====
     
-    // Función para verificar si un producto existe
+    // Función para verificar si un producto existe (BD)
     function productoExiste(codigo) {
         if (!inventarioModel || !codigo) return -1
         
@@ -177,17 +208,22 @@ Item {
         return producto && Object.keys(producto).length > 0 ? 1 : -1
     }
     
-    // Función para crear un nuevo producto único
-    function crearProductoUnico(datos) {
-        console.log("⚠️ crearProductoUnico: Función pendiente de implementar en InventarioModel")
-        // TODO: Implementar en InventarioModel
-        // Por ahora retornamos un ID temporal
-        return Date.now()
+    // Función para crear un nuevo producto único (BD)
+    function crearProductoUnico(datosJson) {
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible para crear producto")
+            mostrarNotificacion("Error: Sistema de inventario no disponible", "error")
+            return 0
+        }
+        
+        console.log("📦 Creando producto en BD...")
+        var exito = inventarioModel.crear_producto(datosJson)
+        return exito ? Date.now() : 0  // Retornar ID temporal si es exitoso
     }
     
-    // Función para agregar nueva compra MEJORADA CON MODEL
+    // Función para agregar nueva compra MEJORADA CON MODEL BD
     function agregarCompra(proveedor, usuario, productos) {
-        console.log("=== AGREGANDO NUEVA COMPRA CON MODEL ===")
+        console.log("=== AGREGANDO NUEVA COMPRA CON BD ===")
         
         if (!compraModel) {
             console.log("❌ CompraModel no disponible")
@@ -200,18 +236,19 @@ Item {
             return null
         }
         
-        // Encontrar ID del proveedor
+        // Encontrar ID del proveedor en BD
         var proveedorId = 0
         var proveedores = compraModel.proveedores || []
         for (var i = 0; i < proveedores.length; i++) {
-            if (proveedores[i].nombre === proveedor) {
+            var nombreProveedor = proveedores[i].Nombre || proveedores[i].nombre
+            if (nombreProveedor === proveedor) {
                 proveedorId = proveedores[i].id
                 break
             }
         }
         
         if (proveedorId === 0) {
-            console.log("🏢 Creando nuevo proveedor:", proveedor)
+            console.log("🏢 Creando nuevo proveedor en BD:", proveedor)
             proveedorId = compraModel.crear_proveedor(proveedor, "Dirección no especificada")
             if (proveedorId === 0) {
                 mostrarNotificacion("Error: No se pudo crear el proveedor", "error")
@@ -236,13 +273,13 @@ Item {
             )
         }
         
-        // Procesar la compra
+        // Procesar la compra en BD
         var exito = compraModel.procesar_compra_actual()
         if (exito) {
-            console.log("✅ Compra procesada exitosamente")
-            return "C-PROCESSED"
+            console.log("✅ Compra procesada exitosamente en BD")
+            return "C-PROCESSED-BD"
         } else {
-            console.log("❌ Error procesando compra")
+            console.log("❌ Error procesando compra en BD")
             return null
         }
     }
@@ -272,9 +309,10 @@ Item {
         }
     }
     
-    // Función para obtener productos únicos para la vista principal (CON DATOS REALES)
+    // Función para obtener productos únicos para la vista principal (CON DATOS BD)
     function obtenerProductosParaVista() {
         if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible para vista")
             return []
         }
         
@@ -296,25 +334,26 @@ Item {
                 nombre: producto.Nombre || "Producto sin nombre",
                 stockTotal: stockTotal,
                 precioUnitarioPromedio: precioVenta,
-                lotesTotales: 1, // Se puede obtener de lotes_activos si es necesario
+                lotesTotales: 1,
                 lotesDisponibles: stockTotal > 0 ? 1 : 0,
                 // Campos adicionales para compatibilidad
                 precioCompra: parseFloat(producto.Precio_compra) || 0,
                 precioVenta: precioVenta,
                 detalles: producto.Detalles || "Sin detalles",
                 stockCaja: stockCaja,
-                stockUnitario: stockUnitario
+                stockUnitario: stockUnitario,
+                marca_nombre: producto.marca_nombre || producto.Marca_Nombre || "GENÉRICO"
             })
         }
         
-        console.log("📋 Productos para vista principal:", productosVista.length)
+        console.log("📋 Productos para vista principal (BD):", productosVista.length)
         return productosVista
     }
     
-    // Función para obtener lotes de un producto específico (CON DATOS REALES)
+    // Función para obtener lotes de un producto específico (CON DATOS BD)
     function obtenerLotesDeProducto(codigo) {
         if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
+            console.log("❌ InventarioModel no disponible para lotes")
             return []
         }
         
@@ -324,7 +363,7 @@ Item {
             return []
         }
         
-        // Obtener lotes del producto
+        // Obtener lotes del producto desde BD
         var lotes = inventarioModel.get_lotes_producto(producto.id) || []
         var lotesProducto = []
         
@@ -346,7 +385,7 @@ Item {
         return lotesProducto
     }
     
-    // Función para agregar nuevo proveedor (CON MODEL)
+    // Función para agregar nuevo proveedor (CON MODEL BD)
     function agregarProveedor(nombre, direccion, telefono, email) {
         if (!compraModel) {
             mostrarNotificacion("Error: Sistema de compras no disponible", "error")
@@ -366,9 +405,9 @@ Item {
         return proveedorId > 0
     }
     
-    // Función para realizar venta MEJORADA (CON MODEL Y FIFO)
+    // Función para realizar venta MEJORADA (CON MODEL BD Y FIFO)
     function realizarVenta(usuario, productos) {
-        console.log("=== REALIZANDO NUEVA VENTA CON MODEL ===")
+        console.log("=== REALIZANDO NUEVA VENTA CON BD ===")
         
         if (!ventaModel) {
             console.log("❌ VentaModel no disponible")
@@ -394,21 +433,21 @@ Item {
             )
         }
         
-        // Procesar venta
+        // Procesar venta en BD
         var exito = ventaModel.procesar_venta_carrito()
         if (exito) {
-            console.log("✅ Venta procesada exitosamente")
-            return "V-PROCESSED"
+            console.log("✅ Venta procesada exitosamente en BD")
+            return "V-PROCESSED-BD"
         } else {
-            console.log("❌ Error procesando venta")
+            console.log("❌ Error procesando venta en BD")
             return null
         }
     }
     
-    // Función para buscar productos disponibles por nombre parcial (CON MODEL)
+    // Función para buscar productos disponibles por nombre parcial (CON MODEL BD)
     function buscarProductosPorNombre(textoBusqueda) {
         if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
+            console.log("❌ InventarioModel no disponible para búsqueda")
             return []
         }
         
@@ -420,7 +459,7 @@ Item {
         return inventarioModel.search_results || []
     }
     
-    // Función para obtener stock total de un producto (CON MODEL)
+    // Función para obtener stock total de un producto (CON MODEL BD)
     function obtenerStockProducto(codigo) {
         if (!inventarioModel || !codigo) return 0
         
@@ -428,12 +467,12 @@ Item {
         return producto ? ((producto.Stock_Caja || 0) + (producto.Stock_Unitario || 0)) : 0
     }
 
-    // ===== FUNCIONES PARA SINCRONIZACIÓN CON PRODUCTOS.QML =====
+    // ===== FUNCIONES PARA SINCRONIZACIÓN CON PRODUCTOS.QML (BD) =====
     
-    // Función para obtener productos formateados para la vista de inventario (CON DATOS REALES)
+    // Función para obtener productos formateados para la vista de inventario (CON DATOS BD)
     function obtenerProductosParaInventario() {
         if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
+            console.log("❌ InventarioModel no disponible para inventario")
             return []
         }
         
@@ -444,7 +483,7 @@ Item {
             var prod = productos[i]
             
             // Debug: mostrar estructura del producto
-            console.log("📦 Producto estructurado:", JSON.stringify(prod))
+            console.log("📦 Producto estructurado desde BD:", JSON.stringify(prod))
             
             // Convertir precios a números para evitar errores de visualización
             var precioCompra = parseFloat(prod.Precio_compra) || 0
@@ -460,7 +499,7 @@ Item {
                 stockCaja: parseInt(prod.Stock_Caja) || 0,
                 stockUnitario: parseInt(prod.Stock_Unitario) || 0,
                 unidadMedida: prod.Unidad_Medida || "Unidades",
-                idMarca: prod.Marca_Nombre || prod.ID_Marca || "GENÉRICO",
+                idMarca: prod.marca_nombre || prod.Marca_Nombre || prod.ID_Marca || "GENÉRICO",
                 // Campos adicionales para compatibilidad
                 precioCompraBase: precioCompra,
                 precioVentaBase: precioVenta,
@@ -468,50 +507,51 @@ Item {
             })
         }
         
-        console.log("📋 Productos formateados para inventario:", productosFormateados.length)
+        console.log("📋 Productos formateados para inventario (BD):", productosFormateados.length)
         return productosFormateados
     }
 
-    // Función para actualizar precio de venta (CON MODEL)
+    // Función para actualizar precio de venta (CON MODEL BD)
     function actualizarPrecioVentaProducto(codigo, nuevoPrecio) {
-        console.log("💰 Actualizando precio con InventarioModel:", codigo, nuevoPrecio)
+        console.log("💰 Actualizando precio en BD:", codigo, nuevoPrecio)
         
         if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
+            console.log("❌ InventarioModel no disponible para actualizar precio")
             mostrarNotificacion("Error: Sistema de inventario no disponible", "error")
             return false
         }
         
-        // TODO: Implementar actualización de precio en InventarioModel
-        console.log("⚠️ Actualización de precio pendiente de implementar en Model")
-        mostrarNotificacion("Función pendiente de implementar", "warning")
-        return true
+        var exito = inventarioModel.actualizar_precio_venta(codigo, nuevoPrecio)
+        if (exito) {
+            mostrarNotificacion(`Precio actualizado: ${codigo} - Bs${nuevoPrecio.toFixed(2)}`, "success")
+        }
+        return exito
     }
 
-    // Función para eliminar producto (CON MODEL)
+    // Función para eliminar producto (CON MODEL BD)
     function eliminarProductoInventario(codigo) {
-        console.log("🗑️ Eliminación con InventarioModel:", codigo)
+        console.log("🗑️ Eliminación en BD:", codigo)
         
         if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
+            console.log("❌ InventarioModel no disponible para eliminar")
             mostrarNotificacion("Error: Sistema de inventario no disponible", "error")
             return false
         }
         
-        // TODO: Implementar eliminación en InventarioModel
-        console.log("⚠️ Eliminación pendiente de implementar en Model")
-        mostrarNotificacion("Función pendiente de implementar", "warning")
+        // TODO: Implementar eliminación en InventarioModel cuando esté disponible
+        console.log("⚠️ Eliminación pendiente de implementar en InventarioModel")
+        mostrarNotificacion("Función de eliminación en desarrollo", "warning")
         return false
     }
 
-    // Función para obtener productos de una compra específica
+    // Función para obtener productos de una compra específica (BD)
     function obtenerProductosDeCompra(compraId) {
         if (!compraModel) {
-            console.log("❌ CompraModel no disponible")
+            console.log("❌ CompraModel no disponible para obtener productos")
             return []
         }
         
-        // Obtener detalle completo de la compra
+        // Obtener detalle completo de la compra desde BD
         var compraDetalle = compraModel.get_compra_detalle(compraId)
         if (!compraDetalle || !compraDetalle.items) {
             return []
@@ -531,17 +571,19 @@ Item {
             })
         }
         
-        console.log("📦 Productos encontrados para", compraId, ":", productosCompra.length)
+        console.log("📦 Productos encontrados para compra BD", compraId, ":", productosCompra.length)
         return productosCompra
     }
 
-    // Función auxiliar para obtener nombre del producto (CON MODEL)
+    // Función auxiliar para obtener nombre del producto (CON MODEL BD)
     function obtenerNombreProducto(codigo) {
         if (!inventarioModel || !codigo) return "Producto no encontrado"
         
         var producto = inventarioModel.get_producto_by_codigo(codigo)
         return producto ? producto.Nombre : "Producto no encontrado"
     }
+    
+    // ===== FUNCIONES DE UTILIDADES =====
     
     // Función auxiliar para parsear fecha DD/MM/YYYY
     function parsearFecha(fechaStr) {
@@ -571,7 +613,7 @@ Item {
             case "error": prefijo = "❌"; break
             case "warning": prefijo = "⚠️"; break
             case "info": prefijo = "ℹ️"; break
-            default: prefijo = "📝"; break
+            default: prefijo = "📌"; break
         }
         console.log(`${prefijo} [${tipo.toUpperCase()}] ${mensaje}`)
         
@@ -579,34 +621,41 @@ Item {
         // Por ahora solo log en consola
     }
     
-    // Función de debug para inspeccionar datos
+    // Función de debug para inspeccionar datos BD
     function debugProductoData(codigo) {
         if (!inventarioModel) {
             console.log("❌ InventarioModel no disponible para debug")
             return
         }
         
-        console.log("🔍 DEBUG - Buscando producto:", codigo)
+        console.log("🔍 DEBUG BD - Buscando producto:", codigo)
         var producto = inventarioModel.get_producto_by_codigo(codigo)
-        console.log("📦 Producto encontrado:", JSON.stringify(producto, null, 2))
+        console.log("📦 Producto encontrado en BD:", JSON.stringify(producto, null, 2))
         
         if (producto && producto.id) {
             var lotes = inventarioModel.get_lotes_producto(producto.id)
-            console.log("📋 Lotes del producto:", JSON.stringify(lotes, null, 2))
+            console.log("📋 Lotes del producto en BD:", JSON.stringify(lotes, null, 2))
         }
     }
     
-    // Función para forzar actualización de datos
+    // Función para forzar actualización de datos desde BD
     function forzarActualizacionDatos() {
         if (!modelsReady) {
-            console.log("⚠️ Models no están listos para actualización")
+            console.log("⚠️ Models no están listos para actualización BD")
             return
         }
         
-        console.log("🔄 Forzando actualización de todos los datos...")
+        console.log("🔄 Forzando actualización de todos los datos desde BD...")
+        refrescarTodosLosDatos()
+    }
+    
+    // Función centralizada para refrescar todos los datos
+    function refrescarTodosLosDatos() {
+        console.log("🔄 Refrescando todos los datos desde BD...")
         
         if (inventarioModel) {
             inventarioModel.refresh_productos()
+            inventarioModel.actualizar_alertas()
         }
         if (ventaModel) {
             ventaModel.refresh_ventas_hoy()
@@ -624,9 +673,11 @@ Item {
     // Señal para notificar cambios en los datos
     signal datosActualizados()
     
+    // ===== INTERFAZ PRINCIPAL =====
+    
     // Monitorear cambios en la subsección
     onCurrentSubSectionChanged: {
-        console.log("Farmacia: Cambiando a subsección", currentSubSection)
+        console.log("Farmacia BD: Cambiando a subsección", currentSubSection)
         contentLoader.updateSource()
     }
     
@@ -649,6 +700,7 @@ Item {
                 property var inventarioModel: farmaciaRoot.inventarioModel
                 property var ventaModel: farmaciaRoot.ventaModel  
                 property var compraModel: farmaciaRoot.compraModel
+                property var farmaciaData: farmaciaRoot  // Para compatibilidad
                 
                 function updateSource() {
                     var newSource = getSourceForSubsection(currentSubSection)
@@ -660,7 +712,7 @@ Item {
                 function getSourceForSubsection(subsection) {
                     switch(subsection) {
                         case 0: return "VentasMain.qml"
-                        case 1: return "Productos.qml"
+                        case 1: return Qt.resolvedUrl("Productos.qml") // El nuevo Productos.qml conectado
                         case 2: return "ComprasMain.qml"
                         default: return "VentasMain.qml" 
                     }
@@ -670,10 +722,10 @@ Item {
                 
                 onStatusChanged: {
                     if (status === Loader.Error) {
-                        console.error("Error cargando el módulo:", source)
+                        console.error("Error cargando el módulo BD:", source)
                         sourceComponent = errorComponent
                     } else if (status === Loader.Ready) {
-                        console.log("Módulo cargado exitosamente:", source)
+                        console.log("Módulo BD cargado exitosamente:", source)
                     }
                 }
                 
@@ -715,7 +767,7 @@ Item {
                         }
                         
                         Label {
-                            text: "Error al cargar el módulo"
+                            text: "Error al cargar el módulo BD"
                             font.pixelSize: 18
                             font.bold: true
                             color: dangerColor
@@ -752,7 +804,7 @@ Item {
                 }
             }
             
-            // Indicador de carga
+            // Indicador de carga BD
             Rectangle {
                 anchors.centerIn: parent
                 width: 200
@@ -773,7 +825,7 @@ Item {
                     }
                     
                     Label {
-                        text: dataLoading ? "Cargando datos..." : ("Cargando " + getCurrentSubSectionName() + "...")
+                        text: dataLoading ? "Cargando datos BD..." : ("Cargando " + getCurrentSubSectionName() + "...")
                         color: textColor
                         font.pixelSize: 14
                         Layout.alignment: Qt.AlignHCenter
@@ -783,38 +835,68 @@ Item {
         }
     }
     
-    // Funciones auxiliares
+    // ===== FUNCIONES AUXILIARES =====
+    
     function getCurrentSubSectionName() {
         const names = ["Gestión de Ventas", "Inventario de Productos", "Gestión de Compras"]
         return names[currentSubSection] || "Sección Desconocida"
     }
     
     function getCurrentSubSectionFile() {
-        const files = ["VentasMain.qml", "Productos.qml", "ComprasMain.qml"]  // ← CAMBIADO
+        const files = ["VentasMain.qml", "Productos.qml", "ComprasMain.qml"]
         return files[currentSubSection] || "Archivo.qml"
     }
     
-    // Inicialización
+    function actualizarProductos() {
+        if (inventarioModel && currentSubSection === 1) {
+            inventarioModel.refresh_productos()
+            console.log("🔄 Productos actualizados desde BD")
+        }
+    }
+    
+    function buscarProducto(codigo) {
+        if (inventarioModel) {
+            return inventarioModel.get_producto_by_codigo(codigo)
+        }
+        return null
+    }
+    
+    function obtenerEstadisticasProductos() {
+        if (inventarioModel) {
+            var estadisticas = inventarioModel.get_estadisticas_inventario()
+            return {
+                total: estadisticas.total_productos || 0,
+                con_stock: estadisticas.productos_con_stock || 0,
+                stock_bajo: estadisticas.productos_bajo_stock || 0,
+                sin_stock: estadisticas.productos_sin_stock || 0
+            }
+        }
+        return { total: 0, con_stock: 0, stock_bajo: 0, sin_stock: 0 }
+    }
+
+    // ===== INICIALIZACIÓN =====
+    
     Component.onCompleted: {
         console.log("=== MÓDULO DE FARMACIA INICIALIZADO (CONECTADO A BD) ===")
-        console.log("🔄 Esperando conexión con Models...")
+        console.log("🔄 Esperando conexión con Models BD...")
         console.log("Subsección inicial:", currentSubSection)
     }
     
-    // Monitorear cuando los models están listos
+    // Monitorear cuando los models estén listos
     onModelsReadyChanged: {
         if (modelsReady) {
-            console.log("🚀 Models conectados:")
-            console.log("📦 Productos disponibles:", productosUnicosModel.length)
-            console.log("🏢 Proveedores:", proveedoresModel.length) 
-
-            // DEBUG ESPECÍFICO PARA COMPRAS
+            console.log("🚀 Models BD conectados:")
+            console.log("📦 Productos disponibles BD:", productosUnicosModel.length)
+            console.log("🏢 Proveedores BD:", proveedoresModel.length) 
+            console.log("💰 Ventas del día BD:", ventasModel.length)
+            
+            // DEBUG ESPECÍFICO PARA COMPRAS BD
             if (compraModel) {
-                console.log("🛒 CompraModel disponible:", !!compraModel)
-                console.log("🛒 Compras recientes (direct):", compraModel.compras_recientes ? compraModel.compras_recientes.length : "undefined")
-                console.log("🛒 Total compras mes (property):", compraModel.total_compras_mes)
+                console.log("🛒 CompraModel BD disponible:", !!compraModel)
+                console.log("🛒 Compras recientes BD:", compraModel.compras_recientes ? compraModel.compras_recientes.length : "undefined")
+                console.log("🛒 Total compras mes BD:", compraModel.total_compras_mes)
             }
-            console.log("💰 Ventas del día:", ventasModel.length)
+            
             // Configurar alertas automáticas
             if (inventarioModel) {
                 inventarioModel.configurar_stock_minimo(10)
@@ -825,12 +907,44 @@ Item {
             datosActualizados()
         }
     }
-    
-    // Monitor de cambios en productos para debug
-    onProductosUnicosModelChanged: {
-        console.log("📊 ProductosUnicosModel actualizado - Total productos:", productosUnicosModel.length)
-        if (productosUnicosModel.length > 0) {
-            console.log("📝 Ejemplo de producto:", JSON.stringify(productosUnicosModel[0]))
+
+    Component {
+        id: detalleProductoComponent
+        DetalleProducto {
+            productoData: null
+            
+            onEditarSolicitado: function(producto) {
+                console.log("✏️ Editar producto:", producto.codigo)
+                // TODO: Implementar edición
+            }
+            
+            onEliminarSolicitado: function(producto) {
+                console.log("🗑️ Eliminar producto:", producto.codigo)
+                if (farmaciaRoot.eliminarProductoInventario) {
+                    farmaciaRoot.eliminarProductoInventario(producto.codigo)
+                }
+            }
+            
+            onCerrarSolicitado: {
+                contentLoader.updateSource()
+            }
         }
     }
+    
+    // Monitor de cambios en productos para debug BD
+    onProductosUnicosModelChanged: {
+        console.log("📊 ProductosUnicosModel BD actualizado - Total productos:", productosUnicosModel.length)
+        if (productosUnicosModel.length > 0) {
+            console.log("🔍 Ejemplo de producto BD:", JSON.stringify(productosUnicosModel[0]))
+        }
+    }
+
+    Component {
+    id: crearProductoComponent
+    CrearProducto {
+        onCerrarSolicitado: {
+            contentLoader.updateSource() // Volver a productos
+        }
+    }
+}
 }
