@@ -91,6 +91,8 @@ class AppController(QObject):
             # Cuando se procesa una compra, actualizar inventario
             self.compra_model.compraCreada.connect(self._on_compra_creada)
             
+            self._establecer_usuario_por_defecto()
+
             # Conectar errores para mostrar en UI
             self.inventario_model.operacionError.connect(self._on_model_error)
             self.venta_model.operacionError.connect(self._on_model_error)
@@ -107,6 +109,50 @@ class AppController(QObject):
             
         except Exception as e:
             print(f"❌ Error conectando models: {e}")
+    def _establecer_usuario_por_defecto(self):
+        """Establece automáticamente un usuario administrador como usuario actual"""
+        try:
+            if not self.usuario_model:
+                print("⚠️ UsuarioModel no disponible para establecer usuario por defecto")
+                return
+            
+            # Obtener administradores disponibles
+            administradores = self.usuario_model.obtenerAdministradores()
+            
+            if administradores and len(administradores) > 0:
+                # Usar el primer administrador disponible
+                admin_usuario = administradores[0]
+                usuario_id = int(admin_usuario.get('usuarioId', 0))
+                
+                if usuario_id > 0:
+                    # Establecer en VentaModel
+                    if self.venta_model:
+                        self.venta_model.set_usuario_actual(usuario_id)
+                        print(f"👤 Usuario establecido en VentaModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    # Establecer en CompraModel  
+                    if self.compra_model:
+                        self.compra_model.set_usuario_actual(usuario_id)
+                        print(f"👤 Usuario establecido en CompraModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                else:
+                    print("⚠️ Usuario administrador no tiene ID válido")
+            else:
+                print("⚠️ No se encontraron administradores disponibles")
+                # Fallback: usar usuario ID 10 como antes
+                self._establecer_usuario_fallback()
+                
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario por defecto: {e}")
+            # Fallback en caso de error
+            self._establecer_usuario_fallback()
+
+    def _establecer_usuario_fallback(self):
+        """Fallback: establecer usuario ID 10 como antes"""
+        print("🔄 Usando fallback: Usuario ID 10")
+        if self.venta_model:
+            self.venta_model.set_usuario_actual(10)
+        if self.compra_model:
+            self.compra_model.set_usuario_actual(10)
     
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
