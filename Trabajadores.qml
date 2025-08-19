@@ -229,43 +229,6 @@ Item {
                                 showNewWorkerDialog = true
                             }
                         }
-                        
-                        // Botón de configuración
-                        Button {
-                            id: configButton
-                            text: "⚙️"
-                            Layout.preferredWidth: baseUnit * 4.5
-                            Layout.preferredHeight: baseUnit * 4.5
-                            font.pixelSize: fontBaseSize
-                            
-                            background: Rectangle {
-                                color: "#6c757d"
-                                radius: baseUnit
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: configMenu.open()
-                            
-                            Menu {
-                                id: configMenu
-                                y: parent.height
-                                
-                                // ===== PASO 3d: MODIFICAR MENUITEM PARA EMITIR SEÑAL =====
-                                MenuItem {
-                                    text: "👥 Configuración de Tipos de Trabajadores"
-                                    onTriggered: {
-                                        console.log("🔄 Emitiendo señal irAConfigPersonal")
-                                        irAConfigPersonal()
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
                 

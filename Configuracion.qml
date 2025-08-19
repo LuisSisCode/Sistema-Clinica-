@@ -723,7 +723,7 @@ Item {
                 ProfileField { 
                     label: "Usuario"
                     value: currentUsername
-                    icon: "🔒"
+                    icon: "🔑"
                 }
                 
                 ProfileField { 
@@ -757,7 +757,7 @@ Item {
                     spacing: marginTiny
                     
                     Label {
-                        text: "🔐"
+                        text: "🔒"
                         font.pixelSize: fontSmall
                         color: backgroundColor
                     }
@@ -1297,17 +1297,14 @@ Item {
         }
     }
     
+    // ===== COMPONENTE DE USUARIOS MODIFICADO (SIN GenericConfigView) =====
     Component {
         id: usuariosConfigComponent
-        GenericConfigView {
-            moduleId: "usuarios"
-            moduleTitle: "Usuarios"
-            moduleIcon: "👤"
-            moduleColor: usuariosColor
+        ConfiUsuarios {
+            anchors.fill: parent
             
-            configContent: UsuariosConfig {
-                anchors.fill: parent
-            }
+            // Conectar la señal de volver a la función del parent
+            onBackToMain: changeView("main")
         }
     }
     
@@ -1435,28 +1432,6 @@ Item {
         }
     }
     
-    // ===== CONFIGURACIONES ESPECÍFICAS SIMPLIFICADAS =====
-    
-    component UsuariosConfig: ScrollView {
-        clip: true
-        
-        ColumnLayout {
-            width: parent.width - marginLarge * 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: marginLarge
-            spacing: marginLarge
-            
-            Label {
-                Layout.fillWidth: true
-                text: "Configuración de Usuarios implementada aquí"
-                font.pixelSize: fontLarge
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
-                font.family: "Segoe UI"
-            }
-        }
-    }
-    
     // ===== IMPORTAR LOS COMPONENTES DE CONFIGURACIÓN =====
     ConfiConsultas {
         id: hiddenConfiConsultas
@@ -1486,6 +1461,13 @@ Item {
     // ===== PASO 2a: IMPORTAR EL NUEVO COMPONENTE ConfiTrabajadores =====
     ConfiTrabajadores {
         id: hiddenConfiTrabajadores
+        visible: false
+        // Componente oculto solo para cargar el tipo en memoria
+    }
+    
+    // ===== IMPORTAR EL NUEVO COMPONENTE ConfiUsuarios =====
+    ConfiUsuarios {
+        id: hiddenConfiUsuarios
         visible: false
         // Componente oculto solo para cargar el tipo en memoria
     }
