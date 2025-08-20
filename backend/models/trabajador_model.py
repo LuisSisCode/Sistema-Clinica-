@@ -2,13 +2,13 @@ from typing import List, Dict, Any, Optional
 from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import qmlRegisterType
 
-from ..services.trabajador_service import TrabajadorService
+from ..repositories.trabajador_repository import TrabajadorRepository
 from ..core.excepciones import ExceptionHandler, ValidationError
 
 class TrabajadorModel(QObject):
     """
     Model QObject para gestión de trabajadores en QML
-    Conecta la interfaz QML con el TrabajadorService
+    Conecta la interfaz QML con el TrabajadorRepository
     """
     
     # ===============================
@@ -41,8 +41,8 @@ class TrabajadorModel(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Referencias a services
-        self.service = TrabajadorService()
+        # Repository en lugar de service
+        self.repository = TrabajadorRepository()
         
         # Estado interno
         self._trabajadores: List[Dict[str, Any]] = []
@@ -119,25 +119,25 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.crear_trabajador(
+            trabajador_id = self.repository.create_worker(
                 nombre=nombre.strip(),
                 apellido_paterno=apellido_paterno.strip(),
                 apellido_materno=apellido_materno.strip(),
                 tipo_trabajador_id=tipo_trabajador_id
             )
             
-            if resultado.get('success'):
+            if trabajador_id:
                 self._cargar_trabajadores()
                 self._cargar_estadisticas()
                 
-                mensaje = resultado.get('message', 'Trabajador creado exitosamente')
+                mensaje = f"Trabajador creado exitosamente - ID: {trabajador_id}"
                 self.trabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Trabajador creado desde QML: {nombre} {apellido_paterno}")
                 return True
             else:
-                error_msg = resultado.get('error', 'Error creando trabajador')
+                error_msg = "Error creando trabajador"
                 self.trabajadorCreado.emit(False, error_msg)
                 self.errorOccurred.emit("Error de validación", error_msg)
                 return False
@@ -169,24 +169,19 @@ class TrabajadorModel(QObject):
             if tipo_trabajador_id > 0:
                 kwargs['tipo_trabajador_id'] = tipo_trabajador_id
             
-            resultado = self.service.actualizar_trabajador(trabajador_id, **kwargs)
+            success = self.repository.update_worker(trabajador_id, **kwargs)
             
-            if resultado.get('success'):
+            if success:
                 self._cargar_trabajadores()
                 
-                mensaje = resultado.get('message', 'Trabajador actualizado exitosamente')
+                mensaje = "Trabajador actualizado exitosamente"
                 self.trabajadorActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Trabajador actualizado desde QML: ID {trabajador_id}")
                 return True
             else:
-                error_msg = resultado.get('error', 'Error actualizando trabajador')
-                
-                # Mostrar advertencia si hay restricciones
-                if resultado.get('code') == 'CAMBIO_TIPO_RESTRINGIDO':
-                    self.warningMessage.emit(error_msg)
-                
+                error_msg = "Error actualizando trabajador"
                 self.trabajadorActualizado.emit(False, error_msg)
                 self.errorOccurred.emit("Error de actualización", error_msg)
                 return False
@@ -199,38 +194,32 @@ class TrabajadorModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, bool, result=bool)
-    def eliminarTrabajador(self, trabajador_id: int, forzar: bool = False) -> bool:
+    @Slot(int, result=bool)
+    def eliminarTrabajador(self, trabajador_id: int) -> bool:
         """Elimina trabajador desde QML"""
         try:
             self._set_loading(True)
             
-            resultado = self.service.eliminar_trabajador(trabajador_id, forzar)
+            # Verificar que no tenga asignaciones de laboratorio
+            asignaciones = self.repository.get_worker_lab_assignments(trabajador_id)
+            if asignaciones:
+                self.warningMessage.emit(f"Trabajador tiene {len(asignaciones)} asignaciones de laboratorio activas")
+                return False
             
-            if resultado.get('success'):
+            success = self.repository.delete(trabajador_id)
+            
+            if success:
                 self._cargar_trabajadores()
                 self._cargar_estadisticas()
                 
-                mensaje = resultado.get('message', 'Trabajador eliminado exitosamente')
+                mensaje = "Trabajador eliminado exitosamente"
                 self.trabajadorEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
-                # Mostrar advertencia si fue eliminación forzada
-                if forzar and resultado.get('data', {}).get('dependencias_afectadas'):
-                    self.warningMessage.emit("Eliminación forzada: se afectaron dependencias")
                 
                 print(f"🗑️ Trabajador eliminado desde QML: ID {trabajador_id}")
                 return True
             else:
-                error_msg = resultado.get('error', 'Error eliminando trabajador')
-                
-                # Mostrar detalles de dependencias si las hay
-                if resultado.get('code') == 'TIENE_DEPENDENCIAS':
-                    details = resultado.get('details', {})
-                    if details:
-                        dependencias_msg = f"Trabajador tiene dependencias. Use 'forzar' para eliminar."
-                        self.warningMessage.emit(dependencias_msg)
-                
+                error_msg = "Error eliminando trabajador"
                 self.trabajadorEliminado.emit(False, error_msg)
                 self.errorOccurred.emit("Error de eliminación", error_msg)
                 return False
@@ -251,19 +240,19 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.crear_tipo_trabajador(nombre.strip())
+            tipo_id = self.repository.create_worker_type(nombre.strip())
             
-            if resultado.get('success'):
+            if tipo_id:
                 self._cargar_tipos_trabajador()
                 
-                mensaje = resultado.get('message', 'Tipo de trabajador creado exitosamente')
+                mensaje = f"Tipo de trabajador creado exitosamente - ID: {tipo_id}"
                 self.tipoTrabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Tipo trabajador creado desde QML: {nombre}")
                 return True
             else:
-                error_msg = resultado.get('error', 'Error creando tipo de trabajador')
+                error_msg = "Error creando tipo de trabajador"
                 self.tipoTrabajadorCreado.emit(False, error_msg)
                 self.errorOccurred.emit("Error de validación", error_msg)
                 return False
@@ -282,18 +271,18 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.actualizar_tipo_trabajador(tipo_id, nombre.strip())
+            success = self.repository.update_worker_type(tipo_id, nombre.strip())
             
-            if resultado.get('success'):
+            if success:
                 self._cargar_tipos_trabajador()
                 
-                mensaje = resultado.get('message', 'Tipo actualizado exitosamente')
+                mensaje = "Tipo actualizado exitosamente"
                 self.tipoTrabajadorActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 return True
             else:
-                error_msg = resultado.get('error', 'Error actualizando tipo')
+                error_msg = "Error actualizando tipo"
                 self.tipoTrabajadorActualizado.emit(False, error_msg)
                 self.errorOccurred.emit("Error de actualización", error_msg)
                 return False
@@ -312,25 +301,26 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.eliminar_tipo_trabajador(tipo_id)
+            # Verificar que no tenga trabajadores asociados
+            trabajadores_del_tipo = self.repository.get_workers_by_type(tipo_id)
+            if trabajadores_del_tipo:
+                error_msg = f"Tipo tiene {len(trabajadores_del_tipo)} trabajadores asociados"
+                self.warningMessage.emit(error_msg)
+                self.tipoTrabajadorEliminado.emit(False, error_msg)
+                return False
             
-            if resultado.get('success'):
+            success = self.repository.delete_worker_type(tipo_id)
+            
+            if success:
                 self._cargar_tipos_trabajador()
                 
-                mensaje = resultado.get('message', 'Tipo eliminado exitosamente')
+                mensaje = "Tipo eliminado exitosamente"
                 self.tipoTrabajadorEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 return True
             else:
-                error_msg = resultado.get('error', 'Error eliminando tipo')
-                
-                # Mostrar detalles si tiene trabajadores asociados
-                if resultado.get('code') == 'TIPO_CON_TRABAJADORES':
-                    details = resultado.get('details', {})
-                    cantidad = details.get('cantidad_trabajadores', 0)
-                    self.warningMessage.emit(f"Tipo tiene {cantidad} trabajadores asociados")
-                
+                error_msg = "Error eliminando tipo"
                 self.tipoTrabajadorEliminado.emit(False, error_msg)
                 self.errorOccurred.emit("Error de eliminación", error_msg)
                 return False
@@ -354,29 +344,41 @@ class TrabajadorModel(QObject):
             self._incluir_stats = incluir_stats
             self._filtro_area = area
             
-            # Preparar filtros para el service
-            filtros = {}
+            # Filtrar datos locales
+            trabajadores_filtrados = self._trabajadores.copy()
+            
+            # Filtro por tipo
             if tipo_id > 0:
-                filtros['tipo_id'] = tipo_id
+                trabajadores_filtrados = [
+                    t for t in trabajadores_filtrados
+                    if t.get('Id_Tipo_Trabajador') == tipo_id
+                ]
+            
+            # Filtro por búsqueda
             if buscar.strip():
-                filtros['buscar'] = buscar.strip()
-            if incluir_stats:
-                filtros['incluir_stats'] = True
+                buscar_lower = buscar.lower()
+                trabajadores_filtrados = [
+                    t for t in trabajadores_filtrados
+                    if (buscar_lower in t.get('Nombre', '').lower() or
+                        buscar_lower in t.get('Apellido_Paterno', '').lower() or
+                        buscar_lower in t.get('Apellido_Materno', '').lower() or
+                        buscar_lower in t.get('tipo_nombre', '').lower())
+                ]
+            
+            # Filtro por área
             if area and area != "Todos":
-                filtros['area'] = area.lower()
+                area_lower = area.lower()
+                trabajadores_filtrados = [
+                    t for t in trabajadores_filtrados
+                    if area_lower in t.get('tipo_nombre', '').lower()
+                ]
             
-            resultado = self.service.obtener_trabajadores(filtros)
+            self._trabajadores_filtrados = trabajadores_filtrados
+            self.trabajadoresChanged.emit()
             
-            if resultado.get('success'):
-                trabajadores = resultado.get('data', {}).get('trabajadores', [])
-                self._trabajadores_filtrados = trabajadores
-                self.trabajadoresChanged.emit()
-                
-                total = len(trabajadores)
-                self.busquedaCompleta.emit(True, f"Encontrados {total} trabajadores", total)
-                print(f"🔍 Filtros aplicados: {total} trabajadores")
-            else:
-                self.errorOccurred.emit("Error en filtros", resultado.get('error', 'Error aplicando filtros'))
+            total = len(trabajadores_filtrados)
+            self.busquedaCompleta.emit(True, f"Encontrados {total} trabajadores", total)
+            print(f"🔍 Filtros aplicados: {total} trabajadores")
                 
         except Exception as e:
             self.errorOccurred.emit("Error en filtros", f"Error aplicando filtros: {str(e)}")
@@ -388,15 +390,9 @@ class TrabajadorModel(QObject):
             if not termino.strip():
                 return self._trabajadores
             
-            resultado = self.service.buscar_trabajadores(termino.strip(), limite)
-            
-            if resultado.get('success'):
-                trabajadores = resultado.get('data', {}).get('trabajadores', [])
-                total = resultado.get('data', {}).get('total', 0)
-                print(f"🔍 Búsqueda '{termino}': {total} resultados")
-                return trabajadores
-            
-            return []
+            trabajadores = self.repository.search_workers(termino.strip(), limite)
+            print(f"🔍 Búsqueda '{termino}': {len(trabajadores)} resultados")
+            return trabajadores
             
         except Exception as e:
             self.errorOccurred.emit("Error en búsqueda", f"Error buscando trabajadores: {str(e)}")
@@ -406,15 +402,12 @@ class TrabajadorModel(QObject):
     def obtenerTrabajadoresPorArea(self, area: str) -> List[Dict[str, Any]]:
         """Obtiene trabajadores por área específica"""
         try:
-            filtros = {'area': area.lower()} if area != "Todos" else {}
-            resultado = self.service.obtener_trabajadores(filtros)
+            if area == "Todos":
+                return self._trabajadores
             
-            if resultado.get('success'):
-                trabajadores = resultado.get('data', {}).get('trabajadores', [])
-                print(f"🏢 Área '{area}': {len(trabajadores)} trabajadores")
-                return trabajadores
-            
-            return []
+            trabajadores = self.repository.get_workers_by_type_name(area)
+            print(f"🏢 Área '{area}': {len(trabajadores)} trabajadores")
+            return trabajadores
             
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo trabajadores por área: {str(e)}")
@@ -437,20 +430,8 @@ class TrabajadorModel(QObject):
     def obtenerTrabajadorPorId(self, trabajador_id: int) -> Dict[str, Any]:
         """Obtiene trabajador específico por ID"""
         try:
-            # Buscar en la lista local primero
-            for trabajador in self._trabajadores:
-                if trabajador.get('id') == trabajador_id:
-                    return trabajador
-            
-            # Si no está en local, validar existencia
-            resultado = self.service.validar_trabajador_existe(trabajador_id)
-            
-            if resultado.get('success') and resultado.get('data', {}).get('existe'):
-                return resultado.get('data', {}).get('trabajador', {})
-            else:
-                self.errorOccurred.emit("Error", "Trabajador no encontrado")
-                return {}
-                
+            trabajador = self.repository.get_worker_with_type(trabajador_id)
+            return trabajador if trabajador else {}
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo trabajador: {str(e)}")
             return {}
@@ -458,39 +439,41 @@ class TrabajadorModel(QObject):
     @Slot(result=list)
     def obtenerTrabajadoresLaboratorio(self) -> List[Dict[str, Any]]:
         """Obtiene trabajadores del área de laboratorio"""
-        return self.obtenerTrabajadoresPorArea("laboratorio")
+        return self.repository.get_laboratory_workers()
     
     @Slot(result=list)
     def obtenerTrabajadoresFarmacia(self) -> List[Dict[str, Any]]:
         """Obtiene trabajadores del área de farmacia"""
-        return self.obtenerTrabajadoresPorArea("farmacia")
+        return self.repository.get_pharmacy_workers()
     
     @Slot(result=list)
     def obtenerTrabajadoresEnfermeria(self) -> List[Dict[str, Any]]:
         """Obtiene trabajadores del área de enfermería"""
-        return self.obtenerTrabajadoresPorArea("enfermeria")
+        return self.repository.get_nursing_staff()
     
     @Slot(result=list)
     def obtenerTrabajadoresAdministrativos(self) -> List[Dict[str, Any]]:
         """Obtiene trabajadores administrativos"""
-        return self.obtenerTrabajadoresPorArea("administrativo")
+        return self.repository.get_administrative_staff()
     
     @Slot(result=list)
     def obtenerTrabajadoresSinAsignaciones(self) -> List[Dict[str, Any]]:
         """Obtiene trabajadores sin asignaciones"""
         try:
-            # Esta funcionalidad específica del service no está expuesta directamente
-            # Se podría implementar como un filtro especial
-            trabajadores_sin_asignaciones = []
-            for trabajador in self._trabajadores:
-                if trabajador.get('total_asignaciones_laboratorio', 0) == 0:
-                    trabajadores_sin_asignaciones.append(trabajador)
-            
-            return trabajadores_sin_asignaciones
-            
+            return self.repository.get_workers_without_assignments()
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo trabajadores sin asignaciones: {str(e)}")
             return []
+    
+    @Slot(int, result='QVariantMap')
+    def obtenerCargaTrabajo(self, trabajador_id: int) -> Dict[str, Any]:
+        """Obtiene carga de trabajo de un trabajador"""
+        try:
+            trabajador = self.repository.get_worker_with_lab_stats(trabajador_id)
+            return trabajador if trabajador else {}
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error obteniendo carga de trabajo: {str(e)}")
+            return {}
     
     # --- RECARGA DE DATOS ---
     
@@ -579,29 +562,27 @@ class TrabajadorModel(QObject):
         except Exception:
             return "Desconocido"
     
-    @Slot()
-    def invalidarCache(self):
-        """Invalida el caché del sistema"""
-        try:
-            self.service.invalidar_cache()
-            self.successMessage.emit("Caché invalidado exitosamente")
-            print("🗑️ Caché de trabajadores invalidado desde QML")
-        except Exception as e:
-            self.errorOccurred.emit("Error", f"Error invalidando caché: {str(e)}")
-    
     @Slot(result='QVariantMap')
     def obtenerEstadisticasCompletas(self) -> Dict[str, Any]:
         """Obtiene estadísticas completas del sistema"""
         try:
-            resultado = self.service.obtener_estadisticas()
-            
-            if resultado.get('success'):
-                return resultado.get('data', {})
-            
-            return {}
-            
+            return self.repository.get_worker_statistics()
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo estadísticas: {str(e)}")
+            return {}
+    
+    @Slot(result='QVariantMap')
+    def obtenerDistribucionCarga(self) -> Dict[str, Any]:
+        """Obtiene distribución de carga de trabajo"""
+        try:
+            carga = self.repository.get_laboratory_workload()
+            return {
+                'trabajadores_laboratorio': carga,
+                'total_trabajadores': len(carga),
+                'con_asignaciones': len([t for t in carga if t.get('total_examenes', 0) > 0])
+            }
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error obteniendo distribución: {str(e)}")
             return {}
     
     # ===============================
@@ -620,19 +601,18 @@ class TrabajadorModel(QObject):
             self.errorOccurred.emit("Error inicial", f"Error cargando datos: {str(e)}")
     
     def _cargar_trabajadores(self):
-        """Carga lista de trabajadores desde el service"""
+        """Carga lista de trabajadores desde el repository"""
         try:
-            resultado = self.service.obtener_trabajadores()
+            trabajadores = self.repository.get_all_with_types()
             
-            if resultado.get('success'):
-                trabajadores = resultado.get('data', {}).get('trabajadores', [])
-                self._trabajadores = trabajadores
-                self._trabajadores_filtrados = trabajadores.copy()
-                self.trabajadoresChanged.emit()
-                print(f"👷‍♂️ Trabajadores cargados: {len(trabajadores)}")
-            else:
-                self._trabajadores = []
-                self._trabajadores_filtrados = []
+            # Agregar nombre completo
+            for trabajador in trabajadores:
+                trabajador['nombre_completo'] = f"{trabajador.get('Nombre', '')} {trabajador.get('Apellido_Paterno', '')} {trabajador.get('Apellido_Materno', '')}"
+            
+            self._trabajadores = trabajadores
+            self._trabajadores_filtrados = trabajadores.copy()
+            self.trabajadoresChanged.emit()
+            print(f"👷‍♂️ Trabajadores cargados: {len(trabajadores)}")
                 
         except Exception as e:
             print(f"❌ Error cargando trabajadores: {e}")
@@ -641,17 +621,12 @@ class TrabajadorModel(QObject):
             raise e
     
     def _cargar_tipos_trabajador(self):
-        """Carga lista de tipos de trabajador desde el service"""
+        """Carga lista de tipos de trabajador desde el repository"""
         try:
-            resultado = self.service.obtener_tipos_trabajadores()
-            
-            if resultado.get('success'):
-                tipos = resultado.get('data', {}).get('tipos', [])
-                self._tipos_trabajador = tipos
-                self.tiposTrabajadorChanged.emit()
-                print(f"🏷️ Tipos de trabajador cargados: {len(tipos)}")
-            else:
-                self._tipos_trabajador = []
+            tipos = self.repository.get_all_worker_types()
+            self._tipos_trabajador = tipos
+            self.tiposTrabajadorChanged.emit()
+            print(f"🏷️ Tipos de trabajador cargados: {len(tipos)}")
                 
         except Exception as e:
             print(f"❌ Error cargando tipos de trabajador: {e}")
@@ -659,18 +634,12 @@ class TrabajadorModel(QObject):
             raise e
     
     def _cargar_estadisticas(self):
-        """Carga estadísticas desde el service"""
+        """Carga estadísticas desde el repository"""
         try:
-            resultado = self.service.obtener_estadisticas()
-            
-            if resultado.get('success'):
-                estadisticas = resultado.get('data', {})
-                self._estadisticas = estadisticas
-                self.estadisticasChanged.emit()
-                print("📈 Estadísticas de trabajadores cargadas")
-            else:
-                self._estadisticas = {}
-                
+            estadisticas = self.repository.get_worker_statistics()
+            self._estadisticas = estadisticas
+            self.estadisticasChanged.emit()
+            print("📈 Estadísticas de trabajadores cargadas")
         except Exception as e:
             print(f"❌ Error cargando estadísticas: {e}")
             # No es crítico, continuar sin estadísticas

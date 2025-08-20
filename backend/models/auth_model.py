@@ -1,16 +1,16 @@
 # backend/models/auth_model.py
 
 from typing import Dict, Any, Optional
-from PySide6.QtCore import QObject, Signal, Slot, Property
+from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 from PySide6.QtQml import qmlRegisterType
 
-from ..services.auth_service import AuthService
+from ..repositories.auth_repository import AuthRepository
 from ..core.excepciones import ExceptionHandler, AuthenticationError
 
 class AuthModel(QObject):
     """
     Model QObject para autenticación y gestión de sesiones en QML
-    Conecta la interfaz QML con el AuthService
+    Conecta la interfaz QML con el AuthRepository
     """
     
     # ===============================
@@ -40,8 +40,8 @@ class AuthModel(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Servicio de autenticación
-        self.auth_service = AuthService()
+        # Repository en lugar de service
+        self.repository = AuthRepository()
         
         # Estado interno
         self._is_authenticated: bool = False
@@ -140,8 +140,8 @@ class AuthModel(QObject):
                 self.loginFailed.emit("Contraseña requerida", "VALIDATION_ERROR")
                 return
             
-            # Intentar login usando el servicio
-            resultado = self.auth_service.login(email.strip(), password)
+            # Intentar login usando el repository
+            resultado = self.repository.authenticate_user(email.strip(), password)
             
             if resultado['success']:
                 # Login exitoso
@@ -179,9 +179,9 @@ class AuthModel(QObject):
         try:
             self._set_loading(True)
             
-            # Cerrar sesión usando el servicio
+            # Cerrar sesión usando el repository
             if self._session_token:
-                resultado = self.auth_service.logout(self._session_token)
+                resultado = self.repository.logout_user(self._session_token)
                 
                 if resultado['success']:
                     self.logoutCompleted.emit(resultado['message'])
@@ -207,7 +207,7 @@ class AuthModel(QObject):
             if not self._session_token:
                 return False
             
-            resultado = self.auth_service.verificar_sesion(self._session_token)
+            resultado = self.repository.verify_session(self._session_token)
             
             if resultado['valid']:
                 # Sesión válida, actualizar datos del usuario
@@ -228,7 +228,7 @@ class AuthModel(QObject):
     def validateSessionToken(self, token: str) -> bool:
         """Valida un token de sesión específico"""
         try:
-            resultado = self.auth_service.verificar_sesion(token)
+            resultado = self.repository.verify_session(token)
             return resultado['valid']
         except Exception:
             return False
@@ -239,7 +239,7 @@ class AuthModel(QObject):
         if self._session_token:
             self.validateCurrentSession()
     
-    @Slot(result=bool)
+    @Slot(str, result=bool)
     def hasPermission(self, permission: str) -> bool:
         """Verifica si el usuario tiene un permiso específico"""
         if not self._current_user:
@@ -253,14 +253,15 @@ class AuthModel(QObject):
         """Verifica si el usuario es administrador"""
         if not self._current_user:
             return False
-        return self._current_user.get('rol_nombre', '') == 'Administrador'
+        return self._current_user.get('rol_nombre', '').lower() == 'administrador'
     
     @Slot(result=bool)
     def isMedico(self) -> bool:
         """Verifica si el usuario es médico"""
         if not self._current_user:
             return False
-        return self._current_user.get('rol_nombre', '') == 'Médico'
+        rol = self._current_user.get('rol_nombre', '').lower()
+        return rol == 'médico' or rol == 'medico'
     
     @Slot(result='QVariantList')
     def getActiveSessions(self) -> list:
@@ -269,7 +270,7 @@ class AuthModel(QObject):
             if not self.isAdmin():
                 return []
             
-            return self.auth_service.obtener_sesiones_activas()
+            return self.repository.get_active_sessions()
         except Exception as e:
             self.errorOccurred.emit("Error obteniendo sesiones", str(e))
             return []
@@ -294,7 +295,7 @@ class AuthModel(QObject):
         elif format_type == "formal":
             # Con título según rol
             rol = self._current_user.get('rol_nombre', '')
-            if rol == 'Médico':
+            if rol.lower() in ['médico', 'medico']:
                 return f"Dr. {nombre}"
             else:
                 return nombre
@@ -307,6 +308,81 @@ class AuthModel(QObject):
         self._remember_me = False
         # En implementación real, limpiar del almacenamiento local
         print("🧹 Credenciales recordadas limpiadas")
+    
+    # ===============================
+    # SLOTS PARA GESTIÓN DE USUARIOS
+    # ===============================
+    
+    @Slot(str, str, str, str, str, int, result=bool)
+    def crearUsuario(self, nombre: str, apellido_paterno: str, apellido_materno: str,
+                    email: str, password: str, rol_id: int = 1) -> bool:
+        """Crea nuevo usuario (solo admin)"""
+        try:
+            if not self.isAdmin():
+                self.errorOccurred.emit("Acceso denegado", "Solo administradores pueden crear usuarios")
+                return False
+            
+            self._set_loading(True)
+            
+            user_id = self.repository.create_user(
+                nombre=nombre,
+                apellido_paterno=apellido_paterno,
+                apellido_materno=apellido_materno,
+                email=email,
+                password=password,
+                rol_id=rol_id
+            )
+            
+            if user_id:
+                print(f"✅ Usuario creado desde QML: {email} - ID: {user_id}")
+                return True
+            else:
+                self.errorOccurred.emit("Error", "No se pudo crear el usuario")
+                return False
+                
+        except Exception as e:
+            self.errorOccurred.emit("Error crítico", f"Error creando usuario: {str(e)}")
+            return False
+        finally:
+            self._set_loading(False)
+    
+    @Slot(str, result=bool)
+    def cambiarPassword(self, new_password: str) -> bool:
+        """Cambia contraseña del usuario actual"""
+        try:
+            if not self._current_user:
+                self.errorOccurred.emit("Error", "No hay usuario autenticado")
+                return False
+            
+            self._set_loading(True)
+            
+            success = self.repository.update_user_password(
+                self._current_user['id'],
+                new_password
+            )
+            
+            if success:
+                # Cerrar sesión para forzar nuevo login
+                self.logout()
+                print("🔑 Contraseña cambiada exitosamente")
+                return True
+            else:
+                self.errorOccurred.emit("Error", "No se pudo cambiar la contraseña")
+                return False
+                
+        except Exception as e:
+            self.errorOccurred.emit("Error crítico", f"Error cambiando contraseña: {str(e)}")
+            return False
+        finally:
+            self._set_loading(False)
+    
+    @Slot(str, result=bool)
+    def emailExists(self, email: str) -> bool:
+        """Verifica si un email ya está registrado"""
+        try:
+            return self.repository.email_exists(email)
+        except Exception:
+            return False
     
     # ===============================
     # MÉTODOS PRIVADOS
@@ -338,15 +414,13 @@ class AuthModel(QObject):
         """Maneja sesión inválida"""
         self._clear_session()
         
-        if "expired" in reason.lower():
+        if "expired" in reason.lower() or "expirada" in reason.lower():
             self.sessionExpired.emit("Su sesión ha expirado. Por favor, inicie sesión nuevamente.")
         else:
             self.sessionInvalid.emit(reason)
     
     def _setup_session_cleanup(self):
         """Configura limpieza automática de sesiones"""
-        from PySide6.QtCore import QTimer
-        
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_expired_sessions)
         self.cleanup_timer.start(300000)  # 5 minutos
@@ -354,7 +428,7 @@ class AuthModel(QObject):
     def _cleanup_expired_sessions(self):
         """Limpia sesiones expiradas automáticamente"""
         try:
-            cleaned = self.auth_service.limpiar_sesiones_expiradas()
+            cleaned = self.repository.cleanup_expired_sessions()
             if cleaned > 0:
                 print(f"🧹 {cleaned} sesiones expiradas limpiadas automáticamente")
         except Exception as e:
@@ -383,9 +457,50 @@ class AuthModel(QObject):
             if not self.isAdmin():
                 return {}
             
-            return self.auth_service.get_stats()
+            return self.repository.get_auth_statistics()
         except Exception:
             return {}
+    
+    @Slot(result='QVariantList')
+    def getUsuariosActivos(self) -> list:
+        """Obtiene lista de usuarios activos (admin only)"""
+        try:
+            if not self.isAdmin():
+                return []
+            
+            return self.repository.get_active_users()
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error obteniendo usuarios: {str(e)}")
+            return []
+    
+    @Slot(int, result='QVariantList')
+    def getSesionesUsuario(self, user_id: int) -> list:
+        """Obtiene sesiones de un usuario específico (admin only)"""
+        try:
+            if not self.isAdmin():
+                return []
+            
+            return self.repository.get_user_sessions(user_id)
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error obteniendo sesiones: {str(e)}")
+            return []
+    
+    @Slot()
+    def limpiarSesionesExpiradas(self):
+        """Limpia sesiones expiradas manualmente (admin only)"""
+        try:
+            if not self.isAdmin():
+                self.errorOccurred.emit("Acceso denegado", "Solo administradores")
+                return
+            
+            cleaned = self.repository.cleanup_expired_sessions()
+            if cleaned > 0:
+                print(f"🧹 {cleaned} sesiones expiradas limpiadas manualmente")
+            else:
+                print("✅ No hay sesiones expiradas que limpiar")
+                
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error limpiando sesiones: {str(e)}")
     
     def __del__(self):
         """Destructor para limpieza"""

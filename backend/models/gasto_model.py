@@ -2,13 +2,13 @@ from typing import List, Dict, Any, Optional
 from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import qmlRegisterType
 
-from ..services.gasto_service import GastoService
+from ..repositories.gasto_repository import GastoRepository
 from ..core.excepciones import ExceptionHandler, ValidationError
 
 class GastoModel(QObject):
     """
     Model QObject para gestión de gastos en QML
-    Conecta la interfaz QML con el GastoService
+    Conecta la interfaz QML con el GastoRepository
     """
     
     # ===============================
@@ -40,8 +40,8 @@ class GastoModel(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Referencias a services
-        self.service = GastoService()
+        # Repository en lugar de service
+        self.repository = GastoRepository()
         
         # Estado interno
         self._gastos: List[Dict[str, Any]] = []
@@ -98,34 +98,42 @@ class GastoModel(QObject):
     
     # --- OPERACIONES CRUD GASTOS ---
     
-    @Slot(int, float, int, str, str, bool, result=bool)
+    @Slot(int, float, int, str, str, result=bool)
     def crearGasto(self, tipo_gasto_id: int, monto: float, usuario_id: int,
-                   descripcion: str, fecha_gasto: str = "", validar_presupuesto: bool = True) -> bool:
+                   descripcion: str = "", fecha_gasto: str = "") -> bool:
         """Crea nuevo gasto desde QML"""
         try:
             self._set_loading(True)
             
-            resultado = self.service.crear_gasto(
+            from datetime import datetime
+            fecha_obj = None
+            if fecha_gasto:
+                try:
+                    fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+                except:
+                    fecha_obj = None
+            
+            # Crear usando repository
+            gasto_id = self.repository.create_expense(
                 tipo_gasto_id=tipo_gasto_id,
                 monto=monto,
                 usuario_id=usuario_id,
-                descripcion=descripcion,
-                fecha_gasto=fecha_gasto if fecha_gasto else None,
-                validar_presupuesto=validar_presupuesto
+                fecha=fecha_obj,
+                descripcion=descripcion if descripcion else None
             )
             
-            if resultado.get('exito'):
+            if gasto_id:
                 self._cargar_gastos()
                 self._cargar_estadisticas()
                 
-                mensaje = resultado.get('mensaje', 'Gasto creado exitosamente')
+                mensaje = f"Gasto creado exitosamente - ID: {gasto_id}"
                 self.gastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Gasto creado desde QML: {monto}")
                 return True
             else:
-                error_msg = resultado.get('mensaje', 'Error creando gasto')
+                error_msg = "Error creando gasto"
                 self.gastoCreado.emit(False, error_msg)
                 return False
                 
@@ -137,8 +145,8 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, float, str, result=bool)
-    def actualizarGasto(self, gasto_id: int, monto: float = 0, descripcion: str = "") -> bool:
+    @Slot(int, float, int, result=bool)
+    def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0) -> bool:
         """Actualiza gasto existente desde QML"""
         try:
             self._set_loading(True)
@@ -146,22 +154,22 @@ class GastoModel(QObject):
             kwargs = {}
             if monto > 0:
                 kwargs['monto'] = monto
-            if descripcion:
-                kwargs['descripcion'] = descripcion
+            if tipo_gasto_id > 0:
+                kwargs['tipo_gasto_id'] = tipo_gasto_id
             
-            resultado = self.service.actualizar_gasto(gasto_id, **kwargs)
+            success = self.repository.update_expense(gasto_id, **kwargs)
             
-            if resultado.get('exito'):
+            if success:
                 self._cargar_gastos()
                 
-                mensaje = resultado.get('mensaje', 'Gasto actualizado exitosamente')
+                mensaje = "Gasto actualizado exitosamente"
                 self.gastoActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Gasto actualizado desde QML: ID {gasto_id}")
                 return True
             else:
-                error_msg = resultado.get('mensaje', 'Error actualizando gasto')
+                error_msg = "Error actualizando gasto"
                 self.gastoActualizado.emit(False, error_msg)
                 return False
                 
@@ -173,26 +181,26 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, int, result=bool)
-    def eliminarGasto(self, gasto_id: int, usuario_id: int) -> bool:
+    @Slot(int, result=bool)
+    def eliminarGasto(self, gasto_id: int) -> bool:
         """Elimina gasto desde QML"""
         try:
             self._set_loading(True)
             
-            resultado = self.service.eliminar_gasto(gasto_id, usuario_id)
+            success = self.repository.delete(gasto_id)
             
-            if resultado.get('exito'):
+            if success:
                 self._cargar_gastos()
                 self._cargar_estadisticas()
                 
-                mensaje = resultado.get('mensaje', 'Gasto eliminado exitosamente')
+                mensaje = "Gasto eliminado exitosamente"
                 self.gastoEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"🗑️ Gasto eliminado desde QML: ID {gasto_id}")
                 return True
             else:
-                error_msg = resultado.get('mensaje', 'Error eliminando gasto')
+                error_msg = "Error eliminando gasto"
                 self.gastoEliminado.emit(False, error_msg)
                 return False
                 
@@ -212,19 +220,19 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.crear_tipo_gasto(nombre.strip())
+            tipo_id = self.repository.create_expense_type(nombre.strip())
             
-            if resultado.get('exito'):
+            if tipo_id:
                 self._cargar_tipos_gastos()
                 
-                mensaje = resultado.get('mensaje', 'Tipo de gasto creado exitosamente')
+                mensaje = f"Tipo de gasto creado exitosamente - ID: {tipo_id}"
                 self.tipoGastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Tipo gasto creado desde QML: {nombre}")
                 return True
             else:
-                error_msg = resultado.get('mensaje', 'Error creando tipo de gasto')
+                error_msg = "Error creando tipo de gasto"
                 self.tipoGastoCreado.emit(False, error_msg)
                 return False
                 
@@ -242,18 +250,18 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.actualizar_tipo_gasto(tipo_id, nombre.strip())
+            success = self.repository.update_expense_type(tipo_id, nombre.strip())
             
-            if resultado.get('exito'):
+            if success:
                 self._cargar_tipos_gastos()
                 
-                mensaje = resultado.get('mensaje', 'Tipo actualizado exitosamente')
+                mensaje = "Tipo actualizado exitosamente"
                 self.tipoGastoActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 return True
             else:
-                error_msg = resultado.get('mensaje', 'Error actualizando tipo')
+                error_msg = "Error actualizando tipo"
                 self.tipoGastoActualizado.emit(False, error_msg)
                 return False
                 
@@ -265,24 +273,24 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, bool, result=bool)
-    def eliminarTipoGasto(self, tipo_id: int, forzar: bool = False) -> bool:
+    @Slot(int, result=bool)
+    def eliminarTipoGasto(self, tipo_id: int) -> bool:
         """Elimina tipo de gasto"""
         try:
             self._set_loading(True)
             
-            resultado = self.service.eliminar_tipo_gasto(tipo_id, forzar)
+            success = self.repository.delete_expense_type(tipo_id)
             
-            if resultado.get('exito'):
+            if success:
                 self._cargar_tipos_gastos()
                 
-                mensaje = resultado.get('mensaje', 'Tipo eliminado exitosamente')
+                mensaje = "Tipo eliminado exitosamente"
                 self.tipoGastoEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 return True
             else:
-                error_msg = resultado.get('mensaje', 'Error eliminando tipo')
+                error_msg = "Error eliminando tipo"
                 self.tipoGastoEliminado.emit(False, error_msg)
                 return False
                 
@@ -296,35 +304,54 @@ class GastoModel(QObject):
     
     # --- BÚSQUEDA Y FILTROS ---
     
-    @Slot(str, int, str, str, float, float, int, int, int)
+    @Slot(str, int, str, str, float, float)
     def aplicarFiltros(self, termino_busqueda: str, tipo_gasto_id: int, fecha_desde: str, 
-                      fecha_hasta: str, monto_min: float, monto_max: float, 
-                      usuario_id: int, page: int = 1, per_page: int = 50):
+                      fecha_hasta: str, monto_min: float, monto_max: float):
         """Aplica filtros avanzados a la lista de gastos"""
         try:
-            filtros = {
-                'termino_busqueda': termino_busqueda.strip(),
-                'tipo_gasto_id': tipo_gasto_id if tipo_gasto_id > 0 else None,
-                'fecha_desde': fecha_desde.strip() if fecha_desde else "",
-                'fecha_hasta': fecha_hasta.strip() if fecha_hasta else "",
-                'monto_min': monto_min if monto_min > 0 else 0,
-                'monto_max': monto_max if monto_max > 0 else 0,
-                'usuario_id': usuario_id if usuario_id > 0 else None,
-                'page': page,
-                'per_page': per_page
-            }
+            self._filtro_busqueda = termino_busqueda.strip()
+            self._filtro_tipo = tipo_gasto_id
+            self._filtro_fecha_desde = fecha_desde
+            self._filtro_fecha_hasta = fecha_hasta
+            self._filtro_monto_min = monto_min
+            self._filtro_monto_max = monto_max
             
-            resultado = self.service.buscar_gastos_avanzado(filtros)
+            # Aplicar filtros
+            gastos_filtrados = self._gastos.copy()
             
-            if resultado.get('exito'):
-                gastos_encontrados = resultado.get('datos', {}).get('gastos', [])
-                self._gastos_filtrados = gastos_encontrados
-                self.gastosChanged.emit()
-                
-                total = len(gastos_encontrados)
-                print(f"🔍 Filtros aplicados: {total} gastos encontrados")
-            else:
-                self.errorOccurred.emit("Error en filtros", resultado.get('mensaje', 'Error aplicando filtros'))
+            # Filtro por búsqueda
+            if termino_busqueda:
+                gastos_filtrados = [
+                    g for g in gastos_filtrados
+                    if (termino_busqueda.lower() in g.get('tipo_nombre', '').lower() or
+                        termino_busqueda.lower() in g.get('usuario_nombre', '').lower())
+                ]
+            
+            # Filtro por tipo
+            if tipo_gasto_id > 0:
+                gastos_filtrados = [
+                    g for g in gastos_filtrados
+                    if g.get('tipo_id') == tipo_gasto_id
+                ]
+            
+            # Filtro por monto
+            if monto_min > 0:
+                gastos_filtrados = [
+                    g for g in gastos_filtrados
+                    if g.get('Monto', 0) >= monto_min
+                ]
+            
+            if monto_max > 0:
+                gastos_filtrados = [
+                    g for g in gastos_filtrados
+                    if g.get('Monto', 0) <= monto_max
+                ]
+            
+            self._gastos_filtrados = gastos_filtrados
+            self.gastosChanged.emit()
+            
+            total = len(gastos_filtrados)
+            print(f"🔍 Filtros aplicados: {total} gastos encontrados")
                 
         except Exception as e:
             self.errorOccurred.emit("Error en filtros", f"Error aplicando filtros: {str(e)}")
@@ -336,29 +363,12 @@ class GastoModel(QObject):
             if not termino.strip():
                 return self._gastos
             
-            filtros = {'termino_busqueda': termino.strip(), 'page': 1, 'per_page': 100}
-            resultado = self.service.buscar_gastos_avanzado(filtros)
-            
-            if resultado.get('exito'):
-                gastos = resultado.get('datos', {}).get('gastos', [])
-                print(f"🔍 Búsqueda '{termino}': {len(gastos)} resultados")
-                return gastos
-            
-            return []
+            gastos = self.repository.search_expenses(termino.strip(), limit=100)
+            print(f"🔍 Búsqueda '{termino}': {len(gastos)} resultados")
+            return gastos
             
         except Exception as e:
             self.errorOccurred.emit("Error en búsqueda", f"Error buscando gastos: {str(e)}")
-            return []
-    
-    @Slot(str, result=list)
-    def filtrarPorPeriodo(self, periodo: str) -> List[Dict[str, Any]]:
-        """Filtra gastos por período predefinido"""
-        try:
-            gastos = self.service.filtrar_gastos_por_periodo(periodo)
-            print(f"📅 Filtro período '{periodo}': {len(gastos)} gastos")
-            return gastos
-        except Exception as e:
-            self.errorOccurred.emit("Error", f"Error filtrando por período: {str(e)}")
             return []
     
     @Slot()
@@ -382,17 +392,29 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.service.generar_reporte_gastos_periodo(
-                fecha_desde, fecha_hasta, incluir_detalles
+            from datetime import datetime
+            start_date = datetime.strptime(fecha_desde, '%Y-%m-%d') if fecha_desde else None
+            end_date = datetime.strptime(fecha_hasta, '%Y-%m-%d') if fecha_hasta else None
+            
+            gastos_reporte = self.repository.get_expenses_for_report(
+                start_date=start_date,
+                end_date=end_date
             )
             
-            if resultado.get('exito'):
-                mensaje = resultado.get('mensaje', 'Reporte generado exitosamente')
-                self.reporteGenerado.emit(True, mensaje, resultado.get('datos', {}))
-                self.successMessage.emit(mensaje)
-            else:
-                error_msg = resultado.get('mensaje', 'Error generando reporte')
-                self.reporteGenerado.emit(False, error_msg, {})
+            total_gastos = len(gastos_reporte)
+            total_monto = sum(g.get('Monto', 0) for g in gastos_reporte)
+            
+            reporte_data = {
+                'gastos': gastos_reporte,
+                'total_gastos': total_gastos,
+                'total_monto': total_monto,
+                'fecha_desde': fecha_desde,
+                'fecha_hasta': fecha_hasta
+            }
+            
+            mensaje = f"Reporte generado: {total_gastos} gastos, Total: ${total_monto:,.2f}"
+            self.reporteGenerado.emit(True, mensaje, reporte_data)
+            self.successMessage.emit(mensaje)
                 
         except Exception as e:
             error_msg = f"Error generando reporte: {str(e)}"
@@ -407,13 +429,8 @@ class GastoModel(QObject):
     def obtenerGastoPorId(self, gasto_id: int) -> Dict[str, Any]:
         """Obtiene gasto específico por ID"""
         try:
-            resultado = self.service.preparar_gasto_para_qml(gasto_id)
-            
-            if resultado.get('exito'):
-                return resultado.get('datos', {})
-            else:
-                self.errorOccurred.emit("Error", resultado.get('mensaje', 'Gasto no encontrado'))
-                return {}
+            gasto = self.repository.get_expense_by_id_complete(gasto_id)
+            return gasto if gasto else {}
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo gasto: {str(e)}")
             return {}
@@ -422,12 +439,8 @@ class GastoModel(QObject):
     def obtenerResumenRecientes(self, dias: int = 7) -> List[Dict[str, Any]]:
         """Obtiene resumen de gastos recientes"""
         try:
-            resultado = self.service.obtener_resumen_gastos_recientes(dias)
-            
-            if resultado.get('exito'):
-                return resultado.get('datos', {}).get('gastos', [])
-            
-            return []
+            gastos = self.repository.get_recent_expenses(dias)
+            return gastos
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo resumen: {str(e)}")
             return []
@@ -436,7 +449,10 @@ class GastoModel(QObject):
     def obtenerDashboard(self) -> Dict[str, Any]:
         """Obtiene estadísticas para el dashboard"""
         try:
-            dashboard = self.service.obtener_estadisticas_dashboard()
+            dashboard = {
+                'gastos_hoy': self.repository.get_today_statistics(),
+                'estadisticas_generales': self.repository.get_expense_statistics()
+            }
             return dashboard
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo dashboard: {str(e)}")
@@ -463,30 +479,33 @@ class GastoModel(QObject):
     def obtenerTiposParaComboBox(self) -> List[Dict[str, Any]]:
         """Obtiene tipos de gastos formateados para ComboBox"""
         try:
-            return self.service.formatear_tipos_gastos_para_combobox()
+            tipos_formateados = []
+            
+            # Agregar opción "Todos"
+            tipos_formateados.append({
+                'id': 0,
+                'text': 'Todos los tipos',
+                'data': {}
+            })
+            
+            # Agregar tipos existentes
+            for tipo in self._tipos_gastos:
+                tipos_formateados.append({
+                    'id': tipo.get('id', 0),
+                    'text': tipo.get('Nombre', 'Sin nombre'),
+                    'data': tipo
+                })
+            
+            return tipos_formateados
+            
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo tipos: {str(e)}")
-            return []
-    
-    @Slot(result=list)
-    def obtenerPeriodosDisponibles(self) -> List[str]:
-        """Obtiene lista de períodos para filtros"""
-        return ["hoy", "semana", "mes", "trimestre", "año"]
+            return [{'id': 0, 'text': 'Todos los tipos', 'data': {}}]
     
     @Slot(float, result=str)
     def formatearPrecio(self, precio: float) -> str:
         """Formatea precio para mostrar"""
         return f"Bs{precio:,.2f}"
-    
-    @Slot()
-    def limpiarCache(self):
-        """Limpia el caché del sistema"""
-        try:
-            # Aquí podrías llamar a un método del service para limpiar caché
-            self.successMessage.emit("Caché limpiado exitosamente")
-            print("🗑️ Caché de gastos limpiado desde QML")
-        except Exception as e:
-            self.errorOccurred.emit("Error", f"Error limpiando caché: {str(e)}")
     
     # ===============================
     # MÉTODOS PRIVADOS
@@ -506,18 +525,11 @@ class GastoModel(QObject):
     def _cargar_gastos(self):
         """Carga lista de gastos recientes"""
         try:
-            resultado = self.service.obtener_resumen_gastos_recientes(30)  # Últimos 30 días
-            
-            if resultado.get('exito'):
-                gastos = resultado.get('datos', {}).get('gastos', [])
-                self._gastos = gastos
-                self._gastos_filtrados = gastos.copy()
-                self.gastosChanged.emit()
-                print(f"💸 Gastos cargados: {len(gastos)}")
-            else:
-                self._gastos = []
-                self._gastos_filtrados = []
-                
+            gastos = self.repository.get_recent_expenses(30)  # Últimos 30 días
+            self._gastos = gastos
+            self._gastos_filtrados = gastos.copy()
+            self.gastosChanged.emit()
+            print(f"💸 Gastos cargados: {len(gastos)}")
         except Exception as e:
             print(f"❌ Error cargando gastos: {e}")
             self._gastos = []
@@ -526,7 +538,7 @@ class GastoModel(QObject):
     def _cargar_tipos_gastos(self):
         """Carga lista de tipos de gastos"""
         try:
-            tipos = self.service.formatear_tipos_gastos_para_combobox()
+            tipos = self.repository.get_all_expense_types()
             self._tipos_gastos = tipos
             self.tiposGastosChanged.emit()
             print(f"🏷️ Tipos de gastos cargados: {len(tipos)}")
@@ -537,7 +549,7 @@ class GastoModel(QObject):
     def _cargar_estadisticas(self):
         """Carga estadísticas de gastos"""
         try:
-            estadisticas = self.service.obtener_estadisticas_dashboard()
+            estadisticas = self.repository.get_expense_statistics()
             self._estadisticas = estadisticas
             self.estadisticasChanged.emit()
             print("📈 Estadísticas de gastos cargadas")

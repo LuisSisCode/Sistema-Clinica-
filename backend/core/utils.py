@@ -370,7 +370,7 @@ def validate_phone(phone: str) -> str:
     
     return phone
 
-def validar_email(email: str) -> bool:
+def validate_email(email: str) -> bool:
     """Valida formato de email"""
     if not email:
         return False

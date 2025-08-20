@@ -743,6 +743,26 @@ class ConsultaModel(QObject):
             self._buscando = buscando
             self.buscandoChanged.emit()
 
+    def _cargar_consultas_recientes(self):
+        """Carga consultas recientes"""
+        try:
+            print("🔄 DEBUG: get_active() llamado para consultas recientes")
+            consultas = safe_execute(
+                self.consulta_repo.get_recent_consultations,
+                days=30
+            )
+            self._consultas_recientes = consultas or []
+            print(f"🔄 DEBUG: get_active() encontró {len(self._consultas_recientes)} consultas")
+            if self._consultas_recientes:
+                print(f"🔄 DEBUG: Primera consulta: {self._consultas_recientes[0]}")
+            
+            self.consultasRecientesChanged.emit()
+            
+        except Exception as e:
+            print(f"⚠️ Error cargando consultas recientes: {e}")
+            self._consultas_recientes = []
+            self.consultasRecientesChanged.emit()
+
 # Registrar el tipo para QML
 def register_consulta_model():
     qmlRegisterType(ConsultaModel, "ClinicaModels", 1, 0, "ConsultaModel")

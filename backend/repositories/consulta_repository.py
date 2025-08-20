@@ -336,19 +336,37 @@ class ConsultaRepository(BaseRepository):
     @cached_query('stats_consultas', ttl=300)
     def get_consultation_statistics(self) -> Dict[str, Any]:
         """Estadísticas completas de consultas"""
-        # Estadísticas generales
+        # Estadísticas generales básicas
         general_query = """
         SELECT 
             COUNT(*) as total_consultas,
             COUNT(DISTINCT Id_Paciente) as pacientes_unicos,
-            COUNT(DISTINCT Id_Especialidad) as especialidades_utilizadas,
-            AVG(DATEDIFF(day, 
-                LAG(Fecha) OVER (PARTITION BY Id_Paciente ORDER BY Fecha), 
-                Fecha)) as dias_promedio_entre_consultas
+            COUNT(DISTINCT Id_Especialidad) as especialidades_utilizadas
         FROM Consultas
         """
         
-        # Por mes (últimos 12 meses)
+        # Promedio de días entre consultas (consulta separada)
+        dias_promedio_query = """
+        WITH ConsultasConLag AS (
+            SELECT 
+                Id_Paciente,
+                Fecha,
+                LAG(Fecha) OVER (PARTITION BY Id_Paciente ORDER BY Fecha) as fecha_anterior
+            FROM Consultas
+        )
+        SELECT AVG(CAST(DATEDIFF(day, fecha_anterior, Fecha) AS FLOAT)) as dias_promedio_entre_consultas
+        FROM ConsultasConLag
+        WHERE fecha_anterior IS NOT NULL
+        """
+        
+        general_stats = self._execute_query(general_query, fetch_one=True) or {}
+        dias_promedio = self._execute_query(dias_promedio_query, fetch_one=True) or {}
+        
+        # Combinar resultados
+        if general_stats and dias_promedio:
+            general_stats['dias_promedio_entre_consultas'] = dias_promedio.get('dias_promedio_entre_consultas', 0)
+        
+        # Resto de las consultas...
         monthly_query = """
         SELECT 
             FORMAT(Fecha, 'yyyy-MM') as mes,
@@ -360,24 +378,22 @@ class ConsultaRepository(BaseRepository):
         ORDER BY mes DESC
         """
         
-        # Por especialidad
         specialty_query = """
         SELECT e.Nombre as especialidad,
-               COUNT(c.id) as total_consultas,
-               COUNT(DISTINCT c.Id_Paciente) as pacientes_unicos,
-               AVG(e.Precio_Normal) as precio_promedio
+            COUNT(c.id) as total_consultas,
+            COUNT(DISTINCT c.Id_Paciente) as pacientes_unicos,
+            AVG(e.Precio_Normal) as precio_promedio
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         GROUP BY e.id, e.Nombre
         ORDER BY total_consultas DESC
         """
         
-        # Por doctor
         doctor_query = """
         SELECT CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor,
-               d.Especialidad as doctor_especialidad,
-               COUNT(c.id) as total_consultas,
-               COUNT(DISTINCT c.Id_Paciente) as pacientes_unicos
+            d.Especialidad as doctor_especialidad,
+            COUNT(c.id) as total_consultas,
+            COUNT(DISTINCT c.Id_Paciente) as pacientes_unicos
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         INNER JOIN Doctores d ON e.Id_Doctor = d.id
@@ -385,7 +401,6 @@ class ConsultaRepository(BaseRepository):
         ORDER BY total_consultas DESC
         """
         
-        general_stats = self._execute_query(general_query, fetch_one=True)
         monthly_stats = self._execute_query(monthly_query)
         specialty_stats = self._execute_query(specialty_query)
         doctor_stats = self._execute_query(doctor_query)

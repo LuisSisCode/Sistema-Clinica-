@@ -4,13 +4,13 @@ from typing import List, Dict, Any, Optional
 from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import qmlRegisterType
 
-from ..services.paciente_service import PacienteService
+from ..repositories.paciente_repository import PacienteRepository
 from ..core.excepciones import ExceptionHandler, ValidationError
 
 class PacienteModel(QObject):
     """
     Model QObject para gestión integral de pacientes en QML
-    Conecta la interfaz QML con el PacienteService
+    Conecta la interfaz QML con el PacienteRepository
     """
     
     # ===============================
@@ -46,8 +46,8 @@ class PacienteModel(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Servicio de pacientes
-        self.paciente_service = PacienteService()
+        # Repository en lugar de service
+        self.repository = PacienteRepository()
         
         # Estado interno
         self._pacientes: List[Dict[str, Any]] = []
@@ -106,17 +106,17 @@ class PacienteModel(QObject):
     @Property(int)
     def totalPacientesPediatricos(self) -> int:
         """Total de pacientes pediátricos (≤17 años)"""
-        return len([p for p in self._pacientes if p.get('edad', 0) <= 17])
+        return len([p for p in self._pacientes if p.get('Edad', 0) <= 17])
     
     @Property(int)
     def totalPacientesAdultos(self) -> int:
         """Total de pacientes adultos (18-64 años)"""
-        return len([p for p in self._pacientes if 18 <= p.get('edad', 0) <= 64])
+        return len([p for p in self._pacientes if 18 <= p.get('Edad', 0) <= 64])
     
     @Property(int)
     def totalPacientesAdultosMayores(self) -> int:
         """Total de pacientes adultos mayores (≥65 años)"""
-        return len([p for p in self._pacientes if p.get('edad', 0) >= 65])
+        return len([p for p in self._pacientes if p.get('Edad', 0) >= 65])
     
     @Property(str)
     def filtroGrupoEtario(self) -> str:
@@ -134,45 +134,36 @@ class PacienteModel(QObject):
     
     # --- OPERACIONES CRUD ---
     
-    @Slot(str, str, str, int, bool, 'QVariantMap', result=bool)
+    @Slot(str, str, str, int, result=bool)
     def crearPaciente(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                     edad: int, crear_consulta_inicial: bool = False, 
-                     datos_consulta: Dict[str, Any] = None) -> bool:
+                     edad: int) -> bool:
         """
         Crea nuevo paciente desde QML
-        
-        Args:
-            nombre: Nombre del paciente
-            apellido_paterno: Apellido paterno
-            apellido_materno: Apellido materno
-            edad: Edad en años
-            crear_consulta_inicial: Si crear consulta inicial
-            datos_consulta: Datos para consulta inicial (opcional)
         """
         try:
             self._set_loading(True)
             
-            # Preparar datos del paciente
-            datos_paciente = {
-                'nombre': nombre.strip(),
-                'apellido_paterno': apellido_paterno.strip(),
-                'apellido_materno': apellido_materno.strip(),
-                'edad': edad,
-                'crear_consulta_inicial': crear_consulta_inicial,
-                'datos_consulta_inicial': datos_consulta or {}
-            }
+            # Verificar duplicados potenciales
+            duplicados = self.detectarDuplicadosPotenciales(nombre, apellido_paterno, apellido_materno, edad)
+            if duplicados:
+                self.duplicadosDetectados.emit(duplicados)
+                self.warningMessage.emit(f"Se encontraron {len(duplicados)} posibles duplicados")
+                return False
             
-            # Crear usando el servicio
-            resultado = self.paciente_service.crear_paciente_completo(datos_paciente)
+            # Crear usando repository
+            paciente_id = self.repository.create_patient(
+                nombre=nombre.strip(),
+                apellido_paterno=apellido_paterno.strip(),
+                apellido_materno=apellido_materno.strip(),
+                edad=edad
+            )
             
-            if resultado['exito']:
-                # Verificar si hay duplicados detectados
-                if 'duplicados_potenciales' in resultado.get('datos', {}):
-                    self.duplicadosDetectados.emit(resultado['datos']['duplicados_potenciales'])
-                    return False  # No crear hasta resolver duplicados
-                
-                # Paciente creado exitosamente
-                paciente_creado = resultado['datos']['paciente']
+            if paciente_id:
+                # Obtener paciente creado
+                paciente_creado = self.repository.get_by_id(paciente_id)
+                if paciente_creado:
+                    # Agregar nombre completo
+                    paciente_creado['nombre_completo'] = f"{nombre} {apellido_paterno} {apellido_materno}"
                 
                 # Recargar datos
                 self._cargar_pacientes()
@@ -182,15 +173,16 @@ class PacienteModel(QObject):
                 self._generar_alertas_grupo_etario(paciente_creado)
                 
                 # Emitir señal de éxito
-                self.pacienteCreado.emit(True, resultado['mensaje'], paciente_creado)
-                self.successMessage.emit(f"Paciente {nombre} {apellido_paterno} creado exitosamente")
+                mensaje = f"Paciente {nombre} {apellido_paterno} creado exitosamente"
+                self.pacienteCreado.emit(True, mensaje, paciente_creado or {})
+                self.successMessage.emit(mensaje)
                 
                 print(f"✅ Paciente creado: {nombre} {apellido_paterno}")
                 return True
             else:
-                # Error en creación
-                self.pacienteCreado.emit(False, resultado['mensaje'], {})
-                self.errorOccurred.emit("Error", resultado['mensaje'])
+                error_msg = "Error creando paciente"
+                self.pacienteCreado.emit(False, error_msg, {})
+                self.errorOccurred.emit("Error", error_msg)
                 return False
                 
         except Exception as e:
@@ -210,31 +202,32 @@ class PacienteModel(QObject):
             self._set_loading(True)
             
             # Preparar datos para actualización (solo campos no vacíos)
-            datos_actualizacion = {}
+            kwargs = {}
             if nombre.strip():
-                datos_actualizacion['nombre'] = nombre.strip()
+                kwargs['nombre'] = nombre.strip()
             if apellido_paterno.strip():
-                datos_actualizacion['apellido_paterno'] = apellido_paterno.strip()
+                kwargs['apellido_paterno'] = apellido_paterno.strip()
             if apellido_materno.strip():
-                datos_actualizacion['apellido_materno'] = apellido_materno.strip()
+                kwargs['apellido_materno'] = apellido_materno.strip()
             if edad >= 0:
-                datos_actualizacion['edad'] = edad
+                kwargs['edad'] = edad
             
-            if not datos_actualizacion:
+            if not kwargs:
                 self.warningMessage.emit("No hay datos para actualizar")
                 return False
             
-            # Actualizar usando repository directamente (simplificado)
-            # En implementación real, usar servicio
-            success = True  # Placeholder
+            success = self.repository.update_patient(paciente_id, **kwargs)
             
             if success:
+                # Obtener paciente actualizado
+                paciente_actualizado = self.repository.get_by_id(paciente_id)
+                
                 # Recargar datos
                 self._cargar_pacientes()
                 
                 # Emitir señal de éxito
                 mensaje = "Paciente actualizado exitosamente"
-                self.pacienteActualizado.emit(True, mensaje, {})
+                self.pacienteActualizado.emit(True, mensaje, paciente_actualizado or {})
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Paciente actualizado: ID {paciente_id}")
@@ -260,10 +253,9 @@ class PacienteModel(QObject):
             self._set_loading(True)
             
             # Verificar que el paciente no tenga consultas recientes
-            # En implementación real, usar servicio con validaciones
+            # Por simplicidad, permitir eliminación directa
             
-            # Eliminar (cambiar estado)
-            success = True  # Placeholder
+            success = self.repository.delete(paciente_id)
             
             if success:
                 # Recargar datos
@@ -301,42 +293,58 @@ class PacienteModel(QObject):
         try:
             self._set_loading(True)
             
-            # Preparar criterios de búsqueda
+            # Filtrar datos locales
+            pacientes_encontrados = self._pacientes.copy()
+            
+            # Filtro por texto
+            if texto.strip():
+                texto_lower = texto.lower()
+                pacientes_encontrados = [
+                    p for p in pacientes_encontrados
+                    if (texto_lower in p.get('Nombre', '').lower() or
+                        texto_lower in p.get('Apellido_Paterno', '').lower() or
+                        texto_lower in p.get('Apellido_Materno', '').lower())
+                ]
+            
+            # Filtro por grupo etario
+            if grupo_etario != "Todos":
+                if grupo_etario == "PEDIÁTRICO":
+                    pacientes_encontrados = [p for p in pacientes_encontrados if p.get('Edad', 0) <= 17]
+                elif grupo_etario == "ADULTO":
+                    pacientes_encontrados = [p for p in pacientes_encontrados if 18 <= p.get('Edad', 0) <= 64]
+                elif grupo_etario == "ADULTO_MAYOR":
+                    pacientes_encontrados = [p for p in pacientes_encontrados if p.get('Edad', 0) >= 65]
+            
+            # Filtro por edad
+            if edad_min > 0:
+                pacientes_encontrados = [p for p in pacientes_encontrados if p.get('Edad', 0) >= edad_min]
+            if edad_max < 120:
+                pacientes_encontrados = [p for p in pacientes_encontrados if p.get('Edad', 0) <= edad_max]
+            
+            # Actualizar lista filtrada
+            self._pacientes_filtrados = pacientes_encontrados
+            
+            # Actualizar filtros activos
+            self._filtro_busqueda = texto
+            self._filtro_grupo_etario = grupo_etario
+            self._filtro_edad_min = edad_min
+            self._filtro_edad_max = edad_max
+            self._filtro_estado_seguimiento = estado_seguimiento
+            
+            # Emitir señales
+            self.pacientesChanged.emit()
+            mensaje = f"Encontrados {len(pacientes_encontrados)} pacientes"
+            self.busquedaCompletada.emit(len(pacientes_encontrados), mensaje)
+            
             criterios = {
-                'texto': texto.strip(),
-                'grupo_etario': grupo_etario if grupo_etario != "Todos" else "",
-                'edad_min': edad_min if edad_min > 0 else None,
-                'edad_max': edad_max if edad_max < 120 else None,
-                'con_consultas_recientes': con_consultas_recientes
+                'texto': texto,
+                'grupo_etario': grupo_etario,
+                'edad_min': edad_min,
+                'edad_max': edad_max
             }
+            self.filtrosAplicados.emit(criterios)
             
-            # Filtrar valores vacíos
-            criterios = {k: v for k, v in criterios.items() if v is not None and v != ""}
-            
-            # Realizar búsqueda usando el servicio
-            resultado = self.paciente_service.buscar_pacientes_avanzado(criterios)
-            
-            if resultado['exito']:
-                pacientes_encontrados = resultado['datos']['pacientes']
-                
-                # Actualizar lista filtrada
-                self._pacientes_filtrados = pacientes_encontrados
-                
-                # Actualizar filtros activos
-                self._filtro_busqueda = texto
-                self._filtro_grupo_etario = grupo_etario
-                self._filtro_edad_min = edad_min
-                self._filtro_edad_max = edad_max
-                self._filtro_estado_seguimiento = estado_seguimiento
-                
-                # Emitir señales
-                self.pacientesChanged.emit()
-                self.busquedaCompletada.emit(len(pacientes_encontrados), resultado['mensaje'])
-                self.filtrosAplicados.emit(criterios)
-                
-                print(f"🔍 Búsqueda completada: {len(pacientes_encontrados)} pacientes")
-            else:
-                self.errorOccurred.emit("Error en búsqueda", resultado['mensaje'])
+            print(f"🔍 Búsqueda completada: {len(pacientes_encontrados)} pacientes")
                 
         except Exception as e:
             self.errorOccurred.emit("Error en búsqueda", f"Error: {str(e)}")
@@ -351,17 +359,16 @@ class PacienteModel(QObject):
             self.pacientesChanged.emit()
             return
         
-        termino_lower = termino.lower()
-        self._pacientes_filtrados = [
-            p for p in self._pacientes
-            if (termino_lower in p.get('nombre_completo', '').lower() or 
-                termino_lower in str(p.get('edad', '')))
-        ]
-        
-        self._filtro_busqueda = termino
-        self.pacientesChanged.emit()
-        self.busquedaCompletada.emit(len(self._pacientes_filtrados), 
-                                    f"Encontrados {len(self._pacientes_filtrados)} pacientes")
+        try:
+            pacientes = self.repository.search_patients(termino, limit=100)
+            self._pacientes_filtrados = pacientes
+            
+            self._filtro_busqueda = termino
+            self.pacientesChanged.emit()
+            self.busquedaCompletada.emit(len(pacientes), 
+                                        f"Encontrados {len(pacientes)} pacientes")
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error en búsqueda: {str(e)}")
     
     @Slot()
     def limpiarFiltros(self):
@@ -385,11 +392,11 @@ class PacienteModel(QObject):
         try:
             self._set_loading(True)
             
-            # Obtener dashboard completo del paciente
-            resultado = self.paciente_service.obtener_paciente_dashboard(paciente_id)
+            # Obtener paciente con consultas y laboratorio
+            paciente = self.repository.get_complete_patient_record(paciente_id)
             
-            if resultado['exito']:
-                self._paciente_seleccionado = resultado['datos']
+            if paciente:
+                self._paciente_seleccionado = paciente
                 self.pacienteSeleccionadoChanged.emit()
                 
                 # Cargar historial médico
@@ -397,7 +404,7 @@ class PacienteModel(QObject):
                 
                 print(f"👤 Paciente seleccionado: ID {paciente_id}")
             else:
-                self.errorOccurred.emit("Error", resultado['mensaje'])
+                self.errorOccurred.emit("Error", "Paciente no encontrado")
                 
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error seleccionando paciente: {str(e)}")
@@ -417,10 +424,7 @@ class PacienteModel(QObject):
     def obtenerDashboardPaciente(self, paciente_id: int) -> Dict[str, Any]:
         """Obtiene dashboard médico completo de un paciente"""
         try:
-            resultado = self.paciente_service.obtener_paciente_dashboard(paciente_id)
-            if resultado['exito']:
-                return resultado['datos']
-            return {}
+            return self.repository.get_complete_patient_record(paciente_id) or {}
         except Exception:
             return {}
     
@@ -432,33 +436,20 @@ class PacienteModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.paciente_service.obtener_historial_completo(
-                paciente_id, incluir_detalles
-            )
+            historial = self.repository.get_complete_patient_record(paciente_id)
             
-            if resultado['exito']:
-                self._historial_medico = resultado['datos']
+            if historial:
+                self._historial_medico = historial
                 self.historialChanged.emit()
                 self.historialActualizado.emit(self._historial_medico)
                 print(f"📋 Historial cargado para paciente {paciente_id}")
             else:
-                self.errorOccurred.emit("Error", resultado['mensaje'])
+                self.errorOccurred.emit("Error", "Historial no encontrado")
                 
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error cargando historial: {str(e)}")
         finally:
             self._set_loading(False)
-    
-    @Slot(int, result='QVariantMap')
-    def analizarPatronConsultas(self, paciente_id: int) -> Dict[str, Any]:
-        """Analiza patrones de consultas del paciente"""
-        try:
-            resultado = self.paciente_service.analizar_patron_consultas(paciente_id)
-            if resultado['exito']:
-                return resultado['datos']
-            return {}
-        except Exception:
-            return {}
     
     # --- VALIDACIONES MÉDICAS ---
     
@@ -466,8 +457,14 @@ class PacienteModel(QObject):
     def validarEdadApropiada(self, edad: int, tipo_consulta: str = "general") -> Dict[str, Any]:
         """Valida si la edad es apropiada para el tipo de consulta"""
         try:
-            resultado = self.paciente_service.validar_edad_apropiada(edad, tipo_consulta)
-            return resultado['datos'] if resultado['exito'] else {}
+            grupo_etario = self.repository.get_age_group(edad)
+            edad_valida = 0 <= edad <= 120
+            
+            return {
+                'edad_valida': edad_valida,
+                'grupo_etario': grupo_etario,
+                'recomendaciones': self._get_age_recommendations(edad, grupo_etario)
+            }
         except Exception:
             return {'edad_valida': False, 'grupo_etario': 'Desconocido'}
     
@@ -476,22 +473,20 @@ class PacienteModel(QObject):
                                      apellido_materno: str, edad: int) -> List[Dict[str, Any]]:
         """Detecta pacientes que podrían ser duplicados"""
         try:
-            # En implementación real, usar método del servicio
-            # Por ahora simulamos detección básica
             nombre_completo = f"{nombre} {apellido_paterno} {apellido_materno}".lower()
             
             duplicados_potenciales = []
             for paciente in self._pacientes:
-                nombre_existente = paciente.get('nombre_completo', '').lower()
-                edad_existente = paciente.get('edad', 0)
+                nombre_existente = f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')}".lower()
+                edad_existente = paciente.get('Edad', 0)
                 
                 # Similitud de nombre y edad cercana
                 if (nombre.lower() in nombre_existente and 
                     abs(edad - edad_existente) <= 2):
                     duplicados_potenciales.append({
                         'paciente': paciente,
-                        'similitud': 0.8,  # Placeholder
-                        'diferencias': []
+                        'similitud': 0.8,
+                        'diferencias': [f"Edad: {edad_existente} vs {edad}"]
                     })
             
             if duplicados_potenciales:
@@ -509,37 +504,26 @@ class PacienteModel(QObject):
         try:
             self._set_loading(True)
             
-            resultado = self.paciente_service.obtener_estadisticas_generales()
+            estadisticas = self.repository.get_patient_statistics()
             
-            if resultado['exito']:
-                self._estadisticas = resultado['datos']
+            if estadisticas:
+                self._estadisticas = estadisticas
                 self.estadisticasChanged.emit()
                 print("📊 Estadísticas de pacientes cargadas")
             else:
-                self.errorOccurred.emit("Error", resultado['mensaje'])
+                self.errorOccurred.emit("Error", "No se pudieron cargar estadísticas")
                 
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error cargando estadísticas: {str(e)}")
         finally:
             self._set_loading(False)
     
-    @Slot('QVariantMap', result='QVariantMap')
-    def generarReportePoblacional(self, criterios_filtro: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Genera reporte poblacional de pacientes"""
-        try:
-            resultado = self.paciente_service.generar_reporte_poblacional(criterios_filtro)
-            if resultado['exito']:
-                return resultado['datos']
-            return {}
-        except Exception:
-            return {}
-    
     # --- UTILIDADES ---
     
     @Slot(result=list)
     def obtenerGruposEtariosDisponibles(self) -> List[str]:
         """Obtiene lista de grupos etarios para filtros"""
-        return ["Todos", "Pediátrico (≤17)", "Adulto (18-64)", "Adulto Mayor (≥65)"]
+        return ["Todos", "PEDIÁTRICO", "ADULTO", "ADULTO_MAYOR"]
     
     @Slot(result=list)
     def obtenerEstadosSeguimientoDisponibles(self) -> List[str]:
@@ -550,13 +534,7 @@ class PacienteModel(QObject):
     def obtenerPacientesFrecuentes(self, limite: int = 10) -> List[Dict[str, Any]]:
         """Obtiene pacientes con más consultas"""
         try:
-            # Filtrar y ordenar por total de consultas
-            pacientes_ordenados = sorted(
-                self._pacientes,
-                key=lambda p: p.get('total_consultas', 0),
-                reverse=True
-            )
-            return pacientes_ordenados[:limite]
+            return self.repository.get_most_frequent_patients(limite)
         except Exception:
             return []
     
@@ -588,22 +566,19 @@ class PacienteModel(QObject):
             self.errorOccurred.emit("Error inicial", f"Error cargando datos: {str(e)}")
     
     def _cargar_pacientes(self):
-        """Carga lista de pacientes desde el servicio"""
+        """Carga lista de pacientes desde el repository"""
         try:
-            # Obtener lista básica para implementar
-            # En implementación real usar: self.paciente_service.obtener_todos_pacientes()
+            pacientes = self.repository.get_active()
             
-            # Placeholder: usar servicio para obtener lista con estadísticas
-            resultado = self.paciente_service.obtener_lista_pacientes_combobox(incluir_estadisticas=True)
+            # Agregar nombre completo
+            for paciente in pacientes:
+                paciente['nombre_completo'] = f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')}"
+                paciente['grupo_etario'] = self.repository.get_age_group(paciente.get('Edad', 0))
             
-            if resultado['exito']:
-                self._pacientes = resultado['datos']['pacientes']
-                self._pacientes_filtrados = self._pacientes.copy()
-                self.pacientesChanged.emit()
-                print(f"👥 Pacientes cargados: {len(self._pacientes)}")
-            else:
-                self._pacientes = []
-                self._pacientes_filtrados = []
+            self._pacientes = pacientes
+            self._pacientes_filtrados = pacientes.copy()
+            self.pacientesChanged.emit()
+            print(f"👥 Pacientes cargados: {len(pacientes)}")
                 
         except Exception as e:
             print(f"❌ Error cargando pacientes: {e}")
@@ -611,11 +586,11 @@ class PacienteModel(QObject):
             self._pacientes_filtrados = []
     
     def _cargar_estadisticas(self):
-        """Carga estadísticas desde el servicio"""
+        """Carga estadísticas desde el repository"""
         try:
-            resultado = self.paciente_service.obtener_estadisticas_generales()
-            if resultado['exito']:
-                self._estadisticas = resultado['datos']
+            estadisticas = self.repository.get_patient_statistics()
+            if estadisticas:
+                self._estadisticas = estadisticas
                 self.estadisticasChanged.emit()
                 print("📈 Estadísticas de pacientes cargadas")
         except Exception as e:
@@ -625,9 +600,9 @@ class PacienteModel(QObject):
     def _cargar_historial_medico(self, paciente_id: int):
         """Carga historial médico del paciente"""
         try:
-            resultado = self.paciente_service.obtener_historial_completo(paciente_id)
-            if resultado['exito']:
-                self._historial_medico = resultado['datos']
+            historial = self.repository.get_complete_patient_record(paciente_id)
+            if historial:
+                self._historial_medico = historial
                 self.historialChanged.emit()
         except Exception as e:
             print(f"❌ Error cargando historial: {e}")
@@ -642,7 +617,7 @@ class PacienteModel(QObject):
     def _generar_alertas_grupo_etario(self, paciente: Dict[str, Any]):
         """Genera alertas médicas según grupo etario"""
         try:
-            edad = paciente.get('edad', 0)
+            edad = paciente.get('Edad', 0)
             nombre = paciente.get('nombre_completo', '')
             
             if edad <= 17:
@@ -659,6 +634,20 @@ class PacienteModel(QObject):
                 )
         except Exception as e:
             print(f"⚠️ Error generando alertas: {e}")
+    
+    def _get_age_recommendations(self, edad: int, grupo_etario: str) -> List[str]:
+        """Genera recomendaciones según edad"""
+        recommendations = []
+        
+        if grupo_etario == "PEDIÁTRICO":
+            recommendations.append("Consulta pediátrica especializada")
+            recommendations.append("Verificar esquema de vacunación")
+        elif grupo_etario == "ADULTO_MAYOR":
+            recommendations.append("Evaluación geriátrica integral")
+            recommendations.append("Chequeo cardiovascular")
+            recommendations.append("Evaluación cognitiva")
+        
+        return recommendations
 
 # ===============================
 # REGISTRO PARA QML
