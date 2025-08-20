@@ -33,146 +33,23 @@ ScrollView {
     // Datos base de cada módulo - SIMULADOS
     property var farmaciaVentas: [
         {fecha: "2025-07-16", total: 850.00},
-        {fecha: "2025-07-15", total: 420.50},
-        {fecha: "2025-07-14", total: 320.75},
-        {fecha: "2025-07-13", total: 180.25},
-        {fecha: "2025-07-12", total: 650.00},
-        {fecha: "2025-07-11", total: 290.50},
-        {fecha: "2025-07-10", total: 475.80},
-        {fecha: "2025-07-09", total: 385.60},
-        {fecha: "2025-07-08", total: 220.40},
-        {fecha: "2025-07-07", total: 540.30},
-        {fecha: "2025-06-30", total: 680.75},
-        {fecha: "2025-06-29", total: 395.20},
-        {fecha: "2025-06-28", total: 450.90},
-        {fecha: "2025-06-15", total: 275.65},
-        {fecha: "2025-06-10", total: 380.45},
-        {fecha: "2025-05-31", total: 520.80},
-        {fecha: "2025-05-25", total: 340.25},
-        {fecha: "2025-05-20", total: 410.60},
-        {fecha: "2025-04-30", total: 285.40},
-        {fecha: "2025-04-15", total: 625.50},
-        {fecha: "2025-03-31", total: 390.75},
-        {fecha: "2025-03-15", total: 475.30},
-        {fecha: "2025-02-28", total: 320.85},
-        {fecha: "2025-02-15", total: 580.20},
-        {fecha: "2025-01-31", total: 445.90},
-        {fecha: "2025-01-15", total: 680.50},
-        {fecha: "2024-12-31", total: 425.75},
-        {fecha: "2024-12-15", total: 590.30},
-        {fecha: "2024-11-30", total: 355.40},
-        {fecha: "2024-11-15", total: 720.60}
     ]
     
     property var consultasHistorial: [
         {fecha: "2025-07-16", precio: 45.00},
-        {fecha: "2025-07-16", precio: 35.00},
-        {fecha: "2025-07-15", precio: 50.00},
-        {fecha: "2025-07-14", precio: 40.00},
-        {fecha: "2025-07-13", precio: 45.00},
-        {fecha: "2025-07-12", precio: 35.00},
-        {fecha: "2025-07-11", precio: 85.00},
-        {fecha: "2025-07-10", precio: 40.00},
-        {fecha: "2025-06-30", precio: 50.00},
-        {fecha: "2025-06-29", precio: 45.00},
-        {fecha: "2025-06-15", precio: 35.00},
-        {fecha: "2025-05-31", precio: 40.00},
-        {fecha: "2025-05-15", precio: 45.00},
-        {fecha: "2025-04-30", precio: 85.00},
-        {fecha: "2025-04-15", precio: 35.00},
-        {fecha: "2025-03-31", precio: 50.00},
-        {fecha: "2025-03-15", precio: 40.00},
-        {fecha: "2025-02-28", precio: 45.00},
-        {fecha: "2025-02-15", precio: 85.00},
-        {fecha: "2025-01-31", precio: 40.00},
-        {fecha: "2025-01-15", precio: 50.00},
-        {fecha: "2024-12-31", precio: 45.00},
-        {fecha: "2024-12-15", precio: 35.00},
-        {fecha: "2024-11-30", precio: 85.00},
-        {fecha: "2024-11-15", precio: 40.00}
     ]
     
     property var laboratorioHistorial: [
         {fecha: "2025-07-16", precio: 25.00},
-        {fecha: "2025-07-16", precio: 35.00},
-        {fecha: "2025-07-15", precio: 18.00},
-        {fecha: "2025-07-14", precio: 22.00},
-        {fecha: "2025-07-13", precio: 25.00},
-        {fecha: "2025-07-12", precio: 35.00},
-        {fecha: "2025-07-11", precio: 18.00},
-        {fecha: "2025-07-10", precio: 25.00},
-        {fecha: "2025-06-30", precio: 22.00},
-        {fecha: "2025-06-29", precio: 35.00},
-        {fecha: "2025-06-15", precio: 25.00},
-        {fecha: "2025-05-31", precio: 18.00},
-        {fecha: "2025-05-15", precio: 22.00},
-        {fecha: "2025-04-30", precio: 25.00},
-        {fecha: "2025-04-15", precio: 35.00},
-        {fecha: "2025-03-31", precio: 18.00},
-        {fecha: "2025-03-15", precio: 25.00},
-        {fecha: "2025-02-28", precio: 22.00},
-        {fecha: "2025-02-15", precio: 35.00},
-        {fecha: "2025-01-31", precio: 25.00},
-        {fecha: "2025-01-15", precio: 35.00},
-        {fecha: "2024-12-31", precio: 22.00},
-        {fecha: "2024-12-15", precio: 25.00},
-        {fecha: "2024-11-30", precio: 18.00},
-        {fecha: "2024-11-15", precio: 35.00}
     ]
     
     property var enfermeriaHistorial: [
         {fecha: "2025-07-16", precioTotal: 25.00},
-        {fecha: "2025-07-16", precioTotal: 45.00},
-        {fecha: "2025-07-15", precioTotal: 15.00},
-        {fecha: "2025-07-14", precioTotal: 20.00},
-        {fecha: "2025-07-13", precioTotal: 35.00},
-        {fecha: "2025-07-12", precioTotal: 18.00},
-        {fecha: "2025-07-11", precioTotal: 25.00},
-        {fecha: "2025-07-10", precioTotal: 36.00},
-        {fecha: "2025-06-30", precioTotal: 18.00},
-        {fecha: "2025-06-29", precioTotal: 70.00},
-        {fecha: "2025-06-15", precioTotal: 25.00},
-        {fecha: "2025-05-31", precioTotal: 15.00},
-        {fecha: "2025-05-15", precioTotal: 20.00},
-        {fecha: "2025-04-30", precioTotal: 35.00},
-        {fecha: "2025-04-15", precioTotal: 25.00},
-        {fecha: "2025-03-31", precioTotal: 45.00},
-        {fecha: "2025-03-15", precioTotal: 18.00},
-        {fecha: "2025-02-28", precioTotal: 36.00},
-        {fecha: "2025-02-15", precioTotal: 25.00},
-        {fecha: "2025-01-31", precioTotal: 35.00},
-        {fecha: "2025-01-15", precioTotal: 20.00},
-        {fecha: "2024-12-31", precioTotal: 45.00},
-        {fecha: "2024-12-15", precioTotal: 18.00},
-        {fecha: "2024-11-30", precioTotal: 25.00},
-        {fecha: "2024-11-15", precioTotal: 35.00}
     ]
     
     property var serviciosBasicosGastos: [
         {fechaGasto: "2025-07-16", monto: 450.00},
-        {fechaGasto: "2025-07-15", monto: 280.50},
-        {fechaGasto: "2025-07-14", monto: 350.00},
-        {fechaGasto: "2025-07-13", monto: 125.75},
-        {fechaGasto: "2025-07-12", monto: 890.00},
-        {fechaGasto: "2025-07-11", monto: 650.75},
-        {fechaGasto: "2025-07-10", monto: 320.25},
-        {fechaGasto: "2025-06-30", monto: 475.60},
-        {fechaGasto: "2025-06-29", monto: 385.40},
-        {fechaGasto: "2025-06-15", monto: 220.80},
-        {fechaGasto: "2025-05-31", monto: 540.30},
-        {fechaGasto: "2025-05-15", monto: 295.45},
-        {fechaGasto: "2025-04-30", monto: 180.70},
-        {fechaGasto: "2025-04-15", monto: 425.90},
-        {fechaGasto: "2025-03-31", monto: 350.25},
-        {fechaGasto: "2025-03-15", monto: 680.50},
-        {fechaGasto: "2025-02-28", monto: 450.75},
-        {fechaGasto: "2025-02-15", monto: 320.40},
-        {fechaGasto: "2025-01-31", monto: 275.60},
-        {fechaGasto: "2025-01-15", monto: 590.20},
-        {fechaGasto: "2024-12-31", monto: 385.80},
-        {fechaGasto: "2024-12-15", monto: 445.30},
-        {fechaGasto: "2024-11-30", monto: 350.40},
-        {fechaGasto: "2024-11-15", monto: 275.80}
+
     ]
     
     // Funciones de utilidad para fechas
@@ -1128,24 +1005,6 @@ ScrollView {
                                     cantidad: "45 unid."
                                     fecha: "20/07/2025"
                                     urgencia: "urgent"
-                                }
-                                ListElement {
-                                    producto: "Paracetamol 750mg"
-                                    cantidad: "120 unid."
-                                    fecha: "25/07/2025"
-                                    urgencia: "warning"
-                                }
-                                ListElement {
-                                    producto: "Ibuprofeno 400mg"
-                                    cantidad: "78 unid."
-                                    fecha: "28/07/2025"
-                                    urgencia: "warning"
-                                }
-                                ListElement {
-                                    producto: "Omeprazol 20mg"
-                                    cantidad: "156 unid."
-                                    fecha: "10/08/2025"
-                                    urgencia: "warning"
                                 }
                             }
                             delegate: alertDelegate
