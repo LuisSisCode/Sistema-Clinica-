@@ -55,6 +55,14 @@ Item {
     property color darkGrayColor: "#7f8c8d"
     property color lightGrayColor: "#bdc3c7"
 
+    // NUEVAS VARIABLES DE ESTADO PARA FLUJO DE DOS PASOS
+    property string productoSeleccionadoCodigo: ""
+    property string productoSeleccionadoNombre: ""
+    property real productoSeleccionadoPrecio: 0
+    property int productoSeleccionadoStock: 0
+    property bool panelResultadosVisible: false
+    property bool productoPreseleccionado: false
+
     Connections {
         target: inventarioModel
         function onSearchResultsChanged() {
@@ -107,55 +115,61 @@ Item {
         console.log("🔍 CrearVenta: Buscando productos con:", textoBusqueda)
         
         resultadosBusquedaModel.clear()
+        panelResultadosVisible = false
         
         if (!textoBusqueda || textoBusqueda.length < 2) {
             return
         }
         
         if (inventarioModel) {
-            try {
-                inventarioModel.buscar_productos(textoBusqueda)
-                var resultados = inventarioModel.search_results || []
-                console.log("🔍 Resultados encontrados:", resultados.length)
-                
-                for (var i = 0; i < resultados.length; i++) {
-                    var producto = resultados[i]
-                    resultadosBusquedaModel.append({
-                        codigo: producto.Codigo || producto.codigo,
-                        nombre: producto.Nombre || producto.nombre,
-                        precio: producto.Precio_venta || producto.precio || 0,
-                        stock: producto.Stock_Total || producto.stock || 0
-                    })
-                }
-            } catch (e) {
-                console.log("❌ Error en búsqueda:", e.message)
-                usarDatosDePrueba(textoBusqueda)
+            inventarioModel.buscar_productos(textoBusqueda)
+            var resultados = inventarioModel.search_results || []
+            console.log("🔍 Resultados encontrados:", resultados.length)
+            
+            for (var i = 0; i < resultados.length; i++) {
+                var producto = resultados[i]
+                resultadosBusquedaModel.append({
+                    codigo: producto.Codigo || producto.codigo,
+                    nombre: producto.Nombre || producto.nombre,
+                    precio: producto.Precio_venta || producto.precio || 0,
+                    stock: producto.Stock_Total || producto.stock || 0
+                })
             }
-        } else {
-            usarDatosDePrueba(textoBusqueda)
+            
+            panelResultadosVisible = resultadosBusquedaModel.count > 0
         }
     }
 
-    // Función auxiliar para datos de prueba
-    function usarDatosDePrueba(texto) {
-        var productosPrueba = [
-            {codigo: "MED001", nombre: "Paracetamol 500mg", precio: 15.50, stock: 100},
-            {codigo: "MED002", nombre: "Ibuprofeno 400mg", precio: 15.25, stock: 75},
-            {codigo: "MED003", nombre: "Amoxicilina 500mg", precio: 23.10, stock: 50},
-            {codigo: "MED004", nombre: "Loratadina 10mg", precio: 18.90, stock: 30},
-            {codigo: "MED005", nombre: "Omeprazol 20mg", precio: 12.75, stock: 60}
-        ]
+    // NUEVA FUNCIÓN: Seleccionar producto (primer paso)
+    function seleccionarProducto(codigo, nombre, precio, stock) {
+        console.log("✅ Producto seleccionado:", codigo, "-", nombre)
         
-        for (var i = 0; i < productosPrueba.length; i++) {
-            var prod = productosPrueba[i]
-            if (prod.nombre.toLowerCase().includes(texto.toLowerCase()) || 
-                prod.codigo.toLowerCase().includes(texto.toLowerCase())) {
-                resultadosBusquedaModel.append(prod)
-            }
-        }
+        productoSeleccionadoCodigo = codigo
+        productoSeleccionadoNombre = nombre
+        productoSeleccionadoPrecio = precio
+        productoSeleccionadoStock = stock
+        productoPreseleccionado = true
+        
+        // Rellenar campo de búsqueda con el nombre del producto
+        busquedaField.text = nombre
+        
+        // Cerrar panel de resultados
+        cerrarPanelResultados()
+        
+        // Mover foco al campo de cantidad
+        Qt.callLater(function() {
+            cantidadField.focus = true
+            cantidadField.selectAll()
+        })
     }
 
-    // Función para agregar producto a venta
+    // NUEVA FUNCIÓN: Cerrar panel de resultados
+    function cerrarPanelResultados() {
+        panelResultadosVisible = false
+        resultadosBusquedaModel.clear()
+    }
+
+    // Función para agregar producto a venta (segundo paso)
     function agregarProductoAVenta(codigo, cantidad) {
         console.log("🛒 Agregando producto:", codigo, "Cantidad:", cantidad)
         
@@ -163,22 +177,14 @@ Item {
             return false
         }
         
-        // Buscar el producto en los resultados de búsqueda
-        var productoEncontrado = null
-        for (var i = 0; i < resultadosBusquedaModel.count; i++) {
-            var item = resultadosBusquedaModel.get(i)
-            if (item.codigo === codigo) {
-                productoEncontrado = item
-                break
-            }
-        }
-        
-        if (!productoEncontrado) {
-            return false
-        }
+        // Usar datos del producto preseleccionado
+        var precio = productoSeleccionadoPrecio
+        var stock = productoSeleccionadoStock
+        var nombre = productoSeleccionadoNombre
         
         // Verificar stock
-        if (cantidad > productoEncontrado.stock) {
+        if (cantidad > stock) {
+            console.log("❌ Stock insuficiente")
             return false
         }
         
@@ -199,9 +205,10 @@ Item {
             // Actualizar cantidad existente
             var productoActual = productosVentaModel.get(indiceExistente)
             var nuevaCantidad = productoActual.cantidad + cantidad
-            var nuevoSubtotal = productoEncontrado.precio * nuevaCantidad
+            var nuevoSubtotal = precio * nuevaCantidad
             
-            if (nuevaCantidad > productoEncontrado.stock) {
+            if (nuevaCantidad > stock) {
+                console.log("❌ Stock insuficiente para nueva cantidad")
                 return false
             }
             
@@ -209,12 +216,12 @@ Item {
             productosVentaModel.setProperty(indiceExistente, "subtotal", nuevoSubtotal)
         } else {
             // Agregar nuevo producto
-            var subtotal = productoEncontrado.precio * cantidad
+            var subtotal = precio * cantidad
             
             productosVentaModel.append({
-                codigo: productoEncontrado.codigo,
-                nombre: productoEncontrado.nombre,
-                precio: productoEncontrado.precio,
+                codigo: codigo,
+                nombre: nombre,
+                precio: precio,
                 cantidad: cantidad,
                 subtotal: subtotal
             })
@@ -268,7 +275,15 @@ Item {
     function limpiarCamposBusqueda() {
         busquedaField.text = ""
         cantidadField.text = "1"
-        resultadosBusquedaModel.clear()
+        
+        // Limpiar estado de selección
+        productoSeleccionadoCodigo = ""
+        productoSeleccionadoNombre = ""
+        productoSeleccionadoPrecio = 0
+        productoSeleccionadoStock = 0
+        productoPreseleccionado = false
+        
+        cerrarPanelResultados()
         
         Qt.callLater(function() {
             busquedaField.focus = true
@@ -281,32 +296,26 @@ Item {
         limpiarCamposBusqueda()
     }
 
-    // Función auxiliar para agregar producto desde input
+    // MODIFICADA: Función para agregar producto desde input (solo si hay preselección)
     function agregarProductoDesdeInput() {
-        var texto = busquedaField.text.trim()
         var cantidadTexto = cantidadField.text.trim()
         var cantidad = parseInt(cantidadTexto) || 1
-        
-        if (!texto) {
-            busquedaField.focus = true
-            return
-        }
         
         if (cantidad <= 0) {
             cantidad = 1
         }
         
-        if (resultadosBusquedaModel.count > 0) {
-            var primerProducto = resultadosBusquedaModel.get(0)
-            agregarProductoAVenta(primerProducto.codigo, cantidad)
+        // Solo agregar si hay un producto preseleccionado
+        if (productoPreseleccionado && productoSeleccionadoCodigo) {
+            agregarProductoAVenta(productoSeleccionadoCodigo, cantidad)
         } else {
-            buscarProductos(texto)
-            Qt.callLater(function() {
-                if (resultadosBusquedaModel.count > 0) {
-                    var producto = resultadosBusquedaModel.get(0)
-                    agregarProductoAVenta(producto.codigo, cantidad)
-                }
-            })
+            // Si no hay preselección, buscar automáticamente
+            var texto = busquedaField.text.trim()
+            if (texto) {
+                buscarProductos(texto)
+            } else {
+                busquedaField.focus = true
+            }
         }
     }
 
@@ -428,6 +437,7 @@ Item {
             
             // SECCIÓN DE BÚSQUEDA DE PRODUCTOS
             Rectangle {
+                id: seccionBusqueda
                 Layout.fillWidth: true
                 Layout.preferredHeight: 120
                 color: "#ffffff"
@@ -461,6 +471,7 @@ Item {
                     }
                     
                     Rectangle {
+                        id: barraBusqueda
                         Layout.fillWidth: true
                         Layout.preferredHeight: 50
                         color: "transparent"
@@ -471,6 +482,7 @@ Item {
                             
                             // Campo de búsqueda
                             Rectangle {
+                                id: campoBusquedaContainer
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 color: "#ffffff"
@@ -491,10 +503,17 @@ Item {
                                     selectByMouse: true
                                     
                                     onTextChanged: {
+                                        // Limpiar estado de preselección si el usuario modifica el texto
+                                        if (productoPreseleccionado && text !== productoSeleccionadoNombre) {
+                                            productoPreseleccionado = false
+                                            productoSeleccionadoCodigo = ""
+                                            productoSeleccionadoNombre = ""
+                                        }
+                                        
                                         if (text.length >= 2) {
                                             buscarProductos(text)
                                         } else {
-                                            resultadosBusquedaModel.clear()
+                                            cerrarPanelResultados()
                                         }
                                     }
                                     
@@ -503,8 +522,7 @@ Item {
                                     }
                                     
                                     Keys.onEscapePressed: {
-                                        text = ""
-                                        resultadosBusquedaModel.clear()
+                                        limpiarCamposBusqueda()
                                     }
                                 }
                                 
@@ -593,99 +611,6 @@ Item {
                                     id: botonMouseArea
                                     anchors.fill: parent
                                     onClicked: agregarProductoDesdeInput()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Lista de resultados de búsqueda
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(120, resultadosBusquedaModel.count * 30)
-                color: whiteColor
-                border.color: "#dee2e6"
-                border.width: 1
-                radius: radiusMedium
-                visible: resultadosBusquedaModel.count > 0
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 4
-                    
-                    Label {
-                        text: "📦 " + resultadosBusquedaModel.count + " productos encontrados"
-                        font.pixelSize: fontSmall
-                        color: "#495057"
-                        font.bold: true
-                    }
-                    
-                    ListView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: resultadosBusquedaModel
-                        clip: true
-                        
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: 28
-                            color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                spacing: 12
-                                
-                                Label {
-                                    text: model.codigo
-                                    color: blueColor
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                    Layout.preferredWidth: 70
-                                }
-                                
-                                Label {
-                                    text: model.nombre
-                                    color: textColor
-                                    font.pixelSize: fontSmall
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                                
-                                Label {
-                                    text: "$" + model.precio.toFixed(2)
-                                    color: successColor
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                    Layout.preferredWidth: 60
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 35
-                                    Layout.preferredHeight: 16
-                                    color: model.stock > 10 ? successColor : (model.stock > 0 ? warningColor : dangerColor)
-                                    radius: 8
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: model.stock.toString()
-                                        color: whiteColor
-                                        font.bold: true
-                                        font.pixelSize: fontTiny
-                                    }
-                                }
-                            }
-                            
-                            MouseArea {
-                                id: mouseArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                
-                                onClicked: {
-                                    var cantidad = parseInt(cantidadField.text) || 1
-                                    agregarProductoAVenta(model.codigo, cantidad)
                                 }
                             }
                         }
@@ -1255,6 +1180,134 @@ Item {
                                 Qt.callLater(function() {
                                     completarVentaButton.text = "✓ Completar Venta"
                                 })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // PANEL FLOTANTE DE RESULTADOS DE BÚSQUEDA
+    Rectangle {
+        id: panelResultadosOverlay
+        anchors.fill: parent
+        color: "transparent"
+        visible: panelResultadosVisible
+        z: 1000
+        
+        // MouseArea para detectar clics fuera del panel
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                cerrarPanelResultados()
+            }
+        }
+        
+        // Panel flotante de resultados
+        Rectangle {
+            id: panelResultados
+            x: campoBusquedaContainer.x + marginMedium + 20
+            y: seccionBusqueda.y + seccionBusqueda.height + seccionBusqueda.anchors.margins
+            width: campoBusquedaContainer.width
+            height: Math.min(200, resultadosBusquedaModel.count * 35 + 40)
+            
+            color: whiteColor
+            border.color: "#3498db"
+            border.width: 2
+            radius: 8
+            
+            // Sombra del panel
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 4
+                anchors.leftMargin: 4
+                color: "#00000020"
+                radius: parent.radius
+                z: -1
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 4
+                
+                Label {
+                    text: "📦 " + resultadosBusquedaModel.count + " productos encontrados"
+                    font.pixelSize: fontSmall
+                    color: "#495057"
+                    font.bold: true
+                }
+                
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    
+                    ListView {
+                        anchors.fill: parent
+                        model: resultadosBusquedaModel
+                        
+                        delegate: Rectangle {
+                            width: ListView.view ? ListView.view.width : 0
+                            height: 32
+                            color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
+                            radius: 4
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 12
+                                
+                                Label {
+                                    text: model.codigo
+                                    color: blueColor
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    Layout.preferredWidth: 70
+                                }
+                                
+                                Label {
+                                    text: model.nombre
+                                    color: textColor
+                                    font.pixelSize: fontSmall
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                
+                                Label {
+                                    text: "$" + model.precio.toFixed(2)
+                                    color: successColor
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    Layout.preferredWidth: 60
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 35
+                                    Layout.preferredHeight: 16
+                                    color: model.stock > 10 ? successColor : (model.stock > 0 ? warningColor : dangerColor)
+                                    radius: 8
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: model.stock.toString()
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: fontTiny
+                                    }
+                                }
+                            }
+                            
+                            MouseArea {
+                                id: mouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                
+                                onClicked: {
+                                    // MODIFICADO: En lugar de agregar automáticamente, seleccionar el producto
+                                    seleccionarProducto(model.codigo, model.nombre, model.precio, model.stock)
+                                }
                             }
                         }
                     }
