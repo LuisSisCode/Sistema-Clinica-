@@ -695,7 +695,7 @@ Item {
                                 
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "Bs" + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
+                                    text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
                                     color: "#27AE60"
                                     font.bold: true
                                     font.pixelSize: 12
@@ -712,7 +712,7 @@ Item {
                                 
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "Bs" + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
+                                    text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
                                     color: "#F39C12"
                                     font.bold: true
                                     font.pixelSize: 12
@@ -1122,7 +1122,7 @@ Item {
                     }
                     
                     Label {
-                        text: "Precio Compra: $" + (productoSeleccionado ? productoSeleccionado.precioCompra.toFixed(2) : "0.00")
+                        text: "Precio Compra: Bs " + (productoSeleccionado ? productoSeleccionado.precioCompra.toFixed(2) : "0.00")
                         font.pixelSize: 12
                         color: successColor
                     }

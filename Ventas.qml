@@ -653,7 +653,7 @@ Item {
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "$" + model.total.toFixed(2)
+                                            text: "Bs " + model.total.toFixed(2)
                                             color: "#FFFFFF"
                                             font.bold: true
                                             font.pixelSize: fontSmall
@@ -1293,7 +1293,7 @@ Item {
                                                 anchors.right: parent.right
                                                 anchors.rightMargin: marginSmall
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: "$" + (model.precio || 0).toFixed(2)
+                                                text: "Bs " + (model.precio || 0).toFixed(2)
                                                 color: "#28a745"
                                                 font.bold: true
                                                 font.pixelSize: fontSmall
@@ -1311,7 +1311,7 @@ Item {
                                                 anchors.right: parent.right
                                                 anchors.rightMargin: marginSmall
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: "$" + (model.subtotal || 0).toFixed(2)
+                                                text: "Bs " + (model.subtotal || 0).toFixed(2)
                                                 color: "#007bff"
                                                 font.bold: true
                                                 font.pixelSize: fontSmall
@@ -1361,7 +1361,7 @@ Item {
                                         total += item.subtotal
                                     }
                                 }
-                                return "$" + total.toFixed(2)
+                                return "Bs " + total.toFixed(2)
                             }
                             color: "#e74c3c"
                             font.pixelSize: fontLarge

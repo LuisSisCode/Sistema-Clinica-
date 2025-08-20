@@ -867,7 +867,7 @@ Item {
                                                 anchors.right: parent.right
                                                 anchors.rightMargin: 8
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: model.precio ? "$" + model.precio.toFixed(2) : ""
+                                                text: model.precio ? "Bs " + model.precio.toFixed(2) : ""
                                                 color: "#28a745"
                                                 font.bold: true
                                                 font.pixelSize: fontSmall
@@ -903,7 +903,7 @@ Item {
                                                 anchors.right: parent.right
                                                 anchors.rightMargin: 8
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: model.subtotal ? "$" + model.subtotal.toFixed(2) : ""
+                                                text: model.subtotal ? "Bs " + model.subtotal.toFixed(2) : ""
                                                 color: "#007bff"
                                                 font.bold: true
                                                 font.pixelSize: fontSmall
@@ -1094,7 +1094,7 @@ Item {
                         Item { Layout.fillWidth: true }
                         
                         Label {
-                            text: "$" + calcularTotal().toFixed(2)
+                            text: "Bs " + calcularTotal().toFixed(2)
                             color: whiteColor
                             font.bold: true
                             font.pixelSize: fontMedium
@@ -1276,7 +1276,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    text: "$" + model.precio.toFixed(2)
+                                    text: "Bs " + model.precio.toFixed(2)
                                     color: successColor
                                     font.bold: true
                                     font.pixelSize: fontSmall

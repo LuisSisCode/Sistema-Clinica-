@@ -382,7 +382,7 @@ Rectangle {
                                     
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "Bs"
+                                        text: "Bs "
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 1.1
                                         color: successColor
@@ -441,7 +441,7 @@ Rectangle {
                                     
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "Bs"
+                                        text: "Bs "
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 1.1
                                         color: "#f39c12"
