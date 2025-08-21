@@ -7,8 +7,7 @@ Item {
     id: farmaciaRoot
     objectName: "farmaciaRoot"
 
-    // Conexiones para navegación de productos
-
+    // ELIMINADO: Conexiones para navegación de productos - ya no es necesario
     
     // Propiedades de colores consistentes
     readonly property color primaryColor: "#273746"
@@ -182,21 +181,8 @@ Item {
         }
     }
 
-    Connections {
-        target: contentLoader.item
-        function onMostrarCrearProducto() {
-            console.log("🚀 Navegando a CrearProducto")
-            contentLoader.sourceComponent = crearProductoComponent
-        }
-        function onMostrarDetalleProducto(producto) {
-            console.log("🔍 Navegando a DetalleProducto:", producto.codigo)
-            contentLoader.sourceComponent = detalleProductoComponent
-            if (contentLoader.item) {
-                contentLoader.item.productoData = producto
-                contentLoader.item.inventarioModel = farmaciaRoot.inventarioModel
-            }
-        }
-    }
+    // ELIMINADO: Conexiones para mostrarCrearProducto y mostrarDetalleProducto
+    // Ya no necesitamos cambiar el contentLoader para estos casos
 
     // ===== FUNCIONES CENTRALES DE GESTIÓN DE DATOS (CONECTADAS A BD) =====
     
@@ -286,7 +272,7 @@ Item {
 
     // Alias para compatibilidad con Compras.qml
     function agregarCompraConDetalles(proveedor, usuario, productos, detalles) {
-        console.log("📝 Detalles adicionales de compra:", detalles)
+        console.log("📋 Detalles adicionales de compra:", detalles)
         return agregarCompra(proveedor, usuario, productos)
     }
     
@@ -712,7 +698,7 @@ Item {
                 function getSourceForSubsection(subsection) {
                     switch(subsection) {
                         case 0: return "VentasMain.qml"
-                        case 1: return Qt.resolvedUrl("Productos.qml") // El nuevo Productos.qml conectado
+                        case 1: return Qt.resolvedUrl("Productos.qml") // El nuevo Productos.qml conectado CON OVERLAY
                         case 2: return "ComprasMain.qml"
                         default: return "VentasMain.qml" 
                     }
@@ -908,28 +894,8 @@ Item {
         }
     }
 
-    Component {
-        id: detalleProductoComponent
-        DetalleProducto {
-            productoData: null
-            
-            onEditarSolicitado: function(producto) {
-                console.log("✏️ Editar producto:", producto.codigo)
-                // TODO: Implementar edición
-            }
-            
-            onEliminarSolicitado: function(producto) {
-                console.log("🗑️ Eliminar producto:", producto.codigo)
-                if (farmaciaRoot.eliminarProductoInventario) {
-                    farmaciaRoot.eliminarProductoInventario(producto.codigo)
-                }
-            }
-            
-            onCerrarSolicitado: {
-                contentLoader.updateSource()
-            }
-        }
-    }
+    // ELIMINADO: Componentes crearProductoComponent y detalleProductoComponent
+    // Ya no los necesitamos aquí porque ahora se manejan como overlay dentro de Productos.qml
     
     // Monitor de cambios en productos para debug BD
     onProductosUnicosModelChanged: {
@@ -938,13 +904,4 @@ Item {
             console.log("🔍 Ejemplo de producto BD:", JSON.stringify(productosUnicosModel[0]))
         }
     }
-
-    Component {
-    id: crearProductoComponent
-    CrearProducto {
-        onCerrarSolicitado: {
-            contentLoader.updateSource() // Volver a productos
-        }
-    }
-}
 }
