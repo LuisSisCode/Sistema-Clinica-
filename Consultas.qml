@@ -73,7 +73,8 @@ Item {
         
         function onConsultasRecientesChanged() {
             console.log("📋 Signal: Consultas recientes cambiadas")
-            updatePaginatedModel()
+            // Forzar actualización después de un breve delay
+            updateTimer.start()
         }
         
         function onEspecialidadesChanged() {
@@ -93,9 +94,16 @@ Item {
         function onOperacionExitosa(mensaje) {
             console.log("✅ Éxito:", mensaje)
             showNotification("Éxito", mensaje)
+            // Forzar actualización inmediata
+            updatePaginatedModel()
         }
     }
-
+    // QUITARLO SI ESTORBA EN UN FUTURO
+    Timer {
+        id: updateTimer
+        interval: 100
+        onTriggered: updatePaginatedModel()
+    }
 
     // FUNCIÓN PARA CALCULAR ELEMENTOS POR PÁGINA ADAPTATIVAMENTE
     function calcularElementosPorPagina() {
@@ -111,18 +119,6 @@ Item {
         var nuevosElementos = calcularElementosPorPagina()
         if (nuevosElementos !== itemsPerPageConsultas) {
             itemsPerPageConsultas = nuevosElementos
-            updatePaginatedModel()
-        }
-    }
-
-    function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
-        
-        var termino = campoBusqueda.text
-        if (termino.length >= 2) {
-            consultaModel.buscar_consultas(termino)
-        } else {
-            // Usar consultas recientes si no hay búsqueda
             updatePaginatedModel()
         }
     }
@@ -1491,14 +1487,20 @@ Item {
     }
     
     Component.onCompleted: {
-        console.log("🩺 Módulo Consultas iniciado")
+        console.log("🩺 Módulo Consultas inisciado")
         
         function conectarModelos() {
             if (typeof appController !== 'undefined') {
                 consultaModel = appController.consulta_model_instance
-                pacienteModel = appController.paciente_model_instance  // Agregar
+                pacienteModel = appController.paciente_model_instance
                 
-                if (consultaModel && pacienteModel) {  // Verificar ambos
+                if (consultaModel) {
+                    // Conectar señales para actualizaciones
+                    consultaModel.consultasRecientesChanged.connect(function() {
+                        console.log("🔄 Consultas actualizadas - forzando refresh")
+                        updatePaginatedModel()
+                    })
+                    
                     consultaModel.refresh_consultas()
                     consultaModel.refresh_especialidades()
                     return true
@@ -1556,10 +1558,12 @@ Item {
         
         var consultas = []
         
-        // Obtener consultas de diferentes fuentes según disponibilidad
+        // Obtener consultas directamente del modelo
         if (consultaModel && consultaModel.consultas_recientes) {
             console.log("📋 Usando consultas del modelo")
             consultas = consultaModel.consultas_recientes
+            // Actualizar consultas originales
+            consultasOriginales = consultas
         } else if (consultasOriginales && consultasOriginales.length > 0) {
             console.log("📋 Usando consultas originales cacheadas")
             consultas = consultasOriginales
@@ -1570,16 +1574,13 @@ Item {
         
         console.log("📊 Consultas disponibles para paginación:", consultas.length)
         
-        // Guardar copia para filtros
-        consultasOriginales = consultas
-        
         // Aplicar filtros
         consultas = aplicarFiltrosConsulta(consultas)
         
         var totalItems = consultas.length
         totalPagesConsultas = Math.ceil(totalItems / itemsPerPageConsultas) || 1
         
-        // Asegurar que currentPage esté dentro de los límites
+        // Restablecer a la primera página si es necesario
         if (currentPageConsultas >= totalPagesConsultas) {
             currentPageConsultas = Math.max(0, totalPagesConsultas - 1)
         }
@@ -1590,6 +1591,7 @@ Item {
         console.log("📊 Paginación:", "página", currentPageConsultas + 1, "de", totalPagesConsultas, 
                     "índices", startIndex, "a", endIndex, "de", totalItems, "elementos")
         
+        // Llenar el modelo paginado
         for (var i = startIndex; i < endIndex; i++) {
             var consulta = consultas[i]
             
@@ -1599,11 +1601,6 @@ Item {
             var especialidadDoctor = (consulta.especialidad_nombre || "Sin especialidad") + " - " + 
                                     (consulta.doctor_completo || consulta.doctor_nombre || "Sin doctor")
             var tipo = consulta.Tipo_Consulta || "Normal"
-            console.log("CONSULTA DEBUG:", JSON.stringify({
-                id: consulta.id,
-                Tipo_Consulta: consulta.Tipo_Consulta,
-                paciente: consulta.paciente_completo
-            }))
             var precio = consulta.Precio_Normal ? consulta.Precio_Normal.toFixed(2) : "0.00"
             var fecha = formatearFecha(consulta.Fecha)
             var detalles = consulta.Detalles || "Sin detalles"
@@ -1612,7 +1609,7 @@ Item {
                 consultaId: consultaId,
                 paciente: paciente,
                 especialidadDoctor: especialidadDoctor,
-                tipo: consulta.tipo_consulta || "Normal", // Usar campo directo
+                tipo: tipo,
                 precio: precio,
                 fecha: fecha,
                 detalles: detalles
@@ -1620,7 +1617,7 @@ Item {
         }
         
         console.log("✅ Modelo paginado actualizado:", consultasPaginadasModel.count, "elementos")
-}
+    }
 
     function crearConsulta() {
         if (consultationForm.selectedEspecialidadIndex < 0) {
@@ -1693,6 +1690,8 @@ Item {
             edadPaciente.text = ""
             detallesConsulta.text = ""
             especialidadCombo.currentIndex = 0
+            // Forzar actualización
+            consultaModel.refresh_consultas()
         }
     }
 
@@ -1784,15 +1783,32 @@ Item {
             })
         }
         
-        // AGREGAR: Filtro por tipo
+        // FILTRO POR TIPO CORREGIDO
         if (filtroTipo && filtroTipo.currentIndex > 0) {
-            var tipoSeleccionado = filtroTipo.currentText
+            var tipoSeleccionado = filtroTipo.currentIndex === 1 ? "Normal" : "Emergencia"
+            console.log("🔍 Filtro tipo seleccionado (por índice):", tipoSeleccionado)
+            
             consultasFiltradas = consultasFiltradas.filter(function(c) {
-                return (c.Tipo_Consulta || "Normal") === tipoSeleccionado
+                var tipoConsulta = c.Tipo_Consulta || "Normal"
+                console.log("🔍 Comparando:", tipoConsulta, "===", tipoSeleccionado)
+                return tipoConsulta === tipoSeleccionado
             })
+            
+            console.log("🔍 Consultas filtradas por tipo:", consultasFiltradas.length)
         }
         
         return consultasFiltradas
-}
+    }
+
+    function aplicarFiltros() {
+        console.log("🔍 Aplicando filtros...")
+        console.log("🔍 Filtro tipo actual:", filtroTipo.currentText, "índice:", filtroTipo.currentIndex)
+        
+        // RESETEAR PAGINACIÓN AL APLICAR FILTROS
+        currentPageConsultas = 0
+        
+        // APLICAR FILTROS INMEDIATAMENTE
+        updatePaginatedModel()
+    }
 
 }

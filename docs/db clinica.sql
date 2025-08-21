@@ -95,6 +95,7 @@ CREATE TABLE Consultas (
     Id_Especialidad INT NOT NULL,
     Fecha DATETIME NOT NULL DEFAULT GETDATE(),
     Detalles TEXT NOT NULL,
+    tipo_consulta VARCHAR(50) NOT NULL DEFAULT 'Normal' CHECK (tipo_consulta IN ('Normal', 'Emergencia')),
     FOREIGN KEY (Id_Usuario) REFERENCES Usuario(id),
     FOREIGN KEY (Id_Paciente) REFERENCES Pacientes(id),
     FOREIGN KEY (Id_Especialidad) REFERENCES Especialidad(id)

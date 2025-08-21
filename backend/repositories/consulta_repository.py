@@ -59,7 +59,7 @@ class ConsultaRepository(BaseRepository):
             'Id_Especialidad': especialidad_id,
             'Fecha': fecha,
             'Detalles': detalles.strip(),
-            'Tipo_Consulta': tipo_consulta.title()  # Normal o Emergencia
+            'Tipo_Consulta': tipo_consulta.capitalize()  # Normal o Emergencia
         }
         
         consultation_id = self.insert(consultation_data)
@@ -99,7 +99,7 @@ class ConsultaRepository(BaseRepository):
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtiene consultas con información completa"""
         query = """
-        SELECT c.id, c.Fecha, c.Detalles,
+        SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta,
             -- Paciente
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
             p.Nombre as paciente_nombre,

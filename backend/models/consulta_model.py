@@ -229,6 +229,7 @@ class ConsultaModel(QObject):
             paciente_id = safe_int(datos.get('paciente_id', 0))
             especialidad_id = safe_int(datos.get('especialidad_id', 0))
             detalles = str(datos.get('detalles', '')).strip()
+            tipo_consulta = str(datos.get('tipo_consulta', 'normal')).lower()
             
             if paciente_id <= 0:
                 raise ValidationError("paciente_id", paciente_id, "Paciente requerido")
@@ -246,6 +247,7 @@ class ConsultaModel(QObject):
                 paciente_id=paciente_id,
                 especialidad_id=especialidad_id,
                 detalles=detalles,
+                tipo_consulta=tipo_consulta,  # ← AGREGAR ESTA LÍNEA
                 fecha=datos.get('fecha')
             )
             
@@ -817,15 +819,18 @@ class ConsultaModel(QObject):
                 self.consulta_repo.get_all_with_details,
                 limit=50
             )
-            self._consultas_recientes = consultas or []
+            # Crear una nueva lista para forzar la actualización
+            self._consultas_recientes = list(consultas) if consultas else []
             print(f"✅ Consultas cargadas: {len(self._consultas_recientes)}")
             
+            # Forzar la emisión de la señal
             self.consultasRecientesChanged.emit()
             
         except Exception as e:
             print(f"❌ Error cargando consultas recientes: {e}")
             self._consultas_recientes = []
             self.consultasRecientesChanged.emit()
+
     def _cargar_datos_iniciales(self):
         self._set_loading(True)
         try:
