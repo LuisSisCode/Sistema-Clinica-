@@ -529,14 +529,4 @@ class CompraRepository(BaseRepository):
         
         result = self._execute_query(query)
         
-        # 🔍 DEBUG TEMPORAL - VER ESTRUCTURA EXACTA
-        if result and len(result) > 0:
-            print("🔍 DEBUG COMPRAS - Primer registro completo:")
-            primer_registro = result[0]
-            for key, value in primer_registro.items():
-                print(f"   {key}: {value} (tipo: {type(value)})")
-            print(f"🔍 TOTAL COMPRAS ENCONTRADAS: {len(result)}")
-        else:
-            print("❌ No se encontraron compras o resultado vacío")
-        
         return result

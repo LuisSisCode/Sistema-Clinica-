@@ -51,15 +51,8 @@ class ProductoRepository(BaseRepository):
         INNER JOIN Marca m ON p.ID_Marca = m.id
         ORDER BY p.Nombre
         """
-        
         # DEBUG: Agregar logging detallado
         result = self._execute_query(query)
-        
-        if result:
-            primer_producto = result[0]
-            print("🔍 DEBUG RAW - Primer producto completo:")
-            for key, value in primer_producto.items():
-                print(f"  {key}: {value} (tipo: {type(value)})")
         
         return result
     

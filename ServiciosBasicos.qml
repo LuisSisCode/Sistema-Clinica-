@@ -53,85 +53,184 @@ Item {
 
     // ✅ NUEVA PROPIEDAD PARA DATOS ORIGINALES (FUENTE DE VERDAD)
     property var gastosOriginales: []
+
+    property var gastoModelInstance: null
     
-    // ===== PROPIEDAD PARA EXPONER EL MODELO DE DATOS =====
-    property alias tiposGastosModel: tiposGastosModel
-    
-    // Modelo de tipos de gastos - CAMBIADO A ListModel
-    ListModel {
-        id: tiposGastosModel
+    // ✅ CONEXIONES CON EL GASTOMODEL VIA APPCONTROLLER
+    Connections {
+        target: gastoModelInstance
+        enabled: gastoModelInstance !== null
         
-        Component.onCompleted: {
-            // Cargar datos iniciales
-            append({
-                nombre: "Servicios Públicos", 
-                descripcion: "Gastos de agua, luz, internet, teléfono y otros servicios básicos",
-                ejemplos: ["Agua potable", "Energía eléctrica", "Internet", "Teléfono fijo", "Gas natural"],
-                color: infoColor
-            })
-            append({
-                nombre: "Personal", 
-                descripcion: "Gastos relacionados con salarios, bonos y prestaciones del personal",
-                ejemplos: ["Salarios", "Bonos", "Aguinaldos", "Prestaciones sociales", "Capacitación"],
-                color: violetColor
-            })
-            append({
-                nombre: "Alimentación", 
-                descripcion: "Gastos de comida para personal y refrigerios",
-                ejemplos: ["Almuerzo personal", "Refrigerios", "Café", "Agua purificada", "Desayunos"],
-                color: successColor
-            })
-            append({
-                nombre: "Mantenimiento", 
-                descripcion: "Gastos de limpieza, reparaciones y mantenimiento de equipos",
-                ejemplos: ["Limpieza", "Reparación equipos", "Mantenimiento preventivo", "Materiales", "Herramientas"],
-                color: warningColor
-            })
-            append({
-                nombre: "Administrativos", 
-                descripcion: "Gastos de papelería, licencias, seguros y administración",
-                ejemplos: ["Papelería", "Licencias software", "Seguros", "Impuestos", "Trámites legales"],
-                color: primaryColor
-            })
-            append({
-                nombre: "Suministros Médicos", 
-                descripcion: "Gastos de insumos médicos y materiales de uso clínico",
-                ejemplos: ["Gasas", "Jeringas", "Medicamentos básicos", "Alcohol", "Guantes"],
-                color: "#e67e22"
-            })
+        function onGastosChanged() {
+            if (gastoModelInstance) {
+                console.log("🔄 Gastos actualizados desde AppController:", gastoModelInstance.gastos.length)
+                // ✅ USAR UN TIMER PARA EVITAR LLAMADAS INMEDIATAS QUE CAUSEN LOOPS
+                loadGastosTimer.restart()
+            }
         }
-    }
-
-    // ✅ MODELOS SEPARADOS PARA PAGINACIÓN (PATRÓN DE TRES CAPAS)
-    ListModel {
-        id: gastosListModel // Modelo filtrado (todos los resultados del filtro)
+        
+        function onTiposGastosChanged() {
+            if (gastoModelInstance) {
+                console.log("🏷️ Tipos de gastos actualizados desde AppController:", gastoModelInstance.tiposGastos.length)
+                // ✅ USAR UN TIMER PARA EVITAR LLAMADAS INMEDIATAS
+                loadTiposTimer.restart()
+            }
+        }
+        
+        // ✅ EL RESTO DE LAS FUNCIONES PERMANECEN IGUAL (no causan loops)
+        function onGastoCreado(success, message) {
+            console.log("📝 Gasto creado:", success, message)
+            if (success) {
+                showSuccessMessage(message)
+                showNewGastoDialog = false
+                selectedRowIndex = -1
+                isEditMode = false
+                editingIndex = -1
+            } else {
+                showErrorMessage("Error creando gasto", message)
+            }
+        }
+        
+        function onGastoActualizado(success, message) {
+            console.log("✏️ Gasto actualizado:", success, message)
+            if (success) {
+                showSuccessMessage(message)
+                showNewGastoDialog = false
+                selectedRowIndex = -1
+                isEditMode = false
+                editingIndex = -1
+            } else {
+                showErrorMessage("Error actualizando gasto", message)
+            }
+        }
+        
+        function onGastoEliminado(success, message) {
+            console.log("🗑️ Gasto eliminado:", success, message)
+            if (success) {
+                showSuccessMessage(message)
+                selectedRowIndex = -1
+            } else {
+                showErrorMessage("Error eliminando gasto", message)
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            console.error("❌ Error:", title, message)
+            showErrorMessage(title, message)
+        }
+        
+        function onSuccessMessage(message) {
+            console.log("✅ Éxito:", message)
+            showSuccessMessage(message)
+        }
+        
+        function onLoadingChanged() {
+            if (gastoModelInstance) {
+                console.log("⏳ Loading estado:", gastoModelInstance.loading)
+                loadingIndicator.visible = gastoModelInstance.loading
+            }
+        }
     }
     
-    ListModel {
-        id: gastosPaginadosModel // Modelo para la página actual
-    }
-
-    // Función helper para obtener nombres de tipos de gastos
-    function getTiposGastosNombres() {
-        var nombres = ["Todos los tipos"]
-        for (var i = 0; i < tiposGastosModel.count; i++) {
-            nombres.push(tiposGastosModel.get(i).nombre)
+    // ✅ AGREGAR TIMERS PARA EVITAR LLAMADAS INMEDIATAS
+    Timer {
+        id: loadGastosTimer
+        interval: 100  // 100ms de delay
+        repeat: false
+        onTriggered: {
+            if (gastoModelInstance) {
+                loadGastosFromModel()
+            }
         }
-        return nombres
     }
-
-    // Función helper para obtener nombres para ComboBox de nuevo gasto
-    function getTiposGastosParaCombo() {
-        var nombres = ["Seleccionar tipo..."]
-        for (var i = 0; i < tiposGastosModel.count; i++) {
-            nombres.push(tiposGastosModel.get(i).nombre)
+    
+    Timer {
+        id: loadTiposTimer
+        interval: 100  // 100ms de delay
+        repeat: false
+        onTriggered: {
+            if (gastoModelInstance) {
+                loadTiposGastosFromModel()
+            }
         }
-        return nombres
     }
-
-    // ✅ FUNCIÓN PARA APLICAR FILTROS - REFACTORIZADA
-    function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros en servicios básicos...")
+    // ✅ CONEXIONES CON APPCONTROLLER PARA NOTIFICACIONES
+    Connections {
+        target: appController
+        
+        function onModelsReady() {
+            console.log("🚀 Models listos desde AppController")
+            // Obtener referencia al modelo cuando esté disponible
+            if (appController && appController.gasto_model_instance) {
+                gastoModelInstance = appController.gasto_model_instance
+                console.log("✅ GastoModel disponible")
+                loadGastosFromModel()
+                loadTiposGastosFromModel()
+            } else {
+                console.log("⚠️ GastoModel no disponible aún")
+                delayedInitTimer.start()
+            }
+        }
+    }
+    // ✅ TIMER PARA INICIALIZACIÓN RETRASADA
+    Timer {
+        id: delayedInitTimer
+        interval: 500
+        repeat: false
+        onTriggered: {
+            // ✅ CORREGIR ESTA FUNCIÓN:
+            if (appController && appController.gasto_model_instance) {
+                gastoModelInstance = appController.gasto_model_instance
+                console.log("🔄 Inicialización retrasada exitosa")
+                loadGastosFromModel()
+                loadTiposGastosFromModel()
+            } else {
+                console.log("❌ GastoModel aún no disponible")
+                // Intentar de nuevo después de más tiempo
+                if (interval < 2000) {
+                    interval = interval * 2
+                    start()
+                }
+            }
+        }
+    }
+    
+    // ✅ FUNCIÓN PARA CARGAR GASTOS DESDE EL MODELO VIA APPCONTROLLER
+    function loadGastosFromModel() {
+        if (!gastoModelInstance) {
+            console.log("⚠️ GastoModel no disponible para cargar gastos")
+            return
+        }
+        
+        console.log("📊 Cargando gastos desde modelo...")
+        
+        gastosOriginales = []
+        gastosListModel.clear()
+        
+        var gastos = gastoModelInstance.gastos
+        for (var i = 0; i < gastos.length; i++) {
+            var gasto = gastos[i]
+            
+            var gastoFormatted = {
+                gastoId: gasto.id || (i + 1),
+                tipoGasto: gasto.tipo_nombre || "Sin tipo",
+                descripcion: gasto.descripcion || "Sin descripción",
+                monto: parseFloat(gasto.Monto || 0).toFixed(2),
+                fechaGasto: formatDateFromModel(gasto.Fecha),
+                proveedorEmpresa: gasto.proveedor || "Sin proveedor",
+                registradoPor: gasto.usuario_completo || "Usuario desconocido"
+            }
+            
+            gastosOriginales.push(gastoFormatted)
+            gastosListModel.append(gastoFormatted)
+        }
+        
+        console.log("📊 Gastos cargados:", gastosOriginales.length)
+    }
+    
+    // ✅ NUEVA FUNCIÓN QUE NO TRIGGEEA SEÑALES DEL MODELO
+    function aplicarFiltrosDirecto() {
+        console.log("🔍 Aplicando filtros directamente...")
         
         // Limpiar el modelo filtrado
         gastosListModel.clear()
@@ -169,7 +268,7 @@ Item {
                 }
             }
             
-            // Búsqueda por texto en descripción o proveedor
+            // Búsqueda por texto
             if (textoBusqueda.length > 0 && mostrar) {
                 if (!gasto.descripcion.toLowerCase().includes(textoBusqueda) && 
                     !gasto.proveedorEmpresa.toLowerCase().includes(textoBusqueda)) {
@@ -186,9 +285,252 @@ Item {
         currentPageServicios = 0
         updatePaginatedModel()
         
-        console.log("✅ Filtros aplicados. Gastos mostrados:", gastosListModel.count)
+        console.log("✅ Filtros aplicados directamente. Gastos mostrados:", gastosListModel.count)
+    }
+    
+    // ✅ FUNCIÓN PARA CARGAR TIPOS DE GASTOS DESDE EL MODELO VIA APPCONTROLLER
+    function loadTiposGastosFromModel() {
+        if (!gastoModelInstance) {
+            console.log("⚠️ GastoModel no disponible para cargar tipos")
+            return
+        }
+        
+        console.log("🏷️ Cargando tipos desde modelo...")
+        
+        // ✅ LIMPIAR COMPLETAMENTE EL MODELO ANTES DE AGREGAR NUEVOS DATOS
+        tiposGastosModel.clear()
+        
+        var tipos = gastoModelInstance.tiposGastos
+        for (var i = 0; i < tipos.length; i++) {
+            var tipo = tipos[i]
+            
+            // ✅ CREAR OBJETO CON TIPOS CONSISTENTES
+            var tipoFormatted = {
+                id: parseInt(tipo.id || 0),
+                nombre: String(tipo.Nombre || "Sin nombre"),
+                descripcion: String(tipo.descripcion || "Tipo de gasto"),
+                ejemplos: [],  // Siempre array vacío para evitar conflictos
+                color: String(getColorForTipo(tipo.Nombre || ""))  // ✅ SIEMPRE STRING
+            }
+            
+            tiposGastosModel.append(tipoFormatted)
+        }
+        
+        console.log("🏷️ Tipos de gastos cargados:", tiposGastosModel.count)
+        
+        // Actualizar ComboBox
+        filtroTipoGasto.model = getTiposGastosNombres()
+    }
+    
+    
+    // ✅ FUNCIÓN OVERRIDE PARA CREAR GASTO CON MODELO REAL VIA APPCONTROLLER
+    function createGastoWithModel(gastoData) {
+        if (!gastoModelInstance) {
+            console.log("❌ GastoModel no disponible para crear gasto")
+            showErrorMessage("Error", "Sistema no disponible")
+            return false
+        }
+        
+        console.log("💰 Creando gasto con modelo real via AppController...")
+        
+        // Obtener ID del tipo de gasto seleccionado
+        var tipoGastoId = 0
+        if (gastoForm.selectedTipoGastoIndex >= 0) {
+            var tipoSeleccionado = tiposGastosModel.get(gastoForm.selectedTipoGastoIndex)
+            tipoGastoId = tipoSeleccionado.id
+        }
+        
+        // Llamar al modelo real via AppController
+        var success = gastoModelInstance.crearGasto(
+            tipoGastoId,                    // tipo_gasto_id
+            parseFloat(gastoData.monto),    // monto
+            1,                              // usuario_id (temporal - usar usuario actual)
+            gastoData.descripcion,          // descripcion
+            gastoData.fechaGasto           // fecha_gasto
+        )
+        
+        console.log("📝 Resultado creación:", success)
+        return success
+    }
+    
+    // ✅ FUNCIÓN OVERRIDE PARA ACTUALIZAR GASTO CON MODELO REAL VIA APPCONTROLLER
+    function updateGastoWithModel(gastoId, gastoData) {
+        if (!gastoModelInstance) {
+            console.log("❌ GastoModel no disponible para actualizar gasto")
+            showErrorMessage("Error", "Sistema no disponible")
+            return false
+        }
+        
+        console.log("✏️ Actualizando gasto con modelo real via AppController...")
+        
+        // Obtener ID del tipo de gasto seleccionado
+        var tipoGastoId = 0
+        if (gastoForm.selectedTipoGastoIndex >= 0) {
+            var tipoSeleccionado = tiposGastosModel.get(gastoForm.selectedTipoGastoIndex)
+            tipoGastoId = tipoSeleccionado.id
+        }
+        
+        // Llamar al modelo real via AppController
+        var success = gastoModelInstance.actualizarGasto(
+            parseInt(gastoId),              // gasto_id
+            parseFloat(gastoData.monto),    // monto
+            tipoGastoId                     // tipo_gasto_id
+        )
+        
+        console.log("✏️ Resultado actualización:", success)
+        return success
+    }
+    
+    // ✅ FUNCIÓN OVERRIDE PARA ELIMINAR GASTO CON MODELO REAL VIA APPCONTROLLER
+    function deleteGastoWithModel(gastoId) {
+        if (!gastoModelInstance) {
+            console.log("❌ GastoModel no disponible para eliminar gasto")
+            showErrorMessage("Error", "Sistema no disponible")
+            return false
+        }
+        
+        console.log("🗑️ Eliminando gasto con modelo real via AppController...")
+        
+        var success = gastoModelInstance.eliminarGasto(parseInt(gastoId))
+        
+        console.log("🗑️ Resultado eliminación:", success)
+        return success
+    }
+    
+    // ✅ FUNCIONES HELPER (MANTENER IGUALES)
+    function formatDateFromModel(dateValue) {
+        if (!dateValue) return Qt.formatDate(new Date(), "yyyy-MM-dd")
+        
+        if (typeof dateValue === "string") {
+            return dateValue.substring(0, 10)
+        }
+        
+        if (dateValue instanceof Date) {
+            return Qt.formatDate(dateValue, "yyyy-MM-dd")
+        }
+        
+        return Qt.formatDate(new Date(), "yyyy-MM-dd")
+    }
+    
+    function getColorForTipo(nombreTipo) {
+        switch(nombreTipo) {
+            case "Servicios Básicos": return infoColor
+            case "Personal": return violetColor
+            case "Alimentación": return successColor
+            case "Mantenimiento": return warningColor
+            case "Administrativos": return primaryColor
+            case "Suministros Médicos": return "#e67e22"
+            default: return "#95a5a6"
+        }
+    }
+    
+    function showSuccessMessage(message) {
+        successToast.text = message
+        successToast.visible = true
+        successToast.hideTimer.restart()
+    }
+    
+    function showErrorMessage(title, message) {
+        errorDialog.title = title
+        errorDialog.text = message
+        errorDialog.open()
+    }
+    // ===== PROPIEDAD PARA EXPONER EL MODELO DE DATOS =====
+    property alias tiposGastosModel: tiposGastosModel
+    
+    // ✅ MODELO DE TIPOS DE GASTOS LOCAL (FALLBACK)
+    ListModel {
+        id: tiposGastosModel
     }
 
+    // ✅ MODELOS SEPARADOS PARA PAGINACIÓN (PATRÓN DE TRES CAPAS)
+    ListModel {
+        id: gastosListModel // Modelo filtrado (todos los resultados del filtro)
+    }
+    
+    ListModel {
+        id: gastosPaginadosModel // Modelo para la página actual
+    }
+
+    // Función helper para obtener nombres de tipos de gastos
+    function getTiposGastosNombres() {
+        var nombres = ["Todos los tipos"]
+        for (var i = 0; i < tiposGastosModel.count; i++) {
+            nombres.push(tiposGastosModel.get(i).nombre)
+        }
+        return nombres
+    }
+
+    // Función helper para obtener nombres para ComboBox de nuevo gasto
+    function getTiposGastosParaCombo() {
+        var nombres = ["Seleccionar tipo..."]
+        for (var i = 0; i < tiposGastosModel.count; i++) {
+            nombres.push(tiposGastosModel.get(i).nombre)
+        }
+        return nombres
+    }
+    // ✅ FUNCIÓN PARA APLICAR FILTROS VIA APPCONTROLLER  
+    function aplicarFiltros() {
+        // ✅ SI NO HAY DATOS ORIGINALES, NO HACER NADA
+        if (gastosOriginales.length === 0) {
+            console.log("⚠️ No hay datos originales para filtrar")
+            return
+        }
+        
+        // ✅ APLICAR FILTROS DIRECTAMENTE SIN INTERACTUAR CON EL MODELO
+        aplicarFiltrosDirecto()
+    }
+    
+    // ✅ FUNCIÓN PARA APLICAR FILTROS VIA MODELO SOLO CUANDO SEA NECESARIO
+    function aplicarFiltrosViaModelo() {
+        if (!gastoModelInstance) {
+            console.log("⚠️ GastoModel no disponible para aplicar filtros")
+            return
+        }
+        
+        console.log("🔍 Aplicando filtros via AppController...")
+        
+        var termino_busqueda = campoBusqueda.text.trim()
+        var tipo_gasto_id = 0
+        var fecha_desde = ""
+        var fecha_hasta = ""
+        var monto_min = 0.0
+        var monto_max = 0.0
+        
+        // Obtener tipo de gasto seleccionado
+        if (filtroTipoGasto.currentIndex > 0) {
+            var tipoSeleccionado = tiposGastosModel.get(filtroTipoGasto.currentIndex - 1)
+            tipo_gasto_id = tipoSeleccionado.id
+        }
+        
+        // Calcular fechas según filtro
+        var hoy = new Date()
+        switch(filtroFecha.currentIndex) {
+            case 1: // Este mes
+                fecha_desde = Qt.formatDate(new Date(hoy.getFullYear(), hoy.getMonth(), 1), "yyyy-MM-dd")
+                fecha_hasta = Qt.formatDate(hoy, "yyyy-MM-dd")
+                break
+            case 2: // Mes anterior
+                var mesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)
+                fecha_desde = Qt.formatDate(mesAnterior, "yyyy-MM-dd")
+                fecha_hasta = Qt.formatDate(new Date(hoy.getFullYear(), hoy.getMonth(), 0), "yyyy-MM-dd")
+                break
+            case 3: // Últimos 3 meses
+                fecha_desde = Qt.formatDate(new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1), "yyyy-MM-dd")
+                fecha_hasta = Qt.formatDate(hoy, "yyyy-MM-dd")
+                break
+        }
+        
+        // ✅ SOLO APLICAR FILTROS VIA MODELO SI ES NECESARIO
+        // Por ahora, usar filtros locales para evitar loops
+        aplicarFiltrosDirecto()
+    }
+    
+    // ✅ ACTUALIZAR LOS EVENTOS DE LOS FILTROS PARA USAR LA FUNCIÓN CORRECTA
+    function onFiltroChanged() {
+        // ✅ USAR FILTROS DIRECTOS EN LUGAR DE VIA MODELO
+        aplicarFiltrosDirecto()
+    }
     // ✅ FUNCIÓN PARA ACTUALIZAR PAGINACIÓN
     function updatePaginatedModel() {
         console.log("🔄 Servicios Básicos: Actualizando paginación - Página:", currentPageServicios + 1)
@@ -344,7 +686,7 @@ Item {
                                 width: Math.max(160, screenWidth * 0.15)
                                 model: getTiposGastosNombres()
                                 currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
+                                onCurrentIndexChanged: onFiltroChanged()
                             }
                             
                             Label {
@@ -360,7 +702,7 @@ Item {
                                 width: Math.max(140, screenWidth * 0.14)
                                 model: ["Todas", "Este mes", "Mes anterior", "Últimos 3 meses"]
                                 currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
+                                onCurrentIndexChanged: onFiltroChanged()
                             }
                         }
                         
@@ -372,7 +714,7 @@ Item {
                                 id: campoBusqueda
                                 width: Math.max(180, screenWidth * 0.18)
                                 placeholderText: "Buscar gasto..."
-                                onTextChanged: aplicarFiltros()
+                                onTextChanged: onFiltroChanged()
                                 
                                 background: Rectangle {
                                     color: whiteColor
@@ -579,17 +921,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 width: Math.min(parent.width * 0.9, baseUnit * 6)
                                                 height: Math.min(parent.height * 0.4, baseUnit * 1)
-                                                color: {
-                                                    switch(model.tipoGasto) {
-                                                        case "Servicios Públicos": return infoColor
-                                                        case "Personal": return violetColor
-                                                        case "Alimentación": return successColor
-                                                        case "Mantenimiento": return warningColor
-                                                        case "Administrativos": return primaryColor
-                                                        case "Suministros Médicos": return "#e67e22"
-                                                        default: return "#95a5a6"
-                                                    }
-                                                }
+                                                color: getColorForTipo(model.tipoGasto)
                                                 radius: height / 2
                                                 
                                                 Label {
@@ -783,27 +1115,9 @@ Item {
                                             
                                             onClicked: {
                                                 var gastoId = model.gastoId
-                                                
-                                                // Eliminar de gastosListModel
-                                                for (var i = 0; i < gastosListModel.count; i++) {
-                                                    if (gastosListModel.get(i).gastoId === gastoId) {
-                                                        gastosListModel.remove(i)
-                                                        break
-                                                    }
-                                                }
-                                                
-                                                // Eliminar de gastosOriginales
-                                                for (var j = 0; j < gastosOriginales.length; j++) {
-                                                    if (gastosOriginales[j].gastoId === gastoId) {
-                                                        gastosOriginales.splice(j, 1)
-                                                        break
-                                                    }
-                                                }
-                                                
-                                                selectedRowIndex = -1
-                                                updatePaginatedModel()
-                                                console.log("Gasto eliminado ID:", gastoId)
-                                            }
+                                                confirmDeleteDialog.gastoIdToDelete = gastoId
+                                                confirmDeleteDialog.open()
+                                            } 
                                         }
                                     }
                                 }
@@ -1004,17 +1318,10 @@ Item {
                         break
                     }
                 }
-                
                 // Cargar descripción
                 descripcionField.text = gasto.descripcion
-                
-                // Cargar monto
                 montoField.text = gasto.monto
-                
-                // Cargar fecha
                 fechaGastoField.text = gasto.fechaGasto
-                
-                // Cargar proveedor
                 proveedorField.text = gasto.proveedorEmpresa
             }
         }
@@ -1259,71 +1566,302 @@ Item {
                             horizontalAlignment: Text.AlignHCenter
                         }
                         onClicked: {
-                            // Crear datos de gasto
-                            var tipoGasto = tiposGastosModel.get(gastoForm.selectedTipoGastoIndex)
+                            // Validaciones adicionales
+                            if (gastoForm.selectedTipoGastoIndex < 0) {
+                                showErrorMessage("Error de validación", "Selecciona un tipo de gasto")
+                                return
+                            }
+                            
+                            if (parseFloat(montoField.text) <= 0) {
+                                showErrorMessage("Error de validación", "El monto debe ser mayor a 0")
+                                return
+                            }
                             
                             var gastoData = {
-                                tipoGasto: tipoGasto.nombre,
-                                descripcion: descripcionField.text,
+                                descripcion: descripcionField.text.trim(),
                                 monto: parseFloat(montoField.text).toFixed(2),
                                 fechaGasto: fechaGastoField.text,
-                                proveedorEmpresa: proveedorField.text,
-                                registradoPor: "Luis López"
+                                proveedorEmpresa: proveedorField.text.trim()
                             }
+                            
+                            var success = false
                             
                             if (isEditMode && editingIndex >= 0) {
-                                // ✅ ACTUALIZAR GASTO EXISTENTE EN AMBOS MODELOS
                                 var gastoExistente = gastosListModel.get(editingIndex)
-                                gastoData.gastoId = gastoExistente.gastoId
-                                
-                                // Actualizar en modelo filtrado
-                                gastosListModel.set(editingIndex, gastoData)
-                                
-                                // Actualizar en datos originales
-                                for (var i = 0; i < gastosOriginales.length; i++) {
-                                    if (gastosOriginales[i].gastoId === gastoData.gastoId) {
-                                        gastosOriginales[i] = gastoData
-                                        break
-                                    }
-                                }
-                                
-                                console.log("Gasto actualizado:", JSON.stringify(gastoData))
+                                success = updateGastoWithModel(gastoExistente.gastoId, gastoData)
                             } else {
-                                // ✅ CREAR NUEVO GASTO EN AMBOS MODELOS
-                                gastoData.gastoId = (getTotalServiciosCount() + 1).toString()
-                                
-                                // Agregar a modelo filtrado
-                                gastosListModel.append(gastoData)
-                                
-                                // Agregar a datos originales
-                                gastosOriginales.push(gastoData)
-                                
-                                console.log("Nuevo gasto guardado:", JSON.stringify(gastoData))
+                                success = createGastoWithModel(gastoData)
                             }
                             
-                            // ✅ ACTUALIZAR PAGINACIÓN
-                            updatePaginatedModel()
-                            
-                            // Actualizar filtros después de agregar/editar
-                            filtroTipoGasto.model = getTiposGastosNombres()
-                            
-                            // Limpiar y cerrar
-                            showNewGastoDialog = false
-                            selectedRowIndex = -1
-                            isEditMode = false
-                            editingIndex = -1
+                            if (!success) {
+                                showErrorMessage("Error", "No se pudo guardar el gasto. Revisa los datos.")
+                            }
                         }
                     }
                 }
             }
         }
     }
+    // ✅ DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    Dialog {
+        id: confirmDeleteDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.8, 400)
+        height: Math.min(parent.height * 0.4, 200)
+        modal: true
+        title: "Confirmar Eliminación"
+        
+        property string gastoIdToDelete: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: baseUnit * 0.5
+            border.color: warningColor
+            border.width: 2
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                text: "⚠️ ¿Estás seguro de eliminar este gasto?"
+                font.pixelSize: fontMedium
+                font.bold: true
+                color: textColor
+                Layout.alignment: Qt.AlignHCenter
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+            
+            Label {
+                text: "Esta acción no se puede deshacer."
+                font.pixelSize: fontBase
+                color: "#7f8c8d"
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: marginMedium
+                
+                Button {
+                    text: "Cancelar"
+                    Layout.preferredWidth: 100
+                    
+                    background: Rectangle {
+                        color: lightGrayColor
+                        radius: baseUnit * 0.3
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: textColor
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    
+                    onClicked: confirmDeleteDialog.close()
+                }
+                
+                Button {
+                    text: "Eliminar"
+                    Layout.preferredWidth: 100
+                    
+                    background: Rectangle {
+                        color: dangerColor
+                        radius: baseUnit * 0.3
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    
+                    onClicked: {
+                        console.log("🗑️ Confirmando eliminación...")
+                        
+                        var success = deleteGastoWithModel(confirmDeleteDialog.gastoIdToDelete)
+                        
+                        if (!success) {
+                            showErrorMessage("Error", "No se pudo eliminar el gasto.")
+                        }
+                        
+                        selectedRowIndex = -1
+                        confirmDeleteDialog.close()
+                    }
+                }
+            }
+        }
+    }
     
-    // ✅ INICIALIZACIÓN AL CARGAR EL COMPONENTE
-    Component.onCompleted: {
-        console.log("💰 Módulo Servicios Básicos iniciado")
+    // ✅ COMPONENTE DE LOADING
+    Rectangle {
+        id: loadingIndicator
+        anchors.fill: parent
+        color: "#80000000"
+        visible: false
+        z: 1000
+        
+        ColumnLayout {
+            anchors.centerIn: parent
+            spacing: marginMedium
+            
+            BusyIndicator {
+                Layout.alignment: Qt.AlignHCenter
+                running: parent.parent.visible
+            }
+            
+            Label {
+                text: "Cargando..."
+                color: whiteColor
+                font.pixelSize: fontLarge
+                Layout.alignment: Qt.AlignHCenter
+            }
+        }
+    }
+    
+    // ✅ TOAST DE ÉXITO
+    Rectangle {
+        id: successToast
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.topMargin: marginLarge
+        width: 300
+        height: 40
+        color: successColor
+        radius: baseUnit * 0.5
+        visible: false
+        z: 1000
+        
+        property alias text: successLabel.text
+        property alias hideTimer: hideTimer
+        
+        Label {
+            id: successLabel
+            anchors.centerIn: parent
+            color: whiteColor
+            font.bold: true
+            font.pixelSize: fontBase
+        }
+        
+        Timer {
+            id: hideTimer
+            interval: 3000
+            onTriggered: successToast.visible = false
+        }
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+    }
+    
+    // ✅ DIÁLOGO DE ERROR
+    Dialog {
+        id: errorDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.8, 400)
+        height: Math.min(parent.height * 0.6, 300)
+        modal: true
+        
+        property alias text: errorText.text
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: baseUnit * 0.5
+            border.color: dangerColor
+            border.width: 2
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: marginLarge
+            spacing: marginLarge
+            
+            Label {
+                text: "❌ " + errorDialog.title
+                font.pixelSize: fontLarge
+                font.bold: true
+                color: dangerColor
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                
+                Label {
+                    id: errorText
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: fontBase
+                    color: textColor
+                }
+            }
+            
+            Button {
+                text: "Cerrar"
+                Layout.alignment: Qt.AlignHCenter
+                onClicked: errorDialog.close()
+                
+                background: Rectangle {
+                    color: dangerColor
+                    radius: baseUnit * 0.3
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: whiteColor
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+        }
+    }
+    // ✅ CORREGIR FUNCIÓN limpiarFiltros
+    function limpiarFiltros() {
+        console.log("🧹 Limpiando filtros...")
+        
+        // Limpiar controles de filtros
+        filtroTipoGasto.currentIndex = 0
+        filtroFecha.currentIndex = 0
+        campoBusqueda.text = ""
+        
+        // Restaurar todos los datos originales
+        gastosListModel.clear()
+        for (var i = 0; i < gastosOriginales.length; i++) {
+            gastosListModel.append(gastosOriginales[i])
+        }
+        
+        // Resetear paginación
+        currentPageServicios = 0
         updatePaginatedModel()
         
-        console.log("✅ Módulo iniciado sin datos - Listo para agregar gastos")
+        console.log("🧹 Filtros limpiados - Mostrando:", gastosListModel.count, "gastos")
     }
+    
+    // ✅ CORREGIR LA INICIALIZACIÓN DEL COMPONENTE
+    Component.onCompleted: {
+        console.log("💰 Módulo Servicios Básicos iniciado")
+        
+        // ✅ NO LLAMAR FUNCIONES QUE PUEDAN CAUSAR LOOPS AL INICIO
+        // Solo inicializar paginación con datos vacíos
+        updatePaginatedModel()
+        
+        console.log("⏳ Esperando conexión con AppController...")
+    }
+    
+    // ✅ AGREGAR ESTA FUNCIÓN PARA DEBUGGING
+    function debugEstado() {
+        console.log("🔍 DEBUG Estado actual:")
+        console.log("   - gastoModelInstance:", gastoModelInstance ? "disponible" : "null")
+        console.log("   - gastosOriginales.length:", gastosOriginales.length)
+        console.log("   - gastosListModel.count:", gastosListModel.count)
+        console.log("   - gastosPaginadosModel.count:", gastosPaginadosModel.count)
+        console.log("   - tiposGastosModel.count:", tiposGastosModel.count)
+    } 
+    // ✅ INICIALIZACIÓN MEJORADA CON APPCONTROLLER
 }

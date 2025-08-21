@@ -83,9 +83,6 @@ Item {
         for (var i = startIndex; i < endIndex; i++) {
             var compraRaw = compraModel.compras_recientes[i]
             
-            // DEBUG: Mostrar compra individual
-            console.log("🔍 DEBUG QML - Compra", i, ":", JSON.stringify(compraRaw))
-            
             // Crear objeto explícito para QML ListModel
             var compraQML = {
                 "id": compraRaw.id || 0,
@@ -102,10 +99,6 @@ Item {
                 "Id_Proveedor": compraRaw.Id_Proveedor || 0,
                 "Id_Usuario": compraRaw.Id_Usuario || 0
             }
-            
-            // DEBUG: Mostrar objeto QML creado
-            console.log("🔍 DEBUG QML - Objeto QML creado:", JSON.stringify(compraQML))
-            
             comprasPaginadasModel.append(compraQML)
         }
         

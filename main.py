@@ -16,7 +16,7 @@ from backend.models.venta_model import VentaModel, register_venta_model
 from backend.models.compra_model import CompraModel, register_compra_model
 from backend.models.usuario_model import UsuarioModel, register_usuario_model
 from backend.models.consulta_model import ConsultaModel, register_consulta_model
-
+from backend.models.gasto_model import GastoModel, register_gasto_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -74,7 +74,7 @@ class AppController(QObject):
             self.compra_model = CompraModel()
             self.consulta_model = ConsultaModel()
             self.usuario_model = UsuarioModel()
-            
+            self.gasto_model = GastoModel()
             # Conectar signals entre models
             self._connect_models()
             
@@ -102,6 +102,7 @@ class AppController(QObject):
             self.venta_model.operacionError.connect(self._on_model_error)
             self.compra_model.operacionError.connect(self._on_model_error)
             self.usuario_model.errorOccurred.connect(self._on_model_error)
+            self.gasto_model.errorOccurred.connect(self._on_model_error)
 
             if self.consulta_model:
                 self.consulta_model.operacionError.connect(self._on_model_error)
@@ -112,11 +113,23 @@ class AppController(QObject):
             self.venta_model.operacionExitosa.connect(self._on_model_success)
             self.compra_model.operacionExitosa.connect(self._on_model_success)
             self.usuario_model.successMessage.connect(self._on_model_success)
+            self.gasto_model.successMessage.connect(self._on_model_success)
+
+             # Conectar errores del GastoModel
+            if self.gasto_model:
+                self.gasto_model.errorOccurred.connect(self._on_model_error)
+                self.gasto_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del GastoModel
+                self.gasto_model.gastoCreado.connect(self._on_gasto_creado)
+                self.gasto_model.gastoActualizado.connect(self._on_gasto_actualizado)
+                self.gasto_model.gastoEliminado.connect(self._on_gasto_eliminado)
+                print("🔗 GastoModel conectado correctamente")
             
-            print("🔗 Models conectados correctamente")
             
         except Exception as e:
             print(f"❌ Error conectando models: {e}")
+
     def _establecer_usuario_por_defecto(self):
         """Establece automáticamente un usuario administrador como usuario actual"""
         try:
@@ -142,7 +155,10 @@ class AppController(QObject):
                     if self.compra_model:
                         self.compra_model.set_usuario_actual(usuario_id)
                         print(f"👤 Usuario establecido en CompraModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
-                    
+                    if self.gasto_model:
+                        # El GastoModel no tiene set_usuario_actual, pero podemos notificar que está listo
+                        print(f"💰 GastoModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                        
                     # AGREGAR PARA CONSULTAMODEL:
                     if self.consulta_model:
                         self.consulta_model.set_usuario_actual(usuario_id)
@@ -185,6 +201,35 @@ class AppController(QObject):
         # Actualizar inventario después de compra
         if self.inventario_model:
             QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+    @Slot(bool, str)
+    def _on_gasto_creado(self, success: bool, message: str):
+        """Handler cuando se crea un gasto"""
+        if success:
+            print(f"💸 Gasto creado exitosamente: {message}")
+            self.showNotification("Gasto Creado", message)
+        else:
+            print(f"❌ Error creando gasto: {message}")
+            self.showNotification("Error", f"Error creando gasto: {message}")
+    
+    @Slot(bool, str)
+    def _on_gasto_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un gasto"""
+        if success:
+            print(f"✏️ Gasto actualizado exitosamente: {message}")
+            self.showNotification("Gasto Actualizado", message)
+        else:
+            print(f"❌ Error actualizando gasto: {message}")
+            self.showNotification("Error", f"Error actualizando gasto: {message}")
+    
+    @Slot(bool, str)
+    def _on_gasto_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un gasto"""
+        if success:
+            print(f"🗑️ Gasto eliminado exitosamente: {message}")
+            self.showNotification("Gasto Eliminado", message)
+        else:
+            print(f"❌ Error eliminando gasto: {message}")
+            self.showNotification("Error", f"Error eliminando gasto: {message}")
     
     @Slot(str)
     def _on_model_error(self, mensaje: str):
@@ -227,6 +272,10 @@ class AppController(QObject):
         """Propiedad para acceder al UsuarioModel desde QML"""
         return self.usuario_model
     
+    @Property(QObject, notify=modelsReady)
+    def gasto_model_instance(self):
+        """Propiedad para acceder al GastoModel desde QML"""
+        return self.gasto_model
     # ===============================
     # MÉTODOS DE INTEGRACIÓN MODELS-PDF
     # ===============================
@@ -337,7 +386,70 @@ class AppController(QObject):
         except Exception as e:
             print(f"❌ Error generando reporte usuarios: {e}")
             return ""
-    
+        
+    @Slot(str, str, str, result=str)
+    def generar_reporte_gastos(self, tipo_reporte: str, fecha_desde: str = "", fecha_hasta: str = ""):
+        """Genera reporte PDF de gastos usando el model"""
+        try:
+            if not self.gasto_model:
+                print("❌ GastoModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los gastos
+                datos = self.gasto_model.gastos
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de gastos
+                datos = self.gasto_model.estadisticas
+            elif tipo_reporte == "tipos":
+                # Obtener tipos de gastos
+                datos = self.gasto_model.tiposGastos
+            elif tipo_reporte == "periodo":
+                # Generar reporte por período específico
+                if fecha_desde and fecha_hasta:
+                    # El método generarReporte del modelo actualizará internamente
+                    self.gasto_model.generarReporte(fecha_desde, fecha_hasta)
+                    # Usar los gastos actuales como datos
+                    datos = self.gasto_model.gastos
+                else:
+                    print("⚠️ Fechas no proporcionadas para reporte de período")
+                    return ""
+            elif tipo_reporte == "dashboard":
+                # Obtener datos para dashboard
+                datos = self.gasto_model.obtenerDashboard()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de gastos")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"gastos_{tipo_reporte}",
+                fecha_desde,
+                fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de gastos generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de gastos: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
     # ===============================
     # MÉTODOS EXISTENTES (MANTENER COMPATIBILIDAD)
     # ===============================
@@ -486,7 +598,7 @@ def register_qml_types():
         register_compra_model()
         register_usuario_model()
         register_consulta_model()
-        
+        register_gasto_model()
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:

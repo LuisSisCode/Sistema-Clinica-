@@ -197,7 +197,6 @@ Item {
             }
         }
     }
-
     // ===== FUNCIONES CENTRALES DE GESTIÓN DE DATOS (CONECTADAS A BD) =====
     
     // Función para verificar si un producto existe (BD)
@@ -481,9 +480,6 @@ Item {
         
         for (var i = 0; i < productos.length; i++) {
             var prod = productos[i]
-            
-            // Debug: mostrar estructura del producto
-            console.log("📦 Producto estructurado desde BD:", JSON.stringify(prod))
             
             // Convertir precios a números para evitar errores de visualización
             var precioCompra = parseFloat(prod.Precio_compra) || 0

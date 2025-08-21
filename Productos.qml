@@ -458,7 +458,7 @@ Item {
                                 anchors.left: parent.left
                                 anchors.leftMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "DETALLES"
+                                text: "DESCRIPCIÓN"
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12

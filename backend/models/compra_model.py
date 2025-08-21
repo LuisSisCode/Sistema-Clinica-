@@ -83,7 +83,6 @@ class CompraModel(QObject):
     @Property(list, notify=comprasRecientesChanged)
     def compras_recientes(self):
         """Lista de compras recientes"""
-        print(f"🔍 DEBUG Property: compras_recientes leída - Total: {len(self._compras_recientes)}")
         return self._compras_recientes
     
     @Property('QVariant', notify=compraActualChanged)
@@ -596,12 +595,6 @@ class CompraModel(QObject):
         """Carga compras recientes CON TRANSFORMACIÓN DE DATOS"""
         try:
             compras_raw = safe_execute(self.compra_repo.get_active)
-            
-            if compras_raw and len(compras_raw) > 0:
-                print("🔍 DEBUG COMPRA MODEL - Datos desde Repository:")
-                primer_registro = compras_raw[0]
-                for key, value in primer_registro.items():
-                    print(f"   RAW: {key}: {value} (tipo: {type(value)})")
             
             # TRANSFORMAR DATOS PARA QML
             compras_transformadas = []

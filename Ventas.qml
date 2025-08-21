@@ -97,8 +97,6 @@ Item {
 
     // FUNCIÓN para actualizar paginación de ventas
     function actualizarPaginacionVentas() {
-        console.log("🐛 DEBUG QML: actualizarPaginacionVentas() iniciado")
-    
         if (!ventaModel) {
             console.log("🐛 DEBUG QML: ventaModel es null")
             return
