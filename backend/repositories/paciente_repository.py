@@ -45,23 +45,23 @@ class PacienteRepository(BaseRepository):
             ID del paciente creado
         """
         # Validaciones
-        nombre = validate_required_string(nombre, "nombre", 2)
-        apellido_paterno = validate_required_string(apellido_paterno, "apellido_paterno", 2)
-        apellido_materno = validate_required_string(apellido_materno, "apellido_materno", 2)
-        edad = validate_age(edad, 0, 120)
+        nombre = normalize_name(nombre.strip()) if nombre.strip() else "Sin nombre"
+        apellido_paterno = normalize_name(apellido_paterno.strip()) if apellido_paterno.strip() else ""
+        apellido_materno = normalize_name(apellido_materno.strip()) if apellido_materno.strip() else ""
+        edad = validate_age(edad, 0, 120) if edad else 0
         
         # Normalizar nombres
         patient_data = {
-            'Nombre': normalize_name(nombre),
-            'Apellido_Paterno': normalize_name(apellido_paterno),
-            'Apellido_Materno': normalize_name(apellido_materno),
+            'Nombre': nombre,
+            'Apellido_Paterno': apellido_paterno,
+            'Apellido_Materno': apellido_materno,
             'Edad': edad
         }
         
         patient_id = self.insert(patient_data)
         print(f"👥 Paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
         
-        return patient_id
+        return self.insert(patient_data)
     
     def update_patient(self, paciente_id: int, nombre: str = None, 
                       apellido_paterno: str = None, apellido_materno: str = None,

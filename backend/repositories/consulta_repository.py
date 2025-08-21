@@ -31,37 +31,24 @@ class ConsultaRepository(BaseRepository):
     # ===============================
     
     def create_consultation(self, usuario_id: int, paciente_id: int, especialidad_id: int,
-                          detalles: str, fecha: datetime = None) -> int:
-        """
-        Crea nueva consulta médica
+                       detalles: str, tipo_consulta: str = "normal", fecha: datetime = None) -> int:
+        """Crea nueva consulta médica"""
         
-        Args:
-            usuario_id: ID del usuario que registra
-            paciente_id: ID del paciente
-            especialidad_id: ID de la especialidad/servicio
-            detalles: Detalles de la consulta
-            fecha: Fecha de la consulta (opcional, por defecto ahora)
-            
-        Returns:
-            ID de la consulta creada
-        """
         # Validaciones
         validate_required(usuario_id, "usuario_id")
-        validate_required(paciente_id, "paciente_id")
+        validate_required(paciente_id, "paciente_id") 
         validate_required(especialidad_id, "especialidad_id")
         detalles = validate_required_string(detalles, "detalles", 5)
         
-        # Verificar que existan las entidades relacionadas
+        # Verificar entidades
         if not self._user_exists(usuario_id):
             raise ValidationError("usuario_id", usuario_id, "Usuario no encontrado")
-        
         if not self._patient_exists(paciente_id):
             raise ValidationError("paciente_id", paciente_id, "Paciente no encontrado")
-        
         if not self._specialty_exists(especialidad_id):
             raise ValidationError("especialidad_id", especialidad_id, "Especialidad no encontrada")
         
-        # Usar fecha actual si no se proporciona
+        # Fecha actual si no se proporciona
         if fecha is None:
             fecha = get_current_datetime()
         
@@ -71,7 +58,8 @@ class ConsultaRepository(BaseRepository):
             'Id_Paciente': paciente_id,
             'Id_Especialidad': especialidad_id,
             'Fecha': fecha,
-            'Detalles': detalles.strip()
+            'Detalles': detalles.strip(),
+            'Tipo_Consulta': tipo_consulta.title()  # Normal o Emergencia
         }
         
         consultation_id = self.insert(consultation_data)
@@ -112,20 +100,24 @@ class ConsultaRepository(BaseRepository):
         """Obtiene consultas con información completa"""
         query = """
         SELECT c.id, c.Fecha, c.Detalles,
-               -- Paciente
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Edad as paciente_edad,
-               -- Especialidad/Servicio
-               e.Nombre as especialidad_nombre,
-               e.Precio_Normal, e.Precio_Emergencia,
-               -- Doctor
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno) as doctor_completo,
-               d.Especialidad as doctor_especialidad,
-               d.Matricula as doctor_matricula,
-               -- Usuario que registró
-               CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
-               -- IDs para referencias
-               c.Id_Paciente, c.Id_Especialidad, c.Id_Usuario, e.Id_Doctor
+            -- Paciente
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
+            p.Nombre as paciente_nombre,
+            p.Apellido_Paterno as paciente_apellido_paterno,
+            p.Apellido_Materno as paciente_apellido_materno,
+            p.Edad as paciente_edad,
+            -- Especialidad/Servicio
+            e.Nombre as especialidad_nombre,
+            e.Precio_Normal, e.Precio_Emergencia,
+            -- Doctor
+            CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno) as doctor_completo,
+            d.Nombre as doctor_nombre,
+            d.Especialidad as doctor_especialidad,
+            d.Matricula as doctor_matricula,
+            -- Usuario que registró
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
+            -- IDs para referencias
+            c.Id_Paciente, c.Id_Especialidad, c.Id_Usuario, e.Id_Doctor
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
@@ -200,11 +192,19 @@ class ConsultaRepository(BaseRepository):
         return self.get_consultations_by_date(today)
     
     def get_recent_consultations(self, days: int = 7) -> List[Dict[str, Any]]:
-        """Obtiene consultas recientes"""
-        end_date = get_current_datetime()
-        start_date = end_date - timedelta(days=days)
-        
-        return self.get_consultations_by_date_range(start_date, end_date)
+        query = """
+        SELECT c.*, c.Tipo_Consulta,  # ← Asegurar que esté incluido
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
+            e.Nombre as especialidad_nombre,
+            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor_completo
+        FROM Consultas c
+        INNER JOIN Pacientes p ON c.Id_Paciente = p.id
+        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
+        INNER JOIN Doctores d ON e.Id_Doctor = d.id
+        WHERE c.Fecha >= DATEADD(day, -?, GETDATE())
+        ORDER BY c.Fecha DESC
+        """
+        return self._execute_query(query, (days,))
     
     def get_consultations_this_month(self) -> List[Dict[str, Any]]:
         """Obtiene consultas del mes actual"""

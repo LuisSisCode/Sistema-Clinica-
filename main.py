@@ -17,6 +17,8 @@ from backend.models.compra_model import CompraModel, register_compra_model
 from backend.models.usuario_model import UsuarioModel, register_usuario_model
 from backend.models.consulta_model import ConsultaModel, register_consulta_model
 from backend.models.gasto_model import GastoModel, register_gasto_model
+from backend.models.paciente_model import PacienteModel, register_paciente_model
+
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -56,6 +58,7 @@ class AppController(QObject):
         self.venta_model = None
         self.compra_model = None
         self.consulta_model = None
+        self.paciente_model = None
         self.usuario_model = None
         
     # ===============================
@@ -73,6 +76,7 @@ class AppController(QObject):
             self.venta_model = VentaModel()
             self.compra_model = CompraModel()
             self.consulta_model = ConsultaModel()
+            self.paciente_model = PacienteModel()
             self.usuario_model = UsuarioModel()
             self.gasto_model = GastoModel()
             # Conectar signals entre models
@@ -107,6 +111,10 @@ class AppController(QObject):
             if self.consulta_model:
                 self.consulta_model.operacionError.connect(self._on_model_error)
                 self.consulta_model.operacionExitosa.connect(self._on_model_success)
+            
+            if self.paciente_model:
+                self.paciente_model.errorOccurred.connect(self._on_model_error)
+                self.paciente_model.successMessage.connect(self._on_model_success)
             
             # Conectar operaciones exitosas
             self.inventario_model.operacionExitosa.connect(self._on_model_success)
@@ -266,6 +274,10 @@ class AppController(QObject):
     def consulta_model_instance(self):
         """Propiedad para acceder al ConsultaModel desde QML"""
         return self.consulta_model
+
+    @Property(QObject, notify=modelsReady)
+    def paciente_model_instance(self):
+        return self.paciente_model
     
     @Property(QObject, notify=modelsReady)
     def usuario_model_instance(self):
@@ -598,7 +610,9 @@ def register_qml_types():
         register_compra_model()
         register_usuario_model()
         register_consulta_model()
+
         register_gasto_model()
+        register_paciente_model()
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:

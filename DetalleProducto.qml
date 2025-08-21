@@ -5,35 +5,28 @@ import QtQuick.Layouts 1.15
 Rectangle {
     id: detalleProductoComponent
     
-    // ===============================
-    // PROPIEDADES PÚBLICAS
-    // ===============================
-    
+    // Propiedades públicas
     property var productoData: null
     property bool mostrarStock: true
     property bool mostrarAcciones: true
-    property color primaryColor: "#273746"
+    property color primaryColor: "#2c3e50"
     property color successColor: "#27ae60"
-    property color dangerColor: "#E74C3C"
+    property color dangerColor: "#e74c3c"
     property color warningColor: "#f39c12"
-    property color lightGrayColor: "#ECF0F1"
+    property color infoColor: "#3498db"
+    property color lightGrayColor: "#ecf0f1"
+    property color darkGrayColor: "#7f8c8d"
     property color textColor: "#2c3e50"
     property real baseUnit: 8
-    property real fontBaseSize: 12
+    property real fontBaseSize: 14
     
-    // ===============================
-    // SEÑALES
-    // ===============================
-    
+    // Señales
     signal editarSolicitado(var producto)
     signal eliminarSolicitado(var producto)
     signal ajustarStockSolicitado(var producto)
     signal cerrarSolicitado()
     
-    // ===============================
-    // PROPIEDADES CALCULADAS
-    // ===============================
-    
+    // Propiedades calculadas
     property real margenGanancia: {
         if (!productoData) return 0
         var compra = productoData.Precio_compra || 0
@@ -57,527 +50,288 @@ Rectangle {
         switch(estadoStock) {
             case "agotado": return dangerColor
             case "bajo": return warningColor
-            case "medio": return "#17a2b8"
+            case "medio": return infoColor
             case "alto": return successColor
             default: return textColor
         }
     }
     
-    // ===============================
-    // CONFIGURACIÓN DEL COMPONENTE
-    // ===============================
+    property string textoEstadoStock: {
+        switch(estadoStock) {
+            case "agotado": return "AGOTADO"
+            case "bajo": return "STOCK BAJO"
+            case "medio": return "STOCK MEDIO"
+            case "alto": return "STOCK ALTO"
+            default: return "DESCONOCIDO"
+        }
+    }
     
-    color: "white"
-    radius: baseUnit
-    border.color: lightGrayColor
+    // Configuración del componente
+    width: 700
+    height: 550
+    color: "#ffffff"
+    radius: 8
+    border.color: "#e1e8ed"
     border.width: 1
     
-    // ===============================
-    // LAYOUT PRINCIPAL
-    // ===============================
-    
+    // Layout principal
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: baseUnit * 2
-        spacing: baseUnit * 1.5
+        anchors.margins: 20
+        spacing: 0
         
-        // ===============================
-        // HEADER CON INFORMACIÓN PRINCIPAL
-        // ===============================
-        
+        // === HEADER SIMILAR AL DE LA IMAGEN ===
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: baseUnit * 10
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: primaryColor }
-                GradientStop { position: 1.0; color: Qt.darker(primaryColor, 1.1) }
-            }
-            radius: baseUnit * 0.5
+            Layout.preferredHeight: 50
+            color: "#f8f9fa"
+            border.color: "#dee2e6"
+            border.width: 1
             
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: baseUnit * 1.5
-                spacing: baseUnit * 1.5
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
                 
-                // Icono del producto
-                Rectangle {
-                    width: baseUnit * 7
-                    height: baseUnit * 7
-                    color: "white"
-                    radius: baseUnit * 3.5
-                    
-                    Text {
-                        anchors.centerIn: parent
-                        text: "💊"
-                        font.pixelSize: fontBaseSize * 2.5
-                    }
-                }
-                
-                // Información principal
-                ColumnLayout {
+                Label {
+                    text: "Detalles del Producto: " + (productoData ? (productoData.Codigo || "SIN-CÓDIGO") : "---")
+                    color: "#2c3e50"
+                    font.bold: true
+                    font.pixelSize: 16
                     Layout.fillWidth: true
-                    spacing: baseUnit * 0.5
-                    
-                    Text {
-                        text: productoData ? (productoData.Nombre || "Sin nombre") : "Producto"
-                        color: "white"
-                        font.bold: true
-                        font.pixelSize: fontBaseSize * 1.5
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                    
-                    Text {
-                        text: productoData ? (productoData.Codigo || "Sin código") : "---"
-                        color: "#E8F4FD"
-                        font.pixelSize: fontBaseSize * 1.1
-                        font.bold: true
-                    }
-                    
-                    Text {
-                        text: productoData ? (productoData.marca_nombre || "Sin marca") : "---"
-                        color: "#E8F4FD"
-                        font.pixelSize: fontBaseSize * 0.9
-                    }
                 }
                 
-                // Estado del stock
-                Rectangle {
-                    width: baseUnit * 8
-                    height: baseUnit * 6
-                    color: "white"
-                    radius: baseUnit * 0.5
-                    
-                    ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: baseUnit * 0.25
-                        
-                        Text {
-                            text: {
-                                if (!productoData) return "0"
-                                return ((productoData.Stock_Caja || 0) + (productoData.Stock_Unitario || 0)).toString()
-                            }
-                            color: colorEstadoStock
-                            font.bold: true
-                            font.pixelSize: fontBaseSize * 1.5
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        
-                        Text {
-                            text: "STOCK TOTAL"
-                            color: textColor
-                            font.pixelSize: fontBaseSize * 0.7
-                            font.bold: true
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                    }
-                }
-                
-                // Botón cerrar
                 Button {
-                    width: baseUnit * 4
-                    height: baseUnit * 4
+                    text: "Cerrar"
                     
                     background: Rectangle {
-                        color: parent.pressed ? "#40FFFFFF" : "transparent"
-                        radius: baseUnit * 2
+                        color: parent.pressed ? "#e9ecef" : "#f8f9fa"
+                        border.color: "#dee2e6"
+                        border.width: 1
+                        radius: 4
                     }
                     
-                    contentItem: Text {
-                        text: "✕"
-                        color: "white"
-                        font.pixelSize: fontBaseSize * 1.5
-                        font.bold: true
+                    contentItem: Label {
+                        text: parent.text
+                        color: "#6c757d"
+                        font.pixelSize: 13
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: {
-                        cerrarSolicitado()
-                    }
+                    onClicked: cerrarSolicitado()
                 }
             }
         }
         
-        // ===============================
-        // CONTENIDO DETALLADO
-        // ===============================
-        
-        ScrollView {
+        // === TABLA DE INFORMACIÓN BÁSICA ===
+        Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
+            Layout.preferredHeight: 160
+            color: "#ffffff"
+            border.color: "#dee2e6"
+            border.width: 1
             
             ColumnLayout {
-                width: parent.width
-                spacing: baseUnit * 2
+                anchors.fill: parent
+                spacing: 0
                 
-                // ===============================
-                // INFORMACIÓN COMERCIAL
-                // ===============================
-                
-                GroupBox {
+                // Header de la tabla
+                Rectangle {
                     Layout.fillWidth: true
-                    title: "💰 Información Comercial"
+                    Layout.preferredHeight: 40
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
                     
-                    background: Rectangle {
-                        color: "#F8F9FA"
-                        border.color: lightGrayColor
-                        border.width: 1
-                        radius: baseUnit * 0.5
-                    }
-                    
-                    label: Rectangle {
-                        color: successColor
-                        width: comercialLabelText.width + baseUnit * 2
-                        height: baseUnit * 3
-                        radius: baseUnit * 0.25
-                        x: baseUnit
-                        y: -baseUnit * 1.5
-                        
-                        Text {
-                            id: comercialLabelText
-                            anchors.centerIn: parent
-                            text: parent.parent.title
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: fontBaseSize * 0.9
-                        }
-                    }
-                    
-                    GridLayout {
+                    RowLayout {
                         anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
-                        columns: 3
-                        columnSpacing: baseUnit * 2
-                        rowSpacing: baseUnit * 1.5
+                        spacing: 0
                         
-                        // Precio de Compra
                         Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 8
-                            color: "white"
-                            border.color: lightGrayColor
+                            Layout.preferredWidth: 120
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
                             border.width: 1
-                            radius: baseUnit * 0.5
                             
-                            ColumnLayout {
+                            Label {
                                 anchors.centerIn: parent
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: "Precio Compra"
-                                    color: textColor
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: productoData ? 
-                                          `Bs ${(productoData.Precio_compra || 0).toFixed(2)}` : 
-                                          "Bs 0.00"
-                                    color: "#6c757d"
-                                    font.pixelSize: fontBaseSize * 1.2
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
+                                text: "CÓDIGO"
+                                color: "#495057"
+                                font.bold: true
+                                font.pixelSize: 12
                             }
                         }
                         
-                        // Precio de Venta
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 8
-                            color: "white"
-                            border.color: lightGrayColor
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
                             border.width: 1
-                            radius: baseUnit * 0.5
                             
-                            ColumnLayout {
+                            Label {
                                 anchors.centerIn: parent
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: "Precio Venta"
-                                    color: textColor
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: productoData ? 
-                                          `Bs ${(productoData.Precio_venta || 0).toFixed(2)}` : 
-                                          "Bs 0.00"
-                                    color: successColor
-                                    font.pixelSize: fontBaseSize * 1.2
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
+                                text: "NOMBRE"
+                                color: "#495057"
+                                font.bold: true
+                                font.pixelSize: 12
                             }
                         }
                         
-                        // Margen de Ganancia
+                        Rectangle {
+                            Layout.preferredWidth: 100
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "MARCA"
+                                color: "#495057"
+                                font.bold: true
+                                font.pixelSize: 12
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 100
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "ESTADO"
+                                color: "#495057"
+                                font.bold: true
+                                font.pixelSize: 12
+                            }
+                        }
+                    }
+                }
+                
+                // Fila de datos
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 45
+                    color: "#ffffff"
+                    border.color: "#dee2e6"
+                    border.width: 1
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 0
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 120
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: productoData ? (productoData.Codigo || "---") : "---"
+                                color: "#007bff"
+                                font.bold: true
+                                font.pixelSize: 13
+                            }
+                        }
+                        
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 8
-                            color: {
-                                if (margenGanancia >= 30) return "#d4edda"
-                                if (margenGanancia >= 15) return "#fff3cd"
-                                return "#f8d7da"
-                            }
-                            border.color: {
-                                if (margenGanancia >= 30) return successColor
-                                if (margenGanancia >= 15) return warningColor
-                                return dangerColor
-                            }
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
                             border.width: 1
-                            radius: baseUnit * 0.5
                             
-                            ColumnLayout {
+                            Label {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: productoData ? (productoData.Nombre || "Sin nombre") : "---"
+                                color: "#212529"
+                                font.pixelSize: 13
+                                elide: Text.ElideRight
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 100
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            Label {
                                 anchors.centerIn: parent
-                                spacing: baseUnit * 0.5
+                                text: productoData ? (productoData.marca_nombre || "---") : "---"
+                                color: "#6c757d"
+                                font.pixelSize: 13
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 100
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 80
+                                height: 22
+                                color: colorEstadoStock
+                                radius: 11
                                 
-                                Text {
-                                    text: "Margen"
-                                    color: textColor
-                                    font.pixelSize: fontBaseSize * 0.8
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: textoEstadoStock
+                                    color: "#ffffff"
                                     font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: `${margenGanancia.toFixed(1)}%`
-                                    color: textColor
-                                    font.pixelSize: fontBaseSize * 1.2
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
+                                    font.pixelSize: 9
                                 }
                             }
                         }
                     }
                 }
                 
-                // ===============================
-                // INFORMACIÓN DE STOCK
-                // ===============================
-                
-                GroupBox {
+                // Descripción si existe
+                Rectangle {
                     Layout.fillWidth: true
-                    title: "📦 Stock e Inventario"
-                    visible: mostrarStock
-                    
-                    background: Rectangle {
-                        color: "#F8F9FA"
-                        border.color: lightGrayColor
-                        border.width: 1
-                        radius: baseUnit * 0.5
-                    }
-                    
-                    label: Rectangle {
-                        color: "#17a2b8"
-                        width: stockLabelText.width + baseUnit * 2
-                        height: baseUnit * 3
-                        radius: baseUnit * 0.25
-                        x: baseUnit
-                        y: -baseUnit * 1.5
-                        
-                        Text {
-                            id: stockLabelText
-                            anchors.centerIn: parent
-                            text: parent.parent.title
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: fontBaseSize * 0.9
-                        }
-                    }
-                    
-                    GridLayout {
-                        anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
-                        columns: 3
-                        columnSpacing: baseUnit * 2
-                        rowSpacing: baseUnit * 1.5
-                        
-                        // Stock en Cajas
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 8
-                            color: "white"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: baseUnit * 0.5
-                            
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: "📦"
-                                    font.pixelSize: fontBaseSize * 1.5
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: productoData ? (productoData.Stock_Caja || 0).toString() : "0"
-                                    color: textColor
-                                    font.pixelSize: fontBaseSize * 1.5
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: "Cajas"
-                                    color: "#6c757d"
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                            }
-                        }
-                        
-                        // Stock Unitario
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 8
-                            color: "white"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: baseUnit * 0.5
-                            
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: "🔢"
-                                    font.pixelSize: fontBaseSize * 1.5
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: productoData ? (productoData.Stock_Unitario || 0).toString() : "0"
-                                    color: textColor
-                                    font.pixelSize: fontBaseSize * 1.5
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: "Unidades"
-                                    color: "#6c757d"
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                            }
-                        }
-                        
-                        // Estado del Stock
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 8
-                            color: {
-                                switch(estadoStock) {
-                                    case "agotado": return "#f8d7da"
-                                    case "bajo": return "#fff3cd"
-                                    case "medio": return "#d1ecf1"
-                                    case "alto": return "#d4edda"
-                                    default: return "#f8f9fa"
-                                }
-                            }
-                            border.color: colorEstadoStock
-                            border.width: 2
-                            radius: baseUnit * 0.5
-                            
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: {
-                                        switch(estadoStock) {
-                                            case "agotado": return "🔴"
-                                            case "bajo": return "🟡"
-                                            case "medio": return "🔵"
-                                            case "alto": return "🟢"
-                                            default: return "⚪"
-                                        }
-                                    }
-                                    font.pixelSize: fontBaseSize * 1.5
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Text {
-                                    text: {
-                                        switch(estadoStock) {
-                                            case "agotado": return "AGOTADO"
-                                            case "bajo": return "STOCK BAJO"
-                                            case "medio": return "STOCK MEDIO"
-                                            case "alto": return "STOCK ALTO"
-                                            default: return "DESCONOCIDO"
-                                        }
-                                    }
-                                    color: colorEstadoStock
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    font.bold: true
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // ===============================
-                // DESCRIPCIÓN (si existe)
-                // ===============================
-                
-                GroupBox {
-                    Layout.fillWidth: true
-                    title: "📄 Descripción"
+                    Layout.preferredHeight: 75
                     visible: productoData && productoData.Descripcion && productoData.Descripcion.trim() !== ""
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
                     
-                    background: Rectangle {
-                        color: "#F8F9FA"
-                        border.color: lightGrayColor
-                        border.width: 1
-                        radius: baseUnit * 0.5
-                    }
-                    
-                    label: Rectangle {
-                        color: "#6c757d"
-                        width: descripcionLabelText.width + baseUnit * 2
-                        height: baseUnit * 3
-                        radius: baseUnit * 0.25
-                        x: baseUnit
-                        y: -baseUnit * 1.5
-                        
-                        Text {
-                            id: descripcionLabelText
-                            anchors.centerIn: parent
-                            text: parent.parent.title
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: fontBaseSize * 0.9
-                        }
-                    }
-                    
-                    Rectangle {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
-                        color: "white"
-                        border.color: lightGrayColor
-                        border.width: 1
-                        radius: baseUnit * 0.5
+                        anchors.margins: 12
+                        spacing: 4
+                        
+                        Label {
+                            text: "DESCRIPCIÓN:"
+                            color: "#495057"
+                            font.bold: true
+                            font.pixelSize: 11
+                        }
                         
                         ScrollView {
-                            anchors.fill: parent
-                            anchors.margins: baseUnit
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
                             
-                            Text {
+                            Label {
                                 width: parent.width
                                 text: productoData ? (productoData.Descripcion || "") : ""
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
+                                color: "#6c757d"
+                                font.pixelSize: 12
                                 wrapMode: Text.WordWrap
                             }
                         }
@@ -586,97 +340,391 @@ Rectangle {
             }
         }
         
-        // ===============================
-        // BOTONES DE ACCIÓN
-        // ===============================
-        
+        // === TABLA DE INFORMACIÓN COMERCIAL ===
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: baseUnit * 8
-            color: "#F8F9FA"
-            border.color: lightGrayColor
+            Layout.preferredHeight: 100
+            color: "#ffffff"
+            border.color: "#dee2e6"
             border.width: 1
-            radius: baseUnit * 0.5
+            
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+                
+                // Header
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 35
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
+                    
+                    Label {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "INFORMACIÓN COMERCIAL"
+                        color: "#495057"
+                        font.bold: true
+                        font.pixelSize: 13
+                    }
+                }
+                
+                // Contenido comercial
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    color: "#ffffff"
+                    border.color: "#dee2e6"
+                    border.width: 1
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 0
+                        spacing: 0
+                        
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                
+                                Label {
+                                    text: "PRECIO COMPRA"
+                                    color: "#6c757d"
+                                    font.pixelSize: 10
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: productoData ? `Bs ${(productoData.Precio_compra || 0).toFixed(2)}` : "Bs 0.00"
+                                    color: "#28a745"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                
+                                Label {
+                                    text: "PRECIO VENTA"
+                                    color: "#6c757d"
+                                    font.pixelSize: 10
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: productoData ? `Bs ${(productoData.Precio_venta || 0).toFixed(2)}` : "Bs 0.00"
+                                    color: "#ffc107"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                
+                                Label {
+                                    text: "MARGEN GANANCIA"
+                                    color: "#6c757d"
+                                    font.pixelSize: 10
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: margenLabel.implicitWidth + 12
+                                    Layout.preferredHeight: 20
+                                    Layout.alignment: Qt.AlignHCenter
+                                    color: margenGanancia >= 30 ? "#28a745" : 
+                                           margenGanancia >= 15 ? "#ffc107" : "#dc3545"
+                                    radius: 10
+                                    
+                                    Label {
+                                        id: margenLabel
+                                        anchors.centerIn: parent
+                                        text: `${margenGanancia.toFixed(1)}%`
+                                        color: "#ffffff"
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // === TABLA DE STOCK ===
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 100
+            visible: mostrarStock
+            color: "#ffffff"
+            border.color: "#dee2e6"
+            border.width: 1
+            
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+                
+                // Header
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 35
+                    color: "#f8f9fa"
+                    border.color: "#dee2e6"
+                    border.width: 1
+                    
+                    Label {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "INVENTARIO Y STOCK"
+                        color: "#495057"
+                        font.bold: true
+                        font.pixelSize: 13
+                    }
+                }
+                
+                // Contenido de stock
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    color: "#ffffff"
+                    border.color: "#dee2e6"
+                    border.width: 1
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 0
+                        spacing: 0
+                        
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                
+                                Label {
+                                    text: "CAJAS"
+                                    color: "#6c757d"
+                                    font.pixelSize: 10
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 40
+                                    Layout.preferredHeight: 25
+                                    Layout.alignment: Qt.AlignHCenter
+                                    color: "#17a2b8"
+                                    radius: 12
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: productoData ? (productoData.Stock_Caja || 0).toString() : "0"
+                                        color: "#ffffff"
+                                        font.bold: true
+                                        font.pixelSize: 13
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                
+                                Label {
+                                    text: "UNIDADES"
+                                    color: "#6c757d"
+                                    font.pixelSize: 10
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 40
+                                    Layout.preferredHeight: 25
+                                    Layout.alignment: Qt.AlignHCenter
+                                    color: "#6f42c1"
+                                    radius: 12
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: productoData ? (productoData.Stock_Unitario || 0).toString() : "0"
+                                        color: "#ffffff"
+                                        font.bold: true
+                                        font.pixelSize: 13
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            border.color: "#dee2e6"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                
+                                Label {
+                                    text: "TOTAL DISPONIBLE"
+                                    color: "#6c757d"
+                                    font.pixelSize: 10
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: {
+                                        if (!productoData) return "0"
+                                        var total = (productoData.Stock_Caja || 0) + (productoData.Stock_Unitario || 0)
+                                        return total.toString() + " unidades"
+                                    }
+                                    color: "#212529"
+                                    font.bold: true
+                                    font.pixelSize: 13
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Espaciador
+        Item {
+            Layout.fillHeight: true
+            Layout.minimumHeight: 10
+        }
+        
+        // === BOTONES DE ACCIÓN ===
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 50
             visible: mostrarAcciones
+            color: "#f8f9fa"
+            border.color: "#dee2e6"
+            border.width: 1
             
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: baseUnit * 1.5
-                spacing: baseUnit * 1.5
+                anchors.margins: 12
+                spacing: 8
                 
-                // Botón Editar
                 Button {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 5
+                    Layout.preferredHeight: 32
                     text: "✏️ Editar"
                     
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker("#007bff", 1.2) : "#007bff"
-                        radius: baseUnit * 0.5
+                        color: parent.pressed ? "#0056b3" : "#007bff"
+                        radius: 4
+                        border.color: "#0056b3"
+                        border.width: 1
                     }
                     
-                    contentItem: Text {
+                    contentItem: Label {
                         text: parent.text
-                        color: "white"
+                        color: "#ffffff"
                         font.bold: true
-                        font.pixelSize: fontBaseSize
+                        font.pixelSize: 13
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: {
-                        editarSolicitado(productoData)
-                    }
+                    onClicked: editarSolicitado(productoData)
                 }
                 
-                // Botón Ajustar Stock
                 Button {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 5
+                    Layout.preferredHeight: 32
                     text: "📦 Ajustar Stock"
                     
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker("#17a2b8", 1.2) : "#17a2b8"
-                        radius: baseUnit * 0.5
+                        color: parent.pressed ? "#e0a800" : "#ffc107"
+                        radius: 4
+                        border.color: "#e0a800"
+                        border.width: 1
                     }
                     
-                    contentItem: Text {
+                    contentItem: Label {
                         text: parent.text
-                        color: "white"
+                        color: "#212529"
                         font.bold: true
-                        font.pixelSize: fontBaseSize
+                        font.pixelSize: 13
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: {
-                        ajustarStockSolicitado(productoData)
-                    }
+                    onClicked: ajustarStockSolicitado(productoData)
                 }
                 
-                // Botón Eliminar
                 Button {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 5
+                    Layout.preferredHeight: 32
                     text: "🗑️ Eliminar"
                     
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                        radius: baseUnit * 0.5
+                        color: parent.pressed ? "#c82333" : "#dc3545"
+                        radius: 4
+                        border.color: "#c82333"
+                        border.width: 1
                     }
                     
-                    contentItem: Text {
+                    contentItem: Label {
                         text: parent.text
-                        color: "white"
+                        color: "#ffffff"
                         font.bold: true
-                        font.pixelSize: fontBaseSize
+                        font.pixelSize: 13
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: {
-                        eliminarSolicitado(productoData)
-                    }
+                    onClicked: eliminarSolicitado(productoData)
                 }
             }
         }

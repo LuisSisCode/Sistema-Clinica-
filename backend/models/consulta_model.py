@@ -47,6 +47,8 @@ class ConsultaModel(QObject):
     
     def __init__(self):
         super().__init__()
+
+        QTimer.singleShot(100, self._cargar_consultas_recientes)
         
         # Repositories
         self.consulta_repo = ConsultaRepository()
@@ -217,10 +219,16 @@ class ConsultaModel(QObject):
         self._set_procesando_consulta(True)
         
         try:
+            # Convertir QJSValue a diccionario de Python
+            if hasattr(datos_consulta, 'toVariant'):
+                datos = datos_consulta.toVariant()
+            else:
+                datos = datos_consulta
+            
             # Validaciones básicas
-            paciente_id = safe_int(datos_consulta.get('paciente_id', 0))
-            especialidad_id = safe_int(datos_consulta.get('especialidad_id', 0))
-            detalles = str(datos_consulta.get('detalles', '')).strip()
+            paciente_id = safe_int(datos.get('paciente_id', 0))
+            especialidad_id = safe_int(datos.get('especialidad_id', 0))
+            detalles = str(datos.get('detalles', '')).strip()
             
             if paciente_id <= 0:
                 raise ValidationError("paciente_id", paciente_id, "Paciente requerido")
@@ -238,7 +246,7 @@ class ConsultaModel(QObject):
                 paciente_id=paciente_id,
                 especialidad_id=especialidad_id,
                 detalles=detalles,
-                fecha=datos_consulta.get('fecha')
+                fecha=datos.get('fecha')
             )
             
             if consulta_id:
@@ -564,6 +572,54 @@ class ConsultaModel(QObject):
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo especialidades: {str(e)}")
             return []
+        
+    @Slot(str, str, str, int, result=int)
+    def crear_paciente_directo(self, nombre, apellido_p, apellido_m, edad):
+        try:
+            # Forzar valores mínimos
+            nombre_final = nombre.strip() or "Sin nombre"
+            apellido_p_final = apellido_p.strip() or "Sin apellido"
+            apellido_m_final = apellido_m.strip() or ""
+            edad = max(0, int(edad))  # Asegurar que la edad sea >= 0
+            
+            return self.paciente_repo.create_patient(
+                nombre_final, apellido_p_final, apellido_m_final, edad
+            )
+        except Exception as e:
+            self.operacionError.emit(f"Error creando paciente: {str(e)}")
+            return -1
+        
+    # Agregar este método al ConsultaModel
+    @Slot(str, result='QVariantList')
+    def buscar_pacientes_completo(self, termino: str):
+        """Búsqueda completa de pacientes con todos los campos"""
+        if not termino or len(termino.strip()) < 2:
+            return []
+        
+        try:
+            pacientes = safe_execute(
+                self.paciente_repo.search_patients_with_names,  # Nueva función
+                termino.strip(),
+                20
+            )
+            
+            # Formatear resultados con toda la información
+            resultados_completos = []
+            for p in pacientes or []:
+                resultados_completos.append({
+                    'id': p['id'],
+                    'nombre': p['Nombre'],
+                    'apellido_paterno': p['Apellido_Paterno'],
+                    'apellido_materno': p['Apellido_Materno'],
+                    'edad': p['Edad'],
+                    'nombre_completo': f"{p['Nombre']} {p['Apellido_Paterno']} {p['Apellido_Materno']}"
+                })
+            
+            return resultados_completos
+            
+        except Exception as e:
+            self.operacionError.emit(f"Error buscando pacientes: {str(e)}")
+            return []
     
     # ===============================
     # MÉTODOS PRIVADOS
@@ -581,19 +637,6 @@ class ConsultaModel(QObject):
         finally:
             self._set_loading(False)
     
-    def _cargar_consultas_recientes(self):
-        """Carga consultas recientes"""
-        try:
-            consultas = safe_execute(
-                self.consulta_repo.get_recent_consultations,
-                days=7
-            )
-            self._consultas_recientes = consultas or []
-            self.consultasRecientesChanged.emit()
-            
-        except Exception as e:
-            print(f"⚠️ Error cargando consultas recientes: {e}")
-    
     def _cargar_estadisticas_dashboard(self):
         """Carga estadísticas para dashboard"""
         try:
@@ -601,11 +644,21 @@ class ConsultaModel(QObject):
             stats_generales = safe_execute(self.consulta_repo.get_consultation_statistics)
             stats_hoy = safe_execute(self.consulta_repo.get_today_statistics)
             
+            # CORRECCIÓN: Verificar que stats_generales es un diccionario antes de usar .get()
+            if stats_generales and isinstance(stats_generales, dict):
+                metricas_generales = stats_generales.get('general', {})
+                por_especialidad = stats_generales.get('por_especialidad', [])
+                por_doctor = stats_generales.get('por_doctor', [])
+            else:
+                metricas_generales = {}
+                por_especialidad = []
+                por_doctor = []
+            
             self._estadisticas_dashboard = {
                 'metricas_hoy': stats_hoy or {},
-                'metricas_generales': stats_generales.get('general', {}) if stats_generales else {},
-                'por_especialidad': stats_generales.get('por_especialidad', []) if stats_generales else [],
-                'por_doctor': stats_generales.get('por_doctor', []) if stats_generales else []
+                'metricas_generales': metricas_generales,
+                'por_especialidad': por_especialidad,
+                'por_doctor': por_doctor
             }
             
             self.estadisticasDashboardChanged.emit()
@@ -637,9 +690,17 @@ class ConsultaModel(QObject):
             print(f"⚠️ Error cargando doctores: {e}")
     
     def _cargar_especialidades(self):
-        """Carga especialidades disponibles"""
+        """Carga especialidades disponibles desde el repository"""
         try:
+            print("🏥 Cargando especialidades desde DoctorRepository...")
+            
+            # Usar repository (correcto)
             especialidades = safe_execute(self.doctor_repo.get_all_specialty_services)
+            
+            print(f"🔍 Especialidades obtenidas del repository: {len(especialidades or [])}")
+            
+            if especialidades and len(especialidades) > 0:
+                print(f"🔍 Primera especialidad: {especialidades[0]}")
             
             especialidades_formateadas = []
             for e in especialidades or []:
@@ -648,16 +709,21 @@ class ConsultaModel(QObject):
                     'text': e['Nombre'],
                     'precio_normal': e['Precio_Normal'],
                     'precio_emergencia': e['Precio_Emergencia'],
-                    'doctor_nombre': e.get('doctor_nombre', ''),
+                    'doctor_nombre': e.get('doctor_completo', e.get('doctor_nombre', '')),
+                    'doctor_especialidad': e.get('doctor_especialidad', ''),
                     'data': e
                 })
             
             self._especialidades = especialidades_formateadas
+            print(f"✅ Especialidades formateadas para QML: {len(especialidades_formateadas)}")
+            
             self.especialidadesChanged.emit()
             
         except Exception as e:
-            print(f"⚠️ Error cargando especialidades: {e}")
-    
+            print(f"❌ Error cargando especialidades: {e}")
+            self._especialidades = []
+            self.especialidadesChanged.emit()
+            
     def _cargar_pacientes_recientes(self):
         """Carga pacientes con consultas recientes"""
         try:
@@ -746,22 +812,46 @@ class ConsultaModel(QObject):
     def _cargar_consultas_recientes(self):
         """Carga consultas recientes"""
         try:
-            print("🔄 DEBUG: get_active() llamado para consultas recientes")
+            print("🔄 Cargando consultas recientes...")
             consultas = safe_execute(
-                self.consulta_repo.get_recent_consultations,
-                days=30
+                self.consulta_repo.get_all_with_details,
+                limit=50
             )
             self._consultas_recientes = consultas or []
-            print(f"🔄 DEBUG: get_active() encontró {len(self._consultas_recientes)} consultas")
-            if self._consultas_recientes:
-                print(f"🔄 DEBUG: Primera consulta: {self._consultas_recientes[0]}")
+            print(f"✅ Consultas cargadas: {len(self._consultas_recientes)}")
             
             self.consultasRecientesChanged.emit()
             
         except Exception as e:
-            print(f"⚠️ Error cargando consultas recientes: {e}")
+            print(f"❌ Error cargando consultas recientes: {e}")
             self._consultas_recientes = []
             self.consultasRecientesChanged.emit()
+    def _cargar_datos_iniciales(self):
+        self._set_loading(True)
+        try:
+            self._cargar_consultas_recientes()
+            self._cargar_estadisticas_dashboard()
+            self._cargar_doctores_disponibles()
+            self._cargar_especialidades()  # ← Ya existe
+            self._cargar_pacientes_recientes()
+            # AGREGAR ESTA LÍNEA:
+            self._cargar_especialidades()  # Forzar carga
+        finally:
+            self._set_loading(False)
+
+    def search_patients_with_names(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Busca solo pacientes con nombres reales"""
+        search_term = f"%{search_term.strip()}%"
+        
+        query = """
+        SELECT * FROM Pacientes 
+        WHERE (Nombre != 'Sin nombre' AND Nombre IS NOT NULL AND Nombre != '')
+        AND (Nombre LIKE ? OR Apellido_Paterno LIKE ? OR Apellido_Materno LIKE ?)
+        ORDER BY Nombre, Apellido_Paterno
+        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+        """
+        
+        return self._execute_query(query, (search_term, search_term, search_term, limit))
 
 # Registrar el tipo para QML
 def register_consulta_model():
