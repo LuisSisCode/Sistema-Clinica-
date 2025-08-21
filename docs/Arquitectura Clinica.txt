@@ -1,7 +1,5 @@
 # Estructura del Proyecto Clínica App
-
 # CLINICAAPP - ARQUITECTURA CON SIGNALS/SLOTS/PROPERTIES
-
 clinica_app/
 ├── backend/
 │   ├── core/                                    # 🆕 Núcleo del sistema
@@ -28,22 +26,6 @@ clinica_app/
 │   │   ├── auth_model.py                        # Autenticación (QObject)
 │   │   └── dashboard_model.py                   # Estadísticas generales (QObject)
 │   │
-│   ├── services/                                # 🧠 Lógica de negocio (OPCIONAL)
-│   │   ├── __init__.py
-│   │   ├── auth_service.py                      # Autenticación + Sesiones
-│   │   ├── usuario_service.py                   # Gestión usuarios
-│   │   ├── paciente_service.py                  # Gestión pacientes
-│   │   ├── doctor_service.py                    # Gestión doctores
-│   │   ├── trabajador_service.py                # Gestión trabajadores
-│   │   ├── consulta_service.py                  # Gestión consultas
-│   │   ├── laboratorio_service.py               # Gestión laboratorio
-│   │   ├── inventario_service.py                # Gestión productos
-│   │   ├── compra_service.py                    # Gestión compras
-│   │   ├── venta_service.py                     # Gestión ventas
-│   │   ├── gasto_service.py                     # Gestión gastos
-│   │   ├── reporte_service.py                   # Generación PDFs
-│   │   └── dashboard_service.py                 # Estadísticas generales
-│   │
 │   ├── repositories/                            # 📊 Acceso a datos
 │   │   ├── __init__.py
 │   │   ├── usuario_repository.py                # Usuario + Roles
@@ -59,35 +41,10 @@ clinica_app/
 │   │   └── estadistica_repository.py            # Consultas complejas
 │   │
 │   └── main.py                                  # Punto de entrada principal
-│
-├── frontend/                                    # 🎨 Interfaz QML
-│   ├── qml/
-│   │   ├── components/                          # Componentes reutilizables
-│   │   │   ├── Header.qml
-│   │   │   ├── SideMenu.qml
-│   │   │   ├── TableComponent.qml               # Tabla reutilizable
-│   │   │   ├── FormDialog.qml                   # Diálogo formulario
-│   │   │   ├── SearchBar.qml                    # Barra búsqueda
-│   │   │   ├── PaginationComponent.qml          # Paginación
-│   │   │   └── Notification.qml
-│   │   ├── views/                               # Vistas principales
-│   │   │   ├── main.qml
-│   │   │   ├── login.qml
-│   │   │   ├── dashboard.qml
-│   │   │   ├── usuario.qml
-│   │   │   ├── consultas.qml
-│   │   │   ├── laboratorio.qml
-│   │   │   ├── farmacia.qml
-│   │   │   ├── compras.qml
-│   │   │   ├── ventas.qml
-│   │   │   ├── trabajadores.qml
-│   │   │   ├── reportes.qml
-│   │   │   └── configuracion.qml
-│   │   └── main.qml                             # Entrada principal
-│   └── resources/
+│                             
+├── resources/
 │       ├── icons/
-│       ├── fonts/
-│       └── qml.qrc                              # Recursos Qt
+│       └── fonts/
 │
 ├── database/                                    # 📄 Scripts SQL
 │   ├── clinica_db.sql                           # Tu script actual
@@ -95,44 +52,46 @@ clinica_app/
 │   └── stored_procedures.sql                    # Procedimientos almacenados
 │
 ├── docs/                                        # 📚 Documentación
-│   ├── architecture.md                          # Documentación arquitectura
-│   ├── database_schema.md                       # Esquema BD
-│   └── models_reference.md                      # Referencia Models
+│   ├── Arquitectura_clinica.txt                          # Documentación arquitectura
+│   └── database_schema.md                       # Esquema BD
 │
-├── requirements.txt                             # Dependencias Python
-├── run.py                                       # Script ejecución
-└── .env.example                                 # Variables entorno
+├── Dashboard.qml
+├── Compras.qml
+├── CrearCompra.qml
+├── CompraMain.qml
+├── Ventas.qml
+├── CrearVenta.qml
+├── VentasMain.qml
+├── Productos.qml
+├── CrearProducto.qml
+├── Farmacia.qml
+├── Consultas.qml
+├── Laboratio.qml
+├── Enfermeria.qml
+├── ServiciosBasicos.qml
+├── Trabajadores.qml
+├── GLobalDataCenter.qml
+├── login.qml
+├── Usuario.qml
+├── Configuracion.qml
+├── ConfiColsultas.qml
+├── ConfiEnfermeria.qml
+├── ConfiLaboratorio.qml
+├── ConfiServiciosBasicos.qml
+├── ConfiTrabajadores.qml
+├── ConfiUsuarios.qml
+├── Reportes.qml
+├── main.qml
+│                             
+├── main.py						# Script ejecución con usuario predeterminado de ID = 10
+└── .env                                 			# Variables entorno
 
 ## CAMBIOS PRINCIPALES VS ARQUITECTURA API
-
-### ❌ ELIMINADO:
-- Carpeta `backend/api/` (12 archivos menos)
-- Referencias a APIs en documentación
 
 ### ✅ MODIFICADO:
 - `backend/api/` → `backend/models/` (QObject con Signals/Slots/Properties)
 - Servicios son OPCIONALES (pueden usarse desde Models)
 - main.py registra Models directamente en QML
-
-### 📊 CONTEO DE ARCHIVOS:
-
-**CORE (7 archivos):**
-- config.py, database_connection.py, exceptions.py, cache_system.py
-- base_repository.py, utils.py, __init__.py
-
-**MODELS (13 archivos):**
-- 12 models + __init__.py
-
-**REPOSITORIES (12 archivos):**
-- 11 repositories + __init__.py
-
-**SERVICES (13 archivos OPCIONALES):**
-- 12 services + __init__.py
-
-**FRONTEND QML (20+ archivos):**
-- Views + Components + Resources
-
-**TOTAL BACKEND: 32 archivos (vs 45 con APIs) = 28% MENOS**
 
 ## FLUJO DE DATOS SIMPLIFICADO:
 
@@ -151,19 +110,11 @@ QObject classes con @Slot, @Signal, @Property para conectar con QML
 ### backend/repositories/ (ACCESO DATOS)  
 Clases CRUD con sistema de caché integrado
 
-### backend/services/ (OPCIONAL)
-Lógica de negocio compleja - usar solo si Models se vuelven muy grandes
-
-### frontend/qml/
-Interfaz Qt/QML que conecta SOLO con Models
-
 ## Descripción de la Arquitectura
 
 **Backend**: Arquitectura por capas con patrón Repository
 - **Database**: Conexión SQL Server, modelos ORM y repositorios por dominio
-- **Services**: Lógica de negocio encapsulada por módulos
 - **Core**: Configuración global y utilidades
-- **API**: Interfaz de comunicación con el frontend QML
 
 **Frontend**: Interfaz Qt QML con componentes reutilizables
 - **Components**: Elementos UI comunes (Header, SideMenu, Notifications)

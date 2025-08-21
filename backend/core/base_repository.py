@@ -64,21 +64,11 @@ class BaseRepository(ABC):
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 
-                # Debug: Imprimir query y parámetros
-                print(f"🔍 DEBUG SQL: {query[:100]}...")
-                print(f"🔍 DEBUG PARAMS: {params}")
-                
                 # Debug: Mostrar análisis de la query
                 query_upper = query.strip().upper()
                 is_select = query_upper.startswith('SELECT')
                 has_output = 'OUTPUT INSERTED' in query_upper
                 has_insert = 'INSERT' in query_upper
-                print(f"🔍 DEBUG QUERY ANALYSIS:")
-                print(f"   - Es SELECT: {is_select}")
-                print(f"   - Tiene OUTPUT INSERTED: {has_output}")
-                print(f"   - Tiene INSERT: {has_insert}")
-                print(f"   - Query path: {'SELECT' if is_select else 'OUTPUT INSERT' if (has_output and has_insert) else 'NORMAL'}")
-                
                 cursor.execute(query, params)
                 
                 if query_upper.startswith('SELECT'):
