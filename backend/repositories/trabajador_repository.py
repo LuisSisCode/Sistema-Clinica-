@@ -29,7 +29,8 @@ class TrabajadorRepository(BaseRepository):
     # ===============================
     
     def create_worker(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                     tipo_trabajador_id: int) -> int:
+                 tipo_trabajador_id: int, especialidad: str = None, 
+                 matricula: str = None) -> int:
         """
         Crea nuevo trabajador con validaciones
         
@@ -59,6 +60,12 @@ class TrabajadorRepository(BaseRepository):
             'Apellido_Materno': normalize_name(apellido_materno),
             'Id_Tipo_Trabajador': tipo_trabajador_id
         }
+        # ✅ Agregar especialidad y matrícula si se proporcionan
+        if especialidad and especialidad.strip():
+            worker_data['Especialidad'] = especialidad.strip()
+        
+        if matricula and matricula.strip():
+            worker_data['Matricula'] = matricula.strip()
         
         worker_id = self.insert(worker_data)
         print(f"👷‍♂️ Trabajador creado: {nombre} {apellido_paterno} - ID: {worker_id}")
@@ -66,9 +73,10 @@ class TrabajadorRepository(BaseRepository):
         return worker_id
     
     def update_worker(self, trabajador_id: int, nombre: str = None, 
-                     apellido_paterno: str = None, apellido_materno: str = None,
-                     tipo_trabajador_id: int = None) -> bool:
-        """Actualiza trabajador existente"""
+                    apellido_paterno: str = None, apellido_materno: str = None,
+                    tipo_trabajador_id: int = None, especialidad: str = None, 
+                    matricula: str = None) -> bool:
+        """Actualiza trabajador existente con todas las columnas"""
         # Verificar existencia
         if not self.get_by_id(trabajador_id):
             raise ValidationError("trabajador_id", trabajador_id, "Trabajador no encontrado")
@@ -92,6 +100,15 @@ class TrabajadorRepository(BaseRepository):
                 raise ValidationError("tipo_trabajador_id", tipo_trabajador_id, "Tipo de trabajador no existe")
             update_data['Id_Tipo_Trabajador'] = tipo_trabajador_id
         
+        if especialidad is not None:
+            update_data['Especialidad'] = especialidad.strip() if especialidad.strip() else None
+        
+        if matricula is not None:
+            matricula_clean = matricula.strip() if matricula and matricula.strip() else None
+            if matricula_clean and not self.validate_matricula_unique(matricula_clean, trabajador_id):
+                raise ValidationError("matricula", matricula_clean, "Matrícula ya existe")
+            update_data['Matricula'] = matricula_clean
+        
         if not update_data:
             return True
         
@@ -107,11 +124,11 @@ class TrabajadorRepository(BaseRepository):
     
     @cached_query('trabajadores_tipos', ttl=600)
     def get_all_with_types(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores con información de tipo"""
+        """Obtiene trabajadores con información de tipo, especialidad y matrícula"""
         query = """
         SELECT t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-               t.Id_Tipo_Trabajador,
-               tt.Tipo as tipo_nombre
+            t.Id_Tipo_Trabajador, t.Especialidad, t.Matricula,
+            tt.Tipo as tipo_nombre
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
@@ -119,7 +136,7 @@ class TrabajadorRepository(BaseRepository):
         return self._execute_query(query)
     
     def get_worker_with_type(self, trabajador_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene trabajador específico con información de tipo"""
+        """Obtiene trabajador específico con información completa"""
         query = """
         SELECT t.*, tt.Tipo as tipo_nombre
         FROM Trabajadores t
@@ -131,9 +148,9 @@ class TrabajadorRepository(BaseRepository):
     # ===============================
     # BÚSQUEDAS ESPECÍFICAS
     # ===============================
-    
+        
     def search_workers(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Búsqueda por nombre, apellidos o tipo"""
+        """Búsqueda por nombre, apellidos, tipo, especialidad o matrícula"""
         if not search_term:
             return []
         
@@ -144,13 +161,13 @@ class TrabajadorRepository(BaseRepository):
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         WHERE t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? OR t.Apellido_Materno LIKE ?
-           OR tt.Tipo LIKE ?
+        OR tt.Tipo LIKE ? OR t.Especialidad LIKE ? OR t.Matricula LIKE ?
         ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         
         return self._execute_query(query, (search_term, search_term, search_term, 
-                                         search_term, limit))
+                                        search_term, search_term, search_term, limit))
     
     def get_workers_by_type(self, tipo_trabajador_id: int) -> List[Dict[str, Any]]:
         """Obtiene trabajadores por tipo específico"""
@@ -510,7 +527,29 @@ class TrabajadorRepository(BaseRepository):
             worker['nombre_completo'] = f"{worker['Nombre']} {worker['Apellido_Paterno']} {worker['Apellido_Materno']}"
         
         return workers
-    
+    def matricula_exists(self, matricula: str) -> bool:
+        """Verifica si existe una matrícula en el sistema"""
+        if not matricula or not matricula.strip():
+            return False
+        
+        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Matricula = ?"
+        result = self._execute_query(query, (matricula.strip(),), fetch_one=True)
+        return result['count'] > 0 if result else False
+
+    def validate_matricula_unique(self, matricula: str, exclude_id: int = None) -> bool:
+        """Valida que la matrícula sea única (excluyendo un ID específico)"""
+        if not matricula or not matricula.strip():
+            return True  # Matrícula vacía es válida
+        
+        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Matricula = ?"
+        params = [matricula.strip()]
+        
+        if exclude_id:
+            query += " AND id != ?"
+            params.append(exclude_id)
+        
+        result = self._execute_query(query, tuple(params), fetch_one=True)
+        return result['count'] == 0 if result else True
     # ===============================
     # CACHÉ
     # ===============================
@@ -525,3 +564,4 @@ class TrabajadorRepository(BaseRepository):
         """Override para invalidación específica"""
         super()._invalidate_cache_after_modification()
         self.invalidate_worker_caches()
+    

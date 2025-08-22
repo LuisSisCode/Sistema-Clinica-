@@ -19,6 +19,8 @@ from backend.models.consulta_model import ConsultaModel, register_consulta_model
 from backend.models.gasto_model import GastoModel, register_gasto_model
 from backend.models.paciente_model import PacienteModel, register_paciente_model
 from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
+from backend.models.trabajador_model import TrabajadorModel, register_trabajador_model
+
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -61,6 +63,9 @@ class AppController(QObject):
         self.paciente_model = None
         self.usuario_model = None
         self.laboratorio_model = None
+        self.gasto_model = None
+        self.trabajador_model = None  # ✅ AGREGAR TRABAJADOR MODEL
+
         
     # ===============================
     # INICIALIZACIÓN DE MODELS
@@ -80,7 +85,11 @@ class AppController(QObject):
             self.paciente_model = PacienteModel()
             self.usuario_model = UsuarioModel()
             self.gasto_model = GastoModel()
+
             self.laboratorio_model = LaboratorioModel()
+
+            self.trabajador_model = TrabajadorModel()  # ✅ INICIALIZAR TRABAJADOR MODEL
+            
 
             # Conectar signals entre models
             self._connect_models()
@@ -123,6 +132,18 @@ class AppController(QObject):
                 self.laboratorio_model.errorOcurrido.connect(self._on_model_error)
                 self.laboratorio_model.operacionExitosa.connect(self._on_model_success)
 
+
+            # ✅ CONECTAR TRABAJADOR MODEL
+            if self.trabajador_model:
+                self.trabajador_model.errorOccurred.connect(self._on_model_error)
+                self.trabajador_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del TrabajadorModel
+                self.trabajador_model.trabajadorCreado.connect(self._on_trabajador_creado)
+                self.trabajador_model.trabajadorActualizado.connect(self._on_trabajador_actualizado)
+                self.trabajador_model.trabajadorEliminado.connect(self._on_trabajador_eliminado)
+                print("🔗 TrabajadorModel conectado correctamente")
+            
             # Conectar operaciones exitosas
             self.inventario_model.operacionExitosa.connect(self._on_model_success)
             self.venta_model.operacionExitosa.connect(self._on_model_success)
@@ -178,6 +199,10 @@ class AppController(QObject):
                     if self.consulta_model:
                         self.consulta_model.set_usuario_actual(usuario_id)
                         print(f"👤 Usuario establecido en ConsultaModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    # ✅ ESTABLECER PARA TRABAJADORMODEL (si lo necesita en el futuro)
+                    if self.trabajador_model:
+                        print(f"👷‍♂️ TrabajadorModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
                 else:
                     print("⚠️ Usuario administrador no tiene ID válido")
             else:
@@ -216,6 +241,7 @@ class AppController(QObject):
         # Actualizar inventario después de compra
         if self.inventario_model:
             QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+    
     @Slot(bool, str)
     def _on_gasto_creado(self, success: bool, message: str):
         """Handler cuando se crea un gasto"""
@@ -245,6 +271,37 @@ class AppController(QObject):
         else:
             print(f"❌ Error eliminando gasto: {message}")
             self.showNotification("Error", f"Error eliminando gasto: {message}")
+    
+    # ✅ HANDLERS PARA TRABAJADOR MODEL
+    @Slot(bool, str)
+    def _on_trabajador_creado(self, success: bool, message: str):
+        """Handler cuando se crea un trabajador"""
+        if success:
+            print(f"👷‍♂️ Trabajador creado exitosamente: {message}")
+            self.showNotification("Trabajador Creado", message)
+        else:
+            print(f"❌ Error creando trabajador: {message}")
+            self.showNotification("Error", f"Error creando trabajador: {message}")
+    
+    @Slot(bool, str)
+    def _on_trabajador_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un trabajador"""
+        if success:
+            print(f"✏️ Trabajador actualizado exitosamente: {message}")
+            self.showNotification("Trabajador Actualizado", message)
+        else:
+            print(f"❌ Error actualizando trabajador: {message}")
+            self.showNotification("Error", f"Error actualizando trabajador: {message}")
+    
+    @Slot(bool, str)
+    def _on_trabajador_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un trabajador"""
+        if success:
+            print(f"🗑️ Trabajador eliminado exitosamente: {message}")
+            self.showNotification("Trabajador Eliminado", message)
+        else:
+            print(f"❌ Error eliminando trabajador: {message}")
+            self.showNotification("Error", f"Error eliminando trabajador: {message}")
     
     @Slot(str)
     def _on_model_error(self, mensaje: str):
@@ -296,10 +353,18 @@ class AppController(QObject):
         """Propiedad para acceder al GastoModel desde QML"""
         return self.gasto_model
     
+
     @Property(QObject, notify=modelsReady)
     def laboratorio_model_instance(self):
         """Propiedad para acceder al LaboratorioModel desde QML"""
         return self.laboratorio_model
+
+    # ✅ GETTER PARA TRABAJADOR MODEL
+    @Property(QObject, notify=modelsReady)
+    def trabajador_model_instance(self):
+        """Propiedad para acceder al TrabajadorModel desde QML"""
+        return self.trabajador_model
+
     
     # ===============================
     # MÉTODOS DE INTEGRACIÓN MODELS-PDF
@@ -410,6 +475,73 @@ class AppController(QObject):
             
         except Exception as e:
             print(f"❌ Error generando reporte usuarios: {e}")
+            return ""
+    
+    # ✅ GENERAR REPORTE DE TRABAJADORES
+    @Slot(str, result=str)
+    def generar_reporte_trabajadores(self, tipo_reporte: str):
+        """Genera reporte PDF de trabajadores usando el model"""
+        try:
+            if not self.trabajador_model:
+                print("❌ TrabajadorModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los trabajadores
+                datos = self.trabajador_model.trabajadores
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de trabajadores
+                datos = self.trabajador_model.estadisticas
+            elif tipo_reporte == "tipos":
+                # Obtener tipos de trabajadores
+                datos = self.trabajador_model.tiposTrabajador
+            elif tipo_reporte == "laboratorio":
+                # Obtener trabajadores de laboratorio
+                datos = self.trabajador_model.obtenerTrabajadoresLaboratorio()
+            elif tipo_reporte == "enfermeria":
+                # Obtener trabajadores de enfermería
+                datos = self.trabajador_model.obtenerTrabajadoresEnfermeria()
+            elif tipo_reporte == "administrativos":
+                # Obtener trabajadores administrativos
+                datos = self.trabajador_model.obtenerTrabajadoresAdministrativos()
+            elif tipo_reporte == "sin_asignaciones":
+                # Obtener trabajadores sin asignaciones
+                datos = self.trabajador_model.obtenerTrabajadoresSinAsignaciones()
+            elif tipo_reporte == "carga_trabajo":
+                # Obtener distribución de carga de trabajo
+                datos = self.trabajador_model.obtenerDistribucionCarga()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de trabajadores")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"trabajadores_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de trabajadores generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de trabajadores: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
         
     @Slot(str, str, str, result=str)
@@ -625,12 +757,36 @@ def register_qml_types():
         register_consulta_model()
         register_gasto_model()
         register_paciente_model()
+
         register_laboratorio_model()
+
+        register_trabajador_model()  # ✅ AGREGAR TRABAJADOR MODEL
+        
+
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:
         print(f"❌ Error registrando tipos QML: {e}")
         raise
+
+def register_data_models():
+    """Registra todos los modelos de datos para QML"""
+    try:
+        print("📊 Registrando modelos de datos...")
+        
+        # Registrar modelos específicos
+        register_trabajador_model()
+        
+        # Aquí puedes agregar otros modelos en el futuro:
+        # register_doctor_model()
+        # register_especialidad_model()
+        # etc.
+        
+        print("✅ Modelos de datos registrados correctamente")
+        
+    except Exception as e:
+        print(f"❌ Error registrando modelos de datos: {e}")
+        raise e
 
 def setup_qml_context(engine, controller):
     """Configura el contexto QML con controllers y models"""
@@ -711,7 +867,10 @@ def main():
         # 6. Precargar archivos QML
         preload_qml_files()
         
-        # 7. Cargar archivo QML principal
+        # ✅ 7. Registrar modelos de datos específicos
+        register_data_models()
+        
+        # 8. Cargar archivo QML principal
         qml_file = os.path.join(os.path.dirname(__file__), "main.qml")
         if not os.path.exists(qml_file):
             print(f"❌ Error: Archivo QML no encontrado: {qml_file}")
@@ -719,18 +878,18 @@ def main():
         
         engine.load(QUrl.fromLocalFile(qml_file))
         
-        # 8. Verificar que se cargó correctamente
+        # 9. Verificar que se cargó correctamente
         if not engine.rootObjects():
             print("❌ Error: No se pudo cargar el archivo QML")
             return -1
         
-        # 9. Iniciar precarga de componentes
+        # 10. Iniciar precarga de componentes
         controller.startPreloading()
         
         print("✅ Sistema iniciado correctamente")
         print("🏥 Clínica Maria Inmaculada - Sistema Operativo")
         
-        # 10. Ejecutar aplicación
+        # 11. Ejecutar aplicación
         return app.exec()
         
     except Exception as e:

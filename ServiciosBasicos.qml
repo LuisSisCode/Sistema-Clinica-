@@ -143,17 +143,7 @@ Item {
             }
         }
     }
-    
-    Timer {
-        id: loadTiposTimer
-        interval: 100  // 100ms de delay
-        repeat: false
-        onTriggered: {
-            if (gastoModelInstance) {
-                loadTiposGastosFromModel()
-            }
-        }
-    }
+
     // ✅ CONEXIONES CON APPCONTROLLER PARA NOTIFICACIONES
     Connections {
         target: appController
@@ -211,14 +201,15 @@ Item {
         for (var i = 0; i < gastos.length; i++) {
             var gasto = gastos[i]
             
+            // ✅ MAPEO ACTUALIZADO CON NUEVOS CAMPOS DE LA BD
             var gastoFormatted = {
                 gastoId: gasto.id || (i + 1),
                 tipoGasto: gasto.tipo_nombre || "Sin tipo",
-                descripcion: gasto.descripcion || "Sin descripción",
+                descripcion: gasto.Descripcion || "Sin descripción",  // ✅ Ahora viene directo de la BD
                 monto: parseFloat(gasto.Monto || 0).toFixed(2),
                 fechaGasto: formatDateFromModel(gasto.Fecha),
-                proveedorEmpresa: gasto.proveedor || "Sin proveedor",
-                registradoPor: gasto.usuario_completo || "Usuario desconocido"
+                proveedor: gasto.Proveedor || "Sin proveedor",        // ✅ Campo directo de la BD
+                registradoPor: gasto.registrado_por_nombre || gasto.usuario_nombre || gasto.usuario_completo || "Usuario desconocido"
             }
             
             gastosOriginales.push(gastoFormatted)
@@ -226,6 +217,7 @@ Item {
         }
         
         console.log("📊 Gastos cargados:", gastosOriginales.length)
+        updatePaginatedModel()
     }
     
     // ✅ NUEVA FUNCIÓN QUE NO TRIGGEEA SEÑALES DEL MODELO
@@ -241,44 +233,33 @@ Item {
         for (var i = 0; i < gastosOriginales.length; i++) {
             var gasto = gastosOriginales[i]
             var mostrar = true
-            
-            // Filtro por tipo de gasto
-            if (filtroTipoGasto.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipoGasto.model[filtroTipoGasto.currentIndex]
+            // Filtro por tipo de servicio
+            if (filtroTipoServicio.currentIndex > 0 && mostrar) {
+                var tipoSeleccionado = filtroTipoServicio.model[filtroTipoServicio.currentIndex]
                 if (gasto.tipoGasto !== tipoSeleccionado) {
                     mostrar = false
                 }
             }
-            
-            // Filtro por fecha
-            if (filtroFecha.currentIndex > 0 && mostrar) {
+
+            // Filtro por mes
+            if (mostrar) {
                 var fechaGasto = new Date(gasto.fechaGasto)
-                var diferenciaDias = Math.floor((hoy - fechaGasto) / (1000 * 60 * 60 * 24))
+                var mesSeleccionado = filtroMes.currentIndex
                 
-                switch(filtroFecha.currentIndex) {
-                    case 1: // Este mes
-                        if (diferenciaDias > 30) mostrar = false
-                        break
-                    case 2: // Mes anterior
-                        if (diferenciaDias <= 30 || diferenciaDias > 60) mostrar = false
-                        break
-                    case 3: // Últimos 3 meses
-                        if (diferenciaDias > 90) mostrar = false
-                        break
-                }
-            }
-            
-            // Búsqueda por texto
-            if (textoBusqueda.length > 0 && mostrar) {
-                if (!gasto.descripcion.toLowerCase().includes(textoBusqueda) && 
-                    !gasto.proveedorEmpresa.toLowerCase().includes(textoBusqueda)) {
+                if (fechaGasto.getMonth() !== mesSeleccionado) {
                     mostrar = false
                 }
             }
-            
-            if (mostrar) {
-                gastosListModel.append(gasto)
-            }
+
+            // Filtro por año (solo si está visible)
+            if (filtroAño.visible && mostrar) {
+                var fechaGasto = new Date(gasto.fechaGasto)
+                var añoSeleccionado = parseInt(filtroAño.currentText)
+                
+                if (fechaGasto.getFullYear() !== añoSeleccionado) {
+                    mostrar = false
+                }
+            } 
         }
         
         // Resetear a primera página y actualizar paginación
@@ -342,11 +323,12 @@ Item {
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.crearGasto(
-            tipoGastoId,                    // tipo_gasto_id
-            parseFloat(gastoData.monto),    // monto
-            1,                              // usuario_id (temporal - usar usuario actual)
-            gastoData.descripcion,          // descripcion
-            gastoData.fechaGasto           // fecha_gasto
+            tipoGastoId,                    
+            parseFloat(gastoData.monto),    
+            10,                              
+            gastoData.descripcion,         
+            gastoData.fechaGasto,          
+            gastoData.proveedor            
         )
         
         console.log("📝 Resultado creación:", success)
@@ -372,9 +354,11 @@ Item {
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.actualizarGasto(
-            parseInt(gastoId),              // gasto_id
-            parseFloat(gastoData.monto),    // monto
-            tipoGastoId                     // tipo_gasto_id
+            parseInt(gastoId),              
+            parseFloat(gastoData.monto),   
+            tipoGastoId,                   
+            gastoData.descripcion,         
+            gastoData.proveedor           
         )
         
         console.log("✏️ Resultado actualización:", success)
@@ -669,12 +653,12 @@ Item {
                         anchors.margins: marginMedium
                         spacing: marginSmall
                         
-                        // ✅ PRIMER GRUPO DE FILTROS
+                        // ✅ FILTROS DE SERVICIOS BÁSICOS
                         Row {
                             spacing: marginSmall
                             
                             Label {
-                                text: "Filtrar por:"
+                                text: "Tipo Servicio:"
                                 font.bold: true
                                 font.pixelSize: fontBase
                                 color: textColor
@@ -682,15 +666,15 @@ Item {
                             }
                             
                             ComboBox {
-                                id: filtroTipoGasto
+                                id: filtroTipoServicio
                                 width: Math.max(160, screenWidth * 0.15)
-                                model: getTiposGastosNombres()
+                                model: getTiposServiciosNombres()
                                 currentIndex: 0
                                 onCurrentIndexChanged: onFiltroChanged()
                             }
                             
                             Label {
-                                text: "Fecha:"
+                                text: "Mes:"
                                 font.bold: true
                                 font.pixelSize: fontBase
                                 color: textColor
@@ -698,33 +682,65 @@ Item {
                             }
                             
                             ComboBox {
-                                id: filtroFecha
-                                width: Math.max(140, screenWidth * 0.14)
-                                model: ["Todas", "Este mes", "Mes anterior", "Últimos 3 meses"]
-                                currentIndex: 0
+                                id: filtroMes
+                                width: Math.max(120, screenWidth * 0.12)
+                                model: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                                        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                                currentIndex: new Date().getMonth()  // Mes actual
                                 onCurrentIndexChanged: onFiltroChanged()
                             }
-                        }
-                        
-                        // ✅ SEGUNDO GRUPO DE FILTROS
-                        Row {
-                            spacing: marginSmall
                             
-                            TextField {
-                                id: campoBusqueda
-                                width: Math.max(180, screenWidth * 0.18)
-                                placeholderText: "Buscar gasto..."
-                                onTextChanged: onFiltroChanged()
-                                
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: "#e0e0e0"
-                                    border.width: 1
-                                    radius: baseUnit * 0.2
-                                }
+                            Label {
+                                text: "Año:"
+                                font.bold: true
+                                font.pixelSize: fontBase
+                                color: textColor
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: filtroAño.visible
+                            }
+                            
+                            ComboBox {
+                                id: filtroAño
+                                width: Math.max(80, screenWidth * 0.08)
+                                model: getAñosDisponibles()
+                                currentIndex: 0  // Año actual
+                                onCurrentIndexChanged: onFiltroChanged()
+                                visible: model.length > 1  // Solo mostrar si hay más de un año
                             }
                         }
                     }
+                }
+                // ✅ FUNCIÓN PARA TIPOS DE SERVICIOS
+                function getTiposServiciosNombres() {
+                    var nombres = ["Todos los servicios"]
+                    for (var i = 0; i < tiposGastosModel.count; i++) {
+                        nombres.push(tiposGastosModel.get(i).nombre)
+                    }
+                    return nombres
+                }
+
+                // ✅ FUNCIÓN PARA AÑOS DISPONIBLES
+                function getAñosDisponibles() {
+                    var años = []
+                    var añoActual = new Date().getFullYear()
+                    
+                    // Verificar si hay datos de años anteriores
+                    var tieneAñosAnteriores = false
+                    for (var i = 0; i < gastosOriginales.length; i++) {
+                        var fechaGasto = new Date(gastosOriginales[i].fechaGasto)
+                        if (fechaGasto.getFullYear() < añoActual) {
+                            tieneAñosAnteriores = true
+                            break
+                        }
+                    }
+                    
+                    // Solo agregar años si hay datos históricos
+                    if (tieneAñosAnteriores) {
+                        años.push((añoActual - 1).toString())  // Año anterior
+                    }
+                    años.push(añoActual.toString())  // Año actual
+                    
+                    return años
                 }
             
                 // ✅ CONTENEDOR DE TABLA COMPLETAMENTE RESPONSIVO
@@ -773,7 +789,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.18
+                                    Layout.preferredWidth: parent.width * 0.16
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -789,7 +805,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.25
+                                    Layout.preferredWidth: parent.width * 0.22
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -821,7 +837,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.14
+                                    Layout.preferredWidth: parent.width * 0.12
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -829,7 +845,7 @@ Item {
                                     
                                     Label { 
                                         anchors.centerIn: parent
-                                        text: "FECHA GASTO"
+                                        text: "FECHA"
                                         font.bold: true
                                         font.pixelSize: fontSmall
                                         color: textColor
@@ -837,7 +853,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.17
+                                    Layout.preferredWidth: parent.width * 0.18
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -878,11 +894,11 @@ Item {
                             
                             ListView {
                                 id: gastosListView
-                                model: gastosPaginadosModel // ✅ CAMBIADO PARA USAR EL MODELO PAGINADO
+                                model: gastosPaginadosModel
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: Math.max(45, screenHeight * 0.06)  // Altura adaptable
+                                    height: Math.max(45, screenHeight * 0.06)
                                     color: {
                                         if (selectedRowIndex === index) return "#e3f2fd"
                                         return index % 2 === 0 ? "transparent" : "#fafafa"
@@ -894,6 +910,7 @@ Item {
                                         anchors.fill: parent
                                         spacing: 0
                                         
+                                        // ✅ COLUMNA ID - Mantiene el ancho actual
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.06
                                             Layout.fillHeight: true
@@ -910,8 +927,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA TIPO - Mantiene el ancho actual
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.18
+                                            Layout.preferredWidth: parent.width * 0.16
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -934,8 +952,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA DESCRIPCIÓN - Ahora campo real de la BD
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.25
+                                            Layout.preferredWidth: parent.width * 0.22
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -944,17 +963,18 @@ Item {
                                             Label { 
                                                 anchors.fill: parent
                                                 anchors.margins: marginSmall * 0.5
-                                                text: model.descripcion
+                                                text: model.descripcion || "Sin descripción"
                                                 color: textColor
                                                 font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA MONTO - Mantiene el ancho actual
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
@@ -964,7 +984,7 @@ Item {
                                             
                                             Label { 
                                                 anchors.centerIn: parent
-                                                text: "Bs" + model.monto
+                                                text: "Bs " + model.monto
                                                 color: {
                                                     var monto = parseFloat(model.monto)
                                                     if (monto > 1000) return dangerColor
@@ -976,8 +996,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA FECHA - Mantiene el ancho actual
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.14
+                                            Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -991,8 +1012,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA PROVEEDOR - Ahora campo directo de la BD
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.17
+                                            Layout.preferredWidth: parent.width * 0.18
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -1001,17 +1023,18 @@ Item {
                                             Label { 
                                                 anchors.fill: parent
                                                 anchors.margins: marginSmall * 0.25
-                                                text: model.proveedorEmpresa
+                                                text: model.proveedor || "Sin proveedor"
                                                 color: "#7f8c8d"
                                                 font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA REGISTRADO POR - Actualizada
                                         Rectangle {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
@@ -1022,14 +1045,14 @@ Item {
                                             Label { 
                                                 anchors.fill: parent
                                                 anchors.margins: marginSmall * 0.25
-                                                text: model.registradoPor || "Luis López"
+                                                text: model.registradoPor || "Usuario desconocido"
                                                 color: "#7f8c8d"
                                                 font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                             }
                                         }
                                     }
@@ -1042,7 +1065,7 @@ Item {
                                         }
                                     }
                                     
-                                    // ✅ BOTONES DE ACCIÓN ADAPTABLES
+                                    // ✅ BOTONES DE ACCIÓN - Mantienen la misma funcionalidad
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
@@ -1122,6 +1145,7 @@ Item {
                                     }
                                 }
                             }
+                                                    
                             
                             // ✅ ESTADO VACÍO PARA TABLA SIN DATOS
                             ColumnLayout {
@@ -1163,7 +1187,6 @@ Item {
                                         Layout.maximumWidth: 400
                                     }
                                 }
-                                
                                 Item { Layout.fillHeight: true }
                             }
                         }
@@ -1322,7 +1345,7 @@ Item {
                 descripcionField.text = gasto.descripcion
                 montoField.text = gasto.monto
                 fechaGastoField.text = gasto.fechaGasto
-                proveedorField.text = gasto.proveedorEmpresa
+                proveedorField.text = gasto.proveedor
             }
         }
         
@@ -1825,10 +1848,9 @@ Item {
     function limpiarFiltros() {
         console.log("🧹 Limpiando filtros...")
         
-        // Limpiar controles de filtros
-        filtroTipoGasto.currentIndex = 0
-        filtroFecha.currentIndex = 0
-        campoBusqueda.text = ""
+        filtroTipoServicio.currentIndex = 0
+        filtroMes.currentIndex = new Date().getMonth()
+        filtroAño.currentIndex = 0
         
         // Restaurar todos los datos originales
         gastosListModel.clear()

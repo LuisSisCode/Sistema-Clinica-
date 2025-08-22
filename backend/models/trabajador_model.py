@@ -112,9 +112,10 @@ class TrabajadorModel(QObject):
     
     # --- OPERACIONES CRUD TRABAJADORES ---
     
-    @Slot(str, str, str, int, result=bool)
+    @Slot(str, str, str, int, str, str, result=bool)
     def crearTrabajador(self, nombre: str, apellido_paterno: str, 
-                       apellido_materno: str, tipo_trabajador_id: int) -> bool:
+                   apellido_materno: str, tipo_trabajador_id: int,
+                   especialidad: str = "", matricula: str = "") -> bool:
         """Crea nuevo trabajador desde QML"""
         try:
             self._set_loading(True)
@@ -125,6 +126,14 @@ class TrabajadorModel(QObject):
                 apellido_materno=apellido_materno.strip(),
                 tipo_trabajador_id=tipo_trabajador_id
             )
+
+            # Actualizar especialidad y matrícula después de crear
+            if trabajador_id and (especialidad.strip() or matricula.strip()):
+                self.repository.update_worker(
+                    trabajador_id,
+                    especialidad=especialidad.strip() if especialidad.strip() else None,
+                    matricula=matricula.strip() if matricula.strip() else None
+                )
             
             if trabajador_id:
                 self._cargar_trabajadores()
@@ -150,11 +159,12 @@ class TrabajadorModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, str, str, str, int, result=bool)
+    @Slot(int, str, str, str, int, str, str, result=bool)
     def actualizarTrabajador(self, trabajador_id: int, nombre: str = "", 
                             apellido_paterno: str = "", apellido_materno: str = "",
-                            tipo_trabajador_id: int = 0) -> bool:
-        """Actualiza trabajador existente desde QML"""
+                            tipo_trabajador_id: int = 0, especialidad: str = "", 
+                            matricula: str = "") -> bool:
+        """Actualiza trabajador existente desde QML con todas las columnas"""
         try:
             self._set_loading(True)
             
@@ -168,6 +178,10 @@ class TrabajadorModel(QObject):
                 kwargs['apellido_materno'] = apellido_materno.strip()
             if tipo_trabajador_id > 0:
                 kwargs['tipo_trabajador_id'] = tipo_trabajador_id
+            if especialidad.strip():
+                kwargs['especialidad'] = especialidad.strip()
+            if matricula.strip():
+                kwargs['matricula'] = matricula.strip()
             
             success = self.repository.update_worker(trabajador_id, **kwargs)
             

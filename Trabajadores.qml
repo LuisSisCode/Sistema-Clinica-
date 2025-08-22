@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
+import ClinicaModels 1.0
 
 Item {
     id: trabajadoresRoot
@@ -29,16 +30,61 @@ Item {
     readonly property color lineColor: "#D1D5DB" // Color para líneas verticales
     readonly property color violetColor: "#9b59b6"
     readonly property color infoColor: "#17a2b8"
-    
+
+    // ===== MODELO DE DATOS REAL =====
+    TrabajadorModel {
+        id: trabajadorModel
+        
+        onTrabajadoresChanged: {
+            console.log("✅ Trabajadores actualizados desde BD:", trabajadorModel.totalTrabajadores)
+            aplicarFiltros()
+        }
+        
+        onTiposTrabajadorChanged: {
+            console.log("🏷️ Tipos de trabajador actualizados:", trabajadorModel.tiposTrabajador.length)
+            filtroTipo.model = getTiposTrabajadoresNombres()
+            tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
+        }
+        
+        onTrabajadorCreado: function(success, message) {
+            if (success) {
+                showNewWorkerDialog = false
+                selectedRowIndex = -1
+                isEditMode = false
+                editingIndex = -1
+            }
+            console.log("Trabajador creado:", success, message)
+        }
+        
+        onTrabajadorActualizado: function(success, message) {
+            if (success) {
+                showNewWorkerDialog = false
+                selectedRowIndex = -1
+                isEditMode = false
+                editingIndex = -1
+            }
+            console.log("Trabajador actualizado:", success, message)
+        }
+        
+        onTrabajadorEliminado: function(success, message) {
+            if (success) {
+                selectedRowIndex = -1
+            }
+            console.log("Trabajador eliminado:", success, message)
+        }
+        
+        onErrorOccurred: function(title, message) {
+            console.error("Error en TrabajadorModel:", title, message)
+        }
+    }
+        
     // ===== PROPIEDADES PARA DIÁLOGOS =====
     property bool showNewWorkerDialog: false
-    // ===== PASO 3a: ELIMINADA PROPIEDAD showConfigTiposDialog =====
-    // property bool showConfigTiposDialog: false  // REMOVIDO
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
     
-    // ===== PASO 3c: NUEVA SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
+    // ===== SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
     signal irAConfigPersonal()
     
     // Distribución de columnas responsive
@@ -48,97 +94,25 @@ Item {
     readonly property real colEspecialidad: 0.20
     readonly property real colMatricula: 0.15
     readonly property real colFecha: 0.10
-    
-    // ===== MODELO DE TIPOS DE TRABAJADORES =====
-    ListModel {
-        id: tiposTrabajadoresModel
-        
-        Component.onCompleted: {
-            append({
-                nombre: "Médico General", 
-                descripcion: "Profesional médico con título universitario en medicina",
-                requiereMatricula: true,
-                especialidades: ["Medicina General", "Medicina Familiar"]
-            })
-            append({
-                nombre: "Médico Especialista", 
-                descripcion: "Médico con especialización en área específica",
-                requiereMatricula: true,
-                especialidades: ["Cardiología", "Pediatría", "Ginecología", "Traumatología", "Neurología"]
-            })
-            append({
-                nombre: "Enfermero(a)", 
-                descripcion: "Profesional de enfermería licenciado",
-                requiereMatricula: true,
-                especialidades: ["Enfermería General", "Enfermería Quirúrgica", "Enfermería Pediátrica"]
-            })
-            append({
-                nombre: "Laboratorista", 
-                descripcion: "Técnico especializado en análisis de laboratorio",
-                requiereMatricula: true,
-                especialidades: ["Laboratorio Clínico", "Microbiología", "Hematología"]
-            })
-            append({
-                nombre: "Administrativo", 
-                descripcion: "Personal de administración y gestión",
-                requiereMatricula: false,
-                especialidades: ["Recursos Humanos", "Contabilidad", "Recepción", "Archivo"]
-            })
-        }
-    }
 
     // ===== FUNCIONES HELPER =====
     function getTiposTrabajadoresNombres() {
         var nombres = ["Todos los tipos"]
-        for (var i = 0; i < tiposTrabajadoresModel.count; i++) {
-            nombres.push(tiposTrabajadoresModel.get(i).nombre)
+        var tipos = trabajadorModel.tiposTrabajador
+        for (var i = 0; i < tipos.length; i++) {
+            nombres.push(tipos[i].Tipo)
         }
         return nombres
     }
 
     function getTiposTrabajadoresParaCombo() {
         var nombres = ["Seleccionar tipo..."]
-        for (var i = 0; i < tiposTrabajadoresModel.count; i++) {
-            nombres.push(tiposTrabajadoresModel.get(i).nombre)
+        var tipos = trabajadorModel.tiposTrabajador
+        for (var i = 0; i < tipos.length; i++) {
+            nombres.push(tipos[i].Tipo)
         }
         return nombres
     }
-
-    // ===== MODELO PARA TRABAJADORES EXISTENTES =====
-    property var trabajadoresModel: [
-        {
-            trabajadorId: "1",
-            nombreCompleto: "Dr. Juan Carlos Mendoza",
-            tipoTrabajador: "Médico Especialista",
-            especialidad: "Cardiología",
-            matricula: "MED-001-2020",
-            fechaRegistro: "2025-01-15"
-        },
-        {
-            trabajadorId: "2",
-            nombreCompleto: "Lic. María Elena Vargas",
-            tipoTrabajador: "Enfermero(a)",
-            especialidad: "Enfermería General",
-            matricula: "ENF-045-2021",
-            fechaRegistro: "2025-02-10"
-        },
-        {
-            trabajadorId: "3",
-            nombreCompleto: "Dra. Ana Patricia Silva",
-            tipoTrabajador: "Médico General",
-            especialidad: "Medicina General",
-            matricula: "MED-032-2019",
-            fechaRegistro: "2025-01-08"
-        },
-        {
-            trabajadorId: "4",
-            nombreCompleto: "Sr. Roberto García",
-            tipoTrabajador: "Administrativo",
-            especialidad: "Recepción",
-            matricula: "",
-            fechaRegistro: "2025-03-01"
-        }
-    ]
 
     // MODELOS
     ListModel {
@@ -757,9 +731,9 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                trabajadoresListModel.remove(index)
-                                                selectedRowIndex = -1
-                                                console.log("Trabajador eliminado en índice:", index)
+                                                var trabajadorData = trabajadoresListModel.get(index)
+                                                var trabajadorId = parseInt(trabajadorData.trabajadorId)
+                                                trabajadorModel.eliminarTrabajador(trabajadorId)
                                             }
                                         }
                                     }
@@ -777,33 +751,54 @@ Item {
         trabajadoresListModel.clear()
         
         var textoBusqueda = campoBusqueda.text.toLowerCase()
+        var tipoSeleccionado = filtroTipo.currentIndex
         
-        for (var i = 0; i < trabajadoresModel.length; i++) {
-            var trabajador = trabajadoresModel[i]
+        // Obtener trabajadores desde el modelo
+        var trabajadores = trabajadorModel.trabajadores
+        
+        for (var i = 0; i < trabajadores.length; i++) {
+            var trabajador = trabajadores[i]
             var mostrar = true
             
             // Filtro por tipo
-            if (filtroTipo.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipo.model[filtroTipo.currentIndex]
-                if (trabajador.tipoTrabajador !== tipoSeleccionado) {
+            if (tipoSeleccionado > 0 && mostrar) {
+                var tipoNombre = filtroTipo.model[tipoSeleccionado]
+                if (trabajador.tipo_nombre !== tipoNombre) {
                     mostrar = false
                 }
             }
             
-            // Búsqueda por texto en nombre
+            // Búsqueda por texto en nombre, especialidad o matrícula
             if (textoBusqueda.length > 0 && mostrar) {
-                if (!trabajador.nombreCompleto.toLowerCase().includes(textoBusqueda)) {
+                var nombreCompleto = trabajador.nombre_completo || 
+                                    (trabajador.Nombre + " " + trabajador.Apellido_Paterno + " " + trabajador.Apellido_Materno)
+                var especialidad = trabajador.Especialidad || ""
+                var matricula = trabajador.Matricula || ""
+                
+                if (!nombreCompleto.toLowerCase().includes(textoBusqueda) &&
+                    !especialidad.toLowerCase().includes(textoBusqueda) &&
+                    !matricula.toLowerCase().includes(textoBusqueda)) {
                     mostrar = false
                 }
             }
             
             if (mostrar) {
-                trabajadoresListModel.append(trabajador)
+                // Formatear datos para la vista con datos reales
+                var trabajadorFormateado = {
+                    trabajadorId: trabajador.id.toString(),
+                    nombreCompleto: trabajador.nombre_completo || 
+                                (trabajador.Nombre + " " + trabajador.Apellido_Paterno + " " + trabajador.Apellido_Materno),
+                    tipoTrabajador: trabajador.tipo_nombre,
+                    especialidad: trabajador.Especialidad || "Sin especialidad",
+                    matricula: trabajador.Matricula || "Sin matrícula",
+                    fechaRegistro: new Date().toISOString().split('T')[0]
+                }
+                trabajadoresListModel.append(trabajadorFormateado)
             }
         }
     }
 
-    // ===== DIÁLOGOS (MANTENGO LA FUNCIONALIDAD ORIGINAL PERO CON MEDIDAS RESPONSIVAS) =====
+    // ===== DIÁLOGOS =====
     
     // Fondo del diálogo
     Rectangle {
@@ -826,12 +821,12 @@ Item {
         }
     }
     
-    // Diálogo del formulario (continúa igual pero con medidas responsivas)
+    // Diálogo del formulario
     Rectangle {
         id: workerForm
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.8, 600)
-        height: Math.min(parent.height * 0.8, 550)
+        height: Math.min(parent.height * 0.8, 600)
         color: whiteColor
         radius: baseUnit * 2
         border.color: lightGrayColor
@@ -843,29 +838,30 @@ Item {
         // Función para cargar datos en modo edición
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
-                var trabajador = trabajadoresListModel.get(editingIndex)
+                var trabajadorData = trabajadoresListModel.get(editingIndex)
+                var trabajadorId = parseInt(trabajadorData.trabajadorId)
                 
-                // Extraer nombres del trabajador completo
-                var nombreCompleto = trabajador.nombreCompleto.split(" ")
-                nombreTrabajador.text = nombreCompleto[0] || ""
-                apellidoPaterno.text = nombreCompleto[1] || ""
-                apellidoMaterno.text = nombreCompleto.slice(2).join(" ") || ""
+                // Obtener datos completos del modelo
+                var trabajadorCompleto = trabajadorModel.obtenerTrabajadorPorId(trabajadorId)
                 
-                // Buscar el tipo de trabajador correspondiente
-                var tipoTrabajadorNombre = trabajador.tipoTrabajador
-                for (var i = 0; i < tiposTrabajadoresModel.count; i++) {
-                    if (tiposTrabajadoresModel.get(i).nombre === tipoTrabajadorNombre) {
-                        tipoTrabajadorCombo.currentIndex = i + 1
-                        workerForm.selectedTipoTrabajadorIndex = i
-                        break
+                if (trabajadorCompleto && Object.keys(trabajadorCompleto).length > 0) {
+                    // Cargar datos de forma segura
+                    if (nombreTrabajador) nombreTrabajador.text = trabajadorCompleto.Nombre || ""
+                    if (apellidoPaterno) apellidoPaterno.text = trabajadorCompleto.Apellido_Paterno || ""
+                    if (apellidoMaterno) apellidoMaterno.text = trabajadorCompleto.Apellido_Materno || ""
+                    if (especialidadField) especialidadField.text = trabajadorCompleto.Especialidad || ""
+                    if (matriculaField) matriculaField.text = trabajadorCompleto.Matricula || ""
+                    
+                    // Buscar el tipo de trabajador correspondiente
+                    var tipos = trabajadorModel.tiposTrabajador
+                    for (var i = 0; i < tipos.length; i++) {
+                        if (tipos[i].id === trabajadorCompleto.Id_Tipo_Trabajador) {
+                            tipoTrabajadorCombo.currentIndex = i + 1
+                            workerForm.selectedTipoTrabajadorIndex = i
+                            break
+                        }
                     }
                 }
-                
-                // Cargar especialidad
-                especialidadCombo.editText = trabajador.especialidad
-                
-                // Cargar matrícula
-                matriculaField.text = trabajador.matricula || ""
             }
         }
         
@@ -873,14 +869,16 @@ Item {
             if (visible && isEditMode) {
                 loadEditData()
             } else if (visible && !isEditMode) {
-                // Limpiar formulario para nuevo trabajador
-                nombreTrabajador.text = ""
-                apellidoPaterno.text = ""
-                apellidoMaterno.text = ""
-                tipoTrabajadorCombo.currentIndex = 0
-                tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
-                especialidadCombo.currentIndex = 0
-                matriculaField.text = ""
+                // Limpiar formulario de forma segura
+                if (nombreTrabajador) nombreTrabajador.text = ""
+                if (apellidoPaterno) apellidoPaterno.text = ""
+                if (apellidoMaterno) apellidoMaterno.text = ""
+                if (especialidadField) especialidadField.text = ""
+                if (matriculaField) matriculaField.text = ""
+                if (tipoTrabajadorCombo) {
+                    tipoTrabajadorCombo.currentIndex = 0
+                    tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
+                }
                 workerForm.selectedTipoTrabajadorIndex = -1
             }
         }
@@ -992,18 +990,8 @@ Item {
                             onCurrentIndexChanged: {
                                 if (currentIndex > 0) {
                                     workerForm.selectedTipoTrabajadorIndex = currentIndex - 1
-                                    var tipoTrabajador = tiposTrabajadoresModel.get(workerForm.selectedTipoTrabajadorIndex)
-                                    
-                                    // Actualizar especialidades disponibles
-                                    especialidadCombo.model = tipoTrabajador.especialidades
-                                    especialidadCombo.currentIndex = 0
-                                    
-                                    // Mostrar/ocultar campo matrícula
-                                    matriculaRow.visible = tipoTrabajador.requiereMatricula
                                 } else {
                                     workerForm.selectedTipoTrabajadorIndex = -1
-                                    especialidadCombo.model = []
-                                    matriculaRow.visible = false
                                 }
                             }
                         }
@@ -1018,11 +1006,16 @@ Item {
                             font.bold: true
                             color: textColor
                         }
-                        ComboBox {
-                            id: especialidadCombo
+                        TextField {
+                            id: especialidadField
                             Layout.fillWidth: true
-                            editable: true
-                            model: []
+                            placeholderText: "Especialidad del trabajador"
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: lightGrayColor
+                                border.width: 1
+                                radius: 6
+                            }
                         }
                     }
                     
@@ -1030,7 +1023,7 @@ Item {
                     RowLayout {
                         id: matriculaRow
                         Layout.fillWidth: true
-                        visible: false
+                        visible: true
                         Label {
                             Layout.preferredWidth: 120
                             text: "Matrícula:"
@@ -1040,7 +1033,7 @@ Item {
                         TextField {
                             id: matriculaField
                             Layout.fillWidth: true
-                            placeholderText: "Número de matrícula profesional"
+                            placeholderText: "Número de matrícula profesional (opcional)"
                             background: Rectangle {
                                 color: whiteColor
                                 border.color: lightGrayColor
@@ -1094,64 +1087,75 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        // Crear datos de trabajador
-                        var nombreCompleto = nombreTrabajador.text + " " + 
-                                           apellidoPaterno.text + " " + 
-                                           apellidoMaterno.text
+                        // Obtener valores de forma segura
+                        var nombre = nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
+                        var apellidoPat = apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
+                        var apellidoMat = apellidoMaterno.text ? apellidoMaterno.text.trim() : ""
+                        var especialidad = especialidadField.text ? especialidadField.text.trim() : ""
+                        var matricula = matriculaField.text ? matriculaField.text.trim() : ""
                         
-                        var tipoTrabajador = tiposTrabajadoresModel.get(workerForm.selectedTipoTrabajadorIndex)
-                        
-                        var trabajadorData = {
-                            nombreCompleto: nombreCompleto.trim(),
-                            tipoTrabajador: tipoTrabajador.nombre,
-                            especialidad: especialidadCombo.editText || especialidadCombo.currentText,
-                            matricula: tipoTrabajador.requiereMatricula ? matriculaField.text : "",
-                            fechaRegistro: new Date().toISOString().split('T')[0]
+                        // Validaciones
+                        if (!nombre || nombre === "") {
+                            console.log("❌ Falta el nombre")
+                            return
                         }
+                        
+                        if (!apellidoPat || apellidoPat === "") {
+                            console.log("❌ Falta el apellido paterno")
+                            return
+                        }
+                        
+                        if (workerForm.selectedTipoTrabajadorIndex < 0) {
+                            console.log("❌ Falta seleccionar tipo de trabajador")
+                            return
+                        }
+                        
+                        // Obtener ID del tipo de trabajador
+                        var tipoTrabajadorId = trabajadorModel.tiposTrabajador[workerForm.selectedTipoTrabajadorIndex].id
+                        
+                        console.log("📝 Datos a guardar:", {
+                            nombre: nombre,
+                            apellidoPaterno: apellidoPat,
+                            apellidoMaterno: apellidoMat,
+                            tipoTrabajadorId: tipoTrabajadorId,
+                            especialidad: especialidad,
+                            matricula: matricula
+                        })
                         
                         if (isEditMode && editingIndex >= 0) {
-                            // Actualizar trabajador existente - mantener el ID original
-                            var trabajadorExistente = trabajadoresListModel.get(editingIndex)
-                            trabajadorData.trabajadorId = trabajadorExistente.trabajadorId
+                            // Actualizar trabajador existente
+                            var trabajadorData = trabajadoresListModel.get(editingIndex)
+                            var trabajadorId = parseInt(trabajadorData.trabajadorId)
                             
-                            trabajadoresListModel.set(editingIndex, trabajadorData)
-                            console.log("Trabajador actualizado:", JSON.stringify(trabajadorData))
+                            trabajadorModel.actualizarTrabajador(
+                                trabajadorId,
+                                nombre,
+                                apellidoPat, 
+                                apellidoMat,
+                                tipoTrabajadorId,
+                                especialidad,
+                                matricula
+                            )
                         } else {
-                            // Crear nuevo trabajador con nuevo ID
-                            trabajadorData.trabajadorId = (trabajadoresListModel.count + 1).toString()
-                            trabajadoresListModel.append(trabajadorData)
-                            console.log("Nuevo trabajador guardado:", JSON.stringify(trabajadorData))
+                            // Crear nuevo trabajador
+                            trabajadorModel.crearTrabajador(
+                                nombre,
+                                apellidoPat,
+                                apellidoMat,
+                                tipoTrabajadorId,
+                                especialidad,
+                                matricula
+                            )
                         }
-                        
-                        // Actualizar filtros después de agregar/editar
-                        filtroTipo.model = getTiposTrabajadoresNombres()
-                        
-                        // Limpiar y cerrar
-                        showNewWorkerDialog = false
-                        selectedRowIndex = -1
-                        isEditMode = false
-                        editingIndex = -1
                     }
                 }
             }
         }
     }
 
-    // ===== PASO 3b: REMOVIDOS POR COMPLETO LOS RECTÁNGULOS DEL DIÁLOGO DE CONFIGURACIÓN =====
-    // Los siguientes elementos han sido completamente eliminados:
-    // - configTiposBackground
-    // - configTiposDialog
-    // Y toda su lógica asociada
-
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("👥 Módulo Trabajadores iniciado")
-        
-        for (var i = 0; i < trabajadoresModel.length; i++) {
-            trabajadoresListModel.append(trabajadoresModel[i])
-        }
-        
-        console.log("✅ Trabajadores cargados:", trabajadoresModel.length)
+        console.log("💥 Módulo Trabajadores iniciado")
         console.log("🔗 Señal irAConfigPersonal configurada para navegación")
     }
 }
