@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
+import Clinica.Models 1.0
 
 Item {
     id: laboratorioRoot
@@ -52,62 +53,44 @@ Item {
     readonly property real colRegistradoPor: 0.15
     readonly property real colFecha: 0.06
 
-    // Modelo de tipos de análisis
-    property var tiposAnalisis: [
-        { 
-            nombre: "Hemograma Completo", 
-            detalles: "Análisis completo de células sanguíneas, incluye recuento de glóbulos rojos, blancos y plaquetas",
-            precioNormal: 25.0,
-            precioEmergencia: 45.0
-        },
-        { 
-            nombre: "Glucosa en Sangre", 
-            detalles: "Medición de niveles de glucosa en sangre en ayunas",
-            precioNormal: 15.0,
-            precioEmergencia: 25.0
-        },
-        { 
-            nombre: "Perfil Lipídico", 
-            detalles: "Evaluación de colesterol total, HDL, LDL y triglicéridos",
-            precioNormal: 35.0,
-            precioEmergencia: 55.0
-        },
-        { 
-            nombre: "Examen General de Orina", 
-            detalles: "Análisis físico, químico y microscópico de orina",
-            precioNormal: 18.0,
-            precioEmergencia: 28.0
-        },
-        { 
-            nombre: "Proteína C Reactiva", 
-            detalles: "Marcador de inflamación e infección",
-            precioNormal: 22.0,
-            precioEmergencia: 35.0
-        },
-        { 
-            nombre: "Creatinina", 
-            detalles: "Evaluación de función renal",
-            precioNormal: 20.0,
-            precioEmergencia: 32.0
-        },
-        { 
-            nombre: "Ácido Úrico", 
-            detalles: "Medición de niveles de ácido úrico en sangre",
-            precioNormal: 18.0,
-            precioEmergencia: 28.0
+    property var tiposAnalisisDB: []
+    property var trabajadoresDB: []
+
+    // MODELO DE LABORATORIO PYTHON
+    LaboratorioModel {
+        id: laboratorioModel
+        
+        // Conectar señales del modelo
+        onExamenesActualizados: {
+            console.log("📊 Exámenes actualizados desde base de datos")
+            cargarDatosDesdeModelo()
         }
-    ]
-
-    // Modelo de trabajadores de laboratorio
-    property var trabajadoresLab: [
-        "Lic. Carmen Ruiz",
-        "Lic. Roberto Silva", 
-        "Lic. Ana Martínez",
-        "Lic. Pedro González"
-    ]
-
-    // Datos de ejemplo ampliados
-    property var analisisModelData: []
+        
+        onOperacionExitosa: function(mensaje) {
+            console.log("✅", mensaje)
+            showSuccessMessage(mensaje)
+        }
+        
+        onErrorOcurrido: function(mensaje, codigo) {
+            console.error("❌", mensaje, codigo)
+            showErrorMessage(mensaje)
+        }
+        
+        onExamenCreado: function(datos) {
+            console.log("🆕 Examen creado:", datos)
+            cargarDatosDesdeModelo()
+        }
+        
+        onExamenActualizado: function(datos) {
+            console.log("🔄 Examen actualizado:", datos)
+            cargarDatosDesdeModelo()
+        }
+        
+        onExamenEliminado: function(examenId) {
+            console.log("🗑️ Examen eliminado:", examenId)
+            cargarDatosDesdeModelo()
+        }
+    }
 
     // Modelos
     ListModel {
@@ -859,26 +842,16 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                var analisisId = model.analisisId
+                                                var analisisId = parseInt(model.analisisId)
+                                                var exito = laboratorioModel.eliminarExamen(analisisId)
                                                 
-                                                for (var i = 0; i < analisisListModel.count; i++) {
-                                                    if (analisisListModel.get(i).analisisId === analisisId) {
-                                                        analisisListModel.remove(i)
-                                                        break
-                                                    }
+                                                if (exito) {
+                                                    selectedRowIndex = -1
+                                                    console.log("✅ Análisis eliminado exitosamente:", analisisId)
+                                                } else {
+                                                    console.error("❌ Error eliminando análisis:", analisisId)
                                                 }
-                                                
-                                                for (var j = 0; j < analisisOriginales.length; j++) {
-                                                    if (analisisOriginales[j].analisisId === analisisId) {
-                                                        analisisOriginales.splice(j, 1)
-                                                        break
-                                                    }
-                                                }
-                                                
-                                                selectedRowIndex = -1
-                                                updatePaginatedModel()
-                                                console.log("Análisis eliminado ID:", analisisId)
-                                            }
+}
                                         }
                                     }
                                 }
@@ -1034,8 +1007,8 @@ Item {
                 apellidoMaterno.text = nombreCompleto.slice(2).join(" ") || ""
                 
                 var tipoAnalisisNombre = analisis.tipoAnalisis
-                for (var i = 0; i < tiposAnalisis.length; i++) {
-                    if (tiposAnalisis[i].nombre === tipoAnalisisNombre) {
+                for (var i = 0; i < tiposAnalisisDB.length; i++) {  // CAMBIAR AQUÍ
+                    if (tiposAnalisisDB[i].nombre === tipoAnalisisNombre) {  // CAMBIAR AQUÍ
                         tipoAnalisisCombo.currentIndex = i + 1
                         labTestForm.selectedTipoAnalisisIndex = i
                         break
@@ -1052,8 +1025,8 @@ Item {
                 
                 labTestForm.calculatedPrice = parseFloat(analisis.precio)
                 
-                for (var j = 0; j < trabajadoresLab.length; j++) {
-                    if (trabajadoresLab[j] === analisis.trabajadorAsignado) {
+                for (var j = 0; j < trabajadoresDB.length; j++) {  // CAMBIAR AQUÍ
+                    if (trabajadoresDB[j] === analisis.trabajadorAsignado) {  // CAMBIAR AQUÍ
                         trabajadorCombo.currentIndex = j + 1
                         break
                     }
@@ -1207,15 +1180,15 @@ Item {
                     Layout.preferredHeight: baseUnit * 4
                     model: {
                         var list = ["Seleccionar tipo de análisis..."]
-                        for (var i = 0; i < tiposAnalisis.length; i++) {
-                            list.push(tiposAnalisis[i].nombre)
+                        for (var i = 0; i < tiposAnalisisDB.length; i++) {
+                            list.push(tiposAnalisisDB[i].nombre)
                         }
                         return list
                     }
                     onCurrentIndexChanged: {
                         if (currentIndex > 0) {
                             labTestForm.selectedTipoAnalisisIndex = currentIndex - 1
-                            var tipoAnalisis = tiposAnalisis[labTestForm.selectedTipoAnalisisIndex]
+                            var tipoAnalisis = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex]  // CAMBIAR AQUÍ
                             if (labTestForm.analisisType === "Normal") {
                                 labTestForm.calculatedPrice = tipoAnalisis.precioNormal
                             } else {
@@ -1225,7 +1198,7 @@ Item {
                             labTestForm.selectedTipoAnalisisIndex = -1
                             labTestForm.calculatedPrice = 0.0
                         }
-                    }
+        }
                     
                     contentItem: Label {
                         text: tipoAnalisisCombo.displayText
@@ -1258,7 +1231,7 @@ Item {
                         if (checked) {
                             labTestForm.analisisType = "Normal"
                             if (labTestForm.selectedTipoAnalisisIndex >= 0) {
-                                var tipoAnalisis = tiposAnalisis[labTestForm.selectedTipoAnalisisIndex]
+                                var tipoAnalisis = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex]  // CAMBIAR AQUÍ
                                 labTestForm.calculatedPrice = tipoAnalisis.precioNormal
                             }
                         }
@@ -1281,7 +1254,7 @@ Item {
                         if (checked) {
                             labTestForm.analisisType = "Emergencia"
                             if (labTestForm.selectedTipoAnalisisIndex >= 0) {
-                                var tipoAnalisis = tiposAnalisis[labTestForm.selectedTipoAnalisisIndex]
+                                var tipoAnalisis = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex]  // CAMBIAR AQUÍ
                                 labTestForm.calculatedPrice = tipoAnalisis.precioEmergencia
                             }
                         }
@@ -1315,8 +1288,8 @@ Item {
                     Layout.preferredHeight: baseUnit * 4
                     model: {
                         var list = ["Seleccionar trabajador..."]
-                        for (var i = 0; i < trabajadoresLab.length; i++) {
-                            list.push(trabajadoresLab[i])
+                        for (var i = 0; i < trabajadoresDB.length; i++) {
+                            list.push(trabajadoresDB[i])
                         }
                         list.push("Sin asignar")
                         return list
@@ -1440,49 +1413,60 @@ Item {
                     }
                     onClicked: {
                         var nombreCompleto = nombrePaciente.text + " " + 
-                                           apellidoPaterno.text + " " + 
-                                           apellidoMaterno.text
-                        
-                        var tipoAnalisis = tiposAnalisis[labTestForm.selectedTipoAnalisisIndex]
-                        var trabajadorSeleccionado = trabajadorCombo.currentIndex > 0 && trabajadorCombo.currentIndex <= trabajadoresLab.length ?
-                                                   trabajadoresLab[trabajadorCombo.currentIndex - 1] : ""
-                        
-                        var analisisData = {
-                            paciente: nombreCompleto.trim(),
-                            tipoAnalisis: tipoAnalisis.nombre,
-                            detalles: tipoAnalisis.detalles,
-                            tipo: labTestForm.analisisType,
-                            precio: labTestForm.calculatedPrice.toFixed(2),
-                            trabajadorAsignado: trabajadorSeleccionado,
-                            fecha: new Date().toISOString().split('T')[0],
-                            registradoPor: "Luis López"
-                        }
+                                        apellidoPaterno.text + " " + 
+                                        apellidoMaterno.text
                         
                         if (isEditMode && editingIndex >= 0) {
+                            // Actualizar examen existente
                             var analisisExistente = analisisListModel.get(editingIndex)
-                            analisisData.analisisId = analisisExistente.analisisId
+                            var resultado = laboratorioModel.actualizarExamen(
+                                parseInt(analisisExistente.analisisId),
+                                tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].nombre,
+                                labTestForm.analisisType === "Normal" ? labTestForm.calculatedPrice : 0,
+                                labTestForm.analisisType === "Emergencia" ? labTestForm.calculatedPrice : 0,
+                                detallesConsulta.text,
+                                trabajadorCombo.currentIndex > 0 && trabajadorCombo.currentIndex <= trabajadoresDB.length ? 
+                                    trabajadorCombo.currentIndex : 0
+                            )
                             
-                            analisisListModel.set(editingIndex, analisisData)
-                            
-                            for (var i = 0; i < analisisOriginales.length; i++) {
-                                if (analisisOriginales[i].analisisId === analisisData.analisisId) {
-                                    analisisOriginales[i] = analisisData
-                                    break
-                                }
+                            var data = JSON.parse(resultado)
+                            if (data.exito) {
+                                console.log("✅ Examen actualizado exitosamente")
+                            } else {
+                                console.error("❌ Error actualizando:", data.error)
                             }
-                            
-                            console.log("Análisis actualizado:", JSON.stringify(analisisData))
                         } else {
-                            analisisData.analisisId = (getTotalLaboratorioCount() + 1).toString()
+                            // Crear nuevo examen
+                            // Primero necesitamos crear el paciente si no existe
+                            // Por simplicidad, asumimos que existe un paciente con ID 1
+                            // En producción deberías tener un selector de pacientes
+                            var pacienteId = 1  
                             
-                            analisisListModel.append(analisisData)
-                            analisisOriginales.push(analisisData)
+                            var resultado = laboratorioModel.crearExamen(
+                                tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].nombre,
+                                pacienteId,
+                                labTestForm.analisisType === "Normal" ? labTestForm.calculatedPrice : labTestForm.calculatedPrice / 1.5,
+                                labTestForm.analisisType === "Emergencia" ? labTestForm.calculatedPrice : labTestForm.calculatedPrice * 1.5,
+                                detallesConsulta.text,
+                                trabajadorCombo.currentIndex > 0 && trabajadorCombo.currentIndex <= trabajadoresDB.length ? 
+                                    trabajadorCombo.currentIndex : 0
+                            )
                             
-                            console.log("Nuevo análisis guardado:", JSON.stringify(analisisData))
+                            var data = JSON.parse(resultado)
+                            if (data.exito) {
+                                console.log("✅ Examen creado exitosamente:", data.examen_id)
+                            } else {
+                                console.error("❌ Error creando:", data.error)
+                            }
                         }
                         
-                        updatePaginatedModel()
+                        // Cerrar diálogo
+                        showNewLabTestDialog = false
+                        selectedRowIndex = -1
+                        isEditMode = false
+                        editingIndex = -1
                         
+                        // Limpiar campos
                         nombrePaciente.text = ""
                         apellidoPaterno.text = ""
                         apellidoMaterno.text = ""
@@ -1490,10 +1474,6 @@ Item {
                         tipoAnalisisCombo.currentIndex = 0
                         trabajadorCombo.currentIndex = 0
                         normalRadio.checked = true
-                        showNewLabTestDialog = false
-                        selectedRowIndex = -1
-                        isEditMode = false
-                        editingIndex = -1
                     }
                 }
             }
@@ -1594,14 +1574,128 @@ Item {
     Component.onCompleted: {
         console.log("🧪 Módulo Laboratorio iniciado")
         
-        for (var i = 0; i < analisisModelData.length; i++) {
-            analisisOriginales.push(analisisModelData[i])
-            analisisListModel.append(analisisModelData[i])
-        }
+        // Cargar datos desde el modelo Python
+        laboratorioModel.cargarExamenes()
+        laboratorioModel.cargarTiposAnalisis()
+        laboratorioModel.cargarTrabajadores()
         
-        updatePaginatedModel()
+        // Cargar datos iniciales
+        cargarTiposAnalisisDB()
+        cargarTrabajadoresDB()
+        cargarDatosDesdeModelo()
         
-        console.log("✅ Análisis cargados:", analisisOriginales.length)
         console.log("📱 Elementos por página calculados:", itemsPerPageLaboratorio)
+    }
+
+    function cargarDatosDesdeModelo() {
+        try {
+            // Cargar exámenes
+            var examenesJson = laboratorioModel.examenesJson
+            console.log("🔍 JSON recibido:", examenesJson)
+            
+            var examenes = JSON.parse(examenesJson)
+            console.log("🔍 Exámenes parseados:", examenes.length)
+            
+            analisisOriginales = []
+            analisisListModel.clear()
+            
+            for (var i = 0; i < examenes.length; i++) {
+                var examen = examenes[i]
+                console.log("🔍 Procesando examen:", JSON.stringify(examen))
+                
+                var analisisItem = {
+                    analisisId: (examen.id || i + 1).toString(),
+                    paciente: examen.paciente_completo || "Paciente Desconocido",
+                    tipoAnalisis: examen.Nombre || "Análisis General",
+                    detalles: examen.Detalles || "Sin detalles",
+                    tipo: (examen.Precio_Emergencia > examen.Precio_Normal) ? "Emergencia" : "Normal",
+                    precio: (examen.Precio_Normal || 0).toFixed(2),
+                    trabajadorAsignado: (examen.trabajador_completo && examen.trabajador_completo !== "Sin asignar") ? 
+                                    examen.trabajador_completo : "",
+                    fecha: new Date().toISOString().split('T')[0],
+                    registradoPor: "Usuario Sistema"
+                }
+                
+                console.log("✅ Item creado:", JSON.stringify(analisisItem))
+                analisisOriginales.push(analisisItem)
+                analisisListModel.append(analisisItem)
+            }
+            
+            updatePaginatedModel()
+            console.log("📊 Datos cargados desde BD:", analisisOriginales.length, "exámenes")
+            
+        } catch (error) {
+            console.error("❌ Error cargando datos:", error)
+            console.error("❌ JSON problemático:", laboratorioModel.examenesJson)
+        }
+    }
+
+    function cargarTiposAnalisisDB() {
+        try {
+            var resultado = laboratorioModel.obtenerTiposExamenesComunes()
+            console.log("🔍 Resultado tipos análisis:", resultado)
+            
+            var data = JSON.parse(resultado)
+            
+            if (data.exito && data.tipos) {
+                tiposAnalisisDB = data.tipos.map(function(tipo) {
+                    return {
+                        nombre: tipo.tipo_examen || tipo.Nombre || "Análisis Genérico",
+                        detalles: "Análisis de laboratorio",
+                        precioNormal: tipo.precio_promedio || tipo.precio_promedio_normal || 50.0,
+                        precioEmergencia: (tipo.precio_promedio || tipo.precio_promedio_normal || 50.0) * 1.5
+                    }
+                })
+                console.log("✅ Tipos análisis cargados:", tiposAnalisisDB.length)
+            } else {
+                console.log("⚠️ No se pudieron cargar tipos, usando fallback")
+                tiposAnalisisDB = [
+                    { nombre: "Hemograma Completo", detalles: "Análisis completo de sangre", precioNormal: 85.0, precioEmergencia: 130.0 },
+                    { nombre: "Glucosa en Ayunas", detalles: "Determinación de glucosa sérica", precioNormal: 40.0, precioEmergencia: 60.0 },
+                    { nombre: "Perfil Lipídico", detalles: "Colesterol total, HDL, LDL, triglicéridos", precioNormal: 95.0, precioEmergencia: 145.0 }
+                ]
+            }
+        } catch (error) {
+            console.error("❌ Error cargando tipos análisis:", error)
+            tiposAnalisisDB = []
+        }
+    }
+
+    function cargarTrabajadoresDB() {
+        try {
+            var trabajadoresJson = laboratorioModel.trabajadoresJson
+            console.log("🔍 JSON trabajadores:", trabajadoresJson)
+            
+            var trabajadores = JSON.parse(trabajadoresJson)
+            
+            trabajadoresDB = trabajadores.map(function(t) {
+                return t.nombre_completo || t.trabajador_completo || "Trabajador Desconocido"
+            })
+            
+            console.log("✅ Trabajadores cargados:", trabajadoresDB.length)
+            if (trabajadoresDB.length === 0) {
+                console.log("⚠️ Usando trabajadores fallback")
+                trabajadoresDB = [
+                    "Lic. Carmen Ruiz",
+                    "Lic. Roberto Silva", 
+                    "Lic. Ana Martínez"
+                ]
+            }
+        } catch (error) {
+            console.error("❌ Error cargando trabajadores:", error)
+            trabajadoresDB = ["Lic. Carmen Ruiz", "Lic. Roberto Silva"]
+        }
+    }
+
+    function showSuccessMessage(mensaje) {
+        console.log("✅ Éxito:", mensaje)
+        // Mostrar notificación visual de éxito
+        Qt.createQmlObject('import QtQuick 2.15; import QtQuick.Controls 2.15; Rectangle { width: 300; height: 50; color: "#10B981"; radius: 8; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 40; z: 999; Label { anchors.centerIn: parent; text: "' + mensaje + '"; color: "white"; font.bold: true; font.pixelSize: 18; } Timer { interval: 2000; running: true; repeat: false; onTriggered: parent.destroy(); } }', laboratorioRoot, "successToast")
+    }
+
+    function showErrorMessage(mensaje) {
+        console.log("❌ Error:", mensaje)
+        // Mostrar notificación visual de error
+        Qt.createQmlObject('import QtQuick 2.15; import QtQuick.Controls 2.15; Rectangle { width: 300; height: 50; color: "#E74C3C"; radius: 8; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 40; z: 999; Label { anchors.centerIn: parent; text: "' + mensaje + '"; color: "white"; font.bold: true; font.pixelSize: 18; } Timer { interval: 2500; running: true; repeat: false; onTriggered: parent.destroy(); } }', laboratorioRoot, "errorToast")
     }
 }

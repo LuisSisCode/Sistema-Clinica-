@@ -18,7 +18,7 @@ from backend.models.usuario_model import UsuarioModel, register_usuario_model
 from backend.models.consulta_model import ConsultaModel, register_consulta_model
 from backend.models.gasto_model import GastoModel, register_gasto_model
 from backend.models.paciente_model import PacienteModel, register_paciente_model
-
+from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -60,6 +60,7 @@ class AppController(QObject):
         self.consulta_model = None
         self.paciente_model = None
         self.usuario_model = None
+        self.laboratorio_model = None
         
     # ===============================
     # INICIALIZACIÓN DE MODELS
@@ -79,6 +80,8 @@ class AppController(QObject):
             self.paciente_model = PacienteModel()
             self.usuario_model = UsuarioModel()
             self.gasto_model = GastoModel()
+            self.laboratorio_model = LaboratorioModel()
+
             # Conectar signals entre models
             self._connect_models()
             
@@ -116,6 +119,10 @@ class AppController(QObject):
                 self.paciente_model.errorOccurred.connect(self._on_model_error)
                 self.paciente_model.successMessage.connect(self._on_model_success)
             
+            if self.laboratorio_model:
+                self.laboratorio_model.errorOcurrido.connect(self._on_model_error)
+                self.laboratorio_model.operacionExitosa.connect(self._on_model_success)
+
             # Conectar operaciones exitosas
             self.inventario_model.operacionExitosa.connect(self._on_model_success)
             self.venta_model.operacionExitosa.connect(self._on_model_success)
@@ -288,6 +295,12 @@ class AppController(QObject):
     def gasto_model_instance(self):
         """Propiedad para acceder al GastoModel desde QML"""
         return self.gasto_model
+    
+    @Property(QObject, notify=modelsReady)
+    def laboratorio_model_instance(self):
+        """Propiedad para acceder al LaboratorioModel desde QML"""
+        return self.laboratorio_model
+    
     # ===============================
     # MÉTODOS DE INTEGRACIÓN MODELS-PDF
     # ===============================
@@ -610,9 +623,9 @@ def register_qml_types():
         register_compra_model()
         register_usuario_model()
         register_consulta_model()
-
         register_gasto_model()
         register_paciente_model()
+        register_laboratorio_model()
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:
