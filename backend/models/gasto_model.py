@@ -98,9 +98,9 @@ class GastoModel(QObject):
     
     # --- OPERACIONES CRUD GASTOS ---
     
-    @Slot(int, float, int, str, str, result=bool)
+    @Slot(int, float, int, str, str, str, result=bool)
     def crearGasto(self, tipo_gasto_id: int, monto: float, usuario_id: int,
-                   descripcion: str = "", fecha_gasto: str = "") -> bool:
+                descripcion: str = "", fecha_gasto: str = "", proveedor: str = "") -> bool:
         """Crea nuevo gasto desde QML"""
         try:
             self._set_loading(True)
@@ -119,7 +119,8 @@ class GastoModel(QObject):
                 monto=monto,
                 usuario_id=usuario_id,
                 fecha=fecha_obj,
-                descripcion=descripcion if descripcion else None
+                descripcion=descripcion if descripcion else None,
+                proveedor=proveedor if proveedor else None
             )
             
             if gasto_id:
@@ -145,8 +146,9 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, float, int, result=bool)
-    def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0) -> bool:
+    @Slot(int, float, int, str, str, result=bool)
+    def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0, 
+                   descripcion: str = "", proveedor: str = "") -> bool:
         """Actualiza gasto existente desde QML"""
         try:
             self._set_loading(True)
@@ -156,7 +158,10 @@ class GastoModel(QObject):
                 kwargs['monto'] = monto
             if tipo_gasto_id > 0:
                 kwargs['tipo_gasto_id'] = tipo_gasto_id
-            
+            if descripcion:  # ✅ Nuevo campo
+                kwargs['descripcion'] = descripcion
+            if proveedor:   # ✅ Nuevo campo
+                kwargs['proveedor'] = proveedor
             success = self.repository.update_expense(gasto_id, **kwargs)
             
             if success:
@@ -525,7 +530,7 @@ class GastoModel(QObject):
     def _cargar_gastos(self):
         """Carga lista de gastos recientes"""
         try:
-            gastos = self.repository.get_recent_expenses(30)  # Últimos 30 días
+            gastos = self.repository.get_recent_expenses(180)  # Últimos 30 días
             self._gastos = gastos
             self._gastos_filtrados = gastos.copy()
             self.gastosChanged.emit()

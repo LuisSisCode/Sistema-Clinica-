@@ -211,14 +211,15 @@ Item {
         for (var i = 0; i < gastos.length; i++) {
             var gasto = gastos[i]
             
+            // ✅ MAPEO ACTUALIZADO CON NUEVOS CAMPOS DE LA BD
             var gastoFormatted = {
                 gastoId: gasto.id || (i + 1),
                 tipoGasto: gasto.tipo_nombre || "Sin tipo",
-                descripcion: gasto.descripcion || "Sin descripción",
+                descripcion: gasto.Descripcion || "Sin descripción",  // ✅ Ahora viene directo de la BD
                 monto: parseFloat(gasto.Monto || 0).toFixed(2),
                 fechaGasto: formatDateFromModel(gasto.Fecha),
-                proveedorEmpresa: gasto.proveedor || "Sin proveedor",
-                registradoPor: gasto.usuario_completo || "Usuario desconocido"
+                proveedor: gasto.Proveedor || "Sin proveedor",        // ✅ Campo directo de la BD
+                registradoPor: gasto.registrado_por_nombre || gasto.usuario_nombre || gasto.usuario_completo || "Usuario desconocido"
             }
             
             gastosOriginales.push(gastoFormatted)
@@ -226,6 +227,7 @@ Item {
         }
         
         console.log("📊 Gastos cargados:", gastosOriginales.length)
+        updatePaginatedModel()
     }
     
     // ✅ NUEVA FUNCIÓN QUE NO TRIGGEEA SEÑALES DEL MODELO
@@ -270,7 +272,8 @@ Item {
             
             // Búsqueda por texto
             if (textoBusqueda.length > 0 && mostrar) {
-                if (!gasto.descripcion.toLowerCase().includes(textoBusqueda) && 
+                if (!gasto.descripcion.toLowerCase().includes(textoBusqueda) &&
+                    !gasto.proveedor.toLowerCase().includes(textoBusqueda) && 
                     !gasto.proveedorEmpresa.toLowerCase().includes(textoBusqueda)) {
                     mostrar = false
                 }
@@ -342,11 +345,12 @@ Item {
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.crearGasto(
-            tipoGastoId,                    // tipo_gasto_id
-            parseFloat(gastoData.monto),    // monto
-            1,                              // usuario_id (temporal - usar usuario actual)
-            gastoData.descripcion,          // descripcion
-            gastoData.fechaGasto           // fecha_gasto
+            tipoGastoId,                    
+            parseFloat(gastoData.monto),    
+            10,                              
+            gastoData.descripcion,         
+            gastoData.fechaGasto,          
+            gastoData.proveedor            
         )
         
         console.log("📝 Resultado creación:", success)
@@ -372,9 +376,11 @@ Item {
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.actualizarGasto(
-            parseInt(gastoId),              // gasto_id
-            parseFloat(gastoData.monto),    // monto
-            tipoGastoId                     // tipo_gasto_id
+            parseInt(gastoId),              
+            parseFloat(gastoData.monto),   
+            tipoGastoId,                   
+            gastoData.descripcion,         
+            gastoData.proveedor           
         )
         
         console.log("✏️ Resultado actualización:", success)
@@ -773,7 +779,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.18
+                                    Layout.preferredWidth: parent.width * 0.16
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -789,7 +795,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.25
+                                    Layout.preferredWidth: parent.width * 0.22
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -821,7 +827,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.14
+                                    Layout.preferredWidth: parent.width * 0.12
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -829,7 +835,7 @@ Item {
                                     
                                     Label { 
                                         anchors.centerIn: parent
-                                        text: "FECHA GASTO"
+                                        text: "FECHA"
                                         font.bold: true
                                         font.pixelSize: fontSmall
                                         color: textColor
@@ -837,7 +843,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.17
+                                    Layout.preferredWidth: parent.width * 0.18
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#d0d0d0"
@@ -878,11 +884,11 @@ Item {
                             
                             ListView {
                                 id: gastosListView
-                                model: gastosPaginadosModel // ✅ CAMBIADO PARA USAR EL MODELO PAGINADO
+                                model: gastosPaginadosModel
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: Math.max(45, screenHeight * 0.06)  // Altura adaptable
+                                    height: Math.max(45, screenHeight * 0.06)
                                     color: {
                                         if (selectedRowIndex === index) return "#e3f2fd"
                                         return index % 2 === 0 ? "transparent" : "#fafafa"
@@ -894,6 +900,7 @@ Item {
                                         anchors.fill: parent
                                         spacing: 0
                                         
+                                        // ✅ COLUMNA ID - Mantiene el ancho actual
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.06
                                             Layout.fillHeight: true
@@ -910,8 +917,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA TIPO - Mantiene el ancho actual
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.18
+                                            Layout.preferredWidth: parent.width * 0.16
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -934,8 +942,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA DESCRIPCIÓN - Ahora campo real de la BD
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.25
+                                            Layout.preferredWidth: parent.width * 0.22
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -944,17 +953,18 @@ Item {
                                             Label { 
                                                 anchors.fill: parent
                                                 anchors.margins: marginSmall * 0.5
-                                                text: model.descripcion
+                                                text: model.descripcion || "Sin descripción"
                                                 color: textColor
                                                 font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA MONTO - Mantiene el ancho actual
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
@@ -964,7 +974,7 @@ Item {
                                             
                                             Label { 
                                                 anchors.centerIn: parent
-                                                text: "Bs" + model.monto
+                                                text: "Bs " + model.monto
                                                 color: {
                                                     var monto = parseFloat(model.monto)
                                                     if (monto > 1000) return dangerColor
@@ -976,8 +986,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA FECHA - Mantiene el ancho actual
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.14
+                                            Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -991,8 +1002,9 @@ Item {
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA PROVEEDOR - Ahora campo directo de la BD
                                         Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.17
+                                            Layout.preferredWidth: parent.width * 0.18
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#d0d0d0"
@@ -1001,17 +1013,18 @@ Item {
                                             Label { 
                                                 anchors.fill: parent
                                                 anchors.margins: marginSmall * 0.25
-                                                text: model.proveedorEmpresa
+                                                text: model.proveedor || "Sin proveedor"
                                                 color: "#7f8c8d"
                                                 font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                             }
                                         }
                                         
+                                        // ✅ COLUMNA REGISTRADO POR - Actualizada
                                         Rectangle {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
@@ -1022,14 +1035,14 @@ Item {
                                             Label { 
                                                 anchors.fill: parent
                                                 anchors.margins: marginSmall * 0.25
-                                                text: model.registradoPor || "Luis López"
+                                                text: model.registradoPor || "Usuario desconocido"
                                                 color: "#7f8c8d"
                                                 font.pixelSize: fontTiny
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignHCenter
+                                                horizontalAlignment: Text.AlignLeft
                                             }
                                         }
                                     }
@@ -1042,7 +1055,7 @@ Item {
                                         }
                                     }
                                     
-                                    // ✅ BOTONES DE ACCIÓN ADAPTABLES
+                                    // ✅ BOTONES DE ACCIÓN - Mantienen la misma funcionalidad
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
@@ -1122,6 +1135,7 @@ Item {
                                     }
                                 }
                             }
+                                                    
                             
                             // ✅ ESTADO VACÍO PARA TABLA SIN DATOS
                             ColumnLayout {
@@ -1163,7 +1177,6 @@ Item {
                                         Layout.maximumWidth: 400
                                     }
                                 }
-                                
                                 Item { Layout.fillHeight: true }
                             }
                         }
@@ -1322,7 +1335,7 @@ Item {
                 descripcionField.text = gasto.descripcion
                 montoField.text = gasto.monto
                 fechaGastoField.text = gasto.fechaGasto
-                proveedorField.text = gasto.proveedorEmpresa
+                proveedorField.text = gasto.proveedor
             }
         }
         

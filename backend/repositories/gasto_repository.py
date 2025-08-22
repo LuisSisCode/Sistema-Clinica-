@@ -31,7 +31,7 @@ class GastoRepository(BaseRepository):
     # ===============================
     
     def create_expense(self, tipo_gasto_id: int, monto: float, usuario_id: int,
-                      fecha: datetime = None, descripcion: str = None) -> int:
+                      fecha: datetime = None, descripcion: str = None, proveedor: str = None) -> int:
         """
         Crea nuevo gasto
         
@@ -40,7 +40,8 @@ class GastoRepository(BaseRepository):
             monto: Monto del gasto
             usuario_id: ID del usuario responsable
             fecha: Fecha del gasto (opcional, por defecto ahora)
-            descripcion: Descripción adicional (opcional)
+            descripcion: Descripción del gasto (opcional)
+            proveedor: Proveedor o empresa (opcional)
             
         Returns:
             ID del gasto creado
@@ -61,32 +62,27 @@ class GastoRepository(BaseRepository):
         if fecha is None:
             fecha = get_current_datetime()
         
-        # 1. Crear gasto principal
+        # Crear gasto con nueva estructura
         gasto_data = {
             'ID_Tipo': tipo_gasto_id,
+            'Descripcion': descripcion or "Sin descripción",
             'Monto': monto,
-            'Fecha': fecha
+            'Fecha': fecha,
+            'Proveedor': proveedor,
+            'Id_RegistradoPor': usuario_id
         }
         
         gasto_id = self.insert(gasto_data)
         if not gasto_id:
             raise ValidationError("gasto", "creacion", "Error creando gasto")
         
-        # 2. Crear relación usuario-gasto
-        relation_query = """
-        INSERT INTO Gastos_Usuario (Id_Usuario, Id_Gastos)
-        VALUES (?, ?)
-        """
-        
-        self._execute_query(relation_query, (usuario_id, gasto_id), fetch_all=False, use_cache=False)
-        
         print(f"💸 Gasto creado: Tipo ID {tipo_gasto_id}, Monto ${monto} - ID: {gasto_id}")
         
         return gasto_id
     
     def update_expense(self, gasto_id: int, monto: float = None, tipo_gasto_id: int = None,
-                      fecha: datetime = None) -> bool:
-        """Actualiza gasto existente (no se puede cambiar usuario)"""
+                      fecha: datetime = None, descripcion: str = None, proveedor: str = None) -> bool:
+        """Actualiza gasto existente"""
         # Verificar existencia
         if not self.get_by_id(gasto_id):
             raise ValidationError("gasto_id", gasto_id, "Gasto no encontrado")
@@ -104,6 +100,12 @@ class GastoRepository(BaseRepository):
         
         if fecha is not None:
             update_data['Fecha'] = fecha
+            
+        if descripcion is not None:
+            update_data['Descripcion'] = descripcion.strip()
+            
+        if proveedor is not None:
+            update_data['Proveedor'] = proveedor.strip() if proveedor else None
         
         if not update_data:
             return True
@@ -122,18 +124,16 @@ class GastoRepository(BaseRepository):
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtiene gastos con información completa"""
         query = """
-        SELECT g.id, g.Monto, g.Fecha,
+        SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.Proveedor,
                -- Tipo de gasto
                tg.id as tipo_id, tg.Nombre as tipo_nombre, tg.fecha as tipo_fecha_creacion,
                -- Usuario responsable
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo,
-               u.correo as usuario_email,
-               -- IDs para referencias
-               gu.Id_Usuario
+               u.correo as usuario_email, u.id as usuario_id,
+               u.Nombre as registrado_por_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         ORDER BY g.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
@@ -142,18 +142,18 @@ class GastoRepository(BaseRepository):
     def get_expense_by_id_complete(self, gasto_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene gasto específico con información completa"""
         query = """
-        SELECT g.id, g.Monto, g.Fecha,
+        SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.Proveedor,
                -- Tipo de gasto
                tg.id as tipo_id, tg.Nombre as tipo_nombre, tg.fecha as tipo_fecha_creacion,
                -- Usuario responsable
                u.id as usuario_id,
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo,
                u.Nombre as usuario_nombre, u.Apellido_Paterno as usuario_apellido_p,
-               u.Apellido_Materno as usuario_apellido_m, u.correo as usuario_email
+               u.Apellido_Materno as usuario_apellido_m, u.correo as usuario_email,
+               u.Nombre as registrado_por_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE g.id = ?
         """
         return self._execute_query(query, (gasto_id,), fetch_one=True)
@@ -165,12 +165,15 @@ class GastoRepository(BaseRepository):
     def get_expenses_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Obtiene gastos en rango de fechas"""
         query = """
-        SELECT g.*, tg.Nombre as tipo_nombre,
-               CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
+        SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.Proveedor,
+            -- Tipo de gasto
+            tg.id as tipo_id, tg.Nombre as tipo_nombre,
+            -- Usuario responsable  
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as registrado_por_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE g.Fecha BETWEEN ? AND ?
         ORDER BY g.Fecha DESC
         """
@@ -188,8 +191,7 @@ class GastoRepository(BaseRepository):
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE YEAR(g.Fecha) = ? AND MONTH(g.Fecha) = ?
         ORDER BY g.Fecha DESC
         """
@@ -221,8 +223,7 @@ class GastoRepository(BaseRepository):
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE g.ID_Tipo = ?
         ORDER BY g.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
@@ -235,8 +236,7 @@ class GastoRepository(BaseRepository):
         SELECT g.*, tg.Nombre as tipo_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        WHERE gu.Id_Usuario = ?
+        WHERE g.Id_RegistradoPor = ?
         ORDER BY g.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
@@ -249,8 +249,7 @@ class GastoRepository(BaseRepository):
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE g.Monto BETWEEN ? AND ?
         ORDER BY g.Monto DESC, g.Fecha DESC
         """
@@ -390,13 +389,12 @@ class GastoRepository(BaseRepository):
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE (tg.Nombre LIKE ? OR u.Nombre LIKE ? OR u.Apellido_Paterno LIKE ? 
-               OR u.Apellido_Materno LIKE ?)
+               OR u.Apellido_Materno LIKE ? OR g.Descripcion LIKE ? OR g.Proveedor LIKE ?)
         """
         
-        params = [search_term] * 4
+        params = [search_term] * 6
         
         # Agregar filtros de fecha si se proporcionan
         if start_date and end_date:
@@ -417,8 +415,7 @@ class GastoRepository(BaseRepository):
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE g.Monto >= ? AND g.Fecha >= ?
         ORDER BY g.Monto DESC, g.Fecha DESC
         """
@@ -463,8 +460,7 @@ class GastoRepository(BaseRepository):
                SUM(g.Monto) as monto_total,
                AVG(g.Monto) as gasto_promedio
         FROM Gastos g
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         GROUP BY u.id, u.Nombre, u.Apellido_Paterno
         ORDER BY monto_total DESC
         """
@@ -504,9 +500,8 @@ class GastoRepository(BaseRepository):
             COUNT(*) as gastos_hoy,
             COALESCE(SUM(Monto), 0) as total_gastos_hoy,
             COUNT(DISTINCT ID_Tipo) as tipos_gastados_hoy,
-            COUNT(DISTINCT gu.Id_Usuario) as usuarios_activos_hoy
+            COUNT(DISTINCT Id_RegistradoPor) as usuarios_activos_hoy
         FROM Gastos g
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
         WHERE g.Fecha BETWEEN ? AND ?
         """
         
@@ -613,8 +608,8 @@ class GastoRepository(BaseRepository):
         query = """
         SELECT u.*
         FROM Usuario u
-        INNER JOIN Gastos_Usuario gu ON u.id = gu.Id_Usuario
-        WHERE gu.Id_Gastos = ?
+        INNER JOIN Gastos g ON u.id = g.Id_RegistradoPor
+        WHERE g.id = ?
         """
         return self._execute_query(query, (gasto_id,), fetch_one=True)
     
@@ -632,15 +627,14 @@ class GastoRepository(BaseRepository):
                                tipo_id: int = None, usuario_id: int = None) -> List[Dict[str, Any]]:
         """Obtiene gastos formateados para reportes"""
         base_query = """
-        SELECT g.id, g.Monto, g.Fecha,
+        SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.Proveedor,
                -- Tipo
                tg.Nombre as tipo_nombre,
                -- Usuario
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Gastos_Usuario gu ON g.id = gu.Id_Gastos
-        INNER JOIN Usuario u ON gu.Id_Usuario = u.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         """
         
         conditions = []
@@ -655,7 +649,7 @@ class GastoRepository(BaseRepository):
             params.append(tipo_id)
         
         if usuario_id:
-            conditions.append("gu.Id_Usuario = ?")
+            conditions.append("g.Id_RegistradoPor = ?")
             params.append(usuario_id)
         
         if conditions:

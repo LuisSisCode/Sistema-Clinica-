@@ -186,19 +186,18 @@ CREATE TABLE Tipo_Gastos (
 CREATE TABLE Gastos (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ID_Tipo INT NOT NULL,
+    Descripcion VARCHAR(500) NOT NULL,
     Monto DECIMAL(12,2) NOT NULL CHECK (Monto >= 0),
     Fecha DATETIME NOT NULL DEFAULT GETDATE(),
-    FOREIGN KEY (ID_Tipo) REFERENCES Tipo_Gastos(id)
+    Proveedor VARCHAR(200),
+    Id_RegistradoPor INT NOT NULL,  -- SIN DEFAULT - la app debe enviarlo
+    
+    -- Claves foráneas
+    FOREIGN KEY (ID_Tipo) REFERENCES Tipo_Gastos(id),
+    FOREIGN KEY (Id_RegistradoPor) REFERENCES Usuario(id)
 );
 
--- Tabla Gastos_Usuario
-CREATE TABLE Gastos_Usuario (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    Id_Usuario INT NOT NULL,
-    Id_Gastos INT NOT NULL,
-    FOREIGN KEY (Id_Usuario) REFERENCES Usuario(id),
-    FOREIGN KEY (Id_Gastos) REFERENCES Gastos(id)
-);
+
 
 -- �ndices para control interno y consultas r�pidas
 CREATE INDEX IX_Consultas_Fecha ON Consultas(Fecha);
