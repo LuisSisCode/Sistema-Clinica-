@@ -31,28 +31,77 @@ Item {
     readonly property color violetColor: "#9b59b6"
     readonly property color infoColor: "#17a2b8"
 
+    // ✅ AGREGAR TIMER PARA ACTUALIZACIÓN AUTOMÁTICA
+    Timer {
+        id: updateTimer
+        interval: 500  // 500ms de delay
+        repeat: false
+        onTriggered: {
+            console.log("⏰ Timer ejecutado - Aplicando filtros automáticamente")
+            aplicarFiltros()
+            
+            // Forzar layout del ListView
+            if (trabajadoresListView) {
+                trabajadoresListView.forceLayout()
+                console.log("🔄 ListView forzadamente actualizado por timer")
+            }
+        }
+    }
+    
+    // ✅ FUNCIÓN MEJORADA PARA INICIO INMEDIATO CON TIMER
+    function actualizarInmediato() {
+        console.log("🚀 Iniciando actualización inmediata...")
+        
+        // Detener timer previo si está corriendo
+        updateTimer.stop()
+        
+        // Aplicar filtros inmediatamente
+        aplicarFiltros()
+        
+        // Iniciar timer como backup
+        updateTimer.start()
+    }
+    
     // ===== MODELO DE DATOS REAL =====
     TrabajadorModel {
         id: trabajadorModel
         
+        // ✅ CONEXIÓN MEJORADA - RECARGA INMEDIATA
         onTrabajadoresChanged: {
             console.log("✅ Trabajadores actualizados desde BD:", trabajadorModel.totalTrabajadores)
-            aplicarFiltros()
+            // Aplicar filtros inmediatamente cuando cambien los datos
+            Qt.callLater(aplicarFiltros)
         }
         
+        // ✅ CONEXIÓN MEJORADA - TIPOS ACTUALIZADOS
         onTiposTrabajadorChanged: {
             console.log("🏷️ Tipos de trabajador actualizados:", trabajadorModel.tiposTrabajador.length)
+            // Actualizar ComboBoxes
             filtroTipo.model = getTiposTrabajadoresNombres()
             tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
         }
         
+        // ✅ CONEXIÓN MEJORADA - TRABAJADOR CREADO
         onTrabajadorCreado: function(success, message) {
+            console.log("📋 Signal trabajadorCreado recibido:", success, message)
+            
             if (success) {
+                // Cerrar diálogo
                 showNewWorkerDialog = false
                 selectedRowIndex = -1
                 isEditMode = false
                 editingIndex = -1
+                
+                // ✅ FORZAR ACTUALIZACIÓN INMEDIATA DEL LISTVIEW
+                if (trabajadoresListView) {
+                    trabajadoresListView.forceLayout()
+                    console.log("🔄 ListView actualizado forzadamente")
+                }
+                
+                // ✅ REFRESCAR MODELO INMEDIATAMENTE
+                trabajadorModel.refrescarDatosInmediato()
             }
+            
             console.log("Trabajador creado:", success, message)
         }
         
@@ -62,6 +111,11 @@ Item {
                 selectedRowIndex = -1
                 isEditMode = false
                 editingIndex = -1
+                
+                // ✅ FORZAR ACTUALIZACIÓN TAMBIÉN PARA EDICIÓN
+                if (trabajadoresListView) {
+                    trabajadoresListView.forceLayout()
+                }
             }
             console.log("Trabajador actualizado:", success, message)
         }
@@ -69,6 +123,11 @@ Item {
         onTrabajadorEliminado: function(success, message) {
             if (success) {
                 selectedRowIndex = -1
+                
+                // ✅ FORZAR ACTUALIZACIÓN PARA ELIMINACIÓN
+                if (trabajadoresListView) {
+                    trabajadoresListView.forceLayout()
+                }
             }
             console.log("Trabajador eliminado:", success, message)
         }
@@ -746,8 +805,11 @@ Item {
         }
     }
 
-    // ===== FUNCIÓN PARA APLICAR FILTROS =====
+    // ✅ MEJORAR LA FUNCIÓN aplicarFiltros() - BUSCA ESTA FUNCIÓN Y REEMPLÁZALA:
     function aplicarFiltros() {
+        console.log("🔍 Aplicando filtros...")
+        
+        // Limpiar modelo actual
         trabajadoresListModel.clear()
         
         var textoBusqueda = campoBusqueda.text.toLowerCase()
@@ -755,6 +817,8 @@ Item {
         
         // Obtener trabajadores desde el modelo
         var trabajadores = trabajadorModel.trabajadores
+        
+        console.log("📊 Total trabajadores disponibles:", trabajadores.length)
         
         for (var i = 0; i < trabajadores.length; i++) {
             var trabajador = trabajadores[i]
@@ -795,6 +859,13 @@ Item {
                 }
                 trabajadoresListModel.append(trabajadorFormateado)
             }
+        }
+        
+        console.log("✅ Filtros aplicados - Mostrando:", trabajadoresListModel.count, "de", trabajadores.length)
+        
+        // ✅ FORZAR ACTUALIZACIÓN DEL LISTVIEW
+        if (trabajadoresListView) {
+            trabajadoresListView.forceLayout()
         }
     }
 
@@ -1075,7 +1146,7 @@ Item {
                 Button {
                     text: isEditMode ? "Actualizar" : "Guardar"
                     enabled: workerForm.selectedTipoTrabajadorIndex >= 0 && 
-                             nombreTrabajador.text.length > 0
+                            nombreTrabajador.text.length > 0
                     background: Rectangle {
                         color: parent.enabled ? primaryColor : "#bdc3c7"
                         radius: 8
@@ -1087,6 +1158,8 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
+                        console.log("💾 Botón Guardar presionado...")
+                        
                         // Obtener valores de forma segura
                         var nombre = nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
                         var apellidoPat = apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
@@ -1113,7 +1186,7 @@ Item {
                         // Obtener ID del tipo de trabajador
                         var tipoTrabajadorId = trabajadorModel.tiposTrabajador[workerForm.selectedTipoTrabajadorIndex].id
                         
-                        console.log("📝 Datos a guardar:", {
+                        console.log("📋 Datos a guardar:", {
                             nombre: nombre,
                             apellidoPaterno: apellidoPat,
                             apellidoMaterno: apellidoMat,
@@ -1122,12 +1195,16 @@ Item {
                             matricula: matricula
                         })
                         
+                        // ✅ EJECUTAR OPERACIÓN Y MANEJAR RESULTADO
+                        var success = false
+                        
                         if (isEditMode && editingIndex >= 0) {
                             // Actualizar trabajador existente
                             var trabajadorData = trabajadoresListModel.get(editingIndex)
                             var trabajadorId = parseInt(trabajadorData.trabajadorId)
                             
-                            trabajadorModel.actualizarTrabajador(
+                            console.log("✏️ Actualizando trabajador ID:", trabajadorId)
+                            success = trabajadorModel.actualizarTrabajador(
                                 trabajadorId,
                                 nombre,
                                 apellidoPat, 
@@ -1138,7 +1215,8 @@ Item {
                             )
                         } else {
                             // Crear nuevo trabajador
-                            trabajadorModel.crearTrabajador(
+                            console.log("➕ Creando nuevo trabajador...")
+                            success = trabajadorModel.crearTrabajador(
                                 nombre,
                                 apellidoPat,
                                 apellidoMat,
@@ -1146,6 +1224,26 @@ Item {
                                 especialidad,
                                 matricula
                             )
+                        }
+                        
+                        // ✅ SI LA OPERACIÓN FUE EXITOSA, ACTUALIZAR INMEDIATAMENTE
+                        if (success) {
+                            console.log("✅ Operación exitosa - Actualizando UI inmediatamente")
+                            
+                            // Cerrar diálogo inmediatamente
+                            showNewWorkerDialog = false
+                            selectedRowIndex = -1
+                            isEditMode = false
+                            editingIndex = -1
+                            
+                            // ✅ FORZAR ACTUALIZACIÓN INMEDIATA
+                            Qt.callLater(function() {
+                                console.log("🔄 Ejecutando actualización diferida...")
+                                actualizarInmediato()
+                            })
+                            
+                        } else {
+                            console.log("❌ Error en la operación")
                         }
                     }
                 }
@@ -1155,7 +1253,51 @@ Item {
 
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("💥 Módulo Trabajadores iniciado")
+        console.log("👥 Módulo Trabajadores iniciado")
         console.log("🔗 Señal irAConfigPersonal configurada para navegación")
+        
+        // ✅ CARGAR DATOS INICIALES
+        console.log("📊 Cargando datos iniciales de trabajadores...")
+        
+        // Esperar a que el modelo esté listo
+        Qt.callLater(function() {
+            if (trabajadorModel) {
+                console.log("✅ TrabajadorModel disponible")
+                
+                // Recargar datos para asegurar que están actualizados
+                trabajadorModel.recargarDatos()
+                
+                // Configurar ComboBoxes
+                if (filtroTipo) {
+                    filtroTipo.model = getTiposTrabajadoresNombres()
+                }
+                
+                if (tipoTrabajadorCombo) {
+                    tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
+                }
+                
+                console.log("🎯 Inicialización completa")
+            } else {
+                console.log("⚠️ TrabajadorModel no disponible")
+            }
+        })
+    }
+
+    // ✅ AGREGAR CONNECTIONS PARA DEBUGGING
+    Connections {
+        target: trabajadorModel
+        
+        function onTrabajadoresChanged() {
+            console.log("🔄 Signal trabajadoresChanged detectado")
+            console.log("📊 Total trabajadores:", trabajadorModel.totalTrabajadores)
+            
+            // Actualizar automáticamente
+            Qt.callLater(actualizarInmediato)
+        }
+        
+        function onTiposTrabajadorChanged() {
+            console.log("🏷️ Signal tiposTrabajadorChanged detectado")
+            console.log("📊 Total tipos:", trabajadorModel.tiposTrabajador.length)
+        }
     }
 }

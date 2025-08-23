@@ -114,8 +114,8 @@ class TrabajadorModel(QObject):
     
     @Slot(str, str, str, int, str, str, result=bool)
     def crearTrabajador(self, nombre: str, apellido_paterno: str, 
-                   apellido_materno: str, tipo_trabajador_id: int,
-                   especialidad: str = "", matricula: str = "") -> bool:
+                apellido_materno: str, tipo_trabajador_id: int,
+                especialidad: str = "", matricula: str = "") -> bool:
         """Crea nuevo trabajador desde QML"""
         try:
             self._set_loading(True)
@@ -136,14 +136,21 @@ class TrabajadorModel(QObject):
                 )
             
             if trabajador_id:
+                # ✅ CARGA INMEDIATA Y FORZADA DE DATOS
                 self._cargar_trabajadores()
+                self._cargar_tipos_trabajador()  # Asegurar tipos actualizados
                 self._cargar_estadisticas()
+                
+                # ✅ FORZAR APLICACIÓN DE FILTROS ACTUALES
+                self.aplicarFiltros(self._filtro_tipo, self._filtro_busqueda, 
+                                self._incluir_stats, self._filtro_area)
                 
                 mensaje = f"Trabajador creado exitosamente - ID: {trabajador_id}"
                 self.trabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Trabajador creado desde QML: {nombre} {apellido_paterno}")
+                print(f"🔄 Datos actualizados automáticamente - Total: {len(self._trabajadores)}")
                 return True
             else:
                 error_msg = "Error creando trabajador"
@@ -158,6 +165,25 @@ class TrabajadorModel(QObject):
             return False
         finally:
             self._set_loading(False)
+
+    # ✅ AGREGAR NUEVO MÉTODO PARA REFRESCAR DESDE QML
+    @Slot()
+    def refrescarDatosInmediato(self):
+        """Método para refrescar datos inmediatamente desde QML"""
+        try:
+            print("🔄 Refrescando datos inmediatamente...")
+            self._cargar_trabajadores()
+            self._cargar_tipos_trabajador()
+            
+            # Aplicar filtros actuales
+            self.aplicarFiltros(self._filtro_tipo, self._filtro_busqueda, 
+                            self._incluir_stats, self._filtro_area)
+            
+            print(f"✅ Datos refrescados: {len(self._trabajadores)} trabajadores")
+            
+        except Exception as e:
+            print(f"❌ Error refrescando datos: {e}")
+            self.errorOccurred.emit("Error", f"Error refrescando datos: {str(e)}")
     
     @Slot(int, str, str, str, int, str, str, result=bool)
     def actualizarTrabajador(self, trabajador_id: int, nombre: str = "", 
