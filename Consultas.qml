@@ -10,7 +10,7 @@ Item {
     objectName: "consultasRoot"
 
     property var consultaModel: appController ? appController.consulta_model_instance : null
-    
+
     // ===== NUEVA SEÑAL PARA IR A CONFIGURACIÓN =====
     signal irAConfiguracion()
     
@@ -856,21 +856,22 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                var consultaId = model.consultaId
-                                                var realIndex = -1
-                                                
-                                                for (var i = 0; i < consultasListModel.count; i++) {
-                                                    if (consultasListModel.get(i).consultaId === consultaId) {
-                                                        realIndex = i
-                                                        break
-                                                    }
+                                                // Almacenar datos completos de la consulta para edición
+                                                consultationForm.consultaParaEditar = {
+                                                    consultaId: model.consultaId,
+                                                    paciente: model.paciente,
+                                                    especialidadDoctor: model.especialidadDoctor,
+                                                    tipo: model.tipo,
+                                                    precio: model.precio,
+                                                    detalles: model.detalles,
+                                                    fecha: model.fecha
                                                 }
                                                 
                                                 isEditMode = true
-                                                editingIndex = realIndex
-                                                
-                                                console.log("Editando consulta ID:", consultaId, "índice real:", realIndex)
+                                                editingIndex = -1 // Ya no lo necesitamos, pero mantenemos compatibilidad
                                                 showNewConsultationDialog = true
+                                                
+                                                console.log("Editando consulta ID:", model.consultaId)
                                             }
                                         }
                                         
@@ -1060,52 +1061,102 @@ Item {
         property int selectedEspecialidadIndex: -1
         property string consultationType: "Normal"
         property real calculatedPrice: 0.0
+        property var consultaParaEditar: null
         
         function loadEditData() {
-            if (isEditMode && editingIndex >= 0) {
-                var consulta = consultasListModel.get(editingIndex)
+            if (!isEditMode || !consultationForm.consultaParaEditar) {
+                console.log("⚠️ No hay datos para cargar en edición")
+                return
+            }
+            
+            var consulta = consultationForm.consultaParaEditar
+            console.log("📝 Cargando datos para edición:", JSON.stringify(consulta))
+            console.log("🎯 Especialidades disponibles:", consultaModel ? consultaModel.especialidades.length : "No disponibles")
+            
+            // Separar nombre completo del paciente
+            var nombreCompleto = consulta.paciente || ""
+            var partesNombre = nombreCompleto.split(" ")
+            
+            nombrePaciente.text = partesNombre[0] || ""
+            apellidoPaterno.text = partesNombre[1] || ""
+            apellidoMaterno.text = partesNombre.slice(2).join(" ") || ""
+            
+            // Buscar y establecer especialidad por nombre completo
+            if (consulta.especialidadDoctor && consultaModel && consultaModel.especialidades) {
+                console.log("🔍 Buscando especialidad:", consulta.especialidadDoctor)
                 
-                var nombreCompleto = consulta.paciente.split(" ")
-                nombrePaciente.text = nombreCompleto[0] || ""
-                apellidoPaterno.text = nombreCompleto[1] || ""
-                apellidoMaterno.text = nombreCompleto.slice(2).join(" ") || ""
-                
-                var especialidadDoctor = consulta.especialidadDoctor
                 for (var i = 0; i < consultaModel.especialidades.length; i++) {
-                    var espStr = consultaModel.especialidades[i].text + " - " + consultaModel.especialidades[i].doctor_nombre
-                    if (espStr === especialidadDoctor) {
+                    var esp = consultaModel.especialidades[i]
+                    var espTextoCompleto = esp.text + " - " + esp.doctor_nombre
+                    var nombreEspecialidad = esp.text
+                    
+                    // Comparar tanto el texto completo como solo el nombre de la especialidad
+                    if (espTextoCompleto === consulta.especialidadDoctor || 
+                        consulta.especialidadDoctor.indexOf(nombreEspecialidad) === 0) {
+                        
                         especialidadCombo.currentIndex = i + 1
                         consultationForm.selectedEspecialidadIndex = i
+                        
+                        // Actualizar precio según el tipo
+                        if (consultationForm.consultationType === "Normal") {
+                            consultationForm.calculatedPrice = esp.precio_normal
+                        } else {
+                            consultationForm.calculatedPrice = esp.precio_emergencia
+                        }
+                        
+                        console.log("✅ Especialidad encontrada:", nombreEspecialidad)
                         break
                     }
                 }
-                
-                if (consulta.tipo === "Normal") {
-                    normalRadio.checked = true
-                    consultationForm.consultationType = "Normal"
-                } else {
-                    emergenciaRadio.checked = true
-                    consultationForm.consultationType = "Emergencia"
-                }
-                
-                consultationForm.calculatedPrice = parseFloat(consulta.precio)
-                detallesConsulta.text = consulta.detalles
             }
+            
+            // Establecer tipo de consulta
+            if (consulta.tipo === "Normal") {
+                normalRadio.checked = true
+                emergenciaRadio.checked = false
+                consultationForm.consultationType = "Normal"
+            } else {
+                normalRadio.checked = false
+                emergenciaRadio.checked = true
+                consultationForm.consultationType = "Emergencia"
+            }
+
+            if (consulta.pacienteEdad !== null && consulta.pacienteEdad !== undefined) {
+                edadPaciente.text = consulta.pacienteEdad.toString()
+                console.log("📅 Edad cargada:", consulta.pacienteEdad)
+            } else {
+                edadPaciente.text = ""
+                console.log("⚠️ Edad no disponible")
+            }
+            
+            // Establecer precio calculado
+            consultationForm.calculatedPrice = parseFloat(consulta.precio) || 0.0
+            
+            // Establecer detalles
+            detallesConsulta.text = consulta.detalles || ""
+            
+            console.log("✅ Datos de edición cargados correctamente")
         }
         
         onVisibleChanged: {
-            if (visible && isEditMode) {
-                loadEditData()
-            } else if (visible && !isEditMode) {
-                nombrePaciente.text = ""
-                apellidoPaterno.text = ""
-                apellidoMaterno.text = ""
-                edadPaciente.text = ""
-                especialidadCombo.currentIndex = 0
-                normalRadio.checked = true
-                detallesConsulta.text = ""
-                consultationForm.selectedEspecialidadIndex = -1
-                consultationForm.calculatedPrice = 0.0
+            if (visible) {
+                if (isEditMode && consultationForm.consultaParaEditar) {
+                    // Cargar datos para edición
+                    loadEditData()
+                } else if (!isEditMode) {
+                    // Limpiar formulario para nueva consulta
+                    nombrePaciente.text = ""
+                    apellidoPaterno.text = ""
+                    apellidoMaterno.text = ""
+                    edadPaciente.text = ""
+                    especialidadCombo.currentIndex = 0
+                    normalRadio.checked = true
+                    emergenciaRadio.checked = false
+                    detallesConsulta.text = ""
+                    consultationForm.selectedEspecialidadIndex = -1
+                    consultationForm.calculatedPrice = 0.0
+                    consultationForm.consultaParaEditar = null
+                }
             }
         }
 
@@ -1414,6 +1465,7 @@ Item {
                         detallesConsulta.text = ""
                         showNewConsultationDialog = false
                         selectedRowIndex = -1
+                        consultationForm.consultaParaEditar = null
                         isEditMode = false
                         editingIndex = -1
                     }
@@ -1436,47 +1488,30 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        if (consultationForm.selectedEspecialidadIndex < 0) {
-                            showNotification("Error", "Seleccione una especialidad")
-                            return
+                        var consultaId = model.consultaId
+                        
+                        // Buscar información del paciente
+                        var pacienteInfo = buscarPacientePorNombre(model.paciente)
+                        
+                        // Almacenar datos completos de la consulta para edición
+                        consultationForm.consultaParaEditar = {
+                            consultaId: consultaId,
+                            paciente: model.paciente,
+                            especialidadDoctor: model.especialidadDoctor,
+                            tipo: model.tipo,
+                            precio: model.precio,
+                            detalles: model.detalles,
+                            fecha: model.fecha,
+                            // Usar edad del paciente encontrado
+                            pacienteEdad: pacienteInfo ? pacienteInfo.Edad : null,
+                            pacienteId: pacienteInfo ? pacienteInfo.id : null
                         }
                         
+                        isEditMode = true
+                        editingIndex = -1
+                        showNewConsultationDialog = true
                         
-                        obtenerOCrearPaciente(
-                            nombrePaciente.text,
-                            apellidoPaterno.text,
-                            apellidoMaterno.text,
-                            parseInt(edadPaciente.text),
-                            function(pacienteId) {
-                                if (pacienteId > 0) {
-                                    var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
-                                    var datosConsulta = {
-                                        "paciente_id": pacienteId,
-                                        "especialidad_id": especialidad.id,
-                                        "detalles": detallesConsulta.text,
-                                        "tipo_consulta": consultationForm.consultationType.toLowerCase()
-                                    }
-                                    
-                                    console.log("📝 Creando consulta con datos:", JSON.stringify(datosConsulta))
-                                    var consultaId = consultaModel.crear_consulta(datosConsulta)
-                                    
-                                    if (consultaId > 0) {
-                                        showNotification("Éxito", "Consulta creada correctamente")
-                                        // Limpiar formulario
-                                        nombrePaciente.text = ""
-                                        apellidoPaterno.text = ""
-                                        apellidoMaterno.text = ""
-                                        edadPaciente.text = ""
-                                        detallesConsulta.text = ""
-                                        especialidadCombo.currentIndex = 0
-                                        showNewConsultationDialog = false
-                                        
-                                        // Forzar actualización de la lista
-                                        consultaModel.refresh_consultas()
-                                    }
-                                }
-                            }
-                        )
+                        console.log("📝 Datos para edición con edad:", JSON.stringify(consultationForm.consultaParaEditar))
                     }
                 }
             }
@@ -1488,7 +1523,7 @@ Item {
     
     Component.onCompleted: {
         console.log("🩺 Módulo Consultas inisciado")
-        
+        console.log("🔧 Sistema de edición de consultas inicializado")
         function conectarModelos() {
             if (typeof appController !== 'undefined') {
                 consultaModel = appController.consulta_model_instance
@@ -1809,6 +1844,24 @@ Item {
         
         // APLICAR FILTROS INMEDIATAMENTE
         updatePaginatedModel()
+    }
+
+    function buscarPacientePorNombre(nombreCompleto) {
+        if (!pacienteModel) return null
+        
+        try {
+            // Buscar usando el método de búsqueda del modelo
+            var resultados = pacienteModel.search_patients(nombreCompleto)
+            
+            if (resultados && resultados.length > 0) {
+                return resultados[0] // Retornar el primer resultado
+            }
+            
+            return null
+        } catch (e) {
+            console.log("⚠️ Error buscando paciente:", e)
+            return null
+        }
     }
 
 }
