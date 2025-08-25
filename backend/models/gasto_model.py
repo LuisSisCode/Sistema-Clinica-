@@ -105,13 +105,28 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
+            # ✅ DEBUG: Imprimir todos los parámetros recibidos
+            print(f"📝 CREANDO GASTO - Parámetros recibidos:")
+            print(f"   - tipo_gasto_id: {tipo_gasto_id}")
+            print(f"   - monto: {monto}")
+            print(f"   - usuario_id: {usuario_id}")
+            print(f"   - descripcion: '{descripcion}'")
+            print(f"   - fecha_gasto: '{fecha_gasto}'")
+            print(f"   - proveedor: '{proveedor}'")  # ✅ ESTE DEBE APARECER EN LA CONSOLA
+            
             from datetime import datetime
             fecha_obj = None
             if fecha_gasto:
                 try:
                     fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
-                except:
+                    print(f"   - fecha_obj convertida: {fecha_obj}")
+                except Exception as e:
+                    print(f"   - Error convirtiendo fecha: {e}")
                     fecha_obj = None
+            
+            # ✅ VALIDAR QUE EL PROVEEDOR NO ESTÉ VACÍO
+            proveedor_final = proveedor.strip() if proveedor else None
+            print(f"   - proveedor_final: '{proveedor_final}'")
             
             # Crear usando repository
             gasto_id = self.repository.create_expense(
@@ -120,7 +135,7 @@ class GastoModel(QObject):
                 usuario_id=usuario_id,
                 fecha=fecha_obj,
                 descripcion=descripcion if descripcion else None,
-                proveedor=proveedor if proveedor else None
+                proveedor=proveedor_final  # ✅ USAR proveedor_final
             )
             
             if gasto_id:
@@ -131,15 +146,20 @@ class GastoModel(QObject):
                 self.gastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Gasto creado desde QML: {monto}")
+                print(f"✅ Gasto creado desde QML: {monto} - Proveedor: '{proveedor_final}'")
                 return True
             else:
                 error_msg = "Error creando gasto"
                 self.gastoCreado.emit(False, error_msg)
+                print(f"❌ {error_msg}")
                 return False
                 
         except Exception as e:
             error_msg = f"Error inesperado: {str(e)}"
+            print(f"❌ Exception en crearGasto: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            
             self.gastoCreado.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
             return False
@@ -148,20 +168,31 @@ class GastoModel(QObject):
     
     @Slot(int, float, int, str, str, result=bool)
     def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0, 
-                   descripcion: str = "", proveedor: str = "") -> bool:
+                descripcion: str = "", proveedor: str = "") -> bool:
         """Actualiza gasto existente desde QML"""
         try:
             self._set_loading(True)
+            
+            # ✅ DEBUG: Imprimir todos los parámetros recibidos
+            print(f"📝 ACTUALIZANDO GASTO - Parámetros recibidos:")
+            print(f"   - gasto_id: {gasto_id}")
+            print(f"   - monto: {monto}")
+            print(f"   - tipo_gasto_id: {tipo_gasto_id}")
+            print(f"   - descripcion: '{descripcion}'")
+            print(f"   - proveedor: '{proveedor}'")  # ✅ ESTE DEBE APARECER EN LA CONSOLA
             
             kwargs = {}
             if monto > 0:
                 kwargs['monto'] = monto
             if tipo_gasto_id > 0:
                 kwargs['tipo_gasto_id'] = tipo_gasto_id
-            if descripcion:  # ✅ Nuevo campo
+            if descripcion:  
                 kwargs['descripcion'] = descripcion
-            if proveedor:   # ✅ Nuevo campo
-                kwargs['proveedor'] = proveedor
+            if proveedor:   # ✅ VALIDAR QUE NO ESTÉ VACÍO
+                kwargs['proveedor'] = proveedor.strip()
+                
+            print(f"   - kwargs a enviar: {kwargs}")
+            
             success = self.repository.update_expense(gasto_id, **kwargs)
             
             if success:
@@ -171,15 +202,20 @@ class GastoModel(QObject):
                 self.gastoActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Gasto actualizado desde QML: ID {gasto_id}")
+                print(f"✅ Gasto actualizado desde QML: ID {gasto_id} - Proveedor: '{proveedor}'")
                 return True
             else:
                 error_msg = "Error actualizando gasto"
                 self.gastoActualizado.emit(False, error_msg)
+                print(f"❌ {error_msg}")
                 return False
                 
         except Exception as e:
             error_msg = f"Error inesperado: {str(e)}"
+            print(f"❌ Exception en actualizarGasto: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            
             self.gastoActualizado.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
             return False
