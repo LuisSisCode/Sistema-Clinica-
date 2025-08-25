@@ -217,6 +217,14 @@ CREATE TABLE Gastos (
     FOREIGN KEY (Id_RegistradoPor) REFERENCES Usuario(id)
 );
 
+CREATE TABLE [dbo].[Tipos_Analisis](
+    [id] INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
+    [Nombre] VARCHAR(100) NOT NULL,
+    [Descripcion] VARCHAR(300) NULL,
+    [Precio_Normal] DECIMAL(10,2) NOT NULL,
+    [Precio_Emergencia] DECIMAL(10,2) NOT NULL
+);
+
 -- Índices para control interno y consultas rápidas
 CREATE INDEX IX_Consultas_Fecha ON Consultas(Fecha);
 CREATE INDEX IX_Productos_Codigo ON Productos(Codigo);
