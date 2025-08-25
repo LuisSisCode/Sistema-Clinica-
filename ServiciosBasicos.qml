@@ -313,29 +313,36 @@ Item {
         }
         
         console.log("💰 Creando gasto con modelo real via AppController...")
+        console.log("📊 Datos recibidos:", JSON.stringify(gastoData))
         
         // Obtener ID del tipo de gasto seleccionado
         var tipoGastoId = 0
         if (gastoForm.selectedTipoGastoIndex >= 0) {
             var tipoSeleccionado = tiposGastosModel.get(gastoForm.selectedTipoGastoIndex)
             tipoGastoId = tipoSeleccionado.id
+            console.log("🏷️ Tipo de gasto seleccionado:", tipoSeleccionado.nombre, "ID:", tipoGastoId)
         }
+        
+        // ✅ CORRECCIÓN: Usar el campo correcto del objeto gastoData
+        var proveedorFinal = gastoData.proveedor || gastoData.proveedorEmpresa || ""
+        console.log("🏢 Proveedor a guardar:", proveedorFinal)
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.crearGasto(
-            tipoGastoId,                    
-            parseFloat(gastoData.monto),    
-            10,                              
-            gastoData.descripcion,         
-            gastoData.fechaGasto,          
-            gastoData.proveedor            
+            tipoGastoId,                    // tipo_gasto_id
+            parseFloat(gastoData.monto),    // monto
+            10,                             // usuario_id (usuario predeterminado)
+            gastoData.descripcion,          // descripcion
+            gastoData.fechaGasto,          // fecha_gasto
+            proveedorFinal                  // proveedor ✅ CORREGIDO
         )
         
         console.log("📝 Resultado creación:", success)
         return success
     }
-    
-    // ✅ FUNCIÓN OVERRIDE PARA ACTUALIZAR GASTO CON MODELO REAL VIA APPCONTROLLER
+
+    // ✅ REEMPLAZAR LA FUNCIÓN updateGastoWithModel EN ServiciosBasicos.qml
+
     function updateGastoWithModel(gastoId, gastoData) {
         if (!gastoModelInstance) {
             console.log("❌ GastoModel no disponible para actualizar gasto")
@@ -344,21 +351,27 @@ Item {
         }
         
         console.log("✏️ Actualizando gasto con modelo real via AppController...")
+        console.log("📊 Datos recibidos:", JSON.stringify(gastoData))
         
         // Obtener ID del tipo de gasto seleccionado
         var tipoGastoId = 0
         if (gastoForm.selectedTipoGastoIndex >= 0) {
             var tipoSeleccionado = tiposGastosModel.get(gastoForm.selectedTipoGastoIndex)
             tipoGastoId = tipoSeleccionado.id
+            console.log("🏷️ Tipo de gasto seleccionado:", tipoSeleccionado.nombre, "ID:", tipoGastoId)
         }
+        
+        // ✅ CORRECCIÓN: Usar el campo correcto del objeto gastoData
+        var proveedorFinal = gastoData.proveedor || gastoData.proveedorEmpresa || ""
+        console.log("🏢 Proveedor a actualizar:", proveedorFinal)
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.actualizarGasto(
-            parseInt(gastoId),              
-            parseFloat(gastoData.monto),   
-            tipoGastoId,                   
-            gastoData.descripcion,         
-            gastoData.proveedor           
+            parseInt(gastoId),              // gasto_id
+            parseFloat(gastoData.monto),   // monto
+            tipoGastoId,                   // tipo_gasto_id
+            gastoData.descripcion,         // descripcion
+            proveedorFinal                 // proveedor ✅ CORREGIDO
         )
         
         console.log("✏️ Resultado actualización:", success)
@@ -640,22 +653,21 @@ Item {
                     }
                 }
                 
-                // ✅ FILTROS RESPONSIVOS
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(70, screenHeight * 0.09)
+                    Layout.preferredHeight: Math.max(80, screenHeight * 0.10)
                     color: "transparent"
                     z: 10
                     
-                    // ✅ USAR FLOWLAYOUT PARA ADAPTARSE A DIFERENTES TAMAÑOS
-                    Flow {
+                    RowLayout {
                         anchors.fill: parent
                         anchors.margins: marginMedium
-                        spacing: marginSmall
+                        spacing: marginMedium
                         
-                        // ✅ FILTROS DE SERVICIOS BÁSICOS
+                        // ✅ FILTRO TIPO SERVICIO
                         Row {
                             spacing: marginSmall
+                            Layout.alignment: Qt.AlignVCenter
                             
                             Label {
                                 text: "Tipo Servicio:"
@@ -668,10 +680,30 @@ Item {
                             ComboBox {
                                 id: filtroTipoServicio
                                 width: Math.max(160, screenWidth * 0.15)
-                                model: getTiposServiciosNombres()
+                                
+                                model: {
+                                    var tipos = ["Todos los servicios"]
+                                    if (tiposGastosModel.count > 0) {
+                                        for (var i = 0; i < tiposGastosModel.count; i++) {
+                                            var item = tiposGastosModel.get(i)
+                                            tipos.push(item.nombre)
+                                        }
+                                    }
+                                    return tipos
+                                }
+                                
                                 currentIndex: 0
-                                onCurrentIndexChanged: onFiltroChanged()
+                                onCurrentIndexChanged: {
+                                    console.log("🔍 Filtro tipo servicio cambiado:", currentIndex)
+                                    Qt.callLater(aplicarFiltrosDirecto)
+                                }
                             }
+                        }
+                        
+                        // ✅ FILTRO MES
+                        Row {
+                            spacing: marginSmall
+                            Layout.alignment: Qt.AlignVCenter
                             
                             Label {
                                 text: "Mes:"
@@ -686,9 +718,19 @@ Item {
                                 width: Math.max(120, screenWidth * 0.12)
                                 model: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                                         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-                                currentIndex: new Date().getMonth()  // Mes actual
-                                onCurrentIndexChanged: onFiltroChanged()
+                                currentIndex: new Date().getMonth()
+                                onCurrentIndexChanged: {
+                                    console.log("📅 Filtro mes cambiado:", currentIndex)
+                                    Qt.callLater(aplicarFiltrosDirecto)
+                                }
                             }
+                        }
+                        
+                        // ✅ FILTRO AÑO
+                        Row {
+                            spacing: marginSmall
+                            Layout.alignment: Qt.AlignVCenter
+                            visible: filtroAño.model.length > 1
                             
                             Label {
                                 text: "Año:"
@@ -702,45 +744,133 @@ Item {
                             ComboBox {
                                 id: filtroAño
                                 width: Math.max(80, screenWidth * 0.08)
-                                model: getAñosDisponibles()
-                                currentIndex: 0  // Año actual
-                                onCurrentIndexChanged: onFiltroChanged()
-                                visible: model.length > 1  // Solo mostrar si hay más de un año
+                                model: obtenerAñosDisponibles()
+                                currentIndex: 0
+                                onCurrentIndexChanged: {
+                                    if (visible) {
+                                        console.log("📅 Filtro año cambiado:", currentText)
+                                        Qt.callLater(aplicarFiltrosDirecto)
+                                    }
+                                }
                             }
                         }
+                        
+                        // ✅ ESPACIADOR PARA EMPUJAR TODO A LA IZQUIERDA
+                        Item {
+                            Layout.fillWidth: true
+                        }
                     }
-                }
-                // ✅ FUNCIÓN PARA TIPOS DE SERVICIOS
-                function getTiposServiciosNombres() {
-                    var nombres = ["Todos los servicios"]
-                    for (var i = 0; i < tiposGastosModel.count; i++) {
-                        nombres.push(tiposGastosModel.get(i).nombre)
+                    
+                    // ✅ TIMER PARA BÚSQUEDA
+                    Timer {
+                        id: searchTimer
+                        interval: 500
+                        repeat: false
+                        onTriggered: aplicarFiltrosDirecto()
                     }
-                    return nombres
                 }
 
-                // ✅ FUNCIÓN PARA AÑOS DISPONIBLES
-                function getAñosDisponibles() {
+                // ✅ FUNCIONES AUXILIARES CORREGIDAS - AGREGAR DESPUÉS DE LA FUNCIÓN debugEstado()
+
+                function obtenerAñosDisponibles() {
                     var años = []
                     var añoActual = new Date().getFullYear()
                     
+                    // Siempre incluir año actual
+                    años.push(añoActual.toString())
+                    
                     // Verificar si hay datos de años anteriores
-                    var tieneAñosAnteriores = false
                     for (var i = 0; i < gastosOriginales.length; i++) {
                         var fechaGasto = new Date(gastosOriginales[i].fechaGasto)
-                        if (fechaGasto.getFullYear() < añoActual) {
-                            tieneAñosAnteriores = true
-                            break
+                        var añoGasto = fechaGasto.getFullYear()
+                        
+                        if (añoGasto < añoActual && años.indexOf(añoGasto.toString()) === -1) {
+                            años.push(añoGasto.toString())
                         }
                     }
                     
-                    // Solo agregar años si hay datos históricos
-                    if (tieneAñosAnteriores) {
-                        años.push((añoActual - 1).toString())  // Año anterior
-                    }
-                    años.push(añoActual.toString())  // Año actual
+                    // Ordenar años de mayor a menor
+                    años.sort(function(a, b) { return parseInt(b) - parseInt(a) })
                     
+                    console.log("📅 Años disponibles:", años)
                     return años
+                }
+
+                // ✅ FUNCIÓN DE FILTRADO MEJORADA
+                function aplicarFiltrosDirecto() {
+                    console.log("🔍 Aplicando filtros directamente...")
+                    
+                    if (gastosOriginales.length === 0) {
+                        console.log("⚠️ No hay datos para filtrar")
+                        return
+                    }
+                    
+                    // Limpiar modelo filtrado
+                    gastosListModel.clear()
+                    
+                    var textoBusqueda = campoBusqueda.text.toLowerCase().trim()
+                    console.log("🔍 Término de búsqueda:", textoBusqueda)
+                    
+                    for (var i = 0; i < gastosOriginales.length; i++) {
+                        var gasto = gastosOriginales[i]
+                        var mostrar = true
+                        
+                        // ✅ FILTRO POR TIPO DE SERVICIO
+                        if (filtroTipoServicio.currentIndex > 0 && mostrar) {
+                            var tipoSeleccionado = filtroTipoServicio.currentText
+                            if (gasto.tipoGasto !== tipoSeleccionado) {
+                                mostrar = false
+                            }
+                        }
+
+                        // ✅ FILTRO POR MES
+                        if (mostrar) {
+                            var fechaGasto = new Date(gasto.fechaGasto)
+                            var mesSeleccionado = filtroMes.currentIndex
+                            
+                            if (fechaGasto.getMonth() !== mesSeleccionado) {
+                                mostrar = false
+                            }
+                        }
+
+                        // ✅ FILTRO POR AÑO (solo si está visible)
+                        if (filtroAño.visible && mostrar) {
+                            var fechaGasto = new Date(gasto.fechaGasto)
+                            var añoSeleccionado = parseInt(filtroAño.currentText)
+                            
+                            if (fechaGasto.getFullYear() !== añoSeleccionado) {
+                                mostrar = false
+                            }
+                        }
+                        
+                        // ✅ FILTRO POR BÚSQUEDA DE TEXTO
+                        if (textoBusqueda.length > 0 && mostrar) {
+                            var descripcion = (gasto.descripcion || "").toLowerCase()
+                            var proveedor = (gasto.proveedor || "").toLowerCase()
+                            var tipoGasto = (gasto.tipoGasto || "").toLowerCase()
+                            var registradoPor = (gasto.registradoPor || "").toLowerCase()
+                            
+                            var encontrado = descripcion.indexOf(textoBusqueda) >= 0 ||
+                                        proveedor.indexOf(textoBusqueda) >= 0 ||
+                                        tipoGasto.indexOf(textoBusqueda) >= 0 ||
+                                        registradoPor.indexOf(textoBusqueda) >= 0
+                            
+                            if (!encontrado) {
+                                mostrar = false
+                            }
+                        }
+                        
+                        // Si pasa todos los filtros, agregarlo al modelo filtrado
+                        if (mostrar) {
+                            gastosListModel.append(gasto)
+                        }
+                    }
+                    
+                    // Resetear a primera página y actualizar paginación
+                    currentPageServicios = 0
+                    updatePaginatedModel()
+                    
+                    console.log("✅ Filtros aplicados. Gastos mostrados:", gastosListModel.count, "de", gastosOriginales.length)
                 }
             
                 // ✅ CONTENEDOR DE TABLA COMPLETAMENTE RESPONSIVO
@@ -1600,12 +1730,15 @@ Item {
                                 return
                             }
                             
+                            // ✅ CORRECCIÓN: Crear objeto con nombres de campo consistentes
                             var gastoData = {
                                 descripcion: descripcionField.text.trim(),
                                 monto: parseFloat(montoField.text).toFixed(2),
                                 fechaGasto: fechaGastoField.text,
-                                proveedorEmpresa: proveedorField.text.trim()
+                                proveedor: proveedorField.text.trim()  // ✅ USAR "proveedor" en lugar de "proveedorEmpresa"
                             }
+                            
+                            console.log("📊 Enviando datos del formulario:", JSON.stringify(gastoData))
                             
                             var success = false
                             
