@@ -1673,14 +1673,6 @@ Item {
             })
             
             console.log("✅ Trabajadores cargados:", trabajadoresDB.length)
-            if (trabajadoresDB.length === 0) {
-                console.log("⚠️ Usando trabajadores fallback")
-                trabajadoresDB = [
-                    "Lic. Carmen Ruiz",
-                    "Lic. Roberto Silva", 
-                    "Lic. Ana Martínez"
-                ]
-            }
         } catch (error) {
             console.error("❌ Error cargando trabajadores:", error)
             trabajadoresDB = ["Lic. Carmen Ruiz", "Lic. Roberto Silva"]
