@@ -1412,55 +1412,78 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                     onClicked: {
-                        var nombreCompleto = nombrePaciente.text + " " + 
-                                        apellidoPaterno.text + " " + 
-                                        apellidoMaterno.text
-                        
-                        if (isEditMode && editingIndex >= 0) {
-                            // Actualizar examen existente
-                            var analisisExistente = analisisListModel.get(editingIndex)
-                            var resultado = laboratorioModel.actualizarExamen(
-                                parseInt(analisisExistente.analisisId),
-                                tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].nombre,
-                                labTestForm.analisisType === "Normal" ? labTestForm.calculatedPrice : 0,
-                                labTestForm.analisisType === "Emergencia" ? labTestForm.calculatedPrice : 0,
-                                detallesConsulta.text,
-                                trabajadorCombo.currentIndex > 0 && trabajadorCombo.currentIndex <= trabajadoresDB.length ? 
-                                    trabajadorCombo.currentIndex : 0
-                            )
-                            
-                            var data = JSON.parse(resultado)
-                            if (data.exito) {
-                                console.log("✅ Examen actualizado exitosamente")
-                            } else {
-                                console.error("❌ Error actualizando:", data.error)
-                            }
-                        } else {
-                            // Crear nuevo examen
-                            // Primero necesitamos crear el paciente si no existe
-                            // Por simplicidad, asumimos que existe un paciente con ID 1
-                            // En producción deberías tener un selector de pacientes
-                            var pacienteId = 1  
-                            
-                            var resultado = laboratorioModel.crearExamen(
-                                tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].nombre,
-                                pacienteId,
-                                labTestForm.analisisType === "Normal" ? labTestForm.calculatedPrice : labTestForm.calculatedPrice / 1.5,
-                                labTestForm.analisisType === "Emergencia" ? labTestForm.calculatedPrice : labTestForm.calculatedPrice * 1.5,
-                                detallesConsulta.text,
-                                trabajadorCombo.currentIndex > 0 && trabajadorCombo.currentIndex <= trabajadoresDB.length ? 
-                                    trabajadorCombo.currentIndex : 0
-                            )
-                            
-                            var data = JSON.parse(resultado)
-                            if (data.exito) {
-                                console.log("✅ Examen creado exitosamente:", data.examen_id)
-                            } else {
-                                console.error("❌ Error creando:", data.error)
-                            }
+                        // Validaciones previas
+                        if (labTestForm.selectedTipoAnalisisIndex < 0) {
+                            console.error("Tipo de análisis no seleccionado")
+                            return
                         }
                         
-                        // Cerrar diálogo
+                        try {
+                            if (isEditMode && editingIndex >= 0) {
+                                // Actualizar examen existente
+                                var analisisExistente = analisisListModel.get(editingIndex)
+                                var tipoAnalisisId = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].id
+                                var trabajadorId = (trabajadorCombo.currentIndex > 0 && 
+                                                trabajadorCombo.currentIndex <= trabajadoresDB.length) ? 
+                                                trabajadorCombo.currentIndex : 0
+                                
+                                var resultado = laboratorioModel.actualizarExamen(
+                                    parseInt(analisisExistente.analisisId),
+                                    tipoAnalisisId,
+                                    labTestForm.analisisType,
+                                    detallesConsulta.text,
+                                    trabajadorId
+                                )
+                                
+                                var data = JSON.parse(resultado)
+                                if (data.exito) {
+                                    console.log("Examen actualizado exitosamente")
+                                    limpiarYCerrarDialogo()
+                                } else {
+                                    console.error("Error actualizando:", data.error)
+                                }
+                            } else {
+                                // Crear nuevo examen - Gestionar paciente inteligentemente
+                                var pacienteId = pacienteModel.buscarOCrearPaciente(
+                                    nombrePaciente.text,
+                                    apellidoPaterno.text,
+                                    apellidoMaterno.text,
+                                    parseInt(edadPaciente.text) || 0
+                                )
+                                
+                                if (pacienteId <= 0) {
+                                    console.error("Error gestionando paciente")
+                                    return
+                                }
+                                
+                                var tipoAnalisisId = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].id
+                                var trabajadorId = (trabajadorCombo.currentIndex > 0 && 
+                                                trabajadorCombo.currentIndex <= trabajadoresDB.length) ? 
+                                                trabajadorCombo.currentIndex : 0
+                                
+                                var resultado = laboratorioModel.crearExamen(
+                                    pacienteId,  // Usa el ID correcto
+                                    tipoAnalisisId,
+                                    labTestForm.analisisType,
+                                    trabajadorId
+                                )
+                                
+                                var data = JSON.parse(resultado)
+                                if (data.exito) {
+                                    console.log("Examen creado exitosamente:", data.examen_id)
+                                    limpiarYCerrarDialogo()
+                                } else {
+                                    console.error("Error creando:", data.error)
+                                }
+                            }
+                            
+                        } catch (error) {
+                            console.error("Error procesando examen:", error)
+                        }
+                    }
+
+                    // Función auxiliar para limpiar (agregar fuera del onClicked)
+                    function limpiarYCerrarDialogo() {
                         showNewLabTestDialog = false
                         selectedRowIndex = -1
                         isEditMode = false
@@ -1471,9 +1494,13 @@ Item {
                         apellidoPaterno.text = ""
                         apellidoMaterno.text = ""
                         edadPaciente.text = ""
+                        detallesConsulta.text = ""
                         tipoAnalisisCombo.currentIndex = 0
                         trabajadorCombo.currentIndex = 0
                         normalRadio.checked = true
+                        
+                        labTestForm.selectedTipoAnalisisIndex = -1
+                        labTestForm.calculatedPrice = 0.0
                     }
                 }
             }
@@ -1589,34 +1616,38 @@ Item {
 
     function cargarDatosDesdeModelo() {
         try {
-            // Cargar exámenes
             var examenesJson = laboratorioModel.examenesJson
-            console.log("🔍 JSON recibido:", examenesJson)
-            
             var examenes = JSON.parse(examenesJson)
-            console.log("🔍 Exámenes parseados:", examenes.length)
             
             analisisOriginales = []
             analisisListModel.clear()
             
             for (var i = 0; i < examenes.length; i++) {
                 var examen = examenes[i]
-                console.log("🔍 Procesando examen:", JSON.stringify(examen))
+                
+                // Determinar precio según tipo
+                var precio = 0
+                if (examen.Tipo === "Emergencia") {
+                    precio = examen.Precio_Emergencia || 0
+                } else {
+                    precio = examen.Precio_Normal || 0
+                }
                 
                 var analisisItem = {
                     analisisId: (examen.id || i + 1).toString(),
                     paciente: examen.paciente_completo || "Paciente Desconocido",
-                    tipoAnalisis: examen.Nombre || "Análisis General",
-                    detalles: examen.Detalles || "Sin detalles",
-                    tipo: (examen.Precio_Emergencia > examen.Precio_Normal) ? "Emergencia" : "Normal",
-                    precio: (examen.Precio_Normal || 0).toFixed(2),
+                    tipoAnalisis: examen.tipo_analisis || "Análisis General",
+                    detalles: examen.detalles || "Sin detalles",
+                    tipo: examen.Tipo || "Normal",
+                    precio: precio.toFixed(2),
                     trabajadorAsignado: (examen.trabajador_completo && examen.trabajador_completo !== "Sin asignar") ? 
                                     examen.trabajador_completo : "",
-                    fecha: new Date().toISOString().split('T')[0],
-                    registradoPor: "Usuario Sistema"
+                    fecha: new Date(examen.Fecha).toISOString().split('T')[0],
+                    registradoPor: examen.registrado_por || "Usuario Sistema",
+                    tipoAnalisisId: examen.Id_Tipo_Analisis,
+                    pacienteId: examen.Id_Paciente
                 }
                 
-                console.log("✅ Item creado:", JSON.stringify(analisisItem))
                 analisisOriginales.push(analisisItem)
                 analisisListModel.append(analisisItem)
             }
@@ -1626,13 +1657,12 @@ Item {
             
         } catch (error) {
             console.error("❌ Error cargando datos:", error)
-            console.error("❌ JSON problemático:", laboratorioModel.examenesJson)
         }
     }
 
     function cargarTiposAnalisisDB() {
         try {
-            var resultado = laboratorioModel.obtenerTiposExamenesComunes()
+            var resultado = laboratorioModel.obtenerTiposAnalisisDisponibles()
             console.log("🔍 Resultado tipos análisis:", resultado)
             
             var data = JSON.parse(resultado)
@@ -1640,26 +1670,23 @@ Item {
             if (data.exito && data.tipos) {
                 tiposAnalisisDB = data.tipos.map(function(tipo) {
                     return {
-                        nombre: tipo.tipo_examen || tipo.Nombre || "Análisis Genérico",
-                        detalles: "Análisis de laboratorio",
-                        precioNormal: tipo.precio_promedio || tipo.precio_promedio_normal || 50.0,
-                        precioEmergencia: (tipo.precio_promedio || tipo.precio_promedio_normal || 50.0) * 1.5
+                        id: tipo.id,
+                        nombre: tipo.Nombre,
+                        detalles: tipo.Descripcion || "Análisis de laboratorio",
+                        precioNormal: tipo.Precio_Normal,
+                        precioEmergencia: tipo.Precio_Emergencia
                     }
                 })
                 console.log("✅ Tipos análisis cargados:", tiposAnalisisDB.length)
             } else {
                 console.log("⚠️ No se pudieron cargar tipos, usando fallback")
-                tiposAnalisisDB = [
-                    { nombre: "Hemograma Completo", detalles: "Análisis completo de sangre", precioNormal: 85.0, precioEmergencia: 130.0 },
-                    { nombre: "Glucosa en Ayunas", detalles: "Determinación de glucosa sérica", precioNormal: 40.0, precioEmergencia: 60.0 },
-                    { nombre: "Perfil Lipídico", detalles: "Colesterol total, HDL, LDL, triglicéridos", precioNormal: 95.0, precioEmergencia: 145.0 }
-                ]
+                tiposAnalisisDB = []
             }
         } catch (error) {
             console.error("❌ Error cargando tipos análisis:", error)
             tiposAnalisisDB = []
         }
-    }
+}
 
     function cargarTrabajadoresDB() {
         try {

@@ -576,19 +576,15 @@ class ConsultaModel(QObject):
             return []
         
     @Slot(str, str, str, int, result=int)
-    def crear_paciente_directo(self, nombre, apellido_p, apellido_m, edad):
+    @Slot(str, str, str, int, result=int)
+    def buscarOCrearPacienteInteligente(self, nombre, apellido_p, apellido_m, edad):
+        """Busca o crea paciente de forma inteligente"""
         try:
-            # Forzar valores mínimos
-            nombre_final = nombre.strip() or "Sin nombre"
-            apellido_p_final = apellido_p.strip() or "Sin apellido"
-            apellido_m_final = apellido_m.strip() or ""
-            edad = max(0, int(edad))  # Asegurar que la edad sea >= 0
-            
-            return self.paciente_repo.create_patient(
-                nombre_final, apellido_p_final, apellido_m_final, edad
+            return self.paciente_repo.buscar_o_crear_paciente(
+                nombre, apellido_p, apellido_m, edad
             )
         except Exception as e:
-            self.operacionError.emit(f"Error creando paciente: {str(e)}")
+            self.operacionError.emit(f"Error gestionando paciente: {str(e)}")
             return -1
         
     # Agregar este método al ConsultaModel
