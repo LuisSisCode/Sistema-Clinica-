@@ -550,6 +550,18 @@ class PacienteModel(QObject):
             self.errorOccurred.emit("Error", f"Error recargando datos: {str(e)}")
         finally:
             self._set_loading(False)
+
+    @Slot(str, str, str, int, result=int)
+    def buscarOCrearPaciente(self, nombre: str, apellido_paterno: str, 
+                            apellido_materno: str = "", edad: int = 0) -> int:
+        """Busca paciente similar o crea nuevo - para uso desde otros módulos"""
+        try:
+            return self.repository.buscar_o_crear_paciente(
+                nombre, apellido_paterno, apellido_materno, edad
+            )
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error gestionando paciente: {str(e)}")
+            return -1
     
     # ===============================
     # MÉTODOS PRIVADOS

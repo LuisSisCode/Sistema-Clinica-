@@ -110,38 +110,31 @@ class LaboratorioModel(QObject):
     # SLOTS PARA OPERACIONES CRUD
     # ===============================
     
-    @Slot(str, int, float, float, str, int, result=str)
-    def crearExamen(self, nombre: str, paciente_id: int, precio_normal: float, 
-                   precio_emergencia: float, detalles: str = "", trabajador_id: int = 0) -> str:
+    @Slot(int, int, str, int, result=str)
+    def crearExamen(self, paciente_id: int, tipo_analisis_id: int, tipo: str = "Normal", 
+                trabajador_id: int = 0) -> str:
         """
         Crea nuevo examen de laboratorio
         """
         try:
             self._set_estado_actual("cargando")
             
-            # Llamar al repository
+            # Usar usuario por defecto (ID 10)
+            usuario_id = 10
+            
             examen_id = self.repository.create_lab_exam(
-                nombre=nombre,
                 paciente_id=paciente_id,
-                precio_normal=precio_normal,
-                precio_emergencia=precio_emergencia,
-                detalles=detalles if detalles else None,
-                trabajador_id=trabajador_id if trabajador_id > 0 else None
+                tipo_analisis_id=tipo_analisis_id,
+                tipo=tipo,
+                trabajador_id=trabajador_id if trabajador_id > 0 else None,
+                usuario_id=usuario_id
             )
             
             if examen_id:
-                # Obtener examen completo
-                examen_completo = self.repository.get_lab_exam_by_id_complete(examen_id)
-                
-                # Emitir signal de éxito
-                self.examenCreado.emit(json.dumps(examen_completo, default=str))
                 self.operacionExitosa.emit(f"Examen creado exitosamente: ID {examen_id}")
-                
-                # Actualizar datos locales
                 self._actualizarExamenes()
-                
                 self._set_estado_actual("listo")
-                return json.dumps({'exito': True, 'examen_id': examen_id, 'examen': examen_completo}, default=str)
+                return json.dumps({'exito': True, 'examen_id': examen_id})
             else:
                 error_msg = "Error creando examen"
                 self.errorOcurrido.emit(error_msg, 'CREATE_ERROR')
@@ -506,14 +499,13 @@ class LaboratorioModel(QObject):
             return json.dumps({'exito': False, 'error': str(e)})
     
     @Slot(result=str)
-    def obtenerTiposExamenesComunes(self) -> str:
-        """Obtiene tipos de exámenes más comunes"""
+    def obtenerTiposAnalisisDisponibles(self) -> str:
+        """Obtiene tipos de análisis disponibles"""
         try:
-            tipos = self.repository.get_common_exam_types(15)
+            tipos = self.repository.get_analysis_types()
             return json.dumps({
                 'exito': True,
-                'tipos': tipos,
-                'total': len(tipos)
+                'tipos': tipos
             }, default=str)
         except Exception as e:
             return json.dumps({'exito': False, 'error': str(e)})

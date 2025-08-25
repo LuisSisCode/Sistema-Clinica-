@@ -1660,45 +1660,50 @@ Item {
             return
         }
         
-        var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
-        
-        var datosConsulta = {
-            "paciente_id": 1, // Esto debería ser el ID real del paciente
-            "especialidad_id": especialidad.id,
-            "detalles": detallesConsulta.text,
-            "tipo_consulta": consultationForm.consultationType.toLowerCase()
-        }
-        
-        console.log("📝 Enviando datos:", JSON.stringify(datosConsulta))
-        
-        var consultaId = consultaModel.crear_consulta(datosConsulta)
-        if (consultaId > 0) {
-            showNewConsultationDialog = false
-            // Limpiar formulario
-            nombrePaciente.text = ""
-            apellidoPaterno.text = ""
-            apellidoMaterno.text = ""
-            detallesConsulta.text = ""
-            especialidadCombo.currentIndex = 0
-        }
-    }
-
-    function obtenerOCrearPaciente(nombre, apellidoPaterno, apellidoMaterno, edad, callback) {
-        if (consultaModel) {
-            var nombreFinal = nombre.trim() || "Sin nombre"
-            var apellidoPaternoFinal = apellidoPaterno.trim() || ""
-            var apellidoMaternoFinal = apellidoMaterno.trim() || ""
-            var edadFinal = parseInt(edad) || 0
-            
-            var pacienteId = consultaModel.crear_paciente_directo(
-                nombreFinal, apellidoPaternoFinal, apellidoMaternoFinal, edadFinal
+        try {
+            // Gestionar paciente inteligentemente
+            var pacienteId = consultaModel.buscarOCrearPacienteInteligente(
+                nombrePaciente.text,
+                apellidoPaterno.text,
+                apellidoMaterno.text,
+                parseInt(edadPaciente.text) || 0
             )
             
-            callback(pacienteId)
-        } else {
-            console.log("CONSULTA DATA:", JSON.stringify(consulta))
-            callback(-1)
+            if (pacienteId <= 0) {
+                showNotification("Error", "Error gestionando datos del paciente")
+                return
+            }
+            
+            var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
+            
+            var datosConsulta = {
+                "paciente_id": pacienteId,  // Ahora usa el ID real
+                "especialidad_id": especialidad.id,
+                "detalles": detallesConsulta.text,
+                "tipo_consulta": consultationForm.consultationType.toLowerCase()
+            }
+            
+            console.log("📝 Enviando datos:", JSON.stringify(datosConsulta))
+            
+            var consultaId = consultaModel.crear_consulta(datosConsulta)
+            if (consultaId > 0) {
+                limpiarYCerrarDialogoConsulta()
+            }
+            
+        } catch (error) {
+            console.error("Error creando consulta:", error)
+            showNotification("Error", "Error procesando consulta")
         }
+    }
+    function limpiarYCerrarDialogoConsulta() {
+        showNewConsultationDialog = false
+        nombrePaciente.text = ""
+        apellidoPaterno.text = ""
+        apellidoMaterno.text = ""
+        edadPaciente.text = ""
+        detallesConsulta.text = ""
+        especialidadCombo.currentIndex = 0
+        normalRadio.checked = true
     }
 
     // Crea una consulta usando el pacienteId proporcionado

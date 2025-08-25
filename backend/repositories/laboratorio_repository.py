@@ -24,59 +24,52 @@ class LaboratorioRepository(BaseRepository):
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene todos los exámenes de laboratorio con información completa"""
         return self.get_all_with_details()
+    def get_analysis_types(self) -> List[Dict[str, Any]]:
+        """Obtiene tipos de análisis disponibles"""
+        query = """
+        SELECT id, Nombre, Descripcion, Precio_Normal, Precio_Emergencia 
+        FROM Tipos_Analisis 
+        ORDER BY Nombre
+        """
+        return self._execute_query(query)
+
+    def get_analysis_type_by_id(self, tipo_id: int) -> Optional[Dict[str, Any]]:
+        """Obtiene tipo de análisis por ID"""
+        query = "SELECT * FROM Tipos_Analisis WHERE id = ?"
+        return self._execute_query(query, (tipo_id,), fetch_one=True)
     
     # ===============================
     # CRUD ESPECÍFICO
     # ===============================
     
-    def create_lab_exam(self, nombre: str, paciente_id: int, precio_normal: float,
-                       precio_emergencia: float, detalles: str = None, 
-                       trabajador_id: int = None) -> int:
+    def create_lab_exam(self, paciente_id: int, tipo_analisis_id: int, tipo: str = "Normal", 
+                   trabajador_id: int = None, usuario_id: int = 10) -> int:
         """
         Crea nuevo examen de laboratorio
-        
-        Args:
-            nombre: Nombre del examen
-            paciente_id: ID del paciente
-            precio_normal: Precio en horario normal
-            precio_emergencia: Precio en emergencia
-            detalles: Descripción del examen (opcional)
-            trabajador_id: ID del trabajador asignado (opcional)
-            
-        Returns:
-            ID del examen creado
         """
-        # Validaciones
-        nombre = validate_required_string(nombre, "nombre", 3)
         validate_required(paciente_id, "paciente_id")
-        precio_normal = validate_positive_number(precio_normal, "precio_normal")
-        precio_emergencia = validate_positive_number(precio_emergencia, "precio_emergencia")
+        validate_required(tipo_analisis_id, "tipo_analisis_id")
+        validate_required(usuario_id, "usuario_id")
         
-        # Validar que precio de emergencia >= precio normal
-        if precio_emergencia < precio_normal:
-            raise ValidationError("precio_emergencia", precio_emergencia,
-                                "Precio de emergencia debe ser mayor o igual al normal")
-        
-        # Verificar que existan las entidades relacionadas
+        # Verificar entidades
         if not self._patient_exists(paciente_id):
             raise ValidationError("paciente_id", paciente_id, "Paciente no encontrado")
-        
+        if not self._analysis_type_exists(tipo_analisis_id):
+            raise ValidationError("tipo_analisis_id", tipo_analisis_id, "Tipo de análisis no encontrado")
         if trabajador_id and not self._worker_exists(trabajador_id):
             raise ValidationError("trabajador_id", trabajador_id, "Trabajador no encontrado")
         
-        # Crear examen
         lab_data = {
-            'Nombre': nombre.strip(),
-            'Detalles': detalles.strip() if detalles else '',
-            'Precio_Normal': precio_normal,
-            'Precio_Emergencia': precio_emergencia,
             'Id_Paciente': paciente_id,
-            'Id_Trabajador': trabajador_id
+            'Id_Tipo_Analisis': tipo_analisis_id,
+            'Id_Trabajador': trabajador_id,
+            'Fecha': datetime.now(),
+            'Id_RegistradoPor': usuario_id,
+            'Tipo': tipo.capitalize()
         }
         
         lab_id = self.insert(lab_data)
-        print(f"🔬 Examen de laboratorio creado: {nombre} para Paciente ID {paciente_id} - ID: {lab_id}")
-        
+        print(f"🧪 Examen creado: ID {lab_id}")
         return lab_id
     
     def update_lab_exam(self, lab_id: int, nombre: str = None, precio_normal: float = None,
@@ -143,23 +136,32 @@ class LaboratorioRepository(BaseRepository):
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtiene exámenes con información completa"""
         query = """
-        SELECT l.id, l.Nombre, l.Detalles, l.Precio_Normal, l.Precio_Emergencia,
-               -- Paciente
-               l.Id_Paciente,
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Edad as paciente_edad,
-               -- Trabajador (puede ser NULL)
-               l.Id_Trabajador,
-               CASE 
-                   WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno)
-                   ELSE 'Sin asignar'
-               END as trabajador_completo,
-               tt.Tipo as trabajador_tipo
+        SELECT l.id, l.Fecha, l.Tipo,
+            -- Paciente
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
+            p.Edad as paciente_edad,
+            -- Tipo de Análisis
+            ta.Nombre as tipo_analisis,
+            ta.Descripcion as detalles,
+            ta.Precio_Normal, ta.Precio_Emergencia,
+            -- Trabajador (puede ser NULL)
+            l.Id_Trabajador,
+            CASE 
+                WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno)
+                ELSE 'Sin asignar'
+            END as trabajador_completo,
+            tt.Tipo as trabajador_tipo,
+            -- Usuario registro
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as registrado_por,
+            -- IDs para referencias
+            l.Id_Paciente, l.Id_Tipo_Analisis, l.Id_RegistradoPor
         FROM Laboratorio l
         INNER JOIN Pacientes p ON l.Id_Paciente = p.id
+        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+        INNER JOIN Usuario u ON l.Id_RegistradoPor = u.id
         LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
         LEFT JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        ORDER BY l.id DESC
+        ORDER BY l.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         return self._execute_query(query, (limit,))
@@ -564,3 +566,9 @@ class LaboratorioRepository(BaseRepository):
         """Override para invalidación específica"""
         super()._invalidate_cache_after_modification()
         self.invalidate_laboratory_caches()
+
+    def _analysis_type_exists(self, tipo_id: int) -> bool:
+        """Verifica si existe el tipo de análisis"""
+        query = "SELECT COUNT(*) as count FROM Tipos_Analisis WHERE id = ?"
+        result = self._execute_query(query, (tipo_id,), fetch_one=True)
+        return result['count'] > 0 if result else False

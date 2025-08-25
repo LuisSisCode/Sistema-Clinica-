@@ -418,7 +418,57 @@ class PacienteRepository(BaseRepository):
             patient['grupo_etario'] = self.get_age_group(patient['Edad'])
         
         return patients
-    
+    def buscar_pacientes_similares(self, nombre: str, apellido_paterno: str, 
+                              apellido_materno: str = "", edad: int = 0) -> List[Dict[str, Any]]:
+        """Busca pacientes con nombres similares"""
+        query = """
+        SELECT *, 
+            (CASE 
+                WHEN Nombre = ? AND Apellido_Paterno = ? AND Apellido_Materno = ? THEN 100
+                WHEN Nombre = ? AND Apellido_Paterno = ? THEN 90
+                WHEN Nombre LIKE ? AND Apellido_Paterno LIKE ? THEN 70
+                ELSE 50
+            END) as similitud_score
+        FROM Pacientes 
+        WHERE (Nombre LIKE ? OR Apellido_Paterno LIKE ? OR Apellido_Materno LIKE ?)
+        AND ABS(Edad - ?) <= 5
+        ORDER BY similitud_score DESC, Nombre
+        """
+        
+        nombre_like = f"%{nombre}%"
+        apellido_p_like = f"%{apellido_paterno}%"
+        apellido_m_like = f"%{apellido_materno}%" if apellido_materno else "%"
+        
+        return self._execute_query(query, (
+            nombre, apellido_paterno, apellido_materno,  # Exacto 100%
+            nombre, apellido_paterno,                     # Sin materno 90%
+            nombre_like, apellido_p_like,                 # Similar 70%
+            nombre_like, apellido_p_like, apellido_m_like,  # Búsqueda general
+            edad or 0
+        ))
+
+    def buscar_o_crear_paciente(self, nombre: str, apellido_paterno: str, 
+                            apellido_materno: str = "", edad: int = 0) -> int:
+        """Busca paciente similar o crea nuevo"""
+        # Limpiar datos
+        nombre = nombre.strip() or "Sin nombre"
+        apellido_paterno = apellido_paterno.strip() or "Sin apellido"
+        apellido_materno = apellido_materno.strip()
+        edad = max(0, edad or 0)
+        
+        # Buscar similares
+        similares = self.buscar_pacientes_similares(nombre, apellido_paterno, apellido_materno, edad)
+        
+        # Si encuentra match con alta similitud (>=90), usar existente
+        if similares and similares[0]['similitud_score'] >= 90:
+            paciente_id = similares[0]['id']
+            print(f"👤 Paciente existente encontrado: {nombre} {apellido_paterno} -> ID {paciente_id}")
+            return paciente_id
+        
+        # Crear nuevo paciente
+        paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, edad)
+        print(f"👤 Nuevo paciente creado: {nombre} {apellido_paterno} -> ID {paciente_id}")
+        return paciente_id
     # ===============================
     # CACHÉ
     # ===============================
