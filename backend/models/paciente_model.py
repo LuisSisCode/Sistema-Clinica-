@@ -562,6 +562,22 @@ class PacienteModel(QObject):
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error gestionando paciente: {str(e)}")
             return -1
+        
+    @Slot(str, str, str, int, result=int)
+    def buscarOCrearPacienteInteligente(self, nombre: str, apellido_paterno: str, 
+                                    apellido_materno: str = "", edad: int = 0) -> int:
+        """Versión inteligente para módulos específicos como Laboratorio"""
+        try:
+            self._set_loading(True)
+            return self.repository.buscar_o_crear_paciente(nombre, apellido_paterno, apellido_materno, edad)
+        except ValidationError as ve:
+            self.errorOccurred.emit("Datos inválidos", ve.message)
+            return -1
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error gestionando paciente: {str(e)}")
+            return -1
+        finally:
+            self._set_loading(False)
     
     # ===============================
     # MÉTODOS PRIVADOS

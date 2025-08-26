@@ -586,6 +586,11 @@ class ConsultaModel(QObject):
         except Exception as e:
             self.operacionError.emit(f"Error gestionando paciente: {str(e)}")
             return -1
+    
+    @Slot(str, str, str, int, result=int) 
+    def buscarOCrearPaciente(self, nombre, apellido_p, apellido_m, edad):
+        """Alias para compatibilidad con Laboratorio"""
+        return self.buscarOCrearPacienteInteligente(nombre, apellido_p, apellido_m, edad)
         
     # Agregar este método al ConsultaModel
     @Slot(str, result='QVariantList')

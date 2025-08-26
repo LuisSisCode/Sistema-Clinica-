@@ -7,7 +7,11 @@ import Clinica.Models 1.0
 Item {
     id: laboratorioRoot
     objectName: "laboratorioRoot"
-    
+
+    property var pacienteModel: appController ? appController.paciente_model_instance : null
+    // Estados de UI
+    property bool isCreatingExam: false
+    property bool showLoadingAnimation: false
     // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
     readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
@@ -42,7 +46,7 @@ Item {
 
     // Datos originales
     property var analisisOriginales: []
-
+  
     // Distribución de columnas responsive (como en Consultas)
     readonly property real colId: 0.04
     readonly property real colPaciente: 0.15
@@ -805,6 +809,7 @@ Item {
                                                 var analisisId = model.analisisId
                                                 var realIndex = -1
                                                 
+                                                // Buscar el índice real en el modelo completo
                                                 for (var i = 0; i < analisisListModel.count; i++) {
                                                     if (analisisListModel.get(i).analisisId === analisisId) {
                                                         realIndex = i
@@ -812,11 +817,16 @@ Item {
                                                     }
                                                 }
                                                 
-                                                isEditMode = true
-                                                editingIndex = realIndex
-                                                
-                                                console.log("Editando análisis ID:", analisisId, "índice real:", realIndex)
-                                                showNewLabTestDialog = true
+                                                if (realIndex >= 0) {
+                                                    isEditMode = true
+                                                    editingIndex = realIndex
+                                                    
+                                                    console.log("📝 Editando análisis ID:", analisisId, "índice real:", realIndex)
+                                                    showNewLabTestDialog = true
+                                                } else {
+                                                    console.error("❌ No se pudo encontrar el análisis para editar")
+                                                    showErrorMessage("No se pudo cargar el análisis para editar")
+                                                }
                                             }
                                         }
                                         
@@ -1001,20 +1011,22 @@ Item {
             if (isEditMode && editingIndex >= 0) {
                 var analisis = analisisListModel.get(editingIndex)
                 
-                var nombreCompleto = analisis.paciente.split(" ")
-                nombrePaciente.text = nombreCompleto[0] || ""
-                apellidoPaterno.text = nombreCompleto[1] || ""
-                apellidoMaterno.text = nombreCompleto.slice(2).join(" ") || ""
+                // Dividir el nombre completo en partes
+                var partesNombre = analisis.paciente.split(" ")
+                nombrePaciente.text = partesNombre[0] || ""
+                apellidoPaterno.text = partesNombre[1] || ""
+                apellidoMaterno.text = partesNombre.slice(2).join(" ") || ""
                 
-                var tipoAnalisisNombre = analisis.tipoAnalisis
-                for (var i = 0; i < tiposAnalisisDB.length; i++) {  // CAMBIAR AQUÍ
-                    if (tiposAnalisisDB[i].nombre === tipoAnalisisNombre) {  // CAMBIAR AQUÍ
+                // Buscar y seleccionar el tipo de análisis
+                for (var i = 0; i < tiposAnalisisDB.length; i++) {
+                    if (tiposAnalisisDB[i].id === analisis.tipoAnalisisId) {
                         tipoAnalisisCombo.currentIndex = i + 1
                         labTestForm.selectedTipoAnalisisIndex = i
                         break
                     }
                 }
                 
+                // Establecer tipo de servicio
                 if (analisis.tipo === "Normal") {
                     normalRadio.checked = true
                     labTestForm.analisisType = "Normal"
@@ -1023,14 +1035,36 @@ Item {
                     labTestForm.analisisType = "Emergencia"
                 }
                 
-                labTestForm.calculatedPrice = parseFloat(analisis.precio)
-                
-                for (var j = 0; j < trabajadoresDB.length; j++) {  // CAMBIAR AQUÍ
-                    if (trabajadoresDB[j] === analisis.trabajadorAsignado) {  // CAMBIAR AQUÍ
-                        trabajadorCombo.currentIndex = j + 1
-                        break
+                // Calcular precio según tipo seleccionado
+                if (labTestForm.selectedTipoAnalisisIndex >= 0) {
+                    var tipoAnalisis = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex]
+                    if (labTestForm.analisisType === "Normal") {
+                        labTestForm.calculatedPrice = tipoAnalisis.precioNormal
+                    } else {
+                        labTestForm.calculatedPrice = tipoAnalisis.precioEmergencia
                     }
                 }
+                
+                // Seleccionar trabajador si existe
+                if (analisis.trabajadorId > 0) {
+                    for (var j = 0; j < trabajadoresDB.length; j++) {
+                        if (trabajadoresDB[j].id === analisis.trabajadorId) {
+                            trabajadorCombo.currentIndex = j + 1
+                            break
+                        }
+                    }
+                } else {
+                    trabajadorCombo.currentIndex = 0
+                }
+                
+                // Cargar detalles si existen
+                if (analisis.detalles && analisis.detalles !== "Sin detalles") {
+                    detallesConsulta.text = analisis.detalles
+                } else {
+                    detallesConsulta.text = ""
+                }
+                
+                console.log("📝 Datos cargados para edición:", analisis)
             }
         }
         
@@ -1289,7 +1323,8 @@ Item {
                     model: {
                         var list = ["Seleccionar trabajador..."]
                         for (var i = 0; i < trabajadoresDB.length; i++) {
-                            list.push(trabajadoresDB[i])
+                            // CORREGIDO: Usar el nombre en lugar del objeto completo
+                            list.push(trabajadoresDB[i].nombre)
                         }
                         list.push("Sin asignar")
                         return list
@@ -1395,14 +1430,25 @@ Item {
                 }
                 
                 Button {
-                    text: isEditMode ? "Actualizar" : "Guardar"
+                    text: {
+                        if (isCreatingExam) return "Procesando..."
+                        return isEditMode ? "Actualizar" : "Guardar"
+                    }
                     enabled: labTestForm.selectedTipoAnalisisIndex >= 0 && 
-                             nombrePaciente.text.length > 0
+                            nombrePaciente.text.length >= 2 && 
+                            edadPaciente.text.length > 0 && 
+                            !isCreatingExam
                     Layout.preferredHeight: baseUnit * 4
+                    
                     background: Rectangle {
-                        color: parent.enabled ? primaryColor : "#bdc3c7"
+                        color: {
+                            if (!parent.enabled) return "#bdc3c7"
+                            if (isCreatingExam) return "#3498DB" 
+                            return primaryColor
+                        }
                         radius: baseUnit
                     }
+                    
                     contentItem: Label {
                         text: parent.text
                         color: whiteColor
@@ -1411,96 +1457,97 @@ Item {
                         font.family: "Segoe UI, Arial, sans-serif"
                         horizontalAlignment: Text.AlignHCenter
                     }
+                    
                     onClicked: {
-                        // Validaciones previas
                         if (labTestForm.selectedTipoAnalisisIndex < 0) {
-                            console.error("Tipo de análisis no seleccionado")
+                            showErrorMessage("Debe seleccionar un tipo de análisis")
                             return
+                        }
+                        if (nombrePaciente.text.trim().length < 2) {
+                            showErrorMessage("Nombre del paciente es obligatorio")
+                            return
+                        }
+                        if (!edadPaciente.text || parseInt(edadPaciente.text) < 0) {
+                            showErrorMessage("Edad del paciente es obligatoria") 
+                            return
+                        }
+
+                        isCreatingExam = true
+                        
+                        // Crear función para manejar la finalización
+                        function finalizarProceso(exito, mensaje) {
+                            isCreatingExam = false;
+                            if (exito) {
+                                showSuccessMessage(mensaje);
+                                limpiarYCerrarDialogo();
+                            } else {
+                                showErrorMessage(mensaje);
+                            }
                         }
                         
                         try {
                             if (isEditMode && editingIndex >= 0) {
                                 // Actualizar examen existente
-                                var analisisExistente = analisisListModel.get(editingIndex)
-                                var tipoAnalisisId = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].id
-                                var trabajadorId = (trabajadorCombo.currentIndex > 0 && 
-                                                trabajadorCombo.currentIndex <= trabajadoresDB.length) ? 
-                                                trabajadorCombo.currentIndex : 0
+                                var analisisExistente = analisisListModel.get(editingIndex);
+                                var tipoAnalisisId = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].id;
+                                
+                                // CORREGIDO: Obtener ID del trabajador seleccionado
+                                var trabajadorId = (trabajadorCombo.currentIndex > 0) ? 
+                                    trabajadoresDB[trabajadorCombo.currentIndex - 1].id : 0;
+                                if (trabajadorCombo.currentIndex > 0 && 
+                                    trabajadorCombo.currentIndex <= trabajadoresDB.length) {
+                                    trabajadorId = trabajadoresDB[trabajadorCombo.currentIndex - 1].id;
+                                }
                                 
                                 var resultado = laboratorioModel.actualizarExamen(
                                     parseInt(analisisExistente.analisisId),
                                     tipoAnalisisId,
                                     labTestForm.analisisType,
-                                    detallesConsulta.text,
-                                    trabajadorId
+                                    trabajadorId,
+                                    detallesConsulta.text
                                 )
                                 
-                                var data = JSON.parse(resultado)
-                                if (data.exito) {
-                                    console.log("Examen actualizado exitosamente")
-                                    limpiarYCerrarDialogo()
-                                } else {
-                                    console.error("Error actualizando:", data.error)
-                                }
+                                var data = JSON.parse(resultado);
+                                finalizarProceso(data.exito, data.exito ? "Examen actualizado exitosamente" : "Error: " + data.error);
                             } else {
-                                // Crear nuevo examen - Gestionar paciente inteligentemente
-                                var pacienteId = pacienteModel.buscarOCrearPaciente(
-                                    nombrePaciente.text,
-                                    apellidoPaterno.text,
-                                    apellidoMaterno.text,
-                                    parseInt(edadPaciente.text) || 0
-                                )
+                                // Crear nuevo examen
+                                var nombre = nombrePaciente.text.trim();
+                                var apellidoP = apellidoPaterno.text.trim();
+                                var apellidoM = apellidoMaterno.text.trim();
+                                var edad = parseInt(edadPaciente.text) || 0;
+                                
+                                // Buscar o crear paciente de forma segura
+                                var pacienteId = buscarOCrearPacienteSeguro(nombre, apellidoP, apellidoM, edad);
                                 
                                 if (pacienteId <= 0) {
-                                    console.error("Error gestionando paciente")
-                                    return
+                                    finalizarProceso(false, "Error gestionando datos del paciente");
+                                    return;
                                 }
                                 
-                                var tipoAnalisisId = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].id
-                                var trabajadorId = (trabajadorCombo.currentIndex > 0 && 
-                                                trabajadorCombo.currentIndex <= trabajadoresDB.length) ? 
-                                                trabajadorCombo.currentIndex : 0
+                                var tipoAnalisisId = tiposAnalisisDB[labTestForm.selectedTipoAnalisisIndex].id;
+                                
+                                // CORREGIDO: Obtener ID del trabajador seleccionado
+                                var trabajadorId = (trabajadorCombo.currentIndex > 0) ? 
+                                    trabajadoresDB[trabajadorCombo.currentIndex - 1].id : 0;
+                                if (trabajadorCombo.currentIndex > 0 && 
+                                    trabajadorCombo.currentIndex <= trabajadoresDB.length) {
+                                    trabajadorId = trabajadoresDB[trabajadorCombo.currentIndex - 1].id;
+                                }
                                 
                                 var resultado = laboratorioModel.crearExamen(
-                                    pacienteId,  // Usa el ID correcto
+                                    pacienteId,
                                     tipoAnalisisId,
                                     labTestForm.analisisType,
-                                    trabajadorId
-                                )
+                                    trabajadorId,
+                                    detallesConsulta.text
+                                );
                                 
-                                var data = JSON.parse(resultado)
-                                if (data.exito) {
-                                    console.log("Examen creado exitosamente:", data.examen_id)
-                                    limpiarYCerrarDialogo()
-                                } else {
-                                    console.error("Error creando:", data.error)
-                                }
+                                var data = JSON.parse(resultado);
+                                finalizarProceso(data.exito, data.exito ? "Examen creado exitosamente" : "Error: " + data.error);
                             }
-                            
                         } catch (error) {
-                            console.error("Error procesando examen:", error)
+                            finalizarProceso(false, "Error inesperado: " + error);
                         }
-                    }
-
-                    // Función auxiliar para limpiar (agregar fuera del onClicked)
-                    function limpiarYCerrarDialogo() {
-                        showNewLabTestDialog = false
-                        selectedRowIndex = -1
-                        isEditMode = false
-                        editingIndex = -1
-                        
-                        // Limpiar campos
-                        nombrePaciente.text = ""
-                        apellidoPaterno.text = ""
-                        apellidoMaterno.text = ""
-                        edadPaciente.text = ""
-                        detallesConsulta.text = ""
-                        tipoAnalisisCombo.currentIndex = 0
-                        trabajadorCombo.currentIndex = 0
-                        normalRadio.checked = true
-                        
-                        labTestForm.selectedTipoAnalisisIndex = -1
-                        labTestForm.calculatedPrice = 0.0
                     }
                 }
             }
@@ -1593,6 +1640,49 @@ Item {
                     "- Mostrando", analisisPaginadosModel.count, "de", totalItems,
                     "- Elementos por página:", itemsPerPageLaboratorio)
     }
+
+    function buscarOCrearPacienteSeguro(nombre, apellidoP, apellidoM, edad) {
+        console.log("Buscando/creando paciente:", nombre, apellidoP, apellidoM, edad);
+        
+        if (!nombre || nombre.trim().length < 2) {
+            showErrorMessage("Nombre es obligatorio para análisis de laboratorio");
+            return -1;
+        }
+        if (!edad || edad < 0) {
+            showErrorMessage("Edad es obligatoria para análisis de laboratorio");
+            return -1;
+        }
+
+        // Intentar reconectar si no está disponible
+        if (!pacienteModel && typeof appController !== 'undefined') {
+            pacienteModel = appController.paciente_model_instance;
+            console.log("Reconectando a PacienteModel:", pacienteModel ? "éxito" : "falló");
+        }
+
+        // Usar pacienteModel si está disponible
+        if (pacienteModel && typeof pacienteModel.buscarOCrearPacienteInteligente === 'function') {
+            console.log("Usando PacienteModel para crear/buscar paciente");
+            var pacienteId = pacienteModel.buscarOCrearPacienteInteligente(
+                nombre, apellidoP, apellidoM, edad
+            );
+            console.log("Paciente ID obtenido:", pacienteId);
+            return pacienteId;
+        }
+        
+        // Fallback - buscar en los pacientes existentes
+        for (var i = 0; i < analisisOriginales.length; i++) {
+            var analisis = analisisOriginales[i];
+            if (analisis.paciente.toLowerCase().includes(nombre.toLowerCase()) &&
+                analisis.paciente.toLowerCase().includes(apellidoP.toLowerCase())) {
+                console.log("Paciente existente encontrado:", analisis.pacienteId);
+                return analisis.pacienteId;
+            }
+        }
+        
+        // Si no se encuentra, crear uno temporal (esto debería ser manejado por el backend)
+        console.log("Creando paciente temporal con ID negativo");
+        return -9999; // ID temporal que deberá ser manejado por el backend
+    }
     
     function getTotalLaboratorioCount() {
         return analisisOriginales.length
@@ -1600,6 +1690,21 @@ Item {
     
     Component.onCompleted: {
         console.log("🧪 Módulo Laboratorio iniciado")
+        
+        function conectarModelos() {
+            if (typeof appController !== 'undefined') {
+                pacienteModel = appController.paciente_model_instance
+                
+                if (pacienteModel) {
+                    console.log("👥 PacienteModel conectado para Laboratorio")
+                    return true
+                }
+            }
+            return false
+        }
+        
+        // LLAMAR la función y continuar con la inicialización
+        var modeloConectado = conectarModelos()
         
         // Cargar datos desde el modelo Python
         laboratorioModel.cargarExamenes()
@@ -1612,6 +1717,7 @@ Item {
         cargarDatosDesdeModelo()
         
         console.log("📱 Elementos por página calculados:", itemsPerPageLaboratorio)
+        console.log("👥 PacienteModel disponible:", modeloConectado)
     }
 
     function cargarDatosDesdeModelo() {
@@ -1636,16 +1742,17 @@ Item {
                 var analisisItem = {
                     analisisId: (examen.id || i + 1).toString(),
                     paciente: examen.paciente_completo || "Paciente Desconocido",
+                    pacienteId: examen.Id_Paciente || 0,
                     tipoAnalisis: examen.tipo_analisis || "Análisis General",
-                    detalles: examen.detalles || "Sin detalles",
+                    tipoAnalisisId: examen.Id_Tipo_Analisis || 0,
+                    detalles: examen.Detalles || examen.detalles_analisis || "Sin detalles",
                     tipo: examen.Tipo || "Normal",
                     precio: precio.toFixed(2),
                     trabajadorAsignado: (examen.trabajador_completo && examen.trabajador_completo !== "Sin asignar") ? 
                                     examen.trabajador_completo : "",
+                    trabajadorId: examen.Id_Trabajador || 0,
                     fecha: new Date(examen.Fecha).toISOString().split('T')[0],
-                    registradoPor: examen.registrado_por || "Usuario Sistema",
-                    tipoAnalisisId: examen.Id_Tipo_Analisis,
-                    pacienteId: examen.Id_Paciente
+                    registradoPor: examen.registrado_por || "Usuario Sistema"
                 }
                 
                 analisisOriginales.push(analisisItem)
@@ -1659,7 +1766,6 @@ Item {
             console.error("❌ Error cargando datos:", error)
         }
     }
-
     function cargarTiposAnalisisDB() {
         try {
             var resultado = laboratorioModel.obtenerTiposAnalisisDisponibles()
@@ -1686,26 +1792,76 @@ Item {
             console.error("❌ Error cargando tipos análisis:", error)
             tiposAnalisisDB = []
         }
-}
+    }
 
     function cargarTrabajadoresDB() {
         try {
-            var trabajadoresJson = laboratorioModel.trabajadoresJson
-            console.log("🔍 JSON trabajadores:", trabajadoresJson)
+            var trabajadoresJson = laboratorioModel.trabajadoresJson;
+            console.log("🔍 JSON trabajadores raw:", trabajadoresJson);
             
-            var trabajadores = JSON.parse(trabajadoresJson)
+            if (!trabajadoresJson || trabajadoresJson === "[]") {
+                console.log("⚠️ No hay trabajadores, usando fallback");
+                trabajadoresDB = [
+                    {id: 1, nombre: "Lic. Carmen Ruiz", tipo: "Laboratorio"},
+                    {id: 2, nombre: "Lic. Roberto Silva", tipo: "Laboratorio"}
+                ];
+                return;
+            }
             
-            trabajadoresDB = trabajadores.map(function(t) {
-                return t.nombre_completo || t.trabajador_completo || "Trabajador Desconocido"
-            })
+            var trabajadoresData = JSON.parse(trabajadoresJson);
+            console.log("📋 Trabajadores parseados:", trabajadoresData.length);
             
-            console.log("✅ Trabajadores cargados:", trabajadoresDB.length)
+            trabajadoresDB = [];
+            for (var i = 0; i < trabajadoresData.length; i++) {
+                var trabajador = trabajadoresData[i];
+                
+                // Extraer nombre completo de diferentes fuentes posibles
+                var nombreCompleto = trabajador.nombre_completo || 
+                                trabajador.trabajador_completo ||
+                                (trabajador.Nombre + " " + (trabajador.Apellido_Paterno || "")) ||
+                                "Trabajador " + (i + 1);
+                
+                trabajadoresDB.push({
+                    id: trabajador.id || (i + 1),
+                    nombre: nombreCompleto.trim(),
+                    tipo: trabajador.tipo_trabajador || trabajador.Tipo || "Laboratorio"
+                });
+            }
+            
+            console.log("✅ Trabajadores procesados:", trabajadoresDB.length);
+            // DEBUG: Mostrar cada trabajador
+            for (var j = 0; j < Math.min(3, trabajadoresDB.length); j++) {
+                console.log(`👤 Trabajador ${j}:`, trabajadoresDB[j].nombre, "ID:", trabajadoresDB[j].id);
+            }
+            
         } catch (error) {
-            console.error("❌ Error cargando trabajadores:", error)
-            trabajadoresDB = ["Lic. Carmen Ruiz", "Lic. Roberto Silva"]
+            console.error("❌ Error cargando trabajadores:", error);
+            // Fallback con trabajadores por defecto
+            trabajadoresDB = [
+                {id: 1, nombre: "Lic. Carmen Ruiz", tipo: "Laboratorio"},
+                {id: 2, nombre: "Lic. Roberto Silva", tipo: "Laboratorio"}
+            ];
         }
     }
-
+    function limpiarYCerrarDialogo() {
+        showNewLabTestDialog = false
+        selectedRowIndex = -1
+        isEditMode = false
+        editingIndex = -1
+        
+        // Limpiar campos
+        nombrePaciente.text = ""
+        apellidoPaterno.text = ""
+        apellidoMaterno.text = ""
+        edadPaciente.text = ""
+        detallesConsulta.text = ""
+        tipoAnalisisCombo.currentIndex = 0
+        trabajadorCombo.currentIndex = 0
+        normalRadio.checked = true
+        
+        labTestForm.selectedTipoAnalisisIndex = -1
+        labTestForm.calculatedPrice = 0.0
+    }
     function showSuccessMessage(mensaje) {
         console.log("✅ Éxito:", mensaje)
         // Mostrar notificación visual de éxito
@@ -1714,7 +1870,6 @@ Item {
 
     function showErrorMessage(mensaje) {
         console.log("❌ Error:", mensaje)
-        // Mostrar notificación visual de error
-        Qt.createQmlObject('import QtQuick 2.15; import QtQuick.Controls 2.15; Rectangle { width: 300; height: 50; color: "#E74C3C"; radius: 8; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 40; z: 999; Label { anchors.centerIn: parent; text: "' + mensaje + '"; color: "white"; font.bold: true; font.pixelSize: 18; } Timer { interval: 2500; running: true; repeat: false; onTriggered: parent.destroy(); } }', laboratorioRoot, "errorToast")
+        Qt.createQmlObject('import QtQuick 2.15; import QtQuick.Controls 2.15; Rectangle { width: 300; height: 50; color: "#E74C3C"; radius: 8; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 40; z: 999; Label { anchors.centerIn: parent; text: "' + mensaje + '"; color: "white"; font.bold: true; font.pixelSize: 18; } Timer { interval: 3000; running: true; repeat: false; onTriggered: parent.destroy(); } }', laboratorioRoot, "errorToast")
     }
 }

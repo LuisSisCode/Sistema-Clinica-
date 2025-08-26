@@ -110,9 +110,9 @@ class LaboratorioModel(QObject):
     # SLOTS PARA OPERACIONES CRUD
     # ===============================
     
-    @Slot(int, int, str, int, result=str)
-    def crearExamen(self, paciente_id: int, tipo_analisis_id: int, tipo: str = "Normal", 
-                trabajador_id: int = 0) -> str:
+    @Slot(int, int, str, int, str, result=str)
+    def crearExamen(self, paciente_id: int, tipo_analisis_id: int, tipo_servicio: str, 
+                    trabajador_id: int = 0, detalles: str = "") -> str:
         """
         Crea nuevo examen de laboratorio
         """
@@ -125,9 +125,10 @@ class LaboratorioModel(QObject):
             examen_id = self.repository.create_lab_exam(
                 paciente_id=paciente_id,
                 tipo_analisis_id=tipo_analisis_id,
-                tipo=tipo,
+                tipo=tipo_servicio,
                 trabajador_id=trabajador_id if trabajador_id > 0 else None,
-                usuario_id=usuario_id
+                usuario_id=usuario_id,
+                detalles=detalles
             )
             
             if examen_id:
@@ -147,28 +148,22 @@ class LaboratorioModel(QObject):
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
     
-    @Slot(int, str, float, float, str, int, result=str)
-    def actualizarExamen(self, examen_id: int, nombre: str = "", precio_normal: float = 0,
-                        precio_emergencia: float = 0, detalles: str = "", trabajador_id: int = -1) -> str:
+    @Slot(int, int, str, int, str, result=str)
+    def actualizarExamen(self, examen_id: int, tipo_analisis_id: int, tipo_servicio: str, 
+                        trabajador_id: int = 0, detalles: str = "") -> str:
         """
         Actualiza examen existente
         """
         try:
             self._set_estado_actual("cargando")
             
-            kwargs = {}
-            if nombre:
-                kwargs['nombre'] = nombre
-            if precio_normal > 0:
-                kwargs['precio_normal'] = precio_normal
-            if precio_emergencia > 0:
-                kwargs['precio_emergencia'] = precio_emergencia
-            if detalles:
-                kwargs['detalles'] = detalles
-            if trabajador_id >= 0:
-                kwargs['trabajador_id'] = trabajador_id if trabajador_id > 0 else None
-            
-            success = self.repository.update_lab_exam(examen_id, **kwargs)
+            success = self.repository.update_lab_exam(
+                examen_id, 
+                tipo_analisis_id=tipo_analisis_id,
+                tipo_servicio=tipo_servicio,
+                trabajador_id=trabajador_id,
+                detalles=detalles
+            )
             
             if success:
                 # Obtener examen actualizado

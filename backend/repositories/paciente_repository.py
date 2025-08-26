@@ -31,18 +31,9 @@ class PacienteRepository(BaseRepository):
     # ===============================
     
     def create_patient(self, nombre: str, apellido_paterno: str, 
-                      apellido_materno: str, edad: int) -> int:
+                  apellido_materno: str, edad: int) -> int:
         """
         Crea nuevo paciente con validaciones
-        
-        Args:
-            nombre: Nombre del paciente
-            apellido_paterno: Apellido paterno
-            apellido_materno: Apellido materno
-            edad: Edad (0-120 años)
-            
-        Returns:
-            ID del paciente creado
         """
         # Validaciones
         nombre = normalize_name(nombre.strip()) if nombre.strip() else "Sin nombre"
@@ -61,7 +52,7 @@ class PacienteRepository(BaseRepository):
         patient_id = self.insert(patient_data)
         print(f"👥 Paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
         
-        return self.insert(patient_data)
+        return patient_id  # CORREGIDO: Devolver el ID directamente
     
     def update_patient(self, paciente_id: int, nombre: str = None, 
                       apellido_paterno: str = None, apellido_materno: str = None,
@@ -418,57 +409,58 @@ class PacienteRepository(BaseRepository):
             patient['grupo_etario'] = self.get_age_group(patient['Edad'])
         
         return patients
+    
     def buscar_pacientes_similares(self, nombre: str, apellido_paterno: str, 
-                              apellido_materno: str = "", edad: int = 0) -> List[Dict[str, Any]]:
-        """Busca pacientes con nombres similares"""
+                          apellido_materno: str = "", edad: int = 0) -> List[Dict[str, Any]]:
+        """Busca pacientes similares - SQL Server Compatible"""
+        
+        # Query más simple y efectiva
         query = """
-        SELECT *, 
-            (CASE 
-                WHEN Nombre = ? AND Apellido_Paterno = ? AND Apellido_Materno = ? THEN 100
-                WHEN Nombre = ? AND Apellido_Paterno = ? THEN 90
-                WHEN Nombre LIKE ? AND Apellido_Paterno LIKE ? THEN 70
-                ELSE 50
-            END) as similitud_score
+        SELECT TOP 5 *
         FROM Pacientes 
-        WHERE (Nombre LIKE ? OR Apellido_Paterno LIKE ? OR Apellido_Materno LIKE ?)
-        AND ABS(Edad - ?) <= 5
-        ORDER BY similitud_score DESC, Nombre
+        WHERE LOWER(Nombre) = LOWER(?) 
+        AND LOWER(Apellido_Paterno) = LOWER(?) 
+        AND ABS(Edad - ?) <= 3
+        ORDER BY ABS(Edad - ?) ASC, id DESC
         """
         
-        nombre_like = f"%{nombre}%"
-        apellido_p_like = f"%{apellido_paterno}%"
-        apellido_m_like = f"%{apellido_materno}%" if apellido_materno else "%"
-        
-        return self._execute_query(query, (
-            nombre, apellido_paterno, apellido_materno,  # Exacto 100%
-            nombre, apellido_paterno,                     # Sin materno 90%
-            nombre_like, apellido_p_like,                 # Similar 70%
-            nombre_like, apellido_p_like, apellido_m_like,  # Búsqueda general
-            edad or 0
-        ))
+        return self._execute_query(query, (nombre.strip(), apellido_paterno.strip(), edad, edad))
 
     def buscar_o_crear_paciente(self, nombre: str, apellido_paterno: str, 
-                            apellido_materno: str = "", edad: int = 0) -> int:
-        """Busca paciente similar o crea nuevo"""
-        # Limpiar datos
-        nombre = nombre.strip() or "Sin nombre"
-        apellido_paterno = apellido_paterno.strip() or "Sin apellido"
+                    apellido_materno: str = "", edad: int = 0) -> int:
+        """Busca paciente similar o crea nuevo - ALGORITMO MEJORADO"""
+    
+        nombre = nombre.strip()
+        apellido_paterno = apellido_paterno.strip() 
         apellido_materno = apellido_materno.strip()
         edad = max(0, edad or 0)
         
-        # Buscar similares
+        if not nombre or len(nombre) < 2:
+            raise ValidationError("nombre", nombre, "Nombre es obligatorio")
+        if not apellido_paterno:
+            apellido_paterno = "Sin apellido"
+        
+        # Buscar exacto: mismo nombre + apellido + edad similar
         similares = self.buscar_pacientes_similares(nombre, apellido_paterno, apellido_materno, edad)
         
-        # Si encuentra match con alta similitud (>=90), usar existente
-        if similares and similares[0]['similitud_score'] >= 90:
+        if similares:
             paciente_id = similares[0]['id']
-            print(f"👤 Paciente existente encontrado: {nombre} {apellido_paterno} -> ID {paciente_id}")
+            print(f"👤 Paciente existente: {nombre} {apellido_paterno} -> ID {paciente_id}")
             return paciente_id
         
-        # Crear nuevo paciente
-        paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, edad)
-        print(f"👤 Nuevo paciente creado: {nombre} {apellido_paterno} -> ID {paciente_id}")
-        return paciente_id
+        # Crear nuevo si no existe - CORREGIDO: solo una inserción
+        try:
+            paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, edad)
+            print(f"👤 Nuevo paciente: {nombre} {apellido_paterno} -> ID {paciente_id}")
+            return paciente_id
+        except Exception as e:
+            print(f"❌ Error creando paciente: {e}")
+            # Si falla, intentar buscar nuevamente por si acaso se creó en otro hilo
+            similares = self.buscar_pacientes_similares(nombre, apellido_paterno, apellido_materno, edad)
+            if similares:
+                return similares[0]['id']
+            raise
+    
     # ===============================
     # CACHÉ
     # ===============================

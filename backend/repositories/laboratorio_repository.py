@@ -43,7 +43,7 @@ class LaboratorioRepository(BaseRepository):
     # ===============================
     
     def create_lab_exam(self, paciente_id: int, tipo_analisis_id: int, tipo: str = "Normal", 
-                   trabajador_id: int = None, usuario_id: int = 10) -> int:
+                   trabajador_id: int = None, usuario_id: int = 10, detalles: str = None) -> int:
         """
         Crea nuevo examen de laboratorio
         """
@@ -65,17 +65,20 @@ class LaboratorioRepository(BaseRepository):
             'Id_Trabajador': trabajador_id,
             'Fecha': datetime.now(),
             'Id_RegistradoPor': usuario_id,
-            'Tipo': tipo.capitalize()
+            'Tipo': tipo.capitalize(),
+            'Detalles': detalles
         }
         
         lab_id = self.insert(lab_data)
         print(f"🧪 Examen creado: ID {lab_id}")
         return lab_id
     
-    def update_lab_exam(self, lab_id: int, nombre: str = None, precio_normal: float = None,
-                       precio_emergencia: float = None, detalles: str = None,
-                       trabajador_id: int = None) -> bool:
-        """Actualiza examen de laboratorio existente"""
+    def update_lab_exam(self, lab_id: int, tipo_analisis_id: int = None, 
+                   tipo_servicio: str = None, trabajador_id: int = None,
+                   detalles: str = None) -> bool:
+        """
+        Actualiza examen de laboratorio existente
+        """
         # Verificar existencia
         existing_exam = self.get_by_id(lab_id)
         if not existing_exam:
@@ -83,33 +86,23 @@ class LaboratorioRepository(BaseRepository):
         
         update_data = {}
         
-        if nombre is not None:
-            nombre = validate_required_string(nombre, "nombre", 3)
-            update_data['Nombre'] = nombre.strip()
+        if tipo_analisis_id is not None:
+            if not self._analysis_type_exists(tipo_analisis_id):
+                raise ValidationError("tipo_analisis_id", tipo_analisis_id, "Tipo de análisis no encontrado")
+            update_data['Id_Tipo_Analisis'] = tipo_analisis_id
         
-        if precio_normal is not None:
-            precio_normal = validate_positive_number(precio_normal, "precio_normal")
-            update_data['Precio_Normal'] = precio_normal
+        if tipo_servicio is not None:
+            if tipo_servicio not in ['Normal', 'Emergencia']:
+                raise ValidationError("tipo_servicio", tipo_servicio, "Tipo de servicio debe ser Normal o Emergencia")
+            update_data['Tipo'] = tipo_servicio
         
-        if precio_emergencia is not None:
-            precio_emergencia = validate_positive_number(precio_emergencia, "precio_emergencia")
-            update_data['Precio_Emergencia'] = precio_emergencia
+        if trabajador_id is not None:
+            if trabajador_id and not self._worker_exists(trabajador_id):
+                raise ValidationError("trabajador_id", trabajador_id, "Trabajador no encontrado")
+            update_data['Id_Trabajador'] = trabajador_id
         
         if detalles is not None:
             update_data['Detalles'] = detalles.strip()
-        
-        if trabajador_id is not None:
-            if trabajador_id > 0 and not self._worker_exists(trabajador_id):
-                raise ValidationError("trabajador_id", trabajador_id, "Trabajador no encontrado")
-            update_data['Id_Trabajador'] = trabajador_id if trabajador_id > 0 else None
-        
-        # Validar precios si ambos están presentes
-        current_normal = update_data.get('Precio_Normal', existing_exam['Precio_Normal'])
-        current_emergencia = update_data.get('Precio_Emergencia', existing_exam['Precio_Emergencia'])
-        
-        if current_emergencia < current_normal:
-            raise ValidationError("precios", current_emergencia,
-                                "Precio de emergencia debe ser mayor o igual al normal")
         
         if not update_data:
             return True
@@ -136,13 +129,13 @@ class LaboratorioRepository(BaseRepository):
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtiene exámenes con información completa"""
         query = """
-        SELECT l.id, l.Fecha, l.Tipo,
+        SELECT l.id, l.Fecha, l.Tipo, l.Detalles,
             -- Paciente
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
             p.Edad as paciente_edad,
             -- Tipo de Análisis
             ta.Nombre as tipo_analisis,
-            ta.Descripcion as detalles,
+            ta.Descripcion as detalles_analisis,
             ta.Precio_Normal, ta.Precio_Emergencia,
             -- Trabajador (puede ser NULL)
             l.Id_Trabajador,
@@ -287,6 +280,30 @@ class LaboratorioRepository(BaseRepository):
                                          search_term, search_term, search_term,
                                          search_term, search_term, limit))
     
+    def search_exams_by_details(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Búsqueda por detalles del examen"""
+        if not search_term:
+            return []
+        
+        search_term = f"%{search_term.strip()}%"
+        
+        query = """
+        SELECT l.*, 
+               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
+               CASE 
+                   WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno)
+                   ELSE 'Sin asignar'
+               END as trabajador_nombre
+        FROM Laboratorio l
+        INNER JOIN Pacientes p ON l.Id_Paciente = p.id
+        LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
+        WHERE l.Detalles LIKE ?
+        ORDER BY l.id DESC
+        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+        """
+        
+        return self._execute_query(query, (search_term, limit))
+
     def get_exams_by_type(self, exam_name_pattern: str) -> List[Dict[str, Any]]:
         """Obtiene exámenes por tipo/nombre similar"""
         query = """
@@ -498,8 +515,8 @@ class LaboratorioRepository(BaseRepository):
         return self._execute_query(query)
     
     def get_exam_types_list(self) -> List[str]:
-        """Obtiene lista de tipos de exámenes disponibles"""
-        query = "SELECT DISTINCT Nombre FROM Laboratorio ORDER BY Nombre"
+        """Obtiene lista de tipos de exámenes disponibles desde Tipos_Analisis"""
+        query = "SELECT DISTINCT Nombre FROM Tipos_Analisis ORDER BY Nombre"
         result = self._execute_query(query)
         return [row['Nombre'] for row in result]
     
