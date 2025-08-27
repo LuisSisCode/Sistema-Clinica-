@@ -29,8 +29,8 @@ Rectangle {
     // Propiedades calculadas
     property real margenGanancia: {
         if (!productoData) return 0
-        var compra = productoData.Precio_compra || 0
-        var venta = productoData.Precio_venta || 0
+        var compra = productoData.precioCompra || 0
+        var venta = productoData.precioVenta || 0
         if (compra > 0) {
             return ((venta - compra) / compra) * 100
         }
@@ -39,7 +39,7 @@ Rectangle {
     
     property string estadoStock: {
         if (!productoData) return "unknown"
-        var total = (productoData.Stock_Caja || 0) + (productoData.Stock_Unitario || 0)
+        var total = (productoData.stockCaja || 0) + (productoData.stockUnitario || 0)
         if (total === 0) return "agotado"
         if (total <= 5) return "bajo"
         if (total <= 20) return "medio"
@@ -94,7 +94,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 
                 Label {
-                    text: "Detalles del Producto: " + (productoData ? (productoData.Codigo || "SIN-CÓDIGO") : "---")
+                    text: "Detalles del Producto: " + (productoData ? (productoData.codigo || "SIN-CÓDIGO") : "---")
                     color: "#2c3e50"
                     font.bold: true
                     font.pixelSize: 16
@@ -235,7 +235,7 @@ Rectangle {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: productoData ? (productoData.Codigo || "---") : "---"
+                                text: productoData ? (productoData.codigo || "---") : "---"
                                 color: "#007bff"
                                 font.bold: true
                                 font.pixelSize: 13
@@ -253,7 +253,7 @@ Rectangle {
                                 anchors.left: parent.left
                                 anchors.leftMargin: 12
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: productoData ? (productoData.Nombre || "Sin nombre") : "---"
+                                text: productoData ? (productoData.nombre || "Sin nombre") : "---"
                                 color: "#212529"
                                 font.pixelSize: 13
                                 elide: Text.ElideRight
@@ -269,7 +269,7 @@ Rectangle {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: productoData ? (productoData.marca_nombre || "---") : "---"
+                                text: productoData ? (productoData.idMarca || "---") : "---"
                                 color: "#6c757d"
                                 font.pixelSize: 13
                             }
@@ -305,7 +305,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 75
-                    visible: productoData && productoData.Descripcion && productoData.Descripcion.trim() !== ""
+                    visible: productoData && productoData.detalles && productoData.detalles.trim() !== ""
                     color: "#f8f9fa"
                     border.color: "#dee2e6"
                     border.width: 1
@@ -329,7 +329,7 @@ Rectangle {
                             
                             Label {
                                 width: parent.width
-                                text: productoData ? (productoData.Descripcion || "") : ""
+                                text: productoData ? (productoData.detalles || "") : ""
                                 color: "#6c757d"
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
@@ -403,7 +403,7 @@ Rectangle {
                                 }
                                 
                                 Label {
-                                    text: productoData ? `Bs ${(productoData.Precio_compra || 0).toFixed(2)}` : "Bs 0.00"
+                                    text: productoData ? `Bs ${(productoData.precioCompra || 0).toFixed(2)}` : "Bs 0.00"
                                     color: "#28a745"
                                     font.bold: true
                                     font.pixelSize: 14
@@ -431,7 +431,7 @@ Rectangle {
                                 }
                                 
                                 Label {
-                                    text: productoData ? `Bs ${(productoData.Precio_venta || 0).toFixed(2)}` : "Bs 0.00"
+                                    text: productoData ? `Bs ${(productoData.precioVenta || 0).toFixed(2)}` : "Bs 0.00"
                                     color: "#ffc107"
                                     font.bold: true
                                     font.pixelSize: 14
@@ -554,7 +554,7 @@ Rectangle {
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: productoData ? (productoData.Stock_Caja || 0).toString() : "0"
+                                        text: productoData ? (productoData.stockCaja || 0).toString() : "0"
                                         color: "#ffffff"
                                         font.bold: true
                                         font.pixelSize: 13
@@ -590,7 +590,7 @@ Rectangle {
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: productoData ? (productoData.Stock_Unitario || 0).toString() : "0"
+                                        text: productoData ? (productoData.stockUnitario || 0).toString() : "0"
                                         color: "#ffffff"
                                         font.bold: true
                                         font.pixelSize: 13
@@ -620,7 +620,7 @@ Rectangle {
                                 Label {
                                     text: {
                                         if (!productoData) return "0"
-                                        var total = (productoData.Stock_Caja || 0) + (productoData.Stock_Unitario || 0)
+                                        var total = (productoData.stockCaja || 0) + (productoData.stockUnitario || 0)
                                         return total.toString() + " unidades"
                                     }
                                     color: "#212529"

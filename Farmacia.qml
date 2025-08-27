@@ -180,27 +180,6 @@ Item {
             console.log("🏢 Proveedores actualizados desde BD")
         }
     }
-
-
-    Connections {
-        target: contentLoader.item
-        function onMostrarCrearProducto() {
-            console.log("🚀 Navegando a CrearProducto")
-            contentLoader.sourceComponent = crearProductoComponent
-        }
-        function onMostrarDetalleProducto(producto) {
-            console.log("🔍 Navegando a DetalleProducto:", producto.codigo)
-            contentLoader.sourceComponent = detalleProductoComponent
-            if (contentLoader.item) {
-                contentLoader.item.productoData = producto
-                contentLoader.item.inventarioModel = farmaciaRoot.inventarioModel
-            }
-        }
-    }
-    // ELIMINADO: Conexiones para mostrarCrearProducto y mostrarDetalleProducto
-    // Ya no necesitamos cambiar el contentLoader para estos casos
-    // ===== FUNCIONES CENTRALES DE GESTIÓN DE DATOS (CONECTADAS A BD) =====
-    
     // Función para verificar si un producto existe (BD)
     function productoExiste(codigo) {
         if (!inventarioModel || !codigo) return -1
@@ -501,7 +480,9 @@ Item {
                 // Campos adicionales para compatibilidad
                 precioCompraBase: precioCompra,
                 precioVentaBase: precioVenta,
-                stockTotal: (parseInt(prod.Stock_Caja) || 0) + (parseInt(prod.Stock_Unitario) || 0)
+                stockTotal: (parseInt(prod.Stock_Caja) || 0) + (parseInt(prod.Stock_Unitario) || 0),
+                marca_nombre: prod.marca_nombre || prod.Marca_Nombre || "GENÉRICO",
+                Descripcion: prod.Detalles || prod.Producto_Detalles || "Sin detalles"
             })
         }
         

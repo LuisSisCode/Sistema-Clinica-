@@ -76,6 +76,13 @@ Item {
         // Componente inicial - Lista de Ventas
         initialItem: Component {
             Item {
+                id: ventasContainer
+                focus: true
+
+                Keys.onEscapePressed: {
+                    console.log("Escape en contenedor de Ventas")
+                    ventasMainRoot.forceFocus()
+                }
                 // Instancia del componente Ventas simplificado
                 Loader {
                     id: ventasLoader
@@ -191,8 +198,9 @@ Item {
             stackView.pop()
             console.log("✅ Stack popped, regresado a Ventas")
             
-            // Actualizar datos en la vista de ventas
+            // Forzar el foco después de regresar
             Qt.callLater(function() {
+                forceFocus()
                 if (ventaModel) {
                     console.log("🔄 Actualizando datos de ventas...")
                     ventaModel.refresh_ventas_hoy()
@@ -200,6 +208,11 @@ Item {
                 }
             })
         }
+    }
+    function forceFocus() {
+        focus = true
+        forceActiveFocus()
+        console.log("🔍 Foco forzado en VentasMain")
     }
     
     // MANEJO DE TECLAS PARA NAVEGACIÓN
@@ -247,6 +260,9 @@ Item {
         } else {
             console.log("✅ Models conectados correctamente")
         }
+        Qt.callLater(function() {
+            forceFocus()
+        })
         
         imprimirEstado()
         console.log("=== CONTAINER LISTO ===")

@@ -16,6 +16,8 @@ class InventarioModel(QObject):
     """
     Model QObject para inventario de farmacia con FIFO automático
     Conecta directamente con QML mediante Signals/Slots/Properties
+    
+    CORREGIDO: Manejo consistente de nomenclatura de campos y conversión de datos
     """
     
     # ===============================
@@ -130,11 +132,20 @@ class InventarioModel(QObject):
         """Refresca la lista de productos"""
         self._set_loading(True)
         try:
-            self._productos = safe_execute(self.producto_repo.get_productos_con_marca) or []
+            productos_raw = safe_execute(self.producto_repo.get_productos_con_marca) or []
+            
+            # CORREGIDO: Normalizar productos con nomenclatura consistente
+            self._productos = []
+            for producto in productos_raw:
+                producto_normalizado = self._normalizar_producto(producto)
+                self._productos.append(producto_normalizado)
+            
             self.productosChanged.emit()
             self.operacionExitosa.emit("Productos actualizados")
             print(f"🔄 Productos refrescados: {len(self._productos)}")
+            
         except Exception as e:
+            print(f"❌ Error refrescando productos: {e}")
             self.operacionError.emit(f"Error actualizando productos: {str(e)}")
         finally:
             self._set_loading(False)
@@ -148,13 +159,21 @@ class InventarioModel(QObject):
             return
         
         try:
-            self._search_results = safe_execute(
+            resultados_raw = safe_execute(
                 self.producto_repo.buscar_productos, 
                 termino.strip(), 
                 True  # incluir_sin_stock
             ) or []
+            
+            # CORREGIDO: Normalizar resultados de búsqueda
+            self._search_results = []
+            for resultado in resultados_raw:
+                resultado_normalizado = self._normalizar_producto(resultado)
+                self._search_results.append(resultado_normalizado)
+            
             self.searchResultsChanged.emit()
             print(f"🔍 Búsqueda '{termino}': {len(self._search_results)} resultados")
+            
         except Exception as e:
             self.operacionError.emit(f"Error en búsqueda: {str(e)}")
     
@@ -165,8 +184,11 @@ class InventarioModel(QObject):
             return {}
         
         try:
-            producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
-            return producto if producto else {}
+            producto_raw = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
+            if producto_raw:
+                producto_normalizado = self._normalizar_producto(producto_raw)
+                return producto_normalizado
+            return {}
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo producto: {str(e)}")
             return {}
@@ -179,6 +201,7 @@ class InventarioModel(QObject):
         
         try:
             lotes = safe_execute(self.producto_repo.get_lotes_producto, producto_id, True) or []
+            # CORREGIDO: Normalizar lotes si es necesario
             return lotes
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo lotes: {str(e)}")
@@ -451,7 +474,7 @@ class InventarioModel(QObject):
             {
                 'codigo': str,
                 'nombre': str,
-                'detalles': str,
+                'detalles': str,  // CORREGIDO: Usar 'detalles' consistentemente
                 'precio_compra': float,
                 'precio_venta': float,
                 'stock_caja': int,
@@ -478,11 +501,11 @@ class InventarioModel(QObject):
             if producto_existente:
                 raise ValueError(f"El código {datos['codigo']} ya existe")
             
-            # Preparar datos para inserción
+            # CORREGIDO: Preparar datos con nomenclatura de BD
             nuevo_producto = {
                 'Codigo': datos['codigo'],
                 'Nombre': datos['nombre'],
-                'Detalles': datos.get('detalles', ''),
+                'Detalles': datos.get('detalles', ''),  # CORREGIDO: Mapear correctamente
                 'Precio_compra': float(datos['precio_compra']),
                 'Precio_venta': float(datos['precio_venta']),
                 'Stock_Caja': int(datos.get('stock_caja', 0)),
@@ -549,9 +572,9 @@ class InventarioModel(QObject):
                 # Refrescar datos
                 self.refresh_productos()
                 
-                self.operacionExitosa.emit(f"Precio actualizado: {codigo} - ${nuevo_precio:.2f}")
+                self.operacionExitosa.emit(f"Precio actualizado: {codigo} - Bs{nuevo_precio:.2f}")
                 self.precioActualizado.emit(codigo, nuevo_precio)
-                print(f"💰 Precio actualizado - {codigo}: ${nuevo_precio:.2f}")
+                print(f"💰 Precio actualizado - {codigo}: Bs{nuevo_precio:.2f}")
                 return True
             else:
                 raise Exception("Error actualizando precio en base de datos")
@@ -627,11 +650,20 @@ class InventarioModel(QObject):
     
     @Slot(result='QVariant')
     def get_marcas_disponibles(self):
-        """Obtiene lista de marcas disponibles para productos"""
+        """Obtiene lista de marcas disponibles para productos - CORREGIDO"""
         try:
+            # CORREGIDO: Asegurar que las marcas estén actualizadas
             marcas = self._cargar_marcas() or []
+            
+            # Actualizar marcas internas si es necesario
+            if marcas:
+                self._marcas = marcas
+                self.marcasChanged.emit()
+            
+            print(f"🏷️ Marcas disponibles: {len(marcas)}")
             return marcas
         except Exception as e:
+            print(f"❌ Error obteniendo marcas: {e}")
             self.operacionError.emit(f"Error obteniendo marcas: {str(e)}")
             return []
 
@@ -653,16 +685,19 @@ class InventarioModel(QObject):
         
         try:
             # Obtener producto
-            producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
-            if not producto:
+            producto_raw = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
+            if not producto_raw:
                 return {}
+            
+            # CORREGIDO: Normalizar producto
+            producto = self._normalizar_producto(producto_raw)
             
             # Obtener lotes
             lotes = safe_execute(self.producto_repo.get_lotes_producto, producto['id'], True) or []
             
             # Calcular totales
-            stock_total = (producto.get('Stock_Caja', 0) + producto.get('Stock_Unitario', 0))
-            valor_inventario = stock_total * producto.get('Precio_compra', 0)
+            stock_total = (producto.get('stockCaja', 0) + producto.get('stockUnitario', 0))
+            valor_inventario = stock_total * producto.get('precioCompra', 0)
             
             return {
                 'producto': producto,
@@ -703,14 +738,20 @@ class InventarioModel(QObject):
             return {}
     
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÉTODOS PRIVADOS - CORREGIDOS
     # ===============================
     
     def _cargar_datos_iniciales(self):
         """Carga datos iniciales al crear el model"""
         self._set_loading(True)
         try:
-            self._productos = safe_execute(self.producto_repo.get_productos_con_marca) or []
+            # CORREGIDO: Cargar y normalizar productos
+            productos_raw = safe_execute(self.producto_repo.get_productos_con_marca) or []
+            self._productos = []
+            for producto in productos_raw:
+                producto_normalizado = self._normalizar_producto(producto)
+                self._productos.append(producto_normalizado)
+            
             self._marcas = self._cargar_marcas() or []
             self._proveedores = safe_execute(self.compra_repo.get_proveedores_activos) or []
             self._cargar_lotes_activos()
@@ -733,7 +774,23 @@ class InventarioModel(QObject):
         """Carga lista de marcas"""
         try:
             query = "SELECT * FROM Marca ORDER BY Nombre"
-            return self.producto_repo._execute_query(query) or []
+            marcas_raw = self.producto_repo._execute_query(query) or []
+            
+            # CORREGIDO: Normalizar marcas para QML
+            marcas_normalizadas = []
+            for marca in marcas_raw:
+                marca_normalizada = {
+                    'id': marca.get('id', 0),
+                    'Nombre': marca.get('Nombre', ''),
+                    'nombre': marca.get('Nombre', ''),  # Compatibilidad
+                    'Detalles': marca.get('Detalles', ''),
+                    'detalles': marca.get('Detalles', '')  # Compatibilidad
+                }
+                marcas_normalizadas.append(marca_normalizada)
+            
+            print(f"🏷️ Marcas cargadas desde BD: {len(marcas_normalizadas)}")
+            return marcas_normalizadas
+            
         except Exception as e:
             print(f"❌ Error cargando marcas: {e}")
             return []
@@ -876,6 +933,194 @@ class InventarioModel(QObject):
             raise ValueError("Precio de venta debe ser mayor al precio de compra")
         
         return True
+    
+    # NUEVA FUNCIÓN: Normalizar productos para consistencia en QML
+    def _normalizar_producto(self, producto_raw: dict) -> dict:
+        """
+        Normaliza un producto de BD para uso consistente en QML
+        
+        Args:
+            producto_raw: Producto raw de la BD con nomenclatura de BD
+            
+        Returns:
+            Producto normalizado con nomenclatura consistente para QML
+        """
+        try:
+            # Conversión segura de valores numéricos
+            def safe_float(value):
+                try:
+                    return float(value) if value is not None else 0.0
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            def safe_int(value):
+                try:
+                    return int(value) if value is not None else 0
+                except (ValueError, TypeError):
+                    return 0
+            
+            def safe_str(value):
+                return str(value) if value is not None else ""
+            
+            # Producto normalizado con doble nomenclatura para compatibilidad
+            producto_normalizado = {
+                # ID
+                'id': safe_int(producto_raw.get('id', 0)),
+                
+                # Código - múltiples variantes
+                'codigo': safe_str(producto_raw.get('Codigo') or producto_raw.get('codigo', '')),
+                'Codigo': safe_str(producto_raw.get('Codigo') or producto_raw.get('codigo', '')),
+                
+                # Nombre - múltiples variantes
+                'nombre': safe_str(producto_raw.get('Nombre') or producto_raw.get('nombre', '')),
+                'Nombre': safe_str(producto_raw.get('Nombre') or producto_raw.get('nombre', '')),
+                
+                # Detalles/Descripción - TODOS los nombres posibles
+                'detalles': safe_str(
+                    producto_raw.get('Detalles') or 
+                    producto_raw.get('Producto_Detalles') or 
+                    producto_raw.get('detalles') or 
+                    producto_raw.get('descripcion', '')
+                ),
+                'Detalles': safe_str(
+                    producto_raw.get('Detalles') or 
+                    producto_raw.get('Producto_Detalles') or 
+                    producto_raw.get('detalles', '')
+                ),
+                'Producto_Detalles': safe_str(
+                    producto_raw.get('Producto_Detalles') or 
+                    producto_raw.get('Detalles') or 
+                    producto_raw.get('detalles', '')
+                ),
+                
+                # Precios - múltiples nomenclaturas
+                'precioCompra': safe_float(
+                    producto_raw.get('Precio_compra') or 
+                    producto_raw.get('precio_compra') or 
+                    producto_raw.get('precioCompra', 0)
+                ),
+                'Precio_compra': safe_float(
+                    producto_raw.get('Precio_compra') or 
+                    producto_raw.get('precio_compra', 0)
+                ),
+                'precio_compra': safe_float(
+                    producto_raw.get('precio_compra') or 
+                    producto_raw.get('Precio_compra', 0)
+                ),
+                
+                'precioVenta': safe_float(
+                    producto_raw.get('Precio_venta') or 
+                    producto_raw.get('precio_venta') or 
+                    producto_raw.get('precioVenta', 0)
+                ),
+                'Precio_venta': safe_float(
+                    producto_raw.get('Precio_venta') or 
+                    producto_raw.get('precio_venta', 0)
+                ),
+                'precio_venta': safe_float(
+                    producto_raw.get('precio_venta') or 
+                    producto_raw.get('Precio_venta', 0)
+                ),
+                
+                # Stock - múltiples nomenclaturas
+                'stockCaja': safe_int(
+                    producto_raw.get('Stock_Caja') or 
+                    producto_raw.get('stock_caja') or 
+                    producto_raw.get('stockCaja', 0)
+                ),
+                'Stock_Caja': safe_int(
+                    producto_raw.get('Stock_Caja') or 
+                    producto_raw.get('stock_caja', 0)
+                ),
+                'stock_caja': safe_int(
+                    producto_raw.get('stock_caja') or 
+                    producto_raw.get('Stock_Caja', 0)
+                ),
+                
+                'stockUnitario': safe_int(
+                    producto_raw.get('Stock_Unitario') or 
+                    producto_raw.get('stock_unitario') or 
+                    producto_raw.get('stockUnitario', 0)
+                ),
+                'Stock_Unitario': safe_int(
+                    producto_raw.get('Stock_Unitario') or 
+                    producto_raw.get('stock_unitario', 0)
+                ),
+                'stock_unitario': safe_int(
+                    producto_raw.get('stock_unitario') or 
+                    producto_raw.get('Stock_Unitario', 0)
+                ),
+                
+                # Stock Total calculado
+                'Stock_Total': safe_int(
+                    producto_raw.get('Stock_Total') or
+                    (safe_int(producto_raw.get('Stock_Caja', 0)) + safe_int(producto_raw.get('Stock_Unitario', 0)))
+                ),
+                
+                # Unidad de medida
+                'unidadMedida': safe_str(
+                    producto_raw.get('Unidad_Medida') or 
+                    producto_raw.get('unidad_medida') or 
+                    'Tabletas'
+                ),
+                'Unidad_Medida': safe_str(
+                    producto_raw.get('Unidad_Medida') or 
+                    producto_raw.get('unidad_medida') or 
+                    'Tabletas'
+                ),
+                
+                # Marca - múltiples nomenclaturas
+                'idMarca': safe_str(
+                    producto_raw.get('Marca_Nombre') or 
+                    producto_raw.get('marca_nombre') or 
+                    producto_raw.get('ID_Marca') or 
+                    producto_raw.get('idMarca') or 
+                    'GENÉRICO'
+                ),
+                'ID_Marca': safe_int(
+                    producto_raw.get('ID_Marca') or 
+                    producto_raw.get('id_marca') or 
+                    producto_raw.get('Marca_ID', 1)
+                ),
+                'Marca_Nombre': safe_str(
+                    producto_raw.get('Marca_Nombre') or 
+                    producto_raw.get('marca_nombre') or 
+                    'GENÉRICO'
+                ),
+                'marca_nombre': safe_str(
+                    producto_raw.get('marca_nombre') or 
+                    producto_raw.get('Marca_Nombre') or 
+                    'GENÉRICO'
+                ),
+                
+                # Fecha de vencimiento
+                'Fecha_Venc': safe_str(
+                    producto_raw.get('Fecha_Venc') or 
+                    producto_raw.get('fecha_vencimiento', '')
+                ),
+                
+                # Campos adicionales para compatibilidad
+                'Marca_Detalles': safe_str(producto_raw.get('Marca_Detalles', '')),
+                'Marca_ID': safe_int(producto_raw.get('Marca_ID') or producto_raw.get('ID_Marca', 1))
+            }
+            
+            return producto_normalizado
+            
+        except Exception as e:
+            print(f"❌ Error normalizando producto: {e}")
+            print(f"📦 Producto raw: {producto_raw}")
+            # Retornar producto con valores por defecto en caso de error
+            return {
+                'id': 0,
+                'codigo': 'ERROR',
+                'nombre': 'Error cargando producto',
+                'detalles': '',
+                'precioCompra': 0.0,
+                'precioVenta': 0.0,
+                'stockCaja': 0,
+                'stockUnitario': 0,
+                'idMarca': 'ERROR'
+            }
     
     def obtener_stock_total_producto(self, codigo: str) -> int:
         """Obtiene el stock total de un producto por código"""

@@ -2,7 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-// Componente principal del módulo de Productos de Farmacia
+// Componente principal del módulo de Productos de Farmacia - CORREGIDO
 Item {
     id: productosRoot
     
@@ -10,9 +10,10 @@ Item {
     property var farmaciaData: parent.farmaciaData
     property var inventarioModel: parent.inventarioModel
     
-    // NUEVA PROPIEDAD: Estado del diálogo
+    // CORREGIDO: Estado del diálogo con mejor manejo
     property bool mostrandoDialogoCrear: false
     property var productoParaEditar: null
+    property bool marcasDisponibles: false
     
     // Propiedades de colores heredadas del tema principal
     readonly property color primaryColor: "#273746"
@@ -29,7 +30,7 @@ Item {
     // Estados de los diálogos y funcionalidades
     property bool editarPrecioDialogOpen: false
     property var productoSeleccionado: null
-    property int currentFilter: 0 // 0=Todos, 1=Próx.Vencer, 2=Vencidos, 3=BajoStock
+    property int currentFilter: 0 // 0=Todos, 1=Prox.Vencer, 2=Vencidos, 3=BajoStock
     property string searchText: ""
     property var productosOriginales: []
     property var fechaActual: new Date()
@@ -40,11 +41,14 @@ Item {
     property int totalPages: 0
     property var allFilteredProducts: []
 
-    // ===== SEÑALES PARA NAVEGACIÓN =====
-    signal mostrarCrearProducto() // Ya no se usa, mantenemos por compatibilidad
-    signal mostrarDetalleProducto(var producto)
+    property bool mostrandoDetalleProducto: false
+    property var productoParaDetalle: null
+    
+    // CORREGIDO: Mejor manejo de marcas
+    property var marcasModel: []
+    property bool marcasCargando: true
 
-    // ===== CONEXIONES CON INVENTARIO MODEL =====
+    // ===== CONEXIONES CON INVENTARIO MODEL - CORREGIDAS =====
     
     Connections {
         target: inventarioModel
@@ -58,6 +62,9 @@ Item {
         function onOperacionError(mensaje) {
             console.log("❌", mensaje)
         }
+        function onMarcasChanged() {
+            cargarMarcasDesdeModel()
+        }
     }
     
     // Conexión con datos centrales
@@ -68,10 +75,58 @@ Item {
             actualizarDesdeDataCentral()
         }
     }
+    focus: true
+    Keys.onEscapePressed: {
+        console.log("Tecla Escape presionada en Productos.qml")
+        if (mostrandoDialogoCrear) {
+            console.log("Cerrando diálogo con Escape")
+            cerrarDialogo()
+        } else if (mostrandoDetalleProducto) {
+            console.log("Cerrando detalle de producto con Escape")
+            mostrandoDetalleProducto = false
+            productoParaDetalle = null
+        } else if (editarPrecioDialogOpen) {
+            console.log("Cerrando diálogo de precio con Escape")
+            editarPrecioDialogOpen = false
+        }
+    }
 
-    // AGREGAR ESTE MODELO NUEVO
+    // MODELO PAGINADO
     ListModel {
         id: productosPaginadosModel
+    }
+
+    // CORREGIDO: Función para cargar marcas con mejor manejo de errores
+    function cargarMarcasDesdeModel() {
+        marcasCargando = true
+        
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible para cargar marcas")
+            marcasCargando = false
+            return
+        }
+        
+        try {
+            // CORREGIDO: Usar la función corregida del model
+            var marcas = inventarioModel.get_marcas_disponibles()
+            
+            if (marcas && marcas.length > 0) {
+                marcasModel = marcas
+                marcasDisponibles = true
+                console.log("✅ Marcas cargadas exitosamente:", marcas.length)
+                
+            } else {
+                console.log("⚠️ No se obtuvieron marcas del model")
+                marcasModel = []
+                marcasDisponibles = false
+            }
+        } catch (error) {
+            console.log("❌ Error cargando marcas:", error)
+            marcasModel = []
+            marcasDisponibles = false
+        }
+        
+        marcasCargando = false
     }
 
     // Función para cargar productos desde el centro de datos
@@ -117,6 +172,61 @@ Item {
     ListModel {
         id: productosFilteredModel
     }
+
+    // Diálogo modal para detalle de producto
+    Rectangle {
+        id: detalleOverlay
+        anchors.fill: parent
+        color: "#80000000"
+        visible: mostrandoDetalleProducto
+        z: 1000
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                mostrandoDetalleProducto = false
+                productoParaDetalle = null
+            }
+        }
+
+        // Contenedor del diálogo
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(700, parent.width * 0.9)
+            height: Math.min(550, parent.height * 0.9)
+            radius: 8
+            color: "#ffffff"
+
+            // Componente de detalle
+            DetalleProducto {
+                id: detalleProductoComponent
+                anchors.fill: parent
+                productoData: productoParaDetalle
+                mostrarStock: true
+                mostrarAcciones: true
+
+                onEditarSolicitado: function(producto) {
+                    mostrandoDetalleProducto = false
+                    abrirDialogoEditar(producto)
+                }
+
+                onEliminarSolicitado: function(producto) {
+                    eliminarProducto(producto)
+                    mostrandoDetalleProducto = false
+                }
+
+                onAjustarStockSolicitado: function(producto) {
+                    console.log("Ajustar stock de:", producto.codigo)
+                    // TODO: Implementar lógica de ajuste de stock
+                }
+
+                onCerrarSolicitado: {
+                    mostrandoDetalleProducto = false
+                    productoParaDetalle = null
+                }
+            }
+        }
+    }
     
     // INTERFAZ PRINCIPAL - Layout que contiene todo
     ColumnLayout {
@@ -159,7 +269,7 @@ Item {
             
             Item { Layout.fillWidth: true }
             
-            // Botón Añadir Producto - MODIFICADO
+            // Botón Añadir Producto - MEJORADO
             Button {
                 text: "➕ Añadir Producto"
                 
@@ -182,9 +292,7 @@ Item {
                 }
                 
                 onClicked: {
-                    // NUEVO: Mostrar diálogo como overlay
-                    productoParaEditar = null
-                    mostrandoDialogoCrear = true
+                    abrirDialogoCrear()
                 }
             }
             
@@ -881,8 +989,8 @@ Item {
                             MenuItem {
                                 text: "✏️ Editar Producto"
                                 onTriggered: {
-                                    productoParaEditar = model
-                                    mostrandoDialogoCrear = true
+                                    console.log("🔧 Intentando editar producto:", model.codigo)
+                                    abrirDialogoEditar(model)
                                 }
                             }
                             
@@ -957,7 +1065,7 @@ Item {
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
-                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") :   // ✅ VERDE
+                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") :   
                                     "#E5E7EB"
                                 radius: 18
                                 
@@ -968,7 +1076,7 @@ Item {
                             
                             contentItem: Label {
                                 text: parent.text
-                                color: parent.enabled ? "#FFFFFF" : "#9CA3AF"   // ✅ BLANCO cuando activo
+                                color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
                                 font.pixelSize: 14
                                 horizontalAlignment: Text.AlignHCenter
@@ -991,12 +1099,12 @@ Item {
                             font.weight: Font.Medium
                         }
                                                 
-                        // Botón Siguiente CORREGIDO
+                        // Botón Siguiente
                         Button {
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 36
                             text: "Siguiente →"
-                            enabled: currentPage < totalPages - 1  // ✅ CORREGIDO
+                            enabled: currentPage < totalPages - 1
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
@@ -1019,9 +1127,9 @@ Item {
                             }
                             
                             onClicked: {
-                                if (currentPage < totalPages - 1) {  // ✅ CORREGIDO
+                                if (currentPage < totalPages - 1) {
                                     currentPage++
-                                    updatePaginatedModel()  // ✅ CORREGIDO
+                                    updatePaginatedModel()
                                 }
                             }
                         }
@@ -1031,14 +1139,18 @@ Item {
         }
     }
 
-    // ===== OVERLAY MODAL PARA CREAR/EDITAR PRODUCTO =====
+    // ===== OVERLAY MODAL PARA CREAR/EDITAR PRODUCTO - MEJORADO =====
     Rectangle {
         id: modalOverlay
         anchors.fill: parent
-        color: "#40000000"  // Fondo semi-transparente negro
+        color: "#40000000"
         visible: mostrandoDialogoCrear
-        z: 1000  // Asegurar que esté por encima de todo
-        
+        z: 1000
+        focus: visible
+        Keys.onEscapePressed: {
+            console.log("Escape en overlay - cerrando diálogo")
+            cerrarDialogo()
+        }
         // Animación de entrada/salida
         opacity: mostrandoDialogoCrear ? 1.0 : 0.0
         Behavior on opacity {
@@ -1049,8 +1161,7 @@ Item {
         MouseArea {
             anchors.fill: parent
             onClicked: {
-                mostrandoDialogoCrear = false
-                productoParaEditar = null
+                cerrarDialogo()
             }
         }
         
@@ -1062,29 +1173,34 @@ Item {
             height: Math.min(750, parent.height * 0.95)
             color: "transparent"
             
-            // Componente CrearProducto cargado dinámicamente
+            // Componente CrearProducto cargado dinámicamente - CORREGIDO
             Loader {
                 id: crearProductoLoader
                 anchors.fill: parent
                 source: mostrandoDialogoCrear ? "CrearProducto.qml" : ""
-                
+                focus: false
+
                 onLoaded: {
                     if (item) {
+                        console.log("🚀 CrearProducto.qml cargado exitosamente")
+                        
+                        // CORREGIDO: Configurar propiedades del diálogo
                         item.modoEdicion = (productoParaEditar !== null)
                         item.productoData = productoParaEditar
+                        item.marcasModel = marcasModel
                         
-                        // ✅ Asegurar que marcas se cargan correctamente
-                        Qt.callLater(function() {
-                            item.marcasModel = obtenerMarcasModel()
-                            console.log("📦 Marcas cargadas:", item.marcasModel.length)
-                        })
+                        console.log("🏷️ Marcas pasadas al diálogo:", marcasModel.length)
+                        console.log("🔧 Modo edición:", item.modoEdicion)
                         
-                        // Conectar señales
+                        if (productoParaEditar) {
+                            console.log("📝 Producto para editar:", productoParaEditar.codigo)
+                        }
+                        
+                        // CORREGIDO: Conectar señales con función anónimas
                         item.productoCreado.connect(function(producto) {
                             console.log("✅ Producto creado:", producto.codigo)
-                            mostrandoDialogoCrear = false
-                            productoParaEditar = null
-                            // Actualizar productos
+                            cerrarDialogo()
+                            
                             if (farmaciaData) {
                                 farmaciaData.crearProductoUnico(JSON.stringify(producto))
                             }
@@ -1092,27 +1208,29 @@ Item {
                         
                         item.productoActualizado.connect(function(producto) {
                             console.log("✅ Producto actualizado:", producto.codigo)
-                            mostrandoDialogoCrear = false
-                            productoParaEditar = null
-                            // Actualizar productos
+                            cerrarDialogo()
                             updateFilteredModel()
                         })
                         
                         item.cancelado.connect(function() {
-                            mostrandoDialogoCrear = false
-                            productoParaEditar = null
+                            cerrarDialogo()
                         })
                         
                         item.cerrarSolicitado.connect(function() {
-                            mostrandoDialogoCrear = false
-                            productoParaEditar = null
+                            cerrarDialogo()
                         })
+                        
+                        // CORREGIDO: Abrir el diálogo usando la función del componente
+                        if (typeof item.abrirDialog === "function") {
+                            item.abrirDialog(item.modoEdicion, item.productoData)
+                        }
+                        item.focus = false
                     }
                 }
                 
                 onStatusChanged: {
                     if (status === Loader.Error) {
-                        console.error("Error cargando CrearProducto.qml")
+                        console.error("❌ Error cargando CrearProducto.qml")
                         mostrandoDialogoCrear = false
                     }
                 }
@@ -1128,7 +1246,44 @@ Item {
         }
     }
 
-    // DiálogoS EXISTENTES (mantener para compatibilidad) 
+    // CORREGIDO: Funciones para manejar diálogos
+    function abrirDialogoCrear() {
+        console.log("🆕 Abriendo diálogo para crear producto")
+        
+        // Cargar marcas antes de abrir
+        cargarMarcasDesdeModel()
+        
+        productoParaEditar = null
+        mostrandoDialogoCrear = true
+    }
+    
+    function abrirDialogoEditar(producto) {
+        console.log("📝 Abriendo diálogo para editar producto:", producto.codigo)
+        
+        // Cargar marcas antes de abrir
+        cargarMarcasDesdeModel()
+        
+        // CORREGIDO: Crear una copia limpia del producto sin referencias circulares
+        productoParaEditar = {
+            id: producto.id,
+            codigo: producto.codigo,
+            nombre: producto.nombre,
+            detalles: producto.detalles || "",
+            precioCompra: producto.precioCompra || 0,
+            precioVenta: producto.precioVenta || 0,
+            stockCaja: producto.stockCaja || 0,
+            stockUnitario: producto.stockUnitario || 0,
+            idMarca: producto.idMarca || "",
+            unidadMedida: producto.unidadMedida || "Tabletas"
+        }
+        
+        mostrandoDialogoCrear = true
+    }
+    
+    function cerrarDialogo() {
+        mostrandoDialogoCrear = false
+        productoParaEditar = null
+    }
 
     // Diálogo para Editar Precio de Venta
     Dialog {
@@ -1266,7 +1421,7 @@ Item {
                         spacing: 8
                         
                         Label {
-                            text: "$"
+                            text: "Bs"
                             font.bold: true
                             font.pixelSize: 18
                             color: textColor
@@ -1348,6 +1503,15 @@ Item {
                     }
                 }
             }
+        }
+        onOpened: {
+            precioVentaEditField.forceActiveFocus()
+            precioVentaEditField.selectAll()
+        }
+
+        onClosed: {
+            // Asegurar que el foco vuelva al componente principal
+            forceActiveFocus()
         }
     }
     
@@ -1680,16 +1844,7 @@ Item {
     
     // Función para obtener marcas (simulada)
     function obtenerMarcasModel() {
-        if (inventarioModel) {
-            return inventarioModel.get_marcas_disponibles()
-        }
-        
-        // Fallback si no hay conexión
-        return [
-            { id: 1, Nombre: "GENÉRICO" },
-            { id: 2, Nombre: "Roche" },
-            { id: 3, Nombre: "Bayer" }
-        ]
+        return marcasModel
     }
     
     // Funciones auxiliares para colores
@@ -1709,11 +1864,33 @@ Item {
         
         if (inventarioModel) {
             console.log("📊 Productos en InventarioModel:", inventarioModel.total_productos)
+            // CORREGIDO: Cargar marcas al inicio
+            cargarMarcasDesdeModel()
         }
         
         if (farmaciaData) {
             actualizarDesdeDataCentral()
             updatePaginatedModel()
         }
-}
+    }
+    
+    function mostrarDetalleProducto(producto) {
+        productoParaDetalle = producto
+        mostrandoDetalleProducto = true
+    }
+    
+    function editarProductoDesdeDetalle(producto) {
+        mostrandoDetalleProducto = false
+        abrirDialogoEditar(producto)
+    }
+    
+    function ajustarStockProducto(producto) {
+        console.log("Ajustar stock de:", producto.codigo)
+        // TODO: Implementar lógica de ajuste de stock
+    }
+    
+    function cerrarDetalleProducto() {
+        mostrandoDetalleProducto = false
+        productoParaDetalle = null
+    }
 }
