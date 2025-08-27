@@ -19,6 +19,40 @@ class GastoRepository(BaseRepository):
         print("💸 GastoRepository inicializado")
     
     # ===============================
+    # FUNCIÓN HELPER PARA FECHAS
+    # ===============================
+    
+    def _format_dates_in_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convierte objetos datetime a strings en los resultados para compatibilidad con QML"""
+        if not isinstance(results, list):
+            return results
+            
+        for result in results:
+            if isinstance(result, dict):
+                # Convertir campo 'Fecha' si existe
+                if result.get('Fecha') and hasattr(result['Fecha'], 'strftime'):
+                    result['Fecha'] = result['Fecha'].strftime('%Y-%m-%d %H:%M:%S')
+                
+                # Convertir campo 'fecha' si existe
+                if result.get('fecha') and hasattr(result['fecha'], 'strftime'):
+                    result['fecha'] = result['fecha'].strftime('%Y-%m-%d %H:%M:%S')
+                
+                # Convertir campos de fecha específicos
+                date_fields = ['ultimo_gasto', 'tipo_fecha_creacion', 'fechaGasto']
+                for field in date_fields:
+                    if result.get(field) and hasattr(result[field], 'strftime'):
+                        result[field] = result[field].strftime('%Y-%m-%d %H:%M:%S')
+        
+        return results
+    
+    def _format_single_date_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Convierte fechas en un solo resultado"""
+        if not result:
+            return result
+        
+        return self._format_dates_in_results([result])[0]
+    
+    # ===============================
     # IMPLEMENTACIÓN ABSTRACTA
     # ===============================
     
@@ -137,7 +171,8 @@ class GastoRepository(BaseRepository):
         ORDER BY g.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
-        return self._execute_query(query, (limit,))
+        result = self._execute_query(query, (limit,))
+        return self._format_dates_in_results(result)
     
     def get_expense_by_id_complete(self, gasto_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene gasto específico con información completa"""
@@ -156,7 +191,8 @@ class GastoRepository(BaseRepository):
         INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
         WHERE g.id = ?
         """
-        return self._execute_query(query, (gasto_id,), fetch_one=True)
+        result = self._execute_query(query, (gasto_id,), fetch_one=True)
+        return self._format_single_date_result(result) if result else None
     
     # ===============================
     # BÚSQUEDAS POR FECHAS
@@ -177,7 +213,8 @@ class GastoRepository(BaseRepository):
         WHERE g.Fecha BETWEEN ? AND ?
         ORDER BY g.Fecha DESC
         """
-        return self._execute_query(query, (start_date, end_date))
+        result = self._execute_query(query, (start_date, end_date))
+        return self._format_dates_in_results(result)
     
     def get_gastos_del_mes(self, año: int = None, mes: int = None) -> List[Dict[str, Any]]:
         """Obtiene gastos del mes específico"""
@@ -195,7 +232,8 @@ class GastoRepository(BaseRepository):
         WHERE YEAR(g.Fecha) = ? AND MONTH(g.Fecha) = ?
         ORDER BY g.Fecha DESC
         """
-        return self._execute_query(query, (año, mes))
+        result = self._execute_query(query, (año, mes))
+        return self._format_dates_in_results(result)
     
     @cached_query('gastos_hoy', ttl=60)
     def get_today_expenses(self) -> List[Dict[str, Any]]:
@@ -203,14 +241,16 @@ class GastoRepository(BaseRepository):
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow = today + timedelta(days=1)
         
-        return self.get_expenses_by_date_range(today, tomorrow)
+        result = self.get_expenses_by_date_range(today, tomorrow)
+        return self._format_dates_in_results(result)
     
     def get_recent_expenses(self, days: int = 7) -> List[Dict[str, Any]]:
         """Obtiene gastos recientes"""
         end_date = get_current_datetime()
         start_date = end_date - timedelta(days=days)
         
-        return self.get_expenses_by_date_range(start_date, end_date)
+        result = self.get_expenses_by_date_range(start_date, end_date)
+        return self._format_dates_in_results(result)
     
     # ===============================
     # BÚSQUEDAS POR ENTIDADES
@@ -228,7 +268,8 @@ class GastoRepository(BaseRepository):
         ORDER BY g.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
-        return self._execute_query(query, (tipo_gasto_id, limit))
+        result = self._execute_query(query, (tipo_gasto_id, limit))
+        return self._format_dates_in_results(result)
     
     def get_expenses_by_user(self, usuario_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """Obtiene gastos registrados por un usuario"""
@@ -240,7 +281,8 @@ class GastoRepository(BaseRepository):
         ORDER BY g.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
-        return self._execute_query(query, (usuario_id, limit))
+        result = self._execute_query(query, (usuario_id, limit))
+        return self._format_dates_in_results(result)
     
     def get_expenses_by_amount_range(self, min_amount: float, max_amount: float) -> List[Dict[str, Any]]:
         """Obtiene gastos por rango de monto"""
@@ -253,7 +295,8 @@ class GastoRepository(BaseRepository):
         WHERE g.Monto BETWEEN ? AND ?
         ORDER BY g.Monto DESC, g.Fecha DESC
         """
-        return self._execute_query(query, (min_amount, max_amount))
+        result = self._execute_query(query, (min_amount, max_amount))
+        return self._format_dates_in_results(result)
     
     # ===============================
     # GESTIÓN DE TIPOS DE GASTOS
@@ -272,7 +315,8 @@ class GastoRepository(BaseRepository):
         GROUP BY tg.id, tg.Nombre, tg.fecha
         ORDER BY total_gastos DESC, tg.Nombre
         """
-        return self._execute_query(query)
+        result = self._execute_query(query)
+        return self._format_dates_in_results(result)
     
     def get_expense_type_by_id(self, tipo_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene tipo de gasto por ID con estadísticas"""
@@ -287,12 +331,14 @@ class GastoRepository(BaseRepository):
         WHERE tg.id = ?
         GROUP BY tg.id, tg.Nombre, tg.fecha
         """
-        return self._execute_query(query, (tipo_id,), fetch_one=True)
+        result = self._execute_query(query, (tipo_id,), fetch_one=True)
+        return self._format_single_date_result(result) if result else None
     
     def get_expense_type_by_name(self, nombre: str) -> Optional[Dict[str, Any]]:
         """Obtiene tipo de gasto por nombre"""
         query = "SELECT * FROM Tipo_Gastos WHERE Nombre = ?"
-        return self._execute_query(query, (nombre.strip(),), fetch_one=True)
+        result = self._execute_query(query, (nombre.strip(),), fetch_one=True)
+        return self._format_single_date_result(result) if result else None
     
     def create_expense_type(self, nombre: str) -> int:
         """
@@ -404,7 +450,8 @@ class GastoRepository(BaseRepository):
         base_query += " ORDER BY g.Fecha DESC OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY"
         params.append(limit)
         
-        return self._execute_query(base_query, tuple(params))
+        result = self._execute_query(base_query, tuple(params))
+        return self._format_dates_in_results(result)
     
     def get_high_expenses(self, min_amount: float = 1000.0, days: int = 30) -> List[Dict[str, Any]]:
         """Obtiene gastos altos en período específico"""
@@ -419,7 +466,8 @@ class GastoRepository(BaseRepository):
         WHERE g.Monto >= ? AND g.Fecha >= ?
         ORDER BY g.Monto DESC, g.Fecha DESC
         """
-        return self._execute_query(query, (min_amount, start_date))
+        result = self._execute_query(query, (min_amount, start_date))
+        return self._format_dates_in_results(result)
     
     # ===============================
     # ESTADÍSTICAS Y REPORTES
@@ -522,7 +570,8 @@ class GastoRepository(BaseRepository):
         GROUP BY FORMAT(g.Fecha, 'yyyy-MM'), FORMAT(g.Fecha, 'MMMM yyyy', 'es-ES')
         ORDER BY mes DESC
         """
-        return self._execute_query(query, (months,))
+        result = self._execute_query(query, (months,))
+        return self._format_dates_in_results(result)
     
     def get_budget_analysis(self, budget_limits: Dict[str, float] = None) -> Dict[str, Any]:
         """Análisis de presupuesto por tipo de gasto"""
@@ -611,7 +660,8 @@ class GastoRepository(BaseRepository):
         INNER JOIN Gastos g ON u.id = g.Id_RegistradoPor
         WHERE g.id = ?
         """
-        return self._execute_query(query, (gasto_id,), fetch_one=True)
+        result = self._execute_query(query, (gasto_id,), fetch_one=True)
+        return self._format_single_date_result(result) if result else None
     
     def get_available_expense_types(self) -> List[str]:
         """Obtiene lista de tipos de gastos disponibles"""
@@ -658,13 +708,104 @@ class GastoRepository(BaseRepository):
         base_query += " ORDER BY g.Fecha DESC"
         
         expenses = self._execute_query(base_query, tuple(params))
+        expenses = self._format_dates_in_results(expenses)
         
         # Agregar información adicional para reporte
         for expense in expenses:
-            expense['fecha_formato'] = expense['Fecha'].strftime('%d/%m/%Y')
-            expense['monto_formato'] = f"${expense['Monto']:,.2f}"
+            try:
+                # Convertir string de fecha de vuelta a datetime para formateo
+                if isinstance(expense['Fecha'], str):
+                    fecha_obj = datetime.strptime(expense['Fecha'], '%Y-%m-%d %H:%M:%S')
+                    expense['fecha_formato'] = fecha_obj.strftime('%d/%m/%Y')
+                else:
+                    expense['fecha_formato'] = expense['Fecha'].strftime('%d/%m/%Y')
+                    
+                expense['monto_formato'] = f"${expense['Monto']:,.2f}"
+            except Exception as e:
+                print(f"Error formateando datos para reporte: {e}")
+                expense['fecha_formato'] = "N/A"
+                expense['monto_formato'] = f"${expense['Monto']:,.2f}"
         
         return expenses
+    
+    # ===============================
+    # PAGINACIÓN - MÉTODO CORREGIDO
+    # ===============================
+    
+    def get_paginated_expenses(self, offset: int, limit: int, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """Obtiene gastos paginados con filtros - CORREGIDO PARA QML"""
+        try:
+            # Validar parámetros
+            if offset < 0:
+                offset = 0
+            if limit <= 0 or limit > 100:
+                limit = 10
+                
+            # Construir consulta con filtros
+            query = """
+            SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.Proveedor,
+                tg.Nombre as tipo_nombre,
+                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
+            FROM Gastos g
+            INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
+            INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
+            """
+            
+            conditions = []
+            params = []
+            
+            if filters:
+                if filters.get('mes') and filters.get('año'):
+                    conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
+                    params.append(filters['mes'])
+                    params.append(filters['año'])
+                    
+                if filters.get('tipo_id') and filters['tipo_id'] > 0:
+                    conditions.append("g.ID_Tipo = ?")
+                    params.append(filters['tipo_id'])
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+                
+            query += " ORDER BY g.Fecha DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
+            params.extend([offset, limit])
+            
+            result = self._execute_query(query, tuple(params))
+            
+            # CONVERSIÓN ESPECÍFICA PARA QML
+            for gasto in result:
+                if gasto.get('Fecha') and hasattr(gasto['Fecha'], 'strftime'):
+                    # Convertir a formato de solo fecha para QML
+                    gasto['Fecha'] = gasto['Fecha'].strftime('%Y-%m-%d')
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ Error en get_paginated_expenses: {e}")
+            raise e
+
+    def get_expenses_count(self, filters: Dict[str, Any] = None) -> int:
+        """Cuenta total de gastos con filtros"""
+        query = "SELECT COUNT(*) as total FROM Gastos g"
+        params = []
+        
+        if filters:
+            where_conditions = []
+            if filters.get('tipo_id'):
+                where_conditions.append("g.ID_Tipo = ?")
+                params.append(filters['tipo_id'])
+            if filters.get('mes'):
+                where_conditions.append("MONTH(g.Fecha) = ?")
+                params.append(filters['mes'])
+            if filters.get('año'):
+                where_conditions.append("YEAR(g.Fecha) = ?")
+                params.append(filters['año'])
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+        
+        result = self._execute_query(query, tuple(params), fetch_one=True)
+        return result['total'] if result else 0
     
     # ===============================
     # CACHÉ

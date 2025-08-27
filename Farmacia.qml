@@ -180,23 +180,6 @@ Item {
             console.log("🏢 Proveedores actualizados desde BD")
         }
     }
-
-
-    Connections {
-        target: contentLoader.item
-        function onMostrarCrearProducto() {
-            console.log("🚀 Navegando a CrearProducto")
-            contentLoader.sourceComponent = crearProductoComponent
-        }
-        function onMostrarDetalleProducto(producto) {
-            console.log("🔍 Navegando a DetalleProducto:", producto.codigo)
-            contentLoader.sourceComponent = detalleProductoComponent
-            if (contentLoader.item) {
-                contentLoader.item.productoData = producto
-                contentLoader.item.inventarioModel = farmaciaRoot.inventarioModel
-            }
-        }
-    }
     // ELIMINADO: Conexiones para mostrarCrearProducto y mostrarDetalleProducto
     // Ya no necesitamos cambiar el contentLoader para estos casos
     // ===== FUNCIONES CENTRALES DE GESTIÓN DE DATOS (CONECTADAS A BD) =====
@@ -904,11 +887,7 @@ Item {
             // Emitir actualización
             datosActualizados()
         }
-    }
-
-    // ELIMINADO: Componentes crearProductoComponent y detalleProductoComponent
-    // Ya no los necesitamos aquí porque ahora se manejan como overlay dentro de Productos.qml
-    
+    }    
     // Monitor de cambios en productos para debug BD
     onProductosUnicosModelChanged: {
         console.log("📊 ProductosUnicosModel BD actualizado - Total productos:", productosUnicosModel.length)

@@ -7,11 +7,11 @@ Item {
     id: serviciosBasicosRoot
     objectName: "serviciosBasicosRoot"
     
-    // ✅ SISTEMA DE ESTILOS ADAPTABLES INTEGRADO
+    // SISTEMA DE ESTILOS ADAPTABLES INTEGRADO
     readonly property real screenWidth: width
     readonly property real screenHeight: height
-    readonly property real baseUnit: Math.min(screenWidth, screenHeight) / 40  // Unidad base escalable
-    readonly property real fontScale: screenHeight / 800  // Factor de escala para fuentes
+    readonly property real baseUnit: Math.min(screenWidth, screenHeight) / 40
+    readonly property real fontScale: screenHeight / 800
     
     // Márgenes escalables
     readonly property real marginSmall: baseUnit * 0.5
@@ -26,7 +26,7 @@ Item {
     readonly property real fontLarge: Math.max(16, 18 * fontScale)
     readonly property real fontTitle: Math.max(18, 24 * fontScale)
     
-    // ===== NUEVA SEÑAL PARA NAVEGACIÓN A CONFIGURACIÓN =====
+    // NUEVA SEÑAL PARA NAVEGACIÓN A CONFIGURACIÓN
     signal irAConfigServiciosBasicos()
     
     // Acceso a colores
@@ -46,17 +46,46 @@ Item {
     property int editingIndex: -1
     property int selectedRowIndex: -1
     
-    // ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
+    // PROPIEDADES DE PAGINACIÓN CORREGIDAS
     property int itemsPerPageServicios: 10
     property int currentPageServicios: 0
     property int totalPagesServicios: 0
 
-    // ✅ NUEVA PROPIEDAD PARA DATOS ORIGINALES (FUENTE DE VERDAD)
-    property var gastosOriginales: []
-
+    property var editingGastoData: null
     property var gastoModelInstance: null
     
-    // ✅ CONEXIONES CON EL GASTOMODEL VIA APPCONTROLLER
+    // FUNCIÓN HELPER MOVIDA AL NIVEL PRINCIPAL
+    function obtenerAñosDisponibles() {
+        var años = []
+        var añoActual = new Date().getFullYear()
+        
+        // Siempre incluir año actual
+        años.push(añoActual.toString())
+        
+        // Añadir algunos años anteriores para tener opciones
+        for (var i = 1; i <= 5; i++) {
+            años.push((añoActual - i).toString())
+        }
+        
+        // Ordenar años de mayor a menor
+        años.sort(function(a, b) { return parseInt(b) - parseInt(a) })
+        
+        console.log("📅 Años disponibles:", años)
+        return años
+    }
+
+    // FUNCIÓN DE DEBUG CORREGIDA
+    function debugEstado() {
+        console.log("🔍 DEBUG Estado actual:")
+        console.log("   - gastoModelInstance:", gastoModelInstance ? "disponible" : "null")
+        console.log("   - gastosListModel.count:", gastosListModel.count)
+        console.log("   - gastosPaginadosModel.count:", gastosPaginadosModel.count)
+        console.log("   - tiposGastosModel.count:", tiposGastosModel.count)
+        console.log("   - currentPageServicios:", currentPageServicios)
+        console.log("   - totalPagesServicios:", totalPagesServicios)
+    }
+    
+    // CONEXIONES CON EL GASTOMODEL VIA APPCONTROLLER
     Connections {
         target: gastoModelInstance
         enabled: gastoModelInstance !== null
@@ -64,7 +93,6 @@ Item {
         function onGastosChanged() {
             if (gastoModelInstance) {
                 console.log("🔄 Gastos actualizados desde AppController:", gastoModelInstance.gastos.length)
-                // ✅ USAR UN TIMER PARA EVITAR LLAMADAS INMEDIATAS QUE CAUSEN LOOPS
                 loadGastosTimer.restart()
             }
         }
@@ -72,12 +100,10 @@ Item {
         function onTiposGastosChanged() {
             if (gastoModelInstance) {
                 console.log("🏷️ Tipos de gastos actualizados desde AppController:", gastoModelInstance.tiposGastos.length)
-                // ✅ USAR UN TIMER PARA EVITAR LLAMADAS INMEDIATAS
                 loadTiposTimer.restart()
             }
         }
         
-        // ✅ EL RESTO DE LAS FUNCIONES PERMANECEN IGUAL (no causan loops)
         function onGastoCreado(success, message) {
             console.log("📝 Gasto creado:", success, message)
             if (success) {
@@ -132,10 +158,10 @@ Item {
         }
     }
     
-    // ✅ AGREGAR TIMERS PARA EVITAR LLAMADAS INMEDIATAS
+    // TIMERS PARA EVITAR LLAMADAS INMEDIATAS
     Timer {
         id: loadGastosTimer
-        interval: 100  // 100ms de delay
+        interval: 100
         repeat: false
         onTriggered: {
             if (gastoModelInstance) {
@@ -144,13 +170,23 @@ Item {
         }
     }
 
-    // ✅ CONEXIONES CON APPCONTROLLER PARA NOTIFICACIONES
+    Timer {
+        id: loadTiposTimer
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (gastoModelInstance) {
+                loadTiposGastosFromModel()
+            }
+        }
+    }
+
+    // CONEXIONES CON APPCONTROLLER PARA NOTIFICACIONES
     Connections {
         target: appController
         
         function onModelsReady() {
             console.log("🚀 Models listos desde AppController")
-            // Obtener referencia al modelo cuando esté disponible
             if (appController && appController.gasto_model_instance) {
                 gastoModelInstance = appController.gasto_model_instance
                 console.log("✅ GastoModel disponible")
@@ -162,13 +198,13 @@ Item {
             }
         }
     }
-    // ✅ TIMER PARA INICIALIZACIÓN RETRASADA
+    
+    // TIMER PARA INICIALIZACIÓN RETRASADA
     Timer {
         id: delayedInitTimer
         interval: 500
         repeat: false
         onTriggered: {
-            // ✅ CORREGIR ESTA FUNCIÓN:
             if (appController && appController.gasto_model_instance) {
                 gastoModelInstance = appController.gasto_model_instance
                 console.log("🔄 Inicialización retrasada exitosa")
@@ -176,7 +212,6 @@ Item {
                 loadTiposGastosFromModel()
             } else {
                 console.log("❌ GastoModel aún no disponible")
-                // Intentar de nuevo después de más tiempo
                 if (interval < 2000) {
                     interval = interval * 2
                     start()
@@ -185,91 +220,17 @@ Item {
         }
     }
     
-    // ✅ FUNCIÓN PARA CARGAR GASTOS DESDE EL MODELO VIA APPCONTROLLER
+    // FUNCIÓN PARA CARGAR GASTOS DESDE EL MODELO VIA APPCONTROLLER
     function loadGastosFromModel() {
         if (!gastoModelInstance) {
             console.log("⚠️ GastoModel no disponible para cargar gastos")
             return
         }
-        
-        console.log("📊 Cargando gastos desde modelo...")
-        
-        gastosOriginales = []
-        gastosListModel.clear()
-        
-        var gastos = gastoModelInstance.gastos
-        for (var i = 0; i < gastos.length; i++) {
-            var gasto = gastos[i]
-            
-            // ✅ MAPEO ACTUALIZADO CON NUEVOS CAMPOS DE LA BD
-            var gastoFormatted = {
-                gastoId: gasto.id || (i + 1),
-                tipoGasto: gasto.tipo_nombre || "Sin tipo",
-                descripcion: gasto.Descripcion || "Sin descripción",  // ✅ Ahora viene directo de la BD
-                monto: parseFloat(gasto.Monto || 0).toFixed(2),
-                fechaGasto: formatDateFromModel(gasto.Fecha),
-                proveedor: gasto.Proveedor || "Sin proveedor",        // ✅ Campo directo de la BD
-                registradoPor: gasto.registrado_por_nombre || gasto.usuario_nombre || gasto.usuario_completo || "Usuario desconocido"
-            }
-            
-            gastosOriginales.push(gastoFormatted)
-            gastosListModel.append(gastoFormatted)
-        }
-        
-        console.log("📊 Gastos cargados:", gastosOriginales.length)
-        updatePaginatedModel()
+        console.log("📊 Recargando página actual desde modelo...")
+        cargarPaginaDesdeBD()
     }
     
-    // ✅ NUEVA FUNCIÓN QUE NO TRIGGEEA SEÑALES DEL MODELO
-    function aplicarFiltrosDirecto() {
-        console.log("🔍 Aplicando filtros directamente...")
-        
-        // Limpiar el modelo filtrado
-        gastosListModel.clear()
-        
-        var hoy = new Date()
-        var textoBusqueda = campoBusqueda.text.toLowerCase()
-        
-        for (var i = 0; i < gastosOriginales.length; i++) {
-            var gasto = gastosOriginales[i]
-            var mostrar = true
-            // Filtro por tipo de servicio
-            if (filtroTipoServicio.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipoServicio.model[filtroTipoServicio.currentIndex]
-                if (gasto.tipoGasto !== tipoSeleccionado) {
-                    mostrar = false
-                }
-            }
-
-            // Filtro por mes
-            if (mostrar) {
-                var fechaGasto = new Date(gasto.fechaGasto)
-                var mesSeleccionado = filtroMes.currentIndex
-                
-                if (fechaGasto.getMonth() !== mesSeleccionado) {
-                    mostrar = false
-                }
-            }
-
-            // Filtro por año (solo si está visible)
-            if (filtroAño.visible && mostrar) {
-                var fechaGasto = new Date(gasto.fechaGasto)
-                var añoSeleccionado = parseInt(filtroAño.currentText)
-                
-                if (fechaGasto.getFullYear() !== añoSeleccionado) {
-                    mostrar = false
-                }
-            } 
-        }
-        
-        // Resetear a primera página y actualizar paginación
-        currentPageServicios = 0
-        updatePaginatedModel()
-        
-        console.log("✅ Filtros aplicados directamente. Gastos mostrados:", gastosListModel.count)
-    }
-    
-    // ✅ FUNCIÓN PARA CARGAR TIPOS DE GASTOS DESDE EL MODELO VIA APPCONTROLLER
+    // FUNCIÓN PARA CARGAR TIPOS DE GASTOS DESDE EL MODELO VIA APPCONTROLLER
     function loadTiposGastosFromModel() {
         if (!gastoModelInstance) {
             console.log("⚠️ GastoModel no disponible para cargar tipos")
@@ -278,20 +239,20 @@ Item {
         
         console.log("🏷️ Cargando tipos desde modelo...")
         
-        // ✅ LIMPIAR COMPLETAMENTE EL MODELO ANTES DE AGREGAR NUEVOS DATOS
+        // LIMPIAR COMPLETAMENTE EL MODELO ANTES DE AGREGAR NUEVOS DATOS
         tiposGastosModel.clear()
         
         var tipos = gastoModelInstance.tiposGastos
         for (var i = 0; i < tipos.length; i++) {
             var tipo = tipos[i]
             
-            // ✅ CREAR OBJETO CON TIPOS CONSISTENTES
+            // CREAR OBJETO CON TIPOS CONSISTENTES
             var tipoFormatted = {
                 id: parseInt(tipo.id || 0),
                 nombre: String(tipo.Nombre || "Sin nombre"),
                 descripcion: String(tipo.descripcion || "Tipo de gasto"),
-                ejemplos: [],  // Siempre array vacío para evitar conflictos
-                color: String(getColorForTipo(tipo.Nombre || ""))  // ✅ SIEMPRE STRING
+                ejemplos: [],
+                color: String(getColorForTipo(tipo.Nombre || ""))
             }
             
             tiposGastosModel.append(tipoFormatted)
@@ -300,11 +261,10 @@ Item {
         console.log("🏷️ Tipos de gastos cargados:", tiposGastosModel.count)
         
         // Actualizar ComboBox
-        filtroTipoGasto.model = getTiposGastosNombres()
+        filtroTipoServicio.model = getTiposGastosNombres()
     }
     
-    
-    // ✅ FUNCIÓN OVERRIDE PARA CREAR GASTO CON MODELO REAL VIA APPCONTROLLER
+    // FUNCIÓN OVERRIDE PARA CREAR GASTO CON MODELO REAL VIA APPCONTROLLER
     function createGastoWithModel(gastoData) {
         if (!gastoModelInstance) {
             console.log("❌ GastoModel no disponible para crear gasto")
@@ -323,25 +283,23 @@ Item {
             console.log("🏷️ Tipo de gasto seleccionado:", tipoSeleccionado.nombre, "ID:", tipoGastoId)
         }
         
-        // ✅ CORRECCIÓN: Usar el campo correcto del objeto gastoData
+        // CORRECCIÓN: Usar el campo correcto del objeto gastoData
         var proveedorFinal = gastoData.proveedor || gastoData.proveedorEmpresa || ""
         console.log("🏢 Proveedor a guardar:", proveedorFinal)
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.crearGasto(
-            tipoGastoId,                    // tipo_gasto_id
-            parseFloat(gastoData.monto),    // monto
-            10,                             // usuario_id (usuario predeterminado)
-            gastoData.descripcion,          // descripcion
-            gastoData.fechaGasto,          // fecha_gasto
-            proveedorFinal                  // proveedor ✅ CORREGIDO
+            tipoGastoId,
+            parseFloat(gastoData.monto),
+            10,
+            gastoData.descripcion,
+            gastoData.fechaGasto,
+            proveedorFinal
         )
         
         console.log("📝 Resultado creación:", success)
         return success
     }
-
-    // ✅ REEMPLAZAR LA FUNCIÓN updateGastoWithModel EN ServiciosBasicos.qml
 
     function updateGastoWithModel(gastoId, gastoData) {
         if (!gastoModelInstance) {
@@ -361,24 +319,24 @@ Item {
             console.log("🏷️ Tipo de gasto seleccionado:", tipoSeleccionado.nombre, "ID:", tipoGastoId)
         }
         
-        // ✅ CORRECCIÓN: Usar el campo correcto del objeto gastoData
+        // CORRECCIÓN: Usar el campo correcto del objeto gastoData
         var proveedorFinal = gastoData.proveedor || gastoData.proveedorEmpresa || ""
         console.log("🏢 Proveedor a actualizar:", proveedorFinal)
         
         // Llamar al modelo real via AppController
         var success = gastoModelInstance.actualizarGasto(
-            parseInt(gastoId),              // gasto_id
-            parseFloat(gastoData.monto),   // monto
-            tipoGastoId,                   // tipo_gasto_id
-            gastoData.descripcion,         // descripcion
-            proveedorFinal                 // proveedor ✅ CORREGIDO
+            parseInt(gastoId),
+            parseFloat(gastoData.monto),
+            tipoGastoId,
+            gastoData.descripcion,
+            proveedorFinal
         )
         
         console.log("✏️ Resultado actualización:", success)
         return success
     }
     
-    // ✅ FUNCIÓN OVERRIDE PARA ELIMINAR GASTO CON MODELO REAL VIA APPCONTROLLER
+    // FUNCIÓN OVERRIDE PARA ELIMINAR GASTO CON MODELO REAL VIA APPCONTROLLER
     function deleteGastoWithModel(gastoId) {
         if (!gastoModelInstance) {
             console.log("❌ GastoModel no disponible para eliminar gasto")
@@ -394,7 +352,7 @@ Item {
         return success
     }
     
-    // ✅ FUNCIONES HELPER (MANTENER IGUALES)
+    // FUNCIONES HELPER
     function formatDateFromModel(dateValue) {
         if (!dateValue) return Qt.formatDate(new Date(), "yyyy-MM-dd")
         
@@ -432,26 +390,27 @@ Item {
         errorDialog.text = message
         errorDialog.open()
     }
-    // ===== PROPIEDAD PARA EXPONER EL MODELO DE DATOS =====
+    
+    // PROPIEDAD PARA EXPONER EL MODELO DE DATOS
     property alias tiposGastosModel: tiposGastosModel
     
-    // ✅ MODELO DE TIPOS DE GASTOS LOCAL (FALLBACK)
+    // MODELO DE TIPOS DE GASTOS LOCAL (FALLBACK)
     ListModel {
         id: tiposGastosModel
     }
 
-    // ✅ MODELOS SEPARADOS PARA PAGINACIÓN (PATRÓN DE TRES CAPAS)
+    // MODELOS SEPARADOS PARA PAGINACIÓN
     ListModel {
-        id: gastosListModel // Modelo filtrado (todos los resultados del filtro)
+        id: gastosListModel
     }
     
     ListModel {
-        id: gastosPaginadosModel // Modelo para la página actual
+        id: gastosPaginadosModel
     }
 
     // Función helper para obtener nombres de tipos de gastos
     function getTiposGastosNombres() {
-        var nombres = ["Todos los tipos"]
+        var nombres = ["Todos los Servicios"]
         for (var i = 0; i < tiposGastosModel.count; i++) {
             nombres.push(tiposGastosModel.get(i).nombre)
         }
@@ -466,109 +425,75 @@ Item {
         }
         return nombres
     }
-    // ✅ FUNCIÓN PARA APLICAR FILTROS VIA APPCONTROLLER  
-    function aplicarFiltros() {
-        // ✅ SI NO HAY DATOS ORIGINALES, NO HACER NADA
-        if (gastosOriginales.length === 0) {
-            console.log("⚠️ No hay datos originales para filtrar")
-            return
-        }
-        
-        // ✅ APLICAR FILTROS DIRECTAMENTE SIN INTERACTUAR CON EL MODELO
-        aplicarFiltrosDirecto()
-    }
-    
-    // ✅ FUNCIÓN PARA APLICAR FILTROS VIA MODELO SOLO CUANDO SEA NECESARIO
-    function aplicarFiltrosViaModelo() {
+  
+    // FUNCIÓN PARA ACTUALIZAR PAGINACIÓN
+    function cargarPaginaDesdeBD() {
         if (!gastoModelInstance) {
-            console.log("⚠️ GastoModel no disponible para aplicar filtros")
+            console.log("⚠️ GastoModel no disponible aún")
             return
         }
         
-        console.log("🔍 Aplicando filtros via AppController...")
+        loadingIndicator.visible = true;
         
-        var termino_busqueda = campoBusqueda.text.trim()
-        var tipo_gasto_id = 0
-        var fecha_desde = ""
-        var fecha_hasta = ""
-        var monto_min = 0.0
-        var monto_max = 0.0
-        
-        // Obtener tipo de gasto seleccionado
-        if (filtroTipoGasto.currentIndex > 0) {
-            var tipoSeleccionado = tiposGastosModel.get(filtroTipoGasto.currentIndex - 1)
-            tipo_gasto_id = tipoSeleccionado.id
+        // Validar y obtener el año correctamente
+        var añoValor = 0;
+        if (filtroAño.currentText && !isNaN(parseInt(filtroAño.currentText))) {
+            añoValor = parseInt(filtroAño.currentText);
+        } else {
+            añoValor = new Date().getFullYear();
         }
         
-        // Calcular fechas según filtro
-        var hoy = new Date()
-        switch(filtroFecha.currentIndex) {
-            case 1: // Este mes
-                fecha_desde = Qt.formatDate(new Date(hoy.getFullYear(), hoy.getMonth(), 1), "yyyy-MM-dd")
-                fecha_hasta = Qt.formatDate(hoy, "yyyy-MM-dd")
-                break
-            case 2: // Mes anterior
-                var mesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)
-                fecha_desde = Qt.formatDate(mesAnterior, "yyyy-MM-dd")
-                fecha_hasta = Qt.formatDate(new Date(hoy.getFullYear(), hoy.getMonth(), 0), "yyyy-MM-dd")
-                break
-            case 3: // Últimos 3 meses
-                fecha_desde = Qt.formatDate(new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1), "yyyy-MM-dd")
-                fecha_hasta = Qt.formatDate(hoy, "yyyy-MM-dd")
-                break
+        var filtrosActuales = {
+            tipo_id: filtroTipoServicio.currentIndex > 0 ? tiposGastosModel.get(filtroTipoServicio.currentIndex - 1).id : 0,
+            mes: filtroMes.currentIndex + 1,
+            año: añoValor
+        };
+        
+        console.log("🔍 Aplicando filtros:", JSON.stringify(filtrosActuales));
+        
+        var offset = currentPageServicios * itemsPerPageServicios;
+        
+        // Cargar datos paginados desde BD
+        var gastosPagina = gastoModelInstance.obtenerGastosPaginados(offset, itemsPerPageServicios, filtrosActuales);
+        var totalGastos = gastoModelInstance.obtenerTotalGastos(filtrosActuales);
+        
+        gastosPaginadosModel.clear();
+        
+        for (var i = 0; i < gastosPagina.length; i++) {
+            var gasto = gastosPagina[i];
+            gastosPaginadosModel.append({
+                gastoId: gasto.id,
+                tipoGasto: gasto.tipo_nombre,
+                descripcion: gasto.Descripcion,
+                monto: gasto.Monto.toFixed(2),
+                fechaGasto: Qt.formatDate(gasto.Fecha, "yyyy-MM-dd"),
+                proveedor: gasto.Proveedor,
+                registradoPor: gasto.usuario_nombre
+            });
         }
         
-        // ✅ SOLO APLICAR FILTROS VIA MODELO SI ES NECESARIO
-        // Por ahora, usar filtros locales para evitar loops
-        aplicarFiltrosDirecto()
-    }
-    
-    // ✅ ACTUALIZAR LOS EVENTOS DE LOS FILTROS PARA USAR LA FUNCIÓN CORRECTA
-    function onFiltroChanged() {
-        // ✅ USAR FILTROS DIRECTOS EN LUGAR DE VIA MODELO
-        aplicarFiltrosDirecto()
-    }
-    // ✅ FUNCIÓN PARA ACTUALIZAR PAGINACIÓN
-    function updatePaginatedModel() {
-        console.log("🔄 Servicios Básicos: Actualizando paginación - Página:", currentPageServicios + 1)
-        
-        // Limpiar modelo paginado
-        gastosPaginadosModel.clear()
-        
-        // Calcular total de páginas basado en gastos filtrados
-        var totalItems = gastosListModel.count
-        totalPagesServicios = Math.ceil(totalItems / itemsPerPageServicios)
-        
-        // Asegurar que siempre hay al menos 1 página
-        if (totalPagesServicios === 0) {
-            totalPagesServicios = 1
-        }
-        
-        // Ajustar página actual si es necesario
-        if (currentPageServicios >= totalPagesServicios && totalPagesServicios > 0) {
-            currentPageServicios = totalPagesServicios - 1
-        }
-        if (currentPageServicios < 0) {
-            currentPageServicios = 0
-        }
-        
-        // Calcular índices
-        var startIndex = currentPageServicios * itemsPerPageServicios
-        var endIndex = Math.min(startIndex + itemsPerPageServicios, totalItems)
-        
-        // Agregar elementos de la página actual
-        for (var i = startIndex; i < endIndex; i++) {
-            var gasto = gastosListModel.get(i)
-            gastosPaginadosModel.append(gasto)
-        }
-        
-        console.log("🔄 Servicios Básicos: Página", currentPageServicios + 1, "de", totalPagesServicios,
-                    "- Mostrando", gastosPaginadosModel.count, "de", totalItems)
+        totalPagesServicios = Math.ceil(totalGastos / itemsPerPageServicios);
+        loadingIndicator.visible = false;
     }
 
-    // ✅ FUNCIÓN PARA OBTENER TOTAL DE GASTOS
-    function getTotalServiciosCount() {
-        return gastosOriginales.length
+    // FUNCIÓN PARA LIMPIAR FILTROS
+    function limpiarFiltros() {
+        console.log("🧹 Limpiando filtros...")
+        
+        filtroTipoServicio.currentIndex = 0
+        filtroMes.currentIndex = new Date().getMonth()
+        
+        // Restablecer el año al año actual
+        var añoActual = new Date().getFullYear().toString();
+        var index = filtroAño.find(añoActual);
+        if (index >= 0) {
+            filtroAño.currentIndex = index;
+        } else if (filtroAño.model.length > 0) {
+            filtroAño.currentIndex = 0;
+        }
+        
+        currentPageServicios = 0
+        cargarPaginaDesdeBD()
     }
 
     ColumnLayout {
@@ -589,7 +514,7 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // ✅ HEADER RESPONSIVO
+                // HEADER RESPONSIVO
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Math.max(60, screenHeight * 0.08)
@@ -664,7 +589,7 @@ Item {
                         anchors.margins: marginMedium
                         spacing: marginMedium
                         
-                        // ✅ FILTRO TIPO SERVICIO
+                        // FILTRO TIPO SERVICIO
                         Row {
                             spacing: marginSmall
                             Layout.alignment: Qt.AlignVCenter
@@ -695,12 +620,13 @@ Item {
                                 currentIndex: 0
                                 onCurrentIndexChanged: {
                                     console.log("🔍 Filtro tipo servicio cambiado:", currentIndex)
-                                    Qt.callLater(aplicarFiltrosDirecto)
+                                    currentPageServicios = 0
+                                    Qt.callLater(cargarPaginaDesdeBD)
                                 }
                             }
                         }
-                        
-                        // ✅ FILTRO MES
+
+                        // FILTRO MES
                         Row {
                             spacing: marginSmall
                             Layout.alignment: Qt.AlignVCenter
@@ -721,12 +647,13 @@ Item {
                                 currentIndex: new Date().getMonth()
                                 onCurrentIndexChanged: {
                                     console.log("📅 Filtro mes cambiado:", currentIndex)
-                                    Qt.callLater(aplicarFiltrosDirecto)
+                                    currentPageServicios = 0
+                                    Qt.callLater(cargarPaginaDesdeBD)
                                 }
                             }
                         }
-                        
-                        // ✅ FILTRO AÑO
+
+                        // FILTRO AÑO - CORREGIDO
                         Row {
                             spacing: marginSmall
                             Layout.alignment: Qt.AlignVCenter
@@ -744,136 +671,42 @@ Item {
                             ComboBox {
                                 id: filtroAño
                                 width: Math.max(80, screenWidth * 0.08)
-                                model: obtenerAñosDisponibles()
-                                currentIndex: 0
+                                
+                                // MODELO INLINE CORREGIDO
+                                model: {
+                                    var años = []
+                                    var añoActual = new Date().getFullYear()
+                                    años.push(añoActual.toString())
+                                    for (var i = 1; i <= 5; i++) {
+                                        años.push((añoActual - i).toString())
+                                    }
+                                    return años.sort(function(a, b) { return parseInt(b) - parseInt(a) })
+                                }
+                                
+                                // ESTABLECER VALOR POR DEFECTO AL INICIALIZAR
+                                Component.onCompleted: {
+                                    var añoActual = new Date().getFullYear().toString();
+                                    var index = find(añoActual);
+                                    if (index >= 0) {
+                                        currentIndex = index;
+                                    } else if (model.length > 0) {
+                                        currentIndex = 0;
+                                    }
+                                }
+                                
                                 onCurrentIndexChanged: {
                                     if (visible) {
                                         console.log("📅 Filtro año cambiado:", currentText)
-                                        Qt.callLater(aplicarFiltrosDirecto)
+                                        currentPageServicios = 0
+                                        Qt.callLater(cargarPaginaDesdeBD)
                                     }
                                 }
                             }
                         }
-                        
-                        // ✅ ESPACIADOR PARA EMPUJAR TODO A LA IZQUIERDA
-                        Item {
-                            Layout.fillWidth: true
-                        }
-                    }
-                    
-                    // ✅ TIMER PARA BÚSQUEDA
-                    Timer {
-                        id: searchTimer
-                        interval: 500
-                        repeat: false
-                        onTriggered: aplicarFiltrosDirecto()
                     }
                 }
 
-                // ✅ FUNCIONES AUXILIARES CORREGIDAS - AGREGAR DESPUÉS DE LA FUNCIÓN debugEstado()
-
-                function obtenerAñosDisponibles() {
-                    var años = []
-                    var añoActual = new Date().getFullYear()
-                    
-                    // Siempre incluir año actual
-                    años.push(añoActual.toString())
-                    
-                    // Verificar si hay datos de años anteriores
-                    for (var i = 0; i < gastosOriginales.length; i++) {
-                        var fechaGasto = new Date(gastosOriginales[i].fechaGasto)
-                        var añoGasto = fechaGasto.getFullYear()
-                        
-                        if (añoGasto < añoActual && años.indexOf(añoGasto.toString()) === -1) {
-                            años.push(añoGasto.toString())
-                        }
-                    }
-                    
-                    // Ordenar años de mayor a menor
-                    años.sort(function(a, b) { return parseInt(b) - parseInt(a) })
-                    
-                    console.log("📅 Años disponibles:", años)
-                    return años
-                }
-
-                // ✅ FUNCIÓN DE FILTRADO MEJORADA
-                function aplicarFiltrosDirecto() {
-                    console.log("🔍 Aplicando filtros directamente...")
-                    
-                    if (gastosOriginales.length === 0) {
-                        console.log("⚠️ No hay datos para filtrar")
-                        return
-                    }
-                    
-                    // Limpiar modelo filtrado
-                    gastosListModel.clear()
-                    
-                    var textoBusqueda = campoBusqueda.text.toLowerCase().trim()
-                    console.log("🔍 Término de búsqueda:", textoBusqueda)
-                    
-                    for (var i = 0; i < gastosOriginales.length; i++) {
-                        var gasto = gastosOriginales[i]
-                        var mostrar = true
-                        
-                        // ✅ FILTRO POR TIPO DE SERVICIO
-                        if (filtroTipoServicio.currentIndex > 0 && mostrar) {
-                            var tipoSeleccionado = filtroTipoServicio.currentText
-                            if (gasto.tipoGasto !== tipoSeleccionado) {
-                                mostrar = false
-                            }
-                        }
-
-                        // ✅ FILTRO POR MES
-                        if (mostrar) {
-                            var fechaGasto = new Date(gasto.fechaGasto)
-                            var mesSeleccionado = filtroMes.currentIndex
-                            
-                            if (fechaGasto.getMonth() !== mesSeleccionado) {
-                                mostrar = false
-                            }
-                        }
-
-                        // ✅ FILTRO POR AÑO (solo si está visible)
-                        if (filtroAño.visible && mostrar) {
-                            var fechaGasto = new Date(gasto.fechaGasto)
-                            var añoSeleccionado = parseInt(filtroAño.currentText)
-                            
-                            if (fechaGasto.getFullYear() !== añoSeleccionado) {
-                                mostrar = false
-                            }
-                        }
-                        
-                        // ✅ FILTRO POR BÚSQUEDA DE TEXTO
-                        if (textoBusqueda.length > 0 && mostrar) {
-                            var descripcion = (gasto.descripcion || "").toLowerCase()
-                            var proveedor = (gasto.proveedor || "").toLowerCase()
-                            var tipoGasto = (gasto.tipoGasto || "").toLowerCase()
-                            var registradoPor = (gasto.registradoPor || "").toLowerCase()
-                            
-                            var encontrado = descripcion.indexOf(textoBusqueda) >= 0 ||
-                                        proveedor.indexOf(textoBusqueda) >= 0 ||
-                                        tipoGasto.indexOf(textoBusqueda) >= 0 ||
-                                        registradoPor.indexOf(textoBusqueda) >= 0
-                            
-                            if (!encontrado) {
-                                mostrar = false
-                            }
-                        }
-                        
-                        // Si pasa todos los filtros, agregarlo al modelo filtrado
-                        if (mostrar) {
-                            gastosListModel.append(gasto)
-                        }
-                    }
-                    
-                    // Resetear a primera página y actualizar paginación
-                    currentPageServicios = 0
-                    updatePaginatedModel()
-                    
-                    console.log("✅ Filtros aplicados. Gastos mostrados:", gastosListModel.count, "de", gastosOriginales.length)
-                }
-            
-                // ✅ CONTENEDOR DE TABLA COMPLETAMENTE RESPONSIVO
+                // CONTENEDOR DE TABLA COMPLETAMENTE RESPONSIVO
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -889,7 +722,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // ✅ HEADER DE TABLA CON ANCHOS PROPORCIONALES
+                        // HEADER DE TABLA CON ANCHOS PROPORCIONALES
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Math.max(40, screenHeight * 0.06)
@@ -1016,7 +849,7 @@ Item {
                             }
                         }
                         
-                        // ✅ CONTENIDO DE TABLA CON ALTURA ADAPTABLE
+                        // CONTENIDO DE TABLA CON ALTURA ADAPTABLE
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -1040,7 +873,7 @@ Item {
                                         anchors.fill: parent
                                         spacing: 0
                                         
-                                        // ✅ COLUMNA ID - Mantiene el ancho actual
+                                        // COLUMNA ID
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.06
                                             Layout.fillHeight: true
@@ -1057,7 +890,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ✅ COLUMNA TIPO - Mantiene el ancho actual
+                                        // COLUMNA TIPO
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.16
                                             Layout.fillHeight: true
@@ -1082,7 +915,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ✅ COLUMNA DESCRIPCIÓN - Ahora campo real de la BD
+                                        // COLUMNA DESCRIPCIÓN
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.22
                                             Layout.fillHeight: true
@@ -1104,7 +937,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ✅ COLUMNA MONTO - Mantiene el ancho actual
+                                        // COLUMNA MONTO
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
@@ -1126,7 +959,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ✅ COLUMNA FECHA - Mantiene el ancho actual
+                                        // COLUMNA FECHA
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
@@ -1142,7 +975,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ✅ COLUMNA PROVEEDOR - Ahora campo directo de la BD
+                                        // COLUMNA PROVEEDOR
                                         Rectangle {
                                             Layout.preferredWidth: parent.width * 0.18
                                             Layout.fillHeight: true
@@ -1164,7 +997,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ✅ COLUMNA REGISTRADO POR - Actualizada
+                                        // COLUMNA REGISTRADO POR
                                         Rectangle {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
@@ -1195,7 +1028,7 @@ Item {
                                         }
                                     }
                                     
-                                    // ✅ BOTONES DE ACCIÓN - Mantienen la misma funcionalidad
+                                    // BOTONES DE ACCIÓN
                                     RowLayout {
                                         anchors.top: parent.top
                                         anchors.right: parent.right
@@ -1226,21 +1059,15 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                var gastoId = model.gastoId
-                                                var realIndex = -1
-                                                
-                                                // Buscar el índice real en gastosListModel
-                                                for (var i = 0; i < gastosListModel.count; i++) {
-                                                    if (gastosListModel.get(i).gastoId === gastoId) {
-                                                        realIndex = i
-                                                        break
-                                                    }
-                                                }
-                                                
                                                 isEditMode = true
-                                                editingIndex = realIndex
-                                                
-                                                console.log("Editando gasto ID:", gastoId, "índice real:", realIndex)
+                                                editingGastoData = {
+                                                    gastoId: model.gastoId,
+                                                    tipoGasto: model.tipoGasto,
+                                                    descripcion: model.descripcion,
+                                                    monto: model.monto,
+                                                    fechaGasto: model.fechaGasto,
+                                                    proveedor: model.proveedor
+                                                }
                                                 showNewGastoDialog = true
                                             }
                                         }
@@ -1275,9 +1102,8 @@ Item {
                                     }
                                 }
                             }
-                                                    
                             
-                            // ✅ ESTADO VACÍO PARA TABLA SIN DATOS
+                            // ESTADO VACÍO PARA TABLA SIN DATOS
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
@@ -1323,7 +1149,7 @@ Item {
                     }
                 }
                 
-                // ✅ CONTROL DE PAGINACIÓN RESPONSIVO - MOVIDO FUERA DE LA TABLA
+                // CONTROL DE PAGINACIÓN RESPONSIVO
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Math.max(50, screenHeight * 0.08)
@@ -1370,7 +1196,7 @@ Item {
                             onClicked: {
                                 if (currentPageServicios > 0) {
                                     currentPageServicios--
-                                    updatePaginatedModel()
+                                    cargarPaginaDesdeBD()
                                 }
                             }
                         }
@@ -1413,7 +1239,7 @@ Item {
                             onClicked: {
                                 if (currentPageServicios < totalPagesServicios - 1) {
                                     currentPageServicios++
-                                    updatePaginatedModel()
+                                    cargarPaginaDesdeBD()
                                 }
                             }
                         }
@@ -1436,6 +1262,8 @@ Item {
             onClicked: {
                 showNewGastoDialog = false
                 selectedRowIndex = -1
+                isEditMode = false
+                editingGastoData = null 
             }
         }
         
@@ -1447,8 +1275,8 @@ Item {
     Rectangle {
         id: gastoForm
         anchors.centerIn: parent
-        width: Math.min(parent.width * 0.9, 600)  // ✅ Ancho adaptable
-        height: Math.min(parent.height * 0.9, 550)  // ✅ Altura adaptable
+        width: Math.min(parent.width * 0.9, 450)
+        height: Math.min(parent.height * 0.9, 450)
         color: whiteColor
         radius: baseUnit * 0.5
         border.color: lightGrayColor
@@ -1457,13 +1285,11 @@ Item {
         
         property int selectedTipoGastoIndex: -1
         
-        // ✅ FUNCIÓN PARA CARGAR DATOS EN MODO EDICIÓN ACTUALIZADA
+        // FUNCIÓN PARA CARGAR DATOS EN MODO EDICIÓN ACTUALIZADA
         function loadEditData() {
-            if (isEditMode && editingIndex >= 0) {
-                var gasto = gastosListModel.get(editingIndex)
-                
+            if (isEditMode && editingGastoData) {
                 // Buscar el tipo de gasto correspondiente
-                var tipoGastoNombre = gasto.tipoGasto
+                var tipoGastoNombre = editingGastoData.tipoGasto
                 for (var i = 0; i < tiposGastosModel.count; i++) {
                     if (tiposGastosModel.get(i).nombre === tipoGastoNombre) {
                         tipoGastoCombo.currentIndex = i + 1
@@ -1472,10 +1298,10 @@ Item {
                     }
                 }
                 // Cargar descripción
-                descripcionField.text = gasto.descripcion
-                montoField.text = gasto.monto
-                fechaGastoField.text = gasto.fechaGasto
-                proveedorField.text = gasto.proveedor
+                descripcionField.text = editingGastoData.descripcion
+                montoField.text = editingGastoData.monto
+                fechaGastoField.text = editingGastoData.fechaGasto
+                proveedorField.text = editingGastoData.proveedor
             }
         }
         
@@ -1494,7 +1320,7 @@ Item {
             }
         }
         
-        // ✅ SCROLL PARA FORMULARIOS LARGOS
+        // SCROLL PARA FORMULARIOS LARGOS
         ScrollView {
             anchors.fill: parent
             anchors.margins: marginLarge
@@ -1533,7 +1359,7 @@ Item {
                         // Tipo de Gasto
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: screenWidth > 400 ? 2 : 1  // ✅ Adaptable
+                            columns: screenWidth > 400 ? 2 : 1
                             columnSpacing: marginSmall
                             
                             Label {
@@ -1695,7 +1521,7 @@ Item {
                             showNewGastoDialog = false
                             selectedRowIndex = -1
                             isEditMode = false
-                            editingIndex = -1
+                            editingGastoData = null
                         }
                     }
                     
@@ -1730,12 +1556,12 @@ Item {
                                 return
                             }
                             
-                            // ✅ CORRECCIÓN: Crear objeto con nombres de campo consistentes
+                            // CORRECCIÓN: Crear objeto con nombres de campo consistentes
                             var gastoData = {
                                 descripcion: descripcionField.text.trim(),
                                 monto: parseFloat(montoField.text).toFixed(2),
                                 fechaGasto: fechaGastoField.text,
-                                proveedor: proveedorField.text.trim()  // ✅ USAR "proveedor" en lugar de "proveedorEmpresa"
+                                proveedor: proveedorField.text.trim()
                             }
                             
                             console.log("📊 Enviando datos del formulario:", JSON.stringify(gastoData))
@@ -1758,7 +1584,8 @@ Item {
             }
         }
     }
-    // ✅ DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+
+    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
     Dialog {
         id: confirmDeleteDialog
         anchors.centerIn: parent
@@ -1854,7 +1681,7 @@ Item {
         }
     }
     
-    // ✅ COMPONENTE DE LOADING
+    // COMPONENTE DE LOADING
     Rectangle {
         id: loadingIndicator
         anchors.fill: parent
@@ -1880,7 +1707,7 @@ Item {
         }
     }
     
-    // ✅ TOAST DE ÉXITO
+    // TOAST DE ÉXITO
     Rectangle {
         id: successToast
         anchors.horizontalCenter: parent.horizontalCenter
@@ -1915,7 +1742,7 @@ Item {
         }
     }
     
-    // ✅ DIÁLOGO DE ERROR
+    // DIÁLOGO DE ERROR
     Dialog {
         id: errorDialog
         anchors.centerIn: parent
@@ -1977,46 +1804,22 @@ Item {
             }
         }
     }
-    // ✅ CORREGIR FUNCIÓN limpiarFiltros
-    function limpiarFiltros() {
-        console.log("🧹 Limpiando filtros...")
-        
-        filtroTipoServicio.currentIndex = 0
-        filtroMes.currentIndex = new Date().getMonth()
-        filtroAño.currentIndex = 0
-        
-        // Restaurar todos los datos originales
-        gastosListModel.clear()
-        for (var i = 0; i < gastosOriginales.length; i++) {
-            gastosListModel.append(gastosOriginales[i])
-        }
-        
-        // Resetear paginación
-        currentPageServicios = 0
-        updatePaginatedModel()
-        
-        console.log("🧹 Filtros limpiados - Mostrando:", gastosListModel.count, "gastos")
-    }
     
-    // ✅ CORREGIR LA INICIALIZACIÓN DEL COMPONENTE
+    // INICIALIZACIÓN MEJORADA CON APPCONTROLLER
     Component.onCompleted: {
         console.log("💰 Módulo Servicios Básicos iniciado")
         
-        // ✅ NO LLAMAR FUNCIONES QUE PUEDAN CAUSAR LOOPS AL INICIO
-        // Solo inicializar paginación con datos vacíos
-        updatePaginatedModel()
+        // Verificar si ya tenemos el modelo disponible
+        if (appController && appController.gasto_model_instance) {
+            gastoModelInstance = appController.gasto_model_instance
+            loadGastosFromModel()
+            loadTiposGastosFromModel()
+        } else {
+            // Si no, esperar con el timer
+            delayedInitTimer.start()
+        }
         
-        console.log("⏳ Esperando conexión con AppController...")
+        // Cargar datos iniciales
+        Qt.callLater(cargarPaginaDesdeBD)
     }
-    
-    // ✅ AGREGAR ESTA FUNCIÓN PARA DEBUGGING
-    function debugEstado() {
-        console.log("🔍 DEBUG Estado actual:")
-        console.log("   - gastoModelInstance:", gastoModelInstance ? "disponible" : "null")
-        console.log("   - gastosOriginales.length:", gastosOriginales.length)
-        console.log("   - gastosListModel.count:", gastosListModel.count)
-        console.log("   - gastosPaginadosModel.count:", gastosPaginadosModel.count)
-        console.log("   - tiposGastosModel.count:", tiposGastosModel.count)
-    } 
-    // ✅ INICIALIZACIÓN MEJORADA CON APPCONTROLLER
 }
