@@ -150,7 +150,7 @@ Item {
                 title: "Centro de Configuraciones"
                 subtitle: "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
                 icon: "⚙️"
-                color: primaryColor
+                headerColor: primaryColor
             }
             
             // Sección de Módulos
@@ -233,12 +233,12 @@ Item {
         property string title: ""
         property string subtitle: ""
         property string icon: ""
-        property string color: primaryColor
+        property string headerColor: primaryColor
         
         Layout.preferredHeight: Math.max(120, baseUnit * 15)
         gradient: Gradient {
-            GradientStop { position: 0.0; color: color }
-            GradientStop { position: 1.0; color: Qt.darker(color, 1.1) }
+            GradientStop { position: 0.0; color: headerColor }
+            GradientStop { position: 1.0; color: Qt.darker(headerColor, 1.1) }
         }
         radius: radiusLarge
         

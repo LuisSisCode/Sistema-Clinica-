@@ -6,7 +6,7 @@ Item {
     id: configTrabajadoresRoot
     
     // ===== PASO 1: PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
-    property alias tiposTrabajadores: listaTiposTrabajadores.model
+    property var tiposTrabajadores: tiposTrabajadoresData
     
     // ===== DATOS INTERNOS =====
     property var tiposTrabajadoresData: []
@@ -687,11 +687,9 @@ Item {
     }
     
     // ===== EVENTOS =====
-    onTiposTrabajadoresChanged: {
-        if (tiposTrabajadores && tiposTrabajadores !== tiposTrabajadoresData) {
-            tiposTrabajadoresData = tiposTrabajadores
-            console.log("📄 Datos de tipos de trabajadores actualizados desde exterior")
-        }
+    function actualizarTiposTrabajadores(nuevosTipos) {
+        tiposTrabajadoresData = nuevosTipos
+        tiposTrabajadores = nuevosTipos
     }
     
     Component.onCompleted: {

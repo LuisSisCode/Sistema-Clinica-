@@ -892,20 +892,31 @@ Item {
         }
     }
     
-    // Diálogo del formulario
+    // Diálogo del formulario - Diseño IDÉNTICO a Enfermería
     Rectangle {
         id: workerForm
         anchors.centerIn: parent
-        width: Math.min(parent.width * 0.8, 600)
-        height: Math.min(parent.height * 0.8, 600)
+        width: Math.min(parent.width * 0.95, 700)  // Más ancho para mejor uso del espacio
+        height: Math.min(parent.height * 0.95, 800)  // Más alto pero con mejor distribución
         color: whiteColor
-        radius: baseUnit * 2
-        border.color: lightGrayColor
-        border.width: 2
+        radius: baseUnit * 1.5  // Bordes más redondeados
+        border.color: "#DDD"
+        border.width: 1
         visible: showNewWorkerDialog
+
+        // Efecto de sombra simple
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -baseUnit
+            color: "transparent"
+            radius: parent.radius + baseUnit
+            border.color: "#20000000"
+            border.width: baseUnit
+            z: -1
+        }
         
         property int selectedTipoTrabajadorIndex: -1
-                
+        
         // Función para cargar datos en modo edición
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
@@ -917,11 +928,11 @@ Item {
                 
                 if (trabajadorCompleto && Object.keys(trabajadorCompleto).length > 0) {
                     // Cargar datos de forma segura
-                    if (nombreTrabajador) nombreTrabajador.text = trabajadorCompleto.Nombre || ""
-                    if (apellidoPaterno) apellidoPaterno.text = trabajadorCompleto.Apellido_Paterno || ""
-                    if (apellidoMaterno) apellidoMaterno.text = trabajadorCompleto.Apellido_Materno || ""
-                    if (especialidadField) especialidadField.text = trabajadorCompleto.Especialidad || ""
-                    if (matriculaField) matriculaField.text = trabajadorCompleto.Matricula || ""
+                    nombreTrabajador.text = trabajadorCompleto.Nombre || ""
+                    apellidoPaterno.text = trabajadorCompleto.Apellido_Paterno || ""
+                    apellidoMaterno.text = trabajadorCompleto.Apellido_Materno || ""
+                    especialidadField.text = trabajadorCompleto.Especialidad || ""
+                    matriculaField.text = trabajadorCompleto.Matricula || ""
                     
                     // Buscar el tipo de trabajador correspondiente
                     var tipos = trabajadorModel.tiposTrabajador
@@ -940,311 +951,503 @@ Item {
             if (visible && isEditMode) {
                 loadEditData()
             } else if (visible && !isEditMode) {
-                // Limpiar formulario de forma segura
-                if (nombreTrabajador) nombreTrabajador.text = ""
-                if (apellidoPaterno) apellidoPaterno.text = ""
-                if (apellidoMaterno) apellidoMaterno.text = ""
-                if (especialidadField) especialidadField.text = ""
-                if (matriculaField) matriculaField.text = ""
-                if (tipoTrabajadorCombo) {
-                    tipoTrabajadorCombo.currentIndex = 0
-                    tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
-                }
+                // Limpiar formulario para nuevo trabajador
+                nombreTrabajador.text = ""
+                apellidoPaterno.text = ""
+                apellidoMaterno.text = ""
+                especialidadField.text = ""
+                matriculaField.text = ""
+                tipoTrabajadorCombo.currentIndex = 0
                 workerForm.selectedTipoTrabajadorIndex = -1
             }
         }
         
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 30
-            spacing: 20
+        // HEADER MEJORADO CON CIERRE - IDÉNTICO A ENFERMERÍA
+        Rectangle {
+            id: dialogHeader
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: baseUnit * 7
+            color: primaryColor
+            radius: baseUnit * 1.5
             
-            // Título
             Label {
-                Layout.fillWidth: true
-                text: isEditMode ? "Editar Trabajador" : "Nuevo Trabajador"
-                font.pixelSize: fontBaseSize * 1.6
+                anchors.centerIn: parent
+                text: isEditMode ? "EDITAR TRABAJADOR" : "NUEVO TRABAJADOR"
+                font.pixelSize: fontBaseSize * 1.2
                 font.bold: true
+                color: whiteColor
                 font.family: "Segoe UI, Arial, sans-serif"
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
             }
             
-            // Datos del Trabajador
-            GroupBox {
-                Layout.fillWidth: true
-                title: "Datos Personales"
-                
+            // Botón de cerrar
+            Button {
+                anchors.right: parent.right
+                anchors.rightMargin: baseUnit * 2
+                anchors.verticalCenter: parent.verticalCenter
+                width: baseUnit * 4
+                height: baseUnit * 4
                 background: Rectangle {
-                    color: lightGrayColor
-                    border.color: lightGrayColor
+                    color: "transparent"
+                    radius: width / 2
+                    border.color: parent.hovered ? whiteColor : "transparent"
                     border.width: 1
-                    radius: 8
                 }
                 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 12
+                contentItem: Text {
+                    text: "×"
+                    color: whiteColor
+                    font.pixelSize: fontBaseSize * 1.8
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    showNewWorkerDialog = false
+                    selectedRowIndex = -1
+                    isEditMode = false
+                    editingIndex = -1
+                }
+            }
+        }
+        
+        // SCROLLVIEW PRINCIPAL CON MÁRGENES ADECUADOS - IDÉNTICO A ENFERMERÍA
+        ScrollView {
+            id: scrollView
+            anchors.top: dialogHeader.bottom
+            anchors.topMargin: baseUnit * 2
+            anchors.bottom: buttonRow.top
+            anchors.bottomMargin: baseUnit * 2
+            anchors.left: parent.left
+            anchors.leftMargin: baseUnit * 3
+            anchors.right: parent.right
+            anchors.rightMargin: baseUnit * 3
+            clip: true
+            
+            // CONTENEDOR PRINCIPAL DEL FORMULARIO - IDÉNTICO A ENFERMERÍA
+            ColumnLayout {
+                width: scrollView.width - (baseUnit * 1)
+                spacing: baseUnit * 2
+                
+                // DATOS PERSONALES - IDÉNTICO A ENFERMERÍA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "DATOS PERSONALES"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
                     
-                    // Nombre
-                    TextField {
-                        id: nombreTrabajador
-                        Layout.fillWidth: true
-                        placeholderText: "Nombre del trabajador"
-                        background: Rectangle {
-                            color: whiteColor
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: 6
-                        }
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
                     }
                     
-                    // Apellidos
-                    RowLayout {
-                        Layout.fillWidth: true                       
+                    GridLayout {
+                        width: parent.width
+                        columns: 2
+                        columnSpacing: baseUnit * 2
+                        rowSpacing: baseUnit * 1.5
+                        
+                        Label {
+                            text: "Nombre:"
+                            font.bold: true
+                            color: textColor
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
+                        
+                        TextField {
+                            id: nombreTrabajador
+                            Layout.fillWidth: true
+                            placeholderText: "Nombre del trabajador"
+                            font.pixelSize: fontBaseSize
+                            font.family: "Segoe UI, Arial, sans-serif"
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: "#ddd"
+                                border.width: 1
+                                radius: baseUnit * 0.5
+                            }
+                            padding: baseUnit
+                        }
+                        
+                        Label {
+                            text: "Apellido Paterno:"
+                            font.bold: true
+                            color: textColor
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
+                        
                         TextField {
                             id: apellidoPaterno
                             Layout.fillWidth: true
                             placeholderText: "Apellido paterno"
+                            font.pixelSize: fontBaseSize
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: "#ddd"
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.5
                             }
+                            padding: baseUnit
+                        }
+                        
+                        Label {
+                            text: "Apellido Materno:"
+                            font.bold: true
+                            color: textColor
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                         
                         TextField {
                             id: apellidoMaterno
                             Layout.fillWidth: true
                             placeholderText: "Apellido materno"
+                            font.pixelSize: fontBaseSize
+                            font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: lightGrayColor
+                                border.color: "#ddd"
                                 border.width: 1
-                                radius: 6
+                                radius: baseUnit * 0.5
                             }
+                            padding: baseUnit
                         }
                     }
                 }
-            }
-            
-            // Información Profesional
-            GroupBox {
-                Layout.fillWidth: true
-                title: "Información Profesional"
                 
-                background: Rectangle {
-                    color: lightGrayColor
-                    border.color: lightGrayColor
-                    border.width: 1
-                    radius: 8
-                }
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 12
+                // INFORMACIÓN PROFESIONAL - IDÉNTICO A ENFERMERÍA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "INFORMACIÓN PROFESIONAL"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
                     
-                    // Tipo de Trabajador
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            Layout.preferredWidth: 120
-                            text: "Tipo:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        ComboBox {
-                            id: tipoTrabajadorCombo
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
+                    }
+                    
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: baseUnit * 2
+                        
+                        // Tipo de Trabajador
+                        RowLayout {
                             Layout.fillWidth: true
-                            model: getTiposTrabajadoresParaCombo()
-                            onCurrentIndexChanged: {
-                                if (currentIndex > 0) {
-                                    workerForm.selectedTipoTrabajadorIndex = currentIndex - 1
-                                } else {
-                                    workerForm.selectedTipoTrabajadorIndex = -1
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Tipo de Trabajador:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 18
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            ComboBox {
+                                id: tipoTrabajadorCombo
+                                Layout.fillWidth: true
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                model: getTiposTrabajadoresParaCombo()
+                                onCurrentIndexChanged: {
+                                    if (currentIndex > 0) {
+                                        workerForm.selectedTipoTrabajadorIndex = currentIndex - 1
+                                    } else {
+                                        workerForm.selectedTipoTrabajadorIndex = -1
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: tipoTrabajadorCombo.displayText
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: "#ddd"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                }
+                                
+                                popup: Popup {
+                                    width: tipoTrabajadorCombo.width
+                                    implicitHeight: contentItem.implicitHeight + baseUnit
+                                    padding: 1
+                                    
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: tipoTrabajadorCombo.popup.visible ? tipoTrabajadorCombo.delegateModel : null
+                                        currentIndex: tipoTrabajadorCombo.highlightedIndex
+                                        
+                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                    }
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: "#ddd"
+                                        radius: baseUnit * 0.5
+                                    }
                                 }
                             }
                         }
-                    }
-                    
-                    // Especialidad
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            Layout.preferredWidth: 120
-                            text: "Especialidad:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        TextField {
-                            id: especialidadField
+                        
+                        // Especialidad
+                        RowLayout {
                             Layout.fillWidth: true
-                            placeholderText: "Especialidad del trabajador"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: lightGrayColor
-                                border.width: 1
-                                radius: 6
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Especialidad:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 18
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            TextField {
+                                id: especialidadField
+                                Layout.fillWidth: true
+                                placeholderText: "Especialidad del trabajador"
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: "#ddd"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                }
+                                padding: baseUnit
                             }
                         }
-                    }
-                    
-                    // Matrícula
-                    RowLayout {
-                        id: matriculaRow
-                        Layout.fillWidth: true
-                        visible: true
-                        Label {
-                            Layout.preferredWidth: 120
-                            text: "Matrícula:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        TextField {
-                            id: matriculaField
+                        
+                        // Matrícula
+                        RowLayout {
                             Layout.fillWidth: true
-                            placeholderText: "Número de matrícula profesional (opcional)"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: lightGrayColor
-                                border.width: 1
-                                radius: 6
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Matrícula:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 18
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            TextField {
+                                id: matriculaField
+                                Layout.fillWidth: true
+                                placeholderText: "Número de matrícula profesional (opcional)"
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: "#ddd"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                }
+                                padding: baseUnit
                             }
                         }
                     }
                 }
+                
+                // INFORMACIÓN ADICIONAL (Opcional) - Para mantener consistencia visual
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "INFORMACIÓN ADICIONAL"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
+                    
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
+                    }
+                    
+                    Label {
+                        width: parent.width
+                        text: "El trabajador será registrado con la fecha actual del sistema. Los campos marcados como opcionales pueden dejarse vacíos."
+                        color: textColorLight
+                        font.pixelSize: fontBaseSize * 0.9
+                        font.family: "Segoe UI, Arial, sans-serif"
+                        wrapMode: Text.WordWrap
+                        font.italic: true
+                    }
+                }
+            }
+        }
+        
+        // BOTONES INFERIORES - IDÉNTICO A ENFERMERÍA
+        RowLayout {
+            id: buttonRow
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: baseUnit * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: baseUnit * 2
+            height: baseUnit * 5
+            
+            Button {
+                id: cancelButton
+                text: "Cancelar"
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
+                
+                background: Rectangle {
+                    color: cancelButton.pressed ? "#e0e0e0" : 
+                        (cancelButton.hovered ? "#f0f0f0" : "#f8f9fa")
+                    border.color: "#ddd"
+                    border.width: 1
+                    radius: baseUnit * 0.8
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: fontBaseSize
+                    font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: textColor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    // Limpiar y cerrar
+                    showNewWorkerDialog = false
+                    selectedRowIndex = -1
+                    isEditMode = false
+                    editingIndex = -1
+                }
             }
             
-            Item { Layout.fillHeight: true }
-            
-            // Botones
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
+            Button {
+                id: saveButton
+                text: isEditMode ? "Actualizar" : "Guardar"
+                enabled: workerForm.selectedTipoTrabajadorIndex >= 0 && 
+                        nombreTrabajador.text.length > 0
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
                 
-                Button {
-                    text: "Cancelar"
-                    background: Rectangle {
-                        color: lightGrayColor
-                        radius: 8
+                background: Rectangle {
+                    color: !saveButton.enabled ? "#bdc3c7" : 
+                        (saveButton.pressed ? Qt.darker(primaryColor, 1.1) : 
+                        (saveButton.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor))
+                    radius: baseUnit * 0.8
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: fontBaseSize
+                    font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: whiteColor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    console.log("Botón Guardar presionado...")
+                    
+                    // Obtener valores de forma segura
+                    var nombre = nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
+                    var apellidoPat = apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
+                    var apellidoMat = apellidoMaterno.text ? apellidoMaterno.text.trim() : ""
+                    var especialidad = especialidadField.text ? especialidadField.text.trim() : ""
+                    var matricula = matriculaField.text ? matriculaField.text.trim() : ""
+                    
+                    // Validaciones
+                    if (!nombre || nombre === "") {
+                        console.log("Error: Falta el nombre")
+                        return
                     }
-                    contentItem: Label {
-                        text: parent.text
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
+                    
+                    if (!apellidoPat || apellidoPat === "") {
+                        console.log("Error: Falta el apellido paterno")
+                        return
                     }
-                    onClicked: {
-                        // Limpiar y cerrar
+                    
+                    if (workerForm.selectedTipoTrabajadorIndex < 0) {
+                        console.log("Error: Falta seleccionar tipo de trabajador")
+                        return
+                    }
+                    
+                    // Obtener ID del tipo de trabajador
+                    var tipoTrabajadorId = trabajadorModel.tiposTrabajador[workerForm.selectedTipoTrabajadorIndex].id
+                    
+                    console.log("Datos a guardar:", {
+                        nombre: nombre,
+                        apellidoPaterno: apellidoPat,
+                        apellidoMaterno: apellidoMat,
+                        tipoTrabajadorId: tipoTrabajadorId,
+                        especialidad: especialidad,
+                        matricula: matricula
+                    })
+                    
+                    // EJECUTAR OPERACIÓN Y MANEJAR RESULTADO
+                    var success = false
+                    
+                    if (isEditMode && editingIndex >= 0) {
+                        // Actualizar trabajador existente
+                        var trabajadorData = trabajadoresListModel.get(editingIndex)
+                        var trabajadorId = parseInt(trabajadorData.trabajadorId)
+                        
+                        console.log("Actualizando trabajador ID:", trabajadorId)
+                        success = trabajadorModel.actualizarTrabajador(
+                            trabajadorId,
+                            nombre,
+                            apellidoPat, 
+                            apellidoMat,
+                            tipoTrabajadorId,
+                            especialidad,
+                            matricula
+                        )
+                    } else {
+                        // Crear nuevo trabajador
+                        console.log("Creando nuevo trabajador...")
+                        success = trabajadorModel.crearTrabajador(
+                            nombre,
+                            apellidoPat,
+                            apellidoMat,
+                            tipoTrabajadorId,
+                            especialidad,
+                            matricula
+                        )
+                    }
+                    
+                    // SI LA OPERACIÓN FUE EXITOSA, ACTUALIZAR INMEDIATAMENTE
+                    if (success) {
+                        console.log("Operación exitosa - Actualizando UI inmediatamente")
+                        
+                        // Cerrar diálogo inmediatamente
                         showNewWorkerDialog = false
                         selectedRowIndex = -1
                         isEditMode = false
                         editingIndex = -1
-                    }
-                }
-                
-                Button {
-                    text: isEditMode ? "Actualizar" : "Guardar"
-                    enabled: workerForm.selectedTipoTrabajadorIndex >= 0 && 
-                            nombreTrabajador.text.length > 0
-                    background: Rectangle {
-                        color: parent.enabled ? primaryColor : "#bdc3c7"
-                        radius: 8
-                    }
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    onClicked: {
-                        console.log("💾 Botón Guardar presionado...")
                         
-                        // Obtener valores de forma segura
-                        var nombre = nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
-                        var apellidoPat = apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
-                        var apellidoMat = apellidoMaterno.text ? apellidoMaterno.text.trim() : ""
-                        var especialidad = especialidadField.text ? especialidadField.text.trim() : ""
-                        var matricula = matriculaField.text ? matriculaField.text.trim() : ""
-                        
-                        // Validaciones
-                        if (!nombre || nombre === "") {
-                            console.log("❌ Falta el nombre")
-                            return
-                        }
-                        
-                        if (!apellidoPat || apellidoPat === "") {
-                            console.log("❌ Falta el apellido paterno")
-                            return
-                        }
-                        
-                        if (workerForm.selectedTipoTrabajadorIndex < 0) {
-                            console.log("❌ Falta seleccionar tipo de trabajador")
-                            return
-                        }
-                        
-                        // Obtener ID del tipo de trabajador
-                        var tipoTrabajadorId = trabajadorModel.tiposTrabajador[workerForm.selectedTipoTrabajadorIndex].id
-                        
-                        console.log("📋 Datos a guardar:", {
-                            nombre: nombre,
-                            apellidoPaterno: apellidoPat,
-                            apellidoMaterno: apellidoMat,
-                            tipoTrabajadorId: tipoTrabajadorId,
-                            especialidad: especialidad,
-                            matricula: matricula
+                        // FORZAR ACTUALIZACIÓN INMEDIATA
+                        Qt.callLater(function() {
+                            console.log("Ejecutando actualización diferida...")
+                            actualizarInmediato()
                         })
                         
-                        // ✅ EJECUTAR OPERACIÓN Y MANEJAR RESULTADO
-                        var success = false
-                        
-                        if (isEditMode && editingIndex >= 0) {
-                            // Actualizar trabajador existente
-                            var trabajadorData = trabajadoresListModel.get(editingIndex)
-                            var trabajadorId = parseInt(trabajadorData.trabajadorId)
-                            
-                            console.log("✏️ Actualizando trabajador ID:", trabajadorId)
-                            success = trabajadorModel.actualizarTrabajador(
-                                trabajadorId,
-                                nombre,
-                                apellidoPat, 
-                                apellidoMat,
-                                tipoTrabajadorId,
-                                especialidad,
-                                matricula
-                            )
-                        } else {
-                            // Crear nuevo trabajador
-                            console.log("➕ Creando nuevo trabajador...")
-                            success = trabajadorModel.crearTrabajador(
-                                nombre,
-                                apellidoPat,
-                                apellidoMat,
-                                tipoTrabajadorId,
-                                especialidad,
-                                matricula
-                            )
-                        }
-                        
-                        // ✅ SI LA OPERACIÓN FUE EXITOSA, ACTUALIZAR INMEDIATAMENTE
-                        if (success) {
-                            console.log("✅ Operación exitosa - Actualizando UI inmediatamente")
-                            
-                            // Cerrar diálogo inmediatamente
-                            showNewWorkerDialog = false
-                            selectedRowIndex = -1
-                            isEditMode = false
-                            editingIndex = -1
-                            
-                            // ✅ FORZAR ACTUALIZACIÓN INMEDIATA
-                            Qt.callLater(function() {
-                                console.log("🔄 Ejecutando actualización diferida...")
-                                actualizarInmediato()
-                            })
-                            
-                        } else {
-                            console.log("❌ Error en la operación")
-                        }
+                    } else {
+                        console.log("Error en la operación")
                     }
                 }
             }

@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import qmlRegisterType
+from datetime import datetime
 
 from ..repositories.gasto_repository import GastoRepository
 from ..core.excepciones import ExceptionHandler, ValidationError
@@ -64,23 +65,48 @@ class GastoModel(QObject):
         print("💸 GastoModel inicializado")
     
     # ===============================
+    # FUNCIÓN HELPER PARA FECHAS QML
+    # ===============================
+    
+    def _convert_dates_for_qml(self, data: Any) -> Any:
+        """Convierte fechas Python datetime a strings para compatibilidad con QML"""
+        if isinstance(data, list):
+            return [self._convert_dates_for_qml(item) for item in data]
+        elif isinstance(data, dict):
+            converted = {}
+            for key, value in data.items():
+                if isinstance(value, datetime):
+                    converted[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+                elif key.lower() in ['fecha', 'fecha_gasto', 'ultimo_gasto', 'tipo_fecha_creacion'] and value:
+                    # Campos específicos de fecha
+                    if hasattr(value, 'strftime'):
+                        converted[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        converted[key] = str(value)
+                else:
+                    converted[key] = self._convert_dates_for_qml(value)
+            return converted
+        else:
+            return data
+    
+    # ===============================
     # PROPERTIES - Datos para QML
     # ===============================
     
     @Property(list, notify=gastosChanged)
     def gastos(self) -> List[Dict[str, Any]]:
         """Lista de gastos para mostrar en QML"""
-        return self._gastos_filtrados
+        return self._convert_dates_for_qml(self._gastos_filtrados)
     
     @Property(list, notify=tiposGastosChanged)
     def tiposGastos(self) -> List[Dict[str, Any]]:
         """Lista de tipos de gastos disponibles"""
-        return self._tipos_gastos
+        return self._convert_dates_for_qml(self._tipos_gastos)
     
     @Property('QVariantMap', notify=estadisticasChanged)
     def estadisticas(self) -> Dict[str, Any]:
         """Estadísticas de gastos"""
-        return self._estadisticas
+        return self._convert_dates_for_qml(self._estadisticas)
     
     @Property(bool, notify=loadingChanged)
     def loading(self) -> bool:
@@ -105,16 +131,15 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
-            # ✅ DEBUG: Imprimir todos los parámetros recibidos
+            # DEBUG: Imprimir todos los parámetros recibidos
             print(f"📝 CREANDO GASTO - Parámetros recibidos:")
             print(f"   - tipo_gasto_id: {tipo_gasto_id}")
             print(f"   - monto: {monto}")
             print(f"   - usuario_id: {usuario_id}")
             print(f"   - descripcion: '{descripcion}'")
             print(f"   - fecha_gasto: '{fecha_gasto}'")
-            print(f"   - proveedor: '{proveedor}'")  # ✅ ESTE DEBE APARECER EN LA CONSOLA
+            print(f"   - proveedor: '{proveedor}'")
             
-            from datetime import datetime
             fecha_obj = None
             if fecha_gasto:
                 try:
@@ -124,7 +149,7 @@ class GastoModel(QObject):
                     print(f"   - Error convirtiendo fecha: {e}")
                     fecha_obj = None
             
-            # ✅ VALIDAR QUE EL PROVEEDOR NO ESTÉ VACÍO
+            # VALIDAR QUE EL PROVEEDOR NO ESTÉ VACÍO
             proveedor_final = proveedor.strip() if proveedor else None
             print(f"   - proveedor_final: '{proveedor_final}'")
             
@@ -135,7 +160,7 @@ class GastoModel(QObject):
                 usuario_id=usuario_id,
                 fecha=fecha_obj,
                 descripcion=descripcion if descripcion else None,
-                proveedor=proveedor_final  # ✅ USAR proveedor_final
+                proveedor=proveedor_final
             )
             
             if gasto_id:
@@ -173,13 +198,13 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
-            # ✅ DEBUG: Imprimir todos los parámetros recibidos
-            print(f"📝 ACTUALIZANDO GASTO - Parámetros recibidos:")
+            # DEBUG: Imprimir todos los parámetros recibidos
+            print(f"✏️ ACTUALIZANDO GASTO - Parámetros recibidos:")
             print(f"   - gasto_id: {gasto_id}")
             print(f"   - monto: {monto}")
             print(f"   - tipo_gasto_id: {tipo_gasto_id}")
             print(f"   - descripcion: '{descripcion}'")
-            print(f"   - proveedor: '{proveedor}'")  # ✅ ESTE DEBE APARECER EN LA CONSOLA
+            print(f"   - proveedor: '{proveedor}'")
             
             kwargs = {}
             if monto > 0:
@@ -188,7 +213,7 @@ class GastoModel(QObject):
                 kwargs['tipo_gasto_id'] = tipo_gasto_id
             if descripcion:  
                 kwargs['descripcion'] = descripcion
-            if proveedor:   # ✅ VALIDAR QUE NO ESTÉ VACÍO
+            if proveedor:
                 kwargs['proveedor'] = proveedor.strip()
                 
             print(f"   - kwargs a enviar: {kwargs}")
@@ -402,11 +427,11 @@ class GastoModel(QObject):
         """Búsqueda rápida de gastos"""
         try:
             if not termino.strip():
-                return self._gastos
+                return self._convert_dates_for_qml(self._gastos)
             
             gastos = self.repository.search_expenses(termino.strip(), limit=100)
             print(f"🔍 Búsqueda '{termino}': {len(gastos)} resultados")
-            return gastos
+            return self._convert_dates_for_qml(gastos)
             
         except Exception as e:
             self.errorOccurred.emit("Error en búsqueda", f"Error buscando gastos: {str(e)}")
@@ -433,7 +458,6 @@ class GastoModel(QObject):
         try:
             self._set_loading(True)
             
-            from datetime import datetime
             start_date = datetime.strptime(fecha_desde, '%Y-%m-%d') if fecha_desde else None
             end_date = datetime.strptime(fecha_hasta, '%Y-%m-%d') if fecha_hasta else None
             
@@ -446,7 +470,7 @@ class GastoModel(QObject):
             total_monto = sum(g.get('Monto', 0) for g in gastos_reporte)
             
             reporte_data = {
-                'gastos': gastos_reporte,
+                'gastos': self._convert_dates_for_qml(gastos_reporte),
                 'total_gastos': total_gastos,
                 'total_monto': total_monto,
                 'fecha_desde': fecha_desde,
@@ -471,7 +495,7 @@ class GastoModel(QObject):
         """Obtiene gasto específico por ID"""
         try:
             gasto = self.repository.get_expense_by_id_complete(gasto_id)
-            return gasto if gasto else {}
+            return self._convert_dates_for_qml(gasto) if gasto else {}
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo gasto: {str(e)}")
             return {}
@@ -481,7 +505,7 @@ class GastoModel(QObject):
         """Obtiene resumen de gastos recientes"""
         try:
             gastos = self.repository.get_recent_expenses(dias)
-            return gastos
+            return self._convert_dates_for_qml(gastos)
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo resumen: {str(e)}")
             return []
@@ -494,7 +518,7 @@ class GastoModel(QObject):
                 'gastos_hoy': self.repository.get_today_statistics(),
                 'estadisticas_generales': self.repository.get_expense_statistics()
             }
-            return dashboard
+            return self._convert_dates_for_qml(dashboard)
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo dashboard: {str(e)}")
             return {}
@@ -534,7 +558,7 @@ class GastoModel(QObject):
                 tipos_formateados.append({
                     'id': tipo.get('id', 0),
                     'text': tipo.get('Nombre', 'Sin nombre'),
-                    'data': tipo
+                    'data': self._convert_dates_for_qml(tipo)
                 })
             
             return tipos_formateados
@@ -547,6 +571,73 @@ class GastoModel(QObject):
     def formatearPrecio(self, precio: float) -> str:
         """Formatea precio para mostrar"""
         return f"Bs{precio:,.2f}"
+    
+    # ===============================
+    # MÉTODOS DE PAGINACIÓN - CORREGIDOS
+    # ===============================
+    
+    @Slot(int, int, 'QVariantMap', result=list)
+    def obtenerGastosPaginados(self, offset: int, limit: int, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """Obtiene gastos paginados desde QML - CORREGIDO PARA FECHAS"""
+        try:
+            # Validar parámetros
+            if offset < 0:
+                offset = 0
+            if limit <= 0:
+                limit = 10
+            
+            print(f"📊 Obteniendo gastos paginados: offset={offset}, limit={limit}, filters={filters}")
+            
+            # Obtener datos del repository
+            gastos = self.repository.get_paginated_expenses(offset, limit, filters)
+            
+            # CONVERSIÓN ESPECÍFICA PARA QML CON FECHAS CORREGIDAS
+            gastos_convertidos = []
+            for gasto in gastos:
+                gasto_convertido = {}
+                for key, value in gasto.items():
+                    if key == 'Fecha' and value:
+                        # Asegurar que la fecha esté en formato string para QML
+                        if hasattr(value, 'strftime'):
+                            gasto_convertido[key] = value.strftime('%Y-%m-%d')
+                        elif isinstance(value, str):
+                            # Si ya es string, asegurar formato correcto
+                            try:
+                                fecha_obj = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+                                gasto_convertido[key] = fecha_obj.strftime('%Y-%m-%d')
+                            except:
+                                gasto_convertido[key] = value[:10] if len(value) >= 10 else value
+                        else:
+                            gasto_convertido[key] = str(value)
+                    else:
+                        gasto_convertido[key] = value
+                
+                gastos_convertidos.append(gasto_convertido)
+            
+            print(f"✅ Gastos paginados obtenidos: {len(gastos_convertidos)}")
+            return gastos_convertidos
+            
+        except Exception as e:
+            error_msg = f"Error obteniendo gastos: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            self.errorOccurred.emit("Error", error_msg)
+            return []
+
+    @Slot('QVariantMap', result=int)
+    def obtenerTotalGastos(self, filters: Dict[str, Any] = None) -> int:
+        """Obtiene total de gastos con filtros"""
+        try:
+            print(f"📊 Contando gastos con filtros: {filters}")
+            total = self.repository.get_expenses_count(filters)
+            print(f"✅ Total gastos encontrados: {total}")
+            return total
+        except Exception as e:
+            error_msg = f"Error contando gastos: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.errorOccurred.emit("Error", error_msg)
+            return 0
     
     # ===============================
     # MÉTODOS PRIVADOS
@@ -566,7 +657,7 @@ class GastoModel(QObject):
     def _cargar_gastos(self):
         """Carga lista de gastos recientes"""
         try:
-            gastos = self.repository.get_recent_expenses(180)  # Últimos 30 días
+            gastos = self.repository.get_recent_expenses(180)  # Últimos 180 días
             self._gastos = gastos
             self._gastos_filtrados = gastos.copy()
             self.gastosChanged.emit()

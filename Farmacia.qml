@@ -115,10 +115,6 @@ Item {
             console.log("✅ Producto creado en BD:", codigo)
             mostrarNotificacion(`Producto ${codigo} creado exitosamente`, "success")
         }
-        function onProductoActualizado(codigo) {
-            console.log("✅ Producto actualizado en BD:", codigo)
-            mostrarNotificacion(`Producto ${codigo} actualizado`, "success")
-        }
         function onProductoEliminado(codigo) {
             console.log("🗑️ Producto eliminado de BD:", codigo)
             mostrarNotificacion(`Producto ${codigo} eliminado`, "warning")
@@ -180,6 +176,7 @@ Item {
             console.log("🏢 Proveedores actualizados desde BD")
         }
     }
+
     // Función para verificar si un producto existe (BD)
     function productoExiste(codigo) {
         if (!inventarioModel || !codigo) return -1
@@ -885,11 +882,7 @@ Item {
             // Emitir actualización
             datosActualizados()
         }
-    }
-
-    // ELIMINADO: Componentes crearProductoComponent y detalleProductoComponent
-    // Ya no los necesitamos aquí porque ahora se manejan como overlay dentro de Productos.qml
-    
+    }    
     // Monitor de cambios en productos para debug BD
     onProductosUnicosModelChanged: {
         console.log("📊 ProductosUnicosModel BD actualizado - Total productos:", productosUnicosModel.length)

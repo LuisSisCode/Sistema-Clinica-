@@ -19,8 +19,14 @@ Item {
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
     readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
     
-    // Colores modernos
+    // PROPIEDADES DE TAMAÑO MEJORADAS
+    readonly property real iconSize: Math.max(baseUnit * 3, 24)
+    readonly property real buttonIconSize: Math.max(baseUnit * 2, 18)
+
+    // PROPIEDADES DE COLOR MEJORADAS (agregar después de scaleFactor)
     readonly property color primaryColor: "#3498DB"
+    readonly property color primaryColorHover: "#2980B9"
+    readonly property color primaryColorPressed: "#21618C"
     readonly property color successColor: "#10B981"
     readonly property color successColorLight: "#D1FAE5"
     readonly property color dangerColor: "#E74C3C"
@@ -31,9 +37,9 @@ Item {
     readonly property color textColor: "#2c3e50"
     readonly property color textColorLight: "#6B7280"
     readonly property color whiteColor: "#FFFFFF"
-    readonly property color borderColor: "#e0e0e0"
+    readonly property color borderColor: "#E5E7EB"
     readonly property color accentColor: "#10B981"
-    readonly property color lineColor: "#D1D5DB" // Color para líneas verticales
+    readonly property color lineColor: "#D1D5DB"
     
     // Propiedades para los diálogos
     property bool showNewConsultationDialog: false
@@ -172,68 +178,151 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // HEADER ADAPTATIVO
+                // HEADER ADAPTATIVO CORREGIDO
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 12  // Aumentamos un poco la altura
                     color: lightGrayColor
                     border.color: borderColor
                     border.width: 1
-                    
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.bottomMargin: baseUnit * 2
-                        color: parent.color
-                        radius: parent.radius
-                    }
+                    radius: baseUnit * 2
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
+                        anchors.margins: baseUnit * 2  // Márgenes más generosos
+                        spacing: baseUnit * 2
                         
+                        // SECCIÓN DEL LOGO Y TÍTULO
                         RowLayout {
-                            spacing: baseUnit
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: baseUnit * 1.5
                             
-                            Label {
-                                text: "🩺"
-                                font.pixelSize: fontBaseSize * 1.8
-                                color: primaryColor
+                            // Contenedor del icono con tamaño fijo
+                            Rectangle {
+                                Layout.preferredWidth: baseUnit * 10
+                                Layout.preferredHeight: baseUnit * 10
+                                color: "transparent"
+                                
+                                Image {
+                                    id: consultaIcon
+                                    anchors.centerIn: parent
+                                    width: Math.min(baseUnit * 8, parent.width * 10)
+                                    height: Math.min(baseUnit * 8, parent.height * 10)
+                                    source: "Resources/iconos/Consulta.png"    // ← CAMBIADO A PNG
+                                    fillMode: Image.PreserveAspectFit
+                                    antialiasing: true    // ← OPCIONAL: para mejor calidad del PNG
+                                    
+                                    onStatusChanged: {
+                                        if (status === Image.Error) {
+                                            console.log("Error cargando PNG:", source)
+                                        } else if (status === Image.Ready) {
+                                            console.log("PNG cargado correctamente:", source)
+                                        }
+                                    }
+                                }
                             }
                             
+                            // Título
                             Label {
+                                Layout.alignment: Qt.AlignVCenter
                                 text: "Registro de Consultas Médicas"
-                                font.pixelSize: fontBaseSize * 1.4
+                                font.pixelSize: fontBaseSize * 1.3
                                 font.bold: true
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 color: textColor
+                                wrapMode: Text.WordWrap
                             }
                         }
                         
-                        Item { Layout.fillWidth: true }
+                        // ESPACIADOR FLEXIBLE
+                        Item { 
+                            Layout.fillWidth: true 
+                            Layout.minimumWidth: baseUnit * 2
+                        }
                         
+                        // BOTÓN NUEVA CONSULTA CORREGIDO
                         Button {
+                            id: newConsultationBtn
                             objectName: "newConsultationButton"
-                            text: "➕ Nueva Consulta"
-                            Layout.preferredHeight: baseUnit * 4.5
+                            Layout.preferredHeight: baseUnit * 5
+                            Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
+                            Layout.alignment: Qt.AlignVCenter
                             
                             background: Rectangle {
-                                color: primaryColor
-                                radius: baseUnit
+                                color: newConsultationBtn.pressed ? Qt.darker(primaryColor, 1.1) : 
+                                    newConsultationBtn.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor
+                                radius: baseUnit * 1.2
+                                border.width: 0
+                                
+                                // Animación suave del color
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
                             }
                             
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize * 0.9
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                horizontalAlignment: Text.AlignHCenter
+                            contentItem: RowLayout {
+                                spacing: baseUnit
+                                
+                                // Contenedor del icono del botón
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 3
+                                    Layout.preferredHeight: baseUnit * 3
+                                    color: "transparent"
+                                    
+                                    Image {
+                                        id: addIcon
+                                        anchors.centerIn: parent
+                                        width: baseUnit * 2.5
+                                        height: baseUnit * 2.5
+                                        source: "Resources/iconos/Nueva_Consulta.png"    // ← CAMBIADO A PNG
+                                        fillMode: Image.PreserveAspectFit
+                                        antialiasing: true    // ← OPCIONAL: para mejor calidad
+                                        
+                                        onStatusChanged: {
+                                            if (status === Image.Error) {
+                                                console.log("Error cargando PNG del botón:", source)
+                                                // Mostrar un "+" si no hay icono
+                                                visible = false
+                                                fallbackText.visible = true
+                                            } else if (status === Image.Ready) {
+                                                console.log("PNG del botón cargado correctamente:", source)
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Texto fallback si no hay icono
+                                    Label {
+                                        id: fallbackText
+                                        anchors.centerIn: parent
+                                        text: "+"
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 1.5
+                                        font.bold: true
+                                        visible: false
+                                    }
+                                }
+                                
+                                // Texto del botón
+                                Label {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: "Nueva Consulta"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
                             }
                             
                             onClicked: {
                                 isEditMode = false
                                 editingIndex = -1
                                 showNewConsultationDialog = true
+                            }
+                            
+                            // Efecto hover mejorado
+                            HoverHandler {
+                                id: buttonHover
+                                cursorShape: Qt.PointingHandCursor
                             }
                         }
                     }
@@ -827,10 +916,10 @@ Item {
                                     
                                     // BOTONES DE ACCIÓN MODERNOS
                                     RowLayout {
-                                        anchors.top: parent.top
+                                        anchors.verticalCenter: parent.verticalCenter
                                         anchors.right: parent.right
                                         anchors.margins: baseUnit * 0.8
-                                        spacing: baseUnit * 0.5
+                                        spacing: baseUnit * 0.8
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
@@ -838,21 +927,19 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            text: "✏️"
                                             
                                             background: Rectangle {
-                                                color: warningColor
-                                                radius: baseUnit * 0.8
-                                                border.color: "#e67e22"
-                                                border.width: 1
+                                                color: "transparent"
                                             }
                                             
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontBaseSize * 0.85
+                                            Image {
+                                                id: editIcon
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                source: "Resources/iconos/editar.svg"  // Ruta a tu imagen SVG de editar
+                                                fillMode: Image.PreserveAspectFit
+                                                
                                             }
                                             
                                             onClicked: {
@@ -873,27 +960,30 @@ Item {
                                                 
                                                 console.log("Editando consulta ID:", model.consultaId)
                                             }
+                                            
+                                            // Efecto hover
+                                            onHoveredChanged: {
+                                                editIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
                                         }
-                                        
+
                                         Button {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            text: "🗑️"
                                             
                                             background: Rectangle {
-                                                color: dangerColor
-                                                radius: baseUnit * 0.8
-                                                border.color: "#c0392b"
-                                                border.width: 1
+                                                color: "transparent"
                                             }
                                             
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontBaseSize * 0.85
+                                            Image {
+                                                id: deleteIcon
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                source: "Resources/iconos/eliminar.svg"  // Ruta a tu imagen SVG de eliminar
+                                                fillMode: Image.PreserveAspectFit
+
                                             }
                                             
                                             onClicked: {
@@ -916,6 +1006,11 @@ Item {
                                                 selectedRowIndex = -1
                                                 updatePaginatedModel()
                                                 console.log("Consulta eliminada ID:", consultaId)
+                                            }
+                                            
+                                            // Efecto hover
+                                            onHoveredChanged: {
+                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
                                             }
                                         }
                                     }
@@ -1046,17 +1141,28 @@ Item {
         }
     }
     
-    // Diálogo de consulta adaptativo
+    // Diálogo de consulta adaptativo - Diseño IDÉNTICO a Enfermería
     Rectangle {
         id: consultationForm
         anchors.centerIn: parent
-        width: Math.min(500, parent.width * 0.9)
-        height: Math.min(650, parent.height * 0.9)
+        width: Math.min(parent.width * 0.95, 700)  // Más ancho para mejor uso del espacio
+        height: Math.min(parent.height * 0.95, 800)  // Más alto pero con mejor distribución
         color: whiteColor
-        radius: baseUnit * 2
-        border.color: lightGrayColor
-        border.width: 2
+        radius: baseUnit * 1.5  // Bordes más redondeados
+        border.color: "#DDD"
+        border.width: 1
         visible: showNewConsultationDialog
+
+        // Efecto de sombra simple
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -baseUnit
+            color: "transparent"
+            radius: parent.radius + baseUnit
+            border.color: "#20000000"
+            border.width: baseUnit
+            z: -1
+        }
         
         property int selectedEspecialidadIndex: -1
         property string consultationType: "Normal"
@@ -1065,13 +1171,12 @@ Item {
         
         function loadEditData() {
             if (!isEditMode || !consultationForm.consultaParaEditar) {
-                console.log("⚠️ No hay datos para cargar en edición")
+                console.log("No hay datos para cargar en edición")
                 return
             }
             
             var consulta = consultationForm.consultaParaEditar
-            console.log("📝 Cargando datos para edición:", JSON.stringify(consulta))
-            console.log("🎯 Especialidades disponibles:", consultaModel ? consultaModel.especialidades.length : "No disponibles")
+            console.log("Cargando datos para edición:", JSON.stringify(consulta))
             
             // Separar nombre completo del paciente
             var nombreCompleto = consulta.paciente || ""
@@ -1083,7 +1188,7 @@ Item {
             
             // Buscar y establecer especialidad por nombre completo
             if (consulta.especialidadDoctor && consultaModel && consultaModel.especialidades) {
-                console.log("🔍 Buscando especialidad:", consulta.especialidadDoctor)
+                console.log("Buscando especialidad:", consulta.especialidadDoctor)
                 
                 for (var i = 0; i < consultaModel.especialidades.length; i++) {
                     var esp = consultaModel.especialidades[i]
@@ -1104,7 +1209,7 @@ Item {
                             consultationForm.calculatedPrice = esp.precio_emergencia
                         }
                         
-                        console.log("✅ Especialidad encontrada:", nombreEspecialidad)
+                        console.log("Especialidad encontrada:", nombreEspecialidad)
                         break
                     }
                 }
@@ -1123,10 +1228,10 @@ Item {
 
             if (consulta.pacienteEdad !== null && consulta.pacienteEdad !== undefined) {
                 edadPaciente.text = consulta.pacienteEdad.toString()
-                console.log("📅 Edad cargada:", consulta.pacienteEdad)
+                console.log("Edad cargada:", consulta.pacienteEdad)
             } else {
                 edadPaciente.text = ""
-                console.log("⚠️ Edad no disponible")
+                console.log("Edad no disponible")
             }
             
             // Establecer precio calculado
@@ -1135,7 +1240,20 @@ Item {
             // Establecer detalles
             detallesConsulta.text = consulta.detalles || ""
             
-            console.log("✅ Datos de edición cargados correctamente")
+            console.log("Datos de edición cargados correctamente")
+        }
+        
+        function updatePrices() {
+            if (consultationForm.selectedEspecialidadIndex >= 0 && consultaModel && consultaModel.especialidades) {
+                var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
+                if (consultationForm.consultationType === "Normal") {
+                    consultationForm.calculatedPrice = especialidad.precio_normal
+                } else {
+                    consultationForm.calculatedPrice = especialidad.precio_emergencia
+                }
+            } else {
+                consultationForm.calculatedPrice = 0.0
+            }
         }
         
         onVisibleChanged: {
@@ -1159,364 +1277,544 @@ Item {
                 }
             }
         }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: baseUnit * 3
-            spacing: baseUnit * 2
+        
+        // HEADER MEJORADO CON CIERRE - IDÉNTICO A ENFERMERÍA
+        Rectangle {
+            id: dialogHeader
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: baseUnit * 7
+            color: primaryColor
+            radius: baseUnit * 1.5
             
             Label {
-                Layout.fillWidth: true
-                text: isEditMode ? "Editar Consulta" : "Nueva Consulta"
-                font.pixelSize: fontBaseSize * 1.6
+                anchors.centerIn: parent
+                text: isEditMode ? "EDITAR CONSULTA" : "NUEVA CONSULTA"
+                font.pixelSize: fontBaseSize * 1.2
                 font.bold: true
+                color: whiteColor
                 font.family: "Segoe UI, Arial, sans-serif"
-                color: textColor
-                horizontalAlignment: Text.AlignHCenter
             }
             
-            GroupBox {
-                Layout.fillWidth: true
-                title: "Datos del Paciente"
-                
+            // Botón de cerrar
+            Button {
+                anchors.right: parent.right
+                anchors.rightMargin: baseUnit * 2
+                anchors.verticalCenter: parent.verticalCenter
+                width: baseUnit * 4
+                height: baseUnit * 4
                 background: Rectangle {
-                    color: lightGrayColor
-                    border.color: borderColor
+                    color: "transparent"
+                    radius: width / 2
+                    border.color: parent.hovered ? whiteColor : "transparent"
                     border.width: 1
-                    radius: baseUnit
                 }
                 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: baseUnit
+                contentItem: Text {
+                    text: "×"
+                    color: whiteColor
+                    font.pixelSize: fontBaseSize * 1.8
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    showNewConsultationDialog = false
+                    selectedRowIndex = -1
+                    isEditMode = false
+                    editingIndex = -1
+                    consultationForm.consultaParaEditar = null
+                }
+            }
+        }
+        
+        // SCROLLVIEW PRINCIPAL CON MÁRGENES ADECUADOS - IDÉNTICO A ENFERMERÍA
+        ScrollView {
+            id: scrollView
+            anchors.top: dialogHeader.bottom
+            anchors.topMargin: baseUnit * 2
+            anchors.bottom: buttonRow.top
+            anchors.bottomMargin: baseUnit * 2
+            anchors.left: parent.left
+            anchors.leftMargin: baseUnit * 3
+            anchors.right: parent.right
+            anchors.rightMargin: baseUnit * 3
+            clip: true
+            
+            // CONTENEDOR PRINCIPAL DEL FORMULARIO - IDÉNTICO A ENFERMERÍA
+            ColumnLayout {
+                width: scrollView.width - (baseUnit * 1)
+                spacing: baseUnit * 2
+                
+                // DATOS DEL PACIENTE - IDÉNTICO A ENFERMERÍA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "DATOS DEL PACIENTE"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
                     
-                    TextField {
-                        id: nombrePaciente
-                        placeholderText: "Nombre del paciente (opcional)"
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: baseUnit * 4
-                        
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        background: Rectangle {
-                            color: whiteColor
-                            border.color: borderColor
-                            border.width: 1
-                            radius: baseUnit * 0.6
-                        }
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
                     }
                     
-                    RowLayout {
-                        Layout.fillWidth: true                       
+                    GridLayout {
+                        width: parent.width
+                        columns: 2
+                        columnSpacing: baseUnit * 2
+                        rowSpacing: baseUnit * 1.5
+                        
+                        Label {
+                            text: "Nombre:"
+                            font.bold: true
+                            color: textColor
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
+                        
                         TextField {
-                            id: apellidoPaterno
-                            placeholderText: "Apellido paterno (opcional)"
+                            id: nombrePaciente
                             Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4
-                            font.pixelSize: fontBaseSize * 0.9
+                            placeholderText: "Nombre del paciente (opcional)"
+                            font.pixelSize: fontBaseSize
                             font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: borderColor
+                                border.color: "#ddd"
                                 border.width: 1
-                                radius: baseUnit * 0.6
+                                radius: baseUnit * 0.5
                             }
+                            padding: baseUnit
+                        }
+                        
+                        Label {
+                            text: "Apellido Paterno:"
+                            font.bold: true
+                            color: textColor
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
+                        
+                        TextField {
+                            id: apellidoPaterno
+                            Layout.fillWidth: true
+                            placeholderText: "Apellido paterno (opcional)"
+                            font.pixelSize: fontBaseSize
+                            font.family: "Segoe UI, Arial, sans-serif"
+                            background: Rectangle {
+                                color: whiteColor
+                                border.color: "#ddd"
+                                border.width: 1
+                                radius: baseUnit * 0.5
+                            }
+                            padding: baseUnit
+                        }
+                        
+                        Label {
+                            text: "Apellido Materno:"
+                            font.bold: true
+                            color: textColor
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                         
                         TextField {
                             id: apellidoMaterno
-                            placeholderText: "Apellido materno (opcional)"
                             Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4
-                            font.pixelSize: fontBaseSize * 0.9
+                            placeholderText: "Apellido materno (opcional)"
+                            font.pixelSize: fontBaseSize
                             font.family: "Segoe UI, Arial, sans-serif"
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: borderColor
+                                border.color: "#ddd"
                                 border.width: 1
-                                radius: baseUnit * 0.6
+                                radius: baseUnit * 0.5
                             }
+                            padding: baseUnit
                         }
-                    }
-                    
-                    RowLayout {
-                        Layout.fillWidth: true
+                        
                         Label {
-                            Layout.preferredWidth: baseUnit * 12
                             text: "Edad:"
                             font.bold: true
                             color: textColor
-                            font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
                         }
-                        TextField {
-                            id: edadPaciente
-                            placeholderText: "Edad (opcional)"
-                            Layout.preferredWidth: baseUnit * 10
-                            Layout.preferredHeight: baseUnit * 4
-                            validator: IntValidator { bottom: 0; top: 120 }
-                            font.pixelSize: fontBaseSize * 0.9
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: baseUnit * 0.6
+                        
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit
+                            
+                            TextField {
+                                id: edadPaciente
+                                Layout.preferredWidth: baseUnit * 10
+                                placeholderText: "Edad (opcional)"
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                validator: IntValidator { bottom: 0; top: 120 }
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: "#ddd"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                }
+                                padding: baseUnit
+                            }
+                            
+                            Label {
+                                text: "años"
+                                color: textColorLight
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            Item { Layout.fillWidth: true }
+                        }
+                    }
+                }
+                
+                // INFORMACIÓN DE LA CONSULTA - IDÉNTICO A ENFERMERÍA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "INFORMACIÓN DE LA CONSULTA"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
+                    
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
+                    }
+                    
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: baseUnit * 2
+                        
+                        // Especialidad
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Especialidad:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 15
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            ComboBox {
+                                id: especialidadCombo
+                                Layout.fillWidth: true
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                model: {
+                                    var list = ["Seleccionar especialidad..."]
+                                    if (consultaModel && consultaModel.especialidades) {
+                                        for (var i = 0; i < consultaModel.especialidades.length; i++) {
+                                            var esp = consultaModel.especialidades[i]
+                                            list.push(esp.text + " - " + esp.doctor_nombre)
+                                        }
+                                    }
+                                    return list
+                                }
+                                onCurrentIndexChanged: {
+                                    if (currentIndex > 0 && consultaModel && consultaModel.especialidades) {
+                                        consultationForm.selectedEspecialidadIndex = currentIndex - 1
+                                        consultationForm.updatePrices()
+                                    } else {
+                                        consultationForm.selectedEspecialidadIndex = -1
+                                        consultationForm.calculatedPrice = 0.0
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: especialidadCombo.displayText
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: "#ddd"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                }
+                                
+                                popup: Popup {
+                                    width: especialidadCombo.width
+                                    implicitHeight: contentItem.implicitHeight + baseUnit
+                                    padding: 1
+                                    
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: especialidadCombo.popup.visible ? especialidadCombo.delegateModel : null
+                                        currentIndex: especialidadCombo.highlightedIndex
+                                        
+                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                    }
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: "#ddd"
+                                        radius: baseUnit * 0.5
+                                    }
+                                }
                             }
                         }
+                        
+                        // Tipo de consulta
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Tipo:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 15
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: baseUnit * 3
+                                
+                                RadioButton {
+                                    id: normalRadio
+                                    text: "Normal"
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    checked: true
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            consultationForm.consultationType = "Normal"
+                                            consultationForm.updatePrices()
+                                        }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: normalRadio.text
+                                        font.pixelSize: fontBaseSize
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        leftPadding: normalRadio.indicator.width + normalRadio.spacing
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                                
+                                RadioButton {
+                                    id: emergenciaRadio
+                                    text: "Emergencia"
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            consultationForm.consultationType = "Emergencia"
+                                            consultationForm.updatePrices()
+                                        }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: emergenciaRadio.text
+                                        font.pixelSize: fontBaseSize
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                            }
+                        }
+                    }
+                }
+                
+                // INFORMACIÓN DE PRECIO - IDÉNTICO A ENFERMERÍA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "INFORMACIÓN DE PRECIO"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
+                    
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
+                    }
+                    
+                    GridLayout {
+                        width: parent.width
+                        columns: 2
+                        columnSpacing: baseUnit * 2
+                        rowSpacing: baseUnit * 1.5
+                        
                         Label {
-                            text: "años"
+                            text: "Precio Consulta:"
+                            font.bold: true
                             color: textColor
-                            font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
                         }
-                        Item { Layout.fillWidth: true }
+                        
+                        Label {
+                            text: consultationForm.selectedEspecialidadIndex >= 0 ? 
+                                "Bs " + consultationForm.calculatedPrice.toFixed(2) : "Seleccione especialidad"
+                            font.bold: true
+                            font.pixelSize: fontBaseSize * 1.1
+                            font.family: "Segoe UI, Arial, sans-serif"
+                            color: consultationForm.consultationType === "Emergencia" ? warningColor : successColor
+                            padding: baseUnit
+                            background: Rectangle {
+                                color: consultationForm.consultationType === "Emergencia" ? warningColorLight : successColorLight
+                                radius: baseUnit * 0.8
+                            }
+                        }
                     }
                 }
-            }
-            
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: baseUnit * 12
-                    text: "Especialidad:"
-                    font.bold: true
-                    color: textColor
-                    font.pixelSize: fontBaseSize * 0.9
-                    font.family: "Segoe UI, Arial, sans-serif"
-                }
-                ComboBox {
-                    id: especialidadCombo
+                
+                // DETALLES DE LA CONSULTA - IDÉNTICO A ENFERMERÍA
+                GroupBox {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 4
-                    model: {
-                        var list = ["Seleccionar especialidad..."]
-                        if (consultaModel && consultaModel.especialidades) {
-                            for (var i = 0; i < consultaModel.especialidades.length; i++) {
-                                var esp = consultaModel.especialidades[i]
-                                list.push(esp.text + " - " + esp.doctor_nombre)
-                            }
-                        }
-                        return list
-                    }
-                    onCurrentIndexChanged: {
-                        if (currentIndex > 0 && consultaModel && consultaModel.especialidades) {
-                            consultationForm.selectedEspecialidadIndex = currentIndex - 1
-                            var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
-                            if (consultationForm.consultationType === "Normal") {
-                                consultationForm.calculatedPrice = especialidad.precio_normal
-                            } else {
-                                consultationForm.calculatedPrice = especialidad.precio_emergencia
-                            }
-                        }
-                    }
+                    title: "DETALLES DE LA CONSULTA"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
                     
-                    contentItem: Label {
-                        text: especialidadCombo.displayText
-                        font.pixelSize: fontBaseSize * 0.8
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        color: textColor
-                        verticalAlignment: Text.AlignVCenter
-                        leftPadding: baseUnit
-                        elide: Text.ElideRight
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
                     }
-                }
-            }
-            
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: baseUnit * 12
-                    text: "Tipo de Consulta:"
-                    font.bold: true
-                    color: textColor
-                    font.pixelSize: fontBaseSize * 0.9
-                    font.family: "Segoe UI, Arial, sans-serif"
-                }
-                
-                RadioButton {
-                    id: normalRadio
-                    text: "Normal"
-                    checked: true
-                    onCheckedChanged: {
-                        if (checked) {
-                            consultationForm.consultationType = "Normal"
-                            if (consultationForm.selectedEspecialidadIndex >= 0) {
-                                var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
-                                consultationForm.calculatedPrice = especialidad.precio_normal // o precio_emergencia
-                            }
-                        }
-                    }
-                    
-                    contentItem: Label {
-                        text: normalRadio.text
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        color: textColor
-                        leftPadding: normalRadio.indicator.width + normalRadio.spacing
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                }
-                
-                RadioButton {
-                    id: emergenciaRadio
-                    text: "Emergencia"
-                    onCheckedChanged: {
-                        if (checked) {
-                            consultationForm.consultationType = "Emergencia"
-                            if (consultationForm.selectedEspecialidadIndex >= 0) {
-                                var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
-                                consultationForm.calculatedPrice = especialidad.precio_emergencia // o precio_emergencia
-                            }
-                        }
-                    }
-                    
-                    contentItem: Label {
-                        text: emergenciaRadio.text
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        color: textColor
-                        leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                }
-                Item { Layout.fillWidth: true }
-            }
-            
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    Layout.preferredWidth: baseUnit * 12
-                    text: "Precio:"
-                    font.bold: true
-                    color: textColor
-                    font.pixelSize: fontBaseSize * 0.9
-                    font.family: "Segoe UI, Arial, sans-serif"
-                }
-                Label {
-                    text: consultationForm.selectedEspecialidadIndex >= 0 ? 
-                          "Bs" + consultationForm.calculatedPrice.toFixed(2) : "Seleccione especialidad"
-                    font.bold: true
-                    font.pixelSize: fontBaseSize * 1.1
-                    font.family: "Segoe UI, Arial, sans-serif"
-                    color: consultationForm.consultationType === "Emergencia" ? "#92400E" : "#047857"
-                }
-                Item { Layout.fillWidth: true }
-            }
-            
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                
-                Label {
-                    text: "Detalles:"
-                    font.bold: true
-                    color: textColor
-                    font.pixelSize: fontBaseSize * 0.9
-                    font.family: "Segoe UI, Arial, sans-serif"
-                }
-                
-                ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.minimumHeight: baseUnit * 8
                     
                     TextArea {
                         id: detallesConsulta
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: baseUnit * 12
                         placeholderText: "Descripción de la consulta, síntomas, observaciones..."
-                        wrapMode: TextArea.Wrap
-                        font.pixelSize: fontBaseSize * 0.9
+                        font.pixelSize: fontBaseSize
                         font.family: "Segoe UI, Arial, sans-serif"
+                        wrapMode: TextArea.Wrap
                         background: Rectangle {
                             color: whiteColor
-                            border.color: borderColor
+                            border.color: "#ddd"
                             border.width: 1
-                            radius: baseUnit
+                            radius: baseUnit * 0.5
                         }
+                        padding: baseUnit
                     }
                 }
             }
+        }
+        
+        // BOTONES INFERIORES - IDÉNTICO A ENFERMERÍA
+        RowLayout {
+            id: buttonRow
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: baseUnit * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: baseUnit * 2
+            height: baseUnit * 5
             
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
+            Button {
+                id: cancelButton
+                text: "Cancelar"
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
                 
-                Button {
-                    text: "Cancelar"
-                    Layout.preferredHeight: baseUnit * 4
-                    background: Rectangle {
-                        color: lightGrayColor
-                        radius: baseUnit
-                    }
-                    contentItem: Label {
-                        text: parent.text
-                        color: textColor
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    onClicked: {
-                        nombrePaciente.text = ""
-                        apellidoPaterno.text = ""
-                        apellidoMaterno.text = ""
-                        edadPaciente.text = ""
-                        especialidadCombo.currentIndex = 0
-                        normalRadio.checked = true
-                        detallesConsulta.text = ""
-                        showNewConsultationDialog = false
-                        selectedRowIndex = -1
-                        consultationForm.consultaParaEditar = null
-                        isEditMode = false
-                        editingIndex = -1
-                    }
+                background: Rectangle {
+                    color: cancelButton.pressed ? "#e0e0e0" : 
+                        (cancelButton.hovered ? "#f0f0f0" : "#f8f9fa")
+                    border.color: "#ddd"
+                    border.width: 1
+                    radius: baseUnit * 0.8
                 }
                 
-                Button {
-                    text: isEditMode ? "Actualizar" : "Guardar"
-                    enabled: consultationForm.selectedEspecialidadIndex >= 0
-                    Layout.preferredHeight: baseUnit * 4
-                    background: Rectangle {
-                        color: parent.enabled ? primaryColor : "#bdc3c7"
-                        radius: baseUnit
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: fontBaseSize
+                    font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: textColor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    nombrePaciente.text = ""
+                    apellidoPaterno.text = ""
+                    apellidoMaterno.text = ""
+                    edadPaciente.text = ""
+                    especialidadCombo.currentIndex = 0
+                    normalRadio.checked = true
+                    detallesConsulta.text = ""
+                    showNewConsultationDialog = false
+                    selectedRowIndex = -1
+                    consultationForm.consultaParaEditar = null
+                    isEditMode = false
+                    editingIndex = -1
+                }
+            }
+            
+            Button {
+                id: saveButton
+                text: isEditMode ? "Actualizar" : "Guardar"
+                enabled: consultationForm.selectedEspecialidadIndex >= 0
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
+                
+                background: Rectangle {
+                    color: !saveButton.enabled ? "#bdc3c7" : 
+                        (saveButton.pressed ? Qt.darker(primaryColor, 1.1) : 
+                        (saveButton.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor))
+                    radius: baseUnit * 0.8
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: fontBaseSize
+                    font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: whiteColor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    if (consultationForm.selectedEspecialidadIndex < 0) {
+                        showNotification("Error", "Seleccione una especialidad")
+                        return
                     }
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    onClicked: {
-                        var consultaId = model.consultaId
-                        
-                        // Buscar información del paciente
-                        var pacienteInfo = buscarPacientePorNombre(model.paciente)
-                        
-                        // Almacenar datos completos de la consulta para edición
-                        consultationForm.consultaParaEditar = {
-                            consultaId: consultaId,
-                            paciente: model.paciente,
-                            especialidadDoctor: model.especialidadDoctor,
-                            tipo: model.tipo,
-                            precio: model.precio,
-                            detalles: model.detalles,
-                            fecha: model.fecha,
-                            // Usar edad del paciente encontrado
-                            pacienteEdad: pacienteInfo ? pacienteInfo.Edad : null,
-                            pacienteId: pacienteInfo ? pacienteInfo.id : null
+                    
+                    try {
+                        if (isEditMode && consultationForm.consultaParaEditar) {
+                            // Lógica de actualización - mantener la funcionalidad existente
+                            console.log("Actualizando consulta existente")
+                            // Aquí iría la lógica de actualización específica
+                        } else {
+                            // Crear nueva consulta - usar la función existente
+                            crearConsulta()
                         }
                         
-                        isEditMode = true
-                        editingIndex = -1
-                        showNewConsultationDialog = true
-                        
-                        console.log("📝 Datos para edición con edad:", JSON.stringify(consultationForm.consultaParaEditar))
+                    } catch (error) {
+                        console.error("Error procesando consulta:", error)
+                        showNotification("Error", "Error inesperado al procesar la consulta")
                     }
                 }
             }
         }
     }
+
     function getTotalConsultasCount() {
         return consultasOriginales.length
     }
