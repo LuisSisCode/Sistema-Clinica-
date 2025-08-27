@@ -115,10 +115,6 @@ Item {
             console.log("✅ Producto creado en BD:", codigo)
             mostrarNotificacion(`Producto ${codigo} creado exitosamente`, "success")
         }
-        function onProductoActualizado(codigo) {
-            console.log("✅ Producto actualizado en BD:", codigo)
-            mostrarNotificacion(`Producto ${codigo} actualizado`, "success")
-        }
         function onProductoEliminado(codigo) {
             console.log("🗑️ Producto eliminado de BD:", codigo)
             mostrarNotificacion(`Producto ${codigo} eliminado`, "warning")

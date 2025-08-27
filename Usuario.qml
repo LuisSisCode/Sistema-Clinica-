@@ -83,10 +83,6 @@ Item {
         function onSuccessMessage(message) {
             mostrarNotificacion("Éxito", message, successColor)
         }
-        
-        function onDatosRecargados() {
-            cargarDatosOriginales()
-        }
     }
 
     // FUNCIÓN PARA CARGAR DATOS ORIGINALES

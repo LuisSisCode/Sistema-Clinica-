@@ -102,10 +102,6 @@ Item {
                 mostrarNotificacion("Error", message, dangerColor)
             }
         }
-        
-        function onDatosRecargados() {
-            cargarDatosOriginales()
-        }
     }
     
     // ===== LAYOUT PRINCIPAL =====
