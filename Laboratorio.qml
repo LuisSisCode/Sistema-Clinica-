@@ -86,7 +86,7 @@ Item {
         }
         
         onExamenActualizado: function(datos) {
-            console.log("🔄 Examen actualizado:", datos)
+            console.log("📄 Examen actualizado:", datos)
             cargarDatosDesdeModelo()
         }
         
@@ -133,25 +133,148 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // HEADER
-                LaboratoryHeader {
-                    id: laboratoryHeader
+                // HEADER ACTUALIZADO
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 12
+                    color: lightGrayColor
+                    border.color: borderColor
+                    border.width: 1
                     
-                    // Propiedades pasadas
-                    baseUnit: laboratorioRoot.baseUnit
-                    fontBaseSize: laboratorioRoot.fontBaseSize
-                    primaryColor: laboratorioRoot.primaryColor
-                    textColor: laboratorioRoot.textColor
-                    lightGrayColor: laboratorioRoot.lightGrayColor
-                    whiteColor: laboratorioRoot.whiteColor
-                    borderColor: laboratorioRoot.borderColor
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.bottomMargin: baseUnit * 2
+                        color: parent.color
+                        radius: parent.radius
+                    }
                     
-                    onNewLabTestRequested: {
-                        isEditMode = false
-                        editingIndex = -1
-                        showNewLabTestDialog = true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: baseUnit * 1.5
+                        
+                        RowLayout {
+                            spacing: baseUnit
+                            
+                            // Contenedor del icono con tamaño fijo
+                            Rectangle {
+                                Layout.preferredWidth: baseUnit * 8
+                                Layout.preferredHeight: baseUnit * 8
+                                color: "transparent"
+                                
+                                Image {
+                                    id: laboratorioIcon
+                                    anchors.centerIn: parent
+                                    width: Math.min(baseUnit * 8, parent.width * 10)
+                                    height: Math.min(baseUnit * 8, parent.height * 10)
+                                    source: "Resources/iconos/Laboratorio.png"
+                                    fillMode: Image.PreserveAspectFit
+                                    antialiasing: true
+                                    
+                                    onStatusChanged: {
+                                        if (status === Image.Error) {
+                                            console.log("Error cargando PNG laboratorio:", source)
+                                        } else if (status === Image.Ready) {
+                                            console.log("PNG laboratorio cargado correctamente:", source)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Label {
+                                text: "Gestión de Análisis de Laboratorio"
+                                font.pixelSize: fontBaseSize * 1.4
+                                font.bold: true
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                color: textColor
+                            }
+                        }
+                        
+                        Item { Layout.fillWidth: true }
+                        
+                        Button {
+                            id: newLabTestBtn
+                            objectName: "newLabTestButton"
+                            Layout.preferredHeight: baseUnit * 5
+                            Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
+                            Layout.alignment: Qt.AlignVCenter
+                            
+                            background: Rectangle {
+                                color: newLabTestBtn.pressed ? Qt.darker(primaryColor, 1.1) : 
+                                    newLabTestBtn.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor
+                                radius: baseUnit * 1.2
+                                border.width: 0
+                                
+                                // Animación suave del color
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: baseUnit
+                                
+                                // Contenedor del icono del botón
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 3
+                                    Layout.preferredHeight: baseUnit * 3
+                                    color: "transparent"
+                                    
+                                    Image {
+                                        id: addLabIcon
+                                        anchors.centerIn: parent
+                                        width: baseUnit * 2.5
+                                        height: baseUnit * 2.5
+                                        source: "Resources/iconos/Nueva_Consulta.png"
+                                        fillMode: Image.PreserveAspectFit
+                                        antialiasing: true
+                                        
+                                        onStatusChanged: {
+                                            if (status === Image.Error) {
+                                                console.log("Error cargando PNG del botón laboratorio:", source)
+                                                // Mostrar un "+" si no hay icono
+                                                visible = false
+                                                fallbackText.visible = true
+                                            } else if (status === Image.Ready) {
+                                                console.log("PNG del botón laboratorio cargado correctamente:", source)
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Texto fallback si no hay icono
+                                    Label {
+                                        id: fallbackText
+                                        anchors.centerIn: parent
+                                        text: "+"
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 1.5
+                                        font.bold: true
+                                        visible: false
+                                    }
+                                }
+                                
+                                // Texto del botón
+                                Label {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: "Nuevo Análisis"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                            }
+                            
+                            onClicked: {
+                                isEditMode = false
+                                editingIndex = -1
+                                showNewLabTestDialog = true
+                            }
+                            
+                            // Efecto hover mejorado
+                            HoverHandler {
+                                id: labButtonHover
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
                     }
                 }
                 
@@ -273,14 +396,14 @@ Item {
         }
     }
 
-    // ===== DIALOGO PRINCIPAL (DE VUELTA EN EL ARCHIVO PRINCIPAL) =====
+    // DIÁLOGO ACTUALIZADO CON NUEVO DISEÑO
     
-    // Fondo del diálogo
+    // Fondo del diálogo (sin oscurecer)
     Rectangle {
         id: dialogBackground
         anchors.fill: parent
-        color: "black"
-        opacity: showNewLabTestDialog ? 0.5 : 0
+        color: "transparent"
+        opacity: showNewLabTestDialog ? 1 : 0
         visible: opacity > 0
         z: 1000
         
@@ -296,18 +419,28 @@ Item {
         }
     }
     
-    // Diálogo de análisis adaptativo
+    // Diálogo de análisis adaptativo - Diseño IDÉNTICO a Consulta
     Rectangle {
         id: labTestForm
         anchors.centerIn: parent
-        width: Math.min(550, parent.width * 0.9)
-        height: Math.min(850, parent.height * 0.9)
+        width: Math.min(parent.width * 0.95, 700)  // Más ancho para mejor uso del espacio
+        height: Math.min(parent.height * 0.95, 800)  // Más alto pero con mejor distribución
         color: whiteColor
-        radius: baseUnit * 2
-        border.color: lightGrayColor
-        border.width: 2
+        radius: baseUnit * 1.5  // Bordes más redondeados
+        border.color: "#DDD"
+        border.width: 1
         visible: showNewLabTestDialog
-        z: 1001
+
+        // Efecto de sombra simple
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -baseUnit
+            color: "transparent"
+            radius: parent.radius + baseUnit
+            border.color: "#20000000"
+            border.width: baseUnit
+            z: -1
+        }
         
         property int selectedTipoAnalisisIndex: -1
         property string analisisType: "Normal"
@@ -396,43 +529,94 @@ Item {
         }
         
         onVisibleChanged: {
-            if (visible && isEditMode) {
-                loadEditData()
-            } else if (visible && !isEditMode) {
-                clearAllFields()
+            if (visible) {
+                if (isEditMode) {
+                    loadEditData()
+                } else {
+                    clearAllFields()
+                }
             }
         }
         
-        ScrollView {
-            anchors.fill: parent
-            anchors.margins: baseUnit * 3
-            contentHeight: mainColumn.implicitHeight
-            clip: true
+        // HEADER MEJORADO CON CIERRE - IDÉNTICO A CONSULTA
+        Rectangle {
+            id: dialogHeader
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: baseUnit * 7
+            color: primaryColor
+            radius: baseUnit * 1.5
             
-            ColumnLayout {
-                id: mainColumn
-                width: labTestForm.width - baseUnit * 6
-                spacing: baseUnit * 2
-                
-                Label {
-                    Layout.fillWidth: true
-                    text: isEditMode ? "Editar Análisis" : "Nuevo Análisis"
-                    font.pixelSize: fontBaseSize * 1.6
-                    font.bold: true
-                    font.family: "Segoe UI, Arial, sans-serif"
-                    color: textColor
-                    horizontalAlignment: Text.AlignHCenter
+            Label {
+                anchors.centerIn: parent
+                text: isEditMode ? "EDITAR ANÁLISIS" : "NUEVO ANÁLISIS"
+                font.pixelSize: fontBaseSize * 1.2
+                font.bold: true
+                color: whiteColor
+                font.family: "Segoe UI, Arial, sans-serif"
+            }
+            
+            // Botón de cerrar
+            Button {
+                anchors.right: parent.right
+                anchors.rightMargin: baseUnit * 2
+                anchors.verticalCenter: parent.verticalCenter
+                width: baseUnit * 4
+                height: baseUnit * 4
+                background: Rectangle {
+                    color: "transparent"
+                    radius: width / 2
+                    border.color: parent.hovered ? whiteColor : "transparent"
+                    border.width: 1
                 }
                 
+                contentItem: Text {
+                    text: "×"
+                    color: whiteColor
+                    font.pixelSize: fontBaseSize * 1.8
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    limpiarYCerrarDialogo()
+                }
+            }
+        }
+        
+        // SCROLLVIEW PRINCIPAL CON MÁRGENES ADECUADOS - IDÉNTICO A CONSULTA
+        ScrollView {
+            id: scrollView
+            anchors.top: dialogHeader.bottom
+            anchors.topMargin: baseUnit * 2
+            anchors.bottom: buttonRow.top
+            anchors.bottomMargin: baseUnit * 2
+            anchors.left: parent.left
+            anchors.leftMargin: baseUnit * 3
+            anchors.right: parent.right
+            anchors.rightMargin: baseUnit * 3
+            clip: true
+            
+            // CONTENEDOR PRINCIPAL DEL FORMULARIO - IDÉNTICO A CONSULTA
+            ColumnLayout {
+                width: scrollView.width - (baseUnit * 1)
+                spacing: baseUnit * 2
+                
+                // DATOS DEL PACIENTE - IDÉNTICO A CONSULTA
                 GroupBox {
                     Layout.fillWidth: true
-                    title: "Datos del Paciente"
+                    title: "DATOS DEL PACIENTE"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
                     
                     background: Rectangle {
-                        color: lightGrayColor
-                        border.color: borderColor
-                        border.width: 1
-                        radius: baseUnit
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
                     }
                     
                     ColumnLayout {
@@ -450,9 +634,9 @@ Item {
                             
                             background: Rectangle {
                                 color: whiteColor
-                                border.color: nombrePaciente.activeFocus ? primaryColor : borderColor
-                                border.width: nombrePaciente.activeFocus ? 2 : 1
-                                radius: baseUnit * 0.6
+                                border.color: nombrePaciente.activeFocus ? primaryColor : "#ddd"
+                                border.width: 1
+                                radius: baseUnit * 0.5
                                 
                                 Text {
                                     anchors.right: parent.right
@@ -463,6 +647,7 @@ Item {
                                     visible: nombrePaciente.text.length >= 2
                                 }
                             }
+                            padding: baseUnit
                             
                             onTextChanged: {
                                 if (text.length >= 2) {
@@ -501,15 +686,24 @@ Item {
                             }
                         }
                         
-                        RowLayout {
+                        GridLayout {
                             Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: baseUnit * 2
+                            rowSpacing: baseUnit * 1.5
+                            
+                            Label {
+                                text: "Apellido Paterno:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
                             
                             TextField {
                                 id: apellidoPaterno
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "Apellido paterno"
-                                font.pixelSize: fontBaseSize * 0.9
+                                font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 readOnly: pacienteAutocompletado
                                 
@@ -517,18 +711,25 @@ Item {
                                 
                                 background: Rectangle {
                                     color: apellidoPaterno.pacienteAutocompletado ? "#F0F8FF" : whiteColor
-                                    border.color: borderColor
+                                    border.color: "#ddd"
                                     border.width: 1
-                                    radius: baseUnit * 0.6
+                                    radius: baseUnit * 0.5
                                 }
+                                padding: baseUnit
+                            }
+                            
+                            Label {
+                                text: "Apellido Materno:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             TextField {
                                 id: apellidoMaterno
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4
                                 placeholderText: "Apellido materno"
-                                font.pixelSize: fontBaseSize * 0.9
+                                font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 readOnly: pacienteAutocompletado
                                 
@@ -536,382 +737,498 @@ Item {
                                 
                                 background: Rectangle {
                                     color: apellidoMaterno.pacienteAutocompletado ? "#F0F8FF" : whiteColor
-                                    border.color: borderColor
+                                    border.color: "#ddd"
                                     border.width: 1
-                                    radius: baseUnit * 0.6
+                                    radius: baseUnit * 0.5
                                 }
+                                padding: baseUnit
                             }
-                        }
-                        
-                        RowLayout {
-                            Layout.fillWidth: true
                             
                             Label {
-                                Layout.preferredWidth: baseUnit * 8
                                 text: "Edad:"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
                                 font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
-                            TextField {
-                                id: edadPaciente
-                                Layout.preferredWidth: baseUnit * 10
-                                Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "0"
-                                validator: IntValidator { bottom: 0; top: 120 }
-                                font.pixelSize: fontBaseSize * 0.9
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                readOnly: pacienteAutocompletado
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: baseUnit
                                 
-                                property bool pacienteAutocompletado: false
+                                TextField {
+                                    id: edadPaciente
+                                    Layout.preferredWidth: baseUnit * 10
+                                    placeholderText: "0"
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    validator: IntValidator { bottom: 0; top: 120 }
+                                    readOnly: pacienteAutocompletado
+                                    
+                                    property bool pacienteAutocompletado: false
+                                    
+                                    background: Rectangle {
+                                        color: edadPaciente.pacienteAutocompletado ? "#F0F8FF" : whiteColor
+                                        border.color: "#ddd"
+                                        border.width: 1
+                                        radius: baseUnit * 0.5
+                                    }
+                                    padding: baseUnit
+                                }
                                 
-                                background: Rectangle {
-                                    color: edadPaciente.pacienteAutocompletado ? "#F0F8FF" : whiteColor
-                                    border.color: borderColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.6
+                                Label {
+                                    text: "años"
+                                    color: textColorLight
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                                
+                                TextField {
+                                    id: cedulaPaciente
+                                    visible: false
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                Button {
+                                    text: "Nuevo Paciente"
+                                    visible: !apellidoPaterno.pacienteAutocompletado && nombrePaciente.text.length > 0
+                                    Layout.preferredHeight: baseUnit * 3
+                                    
+                                    background: Rectangle {
+                                        color: "#D1FAE5"
+                                        border.color: "#10B981"
+                                        border.width: 1
+                                        radius: baseUnit * 0.5
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: parent.text
+                                        color: "#047857"
+                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    onClicked: {
+                                        limpiarSeleccionPaciente()
+                                        edadPaciente.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Button {
+                                    text: "Limpiar"
+                                    visible: apellidoPaterno.pacienteAutocompletado
+                                    Layout.preferredHeight: baseUnit * 3
+                                    
+                                    background: Rectangle {
+                                        color: "#FEE2E2"
+                                        border.color: "#F87171"
+                                        border.width: 1
+                                        radius: baseUnit * 0.5
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: parent.text
+                                        color: "#B91C1C"
+                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    onClicked: limpiarSeleccionPaciente()
                                 }
                             }
+                        }
+                    }
+                }
+                
+                // INFORMACIÓN DEL ANÁLISIS - IDÉNTICO A CONSULTA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "INFORMACIÓN DEL ANÁLISIS"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
+                    
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
+                    }
+                    
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: baseUnit * 2
+                        
+                        // Tipo de Análisis
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit * 2
                             
                             Label {
-                                text: "años"
+                                text: "Análisis:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 15
                                 color: textColor
-                                font.pixelSize: fontBaseSize * 0.9
                                 font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
-                            Label {
-                                text: cedulaPaciente.text ? "CI: " + cedulaPaciente.text : ""
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.8
+                            ComboBox {
+                                id: tipoAnalisisCombo
+                                Layout.fillWidth: true
+                                font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
-                                visible: cedulaPaciente.text.length > 0
-                            }
-                            
-                            TextField {
-                                id: cedulaPaciente
-                                visible: false
-                            }
-                            
-                            Item { Layout.fillWidth: true }
-                            
-                            Button {
-                                text: "Nuevo Paciente"
-                                visible: !apellidoPaterno.pacienteAutocompletado && nombrePaciente.text.length > 0
-                                Layout.preferredHeight: baseUnit * 3
+                                model: {
+                                    var list = ["Seleccionar análisis..."]
+                                    for (var i = 0; i < tiposAnalisisDB.length; i++) {
+                                        list.push(tiposAnalisisDB[i].nombre)
+                                    }
+                                    return list
+                                }
+                                onCurrentIndexChanged: {
+                                    if (currentIndex > 0) {
+                                        labTestForm.selectedTipoAnalisisIndex = currentIndex - 1
+                                        labTestForm.updatePrice()
+                                    } else {
+                                        labTestForm.selectedTipoAnalisisIndex = -1
+                                        labTestForm.calculatedPrice = 0.0
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: tipoAnalisisCombo.displayText
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
                                 
                                 background: Rectangle {
-                                    color: "#D1FAE5"
-                                    border.color: "#10B981"
+                                    color: whiteColor
+                                    border.color: "#ddd"
                                     border.width: 1
                                     radius: baseUnit * 0.5
                                 }
                                 
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: "#047857"
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    font.family: "Segoe UI, Arial, sans-serif"
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                onClicked: {
-                                    limpiarSeleccionPaciente()
-                                    edadPaciente.forceActiveFocus()
+                                popup: Popup {
+                                    width: tipoAnalisisCombo.width
+                                    implicitHeight: contentItem.implicitHeight + baseUnit
+                                    padding: 1
+                                    
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: tipoAnalisisCombo.popup.visible ? tipoAnalisisCombo.delegateModel : null
+                                        currentIndex: tipoAnalisisCombo.highlightedIndex
+                                        
+                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                    }
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: "#ddd"
+                                        radius: baseUnit * 0.5
+                                    }
                                 }
                             }
+                        }
+                        
+                        // Realizado por
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit * 2
                             
-                            Button {
-                                text: "Limpiar"
-                                visible: apellidoPaterno.pacienteAutocompletado
-                                Layout.preferredHeight: baseUnit * 3
+                            Label {
+                                text: "Realizado por:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 15
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            ComboBox {
+                                id: trabajadorCombo
+                                Layout.fillWidth: true
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+
+                                property var trabajadoresDisponibles: trabajadoresDB
+
+                                model: {
+                                    var list = ["Seleccionar trabajador..."]
+                                    for (var i = 0; i < trabajadoresDisponibles.length; i++) {
+                                        var nombre = trabajadoresDisponibles[i].nombre || "Sin nombre"
+                                        list.push(nombre)
+                                    }
+                                    list.push("Sin asignar")
+                                    return list
+                                }
+                                onTrabajadoresDisponiblesChanged: {
+                                    var currentModel = model
+                                }
+                                
+                                contentItem: Label {
+                                    text: trabajadorCombo.displayText
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
                                 
                                 background: Rectangle {
-                                    color: "#FEE2E2"
-                                    border.color: "#F87171"
+                                    color: whiteColor
+                                    border.color: "#ddd"
                                     border.width: 1
                                     radius: baseUnit * 0.5
                                 }
                                 
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: "#B91C1C"
-                                    font.pixelSize: fontBaseSize * 0.8
+                                popup: Popup {
+                                    width: trabajadorCombo.width
+                                    implicitHeight: contentItem.implicitHeight + baseUnit
+                                    padding: 1
+                                    
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: trabajadorCombo.popup.visible ? trabajadorCombo.delegateModel : null
+                                        currentIndex: trabajadorCombo.highlightedIndex
+                                        
+                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                    }
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: "#ddd"
+                                        radius: baseUnit * 0.5
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Tipo de análisis
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Tipo:"
+                                font.bold: true
+                                Layout.preferredWidth: baseUnit * 15
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: baseUnit * 3
+                                
+                                RadioButton {
+                                    id: normalRadio
+                                    text: "Normal"
+                                    font.pixelSize: fontBaseSize
                                     font.family: "Segoe UI, Arial, sans-serif"
-                                    horizontalAlignment: Text.AlignHCenter
+                                    checked: true
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            labTestForm.analisisType = "Normal"
+                                            labTestForm.updatePrice()
+                                        }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: normalRadio.text
+                                        font.pixelSize: fontBaseSize
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        leftPadding: normalRadio.indicator.width + normalRadio.spacing
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                                 
-                                onClicked: limpiarSeleccionPaciente()
+                                RadioButton {
+                                    id: emergenciaRadio
+                                    text: "Emergencia"
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            labTestForm.analisisType = "Emergencia"
+                                            labTestForm.updatePrice()
+                                        }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: emergenciaRadio.text
+                                        font.pixelSize: fontBaseSize
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
                             }
                         }
                     }
                 }
                 
-                // Tipo de Análisis
-                RowLayout {
+                // INFORMACIÓN DE PRECIO - IDÉNTICO A CONSULTA
+                GroupBox {
                     Layout.fillWidth: true
-                    Label {
-                        Layout.preferredWidth: baseUnit * 12
-                        text: "Tipo de Análisis:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                    }
-                    ComboBox {
-                        id: tipoAnalisisCombo
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: baseUnit * 4
-                        model: {
-                            var list = ["Seleccionar tipo de análisis..."]
-                            for (var i = 0; i < tiposAnalisisDB.length; i++) {
-                                list.push(tiposAnalisisDB[i].nombre)
-                            }
-                            return list
-                        }
-                        onCurrentIndexChanged: {
-                            if (currentIndex > 0) {
-                                labTestForm.selectedTipoAnalisisIndex = currentIndex - 1
-                                labTestForm.updatePrice()
-                            } else {
-                                labTestForm.selectedTipoAnalisisIndex = -1
-                                labTestForm.calculatedPrice = 0.0
-                            }
-                        }
-                        
-                        contentItem: Label {
-                            text: tipoAnalisisCombo.displayText
-                            font.pixelSize: fontBaseSize * 0.8
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            color: textColor
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: baseUnit
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-                
-                // Tipo de Servicio
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label {
-                        Layout.preferredWidth: baseUnit * 12
-                        text: "Tipo de Servicio:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
+                    title: "INFORMACIÓN DE PRECIO"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
+                    
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
                     }
                     
-                    RadioButton {
-                        id: normalRadio
-                        text: "Normal"
-                        checked: true
-                        onCheckedChanged: {
-                            if (checked) {
-                                labTestForm.analisisType = "Normal"
-                                labTestForm.updatePrice()
-                            }
-                        }
+                    GridLayout {
+                        width: parent.width
+                        columns: 2
+                        columnSpacing: baseUnit * 2
+                        rowSpacing: baseUnit * 1.5
                         
-                        contentItem: Label {
-                            text: normalRadio.text
-                            font.pixelSize: fontBaseSize * 0.9
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            color: textColor
-                            leftPadding: normalRadio.indicator.width + normalRadio.spacing
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-                    
-                    RadioButton {
-                        id: emergenciaRadio
-                        text: "Emergencia"
-                        onCheckedChanged: {
-                            if (checked) {
-                                labTestForm.analisisType = "Emergencia"
-                                labTestForm.updatePrice()
-                            }
-                        }
-                        
-                        contentItem: Label {
-                            text: emergenciaRadio.text
-                            font.pixelSize: fontBaseSize * 0.9
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            color: textColor
-                            leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                
-                // Trabajador
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label {
-                        Layout.preferredWidth: baseUnit * 12
-                        text: "Trabajador:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                    }
-                    ComboBox {
-                        id: trabajadorCombo
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: baseUnit * 4
-
-                        property var trabajadoresDisponibles: trabajadoresDB
-
-                        model: {
-                            console.log("🔄 ComboBox evaluando modelo - Trabajadores disponibles:", trabajadoresDisponibles.length);
-                            var list = ["Seleccionar trabajador..."];
-                            var list = ["Seleccionar trabajador..."];
-                            for (var i = 0; i < trabajadoresDisponibles.length; i++) {
-                                var nombre = trabajadoresDisponibles[i].nombre || "Sin nombre";
-                                console.log("➕ Agregando trabajador:", nombre);
-                                list.push(nombre);
-                            }
-                            list.push("Sin asignar");
-                            
-                            console.log("📝 ComboBox final:", list.length, "items");
-                            return list;
-                        }
-                        onTrabajadoresDisponiblesChanged: {
-                            console.log("🔄 Trabajadores actualizados, forzando refresh del ComboBox");
-                            // Trigger re-evaluation
-                            var currentModel = model;
-                        }
-                        
-                        contentItem: Label {
-                            text: trabajadorCombo.displayText
-                            font.pixelSize: fontBaseSize * 0.8
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            color: textColor
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: baseUnit
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-                
-                // Precio
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label {
-                        Layout.preferredWidth: baseUnit * 12
-                        text: "Precio:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                    }
-                    Label {
-                        text: labTestForm.selectedTipoAnalisisIndex >= 0 ? 
-                              "Bs " + labTestForm.calculatedPrice.toFixed(2) : "Seleccione tipo de análisis"
-                        font.bold: true
-                        font.pixelSize: fontBaseSize * 1.1
-                        font.family: "Segoe UI, Arial, sans-serif"
-                        color: labTestForm.analisisType === "Emergencia" ? "#92400E" : "#047857"
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                
-                // Detalles
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    
-                    Label {
-                        text: "Detalles:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.family: "Segoe UI, Arial, sans-serif"
-                    }
-                    
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.minimumHeight: baseUnit * 8
-                        
-                        TextArea {
-                            id: detallesConsulta
-                            placeholderText: "Descripción adicional del análisis..."
-                            wrapMode: TextArea.Wrap
-                            font.pixelSize: fontBaseSize * 0.9
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: baseUnit
-                            }
-                        }
-                    }
-                }
-                
-                // Botones de acción
-                RowLayout {
-                    Layout.fillWidth: true
-                    Item { Layout.fillWidth: true }
-                    
-                    Button {
-                        text: "Cancelar"
-                        Layout.preferredHeight: baseUnit * 4
-                        background: Rectangle {
-                            color: lightGrayColor
-                            radius: baseUnit
-                        }
-                        contentItem: Label {
-                            text: parent.text
-                            color: textColor
-                            font.pixelSize: fontBaseSize * 0.9
-                            font.family: "Segoe UI, Arial, sans-serif"
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-                        onClicked: {
-                            limpiarYCerrarDialogo()
-                        }
-                    }
-                    
-                    Button {
-                        text: {
-                            if (isCreatingExam) return "Procesando..."
-                            return isEditMode ? "Actualizar" : "Guardar"
-                        }
-                        enabled: labTestForm.selectedTipoAnalisisIndex >= 0 && 
-                            nombrePaciente.text.length >= 2 && 
-                            apellidoPaterno.text.length >= 2 &&
-                            edadPaciente.text.length > 0 && 
-                            !isCreatingExam
-                        Layout.preferredHeight: baseUnit * 4
-                        
-                        background: Rectangle {
-                            color: {
-                                if (!parent.enabled) return "#bdc3c7"
-                                if (isCreatingExam) return "#3498DB" 
-                                return primaryColor
-                            }
-                            radius: baseUnit
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: whiteColor
+                        Label {
+                            text: "Precio Unitario:"
                             font.bold: true
-                            font.pixelSize: fontBaseSize * 0.9
+                            color: textColor
                             font.family: "Segoe UI, Arial, sans-serif"
-                            horizontalAlignment: Text.AlignHCenter
                         }
                         
-                        onClicked: {
-                            guardarAnalisis()
+                        Label {
+                            text: labTestForm.selectedTipoAnalisisIndex >= 0 ? 
+                                "Bs " + labTestForm.calculatedPrice.toFixed(2) : "Seleccione análisis"
+                            font.bold: true
+                            font.pixelSize: fontBaseSize * 1.1
+                            font.family: "Segoe UI, Arial, sans-serif"
+                            color: labTestForm.analisisType === "Emergencia" ? warningColor : successColor
+                            padding: baseUnit
+                            background: Rectangle {
+                                color: labTestForm.analisisType === "Emergencia" ? warningColorLight : successColorLight
+                                radius: baseUnit * 0.8
+                            }
                         }
                     }
+                }
+                
+                // DETALLES ADICIONALES - IDÉNTICO A CONSULTA
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: "DETALLES ADICIONALES"
+                    font.bold: true
+                    font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    padding: baseUnit * 1.5
+                    
+                    background: Rectangle {
+                        color: "#f8f9fa"
+                        border.color: "#e0e0e0"
+                        radius: baseUnit * 0.8
+                    }
+                    
+                    TextArea {
+                        id: detallesConsulta
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: baseUnit * 12
+                        placeholderText: "Descripción adicional del análisis, observaciones especiales..."
+                        font.pixelSize: fontBaseSize
+                        font.family: "Segoe UI, Arial, sans-serif"
+                        wrapMode: TextArea.Wrap
+                        background: Rectangle {
+                            color: whiteColor
+                            border.color: "#ddd"
+                            border.width: 1
+                            radius: baseUnit * 0.5
+                        }
+                        padding: baseUnit
+                    }
+                }
+            }
+        }
+        
+        // BOTONES INFERIORES - IDÉNTICO A CONSULTA
+        RowLayout {
+            id: buttonRow
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: baseUnit * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: baseUnit * 2
+            height: baseUnit * 5
+            
+            Button {
+                id: cancelButton
+                text: "Cancelar"
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
+                
+                background: Rectangle {
+                    color: cancelButton.pressed ? "#e0e0e0" : 
+                        (cancelButton.hovered ? "#f0f0f0" : "#f8f9fa")
+                    border.color: "#ddd"
+                    border.width: 1
+                    radius: baseUnit * 0.8
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: fontBaseSize
+                    font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: textColor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    limpiarYCerrarDialogo()
+                }
+            }
+            
+            Button {
+                id: saveButton
+                text: {
+                    if (isCreatingExam) return "Procesando..."
+                    return isEditMode ? "Actualizar" : "Guardar"
+                }
+                enabled: labTestForm.selectedTipoAnalisisIndex >= 0 && 
+                    nombrePaciente.text.length >= 2 && 
+                    apellidoPaterno.text.length >= 2 &&
+                    edadPaciente.text.length > 0 && 
+                    !isCreatingExam
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
+                
+                background: Rectangle {
+                    color: {
+                        if (!parent.enabled) return "#bdc3c7"
+                        if (isCreatingExam) return "#3498DB" 
+                        return primaryColor
+                    }
+                    radius: baseUnit * 0.8
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: fontBaseSize
+                    font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
+                    color: whiteColor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    guardarAnalisis()
                 }
             }
         }
@@ -1033,7 +1350,7 @@ Item {
     }
 
     function updatePaginatedModel() {
-        console.log("🔄 Laboratorio: Actualizando paginación - Página:", currentPageLaboratorio + 1)
+        console.log("📄 Laboratorio: Actualizando paginación - Página:", currentPageLaboratorio + 1)
         
         analisisPaginadosModel.clear()
         
@@ -1059,7 +1376,7 @@ Item {
             analisisPaginadosModel.append(analisis)
         }
         
-        console.log("🔄 Laboratorio: Página", currentPageLaboratorio + 1, "de", totalPagesLaboratorio,
+        console.log("📄 Laboratorio: Página", currentPageLaboratorio + 1, "de", totalPagesLaboratorio,
                     "- Mostrando", analisisPaginadosModel.count, "de", totalItems,
                     "- Elementos por página:", itemsPerPageLaboratorio)
     }
@@ -1084,7 +1401,7 @@ Item {
             console.error("Análisis no encontrado:", idToFind)
             showErrorMessage("No se encontró el análisis")
         }
-}
+    }
 
     function deleteAnalisis(analisisId) {
         var analisisIdInt = parseInt(analisisId)
@@ -1326,7 +1643,7 @@ Item {
     function cargarTiposAnalisisDB() {
         try {
             var resultado = laboratorioModel.obtenerTiposAnalisisDisponibles()
-            console.log("🔍 Resultado tipos análisis:", resultado)
+            console.log("📝 Resultado tipos análisis:", resultado)
             
             var data = JSON.parse(resultado)
             
@@ -1354,7 +1671,7 @@ Item {
     function cargarTrabajadoresDB() {
         try {
             var trabajadoresJson = laboratorioModel.trabajadoresJson;
-            console.log("🔍 JSON trabajadores raw:", trabajadoresJson);
+            console.log("📝 JSON trabajadores raw:", trabajadoresJson);
             
             // Verificar si realmente está vacío
             var isEmpty = !trabajadoresJson || trabajadoresJson.trim() === "" || trabajadoresJson === "[]";
@@ -1419,7 +1736,7 @@ Item {
             for (var i = 0; i < 3; i++) {
                 Qt.callLater(function() {
                     if (conectarModelos()) {
-                        console.log("🔄 Reconexión exitosa del PacienteModel")
+                        console.log("📄 Reconexión exitosa del PacienteModel")
                     }
                 })
             }
@@ -1473,7 +1790,7 @@ Item {
 
     function debugDatabaseConnection() {
         if (laboratorioModel) {
-            console.log("🔍 Probando conexión a base de datos...")
+            console.log("📝 Probando conexión a base de datos...")
             
             var tiposResult = laboratorioModel.obtenerTiposAnalisisDisponibles()
             console.log("✅ Tipos de análisis:", tiposResult)
@@ -1488,7 +1805,7 @@ Item {
         enabled: !!pacienteModel
         
         function onSugerenciasPacientesDisponibles(sugerencias) {
-            console.log("🔍 Sugerencias recibidas:", sugerencias.length, "pacientes")
+            console.log("📝 Sugerencias recibidas:", sugerencias.length, "pacientes")
             if (sugerencias.length > 0) {
                 console.log("📋 Primer paciente:", sugerencias[0].nombre)
             }
@@ -1509,7 +1826,7 @@ Item {
     }
     function conectarModelos() {
             // Intentar múltiples rutas de conexión
-            console.log("🔍 Intentando conectar PacienteModel...")
+            console.log("📝 Intentando conectar PacienteModel...")
             
             if (typeof appController !== 'undefined') {
                 console.log("✅ AppController disponible")
