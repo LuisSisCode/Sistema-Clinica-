@@ -1420,4 +1420,18 @@ Item {
         actualizarPaginacionVentas()
         console.log("=== MÓDULO LISTO ===")
     }
+    Item {
+        anchors.fill: parent
+        focus: true
+        
+        Keys.onEscapePressed: {
+            console.log("Escape pressed in Ventas.qml")
+            // Forzar el foco de vuelta al padre y propagar el evento
+            ventasMainRoot.forceActiveFocus()
+            // También puedes emitir una señal si es necesario
+        }
+        
+        // Asegurar que este elemento esté siempre al fondo en términos de foco
+        z: -1
+    }
 }
