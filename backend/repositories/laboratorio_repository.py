@@ -129,10 +129,13 @@ class LaboratorioRepository(BaseRepository):
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtiene exámenes con información completa"""
         query = """
-        SELECT l.id, l.Fecha, l.Tipo, l.Detalles,
+        SELECT l.id, l.Fecha, l.Tipo, l.Detalles as detalles_examen,
             -- Paciente
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
             p.Edad as paciente_edad,
+            p.Nombre as paciente_nombre, 
+            p.Apellido_Paterno as paciente_apellido_p,
+            p.Apellido_Materno as paciente_apellido_m,
             -- Tipo de Análisis
             ta.Nombre as tipo_analisis,
             ta.Descripcion as detalles_analisis,

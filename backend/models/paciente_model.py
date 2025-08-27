@@ -42,6 +42,9 @@ class PacienteModel(QObject):
     errorOccurred = Signal(str, str)  # title, message
     successMessage = Signal(str)
     warningMessage = Signal(str)
+    # Señales para autocompletado
+    sugerenciasPacientesDisponibles = Signal('QVariantList', arguments=['sugerencias'])  # Lista de sugerencias
+    autocompletadoSeleccionado = Signal('QVariantMap', arguments=['pacienteSeleccionado'])  # Paciente seleccionado
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -369,7 +372,100 @@ class PacienteModel(QObject):
                                         f"Encontrados {len(pacientes)} pacientes")
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error en búsqueda: {str(e)}")
-    
+    @Slot(str, result='QVariantList')
+    def buscarSugerenciasPacientes(self, termino: str) -> List[Dict[str, Any]]:
+        """
+        Búsqueda incremental para autocompletado - optimizada para UX
+        """
+        print(f"🔍 PacienteModel.buscarSugerenciasPacientes llamado con: '{termino}'")
+        try:
+            if not termino or len(termino.strip()) < 2:
+                self.sugerenciasPacientesDisponibles.emit([])
+                return []
+            
+            # Usar repository optimizado
+            sugerencias = self.repository.search_patients_incremental(termino.strip(), limit=8)
+            
+            # Formatear para UI
+            sugerencias_formateadas = []
+            for paciente in sugerencias:
+                sugerencias_formateadas.append({
+                    'id': paciente.get('id'),
+                    'nombre': paciente.get('Nombre', ''),
+                    'apellido_paterno': paciente.get('Apellido_Paterno', ''),
+                    'apellido_materno': paciente.get('Apellido_Materno', ''),
+                    'edad': paciente.get('Edad', 0),
+                    'nombre_completo': paciente.get('nombre_completo', ''),
+                    'texto_sugerencia': f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')} ({paciente.get('Edad', 0)} años)"
+                })
+            
+            # Emitir signal para QML
+            self.sugerenciasPacientesDisponibles.emit(sugerencias_formateadas)
+            
+            return sugerencias_formateadas
+            
+        except Exception as e:
+            print(f"⚠️ Error en búsqueda de sugerencias: {e}")
+            self.sugerenciasPacientesDisponibles.emit([])
+            return []
+
+    @Slot(str, str, result='QVariantList')
+    def buscarSugerenciasPorCampo(self, campo: str, valor: str) -> List[Dict[str, Any]]:
+        """
+        Búsqueda específica por campo (nombre, apellido_paterno, apellido_materno)
+        """
+        try:
+            if not valor or len(valor.strip()) < 2:
+                return []
+            
+            # Mapear campos de UI a base de datos
+            campo_mapping = {
+                'nombre': 'Nombre',
+                'apellido_paterno': 'Apellido_Paterno', 
+                'apellido_materno': 'Apellido_Materno'
+            }
+            
+            db_field = campo_mapping.get(campo.lower())
+            if not db_field:
+                return []
+            
+            sugerencias = self.repository.search_patients_by_field(db_field, valor.strip(), limit=6)
+            
+            # Formatear para autocompletado específico
+            sugerencias_formateadas = []
+            for paciente in sugerencias:
+                sugerencias_formateadas.append({
+                    'id': paciente.get('id'),
+                    'valor_campo': paciente.get(db_field, ''),
+                    'nombre_completo': paciente.get('nombre_completo', ''),
+                    'datos_completos': {
+                        'nombre': paciente.get('Nombre', ''),
+                        'apellido_paterno': paciente.get('Apellido_Paterno', ''),
+                        'apellido_materno': paciente.get('Apellido_Materno', ''),
+                        'edad': paciente.get('Edad', 0)
+                    }
+                })
+            
+            return sugerencias_formateadas
+            
+        except Exception as e:
+            print(f"⚠️ Error en búsqueda por campo: {e}")
+            return []
+
+    @Slot('QVariantMap')
+    def seleccionarSugerenciaPaciente(self, paciente_data: Dict[str, Any]):
+        """
+        Procesa la selección de una sugerencia de paciente
+        """
+        try:
+            # Emitir signal con los datos del paciente seleccionado
+            self.autocompletadoSeleccionado.emit(paciente_data)
+            
+            print(f"👤 Sugerencia seleccionada: {paciente_data.get('nombre_completo', 'Desconocido')}")
+            
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error seleccionando sugerencia: {str(e)}")
+
     @Slot()
     def limpiarFiltros(self):
         """Limpia todos los filtros aplicados"""
@@ -676,6 +772,14 @@ class PacienteModel(QObject):
             recommendations.append("Evaluación cognitiva")
         
         return recommendations
+    def _format_suggestion_text(self, paciente: Dict[str, Any]) -> str:
+        """Formatea texto de sugerencia para mostrar en UI"""
+        nombre = paciente.get('Nombre', '')
+        apellido_p = paciente.get('Apellido_Paterno', '')
+        apellido_m = paciente.get('Apellido_Materno', '')
+        edad = paciente.get('Edad', 0)
+        
+        return f"{nombre} {apellido_p} {apellido_m} ({edad} años)".strip()
 
 # ===============================
 # REGISTRO PARA QML

@@ -151,6 +151,73 @@ class PacienteRepository(BaseRepository):
         query = f"SELECT * FROM Pacientes WHERE {where_clause} ORDER BY Nombre, Apellido_Paterno"
         
         return self._execute_query(query, tuple(params))
+    # ===============================
+    # BÚSQUEDAS OPTIMIZADAS para pacientes, se auto completa de forma automatica si el paciente ya existe.
+    # ===============================
+    def search_patients_incremental(self, termino: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Búsqueda optimizada para autocompletado - SQL Server compatible
+        Busca por nombre y apellidos con límite reducido para performance
+        """
+        if not termino or len(termino.strip()) < 2:
+            return []
+        
+        # Normalizar término de búsqueda
+        termino_clean = termino.strip().lower()
+        search_pattern = f"%{termino_clean}%"
+        
+        # Query optimizada para autocompletado
+        query = """
+        SELECT TOP (?) 
+            id, Nombre, Apellido_Paterno, Apellido_Materno, Edad,
+            CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
+        FROM Pacientes 
+        WHERE LOWER(Nombre) LIKE ? 
+        OR LOWER(Apellido_Paterno) LIKE ? 
+        OR LOWER(Apellido_Materno) LIKE ?
+        OR LOWER(CONCAT(Nombre, ' ', Apellido_Paterno)) LIKE ?
+        ORDER BY 
+            -- Priorizar coincidencias exactas al inicio
+            CASE 
+                WHEN LOWER(Nombre) LIKE ? THEN 1
+                WHEN LOWER(Apellido_Paterno) LIKE ? THEN 2
+                ELSE 3
+            END,
+            Nombre, Apellido_Paterno
+        """
+        
+        # Patrón para coincidencias al inicio
+        start_pattern = f"{termino_clean}%"
+        
+        return self._execute_query(query, (
+            limit, 
+            search_pattern, search_pattern, search_pattern, search_pattern,  # LIKE patterns
+            start_pattern, start_pattern  # Ordenamiento por prioridad
+        ))
+
+    def search_patients_by_field(self, field_name: str, value: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Búsqueda específica por campo (nombre, apellido_paterno, apellido_materno)
+        """
+        if not value or len(value.strip()) < 2:
+            return []
+        
+        valid_fields = ['Nombre', 'Apellido_Paterno', 'Apellido_Materno']
+        if field_name not in valid_fields:
+            return []
+        
+        search_pattern = f"%{value.strip().lower()}%"
+        
+        query = f"""
+        SELECT TOP (?) 
+            id, Nombre, Apellido_Paterno, Apellido_Materno, Edad,
+            CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
+        FROM Pacientes 
+        WHERE LOWER({field_name}) LIKE ?
+        ORDER BY {field_name}, Nombre
+        """
+        
+        return self._execute_query(query, (limit, search_pattern))
     
     # ===============================
     # CONSULTAS CON RELACIONES

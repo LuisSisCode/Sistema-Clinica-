@@ -66,7 +66,17 @@ clinica_app/
 ├── CrearProducto.qml
 ├── Farmacia.qml
 ├── Consultas.qml
-├── Laboratio.qml
+├─── Laboratorio.qml (principal)
+├── components/
+│   ├── laboratory/                              
+│   │   ├── LaboratoryHeader.qml                 
+│   │   ├── LaboratoryFilters.qml                
+│   │   ├── LaboratoryTable.qml                  
+│   │   └── LaboratoryPagination.qml                              
+│   │
+│   └── shared/                                  
+│       ├── AutoCompleteTextField.qml            
+│       └── PatientSearchOverlay.qml             
 ├── Enfermeria.qml
 ├── ServiciosBasicos.qml
 ├── Trabajadores.qml
