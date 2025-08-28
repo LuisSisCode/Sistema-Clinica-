@@ -197,69 +197,151 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // ===== HEADER MODERNO =====
+                // ===== HEADER MODERNO CON LOGOS =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 12  // Aumentamos un poco la altura
                     color: lightGrayColor
                     border.color: borderColor
                     border.width: 1
-                    
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.bottomMargin: baseUnit * 2
-                        color: parent.color
-                        radius: parent.radius
-                    }
+                    radius: baseUnit * 2
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
+                        anchors.margins: baseUnit * 2  // Márgenes más generosos
+                        spacing: baseUnit * 2
                         
+                        // SECCIÓN DEL LOGO Y TÍTULO
                         RowLayout {
-                            spacing: baseUnit
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: baseUnit * 1.5
                             
-                            Label {
-                                text: "👥"
-                                font.pixelSize: fontBaseSize * 1.8
-                                color: primaryColor
+                            // Contenedor del icono con tamaño fijo
+                            Rectangle {
+                                Layout.preferredWidth: baseUnit * 10
+                                Layout.preferredHeight: baseUnit * 10
+                                color: "transparent"
+                                
+                                Image {
+                                    id: trabajadoresIcon
+                                    anchors.centerIn: parent
+                                    width: Math.min(baseUnit * 8, parent.width * 10)
+                                    height: Math.min(baseUnit * 8, parent.height * 10)
+                                    source: "Resources/iconos/Trabajadores.png"
+                                    fillMode: Image.PreserveAspectFit
+                                    antialiasing: true
+                                    
+                                    onStatusChanged: {
+                                        if (status === Image.Error) {
+                                            console.log("Error cargando PNG:", source)
+                                        } else if (status === Image.Ready) {
+                                            console.log("PNG cargado correctamente:", source)
+                                        }
+                                    }
+                                }
                             }
                             
+                            // Título
                             Label {
+                                Layout.alignment: Qt.AlignVCenter
                                 text: "Gestión de Trabajadores"
-                                font.pixelSize: fontBaseSize * 1.4
+                                font.pixelSize: fontBaseSize * 1.3
                                 font.bold: true
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 color: textColor
+                                wrapMode: Text.WordWrap
                             }
                         }
                         
-                        Item { Layout.fillWidth: true }
+                        // ESPACIADOR FLEXIBLE
+                        Item { 
+                            Layout.fillWidth: true 
+                            Layout.minimumWidth: baseUnit * 2
+                        }
                         
-                        // Botón Nuevo Trabajador
+                        // BOTÓN NUEVO TRABAJADOR CON LOGO
                         Button {
+                            id: newWorkerBtn
                             objectName: "newWorkerButton"
-                            text: "➕ Nuevo Trabajador"
-                            Layout.preferredHeight: baseUnit * 4.5
+                            Layout.preferredHeight: baseUnit * 5
+                            Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
+                            Layout.alignment: Qt.AlignVCenter
                             
                             background: Rectangle {
-                                color: primaryColor
-                                radius: baseUnit
+                                color: newWorkerBtn.pressed ? Qt.darker(primaryColor, 1.1) : 
+                                    newWorkerBtn.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor
+                                radius: baseUnit * 1.2
+                                border.width: 0
+                                
+                                // Animación suave del color
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
                             }
                             
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize * 0.9
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                horizontalAlignment: Text.AlignHCenter
+                            contentItem: RowLayout {
+                                spacing: baseUnit
+                                
+                                // Contenedor del icono del botón
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 3
+                                    Layout.preferredHeight: baseUnit * 3
+                                    color: "transparent"
+                                    
+                                    Image {
+                                        id: addWorkerIcon
+                                        anchors.centerIn: parent
+                                        width: baseUnit * 2.5
+                                        height: baseUnit * 2.5
+                                        source: "Resources/iconos/Nueva_Consulta.png"
+                                        fillMode: Image.PreserveAspectFit
+                                        antialiasing: true
+                                        
+                                        onStatusChanged: {
+                                            if (status === Image.Error) {
+                                                console.log("Error cargando PNG del botón:", source)
+                                                // Mostrar un "+" si no hay icono
+                                                visible = false
+                                                fallbackText.visible = true
+                                            } else if (status === Image.Ready) {
+                                                console.log("PNG del botón cargado correctamente:", source)
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Texto fallback si no hay icono
+                                    Label {
+                                        id: fallbackText
+                                        anchors.centerIn: parent
+                                        text: "+"
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 1.5
+                                        font.bold: true
+                                        visible: false
+                                    }
+                                }
+                                
+                                // Texto del botón
+                                Label {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: "Nuevo Trabajador"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
                             }
                             
                             onClicked: {
                                 isEditMode = false
                                 editingIndex = -1
                                 showNewWorkerDialog = true
+                            }
+                            
+                            // Efecto hover mejorado
+                            HoverHandler {
+                                id: buttonHover
+                                cursorShape: Qt.PointingHandCursor
                             }
                         }
                     }
@@ -729,12 +811,12 @@ Item {
                                         }
                                     }
                                     
-                                    // ===== BOTONES DE ACCIÓN MODERNOS =====
+                                    // ===== BOTONES DE ACCIÓN MODERNOS CON ICONOS SVG =====
                                     RowLayout {
-                                        anchors.top: parent.top
+                                        anchors.verticalCenter: parent.verticalCenter
                                         anchors.right: parent.right
                                         anchors.margins: baseUnit * 0.8
-                                        spacing: baseUnit * 0.5
+                                        spacing: baseUnit * 0.8
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
@@ -742,21 +824,18 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            text: "✏️"
                                             
                                             background: Rectangle {
-                                                color: warningColor
-                                                radius: baseUnit * 0.8
-                                                border.color: "#e67e22"
-                                                border.width: 1
+                                                color: "transparent"
                                             }
                                             
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontBaseSize * 0.85
+                                            Image {
+                                                id: editIcon
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                source: "Resources/iconos/editar.svg"
+                                                fillMode: Image.PreserveAspectFit
                                             }
                                             
                                             onClicked: {
@@ -766,33 +845,40 @@ Item {
                                                 console.log("Editando trabajador:", JSON.stringify(trabajador))
                                                 showNewWorkerDialog = true
                                             }
+                                            
+                                            // Efecto hover
+                                            onHoveredChanged: {
+                                                editIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
                                         }
-                                        
+
                                         Button {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            text: "🗑️"
                                             
                                             background: Rectangle {
-                                                color: dangerColor
-                                                radius: baseUnit * 0.8
-                                                border.color: "#c0392b"
-                                                border.width: 1
+                                                color: "transparent"
                                             }
                                             
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontBaseSize * 0.85
+                                            Image {
+                                                id: deleteIcon
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                source: "Resources/iconos/eliminar.svg"
+                                                fillMode: Image.PreserveAspectFit
                                             }
                                             
                                             onClicked: {
                                                 var trabajadorData = trabajadoresListModel.get(index)
                                                 var trabajadorId = parseInt(trabajadorData.trabajadorId)
                                                 trabajadorModel.eliminarTrabajador(trabajadorId)
+                                            }
+                                            
+                                            // Efecto hover
+                                            onHoveredChanged: {
+                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
                                             }
                                         }
                                     }

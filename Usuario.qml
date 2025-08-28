@@ -120,69 +120,107 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // ===== HEADER MODERNO =====
+                // ===== HEADER MODERNO ACTUALIZADO =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 8  // Aumentado para hacerlo más grande
                     color: lightGrayColor
                     border.color: borderColor
                     border.width: 1
-                    
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.bottomMargin: baseUnit * 2
-                        color: parent.color
-                        radius: parent.radius
-                    }
+                    radius: baseUnit
                     
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: baseUnit * 1.5
+                        spacing: baseUnit * 1.5
                         
+                        // SECCIÓN DEL LOGO Y TÍTULO - MÁS GRANDE
                         RowLayout {
-                            spacing: baseUnit
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: baseUnit * 1.5
                             
-                            Label {
-                                text: "👤"
-                                font.pixelSize: fontBaseSize * 1.8
-                                color: primaryColor
+                            // Contenedor del icono con tamaño aumentado
+                            Rectangle {
+                                Layout.preferredWidth: baseUnit * 6
+                                Layout.preferredHeight: baseUnit * 6
+                                color: "transparent"
+                                
+                                Image {
+                                    id: usuarioIcon
+                                    anchors.centerIn: parent
+                                    width: baseUnit * 4.8
+                                    height: baseUnit * 4.8
+                                    source: "Resources/iconos/usuario.png"
+                                    fillMode: Image.PreserveAspectFit
+                                    antialiasing: true
+                                    
+                                    onStatusChanged: {
+                                        if (status === Image.Error) {
+                                            console.log("Error cargando PNG de usuario:", source)
+                                            // Fallback al emoji original
+                                            visible = false
+                                            usuarioFallbackLabel.visible = true
+                                        } else if (status === Image.Ready) {
+                                            console.log("PNG de usuario cargado correctamente:", source)
+                                        }
+                                    }
+                                }
+                                
+                                // Fallback al emoji si no carga la imagen
+                                Label {
+                                    id: usuarioFallbackLabel
+                                    anchors.centerIn: parent
+                                    text: "👤"
+                                    font.pixelSize: baseUnit * 4
+                                    color: primaryColor
+                                    visible: false
+                                }
                             }
                             
+                            // Título - Más grande
                             Label {
                                 text: "Listado de Usuarios del Sistema"
-                                font.pixelSize: fontBaseSize * 1.4
+                                font.pixelSize: fontBaseSize * 1.4  // Aumentado
                                 font.bold: true
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 color: textColor
-                            }
-                            
-                            // Loading indicator
-                            BusyIndicator {
-                                Layout.preferredWidth: baseUnit * 2.5
-                                Layout.preferredHeight: baseUnit * 2.5
-                                visible: usuarioModel ? usuarioModel.loading : false
-                                running: visible
                             }
                         }
                         
                         Item { Layout.fillWidth: true }
                         
+                        // Loading indicator más grande
+                        BusyIndicator {
+                            Layout.preferredWidth: baseUnit * 3
+                            Layout.preferredHeight: baseUnit * 3
+                            visible: usuarioModel ? usuarioModel.loading : false
+                            running: visible
+                        }
+                        
                         Button {
                             text: "🔄 Recargar"
-                            Layout.preferredHeight: baseUnit * 4.5
+                            Layout.preferredHeight: baseUnit * 4
+                            Layout.preferredWidth: Math.max(baseUnit * 12, implicitWidth + baseUnit)
                             
                             background: Rectangle {
-                                color: infoColor
-                                radius: baseUnit
+                                color: parent.pressed ? Qt.darker(infoColor, 1.1) : 
+                                    (parent.hovered ? Qt.lighter(infoColor, 1.1) : infoColor)
+                                radius: baseUnit * 0.8
+                                border.width: 0
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: fontBaseSize * 0.9
+                                font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: {
