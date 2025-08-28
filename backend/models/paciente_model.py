@@ -137,57 +137,49 @@ class PacienteModel(QObject):
     
     # --- OPERACIONES CRUD ---
     
-    @Slot(str, str, str, int, result=bool)
+    @Slot(str, str, str, str, str, result=bool)
     def crearPaciente(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                     edad: int) -> bool:
+                    fecha_nacimiento: str, cedula: str = "") -> bool:
         """
-        Crea nuevo paciente desde QML
+        Crea nuevo paciente con fecha_nacimiento (formato dd/mm/yyyy)
         """
         try:
             self._set_loading(True)
             
-            # Verificar duplicados potenciales
-            duplicados = self.detectarDuplicadosPotenciales(nombre, apellido_paterno, apellido_materno, edad)
-            if duplicados:
-                self.duplicadosDetectados.emit(duplicados)
-                self.warningMessage.emit(f"Se encontraron {len(duplicados)} posibles duplicados")
-                return False
+            # Convertir fecha dd/mm/yyyy a fecha Python
+            from datetime import datetime
+            fecha_obj = datetime.strptime(fecha_nacimiento, '%d/%m/%Y').date()
+            
+            cedula_clean = cedula.strip() if cedula else None
             
             # Crear usando repository
             paciente_id = self.repository.create_patient(
                 nombre=nombre.strip(),
                 apellido_paterno=apellido_paterno.strip(),
                 apellido_materno=apellido_materno.strip(),
-                edad=edad
+                fecha_nacimiento=fecha_obj,
+                cedula=cedula_clean
             )
             
             if paciente_id:
-                # Obtener paciente creado
-                paciente_creado = self.repository.get_by_id(paciente_id)
-                if paciente_creado:
-                    # Agregar nombre completo
-                    paciente_creado['nombre_completo'] = f"{nombre} {apellido_paterno} {apellido_materno}"
-                
                 # Recargar datos
                 self._cargar_pacientes()
                 self._cargar_estadisticas()
                 
-                # Generar alertas médicas según grupo etario
-                self._generar_alertas_grupo_etario(paciente_creado)
-                
-                # Emitir señal de éxito
                 mensaje = f"Paciente {nombre} {apellido_paterno} creado exitosamente"
-                self.pacienteCreado.emit(True, mensaje, paciente_creado or {})
+                self.pacienteCreado.emit(True, mensaje, {})
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Paciente creado: {nombre} {apellido_paterno}")
                 return True
             else:
-                error_msg = "Error creando paciente"
-                self.pacienteCreado.emit(False, error_msg, {})
-                self.errorOccurred.emit("Error", error_msg)
+                self.pacienteCreado.emit(False, "Error creando paciente", {})
                 return False
-                
+                    
+        except ValueError as ve:
+            error_msg = "Formato de fecha inválido. Use dd/mm/yyyy"
+            self.pacienteCreado.emit(False, error_msg, {})
+            self.errorOccurred.emit("Error", error_msg)
+            return False
         except Exception as e:
             error_msg = f"Error inesperado: {str(e)}"
             self.pacienteCreado.emit(False, error_msg, {})
@@ -395,6 +387,8 @@ class PacienteModel(QObject):
                     'apellido_paterno': paciente.get('Apellido_Paterno', ''),
                     'apellido_materno': paciente.get('Apellido_Materno', ''),
                     'edad': paciente.get('Edad', 0),
+                    'cedula': paciente.get('Cedula', ''),  # NUEVO
+                    'fecha_nacimiento': paciente.get('Fecha_Nacimiento', ''),  # NUEVO
                     'nombre_completo': paciente.get('nombre_completo', ''),
                     'texto_sugerencia': f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')} ({paciente.get('Edad', 0)} años)"
                 })
@@ -436,14 +430,14 @@ class PacienteModel(QObject):
             for paciente in sugerencias:
                 sugerencias_formateadas.append({
                     'id': paciente.get('id'),
-                    'valor_campo': paciente.get(db_field, ''),
+                    'nombre': paciente.get('Nombre', ''),
+                    'apellido_paterno': paciente.get('Apellido_Paterno', ''),
+                    'apellido_materno': paciente.get('Apellido_Materno', ''),
+                    'edad': paciente.get('Edad', 0),
+                    'cedula': paciente.get('Cedula', ''),  # NUEVO
+                    'fecha_nacimiento': paciente.get('Fecha_Nacimiento', ''),  # NUEVO
                     'nombre_completo': paciente.get('nombre_completo', ''),
-                    'datos_completos': {
-                        'nombre': paciente.get('Nombre', ''),
-                        'apellido_paterno': paciente.get('Apellido_Paterno', ''),
-                        'apellido_materno': paciente.get('Apellido_Materno', ''),
-                        'edad': paciente.get('Edad', 0)
-                    }
+                    'texto_sugerencia': f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')} ({paciente.get('Edad', 0)} años)"
                 })
             
             return sugerencias_formateadas
@@ -659,13 +653,28 @@ class PacienteModel(QObject):
             self.errorOccurred.emit("Error", f"Error gestionando paciente: {str(e)}")
             return -1
         
-    @Slot(str, str, str, int, result=int)
+    @Slot(str, str, str, str, str, result=int)
     def buscarOCrearPacienteInteligente(self, nombre: str, apellido_paterno: str, 
-                                    apellido_materno: str = "", edad: int = 0) -> int:
-        """Versión inteligente para módulos específicos como Laboratorio"""
+                                    apellido_materno: str = "", 
+                                    fecha_nacimiento: str = "", 
+                                    cedula: str = "") -> int:
+        """
+        Versión inteligente que recibe fecha_nacimiento en formato dd/mm/yyyy
+        """
         try:
             self._set_loading(True)
-            return self.repository.buscar_o_crear_paciente(nombre, apellido_paterno, apellido_materno, edad)
+            
+            # Convertir fecha si se proporciona
+            fecha_obj = None
+            if fecha_nacimiento:
+                from datetime import datetime
+                fecha_obj = datetime.strptime(fecha_nacimiento, '%d/%m/%Y').date()
+            
+            cedula_clean = cedula.strip() if cedula else None
+            
+            return self.repository.buscar_o_crear_paciente(
+                nombre, apellido_paterno, apellido_materno, fecha_obj, cedula_clean
+            )
         except ValidationError as ve:
             self.errorOccurred.emit("Datos inválidos", ve.message)
             return -1

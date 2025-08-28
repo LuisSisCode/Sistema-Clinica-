@@ -50,6 +50,11 @@ Item {
     property var analisisOriginales: []
     property var tiposAnalisisDB: []
     property var trabajadoresDB: []
+
+    // Seccion para selecionar pacientes
+    property int pacienteSeleccionadoIndex: -1
+    property bool panelPacientesVisible: false
+    property var pacienteSeleccionado: null
   
     // Distribución de columnas responsive
     readonly property real colId: 0.04
@@ -473,32 +478,52 @@ Item {
                             }
                             
                             onFocusChanged: {
-                                if (focus && text.length >= 2) {
-                                    patientOverlay.search(text)
+                                if (focus && nombrePaciente.text.length >= 2) {
+                                    buscarPacientes(nombrePaciente.text)
+                                } else if (!focus) {
+                                    // Usar timer para permitir la selección antes de cerrar
+                                    timerCerrarPanel.restart()
+                                }
+                            }
+                            Timer {
+                                id: timerCerrarPanel
+                                interval: 200
+                                onTriggered: {
+                                    if (!panelPacientes.focus && !nombrePaciente.focus) {
+                                        cerrarPanelPacientes()
+                                    }
                                 }
                             }
                             
                             Keys.onPressed: (event) => {
-                                if (patientOverlay.visible) {
+                                if (panelPacientesVisible) {
                                     if (event.key === Qt.Key_Down) {
                                         event.accepted = true
-                                        patientOverlay.navigateDown()
+                                        pacienteSeleccionadoIndex = Math.min(pacienteSeleccionadoIndex + 1, pacienteSearchResults.count - 1)
+                                        pacientesListView.currentIndex = pacienteSeleccionadoIndex
+                                        pacientesListView.positionViewAtIndex(pacienteSeleccionadoIndex, ListView.Contain)
                                     } else if (event.key === Qt.Key_Up) {
                                         event.accepted = true
-                                        patientOverlay.navigateUp()
+                                        pacienteSeleccionadoIndex = Math.max(pacienteSeleccionadoIndex - 1, 0)
+                                        pacientesListView.currentIndex = pacienteSeleccionadoIndex
+                                        pacientesListView.positionViewAtIndex(pacienteSeleccionadoIndex, ListView.Contain)
                                     } else if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
                                         event.accepted = true
-                                        patientOverlay.selectCurrent()
+                                        if (pacienteSeleccionadoIndex >= 0) {
+                                            seleccionarPaciente(pacienteSearchResults.get(pacienteSeleccionadoIndex))
+                                        }
                                     } else if (event.key === Qt.Key_Escape) {
                                         event.accepted = true
-                                        patientOverlay.close()
+                                        cerrarPanelPacientes()
                                     }
-                                } else if (event.key === Qt.Key_Down && text.length >= 2) {
+                                } else if (event.key === Qt.Key_Down && nombrePaciente.text.length >= 2) {
                                     event.accepted = true
-                                    patientOverlay.search(text)
-                                    patientOverlay.navigateDown()
+                                    buscarPacientes(nombrePaciente.text)
+                                    pacienteSeleccionadoIndex = 0
+                                    pacientesListView.currentIndex = 0
                                 }
                             }
+
                             Rectangle {
                                 anchors.right: parent.right
                                 anchors.rightMargin: baseUnit
@@ -574,43 +599,48 @@ Item {
                             }
                             
                             TextField {
-                                id: edadPaciente
-                                Layout.preferredWidth: baseUnit * 10
+                                id: fechaNacimientoPaciente
+                                Layout.preferredWidth: baseUnit * 15
                                 Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "0"
-                                validator: IntValidator { bottom: 0; top: 120 }
-                                font.pixelSize: fontBaseSize * 0.9
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                readOnly: pacienteAutocompletado
+                                placeholderText: "dd/mm/yyyy"
+                                inputMask: "99/99/9999"
                                 
-                                property bool pacienteAutocompletado: false
-                                
-                                background: Rectangle {
-                                    color: edadPaciente.pacienteAutocompletado ? "#F0F8FF" : whiteColor
-                                    border.color: borderColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.6
+                                // Calcular edad automáticamente
+                                property int edadCalculada: {
+                                    if (text.length === 10) {
+                                        var partes = text.split('/')
+                                        if (partes.length === 3) {
+                                            var fechaNac = new Date(partes[2], partes[1] - 1, partes[0])
+                                            var hoy = new Date()
+                                            var edad = hoy.getFullYear() - fechaNac.getFullYear()
+                                            if (hoy.getMonth() < fechaNac.getMonth() || 
+                                            (hoy.getMonth() === fechaNac.getMonth() && hoy.getDate() < fechaNac.getDate())) {
+                                                edad--
+                                            }
+                                            return edad
+                                        }
+                                    }
+                                    return 0
                                 }
                             }
-                            
+
                             Label {
-                                text: "años"
+                                text: fechaNacimientoPaciente.edadCalculada > 0 ? 
+                                    fechaNacimientoPaciente.edadCalculada + " años" : ""
                                 color: textColor
                                 font.pixelSize: fontBaseSize * 0.9
-                                font.family: "Segoe UI, Arial, sans-serif"
                             }
-                            
-                            Label {
-                                text: cedulaPaciente.text ? "CI: " + cedulaPaciente.text : ""
-                                color: textColor
-                                font.pixelSize: fontBaseSize * 0.8
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                visible: cedulaPaciente.text.length > 0
-                            }
-                            
+
+                            // Agregar campo cédula
                             TextField {
                                 id: cedulaPaciente
-                                visible: false
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                placeholderText: "Número de cédula (opcional)"
+                                validator: RegularExpressionValidator { 
+                                    regularExpression: /^[0-9]{5,10}$/ 
+                                }
+                                visible: true // Ahora visible
                             }
                             
                             Item { Layout.fillWidth: true }
@@ -942,31 +972,34 @@ Item {
         id: panelPacientesOverlay
         anchors.fill: parent
         color: "transparent"
-        visible: pacienteSearchResults.count > 0 && nombrePaciente.activeFocus
+        visible: panelPacientesVisible && pacienteSearchResults.count > 0
         z: 1000
         
+        // MouseArea para cerrar al hacer clic fuera
         MouseArea {
             anchors.fill: parent
             onClicked: cerrarPanelPacientes()
         }
         
+        // Panel de resultados de búsqueda
         Rectangle {
             id: panelPacientes
             x: nombrePaciente.x
-            y: nombrePaciente.y + nombrePaciente.height + 5
+            y: nombrePaciente.y + nombrePaciente.height + 2
             width: nombrePaciente.width
-            height: Math.min(200, pacienteSearchResults.count * 35 + 30)
+            height: Math.min(200, pacienteSearchResults.count * 50 + 30)
             
             color: whiteColor
             border.color: primaryColor
             border.width: 2
             radius: baseUnit * 0.5
             
+            // Sombra
             Rectangle {
                 anchors.fill: parent
-                anchors.topMargin: 3
-                anchors.leftMargin: 3
-                color: "#00000015"
+                anchors.topMargin: 2
+                anchors.leftMargin: 2
+                color: "#40000000"
                 radius: parent.radius
                 z: -1
             }
@@ -983,68 +1016,88 @@ Item {
                     font.bold: true
                 }
                 
-                ScrollView {
+                ListView {
+                    id: pacientesListView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    model: pacienteSearchResults
                     clip: true
+                    currentIndex: pacienteSeleccionadoIndex
                     
-                    ListView {
-                        model: pacienteSearchResults
+                    delegate: Rectangle {
+                        width: pacientesListView.width
+                        height: 45
+                        color: {
+                            if (ListView.isCurrentItem) return "#E3F2FD"
+                            if (mouseArea.containsMouse) return "#F8F9FA"
+                            return "transparent"
+                        }
                         
-                        delegate: Rectangle {
-                            width: ListView.view ? ListView.view.width : 0
-                            height: 30
-                            color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
-                            radius: baseUnit * 0.25
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: baseUnit * 0.5
+                            spacing: baseUnit * 0.5
                             
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: baseUnit * 0.5
-                                spacing: baseUnit * 0.5
+                            Rectangle {
+                                width: baseUnit * 2
+                                height: baseUnit * 2
+                                radius: width / 2
+                                color: primaryColor
                                 
-                                Rectangle {
-                                    width: baseUnit * 2
-                                    height: baseUnit * 2
-                                    radius: width / 2
-                                    color: primaryColor
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: model.nombre ? model.nombre.charAt(0).toUpperCase() : "?"
-                                        color: whiteColor
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.7
-                                    }
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: model.nombre ? model.nombre.charAt(0).toUpperCase() : "?"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize * 0.7
                                 }
+                            }
+                            
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
                                 
-                                ColumnLayout {
+                                Label {
+                                    text: model.nombre_completo || (model.nombre + " " + model.apellido_paterno)
+                                    color: textColor
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    font.bold: true
                                     Layout.fillWidth: true
-                                    spacing: 1
-                                    
-                                    Label {
-                                        text: model.nombre_completo || (model.nombre + " " + model.apellido_paterno)
-                                        color: textColor
-                                        font.pixelSize: fontBaseSize * 0.8
-                                        font.bold: true
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                    }
-                                    
-                                    Label {
-                                        text: "CI: " + (model.cedula || "Sin cédula") + " - " + (model.edad || 0) + " años"
-                                        color: textColorLight
-                                        font.pixelSize: fontBaseSize * 0.65
-                                    }
+                                    elide: Text.ElideRight
+                                }
+                                
+                                Label {
+                                    text: "CI: " + (model.cedula || "Sin cédula") + " - " + (model.edad || 0) + " años"
+                                    color: textColorLight
+                                    font.pixelSize: fontBaseSize * 0.65
                                 }
                             }
+                        }
+                        
+                        MouseArea {
+                            id: mouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
                             
-                            MouseArea {
-                                id: mouseArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                
-                                onClicked: seleccionarPaciente(model)
+                            onClicked: {
+                                pacienteSeleccionadoIndex = index
+                                seleccionarPaciente(model)
                             }
+                            
+                            onEntered: {
+                                pacienteSeleccionadoIndex = index
+                            }
+                        }
+                    }
+                    
+                    highlight: Rectangle {
+                        color: "#E3F2FD"
+                        radius: baseUnit * 0.25
+                    }
+                    
+                    Keys.onReturnPressed: {
+                        if (pacienteSeleccionadoIndex >= 0) {
+                            seleccionarPaciente(pacienteSearchResults.get(pacienteSeleccionadoIndex))
                         }
                     }
                 }
@@ -1336,7 +1389,7 @@ Item {
         apellidoMaterno.pacienteAutocompletado = false
         edadPaciente.pacienteAutocompletado = false
         
-        patientOverlay.close()
+        cerrarPanelPacientes()
         nombrePaciente.forceActiveFocus()
     }
     
@@ -1351,7 +1404,7 @@ Item {
         apellidoMaterno.pacienteAutocompletado = false
         edadPaciente.pacienteAutocompletado = false
         
-        patientOverlay.close()
+        cerrarPanelPacientes()
         nombrePaciente.forceActiveFocus()
     }
     
@@ -1627,30 +1680,52 @@ Item {
         return false
     }
     function buscarPacientes(termino) {
-    pacienteSearchResults.clear()
-    
-    if (!termino || termino.length < 2) return
-    if (!pacienteModel) return
-    
-    pacienteModel.buscarSugerenciasPacientes(termino)
+        pacienteSearchResults.clear()
+        pacienteSeleccionadoIndex = -1
+        
+        if (!termino || termino.length < 2) {
+            panelPacientesVisible = false
+            return
+        }
+        
+        if (!pacienteModel) {
+            console.log("❌ pacienteModel no disponible para búsqueda")
+            panelPacientesVisible = false
+            return
+        }
+        
+        panelPacientesVisible = true
+        pacienteModel.buscarSugerenciasPacientes(termino)
     }
 
     function seleccionarPaciente(pacienteData) {
-        nombrePaciente.text = pacienteData.nombre
-        apellidoPaterno.text = pacienteData.apellido_paterno
-        apellidoMaterno.text = pacienteData.apellido_materno
-        edadPaciente.text = pacienteData.edad.toString()
+        nombrePaciente.text = pacienteData.nombre || ""
+        apellidoPaterno.text = pacienteData.apellido_paterno || ""
+        apellidoMaterno.text = pacienteData.apellido_materno || ""
+        
+        // Convertir fecha_nacimiento a formato dd/mm/yyyy
+        if (pacienteData.fecha_nacimiento) {
+            var fecha = new Date(pacienteData.fecha_nacimiento)
+            var dia = fecha.getDate().toString().padStart(2, '0')
+            var mes = (fecha.getMonth() + 1).toString().padStart(2, '0')
+            var año = fecha.getFullYear()
+            fechaNacimientoPaciente.text = dia + "/" + mes + "/" + año
+        }
+        
         cedulaPaciente.text = pacienteData.cedula || ""
         
+        // Marcar como autocompletado
         apellidoPaterno.pacienteAutocompletado = true
         apellidoMaterno.pacienteAutocompletado = true
-        edadPaciente.pacienteAutocompletado = true
+        fechaNacimientoPaciente.pacienteAutocompletado = true
         
         cerrarPanelPacientes()
         tipoAnalisisCombo.forceActiveFocus()
     }
 
     function cerrarPanelPacientes() {
+        panelPacientesVisible = false
         pacienteSearchResults.clear()
+        pacienteSeleccionadoIndex = -1
     }
 }

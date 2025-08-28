@@ -105,7 +105,7 @@ class ConsultaRepository(BaseRepository):
             p.Nombre as paciente_nombre,
             p.Apellido_Paterno as paciente_apellido_paterno,
             p.Apellido_Materno as paciente_apellido_materno,
-            p.Edad as paciente_edad,
+            dbo.fn_CalcularEdad(p.Fecha_Nacimiento) as paciente_edad,
             -- Especialidad/Servicio
             e.Nombre as especialidad_nombre,
             e.Precio_Normal, e.Precio_Emergencia,
