@@ -13,6 +13,9 @@ Popup {
     // Propiedades de posicionamiento
     property Item targetTextField: null
     
+    // Cache de búsquedas
+    property var searchCache: ({})
+    property int maxCacheSize: 20
     // Colores y dimensiones
     readonly property real baseUnit: 8
     readonly property color borderColor: "#e0e0e0"
@@ -94,13 +97,14 @@ Popup {
                 spacing: 8
                 
                 Text {
-                    text: "👤"
+                    text: searchTimer.running ? "🔄" : "👤"
                     font.pixelSize: 16
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 
                 Text {
                     text: {
+                        if (searchTimer.running) return "Buscando..."
                         if (suggestionsModel.count === 0 && currentSearchTerm.length >= 2) 
                             return "No se encontraron pacientes"
                         else 
@@ -257,6 +261,18 @@ Popup {
                     }
                 }
             }
+            onVisibleChanged: {
+                if (visible && suggestionsModel.count > 0) {
+                    selectedIndex = 0
+                    suggestionsList.currentIndex = 0
+                    suggestionsList.forceActiveFocus()
+                }
+            }
+            Keys.onReturnPressed: {
+                if (selectedIndex >= 0 && selectedIndex < suggestionsModel.count) {
+                    selectPatient(selectedIndex)
+                }
+            }
         }
         
         // Panel para agregar nuevo paciente cuando no hay resultados
@@ -311,23 +327,32 @@ Popup {
         }
     }
     
+    
     // Conexiones con el modelo
     Connections {
         target: pacienteModel
         function onSugerenciasPacientesDisponibles(sugerencias) {
             suggestionsModel.clear()
             
+            // Guardar en cache
+            if (currentSearchTerm.length >= 2) {
+                searchCache[currentSearchTerm] = sugerencias.slice(0, 8)
+                // Limpiar cache si es muy grande
+                if (Object.keys(searchCache).length > maxCacheSize) {
+                    var keys = Object.keys(searchCache)
+                    delete searchCache[keys[0]]
+                }
+            }
+            
             for (var i = 0; i < Math.min(sugerencias.length, 8); i++) {
                 suggestionsModel.append(sugerencias[i])
             }
             
             selectedIndex = suggestionsModel.count > 0 ? 0 : -1
-            
             if (suggestionsList) {
                 suggestionsList.currentIndex = selectedIndex
             }
             
-            // Mostrar overlay si hay resultados o si no hay pero el término es válido
             if (suggestionsModel.count > 0 || currentSearchTerm.length >= 2) {
                 open()
             } else {
@@ -362,6 +387,7 @@ Popup {
         }
     }
     
+    
     // Funciones principales
     function search(term) {
         currentSearchTerm = term
@@ -369,6 +395,13 @@ Popup {
         
         if (term.length >= 2) {
             if (pacienteModel) {
+                // Verificar cache primero
+                if (searchCache[term]) {
+                    console.log("💾 Usando cache para:", term)
+                    _loadFromCache(term)
+                    return
+                }
+                
                 console.log("📞 Llamando buscarSugerenciasPacientes...")
                 searchTimer.restart()
                 open()
@@ -381,6 +414,16 @@ Popup {
             close()
         }
     }
+
+    function _loadFromCache(term) {
+        var cachedResults = searchCache[term]
+        suggestionsModel.clear()
+        for (var i = 0; i < cachedResults.length; i++) {
+            suggestionsModel.append(cachedResults[i])
+        }
+        selectedIndex = 0
+        open()
+}
     
     function selectPatient(index) {
         if (index < 0 || index >= suggestionsModel.count) return
@@ -399,6 +442,7 @@ Popup {
         })
         
         close()
+        console.log("✅ Paciente enviado:", patient.nombre_completo)
     }
     
     // Navegación con flechas externa

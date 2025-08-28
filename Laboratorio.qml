@@ -466,9 +466,9 @@ Item {
                             
                             onTextChanged: {
                                 if (text.length >= 2) {
-                                    patientOverlay.search(text)
+                                    buscarPacientes(text)
                                 } else {
-                                    patientOverlay.close()
+                                    cerrarPanelPacientes()
                                 }
                             }
                             
@@ -497,6 +497,24 @@ Item {
                                     event.accepted = true
                                     patientOverlay.search(text)
                                     patientOverlay.navigateDown()
+                                }
+                            }
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: baseUnit
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: baseUnit
+                                height: baseUnit
+                                radius: width / 2
+                                color: text.length >= 2 ? "#10B981" : "#F87171"
+                                visible: text.length > 0
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: parent.color === "#10B981" ? "✓" : "✗"
+                                    color: "white"
+                                    font.bold: true
+                                    font.pixelSize: baseUnit * 0.6
                                 }
                             }
                         }
@@ -883,11 +901,13 @@ Item {
                             if (isCreatingExam) return "Procesando..."
                             return isEditMode ? "Actualizar" : "Guardar"
                         }
-                        enabled: labTestForm.selectedTipoAnalisisIndex >= 0 && 
-                            nombrePaciente.text.length >= 2 && 
-                            apellidoPaterno.text.length >= 2 &&
-                            edadPaciente.text.length > 0 && 
-                            !isCreatingExam
+                        enabled:labTestForm.selectedTipoAnalisisIndex >= 0 && 
+                                nombrePaciente.text.length >= 2 && 
+                                apellidoPaterno.text.length >= 1 &&
+                                edadPaciente.text.length > 0 && 
+                                parseInt(edadPaciente.text) > 0 &&
+                                parseInt(edadPaciente.text) <= 120 &&
+                                !isCreatingExam
                         Layout.preferredHeight: baseUnit * 4
                         
                         background: Rectangle {
@@ -917,53 +937,123 @@ Item {
         }
     }
 
-    // Overlay de búsqueda de pacientes
-    PatientSearchOverlay {
-        id: patientOverlay
-        pacienteModel: laboratorioRoot.pacienteModel
-        parent: labTestForm
-        x: nombrePaciente.x
-        y: nombrePaciente.y + nombrePaciente.height + 5
-        width: nombrePaciente.width
-        z: 2000
+    // Panel de búsqueda integrado (como CrearVenta.qml)
+    Rectangle {
+        id: panelPacientesOverlay
+        anchors.fill: parent
+        color: "transparent"
+        visible: pacienteSearchResults.count > 0 && nombrePaciente.activeFocus
+        z: 1000
         
-        onPatientSelected: function(patientData) {
-            console.log("Paciente seleccionado:", patientData.nombre_completo)
-            
-            // Auto-completar campos
-            nombrePaciente.text = patientData.nombre
-            apellidoPaterno.text = patientData.apellido_paterno
-            apellidoMaterno.text = patientData.apellido_materno
-            edadPaciente.text = patientData.edad.toString()
-            cedulaPaciente.text = patientData.cedula || ""
-            
-            // Marcar como autocompletado
-            apellidoPaterno.pacienteAutocompletado = true
-            apellidoMaterno.pacienteAutocompletado = true
-            edadPaciente.pacienteAutocompletado = true
-            
-            // Focus al siguiente campo
-            tipoAnalisisCombo.forceActiveFocus()
-            
-            showSuccessMessage("Paciente seleccionado: " + patientData.nombre_completo)
+        MouseArea {
+            anchors.fill: parent
+            onClicked: cerrarPanelPacientes()
         }
         
-        onNewPatientRequested: function(searchTerm) {
-            var partes = searchTerm.split(' ')
-            var nombre = partes[0] || ""
-            var apellidoP = partes[1] || ""
-            var apellidoM = partes.length > 2 ? partes.slice(2).join(' ') : ""
+        Rectangle {
+            id: panelPacientes
+            x: nombrePaciente.x
+            y: nombrePaciente.y + nombrePaciente.height + 5
+            width: nombrePaciente.width
+            height: Math.min(200, pacienteSearchResults.count * 35 + 30)
             
-            nombrePaciente.text = nombre
-            apellidoPaterno.text = apellidoP
-            apellidoMaterno.text = apellidoM
+            color: whiteColor
+            border.color: primaryColor
+            border.width: 2
+            radius: baseUnit * 0.5
             
-            apellidoPaterno.pacienteAutocompletado = false
-            apellidoMaterno.pacienteAutocompletado = false
-            edadPaciente.pacienteAutocompletado = false
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 3
+                anchors.leftMargin: 3
+                color: "#00000015"
+                radius: parent.radius
+                z: -1
+            }
             
-            edadPaciente.forceActiveFocus()
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: baseUnit * 0.5
+                spacing: baseUnit * 0.25
+                
+                Label {
+                    text: "👥 " + pacienteSearchResults.count + " pacientes encontrados"
+                    font.pixelSize: fontBaseSize * 0.75
+                    color: textColorLight
+                    font.bold: true
+                }
+                
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    
+                    ListView {
+                        model: pacienteSearchResults
+                        
+                        delegate: Rectangle {
+                            width: ListView.view ? ListView.view.width : 0
+                            height: 30
+                            color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
+                            radius: baseUnit * 0.25
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: baseUnit * 0.5
+                                spacing: baseUnit * 0.5
+                                
+                                Rectangle {
+                                    width: baseUnit * 2
+                                    height: baseUnit * 2
+                                    radius: width / 2
+                                    color: primaryColor
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: model.nombre ? model.nombre.charAt(0).toUpperCase() : "?"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.7
+                                    }
+                                }
+                                
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+                                    
+                                    Label {
+                                        text: model.nombre_completo || (model.nombre + " " + model.apellido_paterno)
+                                        color: textColor
+                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    
+                                    Label {
+                                        text: "CI: " + (model.cedula || "Sin cédula") + " - " + (model.edad || 0) + " años"
+                                        color: textColorLight
+                                        font.pixelSize: fontBaseSize * 0.65
+                                    }
+                                }
+                            }
+                            
+                            MouseArea {
+                                id: mouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                
+                                onClicked: seleccionarPaciente(model)
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    ListModel {
+        id: pacienteSearchResults
     }
 
     // ===== FUNCIONES JAVASCRIPT =====
@@ -1119,6 +1209,8 @@ Item {
             if (exito) {
                 showSuccessMessage(mensaje)
                 limpiarYCerrarDialogo()
+                // Auto-limpiar después de éxito
+                Qt.callLater(clearAllFields)
             } else {
                 showErrorMessage(mensaje)
             }
@@ -1442,6 +1534,10 @@ Item {
         
         console.log("📱 Elementos por página calculados:", itemsPerPageLaboratorio)
         console.log("👥 PacienteModel disponible:", modeloConectado)
+        if (typeof window !== 'undefined' && window.pacienteModelGlobal) {
+            pacienteModel = window.pacienteModelGlobal
+            console.log("✅ Modelo global encontrado")
+        }
     }
     
     function showSuccessMessage(mensaje) {
@@ -1488,9 +1584,9 @@ Item {
         enabled: !!pacienteModel
         
         function onSugerenciasPacientesDisponibles(sugerencias) {
-            console.log("🔍 Sugerencias recibidas:", sugerencias.length, "pacientes")
-            if (sugerencias.length > 0) {
-                console.log("📋 Primer paciente:", sugerencias[0].nombre)
+            pacienteSearchResults.clear()
+            for (var i = 0; i < Math.min(sugerencias.length, 8); i++) {
+                pacienteSearchResults.append(sugerencias[i])
             }
         }
         
@@ -1508,32 +1604,53 @@ Item {
         trabajadorCombo.model = trabajadorCombo.model;
     }
     function conectarModelos() {
-            // Intentar múltiples rutas de conexión
-            console.log("🔍 Intentando conectar PacienteModel...")
-            
-            if (typeof appController !== 'undefined') {
-                console.log("✅ AppController disponible")
-                
-                // Ruta 1: paciente_model_instance  
-                if (appController.paciente_model_instance) {
-                    pacienteModel = appController.paciente_model_instance
-                    console.log("✅ PacienteModel conectado vía paciente_model_instance")
-                    return true
-                }
-                
-                // Ruta 2: pacienteModel (alternativo)
-                if (appController.pacienteModel) {
-                    pacienteModel = appController.pacienteModel
-                    console.log("✅ PacienteModel conectado vía pacienteModel")
-                    return true
-                }
-                
-                console.log("❌ Propiedades disponibles en appController:")
-                console.log("- paciente_model_instance:", typeof appController.paciente_model_instance)
-                console.log("- pacienteModel:", typeof appController.pacienteModel)
-            }
-            
-            console.log("❌ No se pudo conectar PacienteModel")
-            return false
+        console.log("🔍 Intentando conectar PacienteModel...")
+        
+        // Método directo usando el contexto global
+        if (typeof pacienteModel !== 'undefined' && pacienteModel) {
+            console.log("✅ PacienteModel ya disponible globalmente")
+            return true
         }
+        
+        // Buscar en el engine QML
+        try {
+            pacienteModel = Qt.createQmlObject('import ClinicaModels 1.0; PacienteModel {}', laboratorioRoot)
+            if (pacienteModel) {
+                console.log("✅ PacienteModel creado desde QML")
+                return true
+            }
+        } catch (e) {
+            console.log("⚠️ No se pudo crear desde QML:", e)
+        }
+        
+        console.log("❌ No se pudo conectar PacienteModel")
+        return false
+    }
+    function buscarPacientes(termino) {
+    pacienteSearchResults.clear()
+    
+    if (!termino || termino.length < 2) return
+    if (!pacienteModel) return
+    
+    pacienteModel.buscarSugerenciasPacientes(termino)
+    }
+
+    function seleccionarPaciente(pacienteData) {
+        nombrePaciente.text = pacienteData.nombre
+        apellidoPaterno.text = pacienteData.apellido_paterno
+        apellidoMaterno.text = pacienteData.apellido_materno
+        edadPaciente.text = pacienteData.edad.toString()
+        cedulaPaciente.text = pacienteData.cedula || ""
+        
+        apellidoPaterno.pacienteAutocompletado = true
+        apellidoMaterno.pacienteAutocompletado = true
+        edadPaciente.pacienteAutocompletado = true
+        
+        cerrarPanelPacientes()
+        tipoAnalisisCombo.forceActiveFocus()
+    }
+
+    function cerrarPanelPacientes() {
+        pacienteSearchResults.clear()
+    }
 }
