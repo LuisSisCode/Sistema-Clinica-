@@ -466,9 +466,9 @@ Item {
                             
                             onTextChanged: {
                                 if (text.length >= 2) {
-                                    patientOverlay.search(text)
+                                    buscarPacientes(text)
                                 } else {
-                                    patientOverlay.close()
+                                    cerrarPanelPacientes()
                                 }
                             }
                             
@@ -937,7 +937,6 @@ Item {
         }
     }
 
-    // Overlay de búsqueda de pacientes
     // Panel de búsqueda integrado (como CrearVenta.qml)
     Rectangle {
         id: panelPacientesOverlay
@@ -1585,9 +1584,9 @@ Item {
         enabled: !!pacienteModel
         
         function onSugerenciasPacientesDisponibles(sugerencias) {
-            console.log("🔍 Sugerencias recibidas:", sugerencias.length, "pacientes")
-            if (sugerencias.length > 0) {
-                console.log("📋 Primer paciente:", sugerencias[0].nombre)
+            pacienteSearchResults.clear()
+            for (var i = 0; i < Math.min(sugerencias.length, 8); i++) {
+                pacienteSearchResults.append(sugerencias[i])
             }
         }
         
@@ -1626,5 +1625,32 @@ Item {
         
         console.log("❌ No se pudo conectar PacienteModel")
         return false
-}
+    }
+    function buscarPacientes(termino) {
+    pacienteSearchResults.clear()
+    
+    if (!termino || termino.length < 2) return
+    if (!pacienteModel) return
+    
+    pacienteModel.buscarSugerenciasPacientes(termino)
+    }
+
+    function seleccionarPaciente(pacienteData) {
+        nombrePaciente.text = pacienteData.nombre
+        apellidoPaterno.text = pacienteData.apellido_paterno
+        apellidoMaterno.text = pacienteData.apellido_materno
+        edadPaciente.text = pacienteData.edad.toString()
+        cedulaPaciente.text = pacienteData.cedula || ""
+        
+        apellidoPaterno.pacienteAutocompletado = true
+        apellidoMaterno.pacienteAutocompletado = true
+        edadPaciente.pacienteAutocompletado = true
+        
+        cerrarPanelPacientes()
+        tipoAnalisisCombo.forceActiveFocus()
+    }
+
+    function cerrarPanelPacientes() {
+        pacienteSearchResults.clear()
+    }
 }
