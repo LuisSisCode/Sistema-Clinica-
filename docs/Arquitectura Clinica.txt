@@ -74,8 +74,7 @@ clinica_app/
 │   │   ├── LaboratoryTable.qml                  
 │   │   └── LaboratoryPagination.qml                              
 │   │
-│   └── shared/                                  
-│       ├── AutoCompleteTextField.qml            
+│   └── shared/                                             
 │       └── PatientSearchOverlay.qml             
 ├── Enfermeria.qml
 ├── ServiciosBasicos.qml
