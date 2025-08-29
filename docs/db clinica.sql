@@ -36,7 +36,7 @@ CREATE TABLE Pacientes (
     Nombre VARCHAR(100) NOT NULL,
     Apellido_Paterno VARCHAR(100) NOT NULL,
     Apellido_Materno VARCHAR(100) NOT NULL,
-    Edad INT NOT NULL CHECK (Edad >= 0 AND Edad <= 120)
+    Cedula VARCHAR(20) NOT NULL
 );
 
 -- Tabla Doctores
