@@ -37,6 +37,7 @@ CREATE TABLE Pacientes (
     Apellido_Paterno VARCHAR(100) NOT NULL,
     Apellido_Materno VARCHAR(100) NOT NULL,
     Cedula VARCHAR(50) NOT NULL UNIQUE CHECK (LEN(Cedula) >= 5 AND Cedula LIKE '%[0-9]%[0-9]%[0-9]%[0-9]%[0-9]%')
+
 );
 
 -- Tabla Doctores

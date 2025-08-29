@@ -20,6 +20,7 @@ from backend.models.gasto_model import GastoModel, register_gasto_model
 from backend.models.paciente_model import PacienteModel, register_paciente_model
 from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
 from backend.models.trabajador_model import TrabajadorModel, register_trabajador_model
+from backend.models.enfermeria_model import EnfermeriaModel, register_enfermeria_model
 
 
 class NotificationWorker(QObject):
@@ -64,7 +65,8 @@ class AppController(QObject):
         self.usuario_model = None
         self.laboratorio_model = None
         self.gasto_model = None
-        self.trabajador_model = None  # ✅ AGREGAR TRABAJADOR MODEL
+        self.trabajador_model = None 
+        self.enfermeria_model = None
 
         
     # ===============================
@@ -85,10 +87,9 @@ class AppController(QObject):
             self.paciente_model = PacienteModel()
             self.usuario_model = UsuarioModel()
             self.gasto_model = GastoModel()
-
             self.laboratorio_model = LaboratorioModel()
-
-            self.trabajador_model = TrabajadorModel()  # ✅ INICIALIZAR TRABAJADOR MODEL
+            self.trabajador_model = TrabajadorModel()  
+            self.enfermeria_model = EnfermeriaModel()
             
 
             # Conectar signals entre models
@@ -161,6 +162,16 @@ class AppController(QObject):
                 self.gasto_model.gastoActualizado.connect(self._on_gasto_actualizado)
                 self.gasto_model.gastoEliminado.connect(self._on_gasto_eliminado)
                 print("🔗 GastoModel conectado correctamente")
+            # ✅ CONECTAR ENFERMERIA MODEL
+            if self.enfermeria_model:
+                self.enfermeria_model.errorOccurred.connect(self._on_model_error)
+                self.enfermeria_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del EnfermeriaModel
+                self.enfermeria_model.procedimientoCreado.connect(self._on_procedimiento_creado)
+                self.enfermeria_model.procedimientoActualizado.connect(self._on_procedimiento_actualizado)
+                self.enfermeria_model.procedimientoEliminado.connect(self._on_procedimiento_eliminado)
+                print("🔗 EnfermeriaModel conectado correctamente")
             
             
         except Exception as e:
@@ -203,6 +214,10 @@ class AppController(QObject):
                     # ✅ ESTABLECER PARA TRABAJADORMODEL (si lo necesita en el futuro)
                     if self.trabajador_model:
                         print(f"👷‍♂️ TrabajadorModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    # ✅ ESTABLECER PARA ENFERMERIAMODEL - AGREGAR AQUÍ
+                    if self.enfermeria_model:
+                        self.enfermeria_model.set_usuario_actual(usuario_id)
+                        print(f"🩹 EnfermeriaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
                 else:
                     print("⚠️ Usuario administrador no tiene ID válido")
             else:
@@ -225,6 +240,9 @@ class AppController(QObject):
         # AGREGAR:
         if self.consulta_model:
             self.consulta_model.set_usuario_actual(10)
+            
+        if self.enfermeria_model:
+            self.enfermeria_model.set_usuario_actual(10)
     
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
@@ -302,13 +320,44 @@ class AppController(QObject):
         else:
             print(f"❌ Error eliminando trabajador: {message}")
             self.showNotification("Error", f"Error eliminando trabajador: {message}")
-    
+    # ✅ HANDLERS PARA ENFERMERIA MODEL
+    @Slot(bool, str)
+    def _on_procedimiento_creado(self, success: bool, message: str):
+        """Handler cuando se crea un procedimiento"""
+        if success:
+            print(f"🩹 Procedimiento creado exitosamente: {message}")
+            self.showNotification("Procedimiento Creado", message)
+        else:
+            print(f"❌ Error creando procedimiento: {message}")
+            self.showNotification("Error", f"Error creando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_procedimiento_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un procedimiento"""
+        if success:
+            print(f"✏️ Procedimiento actualizado exitosamente: {message}")
+            self.showNotification("Procedimiento Actualizado", message)
+        else:
+            print(f"❌ Error actualizando procedimiento: {message}")
+            self.showNotification("Error", f"Error actualizando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_procedimiento_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un procedimiento"""
+        if success:
+            print(f"🗑️ Procedimiento eliminado exitosamente: {message}")
+            self.showNotification("Procedimiento Eliminado", message)
+        else:
+            print(f"❌ Error eliminando procedimiento: {message}")
+            self.showNotification("Error", f"Error eliminando procedimiento: {message}")
+
+    # ← SACAR ESTOS MÉTODOS FUERA, AL NIVEL DE LA CLASE
     @Slot(str)
     def _on_model_error(self, mensaje: str):
         """Handler para errores de models"""
         print(f"❌ Error Model: {mensaje}")
         self.showNotification("Error", mensaje)
-    
+
     @Slot(str)
     def _on_model_success(self, mensaje: str):
         """Handler para operaciones exitosas"""
@@ -364,7 +413,11 @@ class AppController(QObject):
     def trabajador_model_instance(self):
         """Propiedad para acceder al TrabajadorModel desde QML"""
         return self.trabajador_model
-
+    
+    @Property(QObject, notify=modelsReady)
+    def enfermeria_model_instance(self):
+        """Propiedad para acceder al EnfermeriaModel desde QML"""
+        return self.enfermeria_model
     
     # ===============================
     # MÉTODOS DE INTEGRACIÓN MODELS-PDF
@@ -757,12 +810,9 @@ def register_qml_types():
         register_consulta_model()
         register_gasto_model()
         register_paciente_model()
-
         register_laboratorio_model()
-
-        register_trabajador_model()  # ✅ AGREGAR TRABAJADOR MODEL
-        
-
+        register_trabajador_model()
+        register_enfermeria_model()
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:

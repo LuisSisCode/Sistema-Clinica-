@@ -39,21 +39,17 @@ ApplicationWindow {
     property bool farmaciaExpanded: false
     property int farmaciaSubsection: 0
     
-    // PROPIEDADES DE NOTIFICACIONES (mantener)
-    property bool notificationPanelOpen: false
-    property var notificaciones: []
-    property int totalNotificaciones: 0
-    property var fechaActual: new Date()
     
     Universal.theme: Universal.Light
     Universal.accent: primaryColor
     Universal.background: lightGrayColor
     Universal.foreground: textColor
     
-    // HEADER ADAPTATIVO
+    // HEADER ADAPTATIVO MEJORADO
     header: ToolBar {
         objectName: "mainToolBar"
-        height: Math.max(60, baseUnit * 8) // Altura escalable con mínimo
+        // PASO 1: Aumentar altura mínima del header
+        height: Math.max(70, baseUnit * 9) // Incrementado de 60 a 70, y de 8 a 9
         
         background: Rectangle {
             gradient: Gradient {
@@ -66,26 +62,35 @@ ApplicationWindow {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: baseUnit * 2
-            spacing: baseUnit * 2
+            // PASO 2: Reducir márgenes laterales para aprovechar mejor el espacio
+            anchors.leftMargin: baseUnit * 1.5  // Reducido de baseUnit * 2
+            anchors.rightMargin: baseUnit * 1.5 // Reducido de baseUnit * 2
+            anchors.topMargin: baseUnit * 1.2
+            anchors.bottomMargin: baseUnit * 1.2
+            spacing: baseUnit * 1.5 // Reducido para optimizar espacio
             
             // BOTÓN DE MENÚ ADAPTATIVO
             RoundButton {
                 objectName: "menuToggleButton"
-                Layout.preferredWidth: baseUnit * 5
-                Layout.preferredHeight: baseUnit * 5
+                // PASO 3: Ajustar tamaño del botón menú
+                Layout.preferredWidth: baseUnit * 6   // Incrementado de 5 a 6
+                Layout.preferredHeight: baseUnit * 6  // Incrementado de 5 a 6
+                Layout.alignment: Qt.AlignVCenter
                 text: "☰"
                 
                 background: Rectangle {
                     color: whiteColor
-                    radius: baseUnit
+                    radius: baseUnit * 1.2
+                    // Añadir sombra sutil
+                    border.color: "#10000000"
+                    border.width: 1
                 }
                 
                 contentItem: Label {
                     text: parent.text
                     color: primaryColor
                     font.bold: true
-                    font.pixelSize: fontBaseSize * 1.2
+                    font.pixelSize: fontBaseSize * 1.4 // Ligeramente más grande
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -96,29 +101,33 @@ ApplicationWindow {
                 }
             }
             
-            // BREADCRUMB ADAPTATIVO
+            // BREADCRUMB ADAPTATIVO MEJORADO
             RowLayout {
-                spacing: baseUnit
+                Layout.fillWidth: false // Cambiado para no expandirse demasiado
+                Layout.preferredWidth: Math.min(400, mainWindow.width * 0.3) // Limitar ancho máximo
+                spacing: baseUnit * 0.8
                 
                 Label {
-                    text: "🏠"
+                    text: "🏥"
                     color: whiteColor
-                    font.pixelSize: fontBaseSize
+                    font.pixelSize: fontBaseSize * 1.1
                 }
                 
                 Label {
                     text: "Clínica María Inmaculada"
                     color: whiteColor
-                    font.pixelSize: fontBaseSize * 0.9
-                    // En pantallas pequeñas, acortar el texto
-                    visible: parent.parent.width > 600
+                    font.pixelSize: fontBaseSize * 0.95
+                    // PASO 4: Mejorar responsividad del texto
+                    visible: mainWindow.width > 800 // Cambiado de 600 a 800
+                    elide: Text.ElideRight
+                    Layout.maximumWidth: 200
                 }
                 
                 Label {
                     text: ">"
                     color: whiteColor
-                    font.pixelSize: fontBaseSize * 0.8
-                    visible: parent.parent.width > 600
+                    font.pixelSize: fontBaseSize * 0.9
+                    visible: mainWindow.width > 800
                 }
                 
                 Label {
@@ -126,490 +135,117 @@ ApplicationWindow {
                     text: getCurrentPageName()
                     color: whiteColor
                     font.bold: true
-                    font.pixelSize: fontBaseSize * 0.9
+                    font.pixelSize: fontBaseSize * 0.95
+                    elide: Text.ElideRight
+                    Layout.maximumWidth: 150
                 }
             }
             
-            Item { Layout.fillWidth: true }
-            
-            // BOTÓN DE NOTIFICACIONES ADAPTATIVO
-            RoundButton {
-                id: notificationButton
-                objectName: "notificationButton"
-                Layout.preferredWidth: baseUnit * 5
-                Layout.preferredHeight: baseUnit * 5
-                text: "🔔"
-                
-                background: Rectangle {
-                    color: notificationButton.pressed ? Qt.darker(whiteColor, 1.1) : whiteColor
-                    radius: baseUnit
-                    border.color: totalNotificaciones > 0 ? dangerColor : "transparent"
-                    border.width: totalNotificaciones > 0 ? 2 : 0
-                    
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                }
-                
-                contentItem: Label {
-                    text: parent.text
-                    color: primaryColor
-                    font.pixelSize: fontBaseSize * 1.1
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    
-                    SequentialAnimation on scale {
-                        running: totalNotificaciones > 0
-                        loops: Animation.Infinite
-                        NumberAnimation { to: 1.1; duration: 800 }
-                        NumberAnimation { to: 1.0; duration: 800 }
-                    }
-                }
-                
-                // Badge adaptativo
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.right: parent.right
-                    anchors.margins: -baseUnit * 0.25
-                    width: baseUnit * 2.5
-                    height: baseUnit * 2.5
-                    color: totalNotificaciones > 0 ? dangerColor : "transparent"
-                    radius: baseUnit * 1.25
-                    visible: totalNotificaciones > 0
-                    
-                    Label {
-                        anchors.centerIn: parent
-                        text: totalNotificaciones > 99 ? "99+" : totalNotificaciones.toString()
-                        color: whiteColor
-                        font.pixelSize: totalNotificaciones > 99 ? fontBaseSize * 0.6 : fontBaseSize * 0.8
-                        font.bold: true
-                    }
-                    
-                    Behavior on opacity { NumberAnimation { duration: 300 } }
-                }
-                
-                onClicked: {
-                    actualizarNotificaciones()
-                    notificationPanelOpen = !notificationPanelOpen
-                }
+            // PASO 5: Espaciador flexible optimizado
+            Item { 
+                Layout.fillWidth: true 
+                Layout.minimumWidth: baseUnit * 2 // Asegurar espacio mínimo
             }
             
-            // PERFIL DE USUARIO ADAPTATIVO
+            // PERFIL DE USUARIO ADAPTATIVO MEJORADO
             Rectangle {
-                Layout.preferredWidth: Math.max(150, width * 0.15) // Adaptativo con mínimo
-                Layout.preferredHeight: baseUnit * 6
+                // PASO 6: Mejorar el ancho y responsividad del perfil
+                Layout.preferredWidth: {
+                    if (mainWindow.width < 900) return Math.max(120, baseUnit * 15)
+                    else if (mainWindow.width < 1200) return Math.max(160, baseUnit * 20)
+                    else return Math.max(200, baseUnit * 25) // Más ancho en pantallas grandes
+                }
+                Layout.preferredHeight: baseUnit * 7 // Incrementado de 6 a 7
+                Layout.alignment: Qt.AlignVCenter
+                
                 color: whiteColor
-                radius: baseUnit * 1.5
+                radius: baseUnit * 1.8 // Esquinas más redondeadas
+                
+                // PASO 7: Añadir sombra sutil
+                border.color: "#15000000"
+                border.width: 1
                 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: baseUnit * 0.8
-                    spacing: baseUnit
+                    anchors.margins: baseUnit * 1.2 // Incrementado de 0.8
+                    spacing: baseUnit * 1.2
                     
+                    // Avatar más grande
                     Rectangle {
-                        Layout.preferredWidth: baseUnit * 4.5
-                        Layout.preferredHeight: baseUnit * 4.5
+                        Layout.preferredWidth: baseUnit * 5.5  // Incrementado de 4.5
+                        Layout.preferredHeight: baseUnit * 5.5 // Incrementado de 4.5
+                        Layout.alignment: Qt.AlignVCenter
                         color: primaryColor
-                        radius: baseUnit * 2.25
+                        radius: baseUnit * 2.75
                         
                         Label {
                             anchors.centerIn: parent
                             text: "AM"
                             color: whiteColor
                             font.bold: true
-                            font.pixelSize: fontBaseSize
+                            font.pixelSize: fontBaseSize * 1.1 // Ligeramente más grande
                         }
                     }
                     
+                    // PASO 8: Información del usuario mejorada
                     Column {
                         Layout.fillWidth: true
-                        spacing: baseUnit * 0.25
-                        visible: parent.parent.width > 120 // Ocultar texto en espacios muy pequeños
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: baseUnit * 0.3
+                        // PASO 9: Mejorar responsividad del texto del perfil
+                        visible: parent.parent.width > 140 // Incrementado de 120
                         
                         Label {
                             text: "Dr. Admin"
                             color: textColor
                             font.bold: true
-                            font.pixelSize: fontBaseSize * 0.9
+                            font.pixelSize: fontBaseSize * 0.95 // Ligeramente más grande
+                            elide: Text.ElideRight
+                            width: Math.min(implicitWidth, parent.width)
                         }
                         
                         Label {
                             text: "Administrador"
                             color: darkGrayColor
-                            font.pixelSize: fontBaseSize * 0.7
+                            font.pixelSize: fontBaseSize * 0.75
+                            elide: Text.ElideRight
+                            width: Math.min(implicitWidth, parent.width)
                         }
                     }
                     
+                    // Icono dropdown
                     Label {
                         text: "▼"
                         color: darkGrayColor
-                        font.pixelSize: fontBaseSize * 0.8
-                        visible: parent.parent.width > 120
+                        font.pixelSize: fontBaseSize * 0.85
+                        Layout.alignment: Qt.AlignVCenter
+                        visible: parent.parent.width > 140
                     }
                 }
                 
+                // PASO 10: Mejorar interacción visual
                 MouseArea {
                     anchors.fill: parent
+                    hoverEnabled: true
+                    
+                    onEntered: parent.color = Qt.lighter(whiteColor, 0.95)
+                    onExited: parent.color = whiteColor
+                    
                     onClicked: {
                         Qt.callLater(function() {
                             appController.showNotification("Usuario", "Menú de usuario - Próximamente")
                         })
                     }
                 }
-            }
-        }
-    }
-    
-    // PANEL DE NOTIFICACIONES ADAPTATIVO
-    Rectangle {
-        id: notificationOverlay
-        anchors.fill: parent
-        color: "#80000000"
-        visible: notificationPanelOpen
-        opacity: notificationPanelOpen ? 1.0 : 0.0
-        z: 1000
-        
-        Behavior on opacity { NumberAnimation { duration: 300 } }
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: { notificationPanelOpen = false }
-        }
-        
-        // Panel adaptativo
-        Rectangle {
-            id: notificationPanel
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.right: parent.right
-            
-            // ANCHO ADAPTATIVO: 400px en pantallas grandes, 80% en pequeñas, máximo 90%
-            width: Math.min(
-                Math.max(300, parent.width * 0.3),  // Mínimo 300px o 30%
-                Math.min(420, parent.width * 0.9)   // Máximo 420px o 90%
-            )
-            
-            color: whiteColor
-            
-            transform: Translate {
-                x: notificationPanelOpen ? 0 : notificationPanel.width
-                Behavior on x {
-                    NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
-                }
-            }
-            
-            Rectangle {
-                anchors.fill: parent
-                anchors.leftMargin: -baseUnit
-                color: "transparent"
-                border.color: "#20000000"
-                border.width: baseUnit
-                radius: baseUnit
-                z: -1
-            }
-            
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
                 
-                // Header adaptativo
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(60, baseUnit * 8)
-                    color: primaryColor
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: baseUnit * 2
-                        spacing: baseUnit * 1.5
-                        
-                        Rectangle {
-                            width: baseUnit * 4
-                            height: baseUnit * 4
-                            color: whiteColor
-                            radius: baseUnit * 2
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "🔔"
-                                font.pixelSize: fontBaseSize * 1.3
-                            }
-                        }
-                        
-                        ColumnLayout {
-                            spacing: baseUnit * 0.5
-                            
-                            Label {
-                                text: "Centro de Notificaciones"
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize * 1.2
-                            }
-                            
-                            Label {
-                                text: totalNotificaciones + " alertas activas"
-                                color: "#E8F4FD"
-                                font.pixelSize: fontBaseSize * 0.8
-                            }
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        Button {
-                            width: baseUnit * 3.5
-                            height: baseUnit * 3.5
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#40FFFFFF" : "transparent"
-                                radius: baseUnit * 1.75
-                            }
-                            
-                            contentItem: Label {
-                                text: "×"
-                                color: whiteColor
-                                font.pixelSize: fontBaseSize * 1.3
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: { notificationPanelOpen = false }
-                        }
-                    }
-                }
-                
-                // Filtros adaptativos
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 6
-                    color: "#F8F9FA"
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
-                        spacing: baseUnit
-                        
-                        Button {
-                            text: "🔄 Actualizar"
-                            Layout.preferredHeight: baseUnit * 3.5
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                radius: baseUnit * 0.6
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.pixelSize: fontBaseSize * 0.8
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: { actualizarNotificaciones() }
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        Label {
-                            text: Qt.formatDateTime(fechaActual, "dd/MM/yyyy hh:mm")
-                            color: darkGrayColor
-                            font.pixelSize: fontBaseSize * 0.7
-                        }
-                    }
-                }
-                
-                // Lista de notificaciones
-                ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    
-                    ListView {
-                        id: notificationsList
-                        model: ListModel { id: notificacionesModel }
-                        spacing: 0
-                        
-                        delegate: Rectangle {
-                            width: notificationsList.width
-                            height: Math.max(baseUnit * 8, contentColumn.implicitHeight + baseUnit * 2)
-                            color: index % 2 === 0 ? "#FFFFFF" : "#F8F9FA"
-                            border.color: "#E5E7EB"
-                            border.width: 1
-                            
-                            Rectangle {
-                                anchors.left: parent.left
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
-                                width: baseUnit * 0.5
-                                color: getPrioridadColor(model.prioridad)
-                            }
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: baseUnit * 1.5
-                                anchors.leftMargin: baseUnit * 2
-                                spacing: baseUnit
-                                
-                                Rectangle {
-                                    width: baseUnit * 3.5
-                                    height: baseUnit * 3.5
-                                    color: getPrioridadColor(model.prioridad)
-                                    radius: baseUnit * 1.75
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: model.icono
-                                        color: whiteColor
-                                        font.pixelSize: fontBaseSize
-                                        font.bold: true
-                                    }
-                                }
-                                
-                                ColumnLayout {
-                                    id: contentColumn
-                                    Layout.fillWidth: true
-                                    spacing: baseUnit * 0.5
-                                    
-                                    Label {
-                                        text: model.titulo
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.9
-                                        wrapMode: Text.WordWrap
-                                        Layout.fillWidth: true
-                                    }
-                                    
-                                    Label {
-                                        text: model.mensaje
-                                        color: darkGrayColor
-                                        font.pixelSize: fontBaseSize * 0.8
-                                        wrapMode: Text.WordWrap
-                                        Layout.fillWidth: true
-                                    }
-                                    
-                                    Label {
-                                        text: model.tiempo
-                                        color: "#9CA3AF"
-                                        font.pixelSize: fontBaseSize * 0.7
-                                    }
-                                }
-                                
-                                Button {
-                                    visible: model.modulo === "farmacia" && currentIndex !== 1
-                                    text: "Ver"
-                                    Layout.preferredWidth: baseUnit * 5
-                                    Layout.preferredHeight: baseUnit * 3
-                                    
-                                    background: Rectangle {
-                                        color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                        radius: baseUnit * 0.5
-                                    }
-                                    
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: whiteColor
-                                        font.pixelSize: fontBaseSize * 0.7
-                                        font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    
-                                    onClicked: {
-                                        notificationPanelOpen = false
-                                        farmaciaExpanded = true
-                                        farmaciaSubsection = 1
-                                        switchToPage(1)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Estado vacío
-                        Item {
-                            anchors.centerIn: parent
-                            visible: notificacionesModel.count === 0
-                            width: baseUnit * 20
-                            height: baseUnit * 15
-                            
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: baseUnit * 1.5
-                                
-                                Label {
-                                    text: "🎉"
-                                    font.pixelSize: fontBaseSize * 3
-                                    color: successColor
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Label {
-                                    text: "¡Todo en orden!"
-                                    color: textColor
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize * 1.1
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Label {
-                                    text: "No hay alertas pendientes en este momento."
-                                    color: darkGrayColor
-                                    font.pixelSize: fontBaseSize * 0.8
-                                    Layout.alignment: Qt.AlignHCenter
-                                    wrapMode: Text.WordWrap
-                                    Layout.maximumWidth: baseUnit * 18
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Footer adaptativo
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 5
-                    color: "#F1F5F9"
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: baseUnit * 1.5
-                        spacing: baseUnit * 1.5
-                        
-                        Label {
-                            text: "📊 Resumen:"
-                            color: darkGrayColor
-                            font.pixelSize: fontBaseSize * 0.7
-                            font.bold: true
-                        }
-                        
-                        Label {
-                            text: getConteoNotificaciones("critica") + " críticas"
-                            color: dangerColor
-                            font.pixelSize: fontBaseSize * 0.7
-                            font.bold: true
-                        }
-                        
-                        Label {
-                            text: getConteoNotificaciones("alta") + " importantes"
-                            color: warningColor
-                            font.pixelSize: fontBaseSize * 0.7
-                            font.bold: true
-                        }
-                        
-                        Label {
-                            text: getConteoNotificaciones("media") + " normales"
-                            color: primaryColor
-                            font.pixelSize: fontBaseSize * 0.7
-                            font.bold: true
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                    }
+                // Animación suave para cambios de color
+                Behavior on color { 
+                    ColorAnimation { duration: 150 } 
                 }
             }
         }
     }
+
     
     // ESTRUCTURA PRINCIPAL ADAPTATIVA
     RowLayout {
@@ -1007,198 +643,6 @@ ApplicationWindow {
         }
     }
     
-    // ===== FUNCIONES (mantener todas) =====
-    function actualizarNotificaciones() {
-        console.log("🔔 Actualizando notificaciones...")
-        fechaActual = new Date()
-        
-        notificacionesModel.clear()
-        notificaciones = []
-        
-        if (farmaciaPage && farmaciaPage.farmaciaData) {
-            var productos = farmaciaPage.farmaciaData.obtenerProductosParaInventario()
-            verificarProductosVencidos(productos)
-            verificarProductosProximosVencer(productos)
-            verificarProductosBajoStock(productos)
-        } else {
-            console.log("⚠️ Datos de farmacia no disponibles, usando datos de ejemplo")
-            verificarNotificacionesEjemplo()
-        }
-        
-        verificarNotificacionesSistema()
-        totalNotificaciones = notificacionesModel.count
-        console.log("✅ Notificaciones actualizadas. Total:", totalNotificaciones)
-    }
-    
-    function verificarProductosVencidos(productos) {
-        var productosVencidos = []
-        
-        for (var i = 0; i < productos.length; i++) {
-            var producto = productos[i]
-            
-            if (producto.stockUnitario > 0) {
-                var fechaSimuladaVenc = new Date()
-                fechaSimuladaVenc.setDate(fechaSimuladaVenc.getDate() - Math.random() * 10)
-                
-                if (fechaSimuladaVenc < fechaActual && Math.random() < 0.1) {
-                    productosVencidos.push(producto)
-                }
-            }
-        }
-        
-        if (productosVencidos.length > 0) {
-            agregarNotificacion({
-                icono: "⚠️",
-                titulo: "Productos Vencidos",
-                mensaje: `${productosVencidos.length} producto(s) han vencido y deben ser retirados del inventario.`,
-                prioridad: "critica",
-                tiempo: "Ahora",
-                modulo: "farmacia",
-                tipo: "vencidos"
-            })
-        }
-    }
-    
-    function verificarProductosProximosVencer(productos) {
-        var productosProxVencer = []
-        
-        for (var i = 0; i < productos.length; i++) {
-            var producto = productos[i]
-            
-            if (producto.stockUnitario > 0) {
-                if (Math.random() < 0.15) {
-                    productosProxVencer.push(producto)
-                }
-            }
-        }
-        
-        if (productosProxVencer.length > 0) {
-            agregarNotificacion({
-                icono: "⏰",
-                titulo: "Productos Próximos a Vencer",
-                mensaje: `${productosProxVencer.length} producto(s) vencerán en los próximos 30 días.`,
-                prioridad: "alta",
-                tiempo: "Hace 5 min",
-                modulo: "farmacia",
-                tipo: "proximo_vencer"
-            })
-        }
-    }
-    
-    function verificarProductosBajoStock(productos) {
-        var productosBajoStock = []
-        
-        for (var i = 0; i < productos.length; i++) {
-            var producto = productos[i]
-            
-            if (producto.stockUnitario > 0 && producto.stockUnitario <= 15) {
-                productosBajoStock.push(producto)
-            }
-        }
-        
-        if (productosBajoStock.length > 0) {
-            agregarNotificacion({
-                icono: "📉",
-                titulo: "Stock Bajo",
-                mensaje: `${productosBajoStock.length} producto(s) tienen stock inferior a 15 unidades.`,
-                prioridad: "media",
-                tiempo: "Hace 10 min",
-                modulo: "farmacia",
-                tipo: "bajo_stock"
-            })
-        }
-    }
-    
-    function verificarNotificacionesSistema() {
-        var notificacionesSistema = [
-            {
-                icono: "🔄",
-                titulo: "Backup Completado",
-                mensaje: "Copia de seguridad diaria completada exitosamente.",
-                prioridad: "baja",
-                tiempo: "Hace 1 hora",
-                modulo: "sistema",
-                tipo: "backup"
-            },
-            {
-                icono: "👥",
-                titulo: "Nuevo Usuario Registrado",
-                mensaje: "Se ha registrado un nuevo usuario en el sistema.",
-                prioridad: "baja",
-                tiempo: "Hace 2 horas",
-                modulo: "usuarios",
-                tipo: "registro"
-            }
-        ]
-        
-        for (var i = 0; i < notificacionesSistema.length; i++) {
-            if (Math.random() < 0.3) {
-                agregarNotificacion(notificacionesSistema[i])
-            }
-        }
-    }
-    
-    function verificarNotificacionesEjemplo() {
-        var notificacionesEjemplo = [
-            {
-                icono: "⚠️",
-                titulo: "Productos Vencidos",
-                mensaje: "3 productos han vencido y deben ser retirados del inventario.",
-                prioridad: "critica",
-                tiempo: "Ahora",
-                modulo: "farmacia",
-                tipo: "vencidos"
-            },
-            {
-                icono: "⏰",
-                titulo: "Productos Próximos a Vencer",
-                mensaje: "8 productos vencerán en los próximos 30 días.",
-                prioridad: "alta",
-                tiempo: "Hace 5 min",
-                modulo: "farmacia",
-                tipo: "proximo_vencer"
-            },
-            {
-                icono: "📉",
-                titulo: "Stock Bajo",
-                mensaje: "12 productos tienen stock inferior a 15 unidades.",
-                prioridad: "media",
-                tiempo: "Hace 10 min",
-                modulo: "farmacia",
-                tipo: "bajo_stock"
-            }
-        ]
-        
-        for (var i = 0; i < notificacionesEjemplo.length; i++) {
-            agregarNotificacion(notificacionesEjemplo[i])
-        }
-    }
-    
-    function agregarNotificacion(notificacion) {
-        notificaciones.push(notificacion)
-        notificacionesModel.append(notificacion)
-    }
-    
-    function getPrioridadColor(prioridad) {
-        switch(prioridad) {
-            case "critica": return dangerColor
-            case "alta": return warningColor
-            case "media": return primaryColor
-            case "baja": return successColor
-            default: return darkGrayColor
-        }
-    }
-    
-    function getConteoNotificaciones(prioridad) {
-        var count = 0
-        for (var i = 0; i < notificacionesModel.count; i++) {
-            if (notificacionesModel.get(i).prioridad === prioridad) {
-                count++
-            }
-        }
-        return count
-    }
-    
     property var navItems: [navItem0, navItem1, navItem2, navItem3, navItem4, navItem5, navItem6, navItem7, navItem8, navItem9]
     
     function switchToPage(index) {
@@ -1547,36 +991,5 @@ ApplicationWindow {
             logEspecialidadesSync()
             logTiposTrabajadoresSync()
         }
-    }
-    
-    Timer {
-        id: notificationTimer
-        interval: 300000 // 5 minutos
-        running: true
-        repeat: true
-        onTriggered: { actualizarNotificaciones() }
-    }
-    
-    Component.onCompleted: {
-        console.log("🔔 Sistema de notificaciones iniciado")
-        console.log("🔗 Conexión de navegación Consultas -> Configuración establecida")
-        console.log("🔗 Conexión de navegación Trabajadores -> Configuración establecida") // NUEVA LÍNEA
-        Qt.callLater(function() {
-            actualizarNotificaciones()
-            
-            // Verificar que las conexiones estén establecidas
-            if (consultasPage.irAConfiguracion) {
-                console.log("✅ Señal irAConfiguracion conectada correctamente")
-            } else {
-                console.log("❌ Error: Señal irAConfiguracion no encontrada")
-            }
-            
-            // ===== NUEVA VERIFICACIÓN PARA TRABAJADORES =====
-            if (trabajadoresPage.irAConfigPersonal) {
-                console.log("✅ Señal irAConfigPersonal conectada correctamente")
-            } else {
-                console.log("❌ Error: Señal irAConfigPersonal no encontrada")
-            }
-        })
     }
 }
