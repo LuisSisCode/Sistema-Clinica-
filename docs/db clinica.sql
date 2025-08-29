@@ -107,7 +107,7 @@ CREATE TABLE Consultas (
     FOREIGN KEY (Id_Especialidad) REFERENCES Especialidad(id)
 );
 
--- Tabla Laboratorio
+-- Tabla Laboratorio -- Actualizada para incluir Id_Trabajador y Id_Tipo_Analisis
 CREATE TABLE Laboratorio (
     id INT IDENTITY(1,1) PRIMARY KEY,
     Id_Paciente INT NOT NULL,
