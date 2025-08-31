@@ -143,16 +143,7 @@ Item {
         ColumnLayout {
             width: configuracionRoot.width
             spacing: marginMedium
-            
-            // Header Principal
-            HeaderSection {
-                Layout.fillWidth: true
-                title: "Centro de Configuraciones"
-                subtitle: "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
-                icon: "⚙️"
-                headerColor: primaryColor
-            }
-            
+                     
             // Sección de Módulos
             ModulesSection {
                 Layout.fillWidth: true
@@ -1164,140 +1155,113 @@ Item {
         }
     }
     
-    // ===== COMPONENTES DE CONFIGURACIÓN ESPECÍFICA =====
+    // ===== COMPONENTES DE CONFIGURACIÓN ESPECÍFICA SIN HEADERS =====
     
-    // ===== COMPONENTE DE LABORATORIO CON ConfiLaboratorio =====
+    // ===== COMPONENTE DE LABORATORIO SIMPLIFICADO =====
     Component {
         id: laboratorioConfigComponent
-        GenericConfigView {
-            moduleId: "laboratorio"
-            moduleTitle: "Laboratorio"
-            moduleIcon: "🧪"
-            moduleColor: laboratorioColor
+        Rectangle {
+            color: surfaceColor
             
-            configContent: Item {
+            // Contenido directo del módulo
+            ConfiLaboratorio {
+                id: configLaboratorioComponent
                 anchors.fill: parent
+                anchors.margins: marginMedium
                 
-                // ===== INSTANCIAR EL COMPONENTE ConfiLaboratorio =====
-                ConfiLaboratorio {
-                    id: configLaboratorioComponent
-                    anchors.fill: parent
-                    anchors.margins: marginMedium
-                    
-                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
-                    tiposAnalisis: configuracionRoot.tiposAnalisisModel
-                    
-                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
-                    onTiposAnalisisChanged: {
-                        if (tiposAnalisis && tiposAnalisis !== configuracionRoot.tiposAnalisisModel) {
-                            configuracionRoot.tiposAnalisisModel = tiposAnalisis
-                            console.log("🔄 Tipos de análisis actualizados hacia el modelo padre")
-                        }
+                // Conectar el alias a la propiedad del root
+                tiposAnalisis: configuracionRoot.tiposAnalisisModel
+                
+                // Propagación de cambios de vuelta al modelo padre
+                onTiposAnalisisChanged: {
+                    if (tiposAnalisis && tiposAnalisis !== configuracionRoot.tiposAnalisisModel) {
+                        configuracionRoot.tiposAnalisisModel = tiposAnalisis
+                        console.log("🔄 Tipos de análisis actualizados hacia el modelo padre")
                     }
                 }
             }
         }
     }
     
+    // ===== COMPONENTE DE ENFERMERÍA SIMPLIFICADO =====
     Component {
         id: enfermeriaConfigComponent
-        GenericConfigView {
-            moduleId: "enfermeria"
-            moduleTitle: "Enfermería"
-            moduleIcon: "💉"
-            moduleColor: enfermeriaColor
+        Rectangle {
+            color: surfaceColor
             
-            configContent: Item {
+            // Contenido directo del módulo
+            ConfiEnfermeria {
+                id: configEnfermeriaComponent
                 anchors.fill: parent
+                anchors.margins: marginMedium
                 
-                // ===== INSTANCIAR EL COMPONENTE ConfiEnfermeria =====
-                ConfiEnfermeria {
-                    id: configEnfermeriaComponent
-                    anchors.fill: parent
-                    anchors.margins: marginMedium
-                    
-                    // ===== CONECTAR CON EL NOMBRE CORRECTO =====
-                    tiposProcedimientosData: configuracionRoot.tiposProcedimientosModel
-                    
-                    // ===== CONECTAR AL EVENTO CORRECTO =====
-                    onTiposProcedimientosChanged: {
-                        if (tiposProcedimientos && tiposProcedimientos !== configuracionRoot.tiposProcedimientosModel) {
-                            configuracionRoot.tiposProcedimientosModel = tiposProcedimientos
-                            console.log("🔄 Tipos de procedimientos actualizados hacia el modelo padre")
-                        }
+                // Conectar con el nombre correcto
+                tiposProcedimientosData: configuracionRoot.tiposProcedimientosModel
+                
+                // Conectar al evento correcto
+                onTiposProcedimientosChanged: {
+                    if (tiposProcedimientos && tiposProcedimientos !== configuracionRoot.tiposProcedimientosModel) {
+                        configuracionRoot.tiposProcedimientosModel = tiposProcedimientos
+                        console.log("🔄 Tipos de procedimientos actualizados hacia el modelo padre")
                     }
                 }
             }
         }
     }
     
-    // ===== COMPONENTE DE CONSULTAS MODIFICADO =====
+    // ===== COMPONENTE DE CONSULTAS SIMPLIFICADO =====
     Component {
         id: consultasConfigComponent
-        GenericConfigView {
-            moduleId: "consultas"
-            moduleTitle: "Consultas"
-            moduleIcon: "🩺"
-            moduleColor: consultasColor
+        Rectangle {
+            color: surfaceColor
             
-            configContent: Item {
+            // Contenido directo del módulo
+            ConfiConsultas {
+                id: configConsultasComponent
                 anchors.fill: parent
+                anchors.margins: marginMedium
                 
-                // ===== INSTANCIAR EL NUEVO COMPONENTE ConfiConsultas =====
-                ConfiConsultas {
-                    id: configConsultasComponent
-                    anchors.fill: parent
-                    anchors.margins: marginMedium
-                    
-                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
-                    especialidades: configuracionRoot.especialidadesModel
-                    
-                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
-                    onEspecialidadesChanged: {
-                        if (especialidades && especialidades !== configuracionRoot.especialidadesModel) {
-                            configuracionRoot.especialidadesModel = especialidades
-                            console.log("🔄 Especialidades actualizadas hacia el modelo padre")
-                        }
+                // Conectar el alias a la propiedad del root
+                especialidades: configuracionRoot.especialidadesModel
+                
+                // Propagación de cambios de vuelta al modelo padre
+                onEspecialidadesChanged: {
+                    if (especialidades && especialidades !== configuracionRoot.especialidadesModel) {
+                        configuracionRoot.especialidadesModel = especialidades
+                        console.log("🔄 Especialidades actualizadas hacia el modelo padre")
                     }
                 }
             }
         }
     }
     
-    // ===== NUEVO COMPONENTE DE SERVICIOS BÁSICOS =====
+    // ===== COMPONENTE DE SERVICIOS BÁSICOS SIMPLIFICADO =====
     Component {
         id: serviciosConfigComponent
-        GenericConfigView {
-            moduleId: "servicios"
-            moduleTitle: "Servicios Básicos"
-            moduleIcon: "💰"
-            moduleColor: serviciosColor
+        Rectangle {
+            color: surfaceColor
             
-            configContent: Item {
+            // Contenido directo del módulo
+            ConfiServiciosBasicos {
+                id: configServiciosBasicosComponent
                 anchors.fill: parent
+                anchors.margins: marginMedium
                 
-                // ===== INSTANCIAR EL NUEVO COMPONENTE ConfiServiciosBasicos =====
-                ConfiServiciosBasicos {
-                    id: configServiciosBasicosComponent
-                    anchors.fill: parent
-                    anchors.margins: marginMedium
-                    
-                    // ===== CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
-                    tiposGastos: configuracionRoot.tiposGastosModel
-                    
-                    // ===== PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
-                    onTiposGastosChanged: {
-                        if (tiposGastos && tiposGastos !== configuracionRoot.tiposGastosModel) {
-                            configuracionRoot.tiposGastosModel = tiposGastos
-                            console.log("🔄 Tipos de gastos actualizados hacia el modelo padre")
-                        }
+                // Conectar el alias a la propiedad del root
+                tiposGastos: configuracionRoot.tiposGastosModel
+                
+                // Propagación de cambios de vuelta al modelo padre
+                onTiposGastosChanged: {
+                    if (tiposGastos && tiposGastos !== configuracionRoot.tiposGastosModel) {
+                        configuracionRoot.tiposGastosModel = tiposGastos
+                        console.log("🔄 Tipos de gastos actualizados hacia el modelo padre")
                     }
                 }
             }
         }
     }
     
-    // ===== COMPONENTE DE USUARIOS MODIFICADO (SIN GenericConfigView) =====
+    // ===== COMPONENTE DE USUARIOS SIMPLIFICADO (YA NO TENÍA HEADER) =====
     Component {
         id: usuariosConfigComponent
         ConfiUsuarios {
@@ -1308,126 +1272,28 @@ Item {
         }
     }
     
-    // ===== PASO 2c: COMPONENTE DE PERSONAL MODIFICADO CON ConfiTrabajadores =====
+    // ===== COMPONENTE DE PERSONAL SIMPLIFICADO =====
     Component {
         id: personalConfigComponent
-        GenericConfigView {
-            moduleId: "personal"
-            moduleTitle: "Personal"
-            moduleIcon: "👥"
-            moduleColor: personalColor
+        Rectangle {
+            color: surfaceColor
             
-            configContent: Item {
+            // Contenido directo del módulo
+            ConfiTrabajadores {
+                id: configTrabajadoresComponent
                 anchors.fill: parent
+                anchors.margins: marginMedium
                 
-                // ===== PASO 2c: INSTANCIAR EL NUEVO COMPONENTE ConfiTrabajadores =====
-                ConfiTrabajadores {
-                    id: configTrabajadoresComponent
-                    anchors.fill: parent
-                    anchors.margins: marginMedium
-                    
-                    // ===== PASO 2d: CONECTAR EL ALIAS A LA PROPIEDAD DEL ROOT =====
-                    tiposTrabajadores: configuracionRoot.tiposTrabajadoresModel
-                    
-                    // ===== PASO 2e: PROPAGACIÓN DE CAMBIOS DE VUELTA AL MODELO PADRE =====
-                    onTiposTrabajadoresChanged: {
-                        if (tiposTrabajadores && tiposTrabajadores !== configuracionRoot.tiposTrabajadoresModel) {
-                            configuracionRoot.tiposTrabajadoresModel = tiposTrabajadores
-                            console.log("🔄 Tipos de trabajadores actualizados hacia el modelo padre")
-                        }
+                // Conectar el alias a la propiedad del root
+                tiposTrabajadores: configuracionRoot.tiposTrabajadoresModel
+                
+                // Propagación de cambios de vuelta al modelo padre
+                onTiposTrabajadoresChanged: {
+                    if (tiposTrabajadores && tiposTrabajadores !== configuracionRoot.tiposTrabajadoresModel) {
+                        configuracionRoot.tiposTrabajadoresModel = tiposTrabajadores
+                        console.log("🔄 Tipos de trabajadores actualizados hacia el modelo padre")
                     }
                 }
-            }
-        }
-    }
-    
-    component GenericConfigView: Rectangle {
-        property string moduleId: ""
-        property string moduleTitle: ""
-        property string moduleIcon: ""
-        property string moduleColor: primaryColor
-        property Component configContent
-        
-        color: surfaceColor
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            
-            // Header con navegación
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(80, baseUnit * 10)
-                color: moduleColor
-                
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: marginLarge
-                    spacing: marginMedium
-                    
-                    Button {
-                        Layout.preferredWidth: baseUnit * 5
-                        Layout.preferredHeight: baseUnit * 5
-                        text: "←"
-                        
-                        background: Rectangle {
-                            color: backgroundColor
-                            radius: radiusSmall
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: moduleColor
-                            font.pixelSize: fontMedium
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: changeView("main")
-                    }
-                    
-                    Rectangle {
-                        Layout.preferredWidth: baseUnit * 6
-                        Layout.preferredHeight: baseUnit * 6
-                        color: backgroundColor
-                        radius: baseUnit * 3
-                        
-                        Label {
-                            anchors.centerIn: parent
-                            text: moduleIcon
-                            font.pixelSize: fontLarge
-                        }
-                    }
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: marginTiny
-                        
-                        Label {
-                            text: "Configuraciones de " + moduleTitle
-                            color: backgroundColor
-                            font.pixelSize: fontLarge
-                            font.bold: true
-                            font.family: "Segoe UI"
-                        }
-                        
-                        Label {
-                            text: "Gestiona las configuraciones específicas de este módulo"
-                            color: backgroundColor
-                            font.pixelSize: fontBase
-                            opacity: 0.9
-                            font.family: "Segoe UI"
-                        }
-                    }
-                }
-            }
-            
-            // Contenido específico del módulo
-            Loader {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                sourceComponent: configContent
             }
         }
     }
