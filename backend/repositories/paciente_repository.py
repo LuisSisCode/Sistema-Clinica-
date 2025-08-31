@@ -7,66 +7,65 @@ from ..core.excepciones import (
 )
 from ..core.cache_system import cached_query
 from ..core.utils import (
-    normalize_name, validate_age, validate_required_string,
+    normalize_name, validate_required_string,
     safe_int, calculate_percentage
 )
 
 class PacienteRepository(BaseRepository):
-    """Repository para gestión de Pacientes"""
+    """Repository para gestión de Pacientes - ACTUALIZADO sin campo Edad"""
     
     def __init__(self):
         super().__init__('Pacientes', 'pacientes')
-        print("👥 PacienteRepository inicializado")
+        print("👥 PacienteRepository inicializado - SIN campo Edad")
     
     # ===============================
     # IMPLEMENTACIÓN ABSTRACTA
     # ===============================
     
     def get_active(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los pacientes (no hay campo estado)"""
+        """Obtiene todos los pacientes activos"""
         return self.get_all(order_by="Nombre, Apellido_Paterno")
     
     # ===============================
-    # CRUD ESPECÍFICO
+    # CRUD ESPECÍFICO - SIN EDAD
     # ===============================
     
     def create_patient(self, nombre: str, apellido_paterno: str, 
-                   apellido_materno: str, fecha_nacimiento, cedula: str = None) -> int:
-        """
-        Crea nuevo paciente con fecha_nacimiento en lugar de edad
-        """
-        # Validaciones
+                      apellido_materno: str, cedula: str) -> int:
+        """Crea nuevo paciente - SOLO con datos básicos obligatorios"""
         nombre = normalize_name(nombre.strip()) if nombre.strip() else "Sin nombre"
         apellido_paterno = normalize_name(apellido_paterno.strip()) if apellido_paterno.strip() else ""
         apellido_materno = normalize_name(apellido_materno.strip()) if apellido_materno.strip() else ""
         
-        # Validar fecha_nacimiento
-        from datetime import datetime, date
-        if isinstance(fecha_nacimiento, str):
-            fecha_nacimiento = datetime.strptime(fecha_nacimiento, '%Y-%m-%d').date()
+        # Validar cédula obligatoria
+        if not cedula or not cedula.strip():
+            raise ValidationError("cedula", cedula, "Cédula es obligatoria")
         
-        # Validar cédula si se proporciona
-        if cedula:
-            if not (5 <= len(cedula) <= 10 and cedula.isdigit()):
-                raise ValidationError("cedula", cedula, "Cédula debe tener entre 5-10 dígitos")
+        cedula = cedula.strip()
+        if len(cedula) < 5:
+            raise ValidationError("cedula", cedula, "Cédula debe tener al menos 5 dígitos")
+        
+        # Verificar que no existe cédula duplicada
+        existing = self.search_by_cedula_exact(cedula)
+        if existing:
+            raise ValidationError("cedula", cedula, f"Ya existe paciente con cédula {cedula}")
         
         patient_data = {
             'Nombre': nombre,
             'Apellido_Paterno': apellido_paterno,
             'Apellido_Materno': apellido_materno,
-            'Fecha_Nacimiento': fecha_nacimiento,
             'Cedula': cedula
         }
         
         patient_id = self.insert(patient_data)
-        print(f"👥 Paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
+        print(f"👥 Paciente creado: {nombre} {apellido_paterno} - Cédula: {cedula} - ID: {patient_id}")
         
         return patient_id
     
     def update_patient(self, paciente_id: int, nombre: str = None, 
                       apellido_paterno: str = None, apellido_materno: str = None,
-                      edad: int = None) -> bool:
-        """Actualiza paciente existente"""
+                      cedula: str = None) -> bool:
+        """Actualiza paciente existente - SIN EDAD"""
         # Verificar existencia
         if not self.get_by_id(paciente_id):
             raise ValidationError("paciente_id", paciente_id, "Paciente no encontrado")
@@ -84,10 +83,19 @@ class PacienteRepository(BaseRepository):
         if apellido_materno is not None:
             apellido_materno = validate_required_string(apellido_materno, "apellido_materno", 2)
             update_data['Apellido_Materno'] = normalize_name(apellido_materno)
-        
-        if edad is not None:
-            edad = validate_age(edad, 0, 120)
-            update_data['Edad'] = edad
+            
+        if cedula is not None:
+            if cedula.strip():
+                cedula = cedula.strip()
+                if len(cedula) < 5:
+                    raise ValidationError("cedula", cedula, "Cédula debe tener al menos 5 dígitos")
+                
+                # Verificar duplicado (excluyendo el paciente actual)
+                existing = self.search_by_cedula_exact(cedula)
+                if existing and existing['id'] != paciente_id:
+                    raise ValidationError("cedula", cedula, f"Ya existe otro paciente con cédula {cedula}")
+                
+                update_data['Cedula'] = cedula
         
         if not update_data:
             return True
@@ -99,89 +107,95 @@ class PacienteRepository(BaseRepository):
         return success
     
     # ===============================
-    # BÚSQUEDAS ESPECÍFICAS
+    # BÚSQUEDAS ESPECÍFICAS - SIN EDAD
     # ===============================
     
     def search_patients(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Búsqueda por nombre o apellidos"""
+        """Búsqueda por nombre, apellidos O cédula"""
         if not search_term:
             return []
         
-        search_term = f"%{search_term.strip()}%"
+        search_term = search_term.strip()
+        
+        # Si parece ser una cédula (solo números), buscar por cédula primero
+        if search_term.isdigit() and len(search_term) >= 5:
+            cedula_results = self.search_by_cedula(search_term)
+            if cedula_results:
+                return cedula_results
+        
+        # Búsqueda por nombre/apellidos
+        search_pattern = f"%{search_term}%"
         
         query = """
-        SELECT * FROM Pacientes 
+        SELECT TOP (?) * FROM Pacientes 
         WHERE Nombre LIKE ? OR Apellido_Paterno LIKE ? OR Apellido_Materno LIKE ?
-        ORDER BY Nombre, Apellido_Paterno
-        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+        OR (Cedula IS NOT NULL AND Cedula LIKE ?)
+        ORDER BY 
+            CASE 
+                WHEN Cedula = ? THEN 1
+                WHEN LOWER(Nombre) LIKE LOWER(?) THEN 2
+                WHEN LOWER(Apellido_Paterno) LIKE LOWER(?) THEN 3
+                ELSE 4
+            END,
+            Nombre, Apellido_Paterno
         """
         
-        return self._execute_query(query, (search_term, search_term, search_term, limit))
-    
-    def get_by_age_range(self, min_age: int, max_age: int) -> List[Dict[str, Any]]:
-        """Obtiene pacientes por rango de edad"""
-        query = """
-        SELECT *, dbo.fn_CalcularEdad(Fecha_Nacimiento) as Edad 
-        FROM Pacientes 
-        WHERE dbo.fn_CalcularEdad(Fecha_Nacimiento) BETWEEN ? AND ?
-        ORDER BY dbo.fn_CalcularEdad(Fecha_Nacimiento), Nombre
-        """
-        return self._execute_query(query, (min_age, max_age))
-    
-    def get_pediatric_patients(self, max_age: int = 17) -> List[Dict[str, Any]]:
-        """Obtiene pacientes pediátricos"""
-        return self.get_by_age_range(0, max_age)
-    
-    def get_adult_patients(self, min_age: int = 18) -> List[Dict[str, Any]]:
-        """Obtiene pacientes adultos"""
-        query = """
-        SELECT *, dbo.fn_CalcularEdad(Fecha_Nacimiento) as Edad 
-        FROM Pacientes 
-        WHERE dbo.fn_CalcularEdad(Fecha_Nacimiento) >= ? 
-        ORDER BY Nombre, Apellido_Paterno
-        """
-        return self._execute_query(query, (min_age,))
-    
-    def get_elderly_patients(self, min_age: int = 65) -> List[Dict[str, Any]]:
-        """Obtiene pacientes adultos mayores"""
-        return self.get_by_age_range(min_age, 120)
-    
-    def get_patients_by_name(self, nombre: str = None, apellido_paterno: str = None) -> List[Dict[str, Any]]:
-        """Busca pacientes por nombre exacto o apellido"""
-        conditions = []
-        params = []
+        start_pattern = f"{search_term}%"
         
-        if nombre:
-            conditions.append("Nombre = ?")
-            params.append(nombre.strip())
-        
-        if apellido_paterno:
-            conditions.append("Apellido_Paterno = ?")
-            params.append(apellido_paterno.strip())
-        
-        if not conditions:
+        return self._execute_query(query, (
+            limit, search_pattern, search_pattern, search_pattern, search_pattern,
+            search_term, start_pattern, start_pattern
+        ))
+    
+    def search_by_cedula(self, cedula: str) -> List[Dict[str, Any]]:
+        """Búsqueda específica por cédula"""
+        if not cedula or not cedula.strip():
             return []
         
-        where_clause = " AND ".join(conditions)
-        query = f"SELECT * FROM Pacientes WHERE {where_clause} ORDER BY Nombre, Apellido_Paterno"
+        cedula = cedula.strip()
         
-        return self._execute_query(query, tuple(params))
-    # ===============================
-    # BÚSQUEDAS OPTIMIZADAS para pacientes, se auto completa de forma automatica si el paciente ya existe.
-    # ===============================
+        # Búsqueda exacta primero
+        query_exact = "SELECT * FROM Pacientes WHERE Cedula = ?"
+        results = self._execute_query(query_exact, (cedula,))
+        
+        if results:
+            return results
+        
+        # Si no hay resultados exactos, búsqueda parcial
+        query_partial = "SELECT TOP (10) * FROM Pacientes WHERE Cedula LIKE ? ORDER BY Cedula"
+        return self._execute_query(query_partial, (f"%{cedula}%",))
+    
+    def search_by_cedula_exact(self, cedula: str) -> Optional[Dict[str, Any]]:
+        """Búsqueda exacta por cédula - devuelve un solo resultado"""
+        if not cedula or not cedula.strip():
+            return None
+        
+        query = "SELECT * FROM Pacientes WHERE Cedula = ?"
+        return self._execute_query(query, (cedula.strip(),), fetch_one=True)
+    
     def search_patients_incremental(self, termino: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """BÚsqueda optimizada para autocompletado con nueva estructura"""
+        """Búsqueda incremental para autocompletado - SIN EDAD"""
         if not termino or len(termino.strip()) < 2:
             return []
         
-        termino_clean = termino.strip().lower()
-        search_pattern = f"%{termino_clean}%"
+        termino_clean = termino.strip()
+        
+        # Si parece cédula, buscar por cédula
+        if termino_clean.isdigit():
+            cedula_results = self.search_by_cedula(termino_clean)
+            if cedula_results:
+                # Formatear para autocompletado - SIN EDAD
+                for result in cedula_results:
+                    result['nombre_completo'] = f"{result.get('Nombre', '')} {result.get('Apellido_Paterno', '')} {result.get('Apellido_Materno', '')}".strip()
+                return cedula_results[:limit]
+        
+        # Búsqueda por nombre
+        search_pattern = f"%{termino_clean.lower()}%"
         
         query = """
         SELECT TOP (?) 
             id, Nombre, Apellido_Paterno, Apellido_Materno, 
-            Cedula, Fecha_Nacimiento,
-            dbo.fn_CalcularEdad(Fecha_Nacimiento) as Edad,
+            Cedula,
             CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
         FROM Pacientes 
         WHERE LOWER(Nombre) LIKE ? 
@@ -193,35 +207,52 @@ class PacienteRepository(BaseRepository):
             CASE 
                 WHEN LOWER(Nombre) LIKE ? THEN 1
                 WHEN LOWER(Apellido_Paterno) LIKE ? THEN 2
-                ELSE 3
+                WHEN Cedula LIKE ? THEN 3
+                ELSE 4
             END,
             Nombre, Apellido_Paterno
         """
         
-        start_pattern = f"{termino_clean}%"
+        start_pattern = f"{termino_clean.lower()}%"
         
         return self._execute_query(query, (
             limit, 
-            search_pattern, search_pattern, search_pattern, search_pattern, search_pattern,
-            start_pattern, start_pattern
+            search_pattern, search_pattern, search_pattern, search_pattern, 
+            f"%{termino_clean}%",  # Para cédula
+            start_pattern, start_pattern, f"{termino_clean}%"
         ))
-
+    
     def search_patients_by_field(self, field_name: str, value: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Búsqueda específica por campo (nombre, apellido_paterno, apellido_materno)
-        """
+        """Búsqueda específica por campo - SIN EDAD"""
         if not value or len(value.strip()) < 2:
             return []
         
-        valid_fields = ['Nombre', 'Apellido_Paterno', 'Apellido_Materno']
+        valid_fields = ['Nombre', 'Apellido_Paterno', 'Apellido_Materno', 'Cedula']
         if field_name not in valid_fields:
             return []
         
-        search_pattern = f"%{value.strip().lower()}%"
+        value_clean = value.strip()
+        
+        # Para cédula, búsqueda exacta y parcial
+        if field_name == 'Cedula':
+            query = f"""
+            SELECT TOP (?) 
+                id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
+            FROM Pacientes 
+            WHERE {field_name} = ? OR {field_name} LIKE ?
+            ORDER BY 
+                CASE WHEN {field_name} = ? THEN 1 ELSE 2 END,
+                {field_name}
+            """
+            return self._execute_query(query, (limit, value_clean, f"%{value_clean}%", value_clean))
+        
+        # Para otros campos, búsqueda por patrón
+        search_pattern = f"%{value_clean.lower()}%"
         
         query = f"""
         SELECT TOP (?) 
-            id, Nombre, Apellido_Paterno, Apellido_Materno, Edad,
+            id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
             CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
         FROM Pacientes 
         WHERE LOWER({field_name}) LIKE ?
@@ -231,7 +262,59 @@ class PacienteRepository(BaseRepository):
         return self._execute_query(query, (limit, search_pattern))
     
     # ===============================
-    # CONSULTAS CON RELACIONES
+    # FUNCIONES DE GESTIÓN INTELIGENTE - SIN EDAD
+    # ===============================
+    
+    def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
+                                      apellido_materno: str = "", cedula: str = None) -> int:
+        """Busca paciente similar o crea nuevo - SIN EDAD, cédula obligatoria"""
+        nombre = nombre.strip()
+        apellido_paterno = apellido_paterno.strip() 
+        apellido_materno = apellido_materno.strip()
+        
+        if not nombre or len(nombre) < 2:
+            raise ValidationError("nombre", nombre, "Nombre es obligatorio")
+        if not apellido_paterno:
+            apellido_paterno = "Sin apellido"
+        if not cedula or len(cedula.strip()) < 5:
+            raise ValidationError("cedula", cedula, "Cédula es obligatoria (mínimo 5 dígitos)")
+
+        cedula_clean = cedula.strip()
+
+        # 1. Buscar por cédula exacta primero
+        existing_by_cedula = self.search_by_cedula_exact(cedula_clean)
+        if existing_by_cedula:
+            print(f"👤 Paciente encontrado por cédula: {cedula_clean} -> ID {existing_by_cedula['id']}")
+            return existing_by_cedula['id']
+
+        # 2. Crear nuevo paciente (ahora requiere cédula)
+        try:
+            paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, cedula_clean)
+            print(f"👤 Nuevo paciente: {nombre} {apellido_paterno} -> ID {paciente_id}")
+            return paciente_id
+        except Exception as e:
+            print(f"❌ Error creando paciente: {e}")
+            raise
+
+    def buscar_pacientes_por_nombre_exacto(self, nombre: str, apellido_paterno: str, apellido_materno: str = ""):
+        """Busca pacientes con nombre exacto - SIN EDAD"""
+        query = """
+        SELECT TOP 5 *
+        FROM Pacientes 
+        WHERE LOWER(Nombre) = LOWER(?) 
+        AND LOWER(Apellido_Paterno) = LOWER(?)
+        """
+        params = [nombre.strip(), apellido_paterno.strip()]
+        
+        if apellido_materno and apellido_materno.strip():
+            query += " AND LOWER(Apellido_Materno) = LOWER(?)"
+            params.append(apellido_materno.strip())
+        
+        query += " ORDER BY id DESC"
+        return self._execute_query(query, tuple(params))
+
+    # ===============================
+    # CONSULTAS CON RELACIONES - SIN EDAD
     # ===============================
     
     def get_patient_with_consultations(self, paciente_id: int) -> Optional[Dict[str, Any]]:
@@ -263,13 +346,16 @@ class PacienteRepository(BaseRepository):
             return None
         
         lab_query = """
-        SELECT l.*, CONCAT(t.Nombre, ' ', t.Apellido_Paterno) as trabajador_nombre,
+        SELECT l.*, 
+               ta.Nombre as tipo_analisis,
+               CONCAT(t.Nombre, ' ', t.Apellido_Paterno) as trabajador_nombre,
                tt.Tipo as trabajador_tipo
         FROM Laboratorio l
+        LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
         LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
         LEFT JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         WHERE l.Id_Paciente = ?
-        ORDER BY l.id DESC
+        ORDER BY l.Fecha DESC
         """
         
         lab_results = self._execute_query(lab_query, (paciente_id,))
@@ -286,7 +372,7 @@ class PacienteRepository(BaseRepository):
         
         # Obtener consultas
         consultations_query = """
-        SELECT c.id, c.Fecha, c.Detalles,
+        SELECT c.id, c.Fecha, c.Detalles, c.tipo_consulta,
                e.Nombre as especialidad, e.Precio_Normal, e.Precio_Emergencia,
                CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno) as doctor_completo,
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro
@@ -300,14 +386,16 @@ class PacienteRepository(BaseRepository):
         
         # Obtener laboratorio
         lab_query = """
-        SELECT l.id, l.Nombre, l.Detalles, l.Precio_Normal, l.Precio_Emergencia,
+        SELECT l.id, l.Nombre, l.Detalles, l.tipo, l.Fecha,
+               ta.Nombre as tipo_analisis, ta.Precio_Normal, ta.Precio_Emergencia,
                CONCAT(t.Nombre, ' ', t.Apellido_Paterno) as trabajador_encargado,
                tt.Tipo as trabajador_tipo
         FROM Laboratorio l
+        LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
         LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
         LEFT JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         WHERE l.Id_Paciente = ?
-        ORDER BY l.id DESC
+        ORDER BY l.Fecha DESC
         """
         
         consultations = self._execute_query(consultations_query, (paciente_id,))
@@ -326,28 +414,19 @@ class PacienteRepository(BaseRepository):
         return patient
     
     # ===============================
-    # ESTADÍSTICAS
+    # ESTADÍSTICAS - SIN EDAD
     # ===============================
     
     @cached_query('stats_pacientes', ttl=600)
     def get_patient_statistics(self) -> Dict[str, Any]:
-        """Estadísticas completas de pacientes"""
-        # Estadísticas generales
+        """Estadísticas de pacientes - SIN referencias a Edad"""
+        # Estadísticas básicas
         general_query = """
         SELECT 
             COUNT(*) as total_pacientes,
-            AVG(CAST(dbo.fn_CalcularEdad(Fecha_Nacimiento) AS FLOAT)) as edad_promedio,
-            MIN(dbo.fn_CalcularEdad(Fecha_Nacimiento)) as edad_minima,
-            MAX(dbo.fn_CalcularEdad(Fecha_Nacimiento)) as edad_maxima
-        FROM Pacientes
-        """
-        
-        # Por rangos de edad
-        age_ranges_query = """
-        SELECT 
-            SUM(CASE WHEN dbo.fn_CalcularEdad(Fecha_Nacimiento) BETWEEN 0 AND 17 THEN 1 ELSE 0 END) as pediatricos,
-            SUM(CASE WHEN dbo.fn_CalcularEdad(Fecha_Nacimiento) BETWEEN 18 AND 64 THEN 1 ELSE 0 END) as adultos,
-            SUM(CASE WHEN dbo.fn_CalcularEdad(Fecha_Nacimiento) >= 65 THEN 1 ELSE 0 END) as adultos_mayores
+            COUNT(CASE WHEN Cedula IS NOT NULL THEN 1 END) as pacientes_con_cedula,
+            COUNT(CASE WHEN LEN(Nombre) > 10 THEN 1 END) as nombres_largos,
+            COUNT(CASE WHEN Apellido_Materno IS NOT NULL AND Apellido_Materno != '' THEN 1 END) as con_apellido_materno
         FROM Pacientes
         """
         
@@ -355,67 +434,37 @@ class PacienteRepository(BaseRepository):
         surnames_query = """
         SELECT TOP 10 Apellido_Paterno, COUNT(*) as cantidad
         FROM Pacientes
+        WHERE Apellido_Paterno IS NOT NULL AND Apellido_Paterno != ''
         GROUP BY Apellido_Paterno
         ORDER BY cantidad DESC
         """
         
+        # Nombres más comunes
+        names_query = """
+        SELECT TOP 10 Nombre, COUNT(*) as cantidad
+        FROM Pacientes
+        WHERE Nombre IS NOT NULL AND Nombre != ''
+        GROUP BY Nombre
+        ORDER BY cantidad DESC
+        """
+        
         general_stats = self._execute_query(general_query, fetch_one=True)
-        age_stats = self._execute_query(age_ranges_query, fetch_one=True)
         surnames_stats = self._execute_query(surnames_query)
+        names_stats = self._execute_query(names_query)
         
         return {
             'general': general_stats,
-            'por_edades': age_stats,
-            'apellidos_frecuentes': surnames_stats
+            'apellidos_frecuentes': surnames_stats,
+            'nombres_frecuentes': names_stats
         }
     
-    @cached_query('pacientes_con_consultas', ttl=300)
-    def get_patients_consultation_stats(self) -> List[Dict[str, Any]]:
-        """Pacientes con estadísticas de consultas"""
-        query = """
-        SELECT p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, 
-            dbo.fn_CalcularEdad(p.Fecha_Nacimiento) as Edad,
-            COUNT(c.id) as total_consultas,
-            MAX(c.Fecha) as ultima_consulta,
-            MIN(c.Fecha) as primera_consulta
-        FROM Pacientes p
-        LEFT JOIN Consultas c ON p.id = c.Id_Paciente
-        GROUP BY p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Fecha_Nacimiento
-        HAVING COUNT(c.id) > 0
-        ORDER BY total_consultas DESC, p.Nombre
-        """
-        return self._execute_query(query)
-    
-    def get_patients_without_recent_visits(self, days: int = 365) -> List[Dict[str, Any]]:
-        """Pacientes sin consultas recientes"""
-        query = """
-        SELECT p.*, dbo.fn_CalcularEdad(p.Fecha_Nacimiento) as Edad,
-            MAX(c.Fecha) as ultima_consulta
-        FROM Pacientes p
-        LEFT JOIN Consultas c ON p.id = c.Id_Paciente
-        GROUP BY p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Fecha_Nacimiento
-        HAVING MAX(c.Fecha) IS NULL OR MAX(c.Fecha) < DATEADD(day, -?, GETDATE())
-        ORDER BY ultima_consulta DESC, p.Nombre
-        """
-        return self._execute_query(query, (days,))
-    
-    def get_most_frequent_patients(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Pacientes más frecuentes por número de consultas"""
-        query = """
-        SELECT p.*, dbo.fn_CalcularEdad(p.Fecha_Nacimiento) as Edad,
-            COUNT(c.id) as total_consultas,
-            MAX(c.Fecha) as ultima_consulta
-        FROM Pacientes p
-        INNER JOIN Consultas c ON p.id = c.Id_Paciente
-        GROUP BY p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Fecha_Nacimiento
-        ORDER BY total_consultas DESC, p.Nombre
-        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
-        """
-        return self._execute_query(query, (limit,))
-    
     # ===============================
-    # UTILIDADES ESPECÍFICAS
+    # UTILIDADES
     # ===============================
+    
+    def validate_patient_exists(self, paciente_id: int) -> bool:
+        """Valida que el paciente existe"""
+        return self.exists('id', paciente_id)
     
     def get_patient_full_name(self, paciente_id: int) -> str:
         """Obtiene nombre completo del paciente"""
@@ -423,160 +472,23 @@ class PacienteRepository(BaseRepository):
         if not patient:
             return ""
         
-        return f"{patient['Nombre']} {patient['Apellido_Paterno']} {patient['Apellido_Materno']}"
+        return f"{patient['Nombre']} {patient['Apellido_Paterno']} {patient['Apellido_Materno']}".strip()
     
-    def get_age_group(self, edad: int) -> str:
-        """Determina grupo etario"""
-        if edad <= 17:
-            return "PEDIÁTRICO"
-        elif edad <= 64:
-            return "ADULTO"
-        else:
-            return "ADULTO_MAYOR"
+    def validate_cedula_unique(self, cedula: str, exclude_id: int = None) -> bool:
+        """Valida que la cédula sea única (excluyendo opcionalmente un ID)"""
+        if not cedula:
+            return False
+        
+        query = "SELECT id FROM Pacientes WHERE Cedula = ?"
+        params = [cedula.strip()]
+        
+        if exclude_id:
+            query += " AND id != ?"
+            params.append(exclude_id)
+        
+        result = self._execute_query(query, params, fetch_one=True)
+        return result is None
     
-    def validate_patient_exists(self, paciente_id: int) -> bool:
-        """Valida que el paciente existe"""
-        return self.exists('id', paciente_id)
-    
-    # ===============================
-    # REPORTES
-    # ===============================
-    
-    def get_patients_for_report(self, age_group: str = None, with_stats: bool = False) -> List[Dict[str, Any]]:
-        """Obtiene pacientes formateados para reportes"""
-        base_query = """
-        SELECT p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, 
-            dbo.fn_CalcularEdad(p.Fecha_Nacimiento) as Edad
-        """
-        
-        if with_stats:
-            base_query += """
-            , COUNT(c.id) as total_consultas,
-            MAX(c.Fecha) as ultima_consulta
-            """
-        
-        from_clause = " FROM Pacientes p"
-        
-        if with_stats:
-            from_clause += " LEFT JOIN Consultas c ON p.id = c.Id_Paciente"
-        
-        where_conditions = []
-        params = []
-        
-        if age_group:
-            if age_group.upper() == "PEDIÁTRICO":
-                where_conditions.append("dbo.fn_CalcularEdad(p.Fecha_Nacimiento) BETWEEN 0 AND 17")
-            elif age_group.upper() == "ADULTO":
-                where_conditions.append("dbo.fn_CalcularEdad(p.Fecha_Nacimiento) BETWEEN 18 AND 64")
-            elif age_group.upper() == "ADULTO_MAYOR":
-                where_conditions.append("dbo.fn_CalcularEdad(p.Fecha_Nacimiento) >= 65")
-        
-        where_clause = ""
-        if where_conditions:
-            where_clause = " WHERE " + " AND ".join(where_conditions)
-        
-        group_clause = ""
-        if with_stats:
-            group_clause = " GROUP BY p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Edad"
-        
-        order_clause = " ORDER BY p.Nombre, p.Apellido_Paterno"
-        
-        final_query = base_query + from_clause + where_clause + group_clause + order_clause
-        
-        patients = self._execute_query(final_query, tuple(params))
-        
-        # Agregar información adicional
-        for patient in patients:
-            patient['nombre_completo'] = f"{patient['Nombre']} {patient['Apellido_Paterno']} {patient['Apellido_Materno']}"
-            patient['grupo_etario'] = self.get_age_group(patient['Edad'])
-        
-        return patients
-    
-    def buscar_pacientes_similares(self, nombre: str, apellido_paterno: str, 
-                          apellido_materno: str = "", edad: int = 0) -> List[Dict[str, Any]]:
-        """Busca pacientes similares - SQL Server Compatible"""
-        
-        # Query más simple y efectiva
-        query = """
-        SELECT TOP 5 *, dbo.fn_CalcularEdad(Fecha_Nacimiento) as Edad
-        FROM Pacientes 
-        WHERE LOWER(Nombre) = LOWER(?) 
-        AND LOWER(Apellido_Paterno) = LOWER(?) 
-        AND ABS(dbo.fn_CalcularEdad(Fecha_Nacimiento) - ?) <= 3
-        ORDER BY ABS(dbo.fn_CalcularEdad(Fecha_Nacimiento) - ?) ASC, id DESC
-        """
-        
-        return self._execute_query(query, (nombre.strip(), apellido_paterno.strip(), edad, edad))
-
-    def buscar_o_crear_paciente(self, nombre: str, apellido_paterno: str, 
-                    apellido_materno: str = "", fecha_nacimiento = None, 
-                    cedula: str = None) -> int:
-        """Busca paciente similar o crea nuevo con fecha_nacimiento"""
-        
-        nombre = nombre.strip()
-        apellido_paterno = apellido_paterno.strip() 
-        apellido_materno = apellido_materno.strip()
-        
-        if not nombre or len(nombre) < 2:
-            raise ValidationError("nombre", nombre, "Nombre es obligatorio")
-        if not apellido_paterno:
-            apellido_paterno = "Sin apellido"
-        
-        # Buscar por cédula primero si se proporciona
-        if cedula:
-            existing = self.buscar_por_cedula(cedula)
-            if existing:
-                print(f"👤 Paciente encontrado por cédula: {cedula} -> ID {existing['id']}")
-                return existing['id']
-        
-        # Buscar por nombre + apellido
-        similares = self.buscar_pacientes_similares_por_nombre(nombre, apellido_paterno, apellido_materno)
-        
-        if similares:
-            paciente_id = similares[0]['id']
-            print(f"👤 Paciente existente: {nombre} {apellido_paterno} -> ID {paciente_id}")
-            return paciente_id
-        
-        # Crear nuevo
-        try:
-            paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, 
-                                            fecha_nacimiento, cedula)
-            print(f"👤 Nuevo paciente: {nombre} {apellido_paterno} -> ID {paciente_id}")
-            return paciente_id
-        except Exception as e:
-            print(f"❌ Error creando paciente: {e}")
-            raise
-    def buscar_por_cedula(self, cedula: str) -> Optional[Dict[str, Any]]:
-        """Busca paciente por cédula"""
-        query = """
-        SELECT id, Nombre, Apellido_Paterno, Apellido_Materno, 
-            Cedula, Fecha_Nacimiento,
-            dbo.fn_CalcularEdad(Fecha_Nacimiento) AS Edad
-        FROM Pacientes 
-        WHERE Cedula = ?
-        """
-        result = self._execut
-    def buscar_pacientes_similares_por_nombre(self, nombre: str, apellido_paterno: str, 
-                                        apellido_materno: str = ""):
-        query = """
-        SELECT TOP 5 *, dbo.fn_CalcularEdad(Fecha_Nacimiento) as Edad
-        FROM Pacientes 
-        WHERE LOWER(Nombre) = LOWER(?) 
-        AND LOWER(Apellido_Paterno) = LOWER(?)
-        ORDER BY id DESC
-        """
-        return self._execute_query(query, (nombre.strip(), apellido_paterno.strip()))
-    def search_patients_by_field(self, field_name: str, value: str, limit: int = 10):
-        query = f"""
-        SELECT TOP (?) 
-            id, Nombre, Apellido_Paterno, Apellido_Materno, 
-            Cedula, Fecha_Nacimiento,
-            dbo.fn_CalcularEdad(Fecha_Nacimiento) as Edad,
-            CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
-        FROM Pacientes 
-        WHERE LOWER({field_name}) LIKE ?
-        ORDER BY {field_name}, Nombre
-        """
     # ===============================
     # CACHÉ
     # ===============================

@@ -158,10 +158,24 @@ Item {
             RowLayout {
                 spacing: 12
                 
-                Label {
-                    text: "🚚"
-                    font.pixelSize: 28
-                    color: primaryColor
+                Image {
+                    source: "file:///D:/Sistema-Clinica-/Resources/iconos/compras.png"
+                    Layout.preferredWidth: 60
+                    Layout.preferredHeight: 60
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    
+                    // Efecto de hover opcional
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: parent.opacity = 0.8
+                        onExited: parent.opacity = 1.0
+                    }
+                    
+                    Behavior on opacity {
+                        NumberAnimation { duration: 150 }
+                    }
                 }
                 
                 ColumnLayout {
@@ -217,7 +231,8 @@ Item {
             // Botón de Nueva Compra
             Button {
                 id: nuevaCompraButton
-                text: "➕ Nueva Compra"
+                Layout.preferredWidth: 230
+                Layout.preferredHeight: 75
                 
                 background: Rectangle {
                     color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
@@ -226,20 +241,53 @@ Item {
                     Behavior on color {
                         ColorAnimation { duration: 150 }
                     }
+                    
+                    // Sombra sutil
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.topMargin: 2
+                        color: "#00000020"
+                        radius: 8
+                        z: -1
+                    }
                 }
                 
-                contentItem: Label {
-                    text: parent.text
-                    color: whiteColor
-                    font.bold: true
-                    font.pixelSize: 14
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                contentItem: RowLayout {
+                    spacing: 8
+                    anchors.centerIn: parent
+                    
+                    Image {
+                        source: "file:///D:/Sistema-Clinica-/Resources/iconos/añadirProducto.png"
+                        Layout.preferredWidth: 30
+                        Layout.preferredHeight: 30
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                    }
+                    
+                    Label {
+                        text: "Nueva Compra"
+                        color: whiteColor
+                        font.bold: true
+                        font.pixelSize: 18
+                    }
                 }
                 
                 onClicked: {
                     console.log("🚚 Navegando a CrearCompra")
                     navegarACrearCompra() // Emitir señal para navegar
+                }
+                
+                // Efecto hover
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: parent.scale = 1.02
+                    onExited: parent.scale = 1.0
+                    onClicked: parent.clicked()
+                }
+                
+                Behavior on scale {
+                    NumberAnimation { duration: 100 }
                 }
             }
         }

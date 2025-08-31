@@ -36,7 +36,8 @@ CREATE TABLE Pacientes (
     Nombre VARCHAR(100) NOT NULL,
     Apellido_Paterno VARCHAR(100) NOT NULL,
     Apellido_Materno VARCHAR(100) NOT NULL,
-    Cedula VARCHAR(20) NOT NULL
+    Cedula VARCHAR(50) NOT NULL UNIQUE CHECK (LEN(Cedula) >= 5 AND Cedula LIKE '%[0-9]%[0-9]%[0-9]%[0-9]%[0-9]%')
+
 );
 
 -- Tabla Doctores
@@ -107,16 +108,20 @@ CREATE TABLE Consultas (
     FOREIGN KEY (Id_Especialidad) REFERENCES Especialidad(id)
 );
 
--- Tabla Laboratorio
+-- Tabla Laboratorio -- Actualizada para incluir Id_Trabajador y Id_Tipo_Analisis
 CREATE TABLE Laboratorio (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    Nombre VARCHAR(200) NOT NULL,
-    Detalles VARCHAR(500),
-    tipo VARCHAR(20) NOT NULL DEFAULT 'Normal' CHECK (tipo_consulta IN ('Normal', 'Emergencia')),
     Id_Paciente INT NOT NULL,
-    Id_Trabajador INT,
+    Id_Trabajador INT NOT NULL,
+    Id_Tipo_Analisis INT NOT NULL,
+    Fecha DATETIME NOT NULL DEFAULT GETDATE(),
+    Id_RegistradoPor INT NOT NULL,
+    Tipo VARCHAR(20) NOT NULL DEFAULT 'Normal' CHECK (Tipo IN ('Normal', 'Emergencia')),
+    Detalles VARCHAR(500),
     FOREIGN KEY (Id_Paciente) REFERENCES Pacientes(id),
-    FOREIGN KEY (Id_Trabajador) REFERENCES Trabajadores(id)
+    FOREIGN KEY (Id_Trabajador) REFERENCES Trabajadores(id),
+    FOREIGN KEY (Id_Tipo_Analisis) REFERENCES Tipos_Analisis(id),
+    FOREIGN KEY (Id_RegistradoPor) REFERENCES Usuario(id)
 );
 
 -- Tabla Enfermeria (Nueva tabla añadida)
