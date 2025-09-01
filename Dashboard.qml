@@ -443,48 +443,48 @@ ScrollView {
                 columns: 5
                 columnSpacing: 24
                 rowSpacing: 24
-                
+                                
                 KPICard {
                     Layout.fillWidth: true
                     title: "Farmacia"
                     value: "Bs " + calculateFarmaciaTotal().toFixed(0)
-                    icon: "💊"
+                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/farmacia.png"  // Cambiar de "💊"
                     cardColor: farmaciaColor
                     borderColor: farmaciaColor
                 }
-                
+
                 KPICard {
                     Layout.fillWidth: true
                     title: "Consultas"
                     value: "Bs " + calculateConsultasTotal().toFixed(0)
-                    icon: "🩺"
+                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Consulta.png"  // Cambiar de "🩺"
                     cardColor: consultasColor
                     borderColor: consultasColor
                 }
-                
+
                 KPICard {
                     Layout.fillWidth: true
                     title: "Laboratorio"
                     value: "Bs " + calculateLaboratorioTotal().toFixed(0)
-                    icon: "🔬"
+                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Laboratorio.png"  // Cambiar de "🔬"
                     cardColor: laboratorioColor
                     borderColor: laboratorioColor
                 }
-                
+
                 KPICard {
                     Layout.fillWidth: true
                     title: "Enfermería"
                     value: "Bs " + calculateEnfermeriaTotal().toFixed(0)
-                    icon: "👩‍⚕️"
+                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Enfermeria.png"  // Cambiar de "👩‍⚕️"
                     cardColor: enfermeriaColor
                     borderColor: enfermeriaColor
                 }
-                
+
                 KPICard {
                     Layout.fillWidth: true
                     title: "Servicios Básicos"
                     value: "Bs " + calculateServiciosBasicosTotal().toFixed(0)
-                    icon: "⚡"
+                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ServiciosBasicos.png"  // Cambiar de "⚡"
                     cardColor: serviciosColor
                     borderColor: serviciosColor
                 }
@@ -1044,15 +1044,18 @@ ScrollView {
             
             Rectangle {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 50
-                Layout.preferredHeight: 50
-                radius: 12
+                Layout.preferredWidth: 60
+                Layout.preferredHeight: 60
+                radius: 15
                 color: Qt.rgba(255, 255, 255, 0.2)
-                
-                Label {
+
+                Image {
                     anchors.centerIn: parent
-                    text: icon
-                    font.pixelSize: 24
+                    source: icon
+                    width: 48
+                    height: 48
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
                 }
             }
             

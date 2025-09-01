@@ -149,7 +149,7 @@ Item {
                 Layout.fillWidth: true
                 title: "Centro de Configuraciones"
                 subtitle: "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
-                icon: "⚙️"
+                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/configuraciones.png"
                 headerColor: primaryColor
             }
             
@@ -273,10 +273,13 @@ Item {
                     border.width: 1
                 }
                 
-                Label {
+                Image {
                     anchors.centerIn: parent
-                    text: icon
-                    font.pixelSize: fontTitle * 1.5
+                    source: icon
+                    width: fontTitle * 2
+                    height: fontTitle * 2
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
                 }
             }
             
