@@ -98,37 +98,37 @@ Item {
         {
             id: "laboratorio",
             title: "Laboratorio",
-            icon: "🧪",
+            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Laboratorio.png",
             description: "Configura tipos de análisis, equipos y parámetros de laboratorio clínico"
         },
         {
             id: "enfermeria",
             title: "Enfermería",
-            icon: "💉",
+            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Enfermeria.png",
             description: "Gestiona protocolos de cuidados, procedimientos y planes de enfermería"
         },
         {
             id: "consultas",
             title: "Consultas",
-            icon: "🩺",
+            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Consulta.png",
             description: "Administra especialidades médicas,precios de consultas"
         },
         {
             id: "servicios",
             title: "Servicios Básicos",
-            icon: "💰",
+            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ServiciosBasicos.png",
             description: "Controla gastos operativos, categorías financieras y configuraciones"
         },
         {
             id: "usuarios",
             title: "Usuarios",
-            icon: "👤",
+            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/usuario.png",
             description: "Define roles, permisos de acceso y políticas de seguridad del sistema"
         },
         {
             id: "personal",
             title: "Personal",
-            icon: "👥",
+            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Trabajadores.png",
             description: "Organiza departamentos, especialidades y estructura organizacional"
         }
     ]
@@ -143,8 +143,7 @@ Item {
         ColumnLayout {
             width: configuracionRoot.width
             spacing: marginMedium
-<<<<<<< HEAD
-            
+
             // Header Principal
             HeaderSection {
                 Layout.fillWidth: true
@@ -154,9 +153,7 @@ Item {
                 headerColor: primaryColor
             }
             
-=======
-                     
->>>>>>> 2fc83a382b08f4fb41c11bffda5510744f31f0cc
+
             // Sección de Módulos
             ModulesSection {
                 Layout.fillWidth: true
@@ -460,10 +457,14 @@ Item {
                     border.width: 1
                 }
                 
-                Label {
+                // CAMBIAR DE Label A Image
+                Image {
                     anchors.centerIn: parent
-                    text: moduleData.icon
-                    font.pixelSize: fontLarge
+                    source: moduleData.icon
+                    width: fontLarge * 1.5
+                    height: fontLarge * 1.5
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
                 }
             }
             
