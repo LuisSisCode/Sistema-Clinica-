@@ -8,6 +8,10 @@ Item {
     // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
     property alias tiposAnalisis: configAnalisisRoot.tiposAnalisisData
     
+    // ===== SEÑAL PARA VOLVER =====
+    signal volverClicked()
+    signal backToMain()
+    
     // ===== DATOS INTERNOS =====
     property var tiposAnalisisData: []
     
@@ -50,7 +54,6 @@ Item {
     function limpiarFormulario() {
         nuevoAnalisisNombre.text = ""
         nuevoAnalisisTipo.text = ""
-        nuevoAnalisisDescripcion.text = ""
         nuevoAnalisisPrecioNormal.text = ""
         nuevoAnalisisPrecioEmergencia.text = ""
         isEditMode = false
@@ -62,7 +65,6 @@ Item {
             var analisis = tiposAnalisisData[index]
             nuevoAnalisisNombre.text = analisis.nombre
             nuevoAnalisisTipo.text = analisis.tipo
-            nuevoAnalisisDescripcion.text = analisis.descripcion
             nuevoAnalisisPrecioNormal.text = analisis.precioNormal.toString()
             nuevoAnalisisPrecioEmergencia.text = analisis.precioEmergencia.toString()
             isEditMode = true
@@ -91,7 +93,7 @@ Item {
         var nuevoAnalisis = {
             nombre: nuevoAnalisisNombre.text,
             tipo: nuevoAnalisisTipo.text,
-            descripcion: nuevoAnalisisDescripcion.text,
+            descripcion: nuevoAnalisisTipo.text, // Usar tipo como descripcion
             precioNormal: parseFloat(nuevoAnalisisPrecioNormal.text),
             precioEmergencia: parseFloat(nuevoAnalisisPrecioEmergencia.text)
         }
@@ -111,473 +113,372 @@ Item {
     // ===== LAYOUT PRINCIPAL =====
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: marginLarge
-        spacing: marginLarge
+        spacing: 0
         
-        // ===== HEADER =====
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: marginMedium
-            
-            Rectangle {
-                Layout.preferredWidth: baseUnit * 6
-                Layout.preferredHeight: baseUnit * 6
-                color: primaryColor
-                radius: baseUnit * 3
-                
-                Label {
-                    anchors.centerIn: parent
-                    text: "🧪"
-                    font.pixelSize: fontLarge
-                    color: "white"
-                }
-            }
-            
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: marginTiny
-                
-                Label {
-                    text: "Configuración de Tipos de Análisis de Laboratorio"
-                    font.pixelSize: fontTitle
-                    font.bold: true
-                    color: textColor
-                    font.family: "Segoe UI"
-                }
-                
-                Label {
-                    text: "Gestiona los tipos de análisis de laboratorio, categorías y precios"
-                    color: textSecondaryColor
-                    font.pixelSize: fontBase
-                    font.family: "Segoe UI"
-                }
-            }
-        }
-        
-        // ===== FORMULARIO =====
-        GroupBox {
-            Layout.fillWidth: true
-            title: isEditMode ? "Editar Tipo de Análisis" : "Agregar Nuevo Tipo de Análisis"
-            
-            background: Rectangle {
-                color: surfaceColor
-                border.color: borderColor
-                border.width: 1
-                radius: radiusMedium
-            }
-            
-            label: Label {
-                text: parent.title
-                font.pixelSize: fontMedium
-                font.bold: true
-                color: textColor
-                font.family: "Segoe UI"
-            }
-            
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: marginMedium
-                
-                // ===== PRIMERA FILA: NOMBRE Y TIPO/CATEGORÍA =====
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: marginLarge
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: parent.width * 0.5
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Nombre del Análisis:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoAnalisisNombre
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Ej: Hemograma Completo"
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: parent.width * 0.5
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Tipo/Categoría:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoAnalisisTipo
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Ej: Hematología"
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                }
-                
-                // ===== SEGUNDA FILA: DESCRIPCIÓN, PRECIOS Y BOTONES =====
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: marginMedium
-                    
-                    // DESCRIPCIÓN (más ancha)
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: parent.width * 0.4
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Descripción/Detalles:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoAnalisisDescripcion
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Descripción detallada del análisis de laboratorio..."
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                    
-                    // PRECIO NORMAL (más pequeño)
-                    ColumnLayout {
-                        Layout.preferredWidth: baseUnit * 18
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Precio Normal:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontSmall
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoAnalisisPrecioNormal
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "0.00"
-                            validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            horizontalAlignment: TextInput.AlignHCenter
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                    
-                    // PRECIO EMERGENCIA (más pequeño)
-                    ColumnLayout {
-                        Layout.preferredWidth: baseUnit * 18
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Precio Emergencia:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontSmall
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoAnalisisPrecioEmergencia
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "0.00"
-                            validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            horizontalAlignment: TextInput.AlignHCenter
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                    
-                    // BOTONES
-                    ColumnLayout {
-                        Layout.preferredWidth: baseUnit * 20
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: " " // Espaciador para alinear con otros campos
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        RowLayout {
-                            spacing: marginSmall
-                            
-                            Button {
-                                text: "Cancelar"
-                                Layout.preferredWidth: baseUnit * 9
-                                Layout.preferredHeight: baseUnit * 4.5
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
-                                    radius: radiusSmall
-                                    border.color: borderColor
-                                    border.width: 1
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: textColor
-                                    font.pixelSize: fontTiny
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.family: "Segoe UI"
-                                }
-                                
-                                onClicked: limpiarFormulario()
-                            }
-                            
-                            Button {
-                                text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                enabled: nuevoAnalisisNombre.text && nuevoAnalisisTipo.text && 
-                                        nuevoAnalisisDescripcion.text && nuevoAnalisisPrecioNormal.text && 
-                                        nuevoAnalisisPrecioEmergencia.text
-                                Layout.preferredWidth: baseUnit * 11
-                                Layout.preferredHeight: baseUnit * 4.5
-                                
-                                background: Rectangle {
-                                    color: parent.enabled ? 
-                                           (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
-                                           Qt.lighter(successColor, 1.5)
-                                    radius: radiusSmall
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: backgroundColor
-                                    font.bold: true
-                                    font.pixelSize: fontTiny
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.family: "Segoe UI"
-                                }
-                                
-                                onClicked: guardarAnalisis()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // ===== TABLA DE ANÁLISIS =====
+        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE CON USUARIOS) =====
         Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            color: backgroundColor
-            radius: radiusMedium
-            border.color: borderColor
-            border.width: 1
+            Layout.preferredHeight: baseUnit * 12
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: primaryColor }
+                GradientStop { position: 1.0; color: Qt.darker(primaryColor, 1.1) }
+            }
             
-            ColumnLayout {
+            RowLayout {
                 anchors.fill: parent
-                spacing: 0
+                anchors.margins: marginLarge
+                spacing: marginMedium
                 
-                // TÍTULO
-                Rectangle {
-                    Layout.fillWidth: true
+                // ===== BOTÓN DE VOLVER =====
+                Button {
+                    Layout.preferredWidth: baseUnit * 6
                     Layout.preferredHeight: baseUnit * 6
-                    color: "#f8f9fa"
-                    radius: radiusMedium
+                    text: "←"
                     
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.bottomMargin: radiusMedium
-                        color: parent.color
+                    background: Rectangle {
+                        color: backgroundColor
+                        radius: baseUnit * 0.8
+                        opacity: parent.pressed ? 0.8 : 1.0
                     }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: primaryColor
+                        font.pixelSize: baseUnit * 2.5
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        // Emitir señal para volver a la vista principal
+                        if (typeof changeView !== "undefined") {
+                            changeView("main")
+                        } else {
+                            configAnalisisRoot.volverClicked()
+                            configAnalisisRoot.backToMain()
+                        }
+                    }
+                }
+                
+                // ===== ÍCONO DEL MÓDULO =====
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 8
+                    color: backgroundColor
+                    radius: baseUnit * 4
                     
                     Label {
                         anchors.centerIn: parent
-                        text: "🧪 Tipos de Análisis Registrados"
+                        text: "🧪"
+                        font.pixelSize: fontBase * 1.8
+                    }
+                }
+                
+                // ===== INFORMACIÓN DEL MÓDULO =====
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: marginSmall * 0.5
+                    
+                    Label {
+                        text: "Configuración de Tipos de Análisis de Laboratorio"
+                        color: backgroundColor
+                        font.pixelSize: fontBase * 1.4
+                        font.bold: true
+                        font.family: "Segoe UI"
+                    }
+                    
+                    Label {
+                        text: "Gestiona los tipos de análisis de laboratorio, categorías y precios del sistema"
+                        color: backgroundColor
+                        font.pixelSize: fontBase * 0.9
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        opacity: 0.95
+                        font.family: "Segoe UI"
+                    }
+                }
+            }
+        }
+        
+        // ===== ÁREA DE CONTENIDO =====
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: surfaceColor
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: marginLarge
+                spacing: marginLarge
+                
+                // ===== FORMULARIO =====
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: isEditMode ? "Editar Tipo de Análisis" : "Agregar Nuevo Tipo de Análisis"
+                    
+                    background: Rectangle {
+                        color: backgroundColor
+                        border.color: borderColor
+                        border.width: 1
+                        radius: radiusMedium
+                    }
+                    
+                    label: Label {
+                        text: parent.title
                         font.pixelSize: fontMedium
                         font.bold: true
                         color: textColor
                         font.family: "Segoe UI"
                     }
-                }
-                
-                // ENCABEZADOS - AJUSTADOS PARA NO DESBORDARSE
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 6
-                    color: "#e9ecef"
-                    border.color: borderColor
-                    border.width: 1
                     
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: marginSmall
-                        spacing: 1
+                        spacing: marginMedium
                         
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.22
-                            Layout.fillHeight: true
-                            text: "ANÁLISIS"
-                            font.bold: true
-                            font.pixelSize: fontTiny
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
+                        // ===== PRIMERA FILA: NOMBRE Y TIPO/CATEGORÍA =====
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: marginLarge
+                            
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: parent.width * 0.5
+                                spacing: marginSmall
+                                
+                                Label {
+                                    text: "Nombre del Análisis:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                }
+                                TextField {
+                                    id: nuevoAnalisisNombre
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    placeholderText: "Ej: Hemograma Completo"
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: borderColor
+                                        border.width: 1
+                                        radius: radiusSmall
+                                    }
+                                }
+                            }
+                            
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: parent.width * 0.5
+                                spacing: marginSmall
+                                
+                                Label {
+                                    text: "Descripción:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                }
+                                TextField {
+                                    id: nuevoAnalisisTipo
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: borderColor
+                                        border.width: 1
+                                        radius: radiusSmall
+                                    }
+                                }
+                            }
                         }
                         
-                        Rectangle {
-                            Layout.preferredWidth: 1
-                            Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.18
-                            Layout.fillHeight: true
-                            text: "TIPO"
-                            font.bold: true
-                            font.pixelSize: fontTiny
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 1
-                            Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.25
-                            Layout.fillHeight: true
-                            text: "DESCRIPCIÓN"
-                            font.bold: true
-                            font.pixelSize: fontTiny
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 1
-                            Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.12
-                            Layout.fillHeight: true
-                            text: "P. NORMAL"
-                            font.bold: true
-                            font.pixelSize: fontTiny
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 1
-                            Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.12
-                            Layout.fillHeight: true
-                            text: "P. EMERG."
-                            font.bold: true
-                            font.pixelSize: fontTiny
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 1
-                            Layout.fillHeight: true
-                            color: borderColor
-                        }
-                        
-                        Label {
-                            Layout.preferredWidth: parent.width * 0.11
-                            Layout.fillHeight: true
-                            text: "ACCIONES"
-                            font.bold: true
-                            font.pixelSize: fontTiny
-                            color: textColor
-                            font.family: "Segoe UI"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
+                        // ===== SEGUNDA FILA: PRECIOS Y BOTONES =====
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: marginMedium
+                            
+                            // PRECIO NORMAL (fijo y pequeño)
+                            ColumnLayout {
+                                Layout.preferredWidth: 120
+                                spacing: marginSmall
+                                
+                                Label {
+                                    text: "Precio Normal:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontSmall
+                                    font.family: "Segoe UI"
+                                }
+                                TextField {
+                                    id: nuevoAnalisisPrecioNormal
+                                    Layout.preferredWidth: 120
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    placeholderText: "0.00"
+                                    validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: TextInput.AlignHCenter
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: borderColor
+                                        border.width: 1
+                                        radius: radiusSmall
+                                    }
+                                }
+                            }
+                            
+                            // PRECIO EMERGENCIA (fijo y pequeño)
+                            ColumnLayout {
+                                Layout.preferredWidth: 120
+                                spacing: marginSmall
+                                
+                                Label {
+                                    text: "Precio Emergencia:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontSmall
+                                    font.family: "Segoe UI"
+                                }
+                                TextField {
+                                    id: nuevoAnalisisPrecioEmergencia
+                                    Layout.preferredWidth: 120
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    placeholderText: "0.00"
+                                    validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: TextInput.AlignHCenter
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: borderColor
+                                        border.width: 1
+                                        radius: radiusSmall
+                                    }
+                                }
+                            }
+                            
+                            // ESPACIADOR
+                            Item {
+                                Layout.fillWidth: true
+                            }
+                            
+                            // BOTONES
+                            ColumnLayout {
+                                Layout.preferredWidth: baseUnit * 22
+                                spacing: marginSmall
+                                
+                                Label {
+                                    text: " " // Espaciador para alinear con otros campos
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                RowLayout {
+                                    spacing: marginSmall
+                                    
+                                    Button {
+                                        text: "Cancelar"
+                                        Layout.preferredWidth: baseUnit * 10
+                                        Layout.preferredHeight: baseUnit * 4.5
+                                        
+                                        background: Rectangle {
+                                            color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                                            radius: radiusSmall
+                                            border.color: borderColor
+                                            border.width: 1
+                                        }
+                                        
+                                        contentItem: Label {
+                                            text: parent.text
+                                            color: textColor
+                                            font.pixelSize: fontTiny
+                                            font.bold: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            font.family: "Segoe UI"
+                                        }
+                                        
+                                        onClicked: limpiarFormulario()
+                                    }
+                                    
+                                    Button {
+                                        text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
+                                        enabled: nuevoAnalisisNombre.text && nuevoAnalisisTipo.text && 
+                                                nuevoAnalisisPrecioNormal.text && 
+                                                nuevoAnalisisPrecioEmergencia.text
+                                        Layout.preferredWidth: baseUnit * 12
+                                        Layout.preferredHeight: baseUnit * 4.5
+                                        
+                                        background: Rectangle {
+                                            color: parent.enabled ? 
+                                                   (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                                                   Qt.lighter(successColor, 1.5)
+                                            radius: radiusSmall
+                                        }
+                                        
+                                        contentItem: Label {
+                                            text: parent.text
+                                            color: backgroundColor
+                                            font.bold: true
+                                            font.pixelSize: fontTiny
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            font.family: "Segoe UI"
+                                        }
+                                        
+                                        onClicked: guardarAnalisis()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
                 
-                // CONTENIDO
-                ScrollView {
+                // ===== TABLA DE ANÁLISIS =====
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
+                    color: backgroundColor
+                    radius: radiusMedium
+                    border.color: borderColor
+                    border.width: 1
                     
-                    ListView {
-                        id: analisisList
-                        model: tiposAnalisisData
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 0
                         
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: baseUnit * 8
-                            color: index % 2 === 0 ? backgroundColor : "#f8f9fa"
+                        // TÍTULO
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 6
+                            color: "#f8f9fa"
+                            radius: radiusMedium
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.bottomMargin: radiusMedium
+                                color: parent.color
+                            }
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "🧪 Tipos de Análisis Registrados"
+                                font.pixelSize: fontMedium
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI"
+                            }
+                        }
+                        
+                        // ENCABEZADOS - AJUSTADOS PARA NO DESBORDARSE
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 6
+                            color: "#e9ecef"
                             border.color: borderColor
                             border.width: 1
                             
@@ -589,16 +490,14 @@ Item {
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.22
                                     Layout.fillHeight: true
-                                    text: modelData.nombre
+                                    text: "ANÁLISIS"
                                     font.bold: true
-                                    color: primaryColor
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontTiny
+                                    color: textColor
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     wrapMode: Text.WordWrap
-                                    elide: Text.ElideRight
-                                    maximumLineCount: 2
                                 }
                                 
                                 Rectangle {
@@ -610,15 +509,14 @@ Item {
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.18
                                     Layout.fillHeight: true
-                                    text: modelData.tipo
+                                    text: "TIPO"
+                                    font.bold: true
+                                    font.pixelSize: fontTiny
                                     color: textColor
-                                    font.pixelSize: fontSmall
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     wrapMode: Text.WordWrap
-                                    elide: Text.ElideRight
-                                    maximumLineCount: 2
                                 }
                                 
                                 Rectangle {
@@ -630,15 +528,14 @@ Item {
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.25
                                     Layout.fillHeight: true
-                                    text: modelData.descripcion
-                                    color: textColor
+                                    text: "DESCRIPCIÓN"
+                                    font.bold: true
                                     font.pixelSize: fontTiny
+                                    color: textColor
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     wrapMode: Text.WordWrap
-                                    elide: Text.ElideRight
-                                    maximumLineCount: 3
                                 }
                                 
                                 Rectangle {
@@ -650,13 +547,14 @@ Item {
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.12
                                     Layout.fillHeight: true
-                                    text: "Bs " + modelData.precioNormal.toFixed(2)
-                                    color: successColor
+                                    text: "P. NORMAL"
                                     font.bold: true
                                     font.pixelSize: fontTiny
+                                    color: textColor
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
+                                    wrapMode: Text.WordWrap
                                 }
                                 
                                 Rectangle {
@@ -668,13 +566,14 @@ Item {
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.12
                                     Layout.fillHeight: true
-                                    text: "Bs " + modelData.precioEmergencia.toFixed(2)
-                                    color: warningColor
+                                    text: "P. EMERG."
                                     font.bold: true
                                     font.pixelSize: fontTiny
+                                    color: textColor
                                     font.family: "Segoe UI"
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
+                                    wrapMode: Text.WordWrap
                                 }
                                 
                                 Rectangle {
@@ -683,93 +582,229 @@ Item {
                                     color: borderColor
                                 }
                                 
-                                RowLayout {
+                                Label {
                                     Layout.preferredWidth: parent.width * 0.11
                                     Layout.fillHeight: true
-                                    spacing: marginTiny
+                                    text: "ACCIONES"
+                                    font.bold: true
+                                    font.pixelSize: fontTiny
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                        
+                        // CONTENIDO
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            
+                            ListView {
+                                id: analisisList
+                                model: tiposAnalisisData
+                                
+                                delegate: Rectangle {
+                                    width: ListView.view.width
+                                    height: baseUnit * 8
+                                    color: index % 2 === 0 ? backgroundColor : "#f8f9fa"
+                                    border.color: borderColor
+                                    border.width: 1
                                     
-                                    Button {
-                                        Layout.preferredWidth: baseUnit * 3
-                                        Layout.preferredHeight: baseUnit * 3
-                                        text: "✏️"
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: marginSmall
+                                        spacing: 1
                                         
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
-                                            radius: radiusSmall
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.22
+                                            Layout.fillHeight: true
+                                            text: modelData.nombre
+                                            font.bold: true
+                                            color: primaryColor
+                                            font.pixelSize: fontSmall
+                                            font.family: "Segoe UI"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            wrapMode: Text.WordWrap
+                                            elide: Text.ElideRight
+                                            maximumLineCount: 2
                                         }
                                         
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: backgroundColor
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.18
+                                            Layout.fillHeight: true
+                                            text: modelData.tipo
+                                            color: textColor
+                                            font.pixelSize: fontSmall
+                                            font.family: "Segoe UI"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            wrapMode: Text.WordWrap
+                                            elide: Text.ElideRight
+                                            maximumLineCount: 2
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.25
+                                            Layout.fillHeight: true
+                                            text: modelData.descripcion
+                                            color: textColor
                                             font.pixelSize: fontTiny
+                                            font.family: "Segoe UI"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            wrapMode: Text.WordWrap
+                                            elide: Text.ElideRight
+                                            maximumLineCount: 3
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.12
+                                            Layout.fillHeight: true
+                                            text: "Bs " + modelData.precioNormal.toFixed(2)
+                                            color: successColor
+                                            font.bold: true
+                                            font.pixelSize: fontTiny
+                                            font.family: "Segoe UI"
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
                                         
-                                        onClicked: editarAnalisis(index)
-                                    }
-                                    
-                                    Button {
-                                        Layout.preferredWidth: baseUnit * 3
-                                        Layout.preferredHeight: baseUnit * 3
-                                        text: "🗑️"
-                                        
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                            radius: radiusSmall
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
                                         }
                                         
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: backgroundColor
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.12
+                                            Layout.fillHeight: true
+                                            text: "Bs " + modelData.precioEmergencia.toFixed(2)
+                                            color: warningColor
+                                            font.bold: true
                                             font.pixelSize: fontTiny
+                                            font.family: "Segoe UI"
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
                                         
-                                        onClicked: eliminarAnalisis(index)
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        RowLayout {
+                                            Layout.preferredWidth: parent.width * 0.11
+                                            Layout.fillHeight: true
+                                            spacing: marginTiny
+                                            
+                                            Button {
+                                                Layout.preferredWidth: baseUnit * 3
+                                                Layout.preferredHeight: baseUnit * 3
+                                                text: "✏️"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
+                                                    radius: radiusSmall
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: backgroundColor
+                                                    font.pixelSize: fontTiny
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: editarAnalisis(index)
+                                            }
+                                            
+                                            Button {
+                                                Layout.preferredWidth: baseUnit * 3
+                                                Layout.preferredHeight: baseUnit * 3
+                                                text: "🗑️"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                                                    radius: radiusSmall
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: backgroundColor
+                                                    font.pixelSize: fontTiny
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: eliminarAnalisis(index)
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-                
-                // ESTADO VACÍO
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: "transparent"
-                    visible: tiposAnalisisData.length === 0
-                    
-                    ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: marginMedium
                         
-                        Label {
-                            text: "🧪"
-                            font.pixelSize: fontTitle * 2
-                            color: textSecondaryColor
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        
-                        Label {
-                            text: "No hay tipos de análisis registrados"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontMedium
-                            Layout.alignment: Qt.AlignHCenter
-                            font.family: "Segoe UI"
-                        }
-                        
-                        Label {
-                            text: "Agrega el primer tipo de análisis usando el formulario superior"
-                            color: textSecondaryColor
-                            font.pixelSize: fontBase
-                            Layout.alignment: Qt.AlignHCenter
-                            wrapMode: Text.WordWrap
-                            horizontalAlignment: Text.AlignHCenter
-                            font.family: "Segoe UI"
+                        // ESTADO VACÍO
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            visible: tiposAnalisisData.length === 0
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: marginMedium
+                                
+                                Label {
+                                    text: "🧪"
+                                    font.pixelSize: fontTitle * 2
+                                    color: textSecondaryColor
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: "No hay tipos de análisis registrados"
+                                    color: textColor
+                                    font.bold: true
+                                    font.pixelSize: fontMedium
+                                    Layout.alignment: Qt.AlignHCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Label {
+                                    text: "Agrega el primer tipo de análisis usando el formulario superior"
+                                    color: textSecondaryColor
+                                    font.pixelSize: fontBase
+                                    Layout.alignment: Qt.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    horizontalAlignment: Text.AlignHCenter
+                                    font.family: "Segoe UI"
+                                }
+                            }
                         }
                     }
                 }
