@@ -11,11 +11,10 @@ from ..core.utils import (
 )
 
 class LaboratorioRepository(BaseRepository):
-    """Repository para gestión de Exámenes de Laboratorio - ACTUALIZADO con búsqueda por cédula"""
+    """Repository para gestión de Exámenes de Laboratorio con paginación SQL"""
     
     def __init__(self):
         super().__init__('Laboratorio', 'laboratorio')
-        print("🔬 LaboratorioRepository inicializado")
     
     # ===============================
     # IMPLEMENTACIÓN ABSTRACTA
@@ -24,6 +23,246 @@ class LaboratorioRepository(BaseRepository):
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene todos los exámenes de laboratorio con información completa"""
         return self.get_all_with_details()
+    
+    # ===============================
+    # PAGINACIÓN Y FILTROS SQL - NUEVOS MÉTODOS
+    # ===============================
+    
+    def get_paginated_exams_with_details(self, page: int = 0, page_size: int = 20, 
+                                   search_term: str = "", tipo_analisis: str = "",
+                                   tipo_servicio: str = "", fecha_desde: str = "", 
+                                   fecha_hasta: str = "") -> Dict[str, Any]:
+        """Obtiene exámenes paginados con filtros y búsqueda SQL - CORREGIDO"""
+        try:
+            print(f"🔍 Obteniendo página {page + 1}, {page_size} elementos por página")
+            print(f"🔍 Filtros: búsqueda='{search_term}', tipo='{tipo_analisis}', servicio='{tipo_servicio}'")
+            search_term = search_term or ""
+            tipo_analisis = tipo_analisis or ""
+            tipo_servicio = tipo_servicio or ""
+            fecha_desde = fecha_desde or ""
+            fecha_hasta = fecha_hasta or ""
+            # Construir condiciones WHERE
+            where_conditions = ["1=1"]  # Condición base
+            params = []
+            
+            # Filtro por búsqueda (paciente/cédula) - MEJORADO
+            if search_term.strip():
+                search_pattern = f"%{search_term.strip()}%"
+                where_conditions.append("""
+                    (p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ? 
+                    OR p.Cedula LIKE ? OR CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) LIKE ?)
+                """)
+                params.extend([search_pattern] * 5)
+            
+            # Filtro por tipo de análisis - CORREGIDO
+            if tipo_analisis.strip() and tipo_analisis != "Todos":
+                where_conditions.append("ta.Nombre = ?")
+                params.append(tipo_analisis.strip())
+            
+            # Filtro por tipo de servicio - CORREGIDO
+            if tipo_servicio.strip() and tipo_servicio != "Todos":
+                where_conditions.append("l.tipo = ?")
+                params.append(tipo_servicio.strip())
+            
+            # Filtros por fecha - MEJORADOS
+            if fecha_desde.strip():
+                where_conditions.append("CAST(l.Fecha AS DATE) >= ?")
+                params.append(fecha_desde.strip())
+            
+            if fecha_hasta.strip():
+                where_conditions.append("CAST(l.Fecha AS DATE) <= ?")
+                params.append(fecha_hasta.strip())
+            
+            where_clause = " AND ".join(where_conditions)
+            
+            # Query principal con paginación - OPTIMIZADA
+            query = f"""
+            SELECT l.id, l.Detalles as detalles_examen, l.tipo, l.Fecha,
+                -- Paciente
+                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente,
+                p.Cedula as pacienteCedula,
+                p.Nombre as pacienteNombre, 
+                p.Apellido_Paterno as pacienteApellidoP,
+                ISNULL(p.Apellido_Materno, '') as pacienteApellidoM,
+                p.id as pacienteId,
+                -- Tipo de Análisis
+                ta.Nombre as tipoAnalisis,
+                ta.Descripcion as detalles,
+                ta.Precio_Normal, ta.Precio_Emergencia,
+                ta.id as tipoAnalisisId,
+                -- Precio según tipo
+                CASE 
+                    WHEN l.tipo = 'Normal' THEN CAST(ta.Precio_Normal AS DECIMAL(10,2))
+                    ELSE CAST(ta.Precio_Emergencia AS DECIMAL(10,2))
+                END as precio,
+                -- Trabajador (puede ser NULL)
+                l.Id_Trabajador,
+                CASE 
+                    WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', ISNULL(t.Apellido_Materno, ''))
+                    ELSE 'Sin asignar'
+                END as trabajadorAsignado,
+                ISNULL(tt.Tipo, 'Sin tipo') as trabajadorTipo,
+                -- Usuario registro
+                CONCAT(u.Nombre, ' ', ISNULL(u.Apellido_Paterno, '')) as registradoPor,
+                -- IDs para referencias
+                l.Id_RegistradoPor
+            FROM Laboratorio l
+            INNER JOIN Pacientes p ON l.Id_Paciente = p.id
+            INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+            INNER JOIN Usuario u ON l.Id_RegistradoPor = u.id
+            LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
+            LEFT JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            WHERE {where_clause}
+            ORDER BY l.Fecha DESC, l.id DESC
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+            """
+            
+            # Agregar parámetros de paginación
+            offset = page * page_size
+            params.extend([offset, page_size])
+            
+            # Ejecutar query
+            examenes = self._execute_query(query, params)
+            
+            if not examenes:
+                print("⚠️ No se encontraron exámenes")
+                return {
+                    'examenes': [],
+                    'page': page,
+                    'page_size': page_size,
+                    'total_records': 0
+                }
+            
+            # Procesar datos para el formato esperado por QML - NORMALIZADO
+            examenes_procesados = []
+            for examen in examenes:
+                try:
+                    # Formatear fecha
+                    fecha_formateada = ""
+                    if examen.get('Fecha'):
+                        try:
+                            if isinstance(examen['Fecha'], str):
+                                fecha_formateada = examen['Fecha'][:10]  # YYYY-MM-DD
+                            else:
+                                fecha_formateada = examen['Fecha'].strftime('%Y-%m-%d')
+                        except:
+                            fecha_formateada = str(examen.get('Fecha', ''))[:10]
+                    
+                    examen_procesado = {
+                        # IDs
+                        'analisisId': str(examen.get('id', 0)),
+                        'pacienteId': examen.get('pacienteId', 0),
+                        'tipoAnalisisId': examen.get('tipoAnalisisId', 0),
+                        
+                        # Información del paciente
+                        'paciente': str(examen.get('paciente', 'Paciente Desconocido')).strip(),
+                        'pacienteCedula': str(examen.get('pacienteCedula', '')).strip(),
+                        'pacienteNombre': str(examen.get('pacienteNombre', '')).strip(),
+                        'pacienteApellidoP': str(examen.get('pacienteApellidoP', '')).strip(),
+                        'pacienteApellidoM': str(examen.get('pacienteApellidoM', '')).strip(),
+                        
+                        # Información del análisis
+                        'tipoAnalisis': str(examen.get('tipoAnalisis', 'Análisis General')).strip(),
+                        'detalles': str(examen.get('detalles', '')).strip(),
+                        'detallesExamen': str(examen.get('detalles_examen', '')).strip(),
+                        'tipo': str(examen.get('tipo', 'Normal')).strip(),
+                        
+                        # Precio - CORREGIDO
+                        'precio': f"{float(examen.get('precio', 0)):.2f}",
+                        'precioNumerico': float(examen.get('precio', 0)),
+                        
+                        # Trabajador
+                        'trabajadorAsignado': str(examen.get('trabajadorAsignado', 'Sin asignar')).strip(),
+                        'trabajadorId': examen.get('Id_Trabajador', 0) or 0,
+                        
+                        # Fecha y usuario
+                        'fecha': fecha_formateada,
+                        'registradoPor': str(examen.get('registradoPor', 'Sistema')).strip()
+                    }
+                    
+                    examenes_procesados.append(examen_procesado)
+                    
+                except Exception as e:
+                    print(f"⚠️ Error procesando examen {examen.get('id', 'desconocido')}: {e}")
+                    continue
+            
+            total_records = self.get_exam_count_with_filters(search_term, tipo_analisis, tipo_servicio, fecha_desde, fecha_hasta)
+            
+            print(f"🔬 Exámenes paginados: página {page + 1}, {len(examenes_procesados)} registros de {total_records}")
+            
+            return {
+                'examenes': examenes_procesados,
+                'page': page,
+                'page_size': page_size,
+                'total_records': total_records
+            }
+            
+        except Exception as e:
+            print(f"❌ Error en paginación: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'examenes': [],
+                'page': page,
+                'page_size': page_size,
+                'total_records': 0,
+                'error': str(e)
+            }
+    
+    def get_exam_count_with_filters(self, search_term: str = "", tipo_analisis: str = "",
+                               tipo_servicio: str = "", fecha_desde: str = "",
+                               fecha_hasta: str = "") -> int:
+        """Cuenta total de exámenes con filtros aplicados - CORREGIDO"""
+        try:
+            # Construir condiciones WHERE (igual que en get_paginated_exams_with_details)
+            where_conditions = ["1=1"]
+            params = []
+            
+            if search_term.strip():
+                search_pattern = f"%{search_term.strip()}%"
+                where_conditions.append("""
+                    (p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ? 
+                    OR p.Cedula LIKE ? OR CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) LIKE ?)
+                """)
+                params.extend([search_pattern] * 5)
+            
+            if tipo_analisis.strip() and tipo_analisis != "Todos":
+                where_conditions.append("ta.Nombre = ?")
+                params.append(tipo_analisis.strip())
+            
+            if tipo_servicio.strip() and tipo_servicio != "Todos":
+                where_conditions.append("l.tipo = ?")
+                params.append(tipo_servicio.strip())
+            
+            if fecha_desde.strip():
+                where_conditions.append("CAST(l.Fecha AS DATE) >= ?")
+                params.append(fecha_desde.strip())
+            
+            if fecha_hasta.strip():
+                where_conditions.append("CAST(l.Fecha AS DATE) <= ?")
+                params.append(fecha_hasta.strip())
+            
+            where_clause = " AND ".join(where_conditions)
+            
+            query = f"""
+            SELECT COUNT(*) as total
+            FROM Laboratorio l
+            INNER JOIN Pacientes p ON l.Id_Paciente = p.id
+            INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+            INNER JOIN Usuario u ON l.Id_RegistradoPor = u.id
+            LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
+            LEFT JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            WHERE {where_clause}
+            """
+            
+            result = self._execute_query(query, params, fetch_one=True)
+            count = result['total'] if result else 0
+            print(f"📊 Total exámenes con filtros: {count}")
+            return count
+            
+        except Exception as e:
+            print(f"❌ Error contando exámenes: {e}")
+            return 0
     
     # ===============================
     # GESTIÓN DE TIPOS DE ANÁLISIS
@@ -50,25 +289,26 @@ class LaboratorioRepository(BaseRepository):
         return result['count'] > 0 if result else False
     
     # ===============================
-    # GESTIÓN DE PACIENTES - NUEVO
+    # GESTIÓN DE PACIENTES
     # ===============================
     
     def search_patient_by_cedula_exact(self, cedula: str) -> Optional[Dict[str, Any]]:
-        """Busca paciente por cédula exacta"""
+        """Busca paciente por cédula exacta - CORREGIDO con query directa"""
         try:
             if not cedula or len(cedula.strip()) < 5:
                 return None
             
             cedula_clean = cedula.strip()
             
+            # Query directa a tabla Pacientes
             query = """
             SELECT 
                 id,
                 Nombre,
                 Apellido_Paterno,
-                Apellido_Materno,
+                ISNULL(Apellido_Materno, '') as Apellido_Materno,
                 Cedula,
-                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
+                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo
             FROM Pacientes
             WHERE Cedula = ?
             """
@@ -77,7 +317,20 @@ class LaboratorioRepository(BaseRepository):
             
             if result:
                 print(f"👤 Paciente encontrado por cédula: {cedula_clean} -> {result['nombre_completo']}")
-                return result
+                # Normalizar nombres de campos
+                normalized_result = {
+                    'id': result['id'],
+                    'Nombre': result['Nombre'],
+                    'Apellido_Paterno': result['Apellido_Paterno'],
+                    'Apellido_Materno': result['Apellido_Materno'],
+                    'Cedula': result['Cedula'],
+                    'nombre_completo': result['nombre_completo'],
+                    # Añadir aliases para compatibilidad
+                    'nombre': result['Nombre'],
+                    'apellido_paterno': result['Apellido_Paterno'],
+                    'apellido_materno': result['Apellido_Materno']
+                }
+                return normalized_result
             
             return None
             
@@ -86,21 +339,22 @@ class LaboratorioRepository(BaseRepository):
             return None
     
     def search_patients_by_cedula_partial(self, cedula: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Busca pacientes por cédula parcial (para sugerencias)"""
+        """Busca pacientes por cédula parcial (para sugerencias) - CORREGIDO"""
         try:
             if not cedula or len(cedula.strip()) < 3:
                 return []
             
             cedula_clean = cedula.strip()
             
+            # Query directa a tabla Pacientes
             query = """
             SELECT TOP (?)
                 id,
                 Nombre,
                 Apellido_Paterno, 
-                Apellido_Materno,
+                ISNULL(Apellido_Materno, '') as Apellido_Materno,
                 Cedula,
-                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre_completo
+                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo
             FROM Pacientes
             WHERE Cedula LIKE ?
             ORDER BY 
@@ -116,8 +370,8 @@ class LaboratorioRepository(BaseRepository):
             return []
     
     def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
-                                      apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente por cédula o crea uno nuevo si no existe"""
+                                  apellido_materno: str = "", cedula: str = "") -> int:
+        """Busca paciente por cédula o crea uno nuevo si no existe - CORREGIDO"""
         try:
             nombre = nombre.strip()
             apellido_paterno = apellido_paterno.strip()
@@ -138,25 +392,39 @@ class LaboratorioRepository(BaseRepository):
                 print(f"👤 Paciente existente encontrado: {existing_patient['nombre_completo']}")
                 return existing_patient['id']
             
-            # 2. Crear nuevo paciente
-            patient_data = {
-                'Nombre': nombre,
-                'Apellido_Paterno': apellido_paterno,
-                'Apellido_Materno': apellido_materno,
-                'Cedula': cedula_clean
-            }
+            # 2. Crear nuevo paciente - CORREGIDO: Insertar directamente en tabla Pacientes
+            print(f"🆕 Creando nuevo paciente: {nombre} {apellido_paterno} - Cédula: {cedula_clean}")
             
-            patient_id = self.insert(patient_data)
-            print(f"👤 Nuevo paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
+            # Query corregida - insertar en tabla Pacientes, no Laboratorio
+            insert_query = """
+            INSERT INTO Pacientes (Nombre, Apellido_Paterno, Apellido_Materno, Cedula) 
+            OUTPUT INSERTED.id
+            VALUES (?, ?, ?, ?)
+            """
             
-            return patient_id
+            params = (nombre, apellido_paterno, apellido_materno, cedula_clean)
             
+            # Ejecutar query directamente para tabla Pacientes
+            result = self._execute_query(insert_query, params, fetch_one=True)
+            
+            if result and 'id' in result:
+                patient_id = result['id']
+                print(f"👤 Nuevo paciente creado exitosamente - ID: {patient_id}")
+                return patient_id
+            else:
+                raise ValidationError("paciente", "No se pudo obtener ID", "Error en creación de paciente")
+                
         except Exception as e:
             print(f"❌ Error gestionando paciente: {e}")
             raise ValidationError("paciente", str(e), "Error creando/buscando paciente")
-    
+    # Metodo auxiliar
+    def _patient_exists_by_id(self, paciente_id: int) -> bool:
+        """Verifica si existe el paciente por ID - CORREGIDO: usar tabla Pacientes"""
+        query = "SELECT COUNT(*) as count FROM Pacientes WHERE id = ?"
+        result = self._execute_query(query, (paciente_id,), fetch_one=True)
+        return result['count'] > 0 if result else False
     # ===============================
-    # CRUD ESPECÍFICO - CORREGIDO
+    # CRUD ESPECÍFICO
     # ===============================
     
     def create_lab_exam(self, paciente_id: int, tipo_analisis_id: int, tipo: str = "Normal", 
@@ -202,11 +470,7 @@ class LaboratorioRepository(BaseRepository):
         if tipo_analisis_id is not None:
             if not self._analysis_type_exists(tipo_analisis_id):
                 raise ValidationError("tipo_analisis_id", tipo_analisis_id, "Tipo de análisis no encontrado")
-            
-            # Obtener nombre del nuevo tipo
-            tipo_analisis = self.get_analysis_type_by_id(tipo_analisis_id)
             update_data['Id_Tipo_Analisis'] = tipo_analisis_id
-            update_data['Nombre'] = tipo_analisis['Nombre']
         
         if tipo_servicio is not None:
             if tipo_servicio not in ['Normal', 'Emergencia']:
@@ -239,12 +503,12 @@ class LaboratorioRepository(BaseRepository):
         return self.update_lab_exam(lab_id, trabajador_id=0)
     
     # ===============================
-    # CONSULTAS CON RELACIONES - ACTUALIZADAS (SIN EDAD)
+    # CONSULTAS CON RELACIONES - ACTUALIZADA (SIN EDAD)
     # ===============================
     
     @cached_query('laboratorio_completo', ttl=300)
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Obtiene todos los exámenes con información completa - ACTUALIZADO sin edad"""
+        """Obtiene todos los exámenes con información completa - SIN EDAD"""
         query = """
         SELECT l.id, l.Detalles as detalles_examen, l.tipo, l.Fecha,
             -- Paciente (SIN EDAD, CON CÉDULA)
@@ -285,7 +549,7 @@ class LaboratorioRepository(BaseRepository):
         return self._execute_query(query, (limit,))
     
     def get_lab_exam_by_id_complete(self, lab_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene examen específico con información completa - ACTUALIZADO sin edad"""
+        """Obtiene examen específico con información completa - SIN EDAD"""
         query = """
         SELECT l.id, l.Nombre, l.Detalles, l.tipo, l.Fecha,
                -- Paciente (SIN EDAD)
@@ -320,109 +584,6 @@ class LaboratorioRepository(BaseRepository):
         return self._execute_query(query, (lab_id,), fetch_one=True)
     
     # ===============================
-    # BÚSQUEDAS POR ENTIDADES - ACTUALIZADAS
-    # ===============================
-    
-    def get_exams_by_patient(self, paciente_id: int) -> List[Dict[str, Any]]:
-        """Obtiene exámenes de un paciente específico"""
-        query = """
-        SELECT l.*, ta.Nombre as tipo_analisis, ta.Precio_Normal, ta.Precio_Emergencia,
-               CASE 
-                   WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno)
-                   ELSE 'Sin asignar'
-               END as trabajador_nombre,
-               tt.Tipo as trabajador_tipo
-        FROM Laboratorio l
-        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
-        LEFT JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE l.Id_Paciente = ?
-        ORDER BY l.Fecha DESC
-        """
-        return self._execute_query(query, (paciente_id,))
-    
-    def get_exams_by_worker(self, trabajador_id: int) -> List[Dict[str, Any]]:
-        """Obtiene exámenes asignados a un trabajador"""
-        query = """
-        SELECT l.*, ta.Nombre as tipo_analisis,
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Cedula as paciente_cedula
-        FROM Laboratorio l
-        INNER JOIN Pacientes p ON l.Id_Paciente = p.id
-        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        WHERE l.Id_Trabajador = ?
-        ORDER BY l.Fecha DESC
-        """
-        return self._execute_query(query, (trabajador_id,))
-    
-    def get_unassigned_exams(self) -> List[Dict[str, Any]]:
-        """Obtiene exámenes sin trabajador asignado"""
-        query = """
-        SELECT l.*, ta.Nombre as tipo_analisis,
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Cedula as paciente_cedula
-        FROM Laboratorio l
-        INNER JOIN Pacientes p ON l.Id_Paciente = p.id
-        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        WHERE l.Id_Trabajador IS NULL
-        ORDER BY l.Fecha DESC
-        """
-        return self._execute_query(query)
-    
-    def get_assigned_exams(self) -> List[Dict[str, Any]]:
-        """Obtiene exámenes con trabajador asignado"""
-        query = """
-        SELECT l.*, ta.Nombre as tipo_analisis,
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Cedula as paciente_cedula,
-               CONCAT(t.Nombre, ' ', t.Apellido_Paterno) as trabajador_nombre,
-               tt.Tipo as trabajador_tipo
-        FROM Laboratorio l
-        INNER JOIN Pacientes p ON l.Id_Paciente = p.id
-        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        INNER JOIN Trabajadores t ON l.Id_Trabajador = t.id
-        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        ORDER BY l.Fecha DESC
-        """
-        return self._execute_query(query)
-    
-    # ===============================
-    # BÚSQUEDAS ESPECÍFICAS - ACTUALIZADAS
-    # ===============================
-    
-    def search_exams(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Búsqueda por nombre del examen, paciente o trabajador"""
-        if not search_term:
-            return []
-        
-        search_term = f"%{search_term.strip()}%"
-        
-        query = """
-        SELECT l.*, ta.Nombre as tipo_analisis,
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Cedula as paciente_cedula,
-               CASE 
-                   WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno)
-                   ELSE 'Sin asignar'
-               END as trabajador_nombre
-        FROM Laboratorio l
-        INNER JOIN Pacientes p ON l.Id_Paciente = p.id
-        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
-        WHERE l.Nombre LIKE ? OR l.Detalles LIKE ? OR ta.Nombre LIKE ?
-           OR p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ?
-           OR t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? OR t.Apellido_Materno LIKE ?
-           OR p.Cedula LIKE ?
-        ORDER BY l.Fecha DESC
-        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
-        """
-        
-        return self._execute_query(query, (search_term, search_term, search_term, 
-                                         search_term, search_term, search_term,
-                                         search_term, search_term, search_term,
-                                         search_term, limit))
-    
-    # ===============================
     # TRABAJADORES DISPONIBLES
     # ===============================
     
@@ -450,7 +611,7 @@ class LaboratorioRepository(BaseRepository):
         return [row['Nombre'] for row in result]
     
     # ===============================
-    # ESTADÍSTICAS - ACTUALIZADAS
+    # ESTADÍSTICAS
     # ===============================
     
     @cached_query('stats_laboratorio', ttl=300)
@@ -468,51 +629,21 @@ class LaboratorioRepository(BaseRepository):
         FROM Laboratorio
         """
         
-        # Por tipo de análisis
-        analysis_types_query = """
-        SELECT ta.Nombre as tipo_analisis,
-               COUNT(l.id) as cantidad,
-               AVG(ta.Precio_Normal) as precio_promedio_normal,
-               AVG(ta.Precio_Emergencia) as precio_promedio_emergencia,
-               COUNT(DISTINCT l.Id_Paciente) as pacientes_unicos
-        FROM Laboratorio l
-        INNER JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        GROUP BY ta.Nombre, ta.Precio_Normal, ta.Precio_Emergencia
-        ORDER BY cantidad DESC
-        """
-        
-        # Por trabajador
-        workers_query = """
-        SELECT CONCAT(t.Nombre, ' ', t.Apellido_Paterno) as trabajador,
-               tt.Tipo as trabajador_tipo,
-               COUNT(l.id) as examenes_asignados,
-               COUNT(DISTINCT l.Id_Paciente) as pacientes_unicos
-        FROM Laboratorio l
-        INNER JOIN Trabajadores t ON l.Id_Trabajador = t.id
-        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, tt.Tipo
-        ORDER BY examenes_asignados DESC
-        """
-        
         general_stats = self._execute_query(general_query, fetch_one=True)
-        analysis_types_stats = self._execute_query(analysis_types_query)
-        workers_stats = self._execute_query(workers_query)
         
         return {
             'general': general_stats,
-            'por_tipo_analisis': analysis_types_stats,
-            'por_trabajador': workers_stats
+            'por_tipo_analisis': [],
+            'por_trabajador': []
         }
     
     # ===============================
-    # VALIDACIONES - CORREGIDAS
+    # VALIDACIONES
     # ===============================
     
     def _patient_exists(self, paciente_id: int) -> bool:
-        """Verifica si existe el paciente"""
-        query = "SELECT COUNT(*) as count FROM Pacientes WHERE id = ?"
-        result = self._execute_query(query, (paciente_id,), fetch_one=True)
-        return result['count'] > 0 if result else False
+        """Verifica si existe el paciente - CORREGIDO"""
+        return self._patient_exists_by_id(paciente_id)
     
     def _worker_exists(self, trabajador_id: int) -> bool:
         """Verifica si existe el trabajador"""

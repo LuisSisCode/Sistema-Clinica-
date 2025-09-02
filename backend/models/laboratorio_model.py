@@ -1,5 +1,5 @@
 """
-Modelo QObject para Gestión de Laboratorio - ACTUALIZADO con búsqueda por cédula
+Modelo QObject para Gestión de Laboratorio - CORREGIDO con lógica simple de consultas
 Expone funcionalidad de laboratorio a QML con Signals/Slots/Properties
 """
 
@@ -14,41 +14,29 @@ from ..repositories.laboratorio_repository import LaboratorioRepository
 
 class LaboratorioModel(QObject):
     """
-    Modelo QObject para gestión completa de análisis de laboratorio - ACTUALIZADO
-    Conecta la lógica de negocio con la interfaz QML
+    Modelo QObject para gestión completa de análisis de laboratorio - SIMPLIFICADO
+    Usa el patrón exitoso de consultas
     """
     
     # ===============================
-    # SIGNALS PARA QML
+    # SIGNALS SIMPLES (como consultas)
     # ===============================
     
     # Operaciones CRUD
-    examenCreado = Signal(str, arguments=['datos'])  # JSON con datos del examen
+    examenCreado = Signal(str, arguments=['datos'])
     examenActualizado = Signal(str, arguments=['datos'])
     examenEliminado = Signal(int, arguments=['examenId'])
     
-    # Asignación de trabajadores
-    trabajadorAsignado = Signal(int, int, arguments=['examenId', 'trabajadorId'])
-    trabajadorDesasignado = Signal(int, arguments=['examenId'])
-    
-    # Búsquedas y filtros
-    resultadosBusqueda = Signal(str, arguments=['resultados'])  # JSON
-    filtrosAplicados = Signal(str, arguments=['criterios'])
-    
-    # NUEVAS SEÑALES para búsqueda por cédula
+    # Búsqueda por cédula
     pacienteEncontradoPorCedula = Signal('QVariantMap', arguments=['pacienteData'])
     pacienteNoEncontrado = Signal(str, arguments=['cedula'])
-    
-    # Dashboard y estadísticas
-    dashboardActualizado = Signal(str, arguments=['datos'])
-    estadisticasCalculadas = Signal(str, arguments=['estadisticas'])
     
     # Estados y notificaciones
     estadoCambiado = Signal(str, arguments=['nuevoEstado'])
     errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
     operacionExitosa = Signal(str, arguments=['mensaje'])
     
-    # Datos actualizados
+    # SIGNAL SIMPLE PRINCIPAL (como consultas)
     examenesActualizados = Signal()
     tiposAnalisisActualizados = Signal()
     trabajadoresActualizados = Signal()
@@ -56,25 +44,26 @@ class LaboratorioModel(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Repository en lugar de service
+        # Repository
         self.repository = LaboratorioRepository()
         
-        # Estados internos
+        # Estados internos SIMPLES (como consultas)
         self._examenesData = []
         self._tiposAnalisisData = []
         self._trabajadoresData = []
-        self._dashboardData = {}
-        self._estadisticasData = {}
-        self._estadoActual = "listo"  # listo, cargando, error
+        self._estadoActual = "listo"
+        
+        # PROPIEDADES DE PAGINACIÓN SIMPLES
+        self._currentPage = 0
+        self._totalPages = 0
+        self._itemsPerPage = 11
+        self._totalRecords = 0
         
         # Configuración
-        self._autoRefreshInterval = 30000  # 30 segundos
-        self._setupAutoRefresh()
+        self._autoRefreshInterval = 30000
         
-        print("🔬 LaboratorioModel inicializado")
-    
     # ===============================
-    # PROPERTIES PARA QML
+    # PROPERTIES SIMPLES (como consultas)
     # ===============================
     
     def _get_examenes_json(self) -> str:
@@ -88,10 +77,6 @@ class LaboratorioModel(QObject):
     def _get_trabajadores_json(self) -> str:
         """Getter para trabajadores en formato JSON"""
         return json.dumps(self._trabajadoresData, default=str, ensure_ascii=False)
-    
-    def _get_dashboard_json(self) -> str:
-        """Getter para datos de dashboard en formato JSON"""
-        return json.dumps(self._dashboardData, default=str, ensure_ascii=False)
     
     def _get_estado_actual(self) -> str:
         """Getter para estado actual"""
@@ -107,46 +92,153 @@ class LaboratorioModel(QObject):
     examenesJson = Property(str, _get_examenes_json, notify=examenesActualizados)
     tiposAnalisisJson = Property(str, _get_tipos_analisis_json, notify=tiposAnalisisActualizados)
     trabajadoresJson = Property(str, _get_trabajadores_json, notify=trabajadoresActualizados)
-    dashboardJson = Property(str, _get_dashboard_json, notify=dashboardActualizado)
     estadoActual = Property(str, _get_estado_actual, notify=estadoCambiado)
     
+    # Properties para compatibilidad con QML existente
+    @Property(list, notify=examenesActualizados)
+    def examenes_paginados(self):
+        """Lista de exámenes paginados para compatibilidad"""
+        return self._examenesData
+    
+    @Property(list, notify=tiposAnalisisActualizados)
+    def tipos_analisis(self):
+        """Lista de tipos de análisis para compatibilidad"""
+        return self._tiposAnalisisData
+    
+    @Property(list, notify=trabajadoresActualizados)
+    def trabajadores_disponibles(self):
+        """Lista de trabajadores disponibles para compatibilidad"""
+        return self._trabajadoresData
+    
     # ===============================
-    # SLOTS PARA BÚSQUEDA POR CÉDULA - NUEVOS
+    # SLOTS PRINCIPALES SIMPLIFICADOS
+    # ===============================
+    
+    @Slot(int, int, 'QVariant', result='QVariant')
+    def obtener_examenes_paginados(self, page: int, limit: int = 5, filters=None):
+        """Obtiene página específica de exámenes - SIMPLIFICADO como consultas"""
+        try:
+            # Convertir filtros
+            filtros_dict = filters.toVariant() if hasattr(filters, 'toVariant') else filters or {}
+            
+            # Validar parámetros
+            if page < 0:
+                page = 0
+            if limit <= 0:
+                limit = 11
+            
+            print(f"📖 Obteniendo página {page + 1} con {limit} elementos")
+            
+            # Obtener datos paginados del repository
+            resultado = self.repository.get_paginated_exams_with_details(
+                page, limit, 
+                filtros_dict.get('search_term', ''),
+                filtros_dict.get('tipo_analisis', ''),
+                filtros_dict.get('tipo_servicio', ''),
+                filtros_dict.get('fecha_desde', ''),
+                filtros_dict.get('fecha_hasta', '')
+            )
+            
+            # Actualizar propiedades internas
+            self._currentPage = page
+            self._itemsPerPage = limit
+            self._totalRecords = resultado.get('total_records', 0)
+            self._totalPages = max(1, (self._totalRecords + limit - 1) // limit)
+            
+            # Actualizar datos internos
+            self._examenesData = resultado.get('examenes', [])
+            
+            # Emitir signal simple
+            self.examenesActualizados.emit()
+            
+            print(f"✅ Página {page + 1} cargada: {len(self._examenesData)} registros de {self._totalRecords}")
+            
+            return {
+                'examenes': self._examenesData,
+                'page': page,
+                'limit': limit,
+                'total_records': self._totalRecords,
+                'total_pages': self._totalPages
+            }
+            
+        except Exception as e:
+            error_msg = f"Error obteniendo exámenes paginados: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.errorOcurrido.emit(error_msg, 'PAGINATION_EXCEPTION')
+            return {'examenes': [], 'total': 0, 'page': 0, 'total_pages': 0}
+    
+    @Slot(str, str, str, str, str)
+    def aplicar_filtros_y_recargar(self, search_term: str = "", tipo_analisis: str = "", 
+                                  tipo_servicio: str = "", fecha_desde: str = "", 
+                                  fecha_hasta: str = ""):
+        """Aplica filtros y regresa a la primera página - SIMPLIFICADO"""
+        try:
+            self._currentPage = 0 # resetea a pagina 0 siempre que cambien los filtros
+            # Limpiar parámetros
+            search_term = search_term.strip() if search_term else ""
+            tipo_analisis = tipo_analisis.strip() if tipo_analisis else ""
+            tipo_servicio = tipo_servicio.strip() if tipo_servicio else ""
+            fecha_desde = fecha_desde.strip() if fecha_desde else ""
+            fecha_hasta = fecha_hasta.strip() if fecha_hasta else ""
+            
+            # Construir filtros
+            filtros = {
+                'search_term': search_term,
+                'tipo_analisis': tipo_analisis,
+                'tipo_servicio': tipo_servicio,
+                'fecha_desde': fecha_desde,
+                'fecha_hasta': fecha_hasta
+            }
+            
+            # Invalidar cache
+            self.repository.invalidate_laboratory_caches()
+            
+            # Recargar desde página 0
+            self.obtener_examenes_paginados(0, self._itemsPerPage, filtros)
+            
+        except Exception as e:
+            error_msg = f"Error aplicando filtros: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.errorOcurrido.emit(error_msg, 'FILTER_ERROR')
+    
+    # ===============================
+    # SLOTS PARA BÚSQUEDA POR CÉDULA
     # ===============================
     
     @Slot(str, result='QVariantMap')
     def buscar_paciente_por_cedula(self, cedula: str):
-        """
-        Busca un paciente específico por su cédula
-        
-        Args:
-            cedula (str): Cédula del paciente
-            
-        Returns:
-            Dict: Datos del paciente encontrado o diccionario vacío
-        """
+        """Busca un paciente específico por su cédula"""
         try:
-            if len(cedula.strip()) < 5:
+            if not cedula or len(cedula.strip()) < 5:
                 return {}
             
-            print(f"🔍 Buscando paciente por cédula: {cedula}")
+            cedula_clean = cedula.strip()
+            print(f"🔍 Buscando paciente por cédula: {cedula_clean}")
             
-            # Buscar en el repository
-            paciente = self.repository.search_patient_by_cedula_exact(cedula.strip())
+            paciente = self.repository.search_patient_by_cedula_exact(cedula_clean)
             
-            if paciente:
+            if paciente and isinstance(paciente, dict):
                 print(f"👤 Paciente encontrado: {paciente.get('nombre_completo', 'N/A')}")
                 
-                # Emitir señal de éxito
-                self.pacienteEncontradoPorCedula.emit(paciente)
+                # Normalizar datos para QML
+                paciente_normalizado = {
+                    'id': paciente.get('id', 0),
+                    'Nombre': paciente.get('Nombre', paciente.get('nombre', '')),
+                    'Apellido_Paterno': paciente.get('Apellido_Paterno', paciente.get('apellido_paterno', '')),
+                    'Apellido_Materno': paciente.get('Apellido_Materno', paciente.get('apellido_materno', '')),
+                    'Cedula': paciente.get('Cedula', paciente.get('cedula', cedula_clean)),
+                    'nombre_completo': paciente.get('nombre_completo', ''),
+                    # Aliases para compatibilidad
+                    'nombre': paciente.get('Nombre', paciente.get('nombre', '')),
+                    'apellido_paterno': paciente.get('Apellido_Paterno', paciente.get('apellido_paterno', '')),
+                    'apellido_materno': paciente.get('Apellido_Materno', paciente.get('apellido_materno', ''))
+                }
                 
-                return paciente
+                self.pacienteEncontradoPorCedula.emit(paciente_normalizado)
+                return paciente_normalizado
             else:
-                print(f"❌ No se encontró paciente con cédula: {cedula}")
-                
-                # Emitir señal de no encontrado
-                self.pacienteNoEncontrado.emit(cedula)
-                
+                print(f"❌ No se encontró paciente con cédula: {cedula_clean}")
+                self.pacienteNoEncontrado.emit(cedula_clean)
                 return {}
                 
         except Exception as e:
@@ -155,52 +247,10 @@ class LaboratorioModel(QObject):
             self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
             return {}
     
-    @Slot(str, int, result='QVariantList')
-    def buscar_pacientes(self, termino_busqueda: str, limite: int = 5):
-        """
-        Busca pacientes por cédula parcial (para sugerencias)
-        
-        Args:
-            termino_busqueda (str): Término a buscar (generalmente cédula parcial)
-            limite (int): Límite de resultados
-            
-        Returns:
-            List[Dict]: Lista de pacientes encontrados
-        """
-        try:
-            if len(termino_busqueda.strip()) < 3:
-                return []
-            
-            print(f"🔍 Buscando pacientes con término: {termino_busqueda}")
-            
-            resultados = self.repository.search_patients_by_cedula_partial(
-                termino_busqueda.strip(), limite
-            )
-            
-            print(f"📋 Encontrados {len(resultados)} pacientes")
-            return resultados
-            
-        except Exception as e:
-            error_msg = f"Error en búsqueda de pacientes: {str(e)}"
-            print(f"❌ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
-            return []
-    
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
-                                          apellido_materno: str = "", cedula: str = "") -> int:
-        """
-        Busca paciente por cédula o crea uno nuevo si no existe
-        
-        Args:
-            nombre (str): Nombre del paciente
-            apellido_paterno (str): Apellido paterno
-            apellido_materno (str): Apellido materno (opcional)
-            cedula (str): Cédula de identidad
-            
-        Returns:
-            int: ID del paciente (existente o nuevo creado)
-        """
+                                           apellido_materno: str = "", cedula: str = "") -> int:
+        """Busca paciente por cédula o crea uno nuevo si no existe"""
         try:
             if not cedula or len(cedula.strip()) < 5:
                 self.errorOcurrido.emit("Cédula es obligatoria (mínimo 5 dígitos)", 'VALIDATION_ERROR')
@@ -237,20 +287,27 @@ class LaboratorioModel(QObject):
             return -1
     
     # ===============================
-    # SLOTS PARA OPERACIONES CRUD - ACTUALIZADOS
+    # SLOTS PARA OPERACIONES CRUD
     # ===============================
     
     @Slot(int, int, str, int, str, result=str)
     def crearExamen(self, paciente_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                     trabajador_id: int = 0, detalles: str = "") -> str:
-        """
-        Crea nuevo examen de laboratorio
-        """
+        """Crea nuevo examen de laboratorio"""
         try:
             self._set_estado_actual("cargando")
             
-            # Usar usuario por defecto (ID 10)
-            usuario_id = 10
+            # Validar parámetros
+            if paciente_id <= 0:
+                raise ValueError("ID de paciente inválido")
+            if tipo_analisis_id <= 0:
+                raise ValueError("ID de tipo de análisis inválido")
+            if not tipo_servicio or tipo_servicio not in ['Normal', 'Emergencia']:
+                tipo_servicio = 'Normal'
+            
+            usuario_id = 10  # Usuario por defecto
+            
+            print(f"🧪 Creando examen - Paciente: {paciente_id}, Tipo: {tipo_analisis_id}, Servicio: {tipo_servicio}")
             
             examen_id = self.repository.create_lab_exam(
                 paciente_id=paciente_id,
@@ -261,83 +318,107 @@ class LaboratorioModel(QObject):
                 detalles=detalles
             )
             
-            if examen_id:
+            if examen_id and examen_id > 0:
+                # Recargar datos después de crear
+                self._cargar_examenes_actuales()
+                
                 self.operacionExitosa.emit(f"Examen creado exitosamente: ID {examen_id}")
-                self._actualizarExamenes()
+                self.examenCreado.emit(json.dumps({'exito': True, 'examen_id': examen_id}))
                 self._set_estado_actual("listo")
+                
                 return json.dumps({'exito': True, 'examen_id': examen_id})
             else:
-                error_msg = "Error creando examen"
+                error_msg = "Error creando examen - ID inválido"
                 self.errorOcurrido.emit(error_msg, 'CREATE_ERROR')
                 self._set_estado_actual("error")
                 return json.dumps({'exito': False, 'error': error_msg})
                 
         except Exception as e:
             error_msg = f"Error creando examen: {str(e)}"
+            print(f"❌ {error_msg}")
             self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
-    
     @Slot(int, int, str, int, str, result=str)
     def actualizarExamen(self, examen_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                         trabajador_id: int = 0, detalles: str = "") -> str:
-        """
-        Actualiza examen existente
-        """
+        """Actualiza examen de laboratorio existente"""
         try:
             self._set_estado_actual("cargando")
             
-            success = self.repository.update_lab_exam(
-                examen_id, 
+            # Validar parámetros básicos
+            if examen_id <= 0:
+                raise ValueError("ID de examen inválido")
+            if tipo_analisis_id <= 0:
+                raise ValueError("ID de tipo de análisis inválido")
+            if not tipo_servicio or tipo_servicio not in ['Normal', 'Emergencia']:
+                tipo_servicio = 'Normal'
+            
+            print(f"📝 Actualizando examen ID: {examen_id}")
+            print(f"   - Tipo análisis ID: {tipo_analisis_id}")  
+            print(f"   - Tipo servicio: {tipo_servicio}")
+            print(f"   - Trabajador ID: {trabajador_id}")
+            print(f"   - Detalles: {detalles}")
+            
+            # Verificar que el examen existe
+            examen_actual = self.repository.get_by_id(examen_id)
+            if not examen_actual:
+                error_msg = f"Examen con ID {examen_id} no encontrado"
+                self.errorOcurrido.emit(error_msg, 'EXAM_NOT_FOUND')
+                self._set_estado_actual("error")
+                return json.dumps({"exito": False, "error": error_msg})
+            
+            # Usar el método del repository para actualizar
+            exito = self.repository.update_lab_exam(
+                lab_id=examen_id,
                 tipo_analisis_id=tipo_analisis_id,
                 tipo_servicio=tipo_servicio,
-                trabajador_id=trabajador_id,
-                detalles=detalles
+                trabajador_id=trabajador_id if trabajador_id > 0 else None,
+                detalles=detalles.strip() if detalles else None
             )
             
-            if success:
-                # Obtener examen actualizado
-                examen_actualizado = self.repository.get_lab_exam_by_id_complete(examen_id)
+            if exito:
+                # Invalidar cache y recargar datos
+                self.repository.invalidate_laboratory_caches()
+                self._cargar_examenes_actuales()
                 
-                # Emitir signals
-                self.examenActualizado.emit(json.dumps(examen_actualizado, default=str))
+                self.examenActualizado.emit(json.dumps({'exito': True, 'examen_id': examen_id}))
                 self.operacionExitosa.emit(f"Examen {examen_id} actualizado correctamente")
-                
-                # Actualizar datos
-                self._actualizarExamenes()
-                
                 self._set_estado_actual("listo")
-                return json.dumps({'exito': True, 'datos': examen_actualizado}, default=str)
+                
+                print(f"✅ Examen {examen_id} actualizado exitosamente")
+                return json.dumps({
+                    "exito": True, 
+                    "mensaje": "Examen actualizado correctamente",
+                    "examen_id": examen_id
+                })
             else:
-                error_msg = "Error actualizando examen"
+                error_msg = "Error actualizando examen en la base de datos"
                 self.errorOcurrido.emit(error_msg, 'UPDATE_ERROR')
                 self._set_estado_actual("error")
-                return json.dumps({'exito': False, 'error': error_msg})
+                return json.dumps({"exito": False, "error": error_msg})
                 
         except Exception as e:
             error_msg = f"Error actualizando examen: {str(e)}"
+            print(f"❌ {error_msg}")
             self.errorOcurrido.emit(error_msg, 'UPDATE_EXCEPTION')
             self._set_estado_actual("error")
-            return json.dumps({'exito': False, 'error': error_msg})
-    
+            return json.dumps({"exito": False, "error": error_msg})
+
     @Slot(int, result=bool)
     def eliminarExamen(self, examen_id: int) -> bool:
-        """
-        Elimina examen de laboratorio
-        """
+        """Elimina examen de laboratorio"""
         try:
             self._set_estado_actual("cargando")
             
             exito = self.repository.delete(examen_id)
             
             if exito:
-                # Emitir signals
+                # Recargar datos después de eliminar
+                self._cargar_examenes_actuales()
+                
                 self.examenEliminado.emit(examen_id)
                 self.operacionExitosa.emit(f"Examen {examen_id} eliminado correctamente")
-                
-                # Actualizar datos
-                self._actualizarExamenes()
-                
                 self._set_estado_actual("listo")
                 return True
             else:
@@ -352,224 +433,8 @@ class LaboratorioModel(QObject):
             return False
     
     # ===============================
-    # SLOTS PARA GESTIÓN DE TRABAJADORES
-    # ===============================
-    
-    @Slot(int, int, result=bool)
-    def asignarTrabajador(self, examen_id: int, trabajador_id: int) -> bool:
-        """
-        Asigna trabajador a examen
-        """
-        try:
-            exito = self.repository.assign_worker_to_exam(examen_id, trabajador_id)
-            
-            if exito:
-                self.trabajadorAsignado.emit(examen_id, trabajador_id)
-                self.operacionExitosa.emit(f"Trabajador asignado al examen {examen_id}")
-                self._actualizarExamenes()
-                return True
-            else:
-                self.errorOcurrido.emit(f"Error asignando trabajador", 'ASSIGN_ERROR')
-                return False
-                
-        except Exception as e:
-            self.errorOcurrido.emit(f"Error: {str(e)}", 'ASSIGN_EXCEPTION')
-            return False
-    
-    @Slot(int, result=bool)
-    def desasignarTrabajador(self, examen_id: int) -> bool:
-        """
-        Desasigna trabajador de examen
-        """
-        try:
-            exito = self.repository.unassign_worker_from_exam(examen_id)
-            
-            if exito:
-                self.trabajadorDesasignado.emit(examen_id)
-                self.operacionExitosa.emit(f"Trabajador desasignado del examen {examen_id}")
-                self._actualizarExamenes()
-                return True
-            else:
-                self.errorOcurrido.emit(f"Error desasignando trabajador", 'UNASSIGN_ERROR')
-                return False
-                
-        except Exception as e:
-            self.errorOcurrido.emit(f"Error: {str(e)}", 'UNASSIGN_EXCEPTION')
-            return False
-    
-    # ===============================
-    # SLOTS PARA BÚSQUEDAS Y FILTROS
-    # ===============================
-    
-    @Slot(str, result=str)
-    def buscarExamenesAvanzado(self, termino_busqueda: str) -> str:
-        """
-        Realiza búsqueda avanzada de exámenes
-        """
-        try:
-            resultado = self.repository.search_exams(termino_busqueda, limit=100)
-            
-            # Emitir signal con resultados
-            self.resultadosBusqueda.emit(json.dumps(resultado, default=str))
-            
-            return json.dumps({
-                'exito': True,
-                'examenes': resultado,
-                'total': len(resultado)
-            }, default=str)
-            
-        except Exception as e:
-            error_msg = f"Error en búsqueda: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'SEARCH_ERROR')
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    @Slot(int, result=str)
-    def obtenerExamenesDelPaciente(self, paciente_id: int) -> str:
-        """
-        Obtiene exámenes de un paciente específico
-        """
-        try:
-            examenes = self.repository.get_exams_by_patient(paciente_id)
-            
-            return json.dumps({
-                'exito': True,
-                'examenes': examenes,
-                'total': len(examenes)
-            }, default=str)
-            
-        except Exception as e:
-            error_msg = f"Error obteniendo exámenes del paciente: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'PATIENT_EXAMS_ERROR')
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    @Slot(int, result=str)
-    def obtenerExamenesDelTrabajador(self, trabajador_id: int) -> str:
-        """
-        Obtiene exámenes asignados a un trabajador
-        """
-        try:
-            examenes = self.repository.get_exams_by_worker(trabajador_id)
-            
-            return json.dumps({
-                'exito': True,
-                'examenes': examenes,
-                'total': len(examenes)
-            }, default=str)
-            
-        except Exception as e:
-            error_msg = f"Error obteniendo exámenes del trabajador: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'WORKER_EXAMS_ERROR')
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    @Slot(int, result=str)
-    def obtenerExamenCompleto(self, examen_id: int) -> str:
-        """
-        Obtiene examen con información completa
-        """
-        try:
-            examen = self.repository.get_lab_exam_by_id_complete(examen_id)
-            
-            if examen:
-                return json.dumps({'exito': True, 'examen': examen}, default=str)
-            else:
-                return json.dumps({'exito': False, 'error': 'Examen no encontrado'})
-                
-        except Exception as e:
-            error_msg = f"Error obteniendo examen: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'GET_ERROR')
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    # ===============================
-    # SLOTS PARA ESTADÍSTICAS Y REPORTES
-    # ===============================
-    
-    @Slot(result=str)
-    def obtenerDashboard(self) -> str:
-        """
-        Obtiene datos para dashboard de laboratorio
-        """
-        try:
-            self._set_estado_actual("cargando")
-            
-            dashboard = self.repository.get_laboratory_statistics()
-            
-            # Agregar datos adicionales
-            dashboard['examenes_sin_asignar'] = len(self.repository.get_unassigned_exams())
-            dashboard['examenes_asignados'] = len(self.repository.get_assigned_exams())
-            dashboard['tipos_examenes_comunes'] = self.repository.get_exam_types_list()[:10]
-            
-            # Actualizar datos internos
-            self._dashboardData = dashboard
-            
-            # Emitir signal
-            self.dashboardActualizado.emit(json.dumps(dashboard, default=str))
-            
-            self._set_estado_actual("listo")
-            return json.dumps({'exito': True, 'dashboard': dashboard}, default=str)
-            
-        except Exception as e:
-            error_msg = f"Error generando dashboard: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'DASHBOARD_ERROR')
-            self._set_estado_actual("error")
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    @Slot(result=str)
-    def obtenerEstadisticas(self) -> str:
-        """
-        Obtiene estadísticas completas de laboratorio
-        """
-        try:
-            estadisticas = self.repository.get_laboratory_statistics()
-            
-            # Actualizar datos internos
-            self._estadisticasData = estadisticas
-            
-            # Emitir signal
-            self.estadisticasCalculadas.emit(json.dumps(estadisticas, default=str))
-            
-            return json.dumps({'exito': True, 'estadisticas': estadisticas}, default=str)
-            
-        except Exception as e:
-            error_msg = f"Error generando estadísticas: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'STATS_ERROR')
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    @Slot(int, result=str)
-    def obtenerResumenPaciente(self, paciente_id: int) -> str:
-        """
-        Obtiene resumen de laboratorio de un paciente
-        """
-        try:
-            examenes = self.repository.get_exams_by_patient(paciente_id)
-            
-            resumen = {
-                'total_examenes': len(examenes),
-                'examenes_recientes': examenes[:5] if examenes else [],
-                'tipos_realizados': list(set([e['tipo_analisis'] for e in examenes if e.get('tipo_analisis')])),
-                'ultimo_examen': examenes[0]['Fecha'] if examenes else None
-            }
-            
-            return json.dumps({'exito': True, 'resumen': resumen}, default=str)
-            
-        except Exception as e:
-            error_msg = f"Error obteniendo resumen: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'SUMMARY_ERROR')
-            return json.dumps({'exito': False, 'error': error_msg})
-    
-    # ===============================
     # SLOTS PARA GESTIÓN DE DATOS
     # ===============================
-    
-    @Slot()
-    def cargarExamenes(self):
-        """Carga todos los exámenes de laboratorio"""
-        try:
-            self._set_estado_actual("cargando")
-            self._actualizarExamenes()
-            self._set_estado_actual("listo")
-        except Exception as e:
-            self.errorOcurrido.emit(f"Error cargando exámenes: {str(e)}", 'LOAD_ERROR')
-            self._set_estado_actual("error")
     
     @Slot()
     def cargarTiposAnalisis(self):
@@ -578,6 +443,7 @@ class LaboratorioModel(QObject):
             tipos = self.repository.get_analysis_types()
             self._tiposAnalisisData = tipos
             self.tiposAnalisisActualizados.emit()
+            print(f"🔬 Tipos de análisis cargados: {len(tipos)}")
         except Exception as e:
             self.errorOcurrido.emit(f"Error cargando tipos: {str(e)}", 'LOAD_TYPES_ERROR')
     
@@ -588,6 +454,7 @@ class LaboratorioModel(QObject):
             trabajadores = self.repository.get_available_lab_workers()
             self._trabajadoresData = trabajadores
             self.trabajadoresActualizados.emit()
+            print(f"👥 Trabajadores cargados: {len(trabajadores)}")
         except Exception as e:
             self.errorOcurrido.emit(f"Error cargando trabajadores: {str(e)}", 'LOAD_WORKERS_ERROR')
     
@@ -597,133 +464,38 @@ class LaboratorioModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            # Cargar datos principales
-            self._actualizarExamenes()
+            print("🔄 Refrescando todos los datos del modelo...")
+            
+            # Cargar datos de referencia
             self.cargarTiposAnalisis()
             self.cargarTrabajadores()
             
-            # Actualizar dashboard
-            self.obtenerDashboard()
+            # Recargar exámenes actuales
+            self._cargar_examenes_actuales()
             
             self._set_estado_actual("listo")
             self.operacionExitosa.emit("Datos actualizados correctamente")
             
         except Exception as e:
             error_msg = f"Error refrescando datos: {str(e)}"
+            print(f"❌ {error_msg}")
             self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
             self._set_estado_actual("error")
     
+    
     # ===============================
-    # SLOTS PARA CONSULTAS ESPECÍFICAS
+    # MÉTODOS INTERNOS SIMPLES
     # ===============================
     
-    @Slot(result=str)
-    def obtenerExamenesSinAsignar(self) -> str:
-        """Obtiene exámenes sin trabajador asignado"""
+    def _cargar_examenes_actuales(self):
+        """Carga exámenes actuales sin filtros - MÉTODO INTERNO SIMPLE"""
         try:
-            examenes = self.repository.get_unassigned_exams()
-            return json.dumps({
-                'exito': True,
-                'examenes': examenes,
-                'total': len(examenes)
-            }, default=str)
+            # Usar el método de paginación con filtros vacíos
+            self.obtener_examenes_paginados(self._currentPage, self._itemsPerPage, {})
         except Exception as e:
-            return json.dumps({'exito': False, 'error': str(e)})
-    
-    @Slot(result=str)
-    def obtenerTiposAnalisisDisponibles(self) -> str:
-        """Obtiene tipos de análisis disponibles"""
-        try:
-            tipos = self.repository.get_analysis_types()
-            return json.dumps({
-                'exito': True,
-                'tipos': tipos
-            }, default=str)
-        except Exception as e:
-            return json.dumps({'exito': False, 'error': str(e)})
-    
-    @Slot(result=str)
-    def obtenerDistribucionCarga(self) -> str:
-        """Obtiene distribución de carga de trabajo"""
-        try:
-            trabajadores = self.repository.get_available_lab_workers()
-            return json.dumps({
-                'exito': True,
-                'distribucion': trabajadores
-            }, default=str)
-        except Exception as e:
-            return json.dumps({'exito': False, 'error': str(e)})
-    
-    # ===============================
-    # MÉTODOS INTERNOS
-    # ===============================
-    
-    def _actualizarExamenes(self):
-        """Actualiza lista interna de exámenes"""
-        try:
-            examenes_raw = self.repository.get_all_with_details()
-            
-            # Procesar datos para QML - ACTUALIZADO sin edad
+            print(f"❌ Error recargando exámenes: {e}")
             self._examenesData = []
-            for examen in examenes_raw:
-                examen_procesado = {
-                    # IDs
-                    'analisisId': str(examen.get('id', 0)),
-                    'pacienteId': examen.get('Id_Paciente', 0),
-                    
-                    # Información del paciente (SIN EDAD)
-                    'paciente': examen.get('paciente_completo', 'Paciente Desconocido'),
-                    'pacienteCedula': examen.get('paciente_cedula', ''),
-                    'pacienteNombre': examen.get('paciente_nombre', ''),
-                    'pacienteApellidoP': examen.get('paciente_apellido_p', ''),
-                    'pacienteApellidoM': examen.get('paciente_apellido_m', ''),
-                    
-                    # Información del análisis
-                    'tipoAnalisis': examen.get('tipo_analisis', 'Análisis General'),
-                    'detalles': examen.get('Detalles', 'Sin detalles'),
-                    'detallesExamen': examen.get('detalles_examen', ''),
-                    'tipo': examen.get('tipo', 'Normal'),
-                    
-                    # Precio
-                    'precio': f"{float(examen.get('precio', 0)):.2f}",
-                    
-                    # Trabajador
-                    'trabajadorAsignado': examen.get('trabajador_completo', 'Sin asignar'),
-                    
-                    # Fecha y usuario
-                    'fecha': examen.get('Fecha', datetime.now()).strftime('%Y-%m-%d') if examen.get('Fecha') else '',
-                    'registradoPor': examen.get('registrado_por', 'Sistema')
-                }
-                
-                self._examenesData.append(examen_procesado)
-            
             self.examenesActualizados.emit()
-            print(f"🔬 Exámenes actualizados: {len(self._examenesData)} registros")
-            
-        except Exception as e:
-            error_msg = f"Error actualizando exámenes: {str(e)}"
-            print(f"❌ {error_msg}")
-            raise ClinicaBaseException(error_msg)
-    
-    def _setupAutoRefresh(self):
-        """Configura actualización automática de datos"""
-        self._autoRefreshTimer = QTimer(self)
-        self._autoRefreshTimer.timeout.connect(self.refrescarDatos)
-        # Comentado por defecto - se puede activar si es necesario
-        # self._autoRefreshTimer.start(self._autoRefreshInterval)
-    
-    @Slot(int)
-    def setAutoRefreshInterval(self, intervalMs: int):
-        """
-        Configura intervalo de actualización automática
-        """
-        if intervalMs > 0:
-            self._autoRefreshInterval = intervalMs
-            if hasattr(self, '_autoRefreshTimer'):
-                self._autoRefreshTimer.start(intervalMs)
-        else:
-            if hasattr(self, '_autoRefreshTimer'):
-                self._autoRefreshTimer.stop()
 
 # ===============================
 # REGISTRO PARA QML
@@ -732,4 +504,4 @@ class LaboratorioModel(QObject):
 def register_laboratorio_model():
     """Registra el modelo para uso en QML"""
     qmlRegisterType(LaboratorioModel, "Clinica.Models", 1, 0, "LaboratorioModel")
-    print("✅ LaboratorioModel registrado para QML")
+    print("✅ LaboratorioModel registrado para QML con lógica simplificada")
