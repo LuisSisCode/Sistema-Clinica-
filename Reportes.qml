@@ -38,7 +38,7 @@ Item {
             id: 0,
             nombre: "Seleccionar tipo de reporte...",
             modulo: "",
-            icono: "📊",
+            icono: "file:///D:/Sistema-Clinica-/Resources/iconos/reportes.png",
             descripcion: "Seleccione el tipo de reporte que desea generar",
             color: lightGrayColor
         },
@@ -151,11 +151,13 @@ Item {
                             color: primaryColor
                             radius: 8
                             
-                            Label {
+                            Image {
                                 anchors.centerIn: parent
-                                text: "📊"
-                                color: whiteColor
-                                font.pixelSize: 28
+                                source: "file:///D:/Sistema-Clinica-/Resources/iconos/reportes.png"
+                                width: 32
+                                height: 32
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
                             }
                         }
                         

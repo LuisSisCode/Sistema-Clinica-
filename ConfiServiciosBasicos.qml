@@ -8,6 +8,10 @@ Item {
     // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
     property alias tiposGastos: configTiposGastosRoot.tiposGastosData
     
+    // ===== SEÑALES PARA VOLVER =====
+    signal volverClicked()
+    signal backToMain()
+    
     // ===== DATOS INTERNOS =====
     property var tiposGastosData: []
     
@@ -41,8 +45,6 @@ Item {
     readonly property string warningColor: "#D97706"
     readonly property string dangerColor: "#DC2626"
     readonly property string lightGrayColor: "#ECF0F1"
-    readonly property string infoColor: "#17a2b8"
-    readonly property string violetColor: "#9b59b6"
     
     // ===== ESTADO DE EDICIÓN =====
     property bool isEditMode: false
@@ -52,8 +54,6 @@ Item {
     function limpiarFormulario() {
         nuevoTipoGastoNombre.text = ""
         nuevoTipoGastoDescripcion.text = ""
-        nuevoTipoGastoEjemplos.text = ""
-        nuevoTipoGastoColor.currentIndex = 0
         isEditMode = false
         editingIndex = -1
     }
@@ -63,16 +63,6 @@ Item {
             var tipoGasto = tiposGastosData[index]
             nuevoTipoGastoNombre.text = tipoGasto.nombre
             nuevoTipoGastoDescripcion.text = tipoGasto.descripcion
-            nuevoTipoGastoEjemplos.text = tipoGasto.ejemplos ? tipoGasto.ejemplos.join(", ") : ""
-            
-            // Buscar el índice del color en el modelo
-            for (var i = 0; i < nuevoTipoGastoColor.model.length; i++) {
-                if (nuevoTipoGastoColor.model[i].value === tipoGasto.color) {
-                    nuevoTipoGastoColor.currentIndex = i
-                    break
-                }
-            }
-            
             isEditMode = true
             editingIndex = index
         }
@@ -87,19 +77,9 @@ Item {
     }
     
     function guardarTipoGasto() {
-        var ejemplosTexto = nuevoTipoGastoEjemplos.text
-        var ejemplosArray = ejemplosTexto.split(',')
-        
-        // Limpiar espacios de cada ejemplo
-        for (var i = 0; i < ejemplosArray.length; i++) {
-            ejemplosArray[i] = ejemplosArray[i].trim()
-        }
-        
         var nuevoTipoGasto = {
             nombre: nuevoTipoGastoNombre.text,
-            descripcion: nuevoTipoGastoDescripcion.text,
-            ejemplos: ejemplosArray,
-            color: nuevoTipoGastoColor.currentValue || "#95a5a6"
+            descripcion: nuevoTipoGastoDescripcion.text
         }
         
         if (isEditMode && editingIndex >= 0) {
@@ -120,481 +100,545 @@ Item {
     // ===== LAYOUT PRINCIPAL =====
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: marginLarge
-        spacing: marginLarge
+        spacing: 0
         
-        // ===== HEADER =====
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: marginMedium
-            
-            Rectangle {
-                Layout.preferredWidth: baseUnit * 6
-                Layout.preferredHeight: baseUnit * 6
-                color: primaryColor
-                radius: baseUnit * 3
-                
-                Label {
-                    anchors.centerIn: parent
-                    text: "💰"
-                    font.pixelSize: fontLarge
-                    color: "white"
-                }
-            }
-            
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: marginTiny
-                
-                Label {
-                    text: "Configuración de Tipos de Gastos"
-                    font.pixelSize: fontTitle
-                    font.bold: true
-                    color: textColor
-                    font.family: "Segoe UI"
-                }
-                
-                Label {
-                    text: "Gestiona las categorías de gastos operativos y sus configuraciones"
-                    color: textSecondaryColor
-                    font.pixelSize: fontBase
-                    font.family: "Segoe UI"
-                }
-            }
-        }
-        
-        // ===== FORMULARIO =====
-        GroupBox {
-            Layout.fillWidth: true
-            title: isEditMode ? "Editar Tipo de Gasto" : "Agregar Nuevo Tipo de Gasto"
-            
-            background: Rectangle {
-                color: surfaceColor
-                border.color: borderColor
-                border.width: 1
-                radius: radiusMedium
-            }
-            
-            label: Label {
-                text: parent.title
-                font.pixelSize: fontMedium
-                font.bold: true
-                color: textColor
-                font.family: "Segoe UI"
-            }
-            
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: marginMedium
-                
-                // CAMPOS PRINCIPALES
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: width < baseUnit * 80 ? 1 : 2
-                    rowSpacing: marginMedium
-                    columnSpacing: marginLarge
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Nombre:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoTipoGastoNombre
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Ej: Servicios Públicos"
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Color:"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                        }
-                        
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: marginSmall
-                            
-                            ComboBox {
-                                id: nuevoTipoGastoColor
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 4.5
-                                model: [
-                                    { text: "Azul (Servicios)", value: infoColor },
-                                    { text: "Violeta (Personal)", value: violetColor },
-                                    { text: "Verde (Alimentación)", value: successColor },
-                                    { text: "Amarillo (Mantenimiento)", value: warningColor },
-                                    { text: "Azul Oscuro (Administrativos)", value: primaryColor },
-                                    { text: "Naranja (Suministros)", value: "#e67e22" },
-                                    { text: "Gris (Otros)", value: "#95a5a6" },
-                                    { text: "Rojo (Emergencias)", value: dangerColor }
-                                ]
-                                
-                                textRole: "text"
-                                valueRole: "value"
-                                
-                                background: Rectangle {
-                                    color: backgroundColor
-                                    border.color: borderColor
-                                    border.width: 1
-                                    radius: radiusSmall
-                                }
-                            }
-                            
-                            Rectangle {
-                                Layout.preferredWidth: baseUnit * 4
-                                Layout.preferredHeight: baseUnit * 4
-                                color: nuevoTipoGastoColor.currentValue || "#95a5a6"
-                                radius: radiusSmall
-                                border.color: borderColor
-                                border.width: 1
-                            }
-                        }
-                    }
-                }
-                
-                // DESCRIPCIÓN
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: marginSmall
-                    
-                    Label {
-                        text: "Descripción:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: fontBase
-                        font.family: "Segoe UI"
-                    }
-                    
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: baseUnit * 8
-                        
-                        TextArea {
-                            id: nuevoTipoGastoDescripcion
-                            placeholderText: "Descripción del tipo de gasto..."
-                            wrapMode: TextArea.Wrap
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                }
-                
-                // EJEMPLOS Y BOTONES
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: marginMedium
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: marginSmall
-                        
-                        Label {
-                            text: "Ejemplos (separados por comas):"
-                            font.bold: true
-                            color: textColor
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                        }
-                        TextField {
-                            id: nuevoTipoGastoEjemplos
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4.5
-                            placeholderText: "Ej: Agua, Luz, Gas"
-                            font.pixelSize: fontBase
-                            font.family: "Segoe UI"
-                            background: Rectangle {
-                                color: backgroundColor
-                                border.color: borderColor
-                                border.width: 1
-                                radius: radiusSmall
-                            }
-                        }
-                    }
-                    
-                    RowLayout {
-                        spacing: marginMedium
-                        
-                        Button {
-                            text: "Cancelar"
-                            Layout.preferredWidth: baseUnit * 12
-                            Layout.preferredHeight: baseUnit * 4.5
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
-                                radius: radiusSmall
-                                border.color: borderColor
-                                border.width: 1
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: textColor
-                                font.pixelSize: fontSmall
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.family: "Segoe UI"
-                            }
-                            
-                            onClicked: limpiarFormulario()
-                        }
-                        
-                        Button {
-                            text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                            enabled: nuevoTipoGastoNombre.text && nuevoTipoGastoDescripcion.text && 
-                                    nuevoTipoGastoEjemplos.text
-                            Layout.preferredWidth: baseUnit * 15
-                            Layout.preferredHeight: baseUnit * 4.5
-                            
-                            background: Rectangle {
-                                color: parent.enabled ? 
-                                       (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
-                                       Qt.lighter(successColor, 1.5)
-                                radius: radiusSmall
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: backgroundColor
-                                font.bold: true
-                                font.pixelSize: fontSmall
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.family: "Segoe UI"
-                            }
-                            
-                            onClicked: guardarTipoGasto()
-                        }
-                    }
-                }
-            }
-        }
-        
-        // ===== TABLA DE TIPOS DE GASTOS =====
+        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE) =====
         Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            color: backgroundColor
-            radius: radiusMedium
-            border.color: borderColor
-            border.width: 1
+            Layout.preferredHeight: baseUnit * 12
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: primaryColor }
+                GradientStop { position: 1.0; color: Qt.darker(primaryColor, 1.1) }
+            }
             
-            ColumnLayout {
+            RowLayout {
                 anchors.fill: parent
-                spacing: 0
+                anchors.margins: marginLarge
+                spacing: marginMedium
                 
-                // TÍTULO
-                Rectangle {
-                    Layout.fillWidth: true
+                // ===== BOTÓN DE VOLVER =====
+                Button {
+                    Layout.preferredWidth: baseUnit * 6
                     Layout.preferredHeight: baseUnit * 6
-                    color: "#f8f9fa"
-                    radius: radiusMedium
+                    text: "←"
                     
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.bottomMargin: radiusMedium
-                        color: parent.color
+                    background: Rectangle {
+                        color: backgroundColor
+                        radius: baseUnit * 0.8
+                        opacity: parent.pressed ? 0.8 : 1.0
                     }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: primaryColor
+                        font.pixelSize: baseUnit * 2.5
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        // Emitir señal para volver a la vista principal
+                        if (typeof changeView !== "undefined") {
+                            changeView("main")
+                        } else {
+                            configTiposGastosRoot.volverClicked()
+                            configTiposGastosRoot.backToMain()
+                        }
+                    }
+                }
+                
+                // ===== ÍCONO DEL MÓDULO =====
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 8
+                    color: backgroundColor
+                    radius: baseUnit * 4
                     
                     Label {
                         anchors.centerIn: parent
-                        text: "📋 Tipos de Gastos Registrados"
+                        text: "💰"
+                        font.pixelSize: fontBase * 1.8
+                    }
+                }
+                
+                // ===== INFORMACIÓN DEL MÓDULO =====
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: marginSmall * 0.5
+                    
+                    Label {
+                        text: "Configuración de Tipos de Gastos"
+                        color: backgroundColor
+                        font.pixelSize: fontBase * 1.4
+                        font.bold: true
+                        font.family: "Segoe UI"
+                    }
+                    
+                    Label {
+                        text: "Gestiona las categorías de gastos operativos y sus configuraciones del sistema"
+                        color: backgroundColor
+                        font.pixelSize: fontBase * 0.9
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        opacity: 0.95
+                        font.family: "Segoe UI"
+                    }
+                }
+            }
+        }
+        
+        // ===== ÁREA DE CONTENIDO =====
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: surfaceColor
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: marginLarge
+                spacing: marginLarge
+                
+                // ===== FORMULARIO =====
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: isEditMode ? "Editar Tipo de Gasto" : "Agregar Nuevo Tipo de Gasto"
+                    
+                    background: Rectangle {
+                        color: backgroundColor
+                        border.color: borderColor
+                        border.width: 1
+                        radius: radiusMedium
+                    }
+                    
+                    label: Label {
+                        text: parent.title
                         font.pixelSize: fontMedium
                         font.bold: true
                         color: textColor
                         font.family: "Segoe UI"
                     }
-                }
-                
-                // CONTENIDO
-                ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
                     
-                    ListView {
-                        id: tiposGastosList
-                        model: tiposGastosData
-                        spacing: marginSmall
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: marginMedium
                         
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: baseUnit * 12
-                            color: index % 2 === 0 ? backgroundColor : "#fafafa"
-                            border.color: borderColor
-                            border.width: 1
-                            radius: radiusSmall
+                        // ===== PRIMERA FILA: NOMBRE Y DESCRIPCIÓN =====
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: marginLarge
                             
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: marginMedium
-                                spacing: marginMedium
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: parent.width * 0.5
+                                spacing: marginSmall
                                 
-                                // CONTENIDO PRINCIPAL
-                                ColumnLayout {
+                                Label {
+                                    text: "Nombre del Tipo de Gasto:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                }
+                                TextField {
+                                    id: nuevoTipoGastoNombre
                                     Layout.fillWidth: true
-                                    spacing: marginSmall
-                                    
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: baseUnit * 20
-                                            Layout.preferredHeight: baseUnit * 3
-                                            color: modelData.color || "#95a5a6"
-                                            radius: radiusMedium
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: modelData.nombre
-                                                color: backgroundColor
-                                                font.bold: true
-                                                font.pixelSize: fontSmall
-                                                font.family: "Segoe UI"
-                                            }
-                                        }
-                                        
-                                        Item { Layout.fillWidth: true }
-                                    }
-                                    
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: modelData.descripcion
-                                        color: textColor
-                                        font.pixelSize: fontSmall
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 2
-                                        elide: Text.ElideRight
-                                        font.family: "Segoe UI"
-                                    }
-                                    
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: "Ejemplos: " + (modelData.ejemplos ? modelData.ejemplos.join(", ") : "")
-                                        color: textSecondaryColor
-                                        font.pixelSize: fontTiny
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 1
-                                        elide: Text.ElideRight
-                                        font.family: "Segoe UI"
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    placeholderText: "Ej: Servicios Públicos"
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: borderColor
+                                        border.width: 1
+                                        radius: radiusSmall
                                     }
                                 }
+                            }
+                            
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: parent.width * 0.5
+                                spacing: marginSmall
                                 
-                                // BOTONES DE ACCIÓN
-                                RowLayout {
-                                    spacing: marginSmall
+                                Label {
+                                    text: "Descripción:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                }
+                                TextField {
+                                    id: nuevoTipoGastoDescripcion
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    placeholderText: "Descripción del tipo de gasto"
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: borderColor
+                                        border.width: 1
+                                        radius: radiusSmall
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ===== SEGUNDA FILA: BOTONES =====
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: marginMedium
+                            
+                            // ESPACIADOR
+                            Item {
+                                Layout.fillWidth: true
+                            }
+                            
+                            // BOTONES
+                            RowLayout {
+                                spacing: marginMedium
+                                
+                                Button {
+                                    text: "Cancelar"
+                                    Layout.preferredWidth: baseUnit * 12
+                                    Layout.preferredHeight: baseUnit * 4.5
                                     
-                                    Button {
-                                        Layout.preferredWidth: baseUnit * 4
-                                        Layout.preferredHeight: baseUnit * 4
-                                        text: "✏️"
-                                        
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
-                                            radius: radiusSmall
-                                        }
-                                        
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: backgroundColor
-                                            font.pixelSize: fontBase
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-                                        
-                                        onClicked: editarTipoGasto(index)
+                                    background: Rectangle {
+                                        color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                                        radius: radiusSmall
+                                        border.color: borderColor
+                                        border.width: 1
                                     }
                                     
-                                    Button {
-                                        Layout.preferredWidth: baseUnit * 4
-                                        Layout.preferredHeight: baseUnit * 4
-                                        text: "🗑️"
-                                        
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                            radius: radiusSmall
-                                        }
-                                        
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: backgroundColor
-                                            font.pixelSize: fontBase
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-                                        
-                                        onClicked: eliminarTipoGasto(index)
+                                    contentItem: Label {
+                                        text: parent.text
+                                        color: textColor
+                                        font.pixelSize: fontSmall
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        font.family: "Segoe UI"
                                     }
+                                    
+                                    onClicked: limpiarFormulario()
+                                }
+                                
+                                Button {
+                                    text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
+                                    enabled: nuevoTipoGastoNombre.text && nuevoTipoGastoDescripcion.text
+                                    Layout.preferredWidth: baseUnit * 15
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    
+                                    background: Rectangle {
+                                        color: parent.enabled ? 
+                                               (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                                               Qt.lighter(successColor, 1.5)
+                                        radius: radiusSmall
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: parent.text
+                                        color: backgroundColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        font.family: "Segoe UI"
+                                    }
+                                    
+                                    onClicked: guardarTipoGasto()
                                 }
                             }
                         }
                     }
                 }
                 
-                // ESTADO VACÍO
+                // ===== TABLA DE TIPOS DE GASTOS =====
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "transparent"
-                    visible: tiposGastosData.length === 0
+                    color: backgroundColor
+                    radius: radiusMedium
+                    border.color: borderColor
+                    border.width: 1
                     
                     ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: marginMedium
+                        anchors.fill: parent
+                        spacing: 0
                         
-                        Label {
-                            text: "💰"
-                            font.pixelSize: fontTitle * 2
-                            color: textSecondaryColor
-                            Layout.alignment: Qt.AlignHCenter
+                        // TÍTULO
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 6
+                            color: "#f8f9fa"
+                            radius: radiusMedium
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.bottomMargin: radiusMedium
+                                color: parent.color
+                            }
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "💰 Tipos de Gastos Registrados"
+                                font.pixelSize: fontMedium
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI"
+                            }
                         }
                         
-                        Label {
-                            text: "No hay tipos de gastos registrados"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontMedium
-                            Layout.alignment: Qt.AlignHCenter
-                            font.family: "Segoe UI"
+                        // ENCABEZADOS
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: baseUnit * 6
+                            color: "#e9ecef"
+                            border.color: borderColor
+                            border.width: 1
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: marginSmall
+                                spacing: 1
+                                
+                                Label {
+                                    Layout.preferredWidth: parent.width * 0.1
+                                    Layout.fillHeight: true
+                                    text: "ID"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: borderColor
+                                }
+                                
+                                Label {
+                                    Layout.preferredWidth: parent.width * 0.3
+                                    Layout.fillHeight: true
+                                    text: "NOMBRE"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: borderColor
+                                }
+                                
+                                Label {
+                                    Layout.preferredWidth: parent.width * 0.45
+                                    Layout.fillHeight: true
+                                    text: "DESCRIPCIÓN"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: borderColor
+                                }
+                                
+                                Label {
+                                    Layout.preferredWidth: parent.width * 0.15
+                                    Layout.fillHeight: true
+                                    text: "ACCIONES"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
                         }
                         
-                        Label {
-                            text: "Agrega el primer tipo de gasto usando el formulario superior"
-                            color: textSecondaryColor
-                            font.pixelSize: fontBase
-                            Layout.alignment: Qt.AlignHCenter
-                            wrapMode: Text.WordWrap
-                            horizontalAlignment: Text.AlignHCenter
-                            font.family: "Segoe UI"
+                        // CONTENIDO
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            
+                            ListView {
+                                id: tiposGastosList
+                                model: tiposGastosData
+                                
+                                delegate: Rectangle {
+                                    width: ListView.view.width
+                                    height: baseUnit * 8
+                                    color: index % 2 === 0 ? backgroundColor : "#f8f9fa"
+                                    border.color: borderColor
+                                    border.width: 1
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: marginSmall
+                                        spacing: 1
+                                        
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.1
+                                            Layout.fillHeight: true
+                                            text: (index + 1).toString()
+                                            color: textSecondaryColor
+                                            font.pixelSize: fontBase
+                                            font.family: "Segoe UI"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.3
+                                            Layout.fillHeight: true
+                                            text: modelData.nombre
+                                            font.bold: true
+                                            color: primaryColor
+                                            font.pixelSize: fontBase
+                                            font.family: "Segoe UI"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            wrapMode: Text.WordWrap
+                                            elide: Text.ElideRight
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        Label {
+                                            Layout.preferredWidth: parent.width * 0.45
+                                            Layout.fillHeight: true
+                                            text: modelData.descripcion
+                                            color: textColor
+                                            font.pixelSize: fontSmall
+                                            font.family: "Segoe UI"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            wrapMode: Text.WordWrap
+                                            elide: Text.ElideRight
+                                            maximumLineCount: 2
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            color: borderColor
+                                        }
+                                        
+                                        RowLayout {
+                                            Layout.preferredWidth: parent.width * 0.15
+                                            Layout.fillHeight: true
+                                            spacing: marginSmall
+                                            
+                                            Button {
+                                                Layout.preferredWidth: baseUnit * 3.5
+                                                Layout.preferredHeight: baseUnit * 3.5
+                                                text: "✏️"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
+                                                    radius: radiusSmall
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: backgroundColor
+                                                    font.pixelSize: fontSmall
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: editarTipoGasto(index)
+                                            }
+                                            
+                                            Button {
+                                                Layout.preferredWidth: baseUnit * 3.5
+                                                Layout.preferredHeight: baseUnit * 3.5
+                                                text: "🗑️"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                                                    radius: radiusSmall
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: backgroundColor
+                                                    font.pixelSize: fontSmall
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: eliminarTipoGasto(index)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ESTADO VACÍO
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            visible: tiposGastosData.length === 0
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: marginMedium
+                                
+                                Label {
+                                    text: "💰"
+                                    font.pixelSize: fontTitle * 2
+                                    color: textSecondaryColor
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: "No hay tipos de gastos registrados"
+                                    color: textColor
+                                    font.bold: true
+                                    font.pixelSize: fontMedium
+                                    Layout.alignment: Qt.AlignHCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Label {
+                                    text: "Agrega el primer tipo de gasto usando el formulario superior"
+                                    color: textSecondaryColor
+                                    font.pixelSize: fontBase
+                                    Layout.alignment: Qt.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    horizontalAlignment: Text.AlignHCenter
+                                    font.family: "Segoe UI"
+                                }
+                            }
                         }
                     }
                 }

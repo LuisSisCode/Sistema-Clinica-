@@ -328,7 +328,7 @@ ApplicationWindow {
                             NavItemWithSubmenu {
                                 id: navItem1
                                 text: "FARMACIA"
-                                icon: "💊"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/farmacia.png"
                                 active: currentIndex === 1
                                 expanded: farmaciaExpanded
                                 
@@ -340,9 +340,9 @@ ApplicationWindow {
                                 }
                                 
                                 submenuItems: [
-                                    { text: "Ventas", icon: "💰", subsection: 0 },
-                                    { text: "Productos", icon: "📦", subsection: 1 },
-                                    { text: "Compras", icon: "🚚", subsection: 2 }
+                                    { text: "Ventas", icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ventas.png", subsection: 0 },
+                                    { text: "Productos", icon: "file:///D:/Sistema-Clinica-/Resources/iconos/productos.png", subsection: 1 },
+                                    { text: "Compras", icon: "file:///D:/Sistema-Clinica-/Resources/iconos/compras.png", subsection: 2 }
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {
@@ -354,7 +354,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem2
                                 text: "CONSULTAS"
-                                icon: "🩺"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Consulta.png"  // Cambia de "🩺"
                                 active: currentIndex === 2
                                 onClicked: switchToPage(2)
                             }
@@ -362,7 +362,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem3
                                 text: "LABORATORIO"
-                                icon: "🧪"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Laboratorio.png"  // Cambia de "🧪"
                                 active: currentIndex === 3
                                 onClicked: switchToPage(3)
                             }
@@ -370,7 +370,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem4
                                 text: "ENFERMERÍA"
-                                icon: "💉"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Enfermeria.png"  // Cambia de "💉"
                                 active: currentIndex === 4
                                 onClicked: switchToPage(4)
                             }
@@ -382,23 +382,23 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem5
                                 text: "SERVICIOS BÁSICOS"
-                                icon: "📊"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ServiciosBasicos.png"  // Cambia de "📊"
                                 active: currentIndex === 5
                                 onClicked: switchToPage(5)
                             }
-                            
+                                                        
                             NavItem {
                                 id: navItem6
                                 text: "USUARIOS"
-                                icon: "👤"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/usuario.png"  // Cambia de "👤"
                                 active: currentIndex === 6
                                 onClicked: switchToPage(6)
                             }
                             
                             NavItem {
                                 id: navItem7
-                                text: "PERSONAL"
-                                icon: "👥"
+                                text: "PERSONAL"  // Corregir texto
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Trabajadores.png"  // Corregir icon
                                 active: currentIndex === 7
                                 onClicked: switchToPage(7)
                             }
@@ -406,7 +406,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem8
                                 text: "REPORTES"
-                                icon: "📈"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/reportes.png"
                                 active: currentIndex === 8
                                 onClicked: switchToPage(8)
                             }
@@ -418,7 +418,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem9
                                 text: "CONFIGURACIÓN"
-                                icon: "⚙️"
+                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/configuraciones.png"
                                 active: currentIndex === 9
                                 onClicked: switchToPage(9)
                             }
@@ -746,10 +746,12 @@ ApplicationWindow {
             anchors.rightMargin: baseUnit * 2.5
             spacing: baseUnit * 1.5
             
-            Label {
-                text: icon
-                color: whiteColor
-                font.pixelSize: fontBaseSize * 1.3
+            Image {
+                source: icon
+                Layout.preferredWidth: fontBaseSize * 2.5
+                Layout.preferredHeight: fontBaseSize * 2.5
+                fillMode: Image.PreserveAspectFit
+                smooth: true
             }
             
             Label {
@@ -824,10 +826,12 @@ ApplicationWindow {
                 anchors.rightMargin: baseUnit * 2.5
                 spacing: baseUnit * 1.5
                 
-                Label {
-                    text: icon
-                    color: whiteColor
-                    font.pixelSize: fontBaseSize * 1.3
+                Image {
+                    source: icon
+                    Layout.preferredWidth: fontBaseSize * 2.5
+                    Layout.preferredHeight: fontBaseSize * 2.5
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
                 }
                 
                 Label {
@@ -898,10 +902,12 @@ ApplicationWindow {
                         anchors.rightMargin: baseUnit * 2.5
                         spacing: baseUnit
                         
-                        Label {
-                            text: modelData.icon
-                            color: whiteColor
-                            font.pixelSize: fontBaseSize
+                        Image {
+                            source: modelData.icon
+                            Layout.preferredWidth: fontBaseSize * 2.0  // Aumentado de 1.0 a 1.5
+                            Layout.preferredHeight: fontBaseSize * 2.0 // Aumentado de 1.0 a 1.5
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
                         }
                         
                         Label {
