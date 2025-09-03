@@ -3,8 +3,6 @@ import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Clinica.Models 1.0
-import "./components/laboratory"
-
 
 Item {
     id: laboratorioRoot
@@ -13,16 +11,16 @@ Item {
     // ACCESO AL MODELO DE BACKEND
     property var laboratorioModel: null
     
-    // SISTEMA DE ESTILOS ADAPTABLES INTEGRADO
+    // SISTEMA DE ESTILOS ADAPTATIVAS DEL MAIN
     readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
     readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
     
-    // PROPIEDADES DE TAMAÑO MEJORADAS
+    // PROPIEDADES DE TAMAÑO
     readonly property real iconSize: Math.max(baseUnit * 3, 24)
     readonly property real buttonIconSize: Math.max(baseUnit * 2, 18)
 
-    // PROPIEDADES DE COLOR MEJORADAS
+    // PROPIEDADES DE COLOR 
     readonly property color primaryColor: "#3498DB"  // Azul para laboratorio
     readonly property color primaryColorHover: "#2980B9"
     readonly property color primaryColorPressed: "#21618C"
@@ -39,7 +37,6 @@ Item {
     readonly property color borderColor: "#E5E7EB"
     readonly property color accentColor: "#10B981"
     readonly property color lineColor: "#D1D5DB"
-
     // Distribución de columnas responsive
     readonly property real colId: 0.05
     readonly property real colPaciente: 0.18
@@ -49,41 +46,27 @@ Item {
     readonly property real colTrabajador: 0.15
     readonly property real colRegistradoPor: 0.15
     readonly property real colFecha: 0.10
-
-    // Usuario actual del sistema
-    readonly property string currentUser: "Dr. Luis González"
-    readonly property string currentUserRole: "Médico Laboratorista"
-    
     // Propiedades para los diálogos del análisis
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
     property bool showNewAnalysisDialog: false
-
-    // PROPIEDADES DE PAGINACIÓN
-    property int itemsPerPageLaboratorio: calcularElementosPorPagina()
-    property int currentPageLaboratorio: 0
-    property int totalPagesLaboratorio: 0
-
-    // NUEVA PROPIEDAD PARA DATOS ORIGINALES
-    property var analisisOriginales: []
-
     // DATOS DESDE EL BACKEND
     property var trabajadoresDisponibles: laboratorioModel ? laboratorioModel.trabajadoresJson : "[]"
     property var tiposAnalisis: laboratorioModel ? laboratorioModel.tiposAnalisisJson : "[]"
 
-    // DATOS LIMPIOS
+    // PROPIEDADES DE FILTRO
     property var analisisModelData: []
+    property var analysisMap: []
     
-    // PROPIEDADES PARA FILTROS
-    property var filtrosActivos: ({
-        "busqueda": "",
-        "tipo_analisis": "",
-        "tipo": "",
-        "fecha_desde": "",
-        "fecha_hasta": ""
-    })
+    readonly property int currentPageLaboratorio: laboratorioModel ? laboratorioModel._currentPage || 0 : 0
+    readonly property int totalPagesLaboratorio: laboratorioModel ? laboratorioModel._totalPages || 0 : 0
+    readonly property int itemsPerPageLaboratorio: laboratorioModel ? laboratorioModel._itemsPerPage || 20 : 20
+    readonly property int totalItemsLaboratorio: laboratorioModel ? laboratorioModel._totalRecords || 0 : 0
 
+    ListModel {
+        id: analisisPaginadosModel // Modelo para la página actual
+    }
     // CONEXIÓN CON EL MODELO
     Connections {
         target: appController
@@ -95,64 +78,80 @@ Item {
             }
         }
     }
-    
+    Timer {
+        id: initTimer
+        interval: 100
+        running: false
+        repeat: false
+        onTriggered: {
+            console.log("⏰ Ejecutando inicialización retrasada...")
+            if (laboratorioModel) {
+                // ✅ CORREGIDO: Usar el método correcto del modelo
+                laboratorioModel.aplicar_filtros_y_recargar("", "", "", "", "")
+                console.log("✅ Inicialización retrasada exitosa")
+            }
+        }
+    }
     // CONEXIONES CON EL MODELO
     Connections {
         target: laboratorioModel
         enabled: laboratorioModel !== null
         
-        function onExamenCreado(datos) {
-            console.log("Análisis creado:", datos)
-            showNewAnalysisDialog = false
-            cargarDatosDesdeModelo()
-        }
-        
-        function onErrorOcurrido(mensaje, codigo) {
-            console.log("Error en operación:", mensaje)
-        }
-        
-        function onExamenActualizado(datos) {
-            console.log("Análisis actualizado:", datos)
-            showNewAnalysisDialog = false
-            selectedRowIndex = -1
-            cargarDatosDesdeModelo()
-        }
-
-        function onExamenEliminado(examenId) {
-            console.log("Análisis eliminado:", examenId)
-            cargarDatosDesdeModelo()
-        }
-
         function onExamenesActualizados() {
-            cargarDatosDesdeModelo()
+            console.log("🔬 Signal: Exámenes actualizados")
+            updateTimer.start()
+        }
+        
+        function onTiposAnalisisActualizados() {
+            console.log("📋 Signal: Tipos de análisis actualizados")
+            Qt.callLater(updateAnalisisCombo)
+        }
+        
+        function onTrabajadoresActualizados() {
+            console.log("👥 Signal: Trabajadores actualizados") 
+        }
+        
+        function onEstadoCambiado(nuevoEstado) {
+            console.log("⏳ Estado:", nuevoEstado)
+        }
+        
+        // NUEVO: Manejar éxito de operaciones
+        function onOperacionExitosa(mensaje) {
+            console.log("✅ Signal: Operación exitosa -", mensaje)
+            mostrarNotificacion("Éxito", mensaje)
+            updatePaginatedModel()
+            
+            // Solo cerrar si es una operación de análisis
+            if (showNewAnalysisDialog && (mensaje.includes("creado") || mensaje.includes("actualizado") || mensaje.includes("Examen"))) {
+                Qt.callLater(function() {
+                    limpiarYCerrarDialogo()
+                })
+            }
+        }
+        // NUEVO: Manejar actualización exitosa
+        function onExamenActualizado(datos) {
+            console.log("📝 Signal: Examen actualizado exitosamente")
+            mostrarNotificacion("Éxito", "Análisis actualizado correctamente")
+            
+            Qt.callLater(function() {
+                if (showNewAnalysisDialog) {
+                    limpiarYCerrarDialogo()
+                }
+            })
         }
     }
-
-    // MODELOS SEPARADOS PARA PAGINACIÓN
-    ListModel {
-        id: analisisListModel // Modelo filtrado
+    Timer {
+        id: updateTimer
+        interval: 100
+        onTriggered: updatePaginatedModel()
     }
     
-    ListModel {
-        id: analisisPaginadosModel // Modelo para la página actual
-    }
 
-    // FUNCIÓN PARA CALCULAR ELEMENTOS POR PÁGINA
-    function calcularElementosPorPagina() {
-        var alturaDisponible = height - baseUnit * 25
-        var alturaFila = baseUnit * 7
-        var elementosCalculados = Math.floor(alturaDisponible / alturaFila)
-        
-        return Math.max(6, Math.min(elementosCalculados, 15))
-    }
-
-    // RECALCULAR PAGINACIÓN CUANDO CAMBIE EL TAMAÑO
-    onHeightChanged: {
-        var nuevosElementos = calcularElementosPorPagina()
-        if (nuevosElementos !== itemsPerPageLaboratorio) {
-            itemsPerPageLaboratorio = nuevosElementos
-            updatePaginatedModel()
-        }
+    // FUNCIÓN MEJORADA PARA MOSTRAR NOTIFICACIONES
+    function mostrarNotificacion(titulo, mensaje) {
+        console.log("📢 " + titulo + ": " + mensaje)
+        // Aquí puedes agregar tu lógica de notificaciones visual
+        // Por ejemplo, mostrar un toast o popup
     }
 
     // LAYOUT PRINCIPAL RESPONSIVO
@@ -328,7 +327,7 @@ Item {
                         anchors.margins: baseUnit * 3
                         anchors.bottomMargin: baseUnit * 1.5
                         
-                        columns: width < 1000 ? 2 : 4
+                        columns: width < 1000 ? 2 : 5
                         rowSpacing: baseUnit
                         columnSpacing: baseUnit * 2
                         
@@ -379,21 +378,24 @@ Item {
                                 id: filtroAnalisis
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
+                                
+                                // ✅ CORREGIDO: Garantizar que "Todos" esté siempre en índice 0
                                 model: {
-                                    var modelData = ["Todos"]
+                                    var modelData = ["Todos"] // SIEMPRE empieza con "Todos"
                                     try {
                                         var tiposData = JSON.parse(tiposAnalisis)
                                         for (var i = 0; i < tiposData.length; i++) {
                                             var nombre = tiposData[i].nombre || tiposData[i].Nombre || ""
-                                            if (nombre) modelData.push(nombre)
+                                            if (nombre && nombre !== "Todos") { // Evitar duplicados
+                                                modelData.push(nombre)
+                                            }
                                         }
                                     } catch (e) {
                                         console.log("Error parseando tipos análisis:", e)
                                     }
                                     return modelData
                                 }
-                                currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
+                                currentIndex: 0 // Siempre empezar en "Todos"
                                 
                                 contentItem: Label {
                                     text: filtroAnalisis.displayText
@@ -403,6 +405,10 @@ Item {
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
                                     elide: Text.ElideRight
+                                }
+                                onCurrentIndexChanged: {
+                                    console.log("🔍 Tipo análisis cambiado - Índice:", currentIndex, "Texto:", currentText)
+                                    aplicarFiltros()
                                 }
                             }
                         }
@@ -425,7 +431,6 @@ Item {
                                 Layout.preferredHeight: baseUnit * 4
                                 model: ["Todos", "Normal", "Emergencia"]
                                 currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
                                 
                                 contentItem: Label {
                                     text: filtroTipo.displayText
@@ -435,8 +440,13 @@ Item {
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
                                 }
+                                onCurrentIndexChanged: {
+                                    console.log("🔍 Tipo servicio cambiado - Índice:", currentIndex, "Texto:", currentText)
+                                    aplicarFiltros()
+                                }
                             }
                         }
+
                         
                         TextField {
                             id: campoBusqueda
@@ -456,6 +466,45 @@ Item {
                             rightPadding: baseUnit * 1.5
                             font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
+                        }
+                        // En el GridLayout de filtros, agrega este botón:
+                        Button {
+                            id: limpiarFiltrosBtn
+                            text: "Limpiar Filtros"
+                            Layout.preferredHeight: baseUnit * 4
+                            Layout.fillWidth: true
+                            
+                            background: Rectangle {
+                                color: limpiarFiltrosBtn.pressed ? "#E5E7EB" : 
+                                    limpiarFiltrosBtn.hovered ? "#D1D5DB" : "#F3F4F6"
+                                border.color: "#D1D5DB"
+                                border.width: 1
+                                radius: baseUnit * 0.8
+                            }
+                            
+                            contentItem: Label {
+                                text: limpiarFiltrosBtn.text
+                                color: "#374151"
+                                font.pixelSize: fontBaseSize * 0.9
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            
+                            onClicked: {
+                                limpiarFiltros()
+                            }
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                            
+                            ToolTip {
+                                visible: limpiarFiltrosBtn.hovered
+                                text: "Restablecer todos los filtros"
+                                delay: 500
+                                timeout: 3000
+                            }
                         }
                     }
                 }
@@ -679,7 +728,11 @@ Item {
                             ListView {
                                 id: analisisListView
                                 model: analisisPaginadosModel
-                                
+                                section {
+                                    property: "tipo"
+                                    criteria: ViewSection.FullString
+                                    labelPositioning: ViewSection.InlineLabels
+                                }
                                 delegate: Rectangle {
                                     width: ListView.view.width
                                     height: baseUnit * 5.5
@@ -773,23 +826,42 @@ Item {
                                             }
                                         }
                                         
-                                        // ANÁLISIS COLUMN
+                                        // 🎯 ANÁLISIS COLUMN MODIFICADA - AHORA CON DETALLES
                                         Item {
                                             Layout.preferredWidth: parent.width * colAnalisis
                                             Layout.fillHeight: true
                                             
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                anchors.rightMargin: baseUnit
-                                                text: model.tipoAnalisis || "Análisis General"
-                                                color: primaryColor
-                                                font.bold: false
-                                                font.pixelSize: fontBaseSize * 0.85
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                                elide: Text.ElideRight
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: baseUnit * 0.5
+                                                
+                                                Label {
+                                                    width: parent.width - baseUnit
+                                                    text: model.tipoAnalisis || "Análisis General"
+                                                    color: primaryColor
+                                                    font.bold: false
+                                                    font.pixelSize: fontBaseSize * 0.85
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                }
+                                                
+                                                Label {
+                                                    width: parent.width - baseUnit
+                                                    text: {
+                                                        var detalles = model.detallesExamen || ""
+                                                        if (detalles && detalles.trim() !== "") {
+                                                            return "Detalles: " + detalles
+                                                        } else {
+                                                            return "Sin detalles específicos"
+                                                        }
+                                                    }
+                                                    color: textColorLight
+                                                    font.pixelSize: fontBaseSize * 0.75
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 1
+                                                }
                                             }
                                             
                                             Rectangle {
@@ -1074,7 +1146,6 @@ Item {
                         }
                     }
                 }
-                
                 // PAGINACIÓN MODERNA
                 Rectangle {
                     Layout.fillWidth: true
@@ -1117,18 +1188,18 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: {
-                                if (currentPageLaboratorio > 0) {
-                                    currentPageLaboratorio--
-                                    updatePaginatedModel()
-                                }
-                            }
+                            onClicked: irAPaginaAnterior()
                         }
                         
                         Label {
-                            text: "Página " + (currentPageLaboratorio + 1) + " de " + Math.max(1, totalPagesLaboratorio)
+                            text: {
+                                var inicio = currentPageLaboratorio * itemsPerPageLaboratorio + 1
+                                var fin = Math.min((currentPageLaboratorio + 1) * itemsPerPageLaboratorio, totalItemsLaboratorio)
+                                return totalItemsLaboratorio + 
+                                    " Página " + (currentPageLaboratorio + 1) + " de " + Math.max(1, totalPagesLaboratorio) + " "
+                            }
                             color: textColor
-                            font.pixelSize: fontBaseSize * 0.9
+                            font.pixelSize: fontBaseSize * 0.8
                             font.family: "Segoe UI, Arial, sans-serif"
                             font.weight: Font.Medium
                         }
@@ -1160,12 +1231,7 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: {
-                                if (currentPageLaboratorio < totalPagesLaboratorio - 1) {
-                                    currentPageLaboratorio++
-                                    updatePaginatedModel()
-                                }
-                            }
+                            onClicked: irAPaginaSiguiente()
                         }
                     }
                 }
@@ -1215,7 +1281,7 @@ Item {
         
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
-                var analisis = analisisListModel.get(editingIndex)
+                var analisis = analisisPaginadosModel.get(editingIndex)
                 console.log("🔄 Cargando datos para editar:", JSON.stringify(analisis))
                 
                 // Cargar datos del paciente
@@ -1360,9 +1426,14 @@ Item {
                                 maximumLength: 15
                                 
                                 property bool pacienteAutocompletado: false
+                                property bool pacienteNoEncontrado: false
                                 
                                 background: Rectangle {
-                                    color: cedulaPaciente.pacienteAutocompletado ? "#F0F8FF" : whiteColor
+                                    color: {
+                                        if (cedulaPaciente.pacienteAutocompletado) return "#F0F8FF"
+                                        if (cedulaPaciente.pacienteNoEncontrado) return "#FEF3C7"
+                                        return whiteColor
+                                    }
                                     border.color: cedulaPaciente.activeFocus ? primaryColor : borderColor
                                     border.width: cedulaPaciente.activeFocus ? 2 : 1
                                     radius: baseUnit * 0.6
@@ -1371,23 +1442,22 @@ Item {
                                         anchors.right: parent.right
                                         anchors.rightMargin: baseUnit
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: cedulaPaciente.text.length >= 5 ? "🔍" : "🔒"
+                                        text: {
+                                            if (cedulaPaciente.pacienteAutocompletado) return "✅"
+                                            if (cedulaPaciente.pacienteNoEncontrado) return "⚠️"
+                                            return cedulaPaciente.text.length >= 5 ? "🔍" : "🔒"
+                                        }
                                         font.pixelSize: fontBaseSize * 1.2
                                         visible: cedulaPaciente.text.length > 0
                                     }
                                 }
                                 
                                 onTextChanged: {
-                                    if (text.length >= 5 && !cedulaPaciente.pacienteAutocompletado) {
+                                    if (text.length >= 5 && !pacienteAutocompletado) {
+                                        pacienteNoEncontrado = false
                                         buscarTimer.restart()
                                     } else if (text.length === 0) {
                                         limpiarDatosPaciente()
-                                    }
-                                }
-                                
-                                onActiveFocusChanged: {
-                                    if (!activeFocus) {
-                                        // Timer para cerrar panel si existe
                                     }
                                 }
                                 
@@ -1398,10 +1468,63 @@ Item {
                                 }
                                 
                             }
+                            Button {
+                                id: nuevoPacienteBtn
+                                text: "Nuevo Paciente"
+                                visible: cedulaPaciente.pacienteNoEncontrado && 
+                                        cedulaPaciente.text.length >= 5 && 
+                                        !cedulaPaciente.pacienteAutocompletado
+                                Layout.preferredHeight: baseUnit * 3
+                                
+                                background: Rectangle {
+                                    color: nuevoPacienteBtn.pressed ? "#16A085" : 
+                                        nuevoPacienteBtn.hovered ? "#1ABC9C" : "#2ECC71"
+                                    border.color: "#27AE60"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                                
+                                contentItem: RowLayout {
+                                    spacing: baseUnit * 0.5
+                                    
+                                    Text {
+                                        text: "➕"
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 0.8
+                                    }
+                                    
+                                    Label {
+                                        text: nuevoPacienteBtn.text
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        font.bold: true
+                                    }
+                                }
+                                
+                                onClicked: habilitarNuevoPaciente()
+                                
+                                HoverHandler {
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                                
+                                ToolTip {
+                                    visible: nuevoPacienteBtn.hovered
+                                    text: "Crear nuevo paciente con cédula " + cedulaPaciente.text
+                                    delay: 500
+                                    timeout: 3000
+                                }
+                            }
                             
                             Button {
                                 text: "Limpiar"
-                                visible: cedulaPaciente.pacienteAutocompletado || nombrePaciente.text.length > 0
+                                visible: cedulaPaciente.pacienteAutocompletado || 
+                                        nombrePaciente.text.length > 0 ||
+                                        (cedulaPaciente.text.length > 0 && !cedulaPaciente.pacienteNoEncontrado)
                                 Layout.preferredHeight: baseUnit * 3
                                 
                                 background: Rectangle {
@@ -1420,16 +1543,24 @@ Item {
                                 }
                                 
                                 onClicked: limpiarDatosPaciente()
+                                
+                                HoverHandler {
+                                    cursorShape: Qt.PointingHandCursor
+                                }
                             }
                         }
                         
-                        // AGREGAR TIMER PARA EVITAR CONSULTAS EXCESIVAS
                         Timer {
                             id: buscarTimer
-                            interval: 500 // 500ms de delay
+                            interval: 800 // 800ms de delay
                             running: false
                             repeat: false
-                            onTriggered: buscarPacientePorCedula(cedulaPaciente.text.trim())
+                            onTriggered: {
+                                var cedula = cedulaPaciente.text.trim()
+                                if (cedula.length >= 5) {
+                                    buscarPacientePorCedula(cedula)
+                                }
+                            }
                         }
                         
                         // Campos de datos del paciente (solo lectura una vez encontrado)
@@ -1437,16 +1568,35 @@ Item {
                             id: nombrePaciente
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 4
-                            placeholderText: "Nombre del paciente"
-                            readOnly: true
+                            placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                            "Nombre del paciente" : "Ingrese nombre del nuevo paciente"
+                            readOnly: cedulaPaciente.pacienteAutocompletado
                             font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
                             
+                            property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
+                                                            cedulaPaciente.pacienteNoEncontrado
+                            
                             background: Rectangle {
-                                color: "#F8F9FA"
-                                border.color: borderColor
-                                border.width: 1
+                                color: {
+                                    if (cedulaPaciente.pacienteAutocompletado) return "#F8F9FA"
+                                    if (nombrePaciente.esCampoNuevoPaciente) return "#E8F5E8"
+                                    return whiteColor
+                                }
+                                border.color: {
+                                    if (nombrePaciente.esCampoNuevoPaciente && nombrePaciente.activeFocus) return "#2ECC71"
+                                    if (nombrePaciente.esCampoNuevoPaciente) return "#27AE60"
+                                    return borderColor
+                                }
+                                border.width: nombrePaciente.esCampoNuevoPaciente ? 2 : 1
                                 radius: baseUnit * 0.6
+                            }
+                            
+                            // Validación en tiempo real para nuevos pacientes
+                            onTextChanged: {
+                                if (esCampoNuevoPaciente && text.length > 0) {
+                                    color = text.length >= 2 ? textColor : "#E74C3C"
+                                }
                             }
                         }
                         
@@ -1457,18 +1607,35 @@ Item {
                                 id: apellidoPaterno
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "Apellido paterno"
-                                readOnly: true
+                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                                "Apellido paterno" : "Ingrese apellido paterno"
+                                readOnly: cedulaPaciente.pacienteAutocompletado
                                 font.pixelSize: fontBaseSize * 0.9
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 
-                                property bool pacienteAutocompletado: false
+                                property bool pacienteAutocompletado: cedulaPaciente.pacienteAutocompletado
+                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
+                                                                cedulaPaciente.pacienteNoEncontrado
                                 
                                 background: Rectangle {
-                                    color: "#F8F9FA"
-                                    border.color: borderColor
-                                    border.width: 1
+                                    color: {
+                                        if (apellidoPaterno.pacienteAutocompletado) return "#F8F9FA"
+                                        if (apellidoPaterno.esCampoNuevoPaciente) return "#E8F5E8"
+                                        return whiteColor
+                                    }
+                                    border.color: {
+                                        if (apellidoPaterno.esCampoNuevoPaciente && apellidoPaterno.activeFocus) return "#2ECC71"
+                                        if (apellidoPaterno.esCampoNuevoPaciente) return "#27AE60"
+                                        return borderColor
+                                    }
+                                    border.width: apellidoPaterno.esCampoNuevoPaciente ? 2 : 1
                                     radius: baseUnit * 0.6
+                                }
+                                
+                                onTextChanged: {
+                                    if (esCampoNuevoPaciente && text.length > 0) {
+                                        color = text.length >= 2 ? textColor : "#E74C3C"
+                                    }
                                 }
                             }
                             
@@ -1476,20 +1643,58 @@ Item {
                                 id: apellidoMaterno
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "Apellido materno"
-                                readOnly: true
+                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                                "Apellido materno" : "Ingrese apellido materno (opcional)"
+                                readOnly: cedulaPaciente.pacienteAutocompletado
                                 font.pixelSize: fontBaseSize * 0.9
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 
-                                property bool pacienteAutocompletado: false
+                                property bool pacienteAutocompletado: cedulaPaciente.pacienteAutocompletado
+                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
+                                                                cedulaPaciente.pacienteNoEncontrado
                                 
                                 background: Rectangle {
-                                    color: "#F8F9FA"
-                                    border.color: borderColor
-                                    border.width: 1
+                                    color: {
+                                        if (apellidoMaterno.pacienteAutocompletado) return "#F8F9FA"
+                                        if (apellidoMaterno.esCampoNuevoPaciente) return "#E8F5E8"
+                                        return whiteColor
+                                    }
+                                    border.color: {
+                                        if (apellidoMaterno.esCampoNuevoPaciente && apellidoMaterno.activeFocus) return "#2ECC71"
+                                        if (apellidoMaterno.esCampoNuevoPaciente) return "#27AE60"
+                                        return borderColor
+                                    }
+                                    border.width: apellidoMaterno.esCampoNuevoPaciente ? 2 : 1
                                     radius: baseUnit * 0.6
                                 }
                             }
+                        }
+                    }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 3
+                    visible: cedulaPaciente.pacienteNoEncontrado && !cedulaPaciente.pacienteAutocompletado
+                    color: "#D1FAE5"
+                    border.color: "#10B981"
+                    border.width: 1
+                    radius: baseUnit * 0.5
+                    
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: baseUnit
+                        
+                        Text {
+                            text: "✏️"
+                            font.pixelSize: fontBaseSize
+                        }
+                        
+                        Label {
+                            text: "Modo: Crear nuevo paciente con cédula " + cedulaPaciente.text
+                            color: "#047857"
+                            font.pixelSize: fontBaseSize * 0.8
+                            font.bold: true
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                     }
                 }
@@ -1509,12 +1714,17 @@ Item {
                         id: analisisCombo
                         Layout.fillWidth: true
                         Layout.preferredHeight: baseUnit * 4
+                        
+                        // ✅ CORREGIDO: Mismo patrón que el filtro - "Seleccionar..." en índice 0
                         model: {
                             var list = ["Seleccionar tipo de análisis..."]
                             try {
                                 var tiposData = JSON.parse(tiposAnalisis)
                                 for (var i = 0; i < tiposData.length; i++) {
-                                    list.push(tiposData[i].nombre || tiposData[i].Nombre)
+                                    var nombre = tiposData[i].nombre || tiposData[i].Nombre || ""
+                                    if (nombre) {
+                                        list.push(nombre)
+                                    }
                                 }
                             } catch (e) {
                                 console.log("Error parseando tipos análisis:", e)
@@ -1723,22 +1933,61 @@ Item {
                     
                     Button {
                         text: isEditMode ? "Actualizar" : "Guardar"
-                        enabled: analysisForm.selectedAnalysisIndex >= 0 && 
-                            nombrePaciente.text.length >= 2 && 
-                            apellidoPaterno.text.length >= 1 &&
-                            cedulaPaciente.text.length >= 5
+                        enabled: {
+                            // Validaciones básicas
+                            var tieneAnalisis = analysisForm.selectedAnalysisIndex >= 0
+                            var tieneCedula = cedulaPaciente.text.length >= 5
+                            
+                            if (cedulaPaciente.pacienteAutocompletado) {
+                                // Paciente existente encontrado
+                                return tieneAnalisis && tieneCedula && nombrePaciente.text.length >= 2
+                            } else if (cedulaPaciente.pacienteNoEncontrado) {
+                                // Nuevo paciente - validar campos obligatorios
+                                var tieneNombre = nombrePaciente.text.length >= 2
+                                var tieneApellido = apellidoPaterno.text.length >= 2
+                                return tieneAnalisis && tieneCedula && tieneNombre && tieneApellido
+                            }
+                            
+                            return false
+                        }
+                        property bool isLoading: !analysisForm.enabled
                         Layout.preferredHeight: baseUnit * 4
                         
                         background: Rectangle {
                             color: {
                                 if (!parent.enabled) return "#bdc3c7"
+                                if (parent.isLoading) return "#95a5a6"  // Gris mientras carga
                                 return primaryColor
                             }
                             radius: baseUnit
+                            
+                            // Indicador de loading
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.isLoading ? 20 : 0
+                                height: parent.isLoading ? 20 : 0
+                                color: "transparent"
+                                visible: parent.isLoading
+                                
+                                // Spinner simple
+                                Rectangle {
+                                    width: 4
+                                    height: 4
+                                    radius: 2
+                                    color: whiteColor
+                                    anchors.centerIn: parent
+                                    
+                                    SequentialAnimation on rotation {
+                                        running: parent.parent.visible
+                                        loops: Animation.Infinite
+                                        NumberAnimation { to: 360; duration: 1000 }
+                                    }
+                                }
+                            }
                         }
                         
                         contentItem: Label {
-                            text: parent.text
+                            text: parent.isLoading ? "Guardando..." : parent.text
                             color: whiteColor
                             font.bold: true
                             font.pixelSize: fontBaseSize * 0.9
@@ -1747,7 +1996,9 @@ Item {
                         }
                         
                         onClicked: {
-                            guardarAnalisis()
+                            if (!isLoading) {
+                                guardarAnalisis()
+                            }
                         }
                     }
                 }
@@ -1755,113 +2006,144 @@ Item {
         }
     }
 
-    // ===== FUNCIONES JAVASCRIPT =====
-    
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros en laboratorio...")
+        console.log("🔍 Aplicando filtros...")
         
-        analisisListModel.clear()
+        if (!laboratorioModel) {
+            console.log("❌ LaboratorioModel no disponible")
+            return
+        }
+    
+        var filtros = {}
         
-        var hoy = new Date()
-        var textoBusqueda = campoBusqueda.text ? campoBusqueda.text.toLowerCase() : ""
+        // Filtro por tipo de análisis - USAR EL MAPA
+        if (filtroAnalisis && filtroAnalisis.currentIndex > 0) {
+            var selectedText = filtroAnalisis.currentText
+            var analysisMap = laboratorioRoot.analysisMap || []
+            var selectedIndexInMap = filtroAnalisis.currentIndex - 1 // Restar 1 por "Todos"
+            
+            if (selectedIndexInMap >= 0 && selectedIndexInMap < analysisMap.length) {
+                var selectedAnalysis = analysisMap[selectedIndexInMap]
+                filtros.tipo_analisis = selectedAnalysis.nombre
+                console.log("✅ Filtro análisis aplicado:", selectedAnalysis.nombre, "ID:", selectedAnalysis.id)
+            } else {
+                console.log("⚠️ Índice fuera de rango en el mapa de análisis:", selectedIndexInMap)
+            }
+        } else {
+            console.log("🔍 Filtro análisis no aplicado (índice 0 - Todos)")
+        }
         
-        for (var i = 0; i < analisisOriginales.length; i++) {
-            var analisis = analisisOriginales[i]
-            var mostrar = true
-            
-            // Filtro por fecha
-            if (filtroFecha.currentIndex > 0) {
-                var fechaAnalisis = new Date(analisis.fecha)
-                var diferenciaDias = Math.floor((hoy - fechaAnalisis) / (1000 * 60 * 60 * 24))
-                
-                switch(filtroFecha.currentIndex) {
-                    case 1: // Hoy
-                        if (diferenciaDias !== 0) mostrar = false
-                        break
-                    case 2: // Esta Semana
-                        if (diferenciaDias > 7) mostrar = false
-                        break
-                    case 3: // Este Mes
-                        if (diferenciaDias > 30) mostrar = false
-                        break
-                }
-            }
-            
-            // Filtro por tipo de análisis
-            if (filtroAnalisis.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroAnalisis.currentText
-                if (analisis.tipoAnalisis !== tipoSeleccionado) {
-                    mostrar = false
-                }
-            }
-            
-            // Filtro por tipo
-            if (filtroTipo.currentIndex > 0 && mostrar) {
-                var tipoSeleccionado = filtroTipo.currentIndex === 1 ? "Normal" : "Emergencia"
-                if (analisis.tipo !== tipoSeleccionado) {
-                    mostrar = false
-                }
-            }
-            
-            // Filtro por texto de búsqueda
-            if (textoBusqueda.length > 0 && mostrar) {
-                var pacienteNombre = analisis.paciente.toLowerCase()
-                var pacienteCedula = (analisis.pacienteCedula || "").toLowerCase()
-                if (!pacienteNombre.includes(textoBusqueda) && !pacienteCedula.includes(textoBusqueda)) {
-                    mostrar = false
-                }
-            }
-            
-            if (mostrar) {
-                analisisListModel.append(analisis)
+        // Resto de los filtros (se mantienen igual)
+        if (filtroTipo && filtroTipo.currentIndex > 0) {
+            if (filtroTipo.currentIndex === 1) {
+                filtros.tipo_servicio = "Normal"
+            } else if (filtroTipo.currentIndex === 2) {
+                filtros.tipo_servicio = "Emergencia"
             }
         }
         
-        currentPageLaboratorio = 0
-        updatePaginatedModel()
+        if (campoBusqueda && campoBusqueda.text.length >= 2) {
+            filtros.search_term = campoBusqueda.text.trim()
+        }
         
-        console.log("✅ Filtros aplicados. Análisis mostrados:", analisisListModel.count)
+        if (filtroFecha && filtroFecha.currentIndex > 0) {
+            var hoy = new Date();
+            var fechaDesde, fechaHasta;
+            
+            switch(filtroFecha.currentText) {
+                case "Hoy":
+                    fechaDesde = new Date(hoy);
+                    fechaHasta = new Date(hoy);
+                    break;
+                case "Esta Semana":
+                    // Obtener el lunes de esta semana
+                    fechaDesde = new Date(hoy);
+                    var diaSemana = fechaDesde.getDay(); // 0=Domingo, 1=Lunes, etc.
+                    var diffLunes = fechaDesde.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+                    fechaDesde.setDate(diffLunes);
+                    
+                    // Obtener el domingo de esta semana
+                    fechaHasta = new Date(fechaDesde);
+                    fechaHasta.setDate(fechaDesde.getDate() + 6);
+                    break;
+                case "Este Mes":
+                    // Primer día del mes
+                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                    
+                    // Último día del mes
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+                    break;
+            }
+            
+            // Formatear fechas a YYYY-MM-DD
+            filtros.fecha_desde = fechaDesde.toISOString().split('T')[0];
+            filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0];
+            
+            console.log("📅 Filtro fecha aplicado:", filtroFecha.currentText, 
+                    "Desde:", filtros.fecha_desde, "Hasta:", filtros.fecha_hasta);
     }
-
-    function updatePaginatedModel() {
-        console.log("🔄 Laboratorio: Actualizando paginación - Página:", currentPageLaboratorio + 1)
+    
+        console.log("🔍 Filtros construidos:", JSON.stringify(filtros))
         
+        laboratorioModel.aplicar_filtros_y_recargar(
+            filtros.search_term || "",
+            filtros.tipo_analisis || "",
+            filtros.tipo_servicio || "",
+            filtros.fecha_desde || "",
+            filtros.fecha_hasta || ""
+        )
+    }
+    
+    // 🎯 FUNCIÓN MEJORADA - AHORA INCLUYE DETALLES DEL EXAMEN
+    function updatePaginatedModel() {
+        if (!laboratorioModel) {
+            console.log("LaboratorioModel no disponible")
+            return
+        }
+        
+        // Limpiar modelo actual
         analisisPaginadosModel.clear()
         
-        var totalItems = analisisListModel.count
-        totalPagesLaboratorio = Math.ceil(totalItems / itemsPerPageLaboratorio)
-        
-        if (totalPagesLaboratorio === 0) {
-            totalPagesLaboratorio = 1
+        // Obtener datos actuales del modelo
+        try {
+            var examenes = laboratorioModel.examenes_paginados
+            
+            if (examenes && examenes.length > 0) {
+                for (var i = 0; i < examenes.length; i++) {
+                    var examen = examenes[i]
+                    analisisPaginadosModel.append({
+                        analisisId: examen.analisisId || "N/A",
+                        paciente: examen.paciente || "Sin nombre",
+                        pacienteCedula: examen.pacienteCedula || "Sin cédula",
+                        tipoAnalisis: examen.tipoAnalisis || "Análisis General",
+                        tipo: examen.tipo || "Normal",
+                        precio: examen.precio || "0.00",
+                        trabajadorAsignado: examen.trabajadorAsignado || "Sin asignar",
+                        registradoPor: examen.registradoPor || "Sistema",
+                        fecha: examen.fecha || "Sin fecha",
+                        // ⭐ NUEVO: Agregar detalles del examen
+                        detallesExamen: examen.detallesExamen || examen.detalles || ""
+                    })
+                }
+                
+                console.log("✅ Modelo actualizado con", analisisPaginadosModel.count, "elementos (incluyendo detalles)")
+            } else {
+                console.log("No hay exámenes disponibles")
+            }
+        } catch (error) {
+            console.log("❌ Error actualizando modelo:", error)
         }
-        
-        if (currentPageLaboratorio >= totalPagesLaboratorio && totalPagesLaboratorio > 0) {
-            currentPageLaboratorio = totalPagesLaboratorio - 1
-        }
-        if (currentPageLaboratorio < 0) {
-            currentPageLaboratorio = 0
-        }
-        
-        var startIndex = currentPageLaboratorio * itemsPerPageLaboratorio
-        var endIndex = Math.min(startIndex + itemsPerPageLaboratorio, totalItems)
-        
-        for (var i = startIndex; i < endIndex; i++) {
-            var analisis = analisisListModel.get(i)
-            analisisPaginadosModel.append(analisis)
-        }
-        
-        console.log("🔄 Laboratorio: Página", currentPageLaboratorio + 1, "de", totalPagesLaboratorio,
-                    "- Mostrando", analisisPaginadosModel.count, "de", totalItems,
-                    "- Elementos por página:", itemsPerPageLaboratorio)
     }
+    
 
-    function editarAnalisis(realIndex, analisisId) {
-        // Buscar por ID numérico
+    function editarAnalisis(viewIndex, analisisId) {
+        // Buscar por ID en el modelo actual de la página
         var idToFind = parseInt(analisisId)
         var realIndex = -1
         
-        for (var i = 0; i < analisisListModel.count; i++) {
-            if (parseInt(analisisListModel.get(i).analisisId) === idToFind) {
+        // CAMBIAR: usar analisisPaginadosModel en lugar de analisisListModel
+        for (var i = 0; i < analisisPaginadosModel.count; i++) {
+            if (parseInt(analisisPaginadosModel.get(i).analisisId) === idToFind) {
                 realIndex = i
                 break
             }
@@ -1876,93 +2158,159 @@ Item {
         }
     }
 
+    // 🎯 FUNCIÓN DE GUARDAR MEJORADA CON MEJOR MANEJO DE ERRORES
     function guardarAnalisis() {
-        // Validaciones
-        if (analysisForm.selectedAnalysisIndex < 0) {
-            console.log("Debe seleccionar un tipo de análisis")
-            return
-        }
-        if (!cedulaPaciente.text || cedulaPaciente.text.length < 5) {
-            console.log("Debe ingresar una cédula válida")
-            return
-        }
-        if (!nombrePaciente.text || nombrePaciente.text.length < 2) {
-            console.log("Paciente no encontrado. Verifique la cédula.")
-            return
-        }
-
         try {
+            console.log("🎯 Iniciando guardado - Modo:", isEditMode ? "EDITAR" : "CREAR")
+            
             if (isEditMode && editingIndex >= 0) {
-                // Actualizar análisis existente
-                var analisisExistente = analisisListModel.get(editingIndex)
-                var tiposData = JSON.parse(tiposAnalisis)
-                var tipoAnalisisId = tiposData[analysisForm.selectedAnalysisIndex].id
-                
-                var trabajadorId = 0
-                if (trabajadorCombo.currentIndex > 0) {
-                    var trabajadoresData = JSON.parse(trabajadoresDisponibles)
-                    if (trabajadorCombo.currentIndex - 1 < trabajadoresData.length) {
-                        trabajadorId = trabajadoresData[trabajadorCombo.currentIndex - 1].id
-                    }
-                }
-                
-                var resultado = laboratorioModel.actualizarExamen(
-                    parseInt(analisisExistente.analisisId),
-                    tipoAnalisisId,
-                    analysisForm.analysisType,
-                    trabajadorId,
-                    detallesAnalisis.text
-                )
-                
-                console.log("Resultado actualización:", resultado)
+                actualizarAnalisis()
             } else {
-                // Crear nuevo análisis - buscar o crear paciente por cédula
-                var pacienteId = buscarOCrearPacientePorCedula()
-                
-                if (pacienteId <= 0) {
-                    console.log("Error gestionando datos del paciente")
-                    return
-                }
-                
-                var tiposData = JSON.parse(tiposAnalisis)
-                var tipoAnalisisId = tiposData[analysisForm.selectedAnalysisIndex].id
-                
-                var trabajadorId = 0
-                if (trabajadorCombo.currentIndex > 0) {
-                    var trabajadoresData = JSON.parse(trabajadoresDisponibles)
-                    if (trabajadorCombo.currentIndex - 1 < trabajadoresData.length) {
-                        trabajadorId = trabajadoresData[trabajadorCombo.currentIndex - 1].id
-                    }
-                }
-                
-                var resultado = laboratorioModel.crearExamen(
-                    pacienteId,
-                    tipoAnalisisId,
-                    analysisForm.analysisType,
-                    trabajadorId,
-                    detallesAnalisis.text
-                )
-                
-                console.log("Resultado creación:", resultado)
+                crearNuevoAnalisis()
             }
+            
         } catch (error) {
-            console.log("Error inesperado:", error)
+            console.log("❌ Error en coordinador de guardado:", error.message)
+            analysisForm.enabled = true
+            mostrarNotificacion("Error", "Error procesando solicitud: " + error.message)
         }
     }
-
+    function crearNuevoAnalisis() {
+        try {
+            console.log("🧪 === INICIANDO CREACIÓN DE NUEVO ANÁLISIS ===")
+            
+            // Validar formulario
+            if (!validarFormularioAnalisis()) {
+                return
+            }
+            
+            // Mostrar loading
+            analysisForm.enabled = false
+            
+            // 1. Gestionar paciente (buscar o crear)
+            var pacienteId = buscarOCrearPacientePorCedula()
+            if (pacienteId <= 0) {
+                throw new Error("Error gestionando datos del paciente")
+            }
+            
+            // 2. Obtener datos del formulario
+            var datosAnalisis = obtenerDatosFormulario()
+            
+            // 3. Crear examen en el backend
+            console.log("🔬 Creando examen con parámetros:")
+            console.log("   - Paciente ID:", pacienteId)
+            console.log("   - Tipo análisis ID:", datosAnalisis.tipoAnalisisId)  
+            console.log("   - Tipo servicio:", datosAnalisis.tipoServicio)
+            console.log("   - Trabajador ID:", datosAnalisis.trabajadorId)
+            console.log("   - Detalles:", datosAnalisis.detalles)
+            
+            var resultado = laboratorioModel.crearExamen(
+                pacienteId,
+                datosAnalisis.tipoAnalisisId,
+                datosAnalisis.tipoServicio,
+                datosAnalisis.trabajadorId,
+                datosAnalisis.detalles
+            )
+            
+            // 4. Procesar resultado
+            procesarResultadoCreacion(resultado)
+            
+        } catch (error) {
+            console.log("❌ Error creando análisis:", error.message)
+            analysisForm.enabled = true
+            mostrarNotificacion("Error", error.message)
+        }
+    }
+    function actualizarAnalisis() {
+        try {
+            console.log("📝 === INICIANDO ACTUALIZACIÓN DE ANÁLISIS ===")
+            
+            // Validar formulario
+            if (!validarFormularioAnalisis()) {
+                return
+            }
+            
+            // Validar que estamos en modo edición
+            if (!isEditMode || editingIndex < 0) {
+                throw new Error("No hay análisis seleccionado para editar")
+            }
+            
+            // Mostrar loading
+            analysisForm.enabled = true
+            
+            // 1. Obtener análisis existente
+            var analisisExistente = analisisPaginadosModel.get(editingIndex)
+            if (!analisisExistente) {
+                throw new Error("Análisis a editar no encontrado")
+            }
+            
+            var analisisId = parseInt(analisisExistente.analisisId)
+            if (analisisId <= 0) {
+                throw new Error("ID de análisis inválido: " + analisisId)
+            }
+            
+            // 2. Obtener datos del formulario
+            var datosAnalisis = obtenerDatosFormulario()
+            
+            console.log("📝 Actualizando análisis ID:", analisisId)
+            console.log("   - Tipo análisis ID:", datosAnalisis.tipoAnalisisId)  
+            console.log("   - Tipo servicio:", datosAnalisis.tipoServicio)
+            console.log("   - Trabajador ID:", datosAnalisis.trabajadorId)
+            console.log("   - Detalles:", datosAnalisis.detalles)
+            
+            // 3. Actualizar en el backend
+            var resultado = laboratorioModel.actualizarExamen(
+                analisisId,
+                datosAnalisis.tipoAnalisisId,
+                datosAnalisis.tipoServicio,
+                datosAnalisis.trabajadorId,
+                datosAnalisis.detalles
+            )
+            
+            // 4. Procesar resultado
+            procesarResultadoActualizacion(resultado)
+            
+        } catch (error) {
+            console.log("❌ Error actualizando análisis:", error.message)
+            analysisForm.enabled = true
+            mostrarNotificacion("Error", error.message)
+        }
+    }
     function buscarOCrearPacientePorCedula() {
         if (!laboratorioModel) {
-            console.error("❌ LaboratorioModel no disponible")
-            return -1
+            throw new Error("LaboratorioModel no disponible")
         }
         
+        var nombre = nombrePaciente.text.trim()
+        var apellidoP = apellidoPaterno.text.trim()
+        var apellidoM = apellidoMaterno.text.trim()
+        var cedula = cedulaPaciente.text.trim()
+        
+        // Validaciones
+        if (!cedula || cedula.length < 5) {
+            throw new Error("Cédula inválida: " + cedula)
+        }
+        if (!nombre || nombre.length < 2) {
+            throw new Error("Nombre inválido: " + nombre)
+        }
+        if (!apellidoP || apellidoP.length < 2) {
+            throw new Error("Apellido paterno inválido: " + apellidoP)
+        }
+        
+        console.log("📄 Gestionando paciente:", nombre, apellidoP, "- Cédula:", cedula)
+        
         var pacienteId = laboratorioModel.buscar_o_crear_paciente_inteligente(
-            nombrePaciente.text || "Nombre",
-            apellidoPaterno.text || "Apellido",
-            apellidoMaterno.text || "",
-            cedulaPaciente.text
+            nombre,
+            apellidoP, 
+            apellidoM,
+            cedula
         )
         
+        if (!pacienteId || pacienteId <= 0) {
+            throw new Error("Error: ID de paciente inválido: " + pacienteId)
+        }
+        
+        console.log("✅ Paciente gestionado correctamente - ID:", pacienteId)
         return pacienteId
     }
 
@@ -1971,13 +2319,45 @@ Item {
         
         console.log("Buscando paciente con cédula:", cedula)
         
+        // Limpiar estado anterior
+        cedulaPaciente.pacienteNoEncontrado = false
+        
         var pacienteData = laboratorioModel.buscar_paciente_por_cedula(cedula.trim())
         
         if (pacienteData && pacienteData.id) {
             autocompletarDatosPaciente(pacienteData)
         } else {
             console.log("No se encontró paciente con cédula:", cedula)
+            marcarPacienteNoEncontrado(cedula)
         }
+    }
+    
+    function marcarPacienteNoEncontrado(cedula) {
+        cedulaPaciente.pacienteNoEncontrado = true
+        cedulaPaciente.pacienteAutocompletado = false
+        
+        // Limpiar campos pero mantener la cédula
+        nombrePaciente.text = ""
+        apellidoPaterno.text = ""
+        apellidoMaterno.text = ""
+        
+        console.log("⚠️ Paciente no encontrado. Habilitando modo crear nuevo paciente.")
+    }
+    
+    function habilitarNuevoPaciente() {
+        console.log("✅ Habilitando creación de nuevo paciente con cédula:", cedulaPaciente.text)
+        
+        // Mantener la cédula ingresada
+        cedulaPaciente.pacienteNoEncontrado = true
+        cedulaPaciente.pacienteAutocompletado = false
+        
+        // Limpiar campos de nombre para edición
+        nombrePaciente.text = ""
+        apellidoPaterno.text = ""
+        apellidoMaterno.text = ""
+        
+        // Enfocar en el primer campo editable
+        nombrePaciente.forceActiveFocus()
     }
 
     function autocompletarDatosPaciente(paciente) {
@@ -1985,138 +2365,420 @@ Item {
         apellidoPaterno.text = paciente.Apellido_Paterno || paciente.apellido_paterno || ""
         apellidoMaterno.text = paciente.Apellido_Materno || paciente.apellido_materno || ""
         
-        // Marcar como autocompletado
+        // Marcar como encontrado y autocompletado
         cedulaPaciente.pacienteAutocompletado = true
+        cedulaPaciente.pacienteNoEncontrado = false
         apellidoPaterno.pacienteAutocompletado = true
         apellidoMaterno.pacienteAutocompletado = true
         
         console.log("✅ Paciente encontrado y autocompletado:", paciente.nombre_completo || "")
     }
 
-    function limpiarDatosPaciente() {
+    function limpiarDatosPacienteMejorado() {
         cedulaPaciente.text = ""
         nombrePaciente.text = ""
         apellidoPaterno.text = ""
         apellidoMaterno.text = ""
         
+        // Resetear estados
         cedulaPaciente.pacienteAutocompletado = false
-        apellidoPaterno.pacienteAutocompletado = false
-        apellidoMaterno.pacienteAutocompletado = false
+        cedulaPaciente.pacienteNoEncontrado = false
+        cedulaPaciente.buscandoPaciente = false
         
-        cedulaPaciente.forceActiveFocus()
+        // Hacer campos editables
+        nombrePaciente.readOnly = false
+        apellidoPaterno.readOnly = false
+        apellidoMaterno.readOnly = false
+        
+        console.log("🧹 Datos del paciente limpiados")
     }
     
     function limpiarYCerrarDialogo() {
-        showNewAnalysisDialog = false
-        selectedRowIndex = -1
-        isEditMode = false
-        editingIndex = -1
+        console.log("🚪 Cerrando diálogo de análisis...")
+        
+        try {
+            // Reactivar formulario si estaba deshabilitado
+            if (analysisForm) {
+                analysisForm.enabled = true
+            }
+            
+            // Cerrar diálogo
+            showNewAnalysisDialog = false
+            
+            // Limpiar estados
+            selectedRowIndex = -1
+            isEditMode = false
+            editingIndex = -1
+            
+            // Limpiar todos los campos
+            clearAllFields()
+            
+            console.log("✅ Diálogo cerrado y limpiado correctamente")
+            
+        } catch (error) {
+            console.log("⚠️ Error limpiando diálogo:", error)
+            // Forzar cierre básico
+            showNewAnalysisDialog = false
+            if (analysisForm) analysisForm.enabled = true
+        }
     }
     
     function clearAllFields() {
-        limpiarDatosPaciente()
-        detallesAnalisis.text = ""
-        analisisCombo.currentIndex = 0
-        trabajadorCombo.currentIndex = 0
-        normalRadio.checked = true
+        console.log("🧹 Limpiando todos los campos del formulario...")
         
+        // Limpiar datos del paciente
+        limpiarDatosPaciente()
+        
+        // Limpiar formulario
+        detallesAnalisis.text = ""
+        
+        // Resetear combos
+        if (analisisCombo) analisisCombo.currentIndex = 0
+        if (trabajadorCombo) trabajadorCombo.currentIndex = 0
+        
+        // Resetear radio buttons
+        if (normalRadio) normalRadio.checked = true
+        if (emergenciaRadio) emergenciaRadio.checked = false
+        
+        // Resetear propiedades del formulario
         analysisForm.selectedAnalysisIndex = -1
         analysisForm.calculatedPrice = 0.0
+        analysisForm.analysisType = "Normal"
         
-        cedulaPaciente.forceActiveFocus()
+        // Enfocar en cédula
+        if (cedulaPaciente) {
+            cedulaPaciente.forceActiveFocus()
+        }
+        
+        console.log("✅ Campos limpiados correctamente")
     }
     
     function initializarModelo() {
         console.log("✅ LaboratorioModel disponible, inicializando datos...")
         
-        if (laboratorioModel) {
+        if (!laboratorioModel) {
+            console.log("❌ Error: laboratorioModel es null")
+            return
+        }
+        
+        try {
+            // Configurar elementos por página según tamaño de pantalla
+            var elementosPorPagina = Math.max(6, Math.min(Math.floor(height / (baseUnit * 7)), 20))
+            console.log("📊 Configurando elementos por página:", elementosPorPagina)
+            
+            // Establecer tamaño de página
+            if (laboratorioModel.itemsPerPage !== elementosPorPagina) {
+                laboratorioModel.itemsPerPage = elementosPorPagina
+            }
+            
             // Cargar datos iniciales del backend
-            laboratorioModel.cargarExamenes()
             laboratorioModel.cargarTiposAnalisis()
             laboratorioModel.cargarTrabajadores()
             
-            // Cargar datos en la interfaz
-            cargarDatosDesdeModelo()
-        }
-    }
-    
-    function cargarDatosDesdeModelo() {
-        try {
-            console.log("🔄 Cargando datos desde modelo de laboratorio...")
+            // ✅ FORZAR LIMPIEZA DE FILTROS AL INICIALIZAR
+            if (filtroFecha) filtroFecha.currentIndex = 0
+            if (filtroAnalisis) filtroAnalisis.currentIndex = 0  
+            if (filtroTipo) filtroTipo.currentIndex = 0
+            if (campoBusqueda) campoBusqueda.text = ""
             
-            // Obtener JSON directamente del modelo
-            var examenesJson = laboratorioModel.examenesJson
-            console.log("📋 ExamenesJSON longitud:", examenesJson.length)
-            
-            if (!examenesJson || examenesJson.length < 10) {
-                console.log("⚠️ No hay datos en examenesJson, usando array vacío")
-                analisisOriginales = []
-                analisisListModel.clear()
-                updatePaginatedModel()
-                return
-            }
-            
-            var examenes = JSON.parse(examenesJson)
-            console.log("✅ JSON parseado, examenes encontrados:", examenes.length)
-            
-            analisisOriginales = []
-            analisisListModel.clear()
-            
-            for (var i = 0; i < examenes.length; i++) {
-                var examen = examenes[i]
-                
-                // Construir item de análisis con datos seguros
-                var analisisItem = {
-                    // IDs y básicos
-                    analisisId: (examen.analisisId || examen.id || (i + 1)).toString(),
-                    
-                    // Información del paciente (SIN EDAD)
-                    paciente: examen.paciente || examen.paciente_completo || "Paciente Desconocido",
-                    pacienteCedula: examen.pacienteCedula || examen.paciente_cedula || "",
-                    pacienteNombre: examen.pacienteNombre || examen.paciente_nombre || "",
-                    pacienteApellidoP: examen.pacienteApellidoP || examen.paciente_apellido_p || "",
-                    pacienteApellidoM: examen.pacienteApellidoM || examen.paciente_apellido_m || "",
-                    
-                    // Información del análisis
-                    tipoAnalisis: examen.tipoAnalisis || examen.tipo_analisis || "Análisis General",
-                    detalles: examen.detalles || "Sin detalles",
-                    detallesExamen: examen.detallesExamen || examen.detalles_examen || "",
-                    tipo: examen.tipo || "Normal",
-                    
-                    // Precio
-                    precio: (examen.precio || "0.00").toString(),
-                    
-                    // Trabajador
-                    trabajadorAsignado: examen.trabajadorAsignado || examen.trabajador_completo || "Sin asignar",
-                    
-                    // Fecha y usuario
-                    fecha: examen.fecha || new Date().toISOString().split('T')[0],
-                    registradoPor: examen.registradoPor || examen.registrado_por || "Sistema"
-                }
-                
-                analisisOriginales.push(analisisItem)
-                analisisListModel.append(analisisItem)
-            }
-            
-            updatePaginatedModel()
-            console.log("✅ Datos cargados correctamente:", analisisOriginales.length, "análisis")
+            // Pequeño delay para asegurar que los datos estén cargados
+            initTimer.start()
             
         } catch (error) {
-            console.error("❌ Error cargando datos:", error)
-            // Datos de prueba si hay error
-            analisisOriginales = []
-            analisisListModel.clear()
-            updatePaginatedModel()
+            console.log("❌ Error inicializando modelo:", error)
+        }
+    }
+
+    function irAPaginaAnterior() {
+        if (laboratorioModel) {
+            var currentPage = laboratorioModel._currentPage || 0
+            if (currentPage > 0) {
+                aplicarFiltros() // Esto recargará con los filtros actuales
+            }
+        }
+    }
+
+    function irAPaginaSiguiente() {
+        if (laboratorioModel) {
+            var currentPage = laboratorioModel._currentPage || 0
+            var totalPages = laboratorioModel._totalPages || 1
+            if (currentPage < totalPages - 1) {
+                aplicarFiltros() // Esto recargará con los filtros actuales
+            }
         }
     }
     
-    Component.onCompleted: {
-        console.log("🔬 Módulo Laboratorio iniciado")
+    function updateAnalisisCombo() {
+        if (filtroAnalisis && laboratorioModel) {
+            try {
+                var tiposData = laboratorioModel.tipos_analisis
+                var newModelData = ["Todos"] // Siempre empezar con "Todos"
+                
+                // Mapear nombres y IDs para mantener consistencia
+                var analysisMap = []
+                for (var i = 0; i < tiposData.length; i++) {
+                    var nombre = tiposData[i].nombre || tiposData[i].Nombre || ""
+                    var id = tiposData[i].id || tiposData[i].ID || i
+                    if (nombre && nombre !== "Todos") {
+                        newModelData.push(nombre)
+                        analysisMap.push({id: id, nombre: nombre})
+                    }
+                }
+                
+                // Almacenar el mapa para referencia futura
+                laboratorioRoot.analysisMap = analysisMap
+                
+                // Solo actualizar si el modelo ha cambiado
+                var currentModel = filtroAnalisis.model || []
+                var shouldUpdate = currentModel.length !== newModelData.length
+                
+                if (!shouldUpdate) {
+                    for (var j = 0; j < currentModel.length; j++) {
+                        if (currentModel[j] !== newModelData[j]) {
+                            shouldUpdate = true
+                            break
+                        }
+                    }
+                }
+                
+                if (shouldUpdate) {
+                    var currentIndex = filtroAnalisis.currentIndex
+                    var currentText = filtroAnalisis.currentText
+                    
+                    filtroAnalisis.model = newModelData
+                    
+                    // Restaurar la selección si es posible
+                    var newIndex = newModelData.indexOf(currentText)
+                    if (newIndex >= 0) {
+                        filtroAnalisis.currentIndex = newIndex
+                    } else {
+                        filtroAnalisis.currentIndex = 0
+                    }
+                    
+                    console.log("🔍 Combo análisis actualizado. Elementos:", newModelData.length, 
+                            "Selección:", filtroAnalisis.currentIndex, filtroAnalisis.currentText)
+                }
+            } catch (e) {
+                console.log("❌ Error actualizando combo análisis:", e)
+            }
+        }
+    }
+
+    function limpiarFiltros() {
+        console.log("🧹 Limpiando todos los filtros")
         
-        if (laboratorioModel) {
-            initializarModelo()
+        // Reiniciar filtro de fecha
+        if (filtroFecha) {
+            filtroFecha.currentIndex = 0
         }
         
-        console.log("📱 Elementos por página calculados:", itemsPerPageLaboratorio)
+        // Reiniciar filtro de análisis
+        if (filtroAnalisis) {
+            filtroAnalisis.currentIndex = 0
+        }
+        
+        // Reiniciar filtro de tipo
+        if (filtroTipo) {
+            filtroTipo.currentIndex = 0
+        }
+        
+        // Limpiar campo de búsqueda
+        if (campoBusqueda) {
+            campoBusqueda.text = ""
+        }
+        
+        // Aplicar filtros vacíos
+        aplicarFiltros()
+    }
+
+    Component.onCompleted: {
+        console.log("🔬 Módulo Laboratorio iniciado con lógica mejorada")
+        
+        function conectarModelos() {
+            if (typeof appController !== 'undefined') {
+                laboratorioModel = appController.laboratorio_model_instance
+                
+                if (laboratorioModel) {
+                    // Conectar señales críticas
+                    laboratorioModel.examenesActualizados.connect(function() {
+                        console.log("🔄 Exámenes actualizados - forzando refresh")
+                        updatePaginatedModel()
+                    })
+                    
+                    // Verificar métodos disponibles
+                    console.log("🔍 Verificando métodos disponibles:")
+                    console.log("   - actualizarExamen:", typeof laboratorioModel.actualizarExamen === 'function' ? "✅" : "❌")
+                    console.log("   - editarExamen:", typeof laboratorioModel.editarExamen === 'function' ? "✅" : "❌")
+                    console.log("   - crearExamen:", typeof laboratorioModel.crearExamen === 'function' ? "✅" : "❌")
+                    console.log("   - refrescarDatos:", typeof laboratorioModel.refrescarDatos === 'function' ? "✅" : "❌")
+                    
+                    // Inicializar datos
+                    if (typeof laboratorioModel.refrescarDatos === 'function') {
+                        laboratorioModel.refrescarDatos()
+                    }
+                    
+                    return true
+                }
+            }
+            return false
+        }
+        
+        var attempts = 0
+        var timer = Qt.createQmlObject("import QtQuick 2.15; Timer { interval: 300; repeat: true }", laboratorioRoot)
+        
+        timer.triggered.connect(function() {
+            if (conectarModelos() || ++attempts >= 5) {
+                timer.destroy()
+                if (attempts >= 5) {
+                    console.log("⚠️ No se pudo conectar con LaboratorioModel después de 5 intentos")
+                }
+            }
+        })
+        timer.start()
+    }
+    function validarFormularioAnalisis() {
+        console.log("✅ Validando formulario...")
+        
+        if (analysisForm.selectedAnalysisIndex < 0) {
+            mostrarNotificacion("Error", "Debe seleccionar un tipo de análisis")
+            return false
+        }
+        
+        if (!cedulaPaciente.text || cedulaPaciente.text.length < 5) {
+            mostrarNotificacion("Error", "Debe ingresar una cédula válida (mínimo 5 dígitos)")
+            return false
+        }
+        
+        if (!nombrePaciente.text || nombrePaciente.text.length < 2) {
+            mostrarNotificacion("Error", "Nombre del paciente es obligatorio")
+            return false
+        }
+        
+        // Validación adicional para pacientes nuevos
+        if (cedulaPaciente.pacienteNoEncontrado) {
+            if (!apellidoPaterno.text || apellidoPaterno.text.length < 2) {
+                mostrarNotificacion("Error", "Apellido paterno es obligatorio para pacientes nuevos")
+                return false
+            }
+        }
+        
+        console.log("✅ Formulario válido")
+        return true
+    }
+
+    function obtenerDatosFormulario() {
+        try {
+            // Validar tipos de análisis
+            if (!tiposAnalisis || tiposAnalisis === "[]") {
+                throw new Error("No hay tipos de análisis disponibles")
+            }
+            
+            var tiposData = JSON.parse(tiposAnalisis)
+            if (!tiposData || tiposData.length === 0) {
+                throw new Error("Lista de tipos de análisis está vacía")
+            }
+            
+            if (analysisForm.selectedAnalysisIndex >= tiposData.length) {
+                throw new Error("Índice de análisis fuera de rango")
+            }
+            
+            var tipoAnalisisSeleccionado = tiposData[analysisForm.selectedAnalysisIndex]
+            var tipoAnalisisId = tipoAnalisisSeleccionado.id || tipoAnalisisSeleccionado.ID
+            
+            if (!tipoAnalisisId || tipoAnalisisId <= 0) {
+                throw new Error("ID de tipo de análisis inválido")
+            }
+            
+            // Obtener trabajador ID
+            var trabajadorId = 0
+            if (trabajadorCombo.currentIndex > 0 && trabajadoresDisponibles !== "[]") {
+                try {
+                    var trabajadoresData = JSON.parse(trabajadoresDisponibles)
+                    if (trabajadorCombo.currentIndex - 1 < trabajadoresData.length) {
+                        var trabajadorSeleccionado = trabajadoresData[trabajadorCombo.currentIndex - 1]
+                        trabajadorId = trabajadorSeleccionado.id || trabajadorSeleccionado.ID || 0
+                    }
+                } catch (e) {
+                    console.log("⚠️ Error parseando trabajadores, continuando sin asignar:", e)
+                }
+            }
+            
+            return {
+                tipoAnalisisId: tipoAnalisisId,
+                tipoServicio: analysisForm.analysisType,
+                trabajadorId: trabajadorId,
+                detalles: detallesAnalisis.text || ""
+            }
+            
+        } catch (error) {
+            console.log("❌ Error obteniendo datos del formulario:", error.message)
+            throw error
+        }
+    }
+
+    function procesarResultadoCreacion(resultado) {
+        try {
+            console.log("🔄 Procesando resultado de creación:", resultado)
+            
+            // Verificar si fue exitoso
+            var resultadoObj = typeof resultado === 'string' ? JSON.parse(resultado) : resultado
+            if (resultadoObj && resultadoObj.exito === false) {
+                throw new Error(resultadoObj.error || "Error desconocido en la creación")
+            }
+            
+            console.log("✅ Análisis creado exitosamente")
+            
+            // Actualizar interfaz
+            if (laboratorioModel && typeof laboratorioModel.refrescarDatos === 'function') {
+                laboratorioModel.refrescarDatos()
+            }
+            
+            // Limpiar y cerrar formulario
+            Qt.callLater(function() {
+                if (showNewAnalysisDialog) {
+                    limpiarYCerrarDialogo()
+                }
+            })
+            
+            analysisForm.enabled = true
+            
+        } catch (error) {
+            console.log("❌ Error procesando resultado de creación:", error.message)
+            analysisForm.enabled = true
+            throw error
+        }
+    }
+
+    function procesarResultadoActualizacion(resultado) {
+        try {
+            console.log("🔄 Procesando resultado de actualización:", resultado)
+            
+            // Verificar si fue exitoso
+            var resultadoObj = typeof resultado === 'string' ? JSON.parse(resultado) : resultado
+            if (resultadoObj && resultadoObj.exito === false) {
+                throw new Error(resultadoObj.error || "Error desconocido en la actualización")
+            }
+            
+            console.log("✅ Análisis actualizado exitosamente")
+            
+            // Actualizar interfaz
+            if (laboratorioModel && typeof laboratorioModel.refrescarDatos === 'function') {
+                laboratorioModel.refrescarDatos()
+            }
+            
+            // Limpiar y cerrar formulario
+            Qt.callLater(function() {
+                if (showNewAnalysisDialog) {
+                    limpiarYCerrarDialogo()
+                }
+            })
+            
+            analysisForm.enabled = true
+            
+        } catch (error) {
+            console.log("❌ Error procesando resultado de actualización:", error.message)
+            analysisForm.enabled = true
+            throw error
+        }
     }
 }

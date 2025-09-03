@@ -466,26 +466,7 @@ ApplicationWindow {
                 visible: currentIndex === 2
                 layer.enabled: true
                 
-                // ===== NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN =====
-                onIrAConfiguracion: {
-                    console.log("🚀 Señal irAConfiguracion recibida desde Consultas")
-                    
-                    // ===== PASO 4a: OBTENER MODELO DE DATOS DESDE CONSULTAS =====
-                    var especialidadesData = consultasPage.especialidades
-                    console.log("📊 Datos de especialidades obtenidos:", JSON.stringify(especialidadesData))
-                    
-                    // ===== PASO 4b: ASIGNAR DATOS AL MÓDULO CONFIGURACIÓN =====
-                    configuracionPage.especialidadesModel = especialidadesData
-                    console.log("📤 Datos transferidos a configuracionPage.especialidadesModel")
-                    
-                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN =====
-                    configuracionPage.changeView("consultas")
-                    console.log("🔄 Vista de configuración cambiada a: consultas")
-                    
-                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN =====
-                    switchToPage(9)
-                    console.log("🎯 Navegación completada hacia módulo Configuración")
-                }
+                
             }
             
             // Laboratorio Page
@@ -504,27 +485,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: currentIndex === 4
                 layer.enabled: true
-                
-                // ===== NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN =====
-                onIrAConfigEnfermeria: {
-                    console.log("🚀 Señal irAConfigEnfermeria recibida desde Enfermería")
-                    
-                    // ===== PASO 4a: OBTENER MODELO DE DATOS DESDE ENFERMERÍA =====
-                    var tiposProcedimientosData = enfermeriaPage.tiposProcedimientos
-                    console.log("📊 Datos de tipos de procedimientos obtenidos:", JSON.stringify(tiposProcedimientosData))
-                    
-                    // ===== PASO 4b: ASIGNAR DATOS AL MÓDULO CONFIGURACIÓN =====
-                    configuracionPage.tiposProcedimientosModel = tiposProcedimientosData
-                    console.log("📤 Datos transferidos a configuracionPage.tiposProcedimientosModel")
-                    
-                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN =====
-                    configuracionPage.changeView("enfermeria")
-                    console.log("🔄 Vista de configuración cambiada a: enfermeria")
-                    
-                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN =====
-                    switchToPage(9)
-                    console.log("🎯 Navegación completada hacia módulo Configuración - Enfermería")
-                }            
+                      
             }   
             
             // ===== SERVICIOS BÁSICOS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====

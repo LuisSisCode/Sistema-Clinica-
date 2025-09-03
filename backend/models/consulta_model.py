@@ -1,205 +1,263 @@
+"""
+Modelo QObject para Gestión de Consultas Médicas - CORREGIDO con nombres reales de BD
+Expone funcionalidad de consultas a QML con Signals/Slots/Properties
+"""
+
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 from PySide6.QtQml import qmlRegisterType
 from typing import List, Dict, Any, Optional
+import json
 from datetime import datetime, timedelta
 
+from ..core.excepciones import ExceptionHandler, ClinicaBaseException
 from ..repositories.consulta_repository import ConsultaRepository
-from ..repositories.paciente_repository import PacienteRepository
 from ..repositories.doctor_repository import DoctorRepository
-from ..repositories.usuario_repository import UsuarioRepository
-from ..core.excepciones import (
-    ValidationError, ExceptionHandler, safe_execute
-)
-from ..core.utils import (
-    formatear_fecha, formatear_precio, preparar_para_qml,
-    formatear_nombre_completo, safe_int, safe_float
-)
 
 class ConsultaModel(QObject):
     """
-    Model QObject para gestión de consultas médicas
-    Conecta directamente con QML mediante Signals/Slots/Properties
+    Modelo QObject para gestión completa de consultas médicas - CORREGIDO
+    Conecta la lógica de negocio con la interfaz QML
     """
     
     # ===============================
     # SIGNALS PARA QML
     # ===============================
     
-    # Signals de datos
+    # Operaciones CRUD
+    consultaCreada = Signal(str, arguments=['datos'])  # JSON con datos de la consulta
+    consultaActualizada = Signal(str, arguments=['datos'])
+    consultaEliminada = Signal(int, arguments=['consultaId'])
+    
+    # NUEVAS SEÑALES para búsqueda por cédula
+    pacienteEncontradoPorCedula = Signal('QVariantMap', arguments=['pacienteData'])
+    pacienteNoEncontrado = Signal(str, arguments=['cedula'])
+    
+    # Búsquedas y filtros
+    resultadosBusqueda = Signal(str, arguments=['resultados'])  # JSON
+    filtrosAplicados = Signal(str, arguments=['criterios'])
+    
+    # Dashboard y estadísticas
+    dashboardActualizado = Signal(str, arguments=['datos'])
+    estadisticasCalculadas = Signal(str, arguments=['estadisticas'])
+    
+    # Estados y notificaciones
+    estadoCambiado = Signal(str, arguments=['nuevoEstado'])
+    errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
+    operacionExitosa = Signal(str, arguments=['mensaje'])
+    
+    # Datos actualizados
     consultasRecientesChanged = Signal()
-    consultaActualChanged = Signal()
-    estadisticasDashboardChanged = Signal()
-    doctoresDisponiblesChanged = Signal()
     especialidadesChanged = Signal()
-    pacientesRecientesChanged = Signal()
-    historialConsultasChanged = Signal()
+    doctoresDisponiblesChanged = Signal()
     
-    # Signals de operaciones
-    consultaCreada = Signal(int, str)      # consulta_id, paciente_nombre
-    consultaActualizada = Signal(int)      # consulta_id
-    operacionExitosa = Signal(str)         # mensaje
-    operacionError = Signal(str)           # mensaje_error
-    
-    # Signals de estados
-    loadingChanged = Signal()
-    procesandoConsultaChanged = Signal()
-    buscandoChanged = Signal()
-    
-    def __init__(self):
-        super().__init__()
-
-        QTimer.singleShot(100, self._cargar_consultas_recientes)
+    def __init__(self, parent=None):
+        super().__init__(parent)
         
         # Repositories
-        self.consulta_repo = ConsultaRepository()
-        self.paciente_repo = PacienteRepository()
+        self.repository = ConsultaRepository()
         self.doctor_repo = DoctorRepository()
-        self.usuario_repo = UsuarioRepository()
         
-        # Datos internos
-        self._consultas_recientes = []
-        self._consulta_actual = {}
-        self._estadisticas_dashboard = {}
-        self._doctores_disponibles = []
-        self._especialidades = []
-        self._pacientes_recientes = []
-        self._historial_consultas = []
-        
-        # Estados
-        self._loading = False
-        self._procesando_consulta = False
-        self._buscando = False
+        # Estados internos
+        self._consultasData = []
+        self._especialidadesData = []
+        self._doctoresData = []
+        self._dashboardData = {}
+        self._estadisticasData = {}
+        self._estadoActual = "listo"  # listo, cargando, error
         
         # Configuración
-        self._usuario_actual = 0
-        self._filtros_activos = {}
+        self._autoRefreshInterval = 30000  # 30 segundos
+        self._setupAutoRefresh()
         
-        # Timer para actualización automática
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self._auto_update_consultas)
-        self.update_timer.start(180000)  # 3 minutos
-        
-        # Cargar datos iniciales
-        self._cargar_datos_iniciales()
-        
-        print("🩺 ConsultaModel inicializado")
+        print("🩺 ConsultaModel inicializado con gestión de pacientes por cédula")
     
     # ===============================
     # PROPERTIES PARA QML
     # ===============================
     
+    def _get_consultas_json(self) -> str:
+        """Getter para consultas en formato JSON"""
+        return json.dumps(self._consultasData, default=str, ensure_ascii=False)
+    
+    def _get_especialidades_json(self) -> str:
+        """Getter para especialidades en formato JSON"""
+        return json.dumps(self._especialidadesData, default=str, ensure_ascii=False)
+    
+    def _get_doctores_json(self) -> str:
+        """Getter para doctores en formato JSON"""
+        return json.dumps(self._doctoresData, default=str, ensure_ascii=False)
+    
+    def _get_dashboard_json(self) -> str:
+        """Getter para datos de dashboard en formato JSON"""
+        return json.dumps(self._dashboardData, default=str, ensure_ascii=False)
+    
+    def _get_estado_actual(self) -> str:
+        """Getter para estado actual"""
+        return self._estadoActual
+    
+    def _set_estado_actual(self, nuevo_estado: str):
+        """Setter para estado actual"""
+        if self._estadoActual != nuevo_estado:
+            self._estadoActual = nuevo_estado
+            self.estadoCambiado.emit(nuevo_estado)
+    
+    # Properties expuestas a QML
+    consultasJson = Property(str, _get_consultas_json, notify=consultasRecientesChanged)
+    especialidadesJson = Property(str, _get_especialidades_json, notify=especialidadesChanged)
+    doctoresJson = Property(str, _get_doctores_json, notify=doctoresDisponiblesChanged)
+    dashboardJson = Property(str, _get_dashboard_json, notify=dashboardActualizado)
+    estadoActual = Property(str, _get_estado_actual, notify=estadoCambiado)
+    
+    # Properties adicionales para compatibilidad con QML existente
     @Property(list, notify=consultasRecientesChanged)
     def consultas_recientes(self):
-        """Lista de consultas recientes"""
-        return self._consultas_recientes
-    
-    @Property('QVariant', notify=consultaActualChanged)
-    def consulta_actual(self):
-        """Consulta actualmente seleccionada"""
-        return self._consulta_actual
-    
-    @Property('QVariant', notify=estadisticasDashboardChanged)
-    def estadisticas_dashboard(self):
-        """Estadísticas para dashboard"""
-        return self._estadisticas_dashboard
-    
-    @Property(list, notify=doctoresDisponiblesChanged)
-    def doctores_disponibles(self):
-        """Lista de doctores disponibles"""
-        return self._doctores_disponibles
+        """Lista de consultas recientes para compatibilidad"""
+        return self._consultasData
     
     @Property(list, notify=especialidadesChanged)
     def especialidades(self):
-        """Lista de especialidades disponibles"""
-        return self._especialidades
+        """Lista de especialidades para compatibilidad"""
+        return self._especialidadesData
     
-    @Property(list, notify=pacientesRecientesChanged)
-    def pacientes_recientes(self):
-        """Lista de pacientes recientes"""
-        return self._pacientes_recientes
-    
-    @Property(list, notify=historialConsultasChanged)
-    def historial_consultas(self):
-        """Historial de consultas filtrado"""
-        return self._historial_consultas
-    
-    @Property(bool, notify=loadingChanged)
-    def loading(self):
-        """Estado de carga general"""
-        return self._loading
-    
-    @Property(bool, notify=procesandoConsultaChanged)
-    def procesando_consulta(self):
-        """Estado de procesamiento de consulta"""
-        return self._procesando_consulta
-    
-    @Property(bool, notify=buscandoChanged)
-    def buscando(self):
-        """Estado de búsqueda"""
-        return self._buscando
-    
-    # Properties de estadísticas rápidas
-    @Property(int, notify=consultasRecientesChanged)
-    def total_consultas_hoy(self):
-        """Total consultas de hoy"""
-        hoy = datetime.now().strftime('%Y-%m-%d')
-        return len([c for c in self._consultas_recientes 
-                   if c.get('Fecha', '').startswith(hoy)])
-    
-    @Property(int, notify=estadisticasDashboardChanged)
-    def pacientes_atendidos_hoy(self):
-        """Pacientes únicos atendidos hoy"""
-        return self._estadisticas_dashboard.get('metricas_hoy', {}).get('pacientes_hoy', 0)
-    
-    @Property(int, notify=doctoresDisponiblesChanged)
-    def doctores_activos(self):
-        """Total doctores activos"""
-        return len(self._doctores_disponibles)
-    
-    @Property(float, notify=estadisticasDashboardChanged)
-    def ingresos_estimados_mes(self):
-        """Ingresos estimados del mes"""
-        return float(self._estadisticas_dashboard.get('metricas_generales', {}).get('ingresos_mes', 0))
+    @Property(list, notify=doctoresDisponiblesChanged)
+    def doctores_disponibles(self):
+        """Lista de doctores disponibles para compatibilidad"""
+        return self._doctoresData
     
     # ===============================
-    # SLOTS PARA QML - CONFIGURACIÓN
+    # SLOTS PARA BÚSQUEDA POR CÉDULA - CORREGIDOS
     # ===============================
     
-    @Slot(int)
-    def set_usuario_actual(self, usuario_id: int):
-        """Establece el usuario actual"""
-        if usuario_id > 0:
-            self._usuario_actual = usuario_id
-            print(f"👤 Usuario establecido para consultas: {usuario_id}")
+    @Slot(str, result='QVariantMap')
+    def buscar_paciente_por_cedula(self, cedula: str):
+        """
+        Busca un paciente específico por su cédula
+        
+        Args:
+            cedula (str): Cédula del paciente
+            
+        Returns:
+            Dict: Datos del paciente encontrado o diccionario vacío
+        """
+        try:
+            if len(cedula.strip()) < 5:
+                return {}
+            
+            print(f"🔍 Buscando paciente por cédula: {cedula}")
+            
+            # Buscar en el repository
+            paciente = self.repository.search_patient_by_cedula_exact(cedula.strip())
+            
+            if paciente:
+                print(f"👤 Paciente encontrado: {paciente.get('nombre_completo', 'N/A')}")
+                
+                # Emitir señal de éxito
+                self.pacienteEncontradoPorCedula.emit(paciente)
+                
+                return paciente
+            else:
+                print(f"⚠️ No se encontró paciente con cédula: {cedula}")
+                
+                # Emitir señal de no encontrado
+                self.pacienteNoEncontrado.emit(cedula)
+                
+                return {}
+                
+        except Exception as e:
+            error_msg = f"Error buscando paciente por cédula: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
+            return {}
     
-    @Slot()
-    def refresh_consultas(self):
-        """Refresca las consultas recientes"""
-        self._cargar_consultas_recientes()
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes(self, termino_busqueda: str, limite: int = 5):
+        """
+        Busca pacientes por cédula parcial (para sugerencias)
+        
+        Args:
+            termino_busqueda (str): Término a buscar (generalmente cédula parcial)
+            limite (int): Límite de resultados
+            
+        Returns:
+            List[Dict]: Lista de pacientes encontrados
+        """
+        try:
+            if len(termino_busqueda.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes con término: {termino_busqueda}")
+            
+            resultados = self.repository.search_patients_by_cedula_partial(
+                termino_busqueda.strip(), limite
+            )
+            
+            print(f"📋 Encontrados {len(resultados)} pacientes")
+            return resultados
+            
+        except Exception as e:
+            error_msg = f"Error en búsqueda de pacientes: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
+            return []
     
-    @Slot()
-    def refresh_dashboard(self):
-        """Refresca estadísticas del dashboard"""
-        self._cargar_estadisticas_dashboard()
-    
-    @Slot()
-    def refresh_doctores(self):
-        """Refresca lista de doctores"""
-        self._cargar_doctores_disponibles()
-    
-    @Slot()
-    def refresh_especialidades(self):
-        """Refresca especialidades"""
-        self._cargar_especialidades()
+    @Slot(str, str, str, str, result=int)
+    def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
+                                          apellido_materno: str = "", cedula: str = "") -> int:
+        """
+        Busca paciente por cédula o crea uno nuevo si no existe
+        
+        Args:
+            nombre (str): Nombre del paciente
+            apellido_paterno (str): Apellido paterno
+            apellido_materno (str): Apellido materno (opcional)
+            cedula (str): Cédula de identidad
+            
+        Returns:
+            int: ID del paciente (existente o nuevo creado)
+        """
+        try:
+            if not cedula or len(cedula.strip()) < 5:
+                self.errorOcurrido.emit("Cédula es obligatoria (mínimo 5 dígitos)", 'VALIDATION_ERROR')
+                return -1
+            
+            if not nombre or len(nombre.strip()) < 2:
+                self.errorOcurrido.emit("Nombre es obligatorio", 'VALIDATION_ERROR')
+                return -1
+            
+            if not apellido_paterno or len(apellido_paterno.strip()) < 2:
+                self.errorOcurrido.emit("Apellido paterno es obligatorio", 'VALIDATION_ERROR')
+                return -1
+            
+            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            
+            paciente_id = self.repository.buscar_o_crear_paciente_simple(
+                nombre.strip(), 
+                apellido_paterno.strip(), 
+                apellido_materno.strip(), 
+                cedula.strip()
+            )
+            
+            if paciente_id > 0:
+                self.operacionExitosa.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
+                return paciente_id
+            else:
+                self.errorOcurrido.emit("Error gestionando paciente", 'PATIENT_MANAGEMENT_ERROR')
+                return -1
+                
+        except Exception as e:
+            error_msg = f"Error gestionando paciente: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.errorOcurrido.emit(error_msg, 'PATIENT_MANAGEMENT_EXCEPTION')
+            return -1
     
     # ===============================
-    # SLOTS PARA QML - GESTIÓN CONSULTAS
+    # SLOTS PARA OPERACIONES CRUD - CORREGIDOS
     # ===============================
     
-    @Slot('QVariant', result=int)
+    @Slot('QVariant', result=str)
     def crear_consulta(self, datos_consulta):
         """
-        Crea nueva consulta
+        Crea nueva consulta médica - CORREGIDO
         datos_consulta: {
             'paciente_id': int,
             'especialidad_id': int,
@@ -208,17 +266,9 @@ class ConsultaModel(QObject):
             'fecha': str (opcional)
         }
         """
-        if not datos_consulta:
-            self.operacionError.emit("Datos de consulta requeridos")
-            return 0
-        
-        if self._usuario_actual <= 0:
-            self.operacionError.emit("Usuario no establecido")
-            return 0
-        
-        self._set_procesando_consulta(True)
-        
         try:
+            self._set_estado_actual("cargando")
+            
             # Convertir QJSValue a diccionario de Python
             if hasattr(datos_consulta, 'toVariant'):
                 datos = datos_consulta.toVariant()
@@ -226,639 +276,515 @@ class ConsultaModel(QObject):
                 datos = datos_consulta
             
             # Validaciones básicas
-            paciente_id = safe_int(datos.get('paciente_id', 0))
-            especialidad_id = safe_int(datos.get('especialidad_id', 0))
+            paciente_id = int(datos.get('paciente_id', 0))
+            especialidad_id = int(datos.get('especialidad_id', 0))
             detalles = str(datos.get('detalles', '')).strip()
             tipo_consulta = str(datos.get('tipo_consulta', 'normal')).lower()
             
             if paciente_id <= 0:
-                raise ValidationError("paciente_id", paciente_id, "Paciente requerido")
+                raise ValueError("Paciente requerido")
             
             if especialidad_id <= 0:
-                raise ValidationError("especialidad_id", especialidad_id, "Especialidad requerida")
+                raise ValueError("Especialidad requerida")
             
             if len(detalles) < 10:
-                raise ValidationError("detalles", detalles, "Detalles muy cortos (mínimo 10 caracteres)")
+                raise ValueError("Detalles muy cortos (mínimo 10 caracteres)")
             
-            # Crear consulta
-            consulta_id = safe_execute(
-                self.consulta_repo.create_consultation,
-                usuario_id=self._usuario_actual,
+            # Crear consulta usando el repository
+            consulta_id = self.repository.create_consultation(
+                usuario_id=10,  # Usuario por defecto
                 paciente_id=paciente_id,
                 especialidad_id=especialidad_id,
                 detalles=detalles,
-                tipo_consulta=tipo_consulta,  # ← AGREGAR ESTA LÍNEA
-                fecha=datos.get('fecha')
+                tipo_consulta=tipo_consulta
             )
             
             if consulta_id:
-                # Actualizar datos
-                self._cargar_consultas_recientes()
+                # CAMBIAR: Forzar refresh inmediato en lugar de usar signals
+                self._cargar_consultas_recientes()  # Recargar inmediatamente
                 self._cargar_estadisticas_dashboard()
                 
-                # Obtener nombre del paciente para el signal
-                paciente_nombre = "Paciente"
-                for p in self._pacientes_recientes:
-                    if p.get('id') == paciente_id:
-                        paciente_nombre = p.get('nombre_completo', 'Paciente')
-                        break
+                # Invalidar cache manualmente
+                self.repository.invalidate_consultation_caches()
+                print("🔄 Cache forzosamente invalidado desde modelo")
                 
-                self.consultaCreada.emit(consulta_id, paciente_nombre)
-                self.operacionExitosa.emit(f"Consulta creada: {paciente_nombre}")
+                # Obtener datos de la consulta creada
+                consulta_creada = self.repository.get_consultation_by_id_complete(consulta_id)
                 
-                print(f"✅ Consulta creada - ID: {consulta_id}")
-                return consulta_id
+                self.consultaCreada.emit(json.dumps(consulta_creada, default=str))
+                self.operacionExitosa.emit(f"Consulta creada exitosamente: ID {consulta_id}")
+                
+                self._set_estado_actual("listo")
+                return json.dumps({'exito': True, 'consulta_id': consulta_id})
             else:
-                raise ValidationError("consulta", None, "Error creando consulta")
+                raise ValueError("Error creando consulta")
                 
         except Exception as e:
-            self.operacionError.emit(f"Error creando consulta: {str(e)}")
-            return 0
-        finally:
-            self._set_procesando_consulta(False)
+            error_msg = f"Error creando consulta: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
+            self._set_estado_actual("error")
+            return json.dumps({'exito': False, 'error': error_msg})
     
-    @Slot(int, 'QVariant', result=bool)
+    @Slot(int, 'QVariant', result=str)
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
-        """Actualiza consulta existente"""
-        if consulta_id <= 0 or not nuevos_datos:
-            self.operacionError.emit("ID de consulta y datos requeridos")
-            return False
-        
-        self._set_procesando_consulta(True)
-        
+        """Actualiza consulta existente - CORREGIDO"""
         try:
-            # Actualizar consulta
-            success = safe_execute(
-                self.consulta_repo.update_consultation,
+            self._set_estado_actual("cargando")
+            
+            # Convertir QJSValue a diccionario
+            if hasattr(nuevos_datos, 'toVariant'):
+                datos = nuevos_datos.toVariant()
+            else:
+                datos = nuevos_datos
+            
+            success = self.repository.update_consultation(
                 consulta_id=consulta_id,
-                detalles=nuevos_datos.get('detalles'),
-                fecha=nuevos_datos.get('fecha')
+                detalles=datos.get('detalles'),
+                tipo_consulta=datos.get('tipo_consulta'),
+                fecha=datos.get('fecha')
             )
             
             if success:
+                # Obtener consulta actualizada
+                consulta_actualizada = self.repository.get_consultation_by_id_complete(consulta_id)
+                
+                # Emitir signals
+                self.consultaActualizada.emit(json.dumps(consulta_actualizada, default=str))
+                self.operacionExitosa.emit(f"Consulta {consulta_id} actualizada correctamente")
+                
                 # Actualizar datos
                 self._cargar_consultas_recientes()
-                if self._consulta_actual.get('id') == consulta_id:
-                    self._cargar_consulta_detalle(consulta_id)
                 
-                self.consultaActualizada.emit(consulta_id)
-                self.operacionExitosa.emit("Consulta actualizada correctamente")
+                self._set_estado_actual("listo")
+                return json.dumps({'exito': True, 'datos': consulta_actualizada}, default=str)
+            else:
+                error_msg = "Error actualizando consulta"
+                self.errorOcurrido.emit(error_msg, 'UPDATE_ERROR')
+                self._set_estado_actual("error")
+                return json.dumps({'exito': False, 'error': error_msg})
                 
+        except Exception as e:
+            error_msg = f"Error actualizando consulta: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'UPDATE_EXCEPTION')
+            self._set_estado_actual("error")
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    @Slot(int, result=bool)
+    def eliminar_consulta(self, consulta_id: int) -> bool:
+        """Elimina consulta médica"""
+        try:
+            self._set_estado_actual("cargando")
+            
+            exito = self.repository.delete(consulta_id)
+            
+            if exito:
+                # Emitir signals
+                self.consultaEliminada.emit(consulta_id)
+                self.operacionExitosa.emit(f"Consulta {consulta_id} eliminada correctamente")
+                
+                # Actualizar datos
+                self._cargar_consultas_recientes()
+                
+                self._set_estado_actual("listo")
                 return True
             else:
-                raise ValidationError("update", None, "Error actualizando consulta")
+                self.errorOcurrido.emit(f"No se pudo eliminar la consulta {consulta_id}", 'DELETE_ERROR')
+                self._set_estado_actual("error")
+                return False
                 
         except Exception as e:
-            self.operacionError.emit(f"Error actualizando consulta: {str(e)}")
+            error_msg = f"Error eliminando consulta: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'DELETE_EXCEPTION')
+            self._set_estado_actual("error")
             return False
-        finally:
-            self._set_procesando_consulta(False)
-    
-    @Slot(int)
-    def cargar_consulta_detalle(self, consulta_id: int):
-        """Carga detalle completo de una consulta"""
-        if consulta_id <= 0:
-            return
-        
-        self._set_loading(True)
-        self._cargar_consulta_detalle(consulta_id)
-        self._set_loading(False)
     
     # ===============================
-    # SLOTS PARA QML - BÚSQUEDAS
+    # SLOTS PARA BÚSQUEDAS Y FILTROS - CORREGIDOS
     # ===============================
     
-    @Slot(str)
-    def buscar_consultas(self, termino: str):
-        """Búsqueda simple de consultas"""
-        if not termino or len(termino.strip()) < 2:
-            self._historial_consultas = self._consultas_recientes.copy()
-            self.historialConsultasChanged.emit()
-            return
-        
-        self._set_buscando(True)
-        
+    @Slot(str, result=str)
+    def buscar_consultas_avanzado(self, termino_busqueda: str) -> str:
+        """Realiza búsqueda avanzada de consultas"""
         try:
-            resultados = safe_execute(
-                self.consulta_repo.search_consultations,
-                search_term=termino.strip(),
-                limit=50
-            )
+            resultado = self.repository.search_consultations(termino_busqueda, limit=100)
             
-            self._historial_consultas = resultados or []
-            self.historialConsultasChanged.emit()
+            # Emitir signal con resultados
+            self.resultadosBusqueda.emit(json.dumps(resultado, default=str))
             
-            print(f"🔍 Búsqueda consultas: {len(self._historial_consultas)} resultados")
+            return json.dumps({
+                'exito': True,
+                'consultas': resultado,
+                'total': len(resultado)
+            }, default=str)
             
         except Exception as e:
-            self.operacionError.emit(f"Error en búsqueda: {str(e)}")
-        finally:
-            self._set_buscando(False)
+            error_msg = f"Error en búsqueda: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'SEARCH_ERROR')
+            return json.dumps({'exito': False, 'error': error_msg})
     
-    @Slot('QVariant')
-    def buscar_consultas_avanzado(self, criterios):
-        """
-        Búsqueda avanzada con criterios
-        criterios: {
-            'texto': str,
-            'fecha_inicio': str,
-            'fecha_fin': str,
-            'doctor_id': int,
-            'especialidad_id': int,
-            'paciente_id': int
-        }
-        """
-        if not criterios:
-            return
-        
-        self._set_buscando(True)
-        
+    @Slot(int, result=str)
+    def obtener_consultas_del_paciente(self, paciente_id: int) -> str:
+        """Obtiene consultas de un paciente específico"""
         try:
-            # Buscar por texto si existe
-            if criterios.get('texto'):
-                resultados = safe_execute(
-                    self.consulta_repo.search_consultations,
-                    search_term=criterios['texto'],
-                    start_date=criterios.get('fecha_inicio'),
-                    end_date=criterios.get('fecha_fin'),
-                    limit=100
-                )
-            elif criterios.get('fecha_inicio') and criterios.get('fecha_fin'):
-                resultados = safe_execute(
-                    self.consulta_repo.get_consultations_by_date_range,
-                    criterios['fecha_inicio'],
-                    criterios['fecha_fin']
-                )
+            consultas = self.repository.get_consultations_by_patient(paciente_id)
+            
+            return json.dumps({
+                'exito': True,
+                'consultas': consultas,
+                'total': len(consultas)
+            }, default=str)
+            
+        except Exception as e:
+            error_msg = f"Error obteniendo consultas del paciente: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'PATIENT_CONSULTATIONS_ERROR')
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    @Slot(int, result=str)
+    def obtener_consultas_del_doctor(self, doctor_id: int) -> str:
+        """Obtiene consultas atendidas por un doctor"""
+        try:
+            consultas = self.repository.get_consultations_by_doctor(doctor_id)
+            
+            return json.dumps({
+                'exito': True,
+                'consultas': consultas,
+                'total': len(consultas)
+            }, default=str)
+            
+        except Exception as e:
+            error_msg = f"Error obteniendo consultas del doctor: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'DOCTOR_CONSULTATIONS_ERROR')
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    @Slot(int, result=str)
+    def obtener_consulta_completa(self, consulta_id: int) -> str:
+        """Obtiene consulta con información completa"""
+        try:
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            
+            if consulta:
+                return json.dumps({'exito': True, 'consulta': consulta}, default=str)
             else:
-                resultados = self._consultas_recientes.copy()
+                return json.dumps({'exito': False, 'error': 'Consulta no encontrada'})
+                
+        except Exception as e:
+            error_msg = f"Error obteniendo consulta: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'GET_ERROR')
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    # ===============================
+    # SLOTS PARA ESTADÍSTICAS Y REPORTES
+    # ===============================
+    
+    @Slot(result=str)
+    def obtener_dashboard(self) -> str:
+        """Obtiene datos para dashboard de consultas"""
+        try:
+            self._set_estado_actual("cargando")
             
-            # Aplicar filtros adicionales
-            if criterios.get('doctor_id'):
-                doctor_id = safe_int(criterios['doctor_id'])
-                resultados = [c for c in resultados if c.get('Id_Doctor') == doctor_id]
+            dashboard = self.repository.get_consultation_statistics()
             
-            if criterios.get('especialidad_id'):
-                esp_id = safe_int(criterios['especialidad_id'])
-                resultados = [c for c in resultados if c.get('Id_Especialidad') == esp_id]
+            # Agregar datos adicionales
+            dashboard['consultas_hoy'] = len(self.repository.get_today_consultations())
+            dashboard['consultas_mes'] = len(self.repository.get_consultations_this_month())
+            dashboard['pacientes_frecuentes'] = self.repository.get_most_frequent_patients(limit=5)
             
-            if criterios.get('paciente_id'):
-                pac_id = safe_int(criterios['paciente_id'])
-                resultados = [c for c in resultados if c.get('Id_Paciente') == pac_id]
+            # Actualizar datos internos
+            self._dashboardData = dashboard
             
-            self._historial_consultas = resultados or []
-            self._filtros_activos = criterios.copy()
-            self.historialConsultasChanged.emit()
+            # Emitir signal
+            self.dashboardActualizado.emit(json.dumps(dashboard, default=str))
             
-            print(f"🔍 Búsqueda avanzada: {len(self._historial_consultas)} resultados")
+            self._set_estado_actual("listo")
+            return json.dumps({'exito': True, 'dashboard': dashboard}, default=str)
             
         except Exception as e:
-            self.operacionError.emit(f"Error en búsqueda avanzada: {str(e)}")
-        finally:
-            self._set_buscando(False)
+            error_msg = f"Error generando dashboard: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'DASHBOARD_ERROR')
+            self._set_estado_actual("error")
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    @Slot(result=str)
+    def obtener_estadisticas(self) -> str:
+        """Obtiene estadísticas completas de consultas"""
+        try:
+            estadisticas = self.repository.get_consultation_statistics()
+            
+            # Actualizar datos internos
+            self._estadisticasData = estadisticas
+            
+            # Emitir signal
+            self.estadisticasCalculadas.emit(json.dumps(estadisticas, default=str))
+            
+            return json.dumps({'exito': True, 'estadisticas': estadisticas}, default=str)
+            
+        except Exception as e:
+            error_msg = f"Error generando estadísticas: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'STATS_ERROR')
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    @Slot(int, result=str)
+    def obtener_resumen_paciente(self, paciente_id: int) -> str:
+        """Obtiene resumen de consultas de un paciente"""
+        try:
+            consultas = self.repository.get_consultations_by_patient(paciente_id)
+            
+            resumen = {
+                'total_consultas': len(consultas),
+                'consultas_recientes': consultas[:5] if consultas else [],
+                'especialidades_visitadas': list(set([c['especialidad_nombre'] for c in consultas if c.get('especialidad_nombre')])),
+                'ultima_consulta': consultas[0]['Fecha'] if consultas else None
+            }
+            
+            return json.dumps({'exito': True, 'resumen': resumen}, default=str)
+            
+        except Exception as e:
+            error_msg = f"Error obteniendo resumen: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'SUMMARY_ERROR')
+            return json.dumps({'exito': False, 'error': error_msg})
+    
+    # ===============================
+    # SLOTS PARA GESTIÓN DE DATOS
+    # ===============================
     
     @Slot()
-    def limpiar_filtros(self):
-        """Limpia filtros y muestra todas las consultas recientes"""
-        self._filtros_activos = {}
-        self._historial_consultas = self._consultas_recientes.copy()
-        self.historialConsultasChanged.emit()
-        self.operacionExitosa.emit("Filtros limpiados")
-    
-    # ===============================
-    # SLOTS PARA QML - REPORTES
-    # ===============================
-    
-    @Slot(int, str, str, result='QVariant')
-    def generar_reporte_doctor(self, doctor_id: int, fecha_inicio: str, fecha_fin: str):
-        """Genera reporte de actividad de un doctor"""
-        if doctor_id <= 0:
-            self.operacionError.emit("Doctor no seleccionado")
-            return {}
-        
-        self._set_loading(True)
-        
+    def cargar_consultas(self):
+        """Carga todas las consultas médicas"""
         try:
-            # Obtener consultas del doctor
-            consultas = safe_execute(
-                self.consulta_repo.get_consultations_by_doctor,
-                doctor_id, limit=1000
-            )
-            
-            if not consultas:
-                return {'consultas': [], 'estadisticas': {}}
-            
-            # Filtrar por fechas si se proporcionan
-            if fecha_inicio and fecha_fin:
-                from ..core.utils import parsear_fecha
-                fecha_ini = parsear_fecha(fecha_inicio)
-                fecha_fin_parsed = parsear_fecha(fecha_fin)
-                
-                if fecha_ini and fecha_fin_parsed:
-                    consultas_filtradas = []
-                    for c in consultas:
-                        fecha_consulta = parsear_fecha(str(c.get('Fecha', '')))
-                        if fecha_consulta and fecha_ini <= fecha_consulta <= fecha_fin_parsed:
-                            consultas_filtradas.append(c)
-                    consultas = consultas_filtradas
-            
-            # Calcular estadísticas
-            estadisticas = {
-                'total_consultas': len(consultas),
-                'pacientes_unicos': len(set(c.get('Id_Paciente') for c in consultas)),
-                'ingresos_estimados': sum(safe_float(c.get('Precio_Normal', 0)) for c in consultas),
-                'promedio_por_consulta': 0
-            }
-            
-            if estadisticas['total_consultas'] > 0:
-                estadisticas['promedio_por_consulta'] = (
-                    estadisticas['ingresos_estimados'] / estadisticas['total_consultas']
-                )
-            
-            reporte = {
-                'consultas': preparar_para_qml(consultas),
-                'estadisticas': estadisticas,
-                'periodo': {
-                    'fecha_inicio': fecha_inicio,
-                    'fecha_fin': fecha_fin
-                }
-            }
-            
-            print(f"📊 Reporte doctor generado: {estadisticas['total_consultas']} consultas")
-            
-            return reporte
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error generando reporte: {str(e)}")
-            return {}
-        finally:
-            self._set_loading(False)
-    
-    @Slot(str, str, result='QVariant')
-    def get_consultas_periodo(self, fecha_inicio: str, fecha_fin: str):
-        """Obtiene consultas de un período específico"""
-        if not fecha_inicio or not fecha_fin:
-            self.operacionError.emit("Fechas de período requeridas")
-            return []
-        
-        try:
-            consultas = safe_execute(
-                self.consulta_repo.get_consultations_by_date_range,
-                fecha_inicio, fecha_fin
-            )
-            return preparar_para_qml(consultas or [])
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo consultas del período: {str(e)}")
-            return []
-    
-    # ===============================
-    # SLOTS PARA QML - PACIENTES Y DOCTORES
-    # ===============================
-    
-    @Slot(str, result=list)
-    def buscar_pacientes(self, termino: str):
-        """Busca pacientes por nombre"""
-        if not termino or len(termino.strip()) < 2:
-            return []
-        
-        try:
-            pacientes = safe_execute(
-                self.paciente_repo.search_patients,
-                termino.strip()
-            )
-            
-            # Formatear para ComboBox
-            pacientes_formateados = []
-            for p in pacientes or []:
-                pacientes_formateados.append({
-                    'id': p['id'],
-                    'text': formatear_nombre_completo(
-                        p['Nombre'], p['Apellido_Paterno'], p['Apellido_Materno']
-                    ),
-                    'edad': p['Edad'],
-                    'data': p
-                })
-            
-            return pacientes_formateados
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error buscando pacientes: {str(e)}")
-            return []
-    
-    @Slot(int, result='QVariant')
-    def get_especialidades_doctor(self, doctor_id: int):
-        """Obtiene especialidades de un doctor específico"""
-        if doctor_id <= 0:
-            return []
-        
-        try:
-            doctor = safe_execute(
-                self.doctor_repo.get_doctor_with_services,
-                doctor_id
-            )
-            
-            if doctor and doctor.get('servicios'):
-                especialidades = []
-                for servicio in doctor['servicios']:
-                    especialidades.append({
-                        'id': servicio['id'],
-                        'text': servicio['Nombre'],
-                        'precio_normal': servicio['Precio_Normal'],
-                        'precio_emergencia': servicio['Precio_Emergencia'],
-                        'detalles': servicio.get('Detalles', ''),
-                        'data': servicio
-                    })
-                return especialidades
-            
-            return []
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo especialidades: {str(e)}")
-            return []
-        
-    @Slot(str, str, str, int, result=int)
-    @Slot(str, str, str, int, result=int)
-    def buscarOCrearPacienteInteligente(self, nombre, apellido_p, apellido_m, edad):
-        """Busca o crea paciente de forma inteligente"""
-        try:
-            return self.paciente_repo.buscar_o_crear_paciente(
-                nombre, apellido_p, apellido_m, edad
-            )
-        except Exception as e:
-            self.operacionError.emit(f"Error gestionando paciente: {str(e)}")
-            return -1
-    
-    @Slot(str, str, str, int, result=int) 
-    def buscarOCrearPaciente(self, nombre, apellido_p, apellido_m, edad):
-        """Alias para compatibilidad con Laboratorio"""
-        return self.buscarOCrearPacienteInteligente(nombre, apellido_p, apellido_m, edad)
-        
-    # Agregar este método al ConsultaModel
-    @Slot(str, result='QVariantList')
-    def buscar_pacientes_completo(self, termino: str):
-        """Búsqueda completa de pacientes con todos los campos"""
-        if not termino or len(termino.strip()) < 2:
-            return []
-        
-        try:
-            pacientes = safe_execute(
-                self.paciente_repo.search_patients_with_names,  # Nueva función
-                termino.strip(),
-                20
-            )
-            
-            # Formatear resultados con toda la información
-            resultados_completos = []
-            for p in pacientes or []:
-                resultados_completos.append({
-                    'id': p['id'],
-                    'nombre': p['Nombre'],
-                    'apellido_paterno': p['Apellido_Paterno'],
-                    'apellido_materno': p['Apellido_Materno'],
-                    'edad': p['Edad'],
-                    'nombre_completo': f"{p['Nombre']} {p['Apellido_Paterno']} {p['Apellido_Materno']}"
-                })
-            
-            return resultados_completos
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error buscando pacientes: {str(e)}")
-            return []
-    
-    # ===============================
-    # MÉTODOS PRIVADOS
-    # ===============================
-    
-    def _cargar_datos_iniciales(self):
-        """Carga datos iniciales"""
-        self._set_loading(True)
-        try:
+            self._set_estado_actual("cargando")
             self._cargar_consultas_recientes()
-            self._cargar_estadisticas_dashboard()
-            self._cargar_doctores_disponibles()
-            self._cargar_especialidades()
-            self._cargar_pacientes_recientes()
-        finally:
-            self._set_loading(False)
+            self._set_estado_actual("listo")
+        except Exception as e:
+            self.errorOcurrido.emit(f"Error cargando consultas: {str(e)}", 'LOAD_ERROR')
+            self._set_estado_actual("error")
     
-    def _cargar_estadisticas_dashboard(self):
-        """Carga estadísticas para dashboard"""
+    @Slot()
+    def cargar_especialidades(self):
+        """Carga especialidades disponibles"""
         try:
-            # Estadísticas generales
-            stats_generales = safe_execute(self.consulta_repo.get_consultation_statistics)
-            stats_hoy = safe_execute(self.consulta_repo.get_today_statistics)
+            especialidades = self.doctor_repo.get_all_specialty_services()
+            self._especialidadesData = []
             
-            # CORRECCIÓN: Verificar que stats_generales es un diccionario antes de usar .get()
-            if stats_generales and isinstance(stats_generales, dict):
-                metricas_generales = stats_generales.get('general', {})
-                por_especialidad = stats_generales.get('por_especialidad', [])
-                por_doctor = stats_generales.get('por_doctor', [])
-            else:
-                metricas_generales = {}
-                por_especialidad = []
-                por_doctor = []
+            for esp in especialidades or []:
+                self._especialidadesData.append({
+                    'id': esp['id'],
+                    'text': esp['Nombre'],
+                    'precio_normal': float(esp.get('Precio_Normal', 0)),
+                    'precio_emergencia': float(esp.get('Precio_Emergencia', 0)),
+                    'doctor_nombre': esp.get('doctor_completo', ''),
+                    'doctor_especialidad': esp.get('doctor_especialidad', ''),
+                    'data': esp
+                })
             
-            self._estadisticas_dashboard = {
-                'metricas_hoy': stats_hoy or {},
-                'metricas_generales': metricas_generales,
-                'por_especialidad': por_especialidad,
-                'por_doctor': por_doctor
-            }
-            
-            self.estadisticasDashboardChanged.emit()
+            self.especialidadesChanged.emit()
+            print(f"🏥 Especialidades cargadas: {len(self._especialidadesData)}")
             
         except Exception as e:
-            print(f"⚠️ Error cargando estadísticas dashboard: {e}")
-    
-    def _cargar_doctores_disponibles(self):
-        """Carga lista de doctores disponibles"""
-        try:
-            doctores = safe_execute(self.doctor_repo.get_all)
+            error_msg = f"Error cargando especialidades: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.errorOcurrido.emit(error_msg, 'LOAD_SPECIALTIES_ERROR')
             
-            doctores_formateados = []
+    @Slot()
+    def cargar_doctores(self):
+        """Carga doctores disponibles"""
+        try:
+            doctores = self.doctor_repo.get_all()
+            self._doctoresData = []
+            
             for d in doctores or []:
-                doctores_formateados.append({
+                self._doctoresData.append({
                     'id': d['id'],
-                    'text': formatear_nombre_completo(
-                        d['Nombre'], d['Apellido_Paterno'], d['Apellido_Materno']
-                    ),
+                    'text': f"{d['Nombre']} {d['Apellido_Paterno']} {d['Apellido_Materno']}",
                     'especialidad': d['Especialidad'],
                     'matricula': d['Matricula'],
                     'data': d
                 })
             
-            self._doctores_disponibles = doctores_formateados
             self.doctoresDisponiblesChanged.emit()
             
         except Exception as e:
-            print(f"⚠️ Error cargando doctores: {e}")
+            self.errorOcurrido.emit(f"Error cargando doctores: {str(e)}", 'LOAD_DOCTORS_ERROR')
     
-    def _cargar_especialidades(self):
-        """Carga especialidades disponibles desde el repository"""
+    @Slot()
+    def refresh_consultas(self):
+        """Refresca las consultas recientes"""
+        self._cargar_consultas_recientes()
+    
+    @Slot()
+    def refresh_especialidades(self):
+        """Refresca especialidades"""
+        self.cargar_especialidades()
+    
+    @Slot()
+    def refresh_doctores(self):
+        """Refresca lista de doctores"""
+        self.cargar_doctores()
+    
+    @Slot()
+    def refrescar_datos(self):
+        """Refresca todos los datos del modelo"""
         try:
-            print("🏥 Cargando especialidades desde DoctorRepository...")
+            self._set_estado_actual("cargando")
             
-            # Usar repository (correcto)
-            especialidades = safe_execute(self.doctor_repo.get_all_specialty_services)
-            
-            print(f"🔍 Especialidades obtenidas del repository: {len(especialidades or [])}")
-            
-            if especialidades and len(especialidades) > 0:
-                print(f"🔍 Primera especialidad: {especialidades[0]}")
-            
-            especialidades_formateadas = []
-            for e in especialidades or []:
-                especialidades_formateadas.append({
-                    'id': e['id'],
-                    'text': e['Nombre'],
-                    'precio_normal': e['Precio_Normal'],
-                    'precio_emergencia': e['Precio_Emergencia'],
-                    'doctor_nombre': e.get('doctor_completo', e.get('doctor_nombre', '')),
-                    'doctor_especialidad': e.get('doctor_especialidad', ''),
-                    'data': e
-                })
-            
-            self._especialidades = especialidades_formateadas
-            print(f"✅ Especialidades formateadas para QML: {len(especialidades_formateadas)}")
-            
-            self.especialidadesChanged.emit()
-            
-        except Exception as e:
-            print(f"❌ Error cargando especialidades: {e}")
-            self._especialidades = []
-            self.especialidadesChanged.emit()
-            
-    def _cargar_pacientes_recientes(self):
-        """Carga pacientes con consultas recientes"""
-        try:
-            pacientes = safe_execute(
-                self.consulta_repo.get_most_frequent_patients,
-                limit=20
-            )
-            
-            pacientes_formateados = []
-            for p in pacientes or []:
-                pacientes_formateados.append({
-                    'id': p.get('Id_Paciente'),
-                    'nombre_completo': p.get('paciente_completo', ''),
-                    'total_consultas': p.get('total_consultas', 0),
-                    'ultima_consulta': p.get('ultima_consulta', ''),
-                    'data': p
-                })
-            
-            self._pacientes_recientes = pacientes_formateados
-            self.pacientesRecientesChanged.emit()
-            
-        except Exception as e:
-            print(f"⚠️ Error cargando pacientes recientes: {e}")
-    
-    def _cargar_consulta_detalle(self, consulta_id: int):
-        """Carga detalle completo de una consulta"""
-        try:
-            consulta = safe_execute(
-                self.consulta_repo.get_consultation_by_id_complete,
-                consulta_id
-            )
-            
-            if consulta:
-                # Enriquecer datos para QML
-                consulta_enriquecida = consulta.copy()
-                
-                # Formatear fecha
-                if 'Fecha' in consulta:
-                    consulta_enriquecida['fecha_formateada'] = formatear_fecha(consulta['Fecha'])
-                
-                # Formatear precios
-                for campo in ['Precio_Normal', 'Precio_Emergencia']:
-                    if campo in consulta:
-                        consulta_enriquecida[f'{campo.lower()}_formateado'] = formatear_precio(
-                            consulta[campo]
-                        )
-                
-                self._consulta_actual = preparar_para_qml(consulta_enriquecida)
-            else:
-                self._consulta_actual = {}
-            
-            self.consultaActualChanged.emit()
-            
-        except Exception as e:
-            print(f"⚠️ Error cargando consulta detalle: {e}")
-            self._consulta_actual = {}
-            self.consultaActualChanged.emit()
-    
-    def _auto_update_consultas(self):
-        """Actualización automática de consultas"""
-        if not self._loading and not self._procesando_consulta:
-            try:
-                self._cargar_consultas_recientes()
-                self._cargar_estadisticas_dashboard()
-            except Exception as e:
-                print(f"⚠️ Error en auto-update consultas: {e}")
-    
-    def _set_loading(self, loading: bool):
-        """Actualiza estado de carga"""
-        if self._loading != loading:
-            self._loading = loading
-            self.loadingChanged.emit()
-    
-    def _set_procesando_consulta(self, procesando: bool):
-        """Actualiza estado de procesamiento"""
-        if self._procesando_consulta != procesando:
-            self._procesando_consulta = procesando
-            self.procesandoConsultaChanged.emit()
-    
-    def _set_buscando(self, buscando: bool):
-        """Actualiza estado de búsqueda"""
-        if self._buscando != buscando:
-            self._buscando = buscando
-            self.buscandoChanged.emit()
-
-    def _cargar_consultas_recientes(self):
-        """Carga consultas recientes"""
-        try:
-            print("🔄 Cargando consultas recientes...")
-            consultas = safe_execute(
-                self.consulta_repo.get_all_with_details,
-                limit=50
-            )
-            # Crear una nueva lista para forzar la actualización
-            self._consultas_recientes = list(consultas) if consultas else []
-            print(f"✅ Consultas cargadas: {len(self._consultas_recientes)}")
-            
-            # Forzar la emisión de la señal
-            self.consultasRecientesChanged.emit()
-            
-        except Exception as e:
-            print(f"❌ Error cargando consultas recientes: {e}")
-            self._consultas_recientes = []
-            self.consultasRecientesChanged.emit()
-
-    def _cargar_datos_iniciales(self):
-        self._set_loading(True)
-        try:
+            # Cargar datos principales
             self._cargar_consultas_recientes()
-            self._cargar_estadisticas_dashboard()
-            self._cargar_doctores_disponibles()
-            self._cargar_especialidades()  # ← Ya existe
-            self._cargar_pacientes_recientes()
-            # AGREGAR ESTA LÍNEA:
-            self._cargar_especialidades()  # Forzar carga
-        finally:
-            self._set_loading(False)
+            self.cargar_especialidades()
+            self.cargar_doctores()
+            
+            # Actualizar dashboard
+            self.obtener_dashboard()
+            
+            self._set_estado_actual("listo")
+            self.operacionExitosa.emit("Datos actualizados correctamente")
+            
+        except Exception as e:
+            error_msg = f"Error refrescando datos: {str(e)}"
+            self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
+            self._set_estado_actual("error")
+    
+    # ===============================
+    # SLOTS PARA CONSULTAS ESPECÍFICAS
+    # ===============================
+    
+    @Slot(result=str)
+    def obtener_consultas_hoy(self) -> str:
+        """Obtiene consultas del día actual"""
+        try:
+            consultas = self.repository.get_today_consultations()
+            return json.dumps({
+                'exito': True,
+                'consultas': consultas,
+                'total': len(consultas)
+            }, default=str)
+        except Exception as e:
+            return json.dumps({'exito': False, 'error': str(e)})
+    
+    @Slot(result=str)
+    def obtener_especialidades_disponibles(self) -> str:
+        """Obtiene especialidades disponibles"""
+        try:
+            return json.dumps({
+                'exito': True,
+                'especialidades': self._especialidadesData
+            }, default=str)
+        except Exception as e:
+            return json.dumps({'exito': False, 'error': str(e)})
+    
+    @Slot(result=str)
+    def obtener_doctores_activos(self) -> str:
+        """Obtiene doctores activos"""
+        try:
+            return json.dumps({
+                'exito': True,
+                'doctores': self._doctoresData
+            }, default=str)
+        except Exception as e:
+            return json.dumps({'exito': False, 'error': str(e)})
+    
+    @Slot()
+    def limpiar_cache_consultas(self):
+        """Limpia el cache de consultas para forzar recarga"""
+        try:
+            self.repository.invalidate_consultation_caches()
+            print("🧹 Cache de consultas limpiado")
+        except Exception as e:
+            print(f"⚠️ Error limpiando cache: {e}")
+    
+    @Slot(int, int, 'QVariant', result='QVariant')
+    def obtener_consultas_paginadas(self, page: int, limit: int = 5, filters=None):
+        """Obtiene página específica de consultas"""
+        try:
+            filtros_dict = filters.toVariant() if hasattr(filters, 'toVariant') else filters or {}
+            resultado = self.repository.get_consultas_paginadas(page, limit, filtros_dict)
+            return resultado
+        except Exception as e:
+            self.errorOcurrido.emit(f"Error paginación: {str(e)}", 'PAGINATION_ERROR')
+            return {'consultas': [], 'total': 0, 'page': 0, 'total_pages': 0}
 
-    def search_patients_with_names(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Busca solo pacientes con nombres reales"""
-        search_term = f"%{search_term.strip()}%"
+    # ===============================
+    # MÉTODOS INTERNOS - CORREGIDOS CON NOMBRES REALES
+    # ===============================
+    
+    def _cargar_consultas_recientes(self):
+        """Actualiza lista interna de consultas - TOTALMENTE CORREGIDA"""
+        try:
+            consultas_raw = self.repository.get_all_with_details()
+            
+            # Procesar datos para QML con nombres EXACTOS según BD real
+            self._consultasData = []
+            for consulta in consultas_raw:
+                consulta_procesada = {
+                    'id': str(consulta.get('id', 'N/A')),
+                    'paciente_completo': consulta.get('paciente_completo') or 'Sin nombre',
+                    'paciente_cedula': consulta.get('paciente_cedula') or 'Sin cédula',
+                    'Detalles': consulta.get('Detalles') or 'Sin detalles',  # CORREGIDO: Detalles con D mayúscula
+                    'especialidad_doctor': consulta.get('especialidad_doctor') or 'Sin especialidad/doctor',
+                    'tipo_consulta': consulta.get('tipo_consulta') or 'Normal',  # CORREGIDO: viene de alias
+                    'precio': float(consulta.get('precio') or 0),
+                    'Fecha': consulta.get('Fecha')
+                }
+                
+                self._consultasData.append(consulta_procesada)
+            
+            self.consultasRecientesChanged.emit()
+            print(f"📋 Consultas cargadas: {len(self._consultasData)}")
+            
+        except Exception as e:
+            error_msg = f"Error actualizando consultas: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self._consultasData = []
+            
+    def _formatear_fecha_simple(self, fecha) -> str:
+        """Formatea fecha de manera simple y segura"""
+        if not fecha:
+            return "Sin fecha"
         
-        query = """
-        SELECT * FROM Pacientes 
-        WHERE (Nombre != 'Sin nombre' AND Nombre IS NOT NULL AND Nombre != '')
-        AND (Nombre LIKE ? OR Apellido_Paterno LIKE ? OR Apellido_Materno LIKE ?)
-        ORDER BY Nombre, Apellido_Paterno
-        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
-        """
-        
-        return self._execute_query(query, (search_term, search_term, search_term, limit))
+        try:
+            if isinstance(fecha, str):
+                fecha_obj = datetime.fromisoformat(fecha.replace('Z', '+00:00'))
+            elif isinstance(fecha, datetime):
+                fecha_obj = fecha
+            else:
+                return "Fecha inválida"
+            
+            return fecha_obj.strftime('%d/%m/%Y')
+        except Exception as e:
+            print(f"Error formateando fecha: {e}")
+            return "Fecha inválida"
 
-# Registrar el tipo para QML
+    def _cargar_estadisticas_dashboard(self):
+        """Carga estadísticas para el dashboard"""
+        try:
+            self._dashboardData = self.repository.get_consultation_statistics()
+            self.dashboardActualizado.emit(json.dumps(self._dashboardData, default=str))
+            print("📊 Estadísticas de consultas cargadas")
+        except Exception as e:
+            print(f"Error cargando estadísticas dashboard: {e}")
+            self._dashboardData = {}
+    
+    def _setupAutoRefresh(self):
+        """Configura actualización automática de datos"""
+        self._autoRefreshTimer = QTimer(self)
+        self._autoRefreshTimer.timeout.connect(self.refrescar_datos)
+        # Comentado por defecto - se puede activar si es necesario
+        # self._autoRefreshTimer.start(self._autoRefreshInterval)
+    
+    @Slot(int)
+    def setAutoRefreshInterval(self, intervalMs: int):
+        """Configura intervalo de actualización automática"""
+        if intervalMs > 0:
+            self._autoRefreshInterval = intervalMs
+            if hasattr(self, '_autoRefreshTimer'):
+                self._autoRefreshTimer.start(intervalMs)
+        else:
+            if hasattr(self, '_autoRefreshTimer'):
+                self._autoRefreshTimer.stop()
+
+# ===============================
+# REGISTRO PARA QML
+# ===============================
+
 def register_consulta_model():
-    qmlRegisterType(ConsultaModel, "ClinicaModels", 1, 0, "ConsultaModel")
+    """Registra el modelo para uso en QML"""
+    qmlRegisterType(ConsultaModel, "Clinica.Models", 1, 0, "ConsultaModel")
+    print("✅ ConsultaModel registrado para QML con gestión de pacientes por cédula")

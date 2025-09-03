@@ -14,7 +14,6 @@ class TrabajadorRepository(BaseRepository):
     
     def __init__(self):
         super().__init__('Trabajadores', 'trabajadores')
-        print("👷‍♂️ TrabajadorRepository inicializado")
     
     # ===============================
     # IMPLEMENTACIÓN ABSTRACTA
