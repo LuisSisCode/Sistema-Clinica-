@@ -448,7 +448,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Farmacia"
                     value: "Bs " + calculateFarmaciaTotal().toFixed(0)
-                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/farmacia.png"  // Cambiar de "💊"
+                    icon: "Resources/iconos/farmacia.png"  // Cambiar de "💊"
                     cardColor: farmaciaColor
                     borderColor: farmaciaColor
                 }
@@ -457,7 +457,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Consultas"
                     value: "Bs " + calculateConsultasTotal().toFixed(0)
-                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Consulta.png"  // Cambiar de "🩺"
+                    icon: "Resources/iconos/Consulta.png"  // Cambiar de "🩺"
                     cardColor: consultasColor
                     borderColor: consultasColor
                 }
@@ -466,7 +466,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Laboratorio"
                     value: "Bs " + calculateLaboratorioTotal().toFixed(0)
-                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Laboratorio.png"  // Cambiar de "🔬"
+                    icon: "Resources/iconos/Laboratorio.png"  // Cambiar de "🔬"
                     cardColor: laboratorioColor
                     borderColor: laboratorioColor
                 }
@@ -475,7 +475,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Enfermería"
                     value: "Bs " + calculateEnfermeriaTotal().toFixed(0)
-                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Enfermeria.png"  // Cambiar de "👩‍⚕️"
+                    icon: "Resources/iconos/Enfermeria.png"  // Cambiar de "👩‍⚕️"
                     cardColor: enfermeriaColor
                     borderColor: enfermeriaColor
                 }
@@ -484,7 +484,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Servicios Básicos"
                     value: "Bs " + calculateServiciosBasicosTotal().toFixed(0)
-                    icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ServiciosBasicos.png"  // Cambiar de "⚡"
+                    icon: "Resources/iconos/ServiciosBasicos.png"  // Cambiar de "⚡"
                     cardColor: serviciosColor
                     borderColor: serviciosColor
                 }

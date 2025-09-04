@@ -38,7 +38,7 @@ Item {
             id: 0,
             nombre: "Seleccionar tipo de reporte...",
             modulo: "",
-            icono: "file:///D:/Sistema-Clinica-/Resources/iconos/reportes.png",
+            icono: "Resources/iconos/reportes.png",
             descripcion: "Seleccione el tipo de reporte que desea generar",
             color: lightGrayColor
         },
@@ -153,7 +153,7 @@ Item {
                             
                             Image {
                                 anchors.centerIn: parent
-                                source: "file:///D:/Sistema-Clinica-/Resources/iconos/reportes.png"
+                                source: "Resources/iconos/reportes.png"
                                 width: 32
                                 height: 32
                                 fillMode: Image.PreserveAspectFit

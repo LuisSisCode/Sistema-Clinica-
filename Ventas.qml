@@ -284,7 +284,7 @@ Item {
                 spacing: 12
                             
                 Image {
-                    source: "file:///D:/Sistema-Clinica-/Resources/iconos/ventas.png"
+                    source: "Resources/iconos/ventas.png"
                     Layout.preferredWidth: 60
                     Layout.preferredHeight: 60
                     fillMode: Image.PreserveAspectFit
@@ -381,7 +381,7 @@ Item {
                     anchors.centerIn: parent
                     
                     Image {
-                        source: "file:///D:/Sistema-Clinica-/Resources/iconos/añadirProducto.png"
+                        source: "Resources/iconos/añadirProducto.png"
                         Layout.preferredWidth: 30
                         Layout.preferredHeight: 30
                         fillMode: Image.PreserveAspectFit

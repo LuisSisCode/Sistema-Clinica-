@@ -37,6 +37,7 @@ Item {
     readonly property color borderColor: "#E5E7EB"
     readonly property color accentColor: "#10B981"
     readonly property color lineColor: "#D1D5DB"
+
     // Distribución de columnas responsive
     readonly property real colId: 0.05
     readonly property real colPaciente: 0.18
@@ -46,12 +47,15 @@ Item {
     readonly property real colTrabajador: 0.15
     readonly property real colRegistradoPor: 0.15
     readonly property real colFecha: 0.10
-    // Propiedades para los diálogos del análisis
+
+    // Propiedades para los diálogos del análisis - CORREGIDAS
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
     property bool showNewAnalysisDialog: false
-    // DATOS DESDE EL BACKEND
+    property bool formEnabled: true  // ✅ NUEVA - Para manejar estado del formulario
+
+    // DATOS DESDE EL BACKEND - CORREGIDOS
     property var trabajadoresDisponibles: laboratorioModel ? laboratorioModel.trabajadoresJson : "[]"
     property var tiposAnalisis: laboratorioModel ? laboratorioModel.tiposAnalisisJson : "[]"
 
@@ -59,15 +63,16 @@ Item {
     property var analisisModelData: []
     property var analysisMap: []
     
-    readonly property int currentPageLaboratorio: laboratorioModel ? laboratorioModel._currentPage || 0 : 0
-    readonly property int totalPagesLaboratorio: laboratorioModel ? laboratorioModel._totalPages || 0 : 0
-    readonly property int itemsPerPageLaboratorio: laboratorioModel ? laboratorioModel._itemsPerPage || 20 : 20
-    readonly property int totalItemsLaboratorio: laboratorioModel ? laboratorioModel._totalRecords || 0 : 0
-
+    // ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
+    readonly property int currentPageLaboratorio: laboratorioModel ? (laboratorioModel.currentPageProperty || 0) : 0
+    readonly property int totalPagesLaboratorio: laboratorioModel ? (laboratorioModel.totalPagesProperty || 0) : 0
+    readonly property int itemsPerPageLaboratorio: laboratorioModel ? (laboratorioModel.itemsPerPageProperty || 6) : 6
+    readonly property int totalItemsLaboratorio: laboratorioModel ? (laboratorioModel.totalRecordsProperty || 0) : 0
     ListModel {
         id: analisisPaginadosModel // Modelo para la página actual
     }
-    // CONEXIÓN CON EL MODELO
+
+    // ✅ CONEXIÓN CON EL MODELO CORREGIDA
     Connections {
         target: appController
         function onModelsReady() {
@@ -78,6 +83,7 @@ Item {
             }
         }
     }
+
     Timer {
         id: initTimer
         interval: 100
@@ -86,13 +92,13 @@ Item {
         onTriggered: {
             console.log("⏰ Ejecutando inicialización retrasada...")
             if (laboratorioModel) {
-                // ✅ CORREGIDO: Usar el método correcto del modelo
                 laboratorioModel.aplicar_filtros_y_recargar("", "", "", "", "")
                 console.log("✅ Inicialización retrasada exitosa")
             }
         }
     }
-    // CONEXIONES CON EL MODELO
+
+    // ✅ CONEXIONES CON EL MODELO CORREGIDAS
     Connections {
         target: laboratorioModel
         enabled: laboratorioModel !== null
@@ -115,20 +121,18 @@ Item {
             console.log("⏳ Estado:", nuevoEstado)
         }
         
-        // NUEVO: Manejar éxito de operaciones
         function onOperacionExitosa(mensaje) {
             console.log("✅ Signal: Operación exitosa -", mensaje)
             mostrarNotificacion("Éxito", mensaje)
             updatePaginatedModel()
             
-            // Solo cerrar si es una operación de análisis
             if (showNewAnalysisDialog && (mensaje.includes("creado") || mensaje.includes("actualizado") || mensaje.includes("Examen"))) {
                 Qt.callLater(function() {
                     limpiarYCerrarDialogo()
                 })
             }
         }
-        // NUEVO: Manejar actualización exitosa
+        
         function onExamenActualizado(datos) {
             console.log("📝 Signal: Examen actualizado exitosamente")
             mostrarNotificacion("Éxito", "Análisis actualizado correctamente")
@@ -140,18 +144,16 @@ Item {
             })
         }
     }
+
     Timer {
         id: updateTimer
         interval: 100
         onTriggered: updatePaginatedModel()
     }
-    
 
-    // FUNCIÓN MEJORADA PARA MOSTRAR NOTIFICACIONES
+    // ✅ FUNCIÓN MEJORADA PARA MOSTRAR NOTIFICACIONES
     function mostrarNotificacion(titulo, mensaje) {
         console.log("📢 " + titulo + ": " + mensaje)
-        // Aquí puedes agregar tu lógica de notificaciones visual
-        // Por ejemplo, mostrar un toast o popup
     }
 
     // LAYOUT PRINCIPAL RESPONSIVO
@@ -192,7 +194,6 @@ Item {
                             Layout.alignment: Qt.AlignVCenter
                             spacing: baseUnit * 1.5
                             
-                            // Contenedor del icono con tamaño fijo
                             Rectangle {
                                 Layout.preferredWidth: baseUnit * 10
                                 Layout.preferredHeight: baseUnit * 10
@@ -217,7 +218,6 @@ Item {
                                 }
                             }
                             
-                            // Título
                             Label {
                                 Layout.alignment: Qt.AlignVCenter
                                 text: "Gestión de Análisis de Laboratorio"
@@ -229,7 +229,6 @@ Item {
                             }
                         }
                         
-                        // ESPACIADOR FLEXIBLE
                         Item { 
                             Layout.fillWidth: true 
                             Layout.minimumWidth: baseUnit * 2
@@ -379,14 +378,13 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
                                 
-                                // ✅ CORREGIDO: Garantizar que "Todos" esté siempre en índice 0
                                 model: {
-                                    var modelData = ["Todos"] // SIEMPRE empieza con "Todos"
+                                    var modelData = ["Todos"]
                                     try {
                                         var tiposData = JSON.parse(tiposAnalisis)
                                         for (var i = 0; i < tiposData.length; i++) {
                                             var nombre = tiposData[i].nombre || tiposData[i].Nombre || ""
-                                            if (nombre && nombre !== "Todos") { // Evitar duplicados
+                                            if (nombre && nombre !== "Todos") {
                                                 modelData.push(nombre)
                                             }
                                         }
@@ -395,7 +393,7 @@ Item {
                                     }
                                     return modelData
                                 }
-                                currentIndex: 0 // Siempre empezar en "Todos"
+                                currentIndex: 0
                                 
                                 contentItem: Label {
                                     text: filtroAnalisis.displayText
@@ -446,7 +444,6 @@ Item {
                                 }
                             }
                         }
-
                         
                         TextField {
                             id: campoBusqueda
@@ -467,7 +464,7 @@ Item {
                             font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
                         }
-                        // En el GridLayout de filtros, agrega este botón:
+
                         Button {
                             id: limpiarFiltrosBtn
                             text: "Limpiar Filtros"
@@ -826,7 +823,7 @@ Item {
                                             }
                                         }
                                         
-                                        // 🎯 ANÁLISIS COLUMN MODIFICADA - AHORA CON DETALLES
+                                        // ANÁLISIS COLUMN MODIFICADA - CON DETALLES
                                         Item {
                                             Layout.preferredWidth: parent.width * colAnalisis
                                             Layout.fillHeight: true
@@ -999,7 +996,7 @@ Item {
                                     
                                     // LÍNEAS VERTICALES CONTINUAS
                                     Repeater {
-                                        model: 7 // Número de líneas verticales
+                                        model: 7
                                         Rectangle {
                                             property real xPos: {
                                                 var w = parent.width - baseUnit * 3
@@ -1146,6 +1143,7 @@ Item {
                         }
                     }
                 }
+
                 // PAGINACIÓN MODERNA
                 Rectangle {
                     Layout.fillWidth: true
@@ -1208,7 +1206,7 @@ Item {
                             Layout.preferredWidth: baseUnit * 11
                             Layout.preferredHeight: baseUnit * 4
                             text: "Siguiente →"
-                            enabled: currentPageLaboratorio < totalPagesLaboratorio - 1
+                            enabled: currentPageLaboratorio < (totalPagesLaboratorio - 1) && totalPagesLaboratorio > 1
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
@@ -1239,7 +1237,7 @@ Item {
         }
     }
 
-    // ===== DIÁLOGO PRINCIPAL =====
+    // ===== DIÁLOGO PRINCIPAL - ✅ CORREGIDO =====
     
     // Fondo del diálogo
     Rectangle {
@@ -1262,9 +1260,9 @@ Item {
         }
     }
     
-    // Diálogo de análisis adaptativo
+    // Diálogo de análisis adaptativo - ✅ CORREGIDO
     Rectangle {
-        id: analysisForm
+        id: analysisForm  // ✅ Este ID es el que se usa
         anchors.centerIn: parent
         width: Math.min(550, parent.width * 0.9)
         height: Math.min(800, parent.height * 0.9)
@@ -1275,14 +1273,17 @@ Item {
         visible: showNewAnalysisDialog
         z: 1001
         
+        // ✅ PROPIEDADES INTERNAS CORREGIDAS
         property int selectedAnalysisIndex: -1
         property string analysisType: "Normal"
         property real calculatedPrice: 0.0
+        // ✅ NUEVA - Propiedad para manejar estado
+        property bool isFormEnabled: laboratorioRoot.formEnabled
         
         function loadEditData() {
             if (isEditMode && editingIndex >= 0) {
                 var analisis = analisisPaginadosModel.get(editingIndex)
-                console.log("🔄 Cargando datos para editar:", JSON.stringify(analisis))
+                console.log("📄 Cargando datos para editar:", JSON.stringify(analisis))
                 
                 // Cargar datos del paciente
                 cedulaPaciente.text = analisis.pacienteCedula || ""
@@ -1466,8 +1467,8 @@ Item {
                                         buscarPacientePorCedula(cedulaPaciente.text)
                                     }
                                 }
-                                
                             }
+
                             Button {
                                 id: nuevoPacienteBtn
                                 text: "Nuevo Paciente"
@@ -1671,6 +1672,7 @@ Item {
                         }
                     }
                 }
+
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 3
@@ -1715,7 +1717,6 @@ Item {
                         Layout.fillWidth: true
                         Layout.preferredHeight: baseUnit * 4
                         
-                        // ✅ CORREGIDO: Mismo patrón que el filtro - "Seleccionar..." en índice 0
                         model: {
                             var list = ["Seleccionar tipo de análisis..."]
                             try {
@@ -1907,7 +1908,7 @@ Item {
                     }
                 }
                 
-                // Botones de acción
+                // ✅ BOTONES DE ACCIÓN CORREGIDOS
                 RowLayout {
                     Layout.fillWidth: true
                     Item { Layout.fillWidth: true }
@@ -1940,34 +1941,33 @@ Item {
                             
                             if (cedulaPaciente.pacienteAutocompletado) {
                                 // Paciente existente encontrado
-                                return tieneAnalisis && tieneCedula && nombrePaciente.text.length >= 2
+                                return tieneAnalisis && tieneCedula && nombrePaciente.text.length >= 2 && laboratorioRoot.formEnabled
                             } else if (cedulaPaciente.pacienteNoEncontrado) {
                                 // Nuevo paciente - validar campos obligatorios
                                 var tieneNombre = nombrePaciente.text.length >= 2
                                 var tieneApellido = apellidoPaterno.text.length >= 2
-                                return tieneAnalisis && tieneCedula && tieneNombre && tieneApellido
+                                return tieneAnalisis && tieneCedula && tieneNombre && tieneApellido && laboratorioRoot.formEnabled
                             }
                             
                             return false
                         }
-                        property bool isLoading: !analysisForm.enabled
                         Layout.preferredHeight: baseUnit * 4
                         
                         background: Rectangle {
                             color: {
                                 if (!parent.enabled) return "#bdc3c7"
-                                if (parent.isLoading) return "#95a5a6"  // Gris mientras carga
+                                if (!laboratorioRoot.formEnabled) return "#95a5a6"  // Gris mientras carga
                                 return primaryColor
                             }
                             radius: baseUnit
                             
-                            // Indicador de loading
+                            // ✅ INDICADOR DE LOADING CORREGIDO
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: parent.isLoading ? 20 : 0
-                                height: parent.isLoading ? 20 : 0
+                                width: !laboratorioRoot.formEnabled ? 20 : 0
+                                height: !laboratorioRoot.formEnabled ? 20 : 0
                                 color: "transparent"
-                                visible: parent.isLoading
+                                visible: !laboratorioRoot.formEnabled
                                 
                                 // Spinner simple
                                 Rectangle {
@@ -1978,7 +1978,7 @@ Item {
                                     anchors.centerIn: parent
                                     
                                     SequentialAnimation on rotation {
-                                        running: parent.parent.visible
+                                        running: parent.visible
                                         loops: Animation.Infinite
                                         NumberAnimation { to: 360; duration: 1000 }
                                     }
@@ -1987,7 +1987,7 @@ Item {
                         }
                         
                         contentItem: Label {
-                            text: parent.isLoading ? "Guardando..." : parent.text
+                            text: !laboratorioRoot.formEnabled ? "Guardando..." : parent.text
                             color: whiteColor
                             font.bold: true
                             font.pixelSize: fontBaseSize * 0.9
@@ -1996,7 +1996,7 @@ Item {
                         }
                         
                         onClicked: {
-                            if (!isLoading) {
+                            if (laboratorioRoot.formEnabled) {
                                 guardarAnalisis()
                             }
                         }
@@ -2006,6 +2006,8 @@ Item {
         }
     }
 
+    // ✅ FUNCIONES JAVASCRIPT CORREGIDAS
+
     function aplicarFiltros() {
         console.log("🔍 Aplicando filtros...")
         
@@ -2013,78 +2015,14 @@ Item {
             console.log("❌ LaboratorioModel no disponible")
             return
         }
-    
-        var filtros = {}
-        
-        // Filtro por tipo de análisis - USAR EL MAPA
-        if (filtroAnalisis && filtroAnalisis.currentIndex > 0) {
-            var selectedText = filtroAnalisis.currentText
-            var analysisMap = laboratorioRoot.analysisMap || []
-            var selectedIndexInMap = filtroAnalisis.currentIndex - 1 // Restar 1 por "Todos"
-            
-            if (selectedIndexInMap >= 0 && selectedIndexInMap < analysisMap.length) {
-                var selectedAnalysis = analysisMap[selectedIndexInMap]
-                filtros.tipo_analisis = selectedAnalysis.nombre
-                console.log("✅ Filtro análisis aplicado:", selectedAnalysis.nombre, "ID:", selectedAnalysis.id)
-            } else {
-                console.log("⚠️ Índice fuera de rango en el mapa de análisis:", selectedIndexInMap)
-            }
-        } else {
-            console.log("🔍 Filtro análisis no aplicado (índice 0 - Todos)")
-        }
-        
-        // Resto de los filtros (se mantienen igual)
-        if (filtroTipo && filtroTipo.currentIndex > 0) {
-            if (filtroTipo.currentIndex === 1) {
-                filtros.tipo_servicio = "Normal"
-            } else if (filtroTipo.currentIndex === 2) {
-                filtros.tipo_servicio = "Emergencia"
-            }
-        }
-        
-        if (campoBusqueda && campoBusqueda.text.length >= 2) {
-            filtros.search_term = campoBusqueda.text.trim()
-        }
-        
-        if (filtroFecha && filtroFecha.currentIndex > 0) {
-            var hoy = new Date();
-            var fechaDesde, fechaHasta;
-            
-            switch(filtroFecha.currentText) {
-                case "Hoy":
-                    fechaDesde = new Date(hoy);
-                    fechaHasta = new Date(hoy);
-                    break;
-                case "Esta Semana":
-                    // Obtener el lunes de esta semana
-                    fechaDesde = new Date(hoy);
-                    var diaSemana = fechaDesde.getDay(); // 0=Domingo, 1=Lunes, etc.
-                    var diffLunes = fechaDesde.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
-                    fechaDesde.setDate(diffLunes);
-                    
-                    // Obtener el domingo de esta semana
-                    fechaHasta = new Date(fechaDesde);
-                    fechaHasta.setDate(fechaDesde.getDate() + 6);
-                    break;
-                case "Este Mes":
-                    // Primer día del mes
-                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-                    
-                    // Último día del mes
-                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-                    break;
-            }
-            
-            // Formatear fechas a YYYY-MM-DD
-            filtros.fecha_desde = fechaDesde.toISOString().split('T')[0];
-            filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0];
-            
-            console.log("📅 Filtro fecha aplicado:", filtroFecha.currentText, 
-                    "Desde:", filtros.fecha_desde, "Hasta:", filtros.fecha_hasta);
-    }
-    
+
+        var filtros = construirFiltrosActuales()
         console.log("🔍 Filtros construidos:", JSON.stringify(filtros))
         
+        if (laboratorioModel.itemsPerPageProperty !== 6) {
+            laboratorioModel.itemsPerPageProperty = 6
+        }
+
         laboratorioModel.aplicar_filtros_y_recargar(
             filtros.search_term || "",
             filtros.tipo_analisis || "",
@@ -2094,7 +2032,6 @@ Item {
         )
     }
     
-    // 🎯 FUNCIÓN MEJORADA - AHORA INCLUYE DETALLES DEL EXAMEN
     function updatePaginatedModel() {
         if (!laboratorioModel) {
             console.log("LaboratorioModel no disponible")
@@ -2121,8 +2058,12 @@ Item {
                         trabajadorAsignado: examen.trabajadorAsignado || "Sin asignar",
                         registradoPor: examen.registradoPor || "Sistema",
                         fecha: examen.fecha || "Sin fecha",
-                        // ⭐ NUEVO: Agregar detalles del examen
-                        detallesExamen: examen.detallesExamen || examen.detalles || ""
+                        // Agregar detalles del examen
+                        detallesExamen: examen.detallesExamen || examen.detalles || "",
+                        // ✅ AGREGAR CAMPOS PARA EDICIÓN
+                        pacienteNombre: examen.pacienteNombre || "",
+                        pacienteApellidoP: examen.pacienteApellidoP || "",
+                        pacienteApellidoM: examen.pacienteApellidoM || ""
                     })
                 }
                 
@@ -2133,15 +2074,14 @@ Item {
         } catch (error) {
             console.log("❌ Error actualizando modelo:", error)
         }
+        debugPaginacion()
     }
-    
 
     function editarAnalisis(viewIndex, analisisId) {
         // Buscar por ID en el modelo actual de la página
         var idToFind = parseInt(analisisId)
         var realIndex = -1
         
-        // CAMBIAR: usar analisisPaginadosModel en lugar de analisisListModel
         for (var i = 0; i < analisisPaginadosModel.count; i++) {
             if (parseInt(analisisPaginadosModel.get(i).analisisId) === idToFind) {
                 realIndex = i
@@ -2158,10 +2098,13 @@ Item {
         }
     }
 
-    // 🎯 FUNCIÓN DE GUARDAR MEJORADA CON MEJOR MANEJO DE ERRORES
+    // ✅ FUNCIÓN DE GUARDAR MEJORADA CON MEJOR MANEJO DE ERRORES
     function guardarAnalisis() {
         try {
             console.log("🎯 Iniciando guardado - Modo:", isEditMode ? "EDITAR" : "CREAR")
+            
+            // ✅ CAMBIAR ESTADO DE FORMULARIO EN LUGAR DE analysisForm.enabled
+            laboratorioRoot.formEnabled = false
             
             if (isEditMode && editingIndex >= 0) {
                 actualizarAnalisis()
@@ -2171,10 +2114,11 @@ Item {
             
         } catch (error) {
             console.log("❌ Error en coordinador de guardado:", error.message)
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true  // ✅ CORREGIDO
             mostrarNotificacion("Error", "Error procesando solicitud: " + error.message)
         }
     }
+
     function crearNuevoAnalisis() {
         try {
             console.log("🧪 === INICIANDO CREACIÓN DE NUEVO ANÁLISIS ===")
@@ -2183,9 +2127,6 @@ Item {
             if (!validarFormularioAnalisis()) {
                 return
             }
-            
-            // Mostrar loading
-            analysisForm.enabled = false
             
             // 1. Gestionar paciente (buscar o crear)
             var pacienteId = buscarOCrearPacientePorCedula()
@@ -2217,10 +2158,11 @@ Item {
             
         } catch (error) {
             console.log("❌ Error creando análisis:", error.message)
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
             mostrarNotificacion("Error", error.message)
         }
     }
+
     function actualizarAnalisis() {
         try {
             console.log("📝 === INICIANDO ACTUALIZACIÓN DE ANÁLISIS ===")
@@ -2234,9 +2176,6 @@ Item {
             if (!isEditMode || editingIndex < 0) {
                 throw new Error("No hay análisis seleccionado para editar")
             }
-            
-            // Mostrar loading
-            analysisForm.enabled = true
             
             // 1. Obtener análisis existente
             var analisisExistente = analisisPaginadosModel.get(editingIndex)
@@ -2272,10 +2211,11 @@ Item {
             
         } catch (error) {
             console.log("❌ Error actualizando análisis:", error.message)
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
             mostrarNotificacion("Error", error.message)
         }
     }
+
     function buscarOCrearPacientePorCedula() {
         if (!laboratorioModel) {
             throw new Error("LaboratorioModel no disponible")
@@ -2374,7 +2314,7 @@ Item {
         console.log("✅ Paciente encontrado y autocompletado:", paciente.nombre_completo || "")
     }
 
-    function limpiarDatosPacienteMejorado() {
+    function limpiarDatosPaciente() {
         cedulaPaciente.text = ""
         nombrePaciente.text = ""
         apellidoPaterno.text = ""
@@ -2383,12 +2323,6 @@ Item {
         // Resetear estados
         cedulaPaciente.pacienteAutocompletado = false
         cedulaPaciente.pacienteNoEncontrado = false
-        cedulaPaciente.buscandoPaciente = false
-        
-        // Hacer campos editables
-        nombrePaciente.readOnly = false
-        apellidoPaterno.readOnly = false
-        apellidoMaterno.readOnly = false
         
         console.log("🧹 Datos del paciente limpiados")
     }
@@ -2397,10 +2331,8 @@ Item {
         console.log("🚪 Cerrando diálogo de análisis...")
         
         try {
-            // Reactivar formulario si estaba deshabilitado
-            if (analysisForm) {
-                analysisForm.enabled = true
-            }
+            // ✅ REACTIVAR FORMULARIO CORREGIDO
+            laboratorioRoot.formEnabled = true
             
             // Cerrar diálogo
             showNewAnalysisDialog = false
@@ -2419,7 +2351,7 @@ Item {
             console.log("⚠️ Error limpiando diálogo:", error)
             // Forzar cierre básico
             showNewAnalysisDialog = false
-            if (analysisForm) analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
         }
     }
     
@@ -2463,19 +2395,19 @@ Item {
         
         try {
             // Configurar elementos por página según tamaño de pantalla
-            var elementosPorPagina = Math.max(6, Math.min(Math.floor(height / (baseUnit * 7)), 20))
+            var elementosPorPagina = 6
             console.log("📊 Configurando elementos por página:", elementosPorPagina)
             
             // Establecer tamaño de página
-            if (laboratorioModel.itemsPerPage !== elementosPorPagina) {
-                laboratorioModel.itemsPerPage = elementosPorPagina
+            if (laboratorioModel.itemsPerPageProperty !== elementosPorPagina) {
+                laboratorioModel.itemsPerPageProperty = elementosPorPagina
             }
             
             // Cargar datos iniciales del backend
             laboratorioModel.cargarTiposAnalisis()
             laboratorioModel.cargarTrabajadores()
             
-            // ✅ FORZAR LIMPIEZA DE FILTROS AL INICIALIZAR
+            // Limpiar filtros al inicializar
             if (filtroFecha) filtroFecha.currentIndex = 0
             if (filtroAnalisis) filtroAnalisis.currentIndex = 0  
             if (filtroTipo) filtroTipo.currentIndex = 0
@@ -2490,21 +2422,24 @@ Item {
     }
 
     function irAPaginaAnterior() {
-        if (laboratorioModel) {
-            var currentPage = laboratorioModel._currentPage || 0
-            if (currentPage > 0) {
-                aplicarFiltros() // Esto recargará con los filtros actuales
-            }
+        if (laboratorioModel && currentPageLaboratorio > 0) {
+            console.log("⬅️ Navegando a página anterior:", currentPageLaboratorio - 1)
+            
+            // ✅ USAR LA MISMA LÓGICA DE FILTROS
+            var filtros = construirFiltrosActuales()
+            
+            laboratorioModel.obtener_examenes_paginados(currentPageLaboratorio - 1, 6, filtros)
         }
     }
 
     function irAPaginaSiguiente() {
-        if (laboratorioModel) {
-            var currentPage = laboratorioModel._currentPage || 0
-            var totalPages = laboratorioModel._totalPages || 1
-            if (currentPage < totalPages - 1) {
-                aplicarFiltros() // Esto recargará con los filtros actuales
-            }
+        if (laboratorioModel && currentPageLaboratorio < (totalPagesLaboratorio - 1)) {
+            console.log("➡️ Navegando a página siguiente:", currentPageLaboratorio + 1)
+            
+            // ✅ USAR LA MISMA LÓGICA DE FILTROS
+            var filtros = construirFiltrosActuales()
+            
+            laboratorioModel.obtener_examenes_paginados(currentPageLaboratorio + 1, 6, filtros)
         }
     }
     
@@ -2591,51 +2526,8 @@ Item {
         aplicarFiltros()
     }
 
-    Component.onCompleted: {
-        console.log("🔬 Módulo Laboratorio iniciado con lógica mejorada")
-        
-        function conectarModelos() {
-            if (typeof appController !== 'undefined') {
-                laboratorioModel = appController.laboratorio_model_instance
-                
-                if (laboratorioModel) {
-                    // Conectar señales críticas
-                    laboratorioModel.examenesActualizados.connect(function() {
-                        console.log("🔄 Exámenes actualizados - forzando refresh")
-                        updatePaginatedModel()
-                    })
-                    
-                    // Verificar métodos disponibles
-                    console.log("🔍 Verificando métodos disponibles:")
-                    console.log("   - actualizarExamen:", typeof laboratorioModel.actualizarExamen === 'function' ? "✅" : "❌")
-                    console.log("   - editarExamen:", typeof laboratorioModel.editarExamen === 'function' ? "✅" : "❌")
-                    console.log("   - crearExamen:", typeof laboratorioModel.crearExamen === 'function' ? "✅" : "❌")
-                    console.log("   - refrescarDatos:", typeof laboratorioModel.refrescarDatos === 'function' ? "✅" : "❌")
-                    
-                    // Inicializar datos
-                    if (typeof laboratorioModel.refrescarDatos === 'function') {
-                        laboratorioModel.refrescarDatos()
-                    }
-                    
-                    return true
-                }
-            }
-            return false
-        }
-        
-        var attempts = 0
-        var timer = Qt.createQmlObject("import QtQuick 2.15; Timer { interval: 300; repeat: true }", laboratorioRoot)
-        
-        timer.triggered.connect(function() {
-            if (conectarModelos() || ++attempts >= 5) {
-                timer.destroy()
-                if (attempts >= 5) {
-                    console.log("⚠️ No se pudo conectar con LaboratorioModel después de 5 intentos")
-                }
-            }
-        })
-        timer.start()
-    }
+    // ✅ FUNCIONES DE VALIDACIÓN Y DATOS CORREGIDAS
+    
     function validarFormularioAnalisis() {
         console.log("✅ Validando formulario...")
         
@@ -2718,7 +2610,7 @@ Item {
 
     function procesarResultadoCreacion(resultado) {
         try {
-            console.log("🔄 Procesando resultado de creación:", resultado)
+            console.log("📄 Procesando resultado de creación:", resultado)
             
             // Verificar si fue exitoso
             var resultadoObj = typeof resultado === 'string' ? JSON.parse(resultado) : resultado
@@ -2740,18 +2632,18 @@ Item {
                 }
             })
             
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
             
         } catch (error) {
             console.log("❌ Error procesando resultado de creación:", error.message)
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
             throw error
         }
     }
 
     function procesarResultadoActualizacion(resultado) {
         try {
-            console.log("🔄 Procesando resultado de actualización:", resultado)
+            console.log("📄 Procesando resultado de actualización:", resultado)
             
             // Verificar si fue exitoso
             var resultadoObj = typeof resultado === 'string' ? JSON.parse(resultado) : resultado
@@ -2773,12 +2665,133 @@ Item {
                 }
             })
             
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
             
         } catch (error) {
             console.log("❌ Error procesando resultado de actualización:", error.message)
-            analysisForm.enabled = true
+            laboratorioRoot.formEnabled = true
             throw error
         }
+    }
+
+    // ✅ COMPONENT.ONCOMPLETED CORREGIDO
+    Component.onCompleted: {
+        console.log("🔬 Módulo Laboratorio iniciado con lógica mejorada")
+        
+        function conectarModelos() {
+            if (typeof appController !== 'undefined') {
+                laboratorioModel = appController.laboratorio_model_instance
+                
+                if (laboratorioModel) {
+                    // Conectar señales críticas
+                    laboratorioModel.examenesActualizados.connect(function() {
+                        console.log("📄 Exámenes actualizados - forzando refresh")
+                        updatePaginatedModel()
+                    })
+                    
+                    // Verificar métodos disponibles
+                    console.log("🔍 Verificando métodos disponibles:")
+                    console.log("   - actualizarExamen:", typeof laboratorioModel.actualizarExamen === 'function' ? "✅" : "❌")
+                    console.log("   - editarExamen:", typeof laboratorioModel.editarExamen === 'function' ? "✅" : "❌")
+                    console.log("   - crearExamen:", typeof laboratorioModel.crearExamen === 'function' ? "✅" : "❌")
+                    console.log("   - refrescarDatos:", typeof laboratorioModel.refrescarDatos === 'function' ? "✅" : "❌")
+                    
+                    // Inicializar datos
+                    if (typeof laboratorioModel.refrescarDatos === 'function') {
+                        laboratorioModel.refrescarDatos()
+                    }
+                    
+                    return true
+                }
+            }
+            return false
+        }
+        
+        var attempts = 0
+        var timer = Qt.createQmlObject("import QtQuick 2.15; Timer { interval: 300; repeat: true }", laboratorioRoot)
+        
+        timer.triggered.connect(function() {
+            if (conectarModelos() || ++attempts >= 5) {
+                timer.destroy()
+                if (attempts >= 5) {
+                    console.log("⚠️ No se pudo conectar con LaboratorioModel después de 5 intentos")
+                }
+            }
+        })
+        timer.start()
+    }
+    function debugPaginacion() {
+        console.log("🔍 DEBUG PAGINACIÓN:")
+        console.log("   - Página actual:", currentPageLaboratorio)
+        console.log("   - Total páginas:", totalPagesLaboratorio) 
+        console.log("   - Items por página:", itemsPerPageLaboratorio)
+        console.log("   - Total items:", totalItemsLaboratorio)
+        console.log("   - Elementos en modelo:", analisisPaginadosModel.count)
+        if (laboratorioModel) {
+            console.log("   - Modelo _currentPage:", laboratorioModel._currentPage)
+            console.log("   - Modelo _totalPages:", laboratorioModel._totalPages)
+            console.log("   - Modelo _itemsPerPage:", laboratorioModel._itemsPerPage)
+            console.log("   - Modelo _totalRecords:", laboratorioModel._totalRecords)
+        }
+    }
+    function construirFiltrosActuales() {
+        var filtros = {}
+        
+        // Filtro por tipo de análisis - USAR EL MAPA CORRECTO
+        if (filtroAnalisis && filtroAnalisis.currentIndex > 0) {
+            var selectedText = filtroAnalisis.currentText
+            var analysisMap = laboratorioRoot.analysisMap || []
+            var selectedIndexInMap = filtroAnalisis.currentIndex - 1 // Restar 1 por "Todos"
+            
+            if (selectedIndexInMap >= 0 && selectedIndexInMap < analysisMap.length) {
+                var selectedAnalysis = analysisMap[selectedIndexInMap]
+                filtros.tipo_analisis = selectedAnalysis.nombre
+            }
+        }
+        
+        // Filtro por tipo de servicio
+        if (filtroTipo && filtroTipo.currentIndex > 0) {
+            if (filtroTipo.currentIndex === 1) {
+                filtros.tipo_servicio = "Normal"
+            } else if (filtroTipo.currentIndex === 2) {
+                filtros.tipo_servicio = "Emergencia"
+            }
+        }
+        
+        // Filtro por búsqueda
+        if (campoBusqueda && campoBusqueda.text.length >= 2) {
+            filtros.search_term = campoBusqueda.text.trim()
+        }
+        
+        // ✅ CORRECCIÓN: Incluir lógica completa de fechas
+        if (filtroFecha && filtroFecha.currentIndex > 0) {
+            var hoy = new Date();
+            var fechaDesde, fechaHasta;
+            
+            switch(filtroFecha.currentText) {
+                case "Hoy":
+                    fechaDesde = new Date(hoy);
+                    fechaHasta = new Date(hoy);
+                    break;
+                case "Esta Semana":
+                    fechaDesde = new Date(hoy);
+                    var diaSemana = fechaDesde.getDay();
+                    var diffLunes = fechaDesde.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+                    fechaDesde.setDate(diffLunes);
+                    
+                    fechaHasta = new Date(fechaDesde);
+                    fechaHasta.setDate(fechaDesde.getDate() + 6);
+                    break;
+                case "Este Mes":
+                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+                    break;
+            }
+            
+            filtros.fecha_desde = fechaDesde.toISOString().split('T')[0];
+            filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0];
+        }
+        
+        return filtros
     }
 }

@@ -1,5 +1,5 @@
 """
-Modelo QObject para Gestión de Laboratorio - CORREGIDO con lógica simple de consultas
+Modelo QObject para Gestión de Laboratorio - CORREGIDO con Paginación Exitosa
 Expone funcionalidad de laboratorio a QML con Signals/Slots/Properties
 """
 
@@ -14,12 +14,12 @@ from ..repositories.laboratorio_repository import LaboratorioRepository
 
 class LaboratorioModel(QObject):
     """
-    Modelo QObject para gestión completa de análisis de laboratorio - SIMPLIFICADO
-    Usa el patrón exitoso de consultas
+    Modelo QObject para gestión completa de análisis de laboratorio - CORREGIDO
+    Con paginación exitosa y propiedades expuestas a QML
     """
     
     # ===============================
-    # SIGNALS SIMPLES (como consultas)
+    # SIGNALS PRINCIPALES
     # ===============================
     
     # Operaciones CRUD
@@ -36,10 +36,16 @@ class LaboratorioModel(QObject):
     errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
     operacionExitosa = Signal(str, arguments=['mensaje'])
     
-    # SIGNAL SIMPLE PRINCIPAL (como consultas)
+    # Signals para datos
     examenesActualizados = Signal()
     tiposAnalisisActualizados = Signal()
     trabajadoresActualizados = Signal()
+    
+    # ✅ NUEVOS SIGNALS PARA PAGINACIÓN
+    currentPageChanged = Signal()
+    totalPagesChanged = Signal() 
+    itemsPerPageChanged = Signal()
+    totalRecordsChanged = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,23 +53,23 @@ class LaboratorioModel(QObject):
         # Repository
         self.repository = LaboratorioRepository()
         
-        # Estados internos SIMPLES (como consultas)
+        # Estados internos
         self._examenesData = []
         self._tiposAnalisisData = []
         self._trabajadoresData = []
         self._estadoActual = "listo"
         
-        # PROPIEDADES DE PAGINACIÓN SIMPLES
+        # ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
         self._currentPage = 0
         self._totalPages = 0
-        self._itemsPerPage = 11
+        self._itemsPerPage = 6  # ✅ CAMBIO: Default a 6 en lugar de 11
         self._totalRecords = 0
         
         # Configuración
         self._autoRefreshInterval = 30000
         
     # ===============================
-    # PROPERTIES SIMPLES (como consultas)
+    # PROPERTIES BÁSICAS
     # ===============================
     
     def _get_examenes_json(self) -> str:
@@ -88,11 +94,42 @@ class LaboratorioModel(QObject):
             self._estadoActual = nuevo_estado
             self.estadoCambiado.emit(nuevo_estado)
     
-    # Properties expuestas a QML
+    # Properties básicas expuestas a QML
     examenesJson = Property(str, _get_examenes_json, notify=examenesActualizados)
     tiposAnalisisJson = Property(str, _get_tipos_analisis_json, notify=tiposAnalisisActualizados)
     trabajadoresJson = Property(str, _get_trabajadores_json, notify=trabajadoresActualizados)
     estadoActual = Property(str, _get_estado_actual, notify=estadoCambiado)
+    
+    # ✅ NUEVAS PROPERTIES DE PAGINACIÓN PARA QML
+    
+    def _get_current_page(self) -> int:
+        """Getter para página actual"""
+        return self._currentPage
+
+    def _get_total_pages(self) -> int:
+        """Getter para total de páginas"""
+        return self._totalPages
+
+    def _get_items_per_page(self) -> int:
+        """Getter para elementos por página"""
+        return self._itemsPerPage
+
+    def _set_items_per_page(self, value: int):
+        """Setter para elementos por página - PERMITE QUE QML CONFIGURE EL VALOR"""
+        if value != self._itemsPerPage and value > 0:
+            print(f"📊 ItemsPerPage actualizado desde QML: {self._itemsPerPage} -> {value}")
+            self._itemsPerPage = value
+            self.itemsPerPageChanged.emit()
+
+    def _get_total_records(self) -> int:
+        """Getter para total de registros"""
+        return self._totalRecords
+
+    # ✅ PROPERTIES EXPUESTAS A QML PARA PAGINACIÓN
+    currentPageProperty = Property(int, _get_current_page, notify=currentPageChanged)
+    totalPagesProperty = Property(int, _get_total_pages, notify=totalPagesChanged)
+    itemsPerPageProperty = Property(int, _get_items_per_page, _set_items_per_page, notify=itemsPerPageChanged)
+    totalRecordsProperty = Property(int, _get_total_records, notify=totalRecordsChanged)
     
     # Properties para compatibilidad con QML existente
     @Property(list, notify=examenesActualizados)
@@ -111,12 +148,12 @@ class LaboratorioModel(QObject):
         return self._trabajadoresData
     
     # ===============================
-    # SLOTS PRINCIPALES SIMPLIFICADOS
+    # SLOTS PRINCIPALES CORREGIDOS
     # ===============================
     
     @Slot(int, int, 'QVariant', result='QVariant')
-    def obtener_examenes_paginados(self, page: int, limit: int = 5, filters=None):
-        """Obtiene página específica de exámenes - SIMPLIFICADO como consultas"""
+    def obtener_examenes_paginados(self, page: int, limit: int = 6, filters=None):
+        """✅ CORREGIDO: Obtiene página específica usando _itemsPerPage configurado desde QML"""
         try:
             # Convertir filtros
             filtros_dict = filters.toVariant() if hasattr(filters, 'toVariant') else filters or {}
@@ -124,14 +161,15 @@ class LaboratorioModel(QObject):
             # Validar parámetros
             if page < 0:
                 page = 0
-            if limit <= 0:
-                limit = 11
+                
+            # ✅ USAR EL VALOR CONFIGURADO DESDE QML, NO EL PARÁMETRO limit
+            limit_real = self._itemsPerPage
             
-            print(f"📖 Obteniendo página {page + 1} con {limit} elementos")
+            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos (configurado desde QML)")
             
             # Obtener datos paginados del repository
             resultado = self.repository.get_paginated_exams_with_details(
-                page, limit, 
+                page, limit_real,  # ✅ USAR limit_real
                 filtros_dict.get('search_term', ''),
                 filtros_dict.get('tipo_analisis', ''),
                 filtros_dict.get('tipo_servicio', ''),
@@ -139,24 +177,36 @@ class LaboratorioModel(QObject):
                 filtros_dict.get('fecha_hasta', '')
             )
             
-            # Actualizar propiedades internas
+            # ✅ ACTUALIZAR PROPIEDADES Y EMITIR SEÑALES
+            old_page = self._currentPage
+            old_total_pages = self._totalPages
+            old_total_records = self._totalRecords
+
             self._currentPage = page
-            self._itemsPerPage = limit
             self._totalRecords = resultado.get('total_records', 0)
-            self._totalPages = max(1, (self._totalRecords + limit - 1) // limit)
+            self._totalPages = max(1, (self._totalRecords + limit_real - 1) // limit_real)
             
             # Actualizar datos internos
             self._examenesData = resultado.get('examenes', [])
             
-            # Emitir signal simple
+            # ✅ EMITIR SEÑALES SOLO SI LAS PROPIEDADES CAMBIARON
+            if old_page != self._currentPage:
+                self.currentPageChanged.emit()
+            if old_total_pages != self._totalPages:
+                self.totalPagesChanged.emit()
+            if old_total_records != self._totalRecords:
+                self.totalRecordsChanged.emit()
+                
+            # Emitir signal de datos actualizados
             self.examenesActualizados.emit()
             
             print(f"✅ Página {page + 1} cargada: {len(self._examenesData)} registros de {self._totalRecords}")
+            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
             
             return {
                 'examenes': self._examenesData,
                 'page': page,
-                'limit': limit,
+                'limit': limit_real,
                 'total_records': self._totalRecords,
                 'total_pages': self._totalPages
             }
@@ -171,9 +221,11 @@ class LaboratorioModel(QObject):
     def aplicar_filtros_y_recargar(self, search_term: str = "", tipo_analisis: str = "", 
                                   tipo_servicio: str = "", fecha_desde: str = "", 
                                   fecha_hasta: str = ""):
-        """Aplica filtros y regresa a la primera página - SIMPLIFICADO"""
+        """✅ CORREGIDO: Aplica filtros y regresa a la primera página usando _itemsPerPage"""
         try:
-            self._currentPage = 0 # resetea a pagina 0 siempre que cambien los filtros
+            # Resetear a página 0 siempre que cambien los filtros
+            self._currentPage = 0
+            
             # Limpiar parámetros
             search_term = search_term.strip() if search_term else ""
             tipo_analisis = tipo_analisis.strip() if tipo_analisis else ""
@@ -193,7 +245,8 @@ class LaboratorioModel(QObject):
             # Invalidar cache
             self.repository.invalidate_laboratory_caches()
             
-            # Recargar desde página 0
+            # ✅ USAR _itemsPerPage EN LUGAR DE VALOR FIJO
+            print(f"🔄 Aplicando filtros con {self._itemsPerPage} elementos por página")
             self.obtener_examenes_paginados(0, self._itemsPerPage, filtros)
             
         except Exception as e:
@@ -264,7 +317,7 @@ class LaboratorioModel(QObject):
                 self.errorOcurrido.emit("Apellido paterno es obligatorio", 'VALIDATION_ERROR')
                 return -1
             
-            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"📄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
             
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
@@ -339,6 +392,7 @@ class LaboratorioModel(QObject):
             self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
+
     @Slot(int, int, str, int, str, result=str)
     def actualizarExamen(self, examen_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                         trabajador_id: int = 0, detalles: str = "") -> str:
@@ -460,7 +514,7 @@ class LaboratorioModel(QObject):
     
     @Slot()
     def refrescarDatos(self):
-        """Refresca todos los datos del modelo"""
+        """✅ CORREGIDO: Refresca todos los datos del modelo usando _itemsPerPage"""
         try:
             self._set_estado_actual("cargando")
             
@@ -482,14 +536,14 @@ class LaboratorioModel(QObject):
             self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
             self._set_estado_actual("error")
     
-    
     # ===============================
-    # MÉTODOS INTERNOS SIMPLES
+    # MÉTODOS INTERNOS CORREGIDOS
     # ===============================
     
     def _cargar_examenes_actuales(self):
-        """Carga exámenes actuales sin filtros - MÉTODO INTERNO SIMPLE"""
+        """✅ CORREGIDO: Carga exámenes actuales usando _itemsPerPage configurado"""
         try:
+            print(f"🔄 Recargando exámenes con {self._itemsPerPage} elementos por página")
             # Usar el método de paginación con filtros vacíos
             self.obtener_examenes_paginados(self._currentPage, self._itemsPerPage, {})
         except Exception as e:
@@ -504,4 +558,4 @@ class LaboratorioModel(QObject):
 def register_laboratorio_model():
     """Registra el modelo para uso en QML"""
     qmlRegisterType(LaboratorioModel, "Clinica.Models", 1, 0, "LaboratorioModel")
-    print("✅ LaboratorioModel registrado para QML con lógica simplificada")
+    print("✅ LaboratorioModel registrado para QML con paginación exitosa")
