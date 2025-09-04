@@ -1,19 +1,17 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import ClinicaModels 1.0
 
 Item {
     id: configTiposGastosRoot
     
-    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
-    property alias tiposGastos: configTiposGastosRoot.tiposGastosData
+    // ===== CONEXIÓN CON EL MODELO =====
+    property var configuracionModel: appController ? appController.configuracion_model_instance : null
     
     // ===== SEÑALES PARA VOLVER =====
     signal volverClicked()
     signal backToMain()
-    
-    // ===== DATOS INTERNOS =====
-    property var tiposGastosData: []
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -48,53 +46,147 @@ Item {
     
     // ===== ESTADO DE EDICIÓN =====
     property bool isEditMode: false
+    property int editingId: -1
     property int editingIndex: -1
     
-    // ===== FUNCIONES =====
+    // ===== CONEXIONES CON EL MODELO =====
+    Connections {
+        target: configuracionModel
+        
+        function onTipoGastoCreado(success, message) {
+            if (success) {
+                limpiarFormulario()
+                mostrarNotificacion("Éxito", message, "success")
+            } else {
+                mostrarNotificacion("Error", message, "error")
+            }
+        }
+        
+        function onTipoGastoActualizado(success, message) {
+            if (success) {
+                limpiarFormulario()
+                mostrarNotificacion("Éxito", message, "success")
+            } else {
+                mostrarNotificacion("Error", message, "error")
+            }
+        }
+        
+        function onTipoGastoEliminado(success, message) {
+            if (success) {
+                mostrarNotificacion("Éxito", message, "success")
+            } else {
+                mostrarNotificacion("Error", message, "error")
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            mostrarNotificacion(title, message, "error")
+        }
+        
+        function onWarningMessage(message) {
+            mostrarNotificacion("Advertencia", message, "warning")
+        }
+    }
+    
+    // ===== FUNCIONES MODIFICADAS PARA USAR EL MODELO =====
     function limpiarFormulario() {
         nuevoTipoGastoNombre.text = ""
         nuevoTipoGastoDescripcion.text = ""
         isEditMode = false
+        editingId = -1
         editingIndex = -1
     }
     
     function editarTipoGasto(index) {
-        if (index >= 0 && index < tiposGastosData.length) {
-            var tipoGasto = tiposGastosData[index]
-            nuevoTipoGastoNombre.text = tipoGasto.nombre
-            nuevoTipoGastoDescripcion.text = tipoGasto.descripcion
+        if (!configuracionModel || !configuracionModel.tiposGastos) return
+        
+        var tiposGastos = configuracionModel.tiposGastos
+        if (index >= 0 && index < tiposGastos.length) {
+            var tipoGasto = tiposGastos[index]
+            nuevoTipoGastoNombre.text = tipoGasto.Nombre || ""
+            nuevoTipoGastoDescripcion.text = tipoGasto.descripcion || ""
             isEditMode = true
+            editingId = tipoGasto.id || -1
             editingIndex = index
+            
+            console.log("✏️ Editando tipo de gasto:", JSON.stringify(tipoGasto))
         }
     }
     
     function eliminarTipoGasto(index) {
-        if (index >= 0 && index < tiposGastosData.length) {
-            tiposGastosData.splice(index, 1)
-            configTiposGastosRoot.tiposGastos = tiposGastosData
-            console.log("🗑️ Tipo de gasto eliminado en índice:", index)
+        if (!configuracionModel || !configuracionModel.tiposGastos) return
+        
+        var tiposGastos = configuracionModel.tiposGastos
+        if (index >= 0 && index < tiposGastos.length) {
+            var tipoGasto = tiposGastos[index]
+            var tipoId = tipoGasto.id
+            
+            // Mostrar diálogo de confirmación
+            confirmarEliminacion(tipoId, tipoGasto.Nombre || "")
+        }
+    }
+    
+    function confirmarEliminacion(tipoId, nombre) {
+        // Verificar si tiene gastos asociados
+        if (configuracionModel) {
+            var gastosAsociados = configuracionModel.obtenerGastosAsociados(tipoId)
+            
+            if (gastosAsociados > 0) {
+                mostrarNotificacion(
+                    "No se puede eliminar", 
+                    "Este tipo de gasto tiene " + gastosAsociados + " gastos asociados",
+                    "warning"
+                )
+                return
+            }
+            
+            // Proceder con eliminación
+            console.log("🗑️ Eliminando tipo de gasto ID:", tipoId)
+            configuracionModel.eliminarTipoGasto(tipoId)
         }
     }
     
     function guardarTipoGasto() {
-        var nuevoTipoGasto = {
-            nombre: nuevoTipoGastoNombre.text,
-            descripcion: nuevoTipoGastoDescripcion.text
+        if (!configuracionModel) return
+        
+        var nombre = nuevoTipoGastoNombre.text.trim()
+        var descripcion = nuevoTipoGastoDescripcion.text.trim()
+        
+        // Validaciones básicas
+        if (!nombre) {
+            mostrarNotificacion("Error de validación", "El nombre es obligatorio", "error")
+            return
         }
         
-        if (isEditMode && editingIndex >= 0) {
+        if (isEditMode && editingId > 0) {
             // Editar tipo de gasto existente
-            tiposGastosData[editingIndex] = nuevoTipoGasto
-            console.log("✏️ Tipo de gasto editado:", JSON.stringify(nuevoTipoGasto))
+            console.log("✏️ Actualizando tipo de gasto ID:", editingId)
+            configuracionModel.actualizarTipoGasto(editingId, nombre, descripcion)
         } else {
-            // Agregar nuevo tipo de gasto
-            tiposGastosData.push(nuevoTipoGasto)
-            console.log("➕ Nuevo tipo de gasto agregado:", JSON.stringify(nuevoTipoGasto))
+            // Crear nuevo tipo de gasto
+            console.log("➕ Creando nuevo tipo de gasto:", nombre)
+            configuracionModel.crearTipoGasto(nombre, descripcion)
         }
+    }
+    
+    function refrescarDatos() {
+        if (configuracionModel) {
+            configuracionModel.refrescarDatosInmediato()
+        }
+    }
+    
+    function mostrarNotificacion(titulo, mensaje, tipo) {
+        console.log("[" + tipo.toUpperCase() + "] " + titulo + ": " + mensaje)
         
-        // Actualizar el modelo y limpiar
-        configTiposGastosRoot.tiposGastos = tiposGastosData
-        limpiarFormulario()
+        // Aquí puedes agregar lógica para mostrar notificaciones visuales
+        // Por ejemplo, un Toast, ToolTip, o cambiar color de algún elemento
+        notificacionTexto.text = titulo + ": " + mensaje
+        notificacionRectangle.color = tipo === "error" ? dangerColor : 
+                                    tipo === "warning" ? warningColor : successColor
+        notificacionRectangle.visible = true
+        
+        // Ocultar después de 3 segundos
+        notificacionTimer.restart()
     }
     
     // ===== LAYOUT PRINCIPAL =====
@@ -102,7 +194,7 @@ Item {
         anchors.fill: parent
         spacing: 0
         
-        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE) =====
+        // ===== HEADER PRINCIPAL UNIFICADO =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: baseUnit * 12
@@ -138,7 +230,6 @@ Item {
                     }
                     
                     onClicked: {
-                        // Emitir señal para volver a la vista principal
                         if (typeof changeView !== "undefined") {
                             changeView("main")
                         } else {
@@ -185,6 +276,53 @@ Item {
                         font.family: "Segoe UI"
                     }
                 }
+                
+                // ===== BOTÓN DE REFRESCAR =====
+                Button {
+                    Layout.preferredWidth: baseUnit * 6
+                    Layout.preferredHeight: baseUnit * 6
+                    text: "🔄"
+                    enabled: configuracionModel && !configuracionModel.loading
+                    
+                    background: Rectangle {
+                        color: backgroundColor
+                        radius: baseUnit * 0.8
+                        opacity: parent.pressed ? 0.8 : 1.0
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: primaryColor
+                        font.pixelSize: baseUnit * 2
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: refrescarDatos()
+                }
+            }
+        }
+        
+        // ===== NOTIFICACIÓN =====
+        Rectangle {
+            id: notificacionRectangle
+            Layout.fillWidth: true
+            Layout.preferredHeight: baseUnit * 4
+            color: successColor
+            visible: false
+            
+            Label {
+                id: notificacionTexto
+                anchors.centerIn: parent
+                color: backgroundColor
+                font.bold: true
+                font.family: "Segoe UI"
+            }
+            
+            Timer {
+                id: notificacionTimer
+                interval: 3000
+                onTriggered: notificacionRectangle.visible = false
             }
         }
         
@@ -203,6 +341,7 @@ Item {
                 GroupBox {
                     Layout.fillWidth: true
                     title: isEditMode ? "Editar Tipo de Gasto" : "Agregar Nuevo Tipo de Gasto"
+                    enabled: configuracionModel && !configuracionModel.loading
                     
                     background: Rectangle {
                         color: backgroundColor
@@ -234,7 +373,7 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Nombre del Tipo de Gasto:"
+                                    text: "Nombre del Tipo de Gasto: *"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase
@@ -249,8 +388,8 @@ Item {
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: parent.activeFocus ? primaryColor : borderColor
+                                        border.width: parent.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -272,13 +411,13 @@ Item {
                                     id: nuevoTipoGastoDescripcion
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: baseUnit * 4.5
-                                    placeholderText: "Descripción del tipo de gasto"
+                                    placeholderText: "Descripción del tipo de gasto (opcional)"
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: parent.activeFocus ? primaryColor : borderColor
+                                        border.width: parent.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -326,7 +465,7 @@ Item {
                                 
                                 Button {
                                     text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                    enabled: nuevoTipoGastoNombre.text && nuevoTipoGastoDescripcion.text
+                                    enabled: nuevoTipoGastoNombre.text.trim() !== ""
                                     Layout.preferredWidth: baseUnit * 15
                                     Layout.preferredHeight: baseUnit * 4.5
                                     
@@ -367,7 +506,7 @@ Item {
                         anchors.fill: parent
                         spacing: 0
                         
-                        // TÍTULO
+                        // TÍTULO SIN CONTADOR
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -380,17 +519,46 @@ Item {
                                 color: parent.color
                             }
                             
-                            Label {
-                                anchors.centerIn: parent
-                                text: "💰 Tipos de Gastos Registrados"
-                                font.pixelSize: fontMedium
-                                font.bold: true
-                                color: textColor
-                                font.family: "Segoe UI"
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: marginMedium
+                                
+                                Label {
+                                    text: "💰 Tipos de Gastos Registrados"
+                                    font.pixelSize: fontMedium
+                                    font.bold: true
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                // INDICADOR DE LOADING
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 4
+                                    Layout.preferredHeight: baseUnit * 4
+                                    color: "transparent"
+                                    visible: configuracionModel && configuracionModel.loading
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "⏳"
+                                        font.pixelSize: fontBase
+                                        
+                                        RotationAnimation {
+                                            target: parent
+                                            from: 0
+                                            to: 360
+                                            duration: 1000
+                                            running: configuracionModel && configuracionModel.loading
+                                            loops: Animation.Infinite
+                                        }
+                                    }
+                                }
                             }
                         }
                         
-                        // ENCABEZADOS
+                        // ENCABEZADOS SIN COLUMNA GASTOS
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -440,7 +608,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.45
+                                    Layout.preferredWidth: parent.width * 0.4
                                     Layout.fillHeight: true
                                     text: "DESCRIPCIÓN"
                                     font.bold: true
@@ -458,7 +626,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.15
+                                    Layout.preferredWidth: parent.width * 0.2
                                     Layout.fillHeight: true
                                     text: "ACCIONES"
                                     font.bold: true
@@ -471,7 +639,7 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO
+                        // CONTENIDO SIN COLUMNA GASTOS
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -479,7 +647,7 @@ Item {
                             
                             ListView {
                                 id: tiposGastosList
-                                model: tiposGastosData
+                                model: configuracionModel ? configuracionModel.tiposGastos : []
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
@@ -496,9 +664,9 @@ Item {
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.1
                                             Layout.fillHeight: true
-                                            text: (index + 1).toString()
+                                            text: modelData.id ? modelData.id.toString() : "N/A"
                                             color: textSecondaryColor
-                                            font.pixelSize: fontBase
+                                            font.pixelSize: fontSmall
                                             font.family: "Segoe UI"
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
@@ -513,13 +681,14 @@ Item {
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.3
                                             Layout.fillHeight: true
-                                            text: modelData.nombre
+                                            text: modelData.Nombre || "Sin nombre"
                                             font.bold: true
                                             color: primaryColor
                                             font.pixelSize: fontBase
                                             font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
+                                            horizontalAlignment: Text.AlignLeft
                                             verticalAlignment: Text.AlignVCenter
+                                            leftPadding: marginSmall
                                             wrapMode: Text.WordWrap
                                             elide: Text.ElideRight
                                         }
@@ -531,14 +700,15 @@ Item {
                                         }
                                         
                                         Label {
-                                            Layout.preferredWidth: parent.width * 0.45
+                                            Layout.preferredWidth: parent.width * 0.4
                                             Layout.fillHeight: true
-                                            text: modelData.descripcion
-                                            color: textColor
+                                            text: modelData.descripcion || "Sin descripción"
+                                            color: modelData.descripcion ? textColor : textSecondaryColor
                                             font.pixelSize: fontSmall
                                             font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
+                                            horizontalAlignment: Text.AlignLeft
                                             verticalAlignment: Text.AlignVCenter
+                                            leftPadding: marginSmall
                                             wrapMode: Text.WordWrap
                                             elide: Text.ElideRight
                                             maximumLineCount: 2
@@ -551,7 +721,7 @@ Item {
                                         }
                                         
                                         RowLayout {
-                                            Layout.preferredWidth: parent.width * 0.15
+                                            Layout.preferredWidth: parent.width * 0.2
                                             Layout.fillHeight: true
                                             spacing: marginSmall
                                             
@@ -607,7 +777,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: "transparent"
-                            visible: tiposGastosData.length === 0
+                            visible: configuracionModel && configuracionModel.totalTiposGastos === 0 && !configuracionModel.loading
                             
                             ColumnLayout {
                                 anchors.centerIn: parent
@@ -646,15 +816,13 @@ Item {
         }
     }
     
-    // ===== EVENTOS =====
-    onTiposGastosChanged: {
-        if (tiposGastos && tiposGastos !== tiposGastosData) {
-            tiposGastosData = tiposGastos
-            console.log("🔄 Datos de tipos de gastos actualizados desde exterior")
-        }
-    }
-    
+    // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
         console.log("💰 Componente de configuración de tipos de gastos iniciado")
+        if (configuracionModel) {
+            console.log("✅ ConfiguracionModel conectado correctamente")
+        } else {
+            console.log("❌ ConfiguracionModel no disponible")
+        }
     }
 }

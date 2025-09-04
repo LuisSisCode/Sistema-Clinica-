@@ -1173,29 +1173,15 @@ Item {
     }
     
     // ===== COMPONENTES DE CONFIGURACIÓN ESPECÍFICA SIN HEADERS =====
-    
-    // ===== COMPONENTE DE LABORATORIO SIMPLIFICADO =====
     Component {
         id: laboratorioConfigComponent
         Rectangle {
             color: surfaceColor
             
-            // Contenido directo del módulo
             ConfiLaboratorio {
                 id: configLaboratorioComponent
                 anchors.fill: parent
                 anchors.margins: marginMedium
-                
-                // Conectar el alias a la propiedad del root
-                tiposAnalisis: configuracionRoot.tiposAnalisisModel
-                
-                // Propagación de cambios de vuelta al modelo padre
-                onTiposAnalisisChanged: {
-                    if (tiposAnalisis && tiposAnalisis !== configuracionRoot.tiposAnalisisModel) {
-                        configuracionRoot.tiposAnalisisModel = tiposAnalisis
-                        console.log("🔄 Tipos de análisis actualizados hacia el modelo padre")
-                    }
-                }
             }
         }
     }
@@ -1211,17 +1197,6 @@ Item {
                 id: configEnfermeriaComponent
                 anchors.fill: parent
                 anchors.margins: marginMedium
-                
-                // Conectar con el nombre correcto
-                tiposProcedimientosData: configuracionRoot.tiposProcedimientosModel
-                
-                // Conectar al evento correcto
-                onTiposProcedimientosChanged: {
-                    if (tiposProcedimientos && tiposProcedimientos !== configuracionRoot.tiposProcedimientosModel) {
-                        configuracionRoot.tiposProcedimientosModel = tiposProcedimientos
-                        console.log("🔄 Tipos de procedimientos actualizados hacia el modelo padre")
-                    }
-                }
             }
         }
     }
@@ -1237,17 +1212,6 @@ Item {
                 id: configConsultasComponent
                 anchors.fill: parent
                 anchors.margins: marginMedium
-                
-                // Conectar el alias a la propiedad del root
-                especialidades: configuracionRoot.especialidadesModel
-                
-                // Propagación de cambios de vuelta al modelo padre
-                onEspecialidadesChanged: {
-                    if (especialidades && especialidades !== configuracionRoot.especialidadesModel) {
-                        configuracionRoot.especialidadesModel = especialidades
-                        console.log("🔄 Especialidades actualizadas hacia el modelo padre")
-                    }
-                }
             }
         }
     }
@@ -1263,17 +1227,6 @@ Item {
                 id: configServiciosBasicosComponent
                 anchors.fill: parent
                 anchors.margins: marginMedium
-                
-                // Conectar el alias a la propiedad del root
-                tiposGastos: configuracionRoot.tiposGastosModel
-                
-                // Propagación de cambios de vuelta al modelo padre
-                onTiposGastosChanged: {
-                    if (tiposGastos && tiposGastos !== configuracionRoot.tiposGastosModel) {
-                        configuracionRoot.tiposGastosModel = tiposGastos
-                        console.log("🔄 Tipos de gastos actualizados hacia el modelo padre")
-                    }
-                }
             }
         }
     }

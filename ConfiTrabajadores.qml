@@ -54,8 +54,6 @@ Item {
     function limpiarFormulario() {
         nuevoTipoNombre.text = ""
         nuevoTipoDescripcion.text = ""
-        nuevoTipoEspecialidades.text = ""
-        nuevoTipoRequiereMatricula.checked = false
         isEditMode = false
         editingIndex = -1
     }
@@ -65,9 +63,6 @@ Item {
             var tipo = tiposTrabajadoresData[index]
             nuevoTipoNombre.text = tipo.nombre
             nuevoTipoDescripcion.text = tipo.descripcion
-            nuevoTipoEspecialidades.text = Array.isArray(tipo.especialidades) ? 
-                tipo.especialidades.join(", ") : tipo.especialidades
-            nuevoTipoRequiereMatricula.checked = tipo.requiereMatricula
             isEditMode = true
             editingIndex = index
         }
@@ -83,17 +78,9 @@ Item {
     }
     
     function guardarTipoTrabajador() {
-        // Convertir especialidades de string a array
-        var especialidadesArray = nuevoTipoEspecialidades.text
-            .split(",")
-            .map(function(item) { return item.trim() })
-            .filter(function(item) { return item.length > 0 })
-        
         var nuevoTipo = {
             nombre: nuevoTipoNombre.text,
-            descripcion: nuevoTipoDescripcion.text,
-            especialidades: especialidadesArray,
-            requiereMatricula: nuevoTipoRequiereMatricula.checked
+            descripcion: nuevoTipoDescripcion.text
         }
         
         if (isEditMode && editingIndex >= 0) {
@@ -190,7 +177,7 @@ Item {
                     }
                     
                     Label {
-                        text: "Gestiona los tipos de personal, especialidades y requisitos profesionales del sistema"
+                        text: "Gestiona los tipos de personal del sistema"
                         color: backgroundColor
                         font.pixelSize: fontBase * 0.9
                         wrapMode: Text.WordWrap
@@ -294,77 +281,6 @@ Item {
                                         border.color: borderColor
                                         border.width: 1
                                         radius: radiusSmall
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // ESPECIALIDADES Y CHECKBOX
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: marginMedium
-                            
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: marginSmall
-                                
-                                Label {
-                                    text: "Especialidades (separadas por comas):"
-                                    font.bold: true
-                                    color: textColor
-                                    font.pixelSize: fontSmall
-                                    font.family: "Segoe UI"
-                                }
-                                TextField {
-                                    id: nuevoTipoEspecialidades
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 4.5
-                                    placeholderText: "Ej: Medicina General, Medicina Familiar"
-                                    font.pixelSize: fontBase
-                                    font.family: "Segoe UI"
-                                    background: Rectangle {
-                                        color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
-                                        radius: radiusSmall
-                                    }
-                                }
-                            }
-                            
-                            ColumnLayout {
-                                spacing: marginSmall
-                                
-                                Label {
-                                    text: "Requisitos:"
-                                    font.bold: true
-                                    color: textColor
-                                    font.pixelSize: fontSmall
-                                    font.family: "Segoe UI"
-                                }
-                                
-                                CheckBox {
-                                    id: nuevoTipoRequiereMatricula
-                                    text: "Requiere Matrícula Profesional"
-                                    font.pixelSize: fontSmall
-                                    font.family: "Segoe UI"
-                                    
-                                    indicator: Rectangle {
-                                        implicitWidth: baseUnit * 2.5
-                                        implicitHeight: baseUnit * 2.5
-                                        x: parent.leftPadding
-                                        y: parent.height / 2 - height / 2
-                                        radius: radiusSmall
-                                        border.color: borderColor
-                                        border.width: 1
-                                        color: parent.checked ? primaryColor : backgroundColor
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "✓"
-                                            color: backgroundColor
-                                            font.pixelSize: fontSmall
-                                            visible: parent.parent.checked
-                                        }
                                     }
                                 }
                             }
@@ -481,7 +397,7 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.20
+                                    Layout.preferredWidth: parent.width * 0.35
                                     text: "TIPO"
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -497,7 +413,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.25
+                                    Layout.preferredWidth: parent.width * 0.45
                                     text: "DESCRIPCIÓN"
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -513,39 +429,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.25
-                                    text: "ESPECIALIDADES"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                    color: textColor
-                                    font.family: "Segoe UI"
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
-                                
-                                Label {
-                                    Layout.preferredWidth: parent.width * 0.15
-                                    text: "MATRÍCULA"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                    color: textColor
-                                    font.family: "Segoe UI"
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
-                                
-                                Label {
-                                    Layout.preferredWidth: parent.width * 0.15
+                                    Layout.preferredWidth: parent.width * 0.20
                                     text: "ACCIONES"
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -579,7 +463,7 @@ Item {
                                         spacing: marginSmall
                                         
                                         Label {
-                                            Layout.preferredWidth: parent.width * 0.20
+                                            Layout.preferredWidth: parent.width * 0.35
                                             text: modelData.nombre
                                             font.bold: true
                                             color: primaryColor
@@ -598,7 +482,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            Layout.preferredWidth: parent.width * 0.25
+                                            Layout.preferredWidth: parent.width * 0.45
                                             text: modelData.descripcion
                                             color: textColor
                                             font.pixelSize: fontSmall
@@ -616,45 +500,9 @@ Item {
                                             color: borderColor
                                         }
                                         
-                                        Label {
-                                            Layout.preferredWidth: parent.width * 0.25
-                                            text: Array.isArray(modelData.especialidades) ? 
-                                                modelData.especialidades.join(", ") : modelData.especialidades
-                                            color: textSecondaryColor
-                                            font.pixelSize: fontTiny
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            wrapMode: Text.WordWrap
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 3
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
-                                        
-                                        Label {
-                                            Layout.preferredWidth: parent.width * 0.15
-                                            text: modelData.requiereMatricula ? "✓ Sí" : "✗ No"
-                                            color: modelData.requiereMatricula ? successColor : dangerColor
-                                            font.bold: true
-                                            font.pixelSize: fontSmall
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
-                                        
                                         RowLayout {
-                                            Layout.preferredWidth: parent.width * 0.15
+                                            Layout.preferredWidth: parent.width * 0.20
+                                            Layout.alignment: Qt.AlignHCenter
                                             spacing: marginSmall
                                             
                                             Button {

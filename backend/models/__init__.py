@@ -22,6 +22,7 @@ from .trabajador_model import TrabajadorModel, register_trabajador_model     # 1
 from .usuario_model import UsuarioModel, register_usuario_model                     # 11
 from .venta_model import VentaModel, register_venta_model                           # 12
 
+
 __all__ = [
     'AuthModel', 'register_auth_model',
     'CompraModel', 'register_compra_model',

@@ -1,19 +1,17 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import ClinicaModels 1.0
 
 Item {
     id: configAnalisisRoot
     
-    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
-    property alias tiposAnalisis: configAnalisisRoot.tiposAnalisisData
+    // ===== CONEXIÓN CON EL MODELO =====
+    property var confiLaboratorioModel: appController ? appController.confi_laboratorio_model_instance : null
     
-    // ===== SEÑAL PARA VOLVER =====
+    // ===== SEÑALES PARA VOLVER =====
     signal volverClicked()
     signal backToMain()
-    
-    // ===== DATOS INTERNOS =====
-    property var tiposAnalisisData: []
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -48,66 +46,145 @@ Item {
     
     // ===== ESTADO DE EDICIÓN =====
     property bool isEditMode: false
+    property int editingId: -1
     property int editingIndex: -1
     
-    // ===== FUNCIONES =====
+    // ===== CONEXIONES CON EL MODELO =====
+    Connections {
+        target: confiLaboratorioModel
+        
+        function onTipoAnalisisCreado(success, message) {
+            if (success) {
+                limpiarFormulario()
+                mostrarNotificacion("Éxito", message, "success")
+            } else {
+                mostrarNotificacion("Error", message, "error")
+            }
+        }
+        
+        function onTipoAnalisisActualizado(success, message) {
+            if (success) {
+                limpiarFormulario()
+                mostrarNotificacion("Éxito", message, "success")
+            } else {
+                mostrarNotificacion("Error", message, "error")
+            }
+        }
+        
+        function onTipoAnalisisEliminado(success, message) {
+            if (success) {
+                mostrarNotificacion("Éxito", message, "success")
+            } else {
+                mostrarNotificacion("Error", message, "error")
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            mostrarNotificacion(title, message, "error")
+        }
+        
+        function onWarningMessage(message) {
+            mostrarNotificacion("Advertencia", message, "warning")
+        }
+    }
+    
+    // ===== FUNCIONES MODIFICADAS PARA USAR EL MODELO =====
     function limpiarFormulario() {
         nuevoAnalisisNombre.text = ""
         nuevoAnalisisTipo.text = ""
         nuevoAnalisisPrecioNormal.text = ""
         nuevoAnalisisPrecioEmergencia.text = ""
         isEditMode = false
+        editingId = -1
         editingIndex = -1
     }
     
     function editarAnalisis(index) {
-        if (index >= 0 && index < tiposAnalisisData.length) {
-            var analisis = tiposAnalisisData[index]
-            nuevoAnalisisNombre.text = analisis.nombre
-            nuevoAnalisisTipo.text = analisis.tipo
-            nuevoAnalisisPrecioNormal.text = analisis.precioNormal.toString()
-            nuevoAnalisisPrecioEmergencia.text = analisis.precioEmergencia.toString()
+        if (!confiLaboratorioModel || !confiLaboratorioModel.tiposAnalisis) return
+        
+        var tiposAnalisis = confiLaboratorioModel.tiposAnalisis
+        if (index >= 0 && index < tiposAnalisis.length) {
+            var analisis = tiposAnalisis[index]
+            nuevoAnalisisNombre.text = analisis.Nombre || ""
+            nuevoAnalisisTipo.text = analisis.Descripcion || ""
+            nuevoAnalisisPrecioNormal.text = analisis.Precio_Normal ? analisis.Precio_Normal.toString() : "0"
+            nuevoAnalisisPrecioEmergencia.text = analisis.Precio_Emergencia ? analisis.Precio_Emergencia.toString() : "0"
             isEditMode = true
+            editingId = analisis.id || -1
             editingIndex = index
+            
+            console.log("✏️ Editando tipo de análisis:", JSON.stringify(analisis))
         }
     }
     
     function eliminarAnalisis(index) {
-        if (!tiposAnalisisData) {
-            tiposAnalisisData = []
-            return
-        }
+        if (!confiLaboratorioModel || !confiLaboratorioModel.tiposAnalisis) return
         
-        if (index >= 0 && index < tiposAnalisisData.length) {
-            tiposAnalisisData.splice(index, 1)
-            configAnalisisRoot.tiposAnalisis = tiposAnalisisData
-            console.log("🗑️ Análisis eliminado en índice:", index)
+        var tiposAnalisis = confiLaboratorioModel.tiposAnalisis
+        if (index >= 0 && index < tiposAnalisis.length) {
+            var analisis = tiposAnalisis[index]
+            var analisisId = analisis.id
+            
+            // Mostrar diálogo de confirmación
+            confirmarEliminacion(analisisId, analisis.Nombre || "")
+        }
+    }
+    
+    function confirmarEliminacion(analisisId, nombre) {
+        // Proceder con eliminación directa
+        if (confiLaboratorioModel) {
+            console.log("🗑️ Eliminando tipo de análisis ID:", analisisId)
+            confiLaboratorioModel.eliminarTipoAnalisis(analisisId)
         }
     }
     
     function guardarAnalisis() {
-        if (!tiposAnalisisData) {
-            tiposAnalisisData = []
+        if (!confiLaboratorioModel) return
+        
+        var nombre = nuevoAnalisisNombre.text.trim()
+        var descripcion = nuevoAnalisisTipo.text.trim()
+        var precioNormal = parseFloat(nuevoAnalisisPrecioNormal.text) || 0
+        var precioEmergencia = parseFloat(nuevoAnalisisPrecioEmergencia.text) || 0
+        
+        // Validaciones básicas
+        if (!nombre) {
+            mostrarNotificacion("Error de validación", "El nombre es obligatorio", "error")
+            return
         }
         
-        var nuevoAnalisis = {
-            nombre: nuevoAnalisisNombre.text,
-            tipo: nuevoAnalisisTipo.text,
-            descripcion: nuevoAnalisisTipo.text, // Usar tipo como descripcion
-            precioNormal: parseFloat(nuevoAnalisisPrecioNormal.text),
-            precioEmergencia: parseFloat(nuevoAnalisisPrecioEmergencia.text)
+        if (precioNormal < 0 || precioEmergencia < 0) {
+            mostrarNotificacion("Error de validación", "Los precios no pueden ser negativos", "error")
+            return
         }
         
-        if (isEditMode && editingIndex >= 0) {
-            tiposAnalisisData[editingIndex] = nuevoAnalisis
-            console.log("✏️ Análisis editado:", JSON.stringify(nuevoAnalisis))
+        if (isEditMode && editingId > 0) {
+            // Editar tipo de análisis existente
+            console.log("✏️ Actualizando tipo de análisis ID:", editingId)
+            confiLaboratorioModel.actualizarTipoAnalisis(editingId, nombre, descripcion, precioNormal, precioEmergencia)
         } else {
-            tiposAnalisisData.push(nuevoAnalisis)
-            console.log("➕ Nuevo análisis agregado:", JSON.stringify(nuevoAnalisis))
+            // Crear nuevo tipo de análisis
+            console.log("➕ Creando nuevo tipo de análisis:", nombre)
+            confiLaboratorioModel.crearTipoAnalisis(nombre, descripcion, precioNormal, precioEmergencia)
         }
+    }
+    
+    function refrescarDatos() {
+        if (confiLaboratorioModel) {
+            confiLaboratorioModel.refrescarDatosInmediato()
+        }
+    }
+    
+    function mostrarNotificacion(titulo, mensaje, tipo) {
+        console.log("[" + tipo.toUpperCase() + "] " + titulo + ": " + mensaje)
         
-        configAnalisisRoot.tiposAnalisis = tiposAnalisisData
-        limpiarFormulario()
+        // Mostrar notificación visual
+        notificacionTexto.text = titulo + ": " + mensaje
+        notificacionRectangle.color = tipo === "error" ? dangerColor : 
+                                    tipo === "warning" ? warningColor : successColor
+        notificacionRectangle.visible = true
+        
+        // Ocultar después de 3 segundos
+        notificacionTimer.restart()
     }
     
     // ===== LAYOUT PRINCIPAL =====
@@ -115,7 +192,7 @@ Item {
         anchors.fill: parent
         spacing: 0
         
-        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE CON USUARIOS) =====
+        // ===== HEADER PRINCIPAL UNIFICADO =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: baseUnit * 12
@@ -151,7 +228,6 @@ Item {
                     }
                     
                     onClicked: {
-                        // Emitir señal para volver a la vista principal
                         if (typeof changeView !== "undefined") {
                             changeView("main")
                         } else {
@@ -198,6 +274,53 @@ Item {
                         font.family: "Segoe UI"
                     }
                 }
+                
+                // ===== BOTÓN DE REFRESCAR =====
+                Button {
+                    Layout.preferredWidth: baseUnit * 6
+                    Layout.preferredHeight: baseUnit * 6
+                    text: "🔄"
+                    enabled: confiLaboratorioModel && !confiLaboratorioModel.loading
+                    
+                    background: Rectangle {
+                        color: backgroundColor
+                        radius: baseUnit * 0.8
+                        opacity: parent.pressed ? 0.8 : 1.0
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: primaryColor
+                        font.pixelSize: baseUnit * 2
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: refrescarDatos()
+                }
+            }
+        }
+        
+        // ===== NOTIFICACIÓN =====
+        Rectangle {
+            id: notificacionRectangle
+            Layout.fillWidth: true
+            Layout.preferredHeight: baseUnit * 4
+            color: successColor
+            visible: false
+            
+            Label {
+                id: notificacionTexto
+                anchors.centerIn: parent
+                color: backgroundColor
+                font.bold: true
+                font.family: "Segoe UI"
+            }
+            
+            Timer {
+                id: notificacionTimer
+                interval: 3000
+                onTriggered: notificacionRectangle.visible = false
             }
         }
         
@@ -216,6 +339,7 @@ Item {
                 GroupBox {
                     Layout.fillWidth: true
                     title: isEditMode ? "Editar Tipo de Análisis" : "Agregar Nuevo Tipo de Análisis"
+                    enabled: confiLaboratorioModel && !confiLaboratorioModel.loading
                     
                     background: Rectangle {
                         color: backgroundColor
@@ -236,7 +360,7 @@ Item {
                         anchors.fill: parent
                         spacing: marginMedium
                         
-                        // ===== PRIMERA FILA: NOMBRE Y TIPO/CATEGORÍA =====
+                        // ===== PRIMERA FILA: NOMBRE Y DESCRIPCIÓN =====
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: marginLarge
@@ -247,7 +371,7 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Nombre del Análisis:"
+                                    text: "Nombre del Análisis: *"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase
@@ -262,8 +386,8 @@ Item {
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: parent.activeFocus ? primaryColor : borderColor
+                                        border.width: parent.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -285,12 +409,13 @@ Item {
                                     id: nuevoAnalisisTipo
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: baseUnit * 4.5
+                                    placeholderText: "Descripción del análisis (opcional)"
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: parent.activeFocus ? primaryColor : borderColor
+                                        border.width: parent.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -302,13 +427,13 @@ Item {
                             Layout.fillWidth: true
                             spacing: marginMedium
                             
-                            // PRECIO NORMAL (fijo y pequeño)
+                            // PRECIO NORMAL
                             ColumnLayout {
                                 Layout.preferredWidth: 120
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Precio Normal:"
+                                    text: "Precio Normal: *"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontSmall
@@ -325,20 +450,20 @@ Item {
                                     horizontalAlignment: TextInput.AlignHCenter
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: parent.activeFocus ? primaryColor : borderColor
+                                        border.width: parent.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
                             }
                             
-                            // PRECIO EMERGENCIA (fijo y pequeño)
+                            // PRECIO EMERGENCIA
                             ColumnLayout {
                                 Layout.preferredWidth: 120
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Precio Emergencia:"
+                                    text: "Precio Emergencia: *"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontSmall
@@ -355,8 +480,8 @@ Item {
                                     horizontalAlignment: TextInput.AlignHCenter
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: parent.activeFocus ? primaryColor : borderColor
+                                        border.width: parent.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -407,9 +532,9 @@ Item {
                                     
                                     Button {
                                         text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                        enabled: nuevoAnalisisNombre.text && nuevoAnalisisTipo.text && 
-                                                nuevoAnalisisPrecioNormal.text && 
-                                                nuevoAnalisisPrecioEmergencia.text
+                                        enabled: nuevoAnalisisNombre.text.trim() !== "" && 
+                                                nuevoAnalisisPrecioNormal.text.trim() !== "" && 
+                                                nuevoAnalisisPrecioEmergencia.text.trim() !== ""
                                         Layout.preferredWidth: baseUnit * 12
                                         Layout.preferredHeight: baseUnit * 4.5
                                         
@@ -451,7 +576,7 @@ Item {
                         anchors.fill: parent
                         spacing: 0
                         
-                        // TÍTULO
+                        // TÍTULO CON CONTADOR
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -464,17 +589,61 @@ Item {
                                 color: parent.color
                             }
                             
-                            Label {
-                                anchors.centerIn: parent
-                                text: "🧪 Tipos de Análisis Registrados"
-                                font.pixelSize: fontMedium
-                                font.bold: true
-                                color: textColor
-                                font.family: "Segoe UI"
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: marginMedium
+                                
+                                Label {
+                                    text: "🧪 Tipos de Análisis Registrados"
+                                    font.pixelSize: fontMedium
+                                    font.bold: true
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 8
+                                    Layout.preferredHeight: baseUnit * 3
+                                    color: primaryColor
+                                    radius: baseUnit * 1.5
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: confiLaboratorioModel ? confiLaboratorioModel.totalTiposAnalisis.toString() : "0"
+                                        color: backgroundColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                // INDICADOR DE LOADING
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 4
+                                    Layout.preferredHeight: baseUnit * 4
+                                    color: "transparent"
+                                    visible: confiLaboratorioModel && confiLaboratorioModel.loading
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "⏳"
+                                        font.pixelSize: fontBase
+                                        
+                                        RotationAnimation {
+                                            target: parent
+                                            from: 0
+                                            to: 360
+                                            duration: 1000
+                                            running: confiLaboratorioModel && confiLaboratorioModel.loading
+                                            loops: Animation.Infinite
+                                        }
+                                    }
+                                }
                             }
                         }
                         
-                        // ENCABEZADOS - AJUSTADOS PARA NO DESBORDARSE
+                        // ENCABEZADOS
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -491,25 +660,6 @@ Item {
                                     Layout.preferredWidth: parent.width * 0.22
                                     Layout.fillHeight: true
                                     text: "ANÁLISIS"
-                                    font.bold: true
-                                    font.pixelSize: fontTiny
-                                    color: textColor
-                                    font.family: "Segoe UI"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    wrapMode: Text.WordWrap
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
-                                
-                                Label {
-                                    Layout.preferredWidth: parent.width * 0.18
-                                    Layout.fillHeight: true
-                                    text: "TIPO"
                                     font.bold: true
                                     font.pixelSize: fontTiny
                                     color: textColor
@@ -583,7 +733,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.11
+                                    Layout.preferredWidth: parent.width * 0.17
                                     Layout.fillHeight: true
                                     text: "ACCIONES"
                                     font.bold: true
@@ -605,7 +755,7 @@ Item {
                             
                             ListView {
                                 id: analisisList
-                                model: tiposAnalisisData
+                                model: confiLaboratorioModel ? confiLaboratorioModel.tiposAnalisis : []
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
@@ -622,7 +772,7 @@ Item {
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.22
                                             Layout.fillHeight: true
-                                            text: modelData.nombre
+                                            text: modelData.Nombre || "Sin nombre"
                                             font.bold: true
                                             color: primaryColor
                                             font.pixelSize: fontSmall
@@ -641,30 +791,10 @@ Item {
                                         }
                                         
                                         Label {
-                                            Layout.preferredWidth: parent.width * 0.18
-                                            Layout.fillHeight: true
-                                            text: modelData.tipo
-                                            color: textColor
-                                            font.pixelSize: fontSmall
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            wrapMode: Text.WordWrap
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 2
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
-                                        
-                                        Label {
                                             Layout.preferredWidth: parent.width * 0.25
                                             Layout.fillHeight: true
-                                            text: modelData.descripcion
-                                            color: textColor
+                                            text: modelData.Descripcion || "Sin descripción"
+                                            color: modelData.Descripcion ? textColor : textSecondaryColor
                                             font.pixelSize: fontTiny
                                             font.family: "Segoe UI"
                                             horizontalAlignment: Text.AlignHCenter
@@ -683,7 +813,7 @@ Item {
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
-                                            text: "Bs " + modelData.precioNormal.toFixed(2)
+                                            text: "Bs " + (modelData.Precio_Normal ? modelData.Precio_Normal.toFixed(2) : "0.00")
                                             color: successColor
                                             font.bold: true
                                             font.pixelSize: fontTiny
@@ -701,7 +831,7 @@ Item {
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.12
                                             Layout.fillHeight: true
-                                            text: "Bs " + modelData.precioEmergencia.toFixed(2)
+                                            text: "Bs " + (modelData.Precio_Emergencia ? modelData.Precio_Emergencia.toFixed(2) : "0.00")
                                             color: warningColor
                                             font.bold: true
                                             font.pixelSize: fontTiny
@@ -717,7 +847,7 @@ Item {
                                         }
                                         
                                         RowLayout {
-                                            Layout.preferredWidth: parent.width * 0.11
+                                            Layout.preferredWidth: parent.width * 0.17
                                             Layout.fillHeight: true
                                             spacing: marginTiny
                                             
@@ -773,7 +903,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: "transparent"
-                            visible: tiposAnalisisData.length === 0
+                            visible: confiLaboratorioModel && confiLaboratorioModel.totalTiposAnalisis === 0 && !confiLaboratorioModel.loading
                             
                             ColumnLayout {
                                 anchors.centerIn: parent
@@ -812,15 +942,15 @@ Item {
         }
     }
     
-    // ===== EVENTOS =====
-    onTiposAnalisisChanged: {
-        if (tiposAnalisis && tiposAnalisis !== tiposAnalisisData) {
-            tiposAnalisisData = tiposAnalisis
-            console.log("🔄 Datos de tipos de análisis actualizados desde exterior")
-        }
-    }
-    
+    // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
         console.log("🧪 Componente de configuración de tipos de análisis iniciado")
+        console.log("🔍 appController disponible:", appController ? "SÍ" : "NO")
+        console.log("🔍 confi_laboratorio_model_instance disponible:", appController ? (appController.confi_laboratorio_model_instance ? "SÍ" : "NO") : "N/A")
+        console.log("🔍 confiLaboratorioModel disponible:", confiLaboratorioModel ? "SÍ" : "NO")
+        if (confiLaboratorioModel) {
+            console.log("🔍 Total tipos análisis:", confiLaboratorioModel.totalTiposAnalisis)
+            console.log("🔍 Loading estado:", confiLaboratorioModel.loading)
+        }
     }
 }

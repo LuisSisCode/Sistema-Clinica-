@@ -515,7 +515,9 @@ ApplicationWindow {
                     console.log("📊 Datos de tipos de gastos obtenidos:", JSON.stringify(tiposGastosData))
                     
                     // ===== PASO 4b: ASIGNAR DATOS AL MÓDULO CONFIGURACIÓN =====
-                    configuracionPage.tiposGastosModel = tiposGastosData
+                    if (configuracionPage.item) {
+                        configuracionPage.item.tiposGastosModel = tiposGastosData
+                    }
                     console.log("📤 Datos transferidos a configuracionPage.tiposGastosModel")
                     
                     // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN =====
@@ -589,15 +591,24 @@ ApplicationWindow {
             }
             
             // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPIEDADES DE MODELOS =====
-            Configuracion {
+            // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPIEDADES DE MODELOS =====
+            Loader {
                 id: configuracionPage
-                objectName: "configuracionPage"
+                objectName: "configuracionPage" 
                 anchors.fill: parent
                 visible: currentIndex === 9
                 layer.enabled: true
+                source: "Configuracion.qml"
                 
-                // ===== LAS PROPIEDADES especialidadesModel Y tiposGastosModel YA ESTÁN DEFINIDAS EN Configuracion.qml =====
-                // ===== SE CONECTARÁN AUTOMÁTICAMENTE CUANDO SE ASIGNEN DESDE LOS HANDLERS =====
+                // Acceso a las propiedades a través del item cargado
+                readonly property var tiposGastosModel: item ? item.tiposGastosModel : []
+                readonly property var especialidadesModel: item ? item.especialidadesModel : []
+                
+                function changeView(view) {
+                    if (item && item.changeView) {
+                        item.changeView(view)
+                    }
+                }
             }
         }
     }

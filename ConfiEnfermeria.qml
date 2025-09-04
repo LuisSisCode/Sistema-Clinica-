@@ -1,19 +1,17 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import ClinicaModels 1.0
 
 Item {
     id: configProcedimientosRoot
-    
-    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA - CORREGIDO =====
-    property alias tiposProcedimientos: configProcedimientosRoot.tiposProcedimientosData
     
     // ===== SEÑALES PARA VOLVER =====
     signal volverClicked()
     signal backToMain()
     
-    // ===== DATOS INTERNOS =====
-    property var tiposProcedimientosData: []
+    // ===== ACCESO AL MODEL =====
+    property var confiEnfermeriaModel: appController.confi_enfermeria_model_instance
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -48,59 +46,113 @@ Item {
     
     // ===== ESTADO DE EDICIÓN =====
     property bool isEditMode: false
-    property int editingIndex: -1
+    property int editingId: -1
     
-    // ===== FUNCIONES =====
+    // ===== FUNCIONES INTEGRADAS CON MODEL =====
     function limpiarFormulario() {
         nuevoProcedimientoNombre.text = ""
         nuevoProcedimientoDescripcion.text = ""
         nuevoProcedimientoPrecioNormal.text = ""
         nuevoProcedimientoPrecioEmergencia.text = ""
         isEditMode = false
-        editingIndex = -1
+        editingId = -1
     }
     
-    function editarProcedimiento(index) {
-        if (index >= 0 && index < tiposProcedimientosData.length) {
-            var procedimiento = tiposProcedimientosData[index]
-            nuevoProcedimientoNombre.text = procedimiento.nombre
-            nuevoProcedimientoDescripcion.text = procedimiento.descripcion
-            nuevoProcedimientoPrecioNormal.text = procedimiento.precioNormal.toString()
-            nuevoProcedimientoPrecioEmergencia.text = procedimiento.precioEmergencia.toString()
+    function editarProcedimiento(procedimientoData) {
+        if (procedimientoData && procedimientoData.id) {
+            nuevoProcedimientoNombre.text = procedimientoData.Nombre || ""
+            nuevoProcedimientoDescripcion.text = procedimientoData.Descripcion || ""
+            nuevoProcedimientoPrecioNormal.text = procedimientoData.Precio_Normal ? procedimientoData.Precio_Normal.toString() : "0.00"
+            nuevoProcedimientoPrecioEmergencia.text = procedimientoData.Precio_Emergencia ? procedimientoData.Precio_Emergencia.toString() : "0.00"
             isEditMode = true
-            editingIndex = index
+            editingId = procedimientoData.id
+            console.log("Editando procedimiento ID:", editingId)
         }
     }
     
-    function eliminarProcedimiento(index) {
-        if (index >= 0 && index < tiposProcedimientosData.length) {
-            tiposProcedimientosData.splice(index, 1)
-            configProcedimientosRoot.tiposProcedimientos = tiposProcedimientosData
-            console.log("🗑️ Procedimiento eliminado en índice:", index)
+    function eliminarProcedimiento(procedimientoId) {
+        if (procedimientoId && confiEnfermeriaModel) {
+            console.log("Eliminando procedimiento ID:", procedimientoId)
+            confiEnfermeriaModel.eliminarTipoProcedimiento(procedimientoId)
         }
     }
     
     function guardarProcedimiento() {
-        var nuevoProcedimiento = {
-            nombre: nuevoProcedimientoNombre.text,
-            descripcion: nuevoProcedimientoDescripcion.text,
-            precioNormal: parseFloat(nuevoProcedimientoPrecioNormal.text),
-            precioEmergencia: parseFloat(nuevoProcedimientoPrecioEmergencia.text)
+        if (!confiEnfermeriaModel) {
+            console.log("❌ ConfiEnfermeriaModel no disponible")
+            return
         }
         
-        if (isEditMode && editingIndex >= 0) {
-            // Editar procedimiento existente
-            tiposProcedimientosData[editingIndex] = nuevoProcedimiento
-            console.log("✏️ Procedimiento editado:", JSON.stringify(nuevoProcedimiento))
+        var nombre = nuevoProcedimientoNombre.text.trim()
+        var descripcion = nuevoProcedimientoDescripcion.text.trim()
+        var precioNormal = parseFloat(nuevoProcedimientoPrecioNormal.text) || 0.0
+        var precioEmergencia = parseFloat(nuevoProcedimientoPrecioEmergencia.text) || 0.0
+        
+        if (!nombre) {
+            console.log("❌ Nombre es requerido")
+            return
+        }
+        
+        var success = false
+        
+        if (isEditMode && editingId > 0) {
+            // Actualizar procedimiento existente
+            console.log("Actualizando procedimiento ID:", editingId)
+            success = confiEnfermeriaModel.actualizarTipoProcedimiento(
+                editingId, nombre, descripcion, precioNormal, precioEmergencia
+            )
         } else {
-            // Agregar nuevo procedimiento
-            tiposProcedimientosData.push(nuevoProcedimiento)
-            console.log("➕ Nuevo procedimiento agregado:", JSON.stringify(nuevoProcedimiento))
+            // Crear nuevo procedimiento
+            console.log("Creando nuevo procedimiento:", nombre)
+            success = confiEnfermeriaModel.crearTipoProcedimiento(
+                nombre, descripcion, precioNormal, precioEmergencia
+            )
         }
         
-        // Actualizar el modelo y limpiar
-        configProcedimientosRoot.tiposProcedimientos = tiposProcedimientosData
-        limpiarFormulario()
+        if (success) {
+            limpiarFormulario()
+            // Refrescar datos
+            if (confiEnfermeriaModel.refrescarDatosInmediato) {
+                confiEnfermeriaModel.refrescarDatosInmediato()
+            }
+        }
+    }
+    
+    function aplicarFiltros() {
+        if (confiEnfermeriaModel && confiEnfermeriaModel.aplicarFiltros) {
+            confiEnfermeriaModel.aplicarFiltros("", 0.0, -1.0)
+        }
+    }
+    
+    // ===== CONEXIONES CON EL MODEL =====
+    Connections {
+        target: confiEnfermeriaModel
+        
+        function onTipoProcedimientoCreado(success, message) {
+            console.log("Procedimiento creado:", success, message)
+            if (success) {
+                limpiarFormulario()
+            }
+        }
+        
+        function onTipoProcedimientoActualizado(success, message) {
+            console.log("Procedimiento actualizado:", success, message)
+            if (success) {
+                limpiarFormulario()
+            }
+        }
+        
+        function onTipoProcedimientoEliminado(success, message) {
+            console.log("Procedimiento eliminado:", success, message)
+        }
+        
+        function onTiposProcedimientosChanged() {
+            console.log("Lista de procedimientos actualizada")
+        }
+        
+        function onErrorOccurred(title, message) {
+            console.log("Error en ConfiEnfermeriaModel:", title, message)
+        }
     }
     
     // ===== LAYOUT PRINCIPAL =====
@@ -108,7 +160,7 @@ Item {
         anchors.fill: parent
         spacing: 0
         
-        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE) =====
+        // ===== HEADER PRINCIPAL =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: baseUnit * 12
@@ -144,7 +196,6 @@ Item {
                     }
                     
                     onClicked: {
-                        // Emitir señal para volver a la vista principal
                         if (typeof changeView !== "undefined") {
                             changeView("main")
                         } else {
@@ -189,6 +240,21 @@ Item {
                         Layout.fillWidth: true
                         opacity: 0.95
                         font.family: "Segoe UI"
+                    }
+                }
+                
+                // ===== INDICADOR DE CARGA =====
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 8
+                    color: "transparent"
+                    visible: confiEnfermeriaModel ? confiEnfermeriaModel.loading : false
+                    
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        width: baseUnit * 4
+                        height: baseUnit * 4
+                        running: parent.visible
                     }
                 }
             }
@@ -384,8 +450,7 @@ Item {
                                 
                                 Button {
                                     text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                    enabled: nuevoProcedimientoNombre.text && nuevoProcedimientoDescripcion.text && 
-                                            nuevoProcedimientoPrecioNormal.text && nuevoProcedimientoPrecioEmergencia.text
+                                    enabled: nuevoProcedimientoNombre.text.trim() !== ""
                                     Layout.preferredWidth: baseUnit * 15
                                     Layout.preferredHeight: baseUnit * 4.5
                                     
@@ -426,7 +491,7 @@ Item {
                         anchors.fill: parent
                         spacing: 0
                         
-                        // TÍTULO
+                        // TÍTULO CON CONTADOR
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -439,13 +504,35 @@ Item {
                                 color: parent.color
                             }
                             
-                            Label {
-                                anchors.centerIn: parent
-                                text: "🩹 Procedimientos Registrados"
-                                font.pixelSize: fontMedium
-                                font.bold: true
-                                color: textColor
-                                font.family: "Segoe UI"
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: marginMedium
+                                
+                                Label {
+                                    text: "🩹 Procedimientos Registrados"
+                                    font.pixelSize: fontMedium
+                                    font.bold: true
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 8
+                                    Layout.preferredHeight: baseUnit * 4
+                                    color: primaryColor
+                                    radius: radiusSmall
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: confiEnfermeriaModel ? confiEnfermeriaModel.totalTiposProcedimientos.toString() : "0"
+                                        color: backgroundColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                        font.family: "Segoe UI"
+                                    }
+                                }
                             }
                         }
                         
@@ -540,7 +627,7 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO
+                        // CONTENIDO DE LA TABLA
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -548,7 +635,7 @@ Item {
                             
                             ListView {
                                 id: procedimientosList
-                                model: tiposProcedimientosData
+                                model: confiEnfermeriaModel ? confiEnfermeriaModel.tiposProcedimientos : []
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
@@ -564,7 +651,7 @@ Item {
                                         
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.25
-                                            text: modelData.nombre
+                                            text: modelData.Nombre || "Sin nombre"
                                             font.bold: true
                                             color: primaryColor
                                             font.pixelSize: fontBase
@@ -583,7 +670,7 @@ Item {
                                         
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.30
-                                            text: modelData.descripcion
+                                            text: modelData.Descripcion || "Sin descripción"
                                             color: textColor
                                             font.pixelSize: fontSmall
                                             font.family: "Segoe UI"
@@ -602,7 +689,7 @@ Item {
                                         
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.15
-                                            text: "Bs " + modelData.precioNormal.toFixed(2)
+                                            text: "Bs " + (modelData.Precio_Normal ? modelData.Precio_Normal.toFixed(2) : "0.00")
                                             color: successColor
                                             font.bold: true
                                             font.pixelSize: fontSmall
@@ -619,7 +706,7 @@ Item {
                                         
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.15
-                                            text: "Bs " + modelData.precioEmergencia.toFixed(2)
+                                            text: "Bs " + (modelData.Precio_Emergencia ? modelData.Precio_Emergencia.toFixed(2) : "0.00")
                                             color: warningColor
                                             font.bold: true
                                             font.pixelSize: fontSmall
@@ -656,7 +743,7 @@ Item {
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 
-                                                onClicked: editarProcedimiento(index)
+                                                onClicked: editarProcedimiento(modelData)
                                             }
                                             
                                             Button {
@@ -677,7 +764,7 @@ Item {
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 
-                                                onClicked: eliminarProcedimiento(index)
+                                                onClicked: eliminarProcedimiento(modelData.id)
                                             }
                                         }
                                     }
@@ -690,7 +777,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: "transparent"
-                            visible: tiposProcedimientosData.length === 0
+                            visible: confiEnfermeriaModel ? confiEnfermeriaModel.totalTiposProcedimientos === 0 : true
                             
                             ColumnLayout {
                                 anchors.centerIn: parent
@@ -729,15 +816,17 @@ Item {
         }
     }
     
-    // ===== EVENTOS =====
-    onTiposProcedimientosChanged: {
-        if (tiposProcedimientos && tiposProcedimientos !== tiposProcedimientosData) {
-            tiposProcedimientosData = tiposProcedimientos
-            console.log("🔄 Datos de tipos de procedimientos actualizados desde exterior")
-        }
-    }
-    
+    // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("🩹 Componente de configuración de tipos de procedimientos iniciado")
+        console.log("🩹 Componente de configuración de procedimientos iniciado")
+        
+        // Verificar que el modelo esté disponible
+        if (confiEnfermeriaModel) {
+            console.log("✅ ConfiEnfermeriaModel conectado correctamente")
+            // Aplicar filtros iniciales si es necesario
+            aplicarFiltros()
+        } else {
+            console.log("❌ ConfiEnfermeriaModel no está disponible")
+        }
     }
 }

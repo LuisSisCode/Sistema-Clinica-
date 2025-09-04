@@ -247,13 +247,13 @@ class TrabajadorRepository(BaseRepository):
     def get_all_worker_types(self) -> List[Dict[str, Any]]:
         """Obtiene todos los tipos de trabajadores"""
         query = """
-        SELECT tt.*, COUNT(t.id) as total_trabajadores
+        SELECT tt.id, tt.Tipo, tt.descripcion, COUNT(t.id) as total_trabajadores
         FROM Tipo_Trabajadores tt
         LEFT JOIN Trabajadores t ON tt.id = t.Id_Tipo_Trabajador
-        GROUP BY tt.id, tt.Tipo
+        GROUP BY tt.id, tt.Tipo, tt.descripcion
         ORDER BY tt.Tipo
-        """
         return self._execute_query(query)
+        """
     
     def get_worker_type_by_id(self, tipo_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene tipo de trabajador por ID"""

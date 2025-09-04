@@ -410,7 +410,7 @@ class GastoRepository(BaseRepository):
                COALESCE(AVG(g.Monto), 0) as monto_promedio
         FROM Tipo_Gastos tg
         LEFT JOIN Gastos g ON tg.id = g.ID_Tipo
-        GROUP BY tg.id, tg.Nombre, tg.fecha
+        GROUP BY tg.id, tg.Nombre, tg.descripcion
         ORDER BY total_gastos DESC, tg.Nombre
         """
         result = self._execute_query(query)
@@ -427,7 +427,7 @@ class GastoRepository(BaseRepository):
         FROM Tipo_Gastos tg
         LEFT JOIN Gastos g ON tg.id = g.ID_Tipo
         WHERE tg.id = ?
-        GROUP BY tg.id, tg.Nombre, tg.fecha
+        GROUP BY tg.id, tg.Nombre, tg.descripcion
         """
         result = self._execute_query(query, (tipo_id,), fetch_one=True)
         return self._format_single_date_result(result) if result else None
