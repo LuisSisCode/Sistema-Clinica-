@@ -66,9 +66,7 @@ clinica_app/
 ├── CrearProducto.qml
 ├── Farmacia.qml
 ├── Consultas.qml
-├─── Laboratorio.qml (principal)
-├── components/
-│   ├── # Aqui agregaremos los nuevos conponentes reutilizables como tablas, helpers y filtros.           
+├───Laboratorio.qml              
 ├── Enfermeria.qml
 ├── ServiciosBasicos.qml
 ├── Trabajadores.qml

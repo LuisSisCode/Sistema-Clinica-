@@ -52,6 +52,7 @@ class ConsultaModel(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._is_initializing = False
         
         # Repositories
         self.repository = ConsultaRepository()
@@ -623,7 +624,10 @@ class ConsultaModel(QObject):
     @Slot()
     def refrescar_datos(self):
         """Refresca todos los datos del modelo"""
+        if self._is_initializing:
+                return
         try:
+            self._is_initializing = True
             self._set_estado_actual("cargando")
             
             # Cargar datos principales
@@ -636,11 +640,14 @@ class ConsultaModel(QObject):
             
             self._set_estado_actual("listo")
             self.operacionExitosa.emit("Datos actualizados correctamente")
+          
             
         except Exception as e:
             error_msg = f"Error refrescando datos: {str(e)}"
             self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
             self._set_estado_actual("error")
+        finally:
+            self._is_initializing = False
     
     # ===============================
     # SLOTS PARA CONSULTAS ESPECÍFICAS

@@ -465,8 +465,6 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: currentIndex === 2
                 layer.enabled: true
-                
-                
             }
             
             // Laboratorio Page

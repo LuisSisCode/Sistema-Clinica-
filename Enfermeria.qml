@@ -1208,7 +1208,6 @@ Item {
                     trabajadorCombo.currentIndex = 0
                     normalRadio.checked = true
                     cantidadSpinBox.value = 1
-                    observacionesProcedimiento.text = ""
                     procedureForm.selectedProcedureIndex = -1
                     procedureForm.calculatedUnitPrice = 0.0
                     procedureForm.calculatedTotalPrice = 0.0
