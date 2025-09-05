@@ -21,7 +21,11 @@ from backend.models.paciente_model import PacienteModel, register_paciente_model
 from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
 from backend.models.trabajador_model import TrabajadorModel, register_trabajador_model
 from backend.models.enfermeria_model import EnfermeriaModel, register_enfermeria_model
-
+#import configuracion 
+from backend.models.ConfiguracionModel.ConfiServiciosbasicos_model import ConfiguracionModel, register_configuracion_model
+from backend.models.ConfiguracionModel.ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
+from backend.models.ConfiguracionModel.ConfiEnfermeria_model import ConfiEnfermeriaModel, register_confi_enfermeria_model
+from backend.models.ConfiguracionModel.ConfiConsulta_model import ConfiConsultaModel, register_confi_consulta_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -67,8 +71,10 @@ class AppController(QObject):
         self.gasto_model = None
         self.trabajador_model = None 
         self.enfermeria_model = None
-
-        
+        self.configuracion_model = None
+        self.confi_laboratorio_model = None
+        self.confi_enfermeria_model = None
+        self.confi_consulta_model = None
     # ===============================
     # INICIALIZACIÓN DE MODELS
     # ===============================
@@ -90,6 +96,10 @@ class AppController(QObject):
             self.laboratorio_model = LaboratorioModel()
             self.trabajador_model = TrabajadorModel()  
             self.enfermeria_model = EnfermeriaModel()
+            self.configuracion_model = ConfiguracionModel()
+            self.confi_laboratorio_model = ConfiLaboratorioModel()
+            self.confi_enfermeria_model = ConfiEnfermeriaModel()
+            self.confi_consulta_model = ConfiConsultaModel()
             
 
             # Conectar signals entre models
@@ -172,7 +182,49 @@ class AppController(QObject):
                 self.enfermeria_model.procedimientoActualizado.connect(self._on_procedimiento_actualizado)
                 self.enfermeria_model.procedimientoEliminado.connect(self._on_procedimiento_eliminado)
                 print("🔗 EnfermeriaModel conectado correctamente")
+            # ✅ CONECTAR CONFIGURACION MODEL
+            if self.configuracion_model:
+                self.configuracion_model.errorOccurred.connect(self._on_model_error)
+                self.configuracion_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiguracionModel
+                self.configuracion_model.tipoGastoCreado.connect(self._on_tipo_gasto_creado)
+                self.configuracion_model.tipoGastoActualizado.connect(self._on_tipo_gasto_actualizado)
+                self.configuracion_model.tipoGastoEliminado.connect(self._on_tipo_gasto_eliminado)
+                print("🔗 ConfiguracionModel conectado correctamente")
             
+            # ✅ CONECTAR CONFI LABORATORIO MODEL
+            if self.confi_laboratorio_model:
+                self.confi_laboratorio_model.errorOccurred.connect(self._on_model_error)
+                self.confi_laboratorio_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiLaboratorioModel
+                self.confi_laboratorio_model.tipoAnalisisCreado.connect(self._on_tipo_analisis_creado)
+                self.confi_laboratorio_model.tipoAnalisisActualizado.connect(self._on_tipo_analisis_actualizado)
+                self.confi_laboratorio_model.tipoAnalisisEliminado.connect(self._on_tipo_analisis_eliminado)
+                print("🔗 ConfiLaboratorioModel conectado correctamente")
+            
+            # ✅ CONECTAR CONFI ENFERMERIA MODEL
+            if self.confi_enfermeria_model:
+                self.confi_enfermeria_model.errorOccurred.connect(self._on_model_error)
+                self.confi_enfermeria_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiEnfermeriaModel
+                self.confi_enfermeria_model.tipoProcedimientoCreado.connect(self._on_tipo_procedimiento_creado)
+                self.confi_enfermeria_model.tipoProcedimientoActualizado.connect(self._on_tipo_procedimiento_actualizado)
+                self.confi_enfermeria_model.tipoProcedimientoEliminado.connect(self._on_tipo_procedimiento_eliminado)
+                print("🔗 ConfiEnfermeriaModel conectado correctamente")
+            
+            # ✅ CONECTAR CONFI CONSULTA MODEL
+            if self.confi_consulta_model:
+                self.confi_consulta_model.errorOccurred.connect(self._on_model_error)
+                self.confi_consulta_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiConsultaModel
+                self.confi_consulta_model.especialidadCreada.connect(self._on_especialidad_creada)
+                self.confi_consulta_model.especialidadActualizada.connect(self._on_especialidad_actualizada)
+                self.confi_consulta_model.especialidadEliminada.connect(self._on_especialidad_eliminada)
+                print("🔗 ConfiConsultaModel conectado correctamente")
             
         except Exception as e:
             print(f"❌ Error conectando models: {e}")
@@ -211,13 +263,26 @@ class AppController(QObject):
                         self.consulta_model.set_usuario_actual(usuario_id)
                         print(f"👤 Usuario establecido en ConsultaModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
                     
-                    # ✅ ESTABLECER PARA TRABAJADORMODEL (si lo necesita en el futuro)
+                    #  ESTABLECER PARA TRABAJADORMODEL (si lo necesita en el futuro)
                     if self.trabajador_model:
                         print(f"👷‍♂️ TrabajadorModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
-                    # ✅ ESTABLECER PARA ENFERMERIAMODEL - AGREGAR AQUÍ
+                    #  ESTABLECER PARA ENFERMERIAMODEL - AGREGAR AQUÍ
                     if self.enfermeria_model:
                         self.enfermeria_model.set_usuario_actual(usuario_id)
                         print(f"🩹 EnfermeriaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    #  ESTABLECER PARA CONFI LABORATORIO MODEL
+                    if self.confi_laboratorio_model:
+                        print(f"🧪 ConfiLaboratorioModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                        
+                    #  ESTABLECER PARA CONFI ENFERMERIA MODEL
+                    if self.confi_enfermeria_model:
+                        print(f"🩹 ConfiEnfermeriaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    #  ESTABLECER PARA CONFI CONSULTA MODEL
+                    if self.confi_consulta_model:
+                        print(f"🏥 ConfiConsultaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                        
                 else:
                     print("⚠️ Usuario administrador no tiene ID válido")
             else:
@@ -351,6 +416,129 @@ class AppController(QObject):
             print(f"❌ Error eliminando procedimiento: {message}")
             self.showNotification("Error", f"Error eliminando procedimiento: {message}")
 
+    # ✅ HANDLERS PARA CONFIGURACION MODEL
+    @Slot(bool, str)
+    def _on_tipo_gasto_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de gasto"""
+        if success:
+            print(f"💰 Tipo de gasto creado exitosamente: {message}")
+            self.showNotification("Tipo Creado", message)
+        else:
+            print(f"❌ Error creando tipo de gasto: {message}")
+            self.showNotification("Error", f"Error creando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_gasto_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de gasto"""
+        if success:
+            print(f"✏️ Tipo de gasto actualizado exitosamente: {message}")
+            self.showNotification("Tipo Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de gasto: {message}")
+            self.showNotification("Error", f"Error actualizando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_gasto_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de gasto"""
+        if success:
+            print(f"🗑️ Tipo de gasto eliminado exitosamente: {message}")
+            self.showNotification("Tipo Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de gasto: {message}")
+            self.showNotification("Error", f"Error eliminando tipo: {message}")
+    
+    # ✅ HANDLERS PARA CONFI LABORATORIO MODEL
+    @Slot(bool, str)
+    def _on_tipo_analisis_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de análisis"""
+        if success:
+            print(f"🧪 Tipo de análisis creado exitosamente: {message}")
+            self.showNotification("Análisis Creado", message)
+        else:
+            print(f"❌ Error creando tipo de análisis: {message}")
+            self.showNotification("Error", f"Error creando análisis: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_analisis_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de análisis"""
+        if success:
+            print(f"✏️ Tipo de análisis actualizado exitosamente: {message}")
+            self.showNotification("Análisis Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de análisis: {message}")
+            self.showNotification("Error", f"Error actualizando análisis: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_analisis_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de análisis"""
+        if success:
+            print(f"🗑️ Tipo de análisis eliminado exitosamente: {message}")
+            self.showNotification("Análisis Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de análisis: {message}")
+            self.showNotification("Error", f"Error eliminando análisis: {message}")
+    
+    # ✅ HANDLERS PARA CONFI ENFERMERIA MODEL
+    @Slot(bool, str)
+    def _on_tipo_procedimiento_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de procedimiento de enfermería"""
+        if success:
+            print(f"🩹 Tipo de procedimiento creado exitosamente: {message}")
+            self.showNotification("Procedimiento Creado", message)
+        else:
+            print(f"❌ Error creando tipo de procedimiento: {message}")
+            self.showNotification("Error", f"Error creando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_procedimiento_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de procedimiento de enfermería"""
+        if success:
+            print(f"✏️ Tipo de procedimiento actualizado exitosamente: {message}")
+            self.showNotification("Procedimiento Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de procedimiento: {message}")
+            self.showNotification("Error", f"Error actualizando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_procedimiento_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de procedimiento de enfermería"""
+        if success:
+            print(f"🗑️ Tipo de procedimiento eliminado exitosamente: {message}")
+            self.showNotification("Procedimiento Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de procedimiento: {message}")
+            self.showNotification("Error", f"Error eliminando procedimiento: {message}")
+    # ✅ HANDLERS PARA CONFI CONSULTA MODEL
+    @Slot(bool, str)
+    def _on_especialidad_creada(self, success: bool, message: str):
+        """Handler cuando se crea una especialidad"""
+        if success:
+            print(f"🏥 Especialidad creada exitosamente: {message}")
+            self.showNotification("Especialidad Creada", message)
+        else:
+            print(f"❌ Error creando especialidad: {message}")
+            self.showNotification("Error", f"Error creando especialidad: {message}")
+
+    @Slot(bool, str)
+    def _on_especialidad_actualizada(self, success: bool, message: str):
+        """Handler cuando se actualiza una especialidad"""
+        if success:
+            print(f"✏️ Especialidad actualizada exitosamente: {message}")
+            self.showNotification("Especialidad Actualizada", message)
+        else:
+            print(f"❌ Error actualizando especialidad: {message}")
+            self.showNotification("Error", f"Error actualizando especialidad: {message}")
+
+    @Slot(bool, str)
+    def _on_especialidad_eliminada(self, success: bool, message: str):
+        """Handler cuando se elimina una especialidad"""
+        if success:
+            print(f"🗑️ Especialidad eliminada exitosamente: {message}")
+            self.showNotification("Especialidad Eliminada", message)
+        else:
+            print(f"❌ Error eliminando especialidad: {message}")
+            self.showNotification("Error", f"Error eliminando especialidad: {message}")
+
     # ← SACAR ESTOS MÉTODOS FUERA, AL NIVEL DE LA CLASE
     @Slot(str)
     def _on_model_error(self, mensaje: str):
@@ -419,6 +607,27 @@ class AppController(QObject):
         """Propiedad para acceder al EnfermeriaModel desde QML"""
         return self.enfermeria_model
     
+    @Property(QObject, notify=modelsReady)
+    def configuracion_model_instance(self):
+        """Propiedad para acceder al ConfiguracionModel desde QML"""
+        return self.configuracion_model
+
+    # ✅ GETTER PARA CONFI LABORATORIO MODEL
+    @Property(QObject, notify=modelsReady)
+    def confi_laboratorio_model_instance(self):
+        """Propiedad para acceder al ConfiLaboratorioModel desde QML"""
+        return self.confi_laboratorio_model
+    
+    # ✅ GETTER PARA CONFI ENFERMERIA MODEL
+    @Property(QObject, notify=modelsReady)
+    def confi_enfermeria_model_instance(self):
+        """Propiedad para acceder al ConfiEnfermeriaModel desde QML"""
+        return self.confi_enfermeria_model
+    # ✅ GETTER PARA CONFI CONSULTA MODEL
+    @Property(QObject, notify=modelsReady)
+    def confi_consulta_model_instance(self):
+        """Propiedad para acceder al ConfiConsultaModel desde QML"""
+        return self.confi_consulta_model
     # ===============================
     # MÉTODOS DE INTEGRACIÓN MODELS-PDF
     # ===============================
@@ -660,6 +869,222 @@ class AppController(QObject):
             import traceback
             traceback.print_exc()
             return ""
+
+    @Slot(str, result=str)
+    def generar_reporte_configuracion(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración usando el model"""
+        try:
+            if not self.configuracion_model:
+                print("❌ ConfiguracionModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los tipos de gastos
+                datos = self.configuracion_model.tiposGastos
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de tipos de gastos
+                datos = self.configuracion_model.estadisticas
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.configuracion_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"configuracion_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+
+    # ✅ GENERAR REPORTE DE CONFI LABORATORIO
+    @Slot(str, result=str)
+    def generar_reporte_confi_laboratorio(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración de laboratorio usando el model"""
+        try:
+            if not self.confi_laboratorio_model:
+                print("❌ ConfiLaboratorioModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los tipos de análisis
+                datos = self.confi_laboratorio_model.tiposAnalisis
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de tipos de análisis
+                datos = self.confi_laboratorio_model.estadisticas
+            elif tipo_reporte == "precios":
+                # Obtener análisis por rangos de precios
+                datos = self.confi_laboratorio_model.obtenerTiposAnalisisPorRangoPrecios(0, -1)
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.confi_laboratorio_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración de laboratorio")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"confi_laboratorio_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración de laboratorio generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración de laboratorio: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+    
+    # ✅ GENERAR REPORTE DE CONFI ENFERMERIA
+    @Slot(str, result=str)
+    def generar_reporte_confi_enfermeria(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración de enfermería usando el model"""
+        try:
+            if not self.confi_enfermeria_model:
+                print("❌ ConfiEnfermeriaModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los tipos de procedimientos
+                datos = self.confi_enfermeria_model.tiposProcedimientos
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de tipos de procedimientos
+                datos = self.confi_enfermeria_model.estadisticas
+            elif tipo_reporte == "precios":
+                # Obtener procedimientos por rangos de precios
+                datos = self.confi_enfermeria_model.obtenerTiposProcedimientosPorRangoPrecios(0, -1)
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.confi_enfermeria_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración de enfermería")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"confi_enfermeria_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración de enfermería generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración de enfermería: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+        
+    # ✅ GENERAR REPORTE DE CONFI CONSULTA
+    @Slot(str, result=str)
+    def generar_reporte_confi_consulta(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración de consultas usando el model"""
+        try:
+            if not self.confi_consulta_model:
+                print("❌ ConfiConsultaModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todas las especialidades
+                datos = self.confi_consulta_model.especialidades
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de especialidades
+                datos = self.confi_consulta_model.estadisticas
+            elif tipo_reporte == "precios":
+                # Obtener especialidades por rangos de precios
+                datos = self.confi_consulta_model.obtenerEspecialidadesPorRangoPrecios(0, -1)
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.confi_consulta_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración de consultas")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"confi_consulta_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración de consultas generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración de consultas: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
     # ===============================
     # MÉTODOS EXISTENTES (MANTENER COMPATIBILIDAD)
     # ===============================
@@ -813,6 +1238,10 @@ def register_qml_types():
         register_laboratorio_model()
         register_trabajador_model()
         register_enfermeria_model()
+        register_configuracion_model()
+        register_confi_laboratorio_model()
+        register_confi_enfermeria_model()
+        register_confi_consulta_model()
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:
@@ -821,17 +1250,11 @@ def register_qml_types():
 
 def register_data_models():
     """Registra todos los modelos de datos para QML"""
-    try:
-        print("📊 Registrando modelos de datos...")
-        
-        # Registrar modelos específicos
+    try: 
         register_trabajador_model()
-        
-        # Aquí puedes agregar otros modelos en el futuro:
-        # register_doctor_model()
-        # register_especialidad_model()
-        # etc.
-        
+        register_confi_laboratorio_model()
+        register_confi_enfermeria_model()
+        register_confi_consulta_model()
         print("✅ Modelos de datos registrados correctamente")
         
     except Exception as e:

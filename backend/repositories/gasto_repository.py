@@ -151,89 +151,6 @@ class GastoRepository(BaseRepository):
         return success
     
     # ===============================
-    # GESTIÓN DE PROVEEDORES - NUEVO
-    # ===============================
-    
-    @cached_query('proveedores_activos', ttl=1800)
-    def get_all_providers(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los proveedores disponibles"""
-        query = """
-        SELECT p.id, p.Nombre, p.Direccion,
-               COUNT(g.id) as gastos_asociados,
-               MAX(g.Fecha) as ultimo_gasto,
-               SUM(g.Monto) as monto_total_gastos
-        FROM Proveedor p
-        LEFT JOIN Gastos g ON p.Nombre = g.Proveedor
-        GROUP BY p.id, p.Nombre, p.Direccion
-        ORDER BY gastos_asociados DESC, p.Nombre ASC
-        """
-        result = self._execute_query(query)
-        return self._format_dates_in_results(result)
-    
-    def get_provider_by_id(self, proveedor_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene proveedor específico por ID"""
-        query = """
-        SELECT p.*, 
-               COUNT(g.id) as gastos_asociados,
-               COALESCE(SUM(g.Monto), 0) as monto_total_gastos,
-               MAX(g.Fecha) as ultimo_gasto
-        FROM Proveedor p
-        LEFT JOIN Gastos g ON p.Nombre = g.Proveedor
-        WHERE p.id = ?
-        GROUP BY p.id, p.Nombre, p.Direccion
-        """
-        result = self._execute_query(query, (proveedor_id,), fetch_one=True)
-        return self._format_single_date_result(result) if result else None
-    
-    def get_providers_for_combobox(self) -> List[Dict[str, Any]]:
-        """Obtiene proveedores formateados para ComboBox de QML"""
-        try:
-            query = """
-            SELECT p.id, p.Nombre, p.Direccion,
-                   COUNT(g.id) as uso_frecuencia
-            FROM Proveedor p
-            LEFT JOIN Gastos g ON p.Nombre = g.Proveedor
-            GROUP BY p.id, p.Nombre, p.Direccion
-            ORDER BY uso_frecuencia DESC, p.Nombre ASC
-            """
-            providers = self._execute_query(query)
-            
-            # Formatear para ComboBox
-            formatted_providers = []
-            for provider in providers:
-                # Crear texto descriptivo: "Nombre - Dirección"
-                display_text = f"{provider['Nombre']}"
-                if provider.get('Direccion'):
-                    display_text += f" - {provider['Direccion']}"
-                
-                formatted_providers.append({
-                    'id': provider['id'],
-                    'nombre': provider['Nombre'],
-                    'direccion': provider.get('Direccion', ''),
-                    'display_text': display_text,
-                    'uso_frecuencia': provider.get('uso_frecuencia', 0)
-                })
-            
-            print(f"🏢 Proveedores cargados para ComboBox: {len(formatted_providers)}")
-            return formatted_providers
-            
-        except Exception as e:
-            print(f"⚠ Error cargando proveedores: {e}")
-            return []
-    
-    def get_provider_by_name(self, nombre: str) -> Optional[Dict[str, Any]]:
-        """Busca proveedor por nombre exacto"""
-        query = "SELECT * FROM Proveedor WHERE Nombre = ?"
-        result = self._execute_query(query, (nombre.strip(),), fetch_one=True)
-        return result if result else None
-    
-    def provider_exists(self, nombre: str) -> bool:
-        """Verifica si existe un proveedor con el nombre dado"""
-        query = "SELECT COUNT(*) as count FROM Proveedor WHERE Nombre = ?"
-        result = self._execute_query(query, (nombre.strip(),), fetch_one=True)
-        return result['count'] > 0 if result else False
-    
-    # ===============================
     # CONSULTAS CON RELACIONES
     # ===============================
     
@@ -278,7 +195,7 @@ class GastoRepository(BaseRepository):
         return self._format_single_date_result(result) if result else None
     
     # ===============================
-    # BÚSQUEDAS POR FECHAS - MEJORADAS
+    # BÚSQUEDAS POR FECHAS
     # ===============================
     
     def get_expenses_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
@@ -365,21 +282,6 @@ class GastoRepository(BaseRepository):
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         result = self._execute_query(query, (usuario_id, limit))
-        return self._format_dates_in_results(result)
-    
-    def get_expenses_by_provider(self, proveedor_nombre: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Obtiene gastos por proveedor específico - NUEVO"""
-        query = """
-        SELECT g.*, tg.Nombre as tipo_nombre,
-               CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
-        FROM Gastos g
-        INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
-        WHERE g.Proveedor = ?
-        ORDER BY g.Fecha DESC
-        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
-        """
-        result = self._execute_query(query, (proveedor_nombre, limit))
         return self._format_dates_in_results(result)
     
     def get_expenses_by_amount_range(self, min_amount: float, max_amount: float) -> List[Dict[str, Any]]:
@@ -766,7 +668,85 @@ class GastoRepository(BaseRepository):
         query = "SELECT Nombre FROM Tipo_Gastos ORDER BY Nombre"
         result = self._execute_query(query)
         return [row['Nombre'] for row in result]
-    
+    # ===============================
+    # GESTIÓN DE PROVEEDORES
+    # ===============================
+
+    @cached_query('proveedores_all', ttl=600)
+    def get_all_providers(self) -> List[str]:
+        """Obtiene lista de todos los proveedores únicos"""
+        query = """
+        SELECT DISTINCT Proveedor
+        FROM Gastos 
+        WHERE Proveedor IS NOT NULL 
+        AND LTRIM(RTRIM(Proveedor)) != ''
+        ORDER BY Proveedor
+        """
+        result = self._execute_query(query)
+        return [row['Proveedor'] for row in result if row['Proveedor']]
+
+    def get_providers_for_combobox(self) -> List[Dict[str, Any]]:
+        """Obtiene proveedores formateados para ComboBox en QML"""
+        try:
+            proveedores = self.get_all_providers()
+            formatted_providers = []
+            
+            # Agregar opción "Todos"
+            formatted_providers.append({
+                'id': 0,
+                'nombre': 'Todos los proveedores',
+                'text': 'Todos los proveedores'
+            })
+            
+            # Agregar proveedores reales
+            for i, proveedor in enumerate(proveedores, 1):
+                formatted_providers.append({
+                    'id': i,
+                    'nombre': proveedor,
+                    'text': proveedor
+                })
+            
+            print(f"📋 Proveedores para ComboBox: {len(formatted_providers)} elementos")
+            return formatted_providers
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo proveedores para ComboBox: {e}")
+            return [{'id': 0, 'nombre': 'Error', 'text': 'Error cargando proveedores'}]
+
+    @cached_query('proveedores_stats', ttl=300)
+    def get_providers_with_stats(self) -> List[Dict[str, Any]]:
+        """Obtiene proveedores con estadísticas de gastos"""
+        query = """
+        SELECT 
+            Proveedor,
+            COUNT(*) as total_gastos,
+            SUM(Monto) as monto_total,
+            AVG(Monto) as monto_promedio,
+            MAX(Fecha) as ultimo_gasto,
+            MIN(Fecha) as primer_gasto
+        FROM Gastos 
+        WHERE Proveedor IS NOT NULL 
+        AND LTRIM(RTRIM(Proveedor)) != ''
+        GROUP BY Proveedor
+        ORDER BY monto_total DESC
+        """
+        result = self._execute_query(query)
+        return self._format_dates_in_results(result)
+
+    def get_expenses_by_provider(self, proveedor: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Obtiene gastos de un proveedor específico"""
+        query = """
+        SELECT g.*, tg.Nombre as tipo_nombre,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
+        FROM Gastos g
+        INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
+        WHERE g.Proveedor = ?
+        ORDER BY g.Fecha DESC
+        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+        """
+        result = self._execute_query(query, (proveedor, limit))
+        return self._format_dates_in_results(result)
     # ===============================
     # REPORTES
     # ===============================
@@ -827,11 +807,11 @@ class GastoRepository(BaseRepository):
         return expenses
     
     # ===============================
-    # PAGINACIÓN - MÉTODO CORREGIDO Y MEJORADO
+    # PAGINACIÓN - MÉTODO CORREGIDO
     # ===============================
     
     def get_paginated_expenses(self, offset: int, limit: int, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Obtiene gastos paginados con filtros mejorados - INCLUYENDO FILTRO "TODOS"""
+        """Obtiene gastos paginados con filtros - CORREGIDO PARA QML"""
         try:
             # Validar parámetros
             if offset < 0:
@@ -853,23 +833,14 @@ class GastoRepository(BaseRepository):
             params = []
             
             if filters:
-                # FILTRO POR TIPO (0 = todos los tipos)
+                if filters.get('mes') and filters.get('año'):
+                    conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
+                    params.append(filters['mes'])
+                    params.append(filters['año'])
+                    
                 if filters.get('tipo_id') and filters['tipo_id'] > 0:
                     conditions.append("g.ID_Tipo = ?")
                     params.append(filters['tipo_id'])
-                
-                # FILTRO POR FECHA - MEJORADO PARA SOPORTAR "TODOS LOS PERÍODOS"
-                if filters.get('mes') and filters.get('año'):
-                    # Si mes es -1, significa "todos los meses de ese año"
-                    if filters['mes'] == -1:
-                        conditions.append("YEAR(g.Fecha) = ?")
-                        params.append(filters['año'])
-                    # Si mes es 0, significa "todos los períodos" (sin filtro temporal)
-                    elif filters['mes'] > 0:
-                        conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
-                        params.append(filters['mes'])
-                        params.append(filters['año'])
-                    # Si mes es 0 y año es 0, no agregar filtro temporal (mostrar todos)
             
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
@@ -888,34 +859,25 @@ class GastoRepository(BaseRepository):
             return result
             
         except Exception as e:
-            print(f"⚠ Error en get_paginated_expenses: {e}")
+            print(f"❌ Error en get_paginated_expenses: {e}")
             raise e
 
     def get_expenses_count(self, filters: Dict[str, Any] = None) -> int:
-        """Cuenta total de gastos con filtros mejorados - INCLUYENDO FILTRO "TODOS"""
+        """Cuenta total de gastos con filtros"""
         query = "SELECT COUNT(*) as total FROM Gastos g"
         params = []
         
         if filters:
             where_conditions = []
-            
-            # FILTRO POR TIPO (0 = todos los tipos)
-            if filters.get('tipo_id') and filters['tipo_id'] > 0:
+            if filters.get('tipo_id'):
                 where_conditions.append("g.ID_Tipo = ?")
                 params.append(filters['tipo_id'])
-            
-            # FILTRO POR FECHA - MEJORADO PARA SOPORTAR "TODOS LOS PERÍODOS"
-            if filters.get('mes') and filters.get('año'):
-                # Si mes es -1, significa "todos los meses de ese año"
-                if filters['mes'] == -1:
-                    where_conditions.append("YEAR(g.Fecha) = ?")
-                    params.append(filters['año'])
-                # Si mes es 0, significa "todos los períodos" (sin filtro temporal)
-                elif filters['mes'] > 0:
-                    where_conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
-                    params.append(filters['mes'])
-                    params.append(filters['año'])
-                # Si mes es 0 y año es 0, no agregar filtro temporal (mostrar todos)
+            if filters.get('mes'):
+                where_conditions.append("MONTH(g.Fecha) = ?")
+                params.append(filters['mes'])
+            if filters.get('año'):
+                where_conditions.append("YEAR(g.Fecha) = ?")
+                params.append(filters['año'])
             
             if where_conditions:
                 query += " WHERE " + " AND ".join(where_conditions)
@@ -930,7 +892,7 @@ class GastoRepository(BaseRepository):
     def invalidate_expense_caches(self):
         """Invalida cachés relacionados con gastos"""
         cache_types = ['gastos', 'gastos_completos', 'gastos_hoy', 'stats_gastos', 
-                      'gastos_today_stats', 'tipos_gastos', 'proveedores_activos']
+                      'gastos_today_stats', 'tipos_gastos']
         from ..core.cache_system import invalidate_after_update
         invalidate_after_update(cache_types)
     
