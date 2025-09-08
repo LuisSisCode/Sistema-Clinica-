@@ -12,8 +12,15 @@ clinica_app/
 │   │   └── utils.py                             # Utilidades generales
 │   │
 │   ├── models/                                  # 🎯 QObject Models para QML
+│   │   ├── ConfiguracionModel/
+│   │   │   ├── __init__.py
+│   │   │   ├── ConfiEnfermeria_model.py
+│   │   │   ├── ConfiLaboratorio_model.py
+│   │   │   ├── ConfiServiciosbasicos_model.py
+│   │   │   └── # falta archivos py para otras configuraciones
 │   │   ├── __init__.py
 │   │   ├── usuario_model.py                     # Usuario + Roles (QObject)
+│   │   ├── enfermeria_model.py                     # Usuario + Roles (QObject)
 │   │   ├── paciente_model.py                    # Pacientes (QObject)
 │   │   ├── doctor_model.py                      # Doctores + Especialidades (QObject)
 │   │   ├── trabajador_model.py                  # Trabajadores + Tipos (QObject)
@@ -27,8 +34,15 @@ clinica_app/
 │   │   └── dashboard_model.py                   # Estadísticas generales (QObject)
 │   │
 │   ├── repositories/                            # 📊 Acceso a datos
+│   │   ├── ConfiguracionRepositor/
+│   │   │   ├── __init__.py
+│   │   │   ├── ConfiEnfermeria_repository.py
+│   │   │   ├── ConfiLaboratorio_repository.py
+│   │   │   ├── ConfiServiciosbasicos_repository.py
+│   │   │   └── # falta archivos py para otras configuraciones
 │   │   ├── __init__.py
 │   │   ├── usuario_repository.py                # Usuario + Roles
+│   │   ├── enfermeria_repository.py                # Usuario + Roles
 │   │   ├── paciente_repository.py               # Pacientes
 │   │   ├── doctor_repository.py                 # Doctores + Especialidades
 │   │   ├── trabajador_repository.py             # Trabajadores + Tipos
