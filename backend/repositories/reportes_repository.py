@@ -1,0 +1,477 @@
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
+
+from ..core.base_repository import BaseRepository
+from ..core.excepciones import (
+    ValidationError, DatabaseQueryError,
+    ExceptionHandler, validate_required
+)
+from ..core.cache_system import cached_query, invalidate_after_update
+
+class ReportesRepository(BaseRepository):
+    """Repository para generación de reportes del sistema"""
+    
+    def __init__(self):
+        super().__init__('reportes_temp', 'reportes')  # Tabla temporal para cachés
+        print("📊 ReportesRepository inicializado")
+    
+    # ===============================
+    # IMPLEMENTACIÓN ABSTRACTA
+    # ===============================
+    
+    def get_active(self) -> List[Dict[str, Any]]:
+        """No aplica para reportes"""
+        return []
+    
+    # ===============================
+    # REPORTES DE VENTAS (TIPO 1)
+    # ===============================
+    
+    @cached_query('reporte_ventas', ttl=300)
+    def get_reporte_ventas(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """
+        Genera reporte de ventas de farmacia
+        
+        Args:
+            fecha_desde: Fecha inicio en formato DD/MM/YYYY
+            fecha_hasta: Fecha fin en formato DD/MM/YYYY
+        """
+        # Convertir fechas del formato DD/MM/YYYY a YYYY-MM-DD
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        query = """
+        SELECT 
+            FORMAT(v.Fecha, 'dd/MM/yyyy') as fecha,
+            'V' + RIGHT('000' + CAST(v.id AS VARCHAR), 3) as numeroVenta,
+            STRING_AGG(p.Nombre + ' x' + CAST(dv.Cantidad_Unitario AS VARCHAR), ', ') as descripcion,
+            SUM(dv.Cantidad_Unitario) as cantidad,
+            v.Total as valor,
+            u.Nombre + ' ' + u.Apellido_Paterno as usuario
+        FROM Ventas v
+        INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
+        INNER JOIN Lote l ON dv.Id_Lote = l.id
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        INNER JOIN Usuario u ON v.Id_Usuario = u.id
+        WHERE v.Fecha >= ? AND v.Fecha <= ?
+        GROUP BY v.id, v.Fecha, v.Total, u.Nombre, u.Apellido_Paterno
+        ORDER BY v.Fecha DESC, v.id DESC
+        """
+        
+        return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
+    # ===============================
+    # REPORTES DE INVENTARIO (TIPO 2)
+    # ===============================
+    
+    @cached_query('reporte_inventario', ttl=600)
+    def get_reporte_inventario(self, fecha_desde: str = "", fecha_hasta: str = "") -> List[Dict[str, Any]]:
+        """Genera reporte de inventario valorizado actual"""
+        query = """
+        SELECT 
+            p.Codigo as codigo,
+            p.Nombre as descripcion,
+            p.Unidad_Medida as unidad,
+            (p.Stock_Caja * 12 + p.Stock_Unitario) as cantidad,
+            p.Precio_venta as precioUnitario,
+            (p.Stock_Caja * 12 + p.Stock_Unitario) * p.Precio_venta as valor,
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            m.Nombre as marca,
+            CASE 
+                WHEN p.Fecha_Venc IS NOT NULL AND p.Fecha_Venc <= DATEADD(MONTH, 3, GETDATE()) 
+                THEN 'Próximo a vencer'
+                ELSE 'Normal'
+            END as estado
+        FROM Productos p
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        WHERE (p.Stock_Caja + p.Stock_Unitario) > 0
+        ORDER BY valor DESC, p.Nombre
+        """
+        
+        return self._execute_query(query)
+    
+    # ===============================
+    # REPORTES DE COMPRAS (TIPO 3)
+    # ===============================
+    
+    @cached_query('reporte_compras', ttl=300)
+    def get_reporte_compras(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """Genera reporte de compras de farmacia"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        query = """
+        SELECT 
+            FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
+            'C' + RIGHT('000' + CAST(c.id AS VARCHAR), 3) as numeroCompra,
+            pr.Nombre as descripcion,
+            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as cantidad,
+            c.Total as valor,
+            u.Nombre + ' ' + u.Apellido_Paterno as usuario,
+            pr.Direccion as direccion_proveedor
+        FROM Compra c
+        INNER JOIN Proveedor pr ON c.Id_Proveedor = pr.id
+        INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
+        INNER JOIN Usuario u ON c.Id_Usuario = u.id
+        WHERE c.Fecha >= ? AND c.Fecha <= ?
+        GROUP BY c.id, c.Fecha, pr.Nombre, pr.Direccion, c.Total, u.Nombre, u.Apellido_Paterno
+        ORDER BY c.Fecha DESC, c.id DESC
+        """
+        
+        return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
+    # ===============================
+    # REPORTES DE CONSULTAS (TIPO 4)
+    # ===============================
+    
+    @cached_query('reporte_consultas', ttl=300)
+    def get_reporte_consultas(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """Genera reporte de consultas médicas"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        query = """
+        SELECT 
+            FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
+            e.Nombre as especialidad,
+            d.Nombre + ' ' + d.Apellido_Paterno + ' ' + d.Apellido_Materno as descripcion,
+            p.Nombre + ' ' + p.Apellido_Paterno as paciente,
+            CASE WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia 
+                 ELSE e.Precio_Normal END as valor,
+            c.Tipo_Consulta as tipo,
+            1 as cantidad,
+            c.Detalles as observaciones
+        FROM Consultas c
+        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
+        INNER JOIN Doctores d ON e.Id_Doctor = d.id
+        INNER JOIN Pacientes p ON c.Id_Paciente = p.id
+        WHERE c.Fecha >= ? AND c.Fecha <= ?
+        ORDER BY c.Fecha DESC, c.id DESC
+        """
+        
+        return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
+    # ===============================
+    # REPORTES DE LABORATORIO (TIPO 5)
+    # ===============================
+    
+    @cached_query('reporte_laboratorio', ttl=300)
+    def get_reporte_laboratorio(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """Genera reporte de análisis de laboratorio"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        query = """
+        SELECT 
+            FORMAT(l.Fecha, 'dd/MM/yyyy') as fecha,
+            COALESCE(ta.Nombre, 'Análisis General') as descripcion,
+            p.Nombre + ' ' + p.Apellido_Paterno as paciente,
+            CASE 
+                WHEN l.Detalles IS NOT NULL THEN 'Completado'
+                ELSE 'Procesado' 
+            END as estado,
+            CASE WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
+                 ELSE COALESCE(ta.Precio_Normal, 20.00) END as valor,
+            l.Tipo as tipo,
+            1 as cantidad,
+            COALESCE(t.Nombre + ' ' + t.Apellido_Paterno, 'Sin asignar') as tecnico
+        FROM Laboratorio l
+        INNER JOIN Pacientes p ON l.Id_Paciente = p.id
+        LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+        LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
+        WHERE l.Fecha >= ? AND l.Fecha <= ?
+        ORDER BY l.Fecha DESC, l.id DESC
+        """
+        
+        return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
+    # ===============================
+    # REPORTES DE ENFERMERÍA (TIPO 6)
+    # ===============================
+    
+    @cached_query('reporte_enfermeria', ttl=300)
+    def get_reporte_enfermeria(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """Genera reporte de procedimientos de enfermería"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        query = """
+        SELECT 
+            FORMAT(e.Fecha, 'dd/MM/yyyy') as fecha,
+            tp.Nombre as descripcion,
+            p.Nombre + ' ' + p.Apellido_Paterno as paciente,
+            e.Cantidad as cantidad,
+            (CASE WHEN e.Tipo = 'Emergencia' THEN tp.Precio_Emergencia 
+                  ELSE tp.Precio_Normal END) * e.Cantidad as valor,
+            e.Tipo as tipo,
+            COALESCE(t.Nombre + ' ' + t.Apellido_Paterno, 'Sin asignar') as enfermero,
+            u.Nombre + ' ' + u.Apellido_Paterno as registrado_por
+        FROM Enfermeria e
+        INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+        INNER JOIN Pacientes p ON e.Id_Paciente = p.id
+        INNER JOIN Usuario u ON e.Id_RegistradoPor = u.id
+        LEFT JOIN Trabajadores t ON e.Id_Trabajador = t.id
+        WHERE e.Fecha >= ? AND e.Fecha <= ?
+        ORDER BY e.Fecha DESC, e.id DESC
+        """
+        
+        return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
+    # ===============================
+    # REPORTES DE GASTOS (TIPO 7)
+    # ===============================
+    
+    @cached_query('reporte_gastos', ttl=300)
+    def get_reporte_gastos(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """Genera reporte de gastos operativos"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        query = """
+        SELECT 
+            FORMAT(g.Fecha, 'dd/MM/yyyy') as fecha,
+            tg.Nombre as categoria,
+            g.Descripcion as descripcion,
+            g.Monto as valor,
+            g.Proveedor as proveedor,
+            u.Nombre + ' ' + u.Apellido_Paterno as registrado_por,
+            1 as cantidad
+        FROM Gastos g
+        INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
+        INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
+        WHERE g.Fecha >= ? AND g.Fecha <= ?
+        ORDER BY g.Fecha DESC, g.id DESC
+        """
+        
+        return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
+    # ===============================
+    # REPORTE CONSOLIDADO (TIPO 8)
+    # ===============================
+    
+    @cached_query('reporte_consolidado', ttl=600)
+    def get_reporte_consolidado(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """Genera reporte financiero consolidado"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        
+        # Consulta UNION para consolidar todos los ingresos y egresos
+        query = """
+        -- VENTAS (INGRESOS)
+        SELECT 
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            'INGRESO' as tipo,
+            'Ventas de Farmacia' as descripcion,
+            COUNT(*) as cantidad,
+            SUM(Total) as valor
+        FROM Ventas 
+        WHERE Fecha >= ? AND Fecha <= ?
+        
+        UNION ALL
+        
+        -- CONSULTAS (INGRESOS)
+        SELECT 
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            'INGRESO' as tipo,
+            'Consultas Médicas' as descripcion,
+            COUNT(*) as cantidad,
+            SUM(CASE WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia 
+                     ELSE e.Precio_Normal END) as valor
+        FROM Consultas c
+        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
+        WHERE c.Fecha >= ? AND c.Fecha <= ?
+        
+        UNION ALL
+        
+        -- LABORATORIO (INGRESOS)
+        SELECT 
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            'INGRESO' as tipo,
+            'Análisis de Laboratorio' as descripcion,
+            COUNT(*) as cantidad,
+            SUM(CASE WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
+                     ELSE COALESCE(ta.Precio_Normal, 20.00) END) as valor
+        FROM Laboratorio l
+        LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+        WHERE l.Fecha >= ? AND l.Fecha <= ?
+        
+        UNION ALL
+        
+        -- ENFERMERÍA (INGRESOS)
+        SELECT 
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            'INGRESO' as tipo,
+            'Procedimientos de Enfermería' as descripcion,
+            COUNT(*) as cantidad,
+            SUM((CASE WHEN e.Tipo = 'Emergencia' THEN tp.Precio_Emergencia 
+                      ELSE tp.Precio_Normal END) * e.Cantidad) as valor
+        FROM Enfermeria e
+        INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+        WHERE e.Fecha >= ? AND e.Fecha <= ?
+        
+        UNION ALL
+        
+        -- COMPRAS (EGRESOS)
+        SELECT 
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            'EGRESO' as tipo,
+            'Compras de Farmacia' as descripcion,
+            COUNT(*) as cantidad,
+            -SUM(Total) as valor
+        FROM Compra
+        WHERE Fecha >= ? AND Fecha <= ?
+        
+        UNION ALL
+        
+        -- GASTOS (EGRESOS)
+        SELECT 
+            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            'EGRESO' as tipo,
+            'Gastos Operativos' as descripcion,
+            COUNT(*) as cantidad,
+            -SUM(Monto) as valor
+        FROM Gastos
+        WHERE Fecha >= ? AND Fecha <= ?
+        
+        ORDER BY tipo DESC, valor DESC
+        """
+        
+        params = (fecha_desde_sql, fecha_hasta_sql) * 6  # 6 consultas x 2 parámetros cada una
+        return self._execute_query(query, params)
+    
+    # ===============================
+    # MÉTODOS DE UTILIDAD
+    # ===============================
+    
+    def _convertir_fecha_sql(self, fecha_str: str) -> str:
+        """
+        Convierte fecha de DD/MM/YYYY a YYYY-MM-DD para SQL Server
+        
+        Args:
+            fecha_str: Fecha en formato DD/MM/YYYY
+            
+        Returns:
+            Fecha en formato YYYY-MM-DD
+        """
+        try:
+            if not fecha_str or fecha_str.strip() == "":
+                return datetime.now().strftime("%Y-%m-%d")
+            
+            # Parsear DD/MM/YYYY
+            dia, mes, anio = fecha_str.split('/')
+            
+            # Validar componentes
+            dia = int(dia)
+            mes = int(mes)
+            anio = int(anio)
+            
+            if dia < 1 or dia > 31:
+                raise ValueError("Día inválido")
+            if mes < 1 or mes > 12:
+                raise ValueError("Mes inválido")
+            if anio < 2020 or anio > 2030:
+                raise ValueError("Año inválido")
+            
+            # Convertir a YYYY-MM-DD
+            return f"{anio:04d}-{mes:02d}-{dia:02d}"
+            
+        except Exception as e:
+            print(f"⚠️ Error convirtiendo fecha '{fecha_str}': {e}")
+            # Fallback: fecha actual
+            return datetime.now().strftime("%Y-%m-%d")
+    
+    def get_resumen_periodo(self, fecha_desde: str, fecha_hasta: str) -> Dict[str, Any]:
+        """Obtiene resumen general del período"""
+        try:
+            fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+            fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+            
+            query = """
+            SELECT 
+                -- INGRESOS
+                COALESCE(SUM(CASE WHEN tipo_operacion = 'INGRESO' THEN monto ELSE 0 END), 0) as total_ingresos,
+                -- EGRESOS  
+                COALESCE(SUM(CASE WHEN tipo_operacion = 'EGRESO' THEN monto ELSE 0 END), 0) as total_egresos,
+                -- TRANSACCIONES
+                COUNT(*) as total_transacciones
+            FROM (
+                SELECT 'INGRESO' as tipo_operacion, Total as monto FROM Ventas WHERE Fecha >= ? AND Fecha <= ?
+                UNION ALL
+                SELECT 'EGRESO' as tipo_operacion, Total as monto FROM Compra WHERE Fecha >= ? AND Fecha <= ?
+                UNION ALL
+                SELECT 'EGRESO' as tipo_operacion, Monto as monto FROM Gastos WHERE Fecha >= ? AND Fecha <= ?
+            ) consolidado
+            """
+            
+            params = (fecha_desde_sql, fecha_hasta_sql) * 3
+            resultado = self._execute_query(query, params, fetch_one=True)
+            
+            if resultado:
+                return {
+                    'total_ingresos': float(resultado.get('total_ingresos', 0)),
+                    'total_egresos': float(resultado.get('total_egresos', 0)),
+                    'utilidad_neta': float(resultado.get('total_ingresos', 0)) - float(resultado.get('total_egresos', 0)),
+                    'total_transacciones': int(resultado.get('total_transacciones', 0))
+                }
+            else:
+                return {
+                    'total_ingresos': 0.0,
+                    'total_egresos': 0.0,
+                    'utilidad_neta': 0.0,
+                    'total_transacciones': 0
+                }
+                
+        except Exception as e:
+            print(f"⚠️ Error obteniendo resumen del período: {e}")
+            return {
+                'total_ingresos': 0.0,
+                'total_egresos': 0.0,
+                'utilidad_neta': 0.0,
+                'total_transacciones': 0
+            }
+    
+    def verificar_datos_disponibles(self, tipo_reporte: int, fecha_desde: str, fecha_hasta: str) -> bool:
+        """Verifica si hay datos disponibles para el reporte solicitado"""
+        try:
+            fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
+            fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+            
+            tablas_por_tipo = {
+                1: "Ventas",
+                2: "Productos", 
+                3: "Compra",
+                4: "Consultas",
+                5: "Laboratorio",
+                6: "Enfermeria",
+                7: "Gastos",
+                8: "Ventas"  # Para consolidado, verificamos al menos una tabla
+            }
+            
+            tabla = tablas_por_tipo.get(tipo_reporte, "Ventas")
+            
+            if tipo_reporte == 2:  # Inventario no depende de fechas
+                query = f"SELECT COUNT(*) as total FROM {tabla} WHERE Stock_Caja + Stock_Unitario > 0"
+                resultado = self._execute_query(query, fetch_one=True)
+            else:
+                query = f"SELECT COUNT(*) as total FROM {tabla} WHERE Fecha >= ? AND Fecha <= ?"
+                resultado = self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql), fetch_one=True)
+            
+            return resultado.get('total', 0) > 0 if resultado else False
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando datos disponibles: {e}")
+            return False
+    
+    # ===============================
+    # INVALIDACIÓN DE CACHÉ
+    # ===============================
+    
+    def _invalidate_cache_after_modification(self):
+        """Invalida cachés de reportes después de modificaciones"""
+        cache_types = [
+            'reporte_ventas', 'reporte_inventario', 'reporte_compras',
+            'reporte_consultas', 'reporte_laboratorio', 'reporte_enfermeria',
+            'reporte_gastos', 'reporte_consolidado'
+        ]
+        invalidate_after_update(cache_types)
+        print("🗑️ Cachés de reportes invalidados")

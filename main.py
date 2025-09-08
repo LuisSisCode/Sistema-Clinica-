@@ -21,6 +21,8 @@ from backend.models.paciente_model import PacienteModel, register_paciente_model
 from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
 from backend.models.trabajador_model import TrabajadorModel, register_trabajador_model
 from backend.models.enfermeria_model import EnfermeriaModel, register_enfermeria_model
+from backend.models.reportes_model import ReportesModel, register_reportes_model
+from backend.models.dashboard_model import DashboardModel, register_dashboard_model
 #import configuracion 
 from backend.models.ConfiguracionModel.ConfiServiciosbasicos_model import ConfiguracionModel, register_configuracion_model
 from backend.models.ConfiguracionModel.ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
@@ -75,6 +77,8 @@ class AppController(QObject):
         self.confi_laboratorio_model = None
         self.confi_enfermeria_model = None
         self.confi_consulta_model = None
+        self.reportes_model = None
+        self.dashboard_model = None
     # ===============================
     # INICIALIZACIÓN DE MODELS
     # ===============================
@@ -100,7 +104,15 @@ class AppController(QObject):
             self.confi_laboratorio_model = ConfiLaboratorioModel()
             self.confi_enfermeria_model = ConfiEnfermeriaModel()
             self.confi_consulta_model = ConfiConsultaModel()
-            
+            self.reportes_model = ReportesModel()
+
+            self.dashboard_model = DashboardModel()
+            print("📊 DashboardModel inicializado")
+
+            # ✅ ESTABLECER CONEXIÓN DIRECTA PARA PDF
+            if self.reportes_model:
+                self.reportes_model.set_app_controller(self)
+                print("📄 PDF generator conectado al ReportesModel")
 
             # Conectar signals entre models
             self._connect_models()
@@ -225,9 +237,40 @@ class AppController(QObject):
                 self.confi_consulta_model.especialidadActualizada.connect(self._on_especialidad_actualizada)
                 self.confi_consulta_model.especialidadEliminada.connect(self._on_especialidad_eliminada)
                 print("🔗 ConfiConsultaModel conectado correctamente")
-            
+                
+            # ✅ CONECTAR REPORTES MODEL
+            if self.reportes_model:
+                self.reportes_model.reporteError.connect(self._on_model_error)
+                self.reportes_model.reporteGenerado.connect(self._on_reporte_generado)
+                
+                # ✅ NUEVA LÍNEA: Establecer referencia al AppController para PDF
+                self.reportes_model.set_app_controller(self)
+                print("🔗 ReportesModel conectado correctamente")
+
+
         except Exception as e:
             print(f"❌ Error conectando models: {e}")
+
+    @Slot(bool, str, int)
+    def _on_reporte_generado(self, success: bool, message: str, total_registros: int):
+        """Handler cuando se genera un reporte"""
+        if success:
+            print(f"📊 Reporte generado exitosamente: {message} ({total_registros} registros)")
+            self.showNotification("Reporte Generado", message)
+        else:
+            print(f"❌ Error generando reporte: {message}")
+            self.showNotification("Error en Reporte", message)
+
+    @Property(QObject, notify=modelsReady)
+    def dashboard_model_instance(self):
+        """Propiedad para acceder al DashboardModel desde QML"""
+        return self.dashboard_model        
+
+    # AGREGAR ESTE GETTER PARA EL REPORTES MODEL:
+    @Property(QObject, notify=modelsReady)
+    def reportes_model_instance(self):
+        """Propiedad para acceder al ReportesModel desde QML"""
+        return self.reportes_model
 
     def _establecer_usuario_por_defecto(self):
         """Establece automáticamente un usuario administrador como usuario actual"""
@@ -1242,6 +1285,8 @@ def register_qml_types():
         register_confi_laboratorio_model()
         register_confi_enfermeria_model()
         register_confi_consulta_model()
+        register_reportes_model()
+        register_dashboard_model()
         print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:
@@ -1255,6 +1300,7 @@ def register_data_models():
         register_confi_laboratorio_model()
         register_confi_enfermeria_model()
         register_confi_consulta_model()
+        register_reportes_model()
         print("✅ Modelos de datos registrados correctamente")
         
     except Exception as e:

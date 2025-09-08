@@ -1,5 +1,5 @@
 """
-Modelo QObject para Gestión de Consultas Médicas - CORREGIDO con nombres reales de BD
+Modelo QObject para Gestión de Consultas Médicas - CORREGIDO con set_usuario_actual
 Expone funcionalidad de consultas a QML con Signals/Slots/Properties
 """
 
@@ -15,7 +15,7 @@ from ..repositories.doctor_repository import DoctorRepository
 
 class ConsultaModel(QObject):
     """
-    Modelo QObject para gestión completa de consultas médicas - CORREGIDO
+    Modelo QObject para gestión completa de consultas médicas - CORREGIDO con usuario
     Conecta la lógica de negocio con la interfaz QML
     """
     
@@ -42,7 +42,7 @@ class ConsultaModel(QObject):
     
     # Estados y notificaciones
     estadoCambiado = Signal(str, arguments=['nuevoEstado'])
-    errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
+    operacionError = Signal(str, arguments=['mensaje'])  # AÑADIDO para compatibilidad
     operacionExitosa = Signal(str, arguments=['mensaje'])
     
     # Datos actualizados
@@ -66,11 +66,41 @@ class ConsultaModel(QObject):
         self._estadisticasData = {}
         self._estadoActual = "listo"  # listo, cargando, error
         
+        # ✅ AGREGAR: Usuario actual para compatibilidad con AppController
+        self._usuario_actual_id = 10  # Usuario por defecto
+        
         # Configuración
         self._autoRefreshInterval = 30000  # 30 segundos
         self._setupAutoRefresh()
         
         print("🩺 ConsultaModel inicializado con gestión de pacientes por cédula")
+    
+    # ===============================
+    # ✅ MÉTODO FALTANTE PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones
+        MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario establecido en ConsultaModel: ID {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de consultas")
+            else:
+                print(f"⚠️ ID de usuario inválido: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en ConsultaModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
     
     # ===============================
     # PROPERTIES PARA QML
@@ -167,7 +197,7 @@ class ConsultaModel(QObject):
         except Exception as e:
             error_msg = f"Error buscando paciente por cédula: {str(e)}"
             print(f"⚠️ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
+            self.operacionError.emit(error_msg)
             return {}
     
     @Slot(str, int, result='QVariantList')
@@ -198,7 +228,7 @@ class ConsultaModel(QObject):
         except Exception as e:
             error_msg = f"Error en búsqueda de pacientes: {str(e)}"
             print(f"⚠️ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
+            self.operacionError.emit(error_msg)
             return []
     
     @Slot(str, str, str, str, result=int)
@@ -218,18 +248,18 @@ class ConsultaModel(QObject):
         """
         try:
             if not cedula or len(cedula.strip()) < 5:
-                self.errorOcurrido.emit("Cédula es obligatoria (mínimo 5 dígitos)", 'VALIDATION_ERROR')
+                self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
                 return -1
             
             if not nombre or len(nombre.strip()) < 2:
-                self.errorOcurrido.emit("Nombre es obligatorio", 'VALIDATION_ERROR')
+                self.operacionError.emit("Nombre es obligatorio")
                 return -1
             
             if not apellido_paterno or len(apellido_paterno.strip()) < 2:
-                self.errorOcurrido.emit("Apellido paterno es obligatorio", 'VALIDATION_ERROR')
+                self.operacionError.emit("Apellido paterno es obligatorio")
                 return -1
             
-            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"📄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
             
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
@@ -242,23 +272,23 @@ class ConsultaModel(QObject):
                 self.operacionExitosa.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
                 return paciente_id
             else:
-                self.errorOcurrido.emit("Error gestionando paciente", 'PATIENT_MANAGEMENT_ERROR')
+                self.operacionError.emit("Error gestionando paciente")
                 return -1
                 
         except Exception as e:
             error_msg = f"Error gestionando paciente: {str(e)}"
             print(f"⚠️ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'PATIENT_MANAGEMENT_EXCEPTION')
+            self.operacionError.emit(error_msg)
             return -1
     
     # ===============================
-    # SLOTS PARA OPERACIONES CRUD - CORREGIDOS
+    # SLOTS PARA OPERACIONES CRUD - CORREGIDOS CON USUARIO
     # ===============================
     
     @Slot('QVariant', result=str)
     def crear_consulta(self, datos_consulta):
         """
-        Crea nueva consulta médica - CORREGIDO
+        Crea nueva consulta médica - CORREGIDO con usuario actual
         datos_consulta: {
             'paciente_id': int,
             'especialidad_id': int,
@@ -291,9 +321,9 @@ class ConsultaModel(QObject):
             if len(detalles) < 10:
                 raise ValueError("Detalles muy cortos (mínimo 10 caracteres)")
             
-            # Crear consulta usando el repository
+            # ✅ USAR usuario actual en lugar de hardcoded
             consulta_id = self.repository.create_consultation(
-                usuario_id=10,  # Usuario por defecto
+                usuario_id=self._usuario_actual_id,  # Usar usuario actual
                 paciente_id=paciente_id,
                 especialidad_id=especialidad_id,
                 detalles=detalles,
@@ -322,7 +352,7 @@ class ConsultaModel(QObject):
                 
         except Exception as e:
             error_msg = f"Error creando consulta: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
     
@@ -360,13 +390,13 @@ class ConsultaModel(QObject):
                 return json.dumps({'exito': True, 'datos': consulta_actualizada}, default=str)
             else:
                 error_msg = "Error actualizando consulta"
-                self.errorOcurrido.emit(error_msg, 'UPDATE_ERROR')
+                self.operacionError.emit(error_msg)
                 self._set_estado_actual("error")
                 return json.dumps({'exito': False, 'error': error_msg})
                 
         except Exception as e:
             error_msg = f"Error actualizando consulta: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'UPDATE_EXCEPTION')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
     
@@ -389,13 +419,13 @@ class ConsultaModel(QObject):
                 self._set_estado_actual("listo")
                 return True
             else:
-                self.errorOcurrido.emit(f"No se pudo eliminar la consulta {consulta_id}", 'DELETE_ERROR')
+                self.operacionError.emit(f"No se pudo eliminar la consulta {consulta_id}")
                 self._set_estado_actual("error")
                 return False
                 
         except Exception as e:
             error_msg = f"Error eliminando consulta: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'DELETE_EXCEPTION')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return False
     
@@ -420,7 +450,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error en búsqueda: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'SEARCH_ERROR')
+            self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
     @Slot(int, result=str)
@@ -437,7 +467,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error obteniendo consultas del paciente: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'PATIENT_CONSULTATIONS_ERROR')
+            self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
     @Slot(int, result=str)
@@ -454,7 +484,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error obteniendo consultas del doctor: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'DOCTOR_CONSULTATIONS_ERROR')
+            self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
     @Slot(int, result=str)
@@ -470,7 +500,7 @@ class ConsultaModel(QObject):
                 
         except Exception as e:
             error_msg = f"Error obteniendo consulta: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'GET_ERROR')
+            self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
     # ===============================
@@ -501,7 +531,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error generando dashboard: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'DASHBOARD_ERROR')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
     
@@ -521,7 +551,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error generando estadísticas: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'STATS_ERROR')
+            self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
     @Slot(int, result=str)
@@ -541,7 +571,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error obteniendo resumen: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'SUMMARY_ERROR')
+            self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
     # ===============================
@@ -556,7 +586,7 @@ class ConsultaModel(QObject):
             self._cargar_consultas_recientes()
             self._set_estado_actual("listo")
         except Exception as e:
-            self.errorOcurrido.emit(f"Error cargando consultas: {str(e)}", 'LOAD_ERROR')
+            self.operacionError.emit(f"Error cargando consultas: {str(e)}")
             self._set_estado_actual("error")
     
     @Slot()
@@ -583,7 +613,7 @@ class ConsultaModel(QObject):
         except Exception as e:
             error_msg = f"Error cargando especialidades: {str(e)}"
             print(f"⚠️ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'LOAD_SPECIALTIES_ERROR')
+            self.operacionError.emit(error_msg)
             
     @Slot()
     def cargar_doctores(self):
@@ -604,7 +634,7 @@ class ConsultaModel(QObject):
             self.doctoresDisponiblesChanged.emit()
             
         except Exception as e:
-            self.errorOcurrido.emit(f"Error cargando doctores: {str(e)}", 'LOAD_DOCTORS_ERROR')
+            self.operacionError.emit(f"Error cargando doctores: {str(e)}")
     
     @Slot()
     def refresh_consultas(self):
@@ -644,7 +674,7 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error refrescando datos: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
         finally:
             self._is_initializing = False
@@ -705,7 +735,7 @@ class ConsultaModel(QObject):
             resultado = self.repository.get_consultas_paginadas(page, limit, filtros_dict)
             return resultado
         except Exception as e:
-            self.errorOcurrido.emit(f"Error paginación: {str(e)}", 'PAGINATION_ERROR')
+            self.operacionError.emit(f"Error paginación: {str(e)}")
             return {'consultas': [], 'total': 0, 'page': 0, 'total_pages': 0}
 
     # ===============================
