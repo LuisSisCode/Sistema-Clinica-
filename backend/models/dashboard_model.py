@@ -336,7 +336,7 @@ class DashboardModel(QObject):
     # ===============================
     
     def _actualizar_farmacia_data(self, fecha_inicio: datetime, fecha_fin: datetime):
-        """Actualiza datos de farmacia/ventas - CON VALIDACIÓN"""
+        """Actualiza datos de farmacia/ventas - CORREGIDO"""
         try:
             if not self.venta_repo:
                 print("⚠️ VentaRepository no disponible")
@@ -344,11 +344,18 @@ class DashboardModel(QObject):
                 self.farmaciaDataChanged.emit()
                 return
                 
-            ventas = self.venta_repo.get_sales_by_date_range(fecha_inicio, fecha_fin)
+            # ✅ CORRECCIÓN: Usar método correcto del VentaRepository
+            # Convertir fechas a string para el método
+            fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
+            fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
+            
+            # Usar get_ventas_con_detalles que sí existe
+            ventas = self.venta_repo.get_ventas_con_detalles(fecha_inicio_str, fecha_fin_str)
             
             total = 0.0
             for venta in ventas:
-                total += float(venta.get('Total', 0))
+                # Usar 'Venta_Total' en lugar de 'Total'
+                total += float(venta.get('Venta_Total', 0))
             
             if total != self._farmacia_total:
                 self._farmacia_total = float(total)
@@ -358,35 +365,37 @@ class DashboardModel(QObject):
         except Exception as e:
             print(f"❌ Error actualizando farmacia: {e}")
             self._farmacia_total = 0.0
-            self.farmaciaDataChanged.emit()
-    
+            self.farmaciaDataChanged.emit
+            
     def _actualizar_consultas_data(self, fecha_inicio: datetime, fecha_fin: datetime):
-        """Actualiza datos de consultas - CON VALIDACIÓN"""
+        """Versión temporal que cuenta consultas con precio fijo"""
         try:
             if not self.consulta_repo:
-                print("⚠️ ConsultaRepository no disponible")
                 self._consultas_total = 0.0
                 self.consultasDataChanged.emit()
                 return
                 
-            consultas = self.consulta_repo.get_consultations_by_date_range(fecha_inicio, fecha_fin)
+            # Obtener todas las consultas y filtrar manualmente
+            todas_consultas = self.consulta_repo.get_all_with_details(1000)
+            consultas_filtradas = 0
             
-            total = 0.0
-            for consulta in consultas:
-                tipo_consulta = consulta.get('Tipo_Consulta', 'Normal')
-                if tipo_consulta and tipo_consulta.lower() == 'emergencia':
-                    precio = consulta.get('Precio_Emergencia', 0)
-                else:
-                    precio = consulta.get('Precio_Normal', 0)
-                total += float(precio or 0)
+            for consulta in todas_consultas:
+                fecha_consulta = consulta.get('Fecha')
+                if fecha_consulta:
+                    if isinstance(fecha_consulta, str):
+                        fecha_consulta = datetime.fromisoformat(fecha_consulta.replace('Z', '+00:00'))
+                    if fecha_inicio <= fecha_consulta < fecha_fin:
+                        consultas_filtradas += 1
             
-            if total != self._consultas_total:
-                self._consultas_total = total
-                self.consultasDataChanged.emit()
-                print(f"🩺 Consultas actualizadas: Bs {total:.2f}")
-                
+            # Precio fijo temporal: 50 normal, 80 emergencia
+            total_temporal = consultas_filtradas * 50  # Asumiendo precio promedio
+            
+            self._consultas_total = total_temporal
+            self.consultasDataChanged.emit()
+            print(f"💡 Temporal: {consultas_filtradas} consultas = Bs {total_temporal}")
+            
         except Exception as e:
-            print(f"❌ Error actualizando consultas: {e}")
+            print(f"Error: {e}")
             self._consultas_total = 0.0
             self.consultasDataChanged.emit()
     
