@@ -14,7 +14,7 @@ Item {
     signal backToMain()
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
-    readonly property real baseUnit: Math.min(width, height) / 100
+    readonly property real baseUnit: Math.min(parent ? parent.width : 800, parent ? parent.height : 600) / 100
     readonly property real fontTiny: baseUnit * 1.2
     readonly property real fontSmall: baseUnit * 1.5
     readonly property real fontBase: baseUnit * 2.0

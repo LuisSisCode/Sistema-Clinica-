@@ -22,7 +22,7 @@ class DatabaseConnection:
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self, server="DESKTOP-HOE6AHT\SQLEXPRESS", database="ClinicaMariaInmaculada", trusted_connection=False):
+    def __init__(self, server="LUISLOPEZ\SQLEXPRESS", database="ClinicaMariaInmaculada", trusted_connection=False):
         """
         Inicializa la conexión a la base de datos SQL Server.
         
@@ -46,7 +46,7 @@ class DatabaseConnection:
                 self.connection_string += "Trusted_Connection=yes;"
             else:
                 # Si necesitas usar autenticación de SQL Server, añade usuario y contraseña
-                self.connection_string += "UID=ADMIN;PWD=admin;"
+                #self.connection_string += "UID=ADMIN;PWD=admin;"
                 pass
                 
             # Probar la conexión al iniciar

@@ -1,19 +1,25 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import ClinicaModels 1.0
 
 Item {
-    id: configEspecialidadesRoot
+    id: confiConsultaRoot
     
-    // ===== PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
-    property alias especialidades: configEspecialidadesRoot.especialidadesData
+    // ===== PROPIEDADES PARA COMUNICACIÓN EXTERNA =====
+    property alias especialidades: confiConsultaRoot.especialidadesData
     
-    // ===== SEÑALES PARA VOLVER =====
+    // ===== SEÑALES PARA NAVEGACIÓN =====
     signal volverClicked()
     signal backToMain()
     
     // ===== DATOS INTERNOS =====
     property var especialidadesData: []
+    property var doctoresDisponibles: []
+    property var estadisticas: ({})
+    
+    // ===== CONEXIÓN AL MODEL =====
+    property var confiConsultaModel: appController.confi_consulta_model_instance
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -48,62 +54,209 @@ Item {
     
     // ===== ESTADO DE EDICIÓN =====
     property bool isEditMode: false
-    property int editingIndex: -1
+    property int editingId: -1
+    property bool isLoading: false
     
-    // ===== FUNCIONES =====
+    // ===== FUNCIONES PRINCIPALES =====
     function limpiarFormulario() {
-        nuevaEspecialidadNombre.text = ""
-        nuevaEspecialidadDoctor.text = ""
-        nuevaEspecialidadDetalles.text = ""
-        nuevaEspecialidadPrecioNormal.text = ""
-        nuevaEspecialidadPrecioEmergencia.text = ""
+        nombreField.text = ""
+        detallesField.text = ""
+        precioNormalField.text = ""
+        precioEmergenciaField.text = ""
+        doctorComboBox.currentIndex = 0
         isEditMode = false
-        editingIndex = -1
+        editingId = -1
     }
     
-    function editarEspecialidad(index) {
-        if (index >= 0 && index < especialidadesData.length) {
-            var especialidad = especialidadesData[index]
-            nuevaEspecialidadNombre.text = especialidad.nombre
-            nuevaEspecialidadDoctor.text = especialidad.doctor
-            nuevaEspecialidadDetalles.text = especialidad.detalles || ""
-            nuevaEspecialidadPrecioNormal.text = especialidad.precioNormal.toString()
-            nuevaEspecialidadPrecioEmergencia.text = especialidad.precioEmergencia.toString()
+    function editarEspecialidad(especialidad) {
+        if (especialidad && especialidad.id) {
+            nombreField.text = especialidad.Nombre || ""
+            detallesField.text = especialidad.Detalles || ""
+            precioNormalField.text = especialidad.Precio_Normal ? especialidad.Precio_Normal.toString() : "0"
+            precioEmergenciaField.text = especialidad.Precio_Emergencia ? especialidad.Precio_Emergencia.toString() : "0"
+            
+            // Seleccionar doctor en combo
+            if (especialidad.Id_Doctor) {
+                for (let i = 0; i < doctorComboBox.model.length; i++) {
+                    if (doctorComboBox.model[i].id === especialidad.Id_Doctor) {
+                        doctorComboBox.currentIndex = i
+                        break
+                    }
+                }
+            } else {
+                doctorComboBox.currentIndex = 0
+            }
+            
             isEditMode = true
-            editingIndex = index
+            editingId = especialidad.id
+            console.log("Editando especialidad ID:", editingId)
         }
     }
     
-    function eliminarEspecialidad(index) {
-        if (index >= 0 && index < especialidadesData.length) {
-            especialidadesData.splice(index, 1)
-            configEspecialidadesRoot.especialidades = especialidadesData
-            console.log("🗑️ Especialidad eliminada en índice:", index)
+    function eliminarEspecialidad(especialidadId) {
+        if (confiConsultaModel && especialidadId > 0) {
+            console.log("Eliminando especialidad ID:", especialidadId)
+            confiConsultaModel.eliminarEspecialidad(especialidadId)
         }
     }
     
     function guardarEspecialidad() {
-        var nuevaEspecialidad = {
-            nombre: nuevaEspecialidadNombre.text,
-            doctor: nuevaEspecialidadDoctor.text,
-            detalles: nuevaEspecialidadDetalles.text,
-            precioNormal: parseFloat(nuevaEspecialidadPrecioNormal.text),
-            precioEmergencia: parseFloat(nuevaEspecialidadPrecioEmergencia.text)
+        if (!confiConsultaModel) {
+            console.log("Model no disponible")
+            return
         }
         
-        if (isEditMode && editingIndex >= 0) {
-            // Editar especialidad existente
-            especialidadesData[editingIndex] = nuevaEspecialidad
-            console.log("✏️ Especialidad editada:", JSON.stringify(nuevaEspecialidad))
+        const nombre = nombreField.text.trim()
+        const detalles = detallesField.text.trim()
+        const precioNormal = parseFloat(precioNormalField.text) || 0
+        const precioEmergencia = parseFloat(precioEmergenciaField.text) || 0
+        const idDoctor = doctorComboBox.currentIndex > 0 ? doctorComboBox.model[doctorComboBox.currentIndex].id : 0
+        
+        if (!nombre) {
+            mostrarError("Error de validación", "El nombre de la especialidad es requerido")
+            return
+        }
+        
+        if (isEditMode && editingId > 0) {
+            // Actualizar especialidad existente
+            console.log("Actualizando especialidad:", nombre)
+            confiConsultaModel.actualizarEspecialidad(
+                editingId,
+                nombre,
+                detalles,
+                precioNormal,
+                precioEmergencia,
+                idDoctor
+            )
         } else {
-            // Agregar nueva especialidad
-            especialidadesData.push(nuevaEspecialidad)
-            console.log("➕ Nueva especialidad agregada:", JSON.stringify(nuevaEspecialidad))
+            // Crear nueva especialidad
+            console.log("Creando nueva especialidad:", nombre)
+            confiConsultaModel.crearEspecialidad(
+                nombre,
+                detalles,
+                precioNormal,
+                precioEmergencia,
+                idDoctor
+            )
+        }
+    }
+    
+    function buscarEspecialidades() {
+        if (confiConsultaModel) {
+            const termino = busquedaField.text.trim()
+            confiConsultaModel.aplicarFiltros(termino)
+        }
+    }
+    
+    function limpiarBusqueda() {
+        busquedaField.text = ""
+        if (confiConsultaModel) {
+            confiConsultaModel.limpiarFiltros()
+        }
+    }
+    
+    function actualizarDatos() {
+        if (confiConsultaModel) {
+            console.log("Actualizando datos desde QML...")
+            especialidadesData = confiConsultaModel.especialidades || []
+            estadisticas = confiConsultaModel.estadisticas || {}
+            
+            // Cargar doctores disponibles
+            doctoresDisponibles = confiConsultaModel.obtenerDoctoresDisponibles() || []
+            actualizarModeloDoctores()
+        }
+    }
+    
+    function actualizarModeloDoctores() {
+        let modeloDoctores = []
+        
+        // Agregar opción "Sin doctor asignado"
+        modeloDoctores.push({
+            id: 0,
+            nombre: "Sin doctor asignado",
+            especialidad: ""
+        })
+        
+        // Agregar doctores disponibles
+        for (let doctor of doctoresDisponibles) {
+            modeloDoctores.push({
+                id: doctor.id || 0,
+                nombre: doctor.nombre || "Sin nombre",
+                especialidad: doctor.especialidad || ""
+            })
         }
         
-        // Actualizar el modelo y limpiar
-        configEspecialidadesRoot.especialidades = especialidadesData
-        limpiarFormulario()
+        doctorComboBox.model = modeloDoctores
+    }
+    
+    function mostrarError(titulo, mensaje) {
+        console.log("ERROR:", titulo, "-", mensaje)
+        // Aquí puedes agregar notificaciones visuales
+    }
+    
+    function mostrarExito(mensaje) {
+        console.log("ÉXITO:", mensaje)
+        // Aquí puedes agregar notificaciones visuales
+    }
+    
+    // ===== CONEXIONES AL MODEL =====
+    Connections {
+        target: confiConsultaModel
+        
+        function onEspecialidadesChanged() {
+            actualizarDatos()
+        }
+        
+        function onEstadisticasChanged() {
+            actualizarDatos()
+        }
+        
+        function onEspecialidadCreada(success, message) {
+            isLoading = false
+            if (success) {
+                mostrarExito(message)
+                limpiarFormulario()
+                confiConsultaModel.refrescarDatosInmediato()
+            } else {
+                mostrarError("Error creando especialidad", message)
+            }
+        }
+        
+        function onEspecialidadActualizada(success, message) {
+            isLoading = false
+            if (success) {
+                mostrarExito(message)
+                limpiarFormulario()
+                confiConsultaModel.refrescarDatosInmediato()
+            } else {
+                mostrarError("Error actualizando especialidad", message)
+            }
+        }
+        
+        function onEspecialidadEliminada(success, message) {
+            isLoading = false
+            if (success) {
+                mostrarExito(message)
+                confiConsultaModel.refrescarDatosInmediato()
+            } else {
+                mostrarError("Error eliminando especialidad", message)
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            isLoading = false
+            mostrarError(title, message)
+        }
+        
+        function onSuccessMessage(message) {
+            mostrarExito(message)
+        }
+        
+        function onLoadingChanged() {
+            if (confiConsultaModel) {
+                isLoading = confiConsultaModel.loading
+            }
+        }
     }
     
     // ===== LAYOUT PRINCIPAL =====
@@ -111,7 +264,7 @@ Item {
         anchors.fill: parent
         spacing: 0
         
-        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE) =====
+        // ===== HEADER PRINCIPAL =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: baseUnit * 12
@@ -147,12 +300,11 @@ Item {
                     }
                     
                     onClicked: {
-                        // Emitir señal para volver a la vista principal
                         if (typeof changeView !== "undefined") {
                             changeView("main")
                         } else {
-                            configEspecialidadesRoot.volverClicked()
-                            configEspecialidadesRoot.backToMain()
+                            confiConsultaRoot.volverClicked()
+                            confiConsultaRoot.backToMain()
                         }
                     }
                 }
@@ -185,13 +337,78 @@ Item {
                     }
                     
                     Label {
-                        text: "Gestiona las especialidades médicas, doctores, detalles y precios de consultas del sistema"
+                        text: "Gestiona las especialidades médicas, asigna doctores y configura precios del sistema"
                         color: backgroundColor
                         font.pixelSize: fontBase * 0.9
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                         opacity: 0.95
                         font.family: "Segoe UI"
+                    }
+                }
+                
+                // ===== ESTADÍSTICAS RÁPIDAS =====
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 20
+                    Layout.preferredHeight: baseUnit * 8
+                    color: backgroundColor
+                    radius: radiusMedium
+                    opacity: 0.95
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: marginSmall
+                        spacing: marginSmall
+                        
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: marginTiny
+                            
+                            Label {
+                                text: estadisticas.general ? estadisticas.general.total_especialidades || 0 : 0
+                                font.pixelSize: fontLarge
+                                font.bold: true
+                                color: primaryColor
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                            }
+                            
+                            Label {
+                                text: "Especialidades"
+                                font.pixelSize: fontTiny
+                                color: textSecondaryColor
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 1
+                            Layout.fillHeight: true
+                            color: borderColor
+                        }
+                        
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: marginTiny
+                            
+                            Label {
+                                text: estadisticas.general ? estadisticas.general.con_doctor_asignado || 0 : 0
+                                font.pixelSize: fontLarge
+                                font.bold: true
+                                color: successColor
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                            }
+                            
+                            Label {
+                                text: "Con Doctor"
+                                font.pixelSize: fontTiny
+                                color: textSecondaryColor
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                            }
+                        }
                     }
                 }
             }
@@ -207,6 +424,99 @@ Item {
                 anchors.fill: parent
                 anchors.margins: marginLarge
                 spacing: marginLarge
+                
+                // ===== BARRA DE BÚSQUEDA =====
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 6
+                    color: backgroundColor
+                    radius: radiusMedium
+                    border.color: borderColor
+                    border.width: 1
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: marginMedium
+                        spacing: marginMedium
+                        
+                        Label {
+                            text: "🔍"
+                            font.pixelSize: fontMedium
+                        }
+                        
+                        TextField {
+                            id: busquedaField
+                            Layout.fillWidth: true
+                            placeholderText: "Buscar especialidades por nombre, detalles o doctor..."
+                            font.pixelSize: fontBase
+                            font.family: "Segoe UI"
+                            
+                            background: Rectangle {
+                                color: "transparent"
+                            }
+                            
+                            onTextChanged: {
+                                buscarEspecialidades()
+                            }
+                            
+                            Keys.onPressed: {
+                                if (event.key === Qt.Key_Escape) {
+                                    limpiarBusqueda()
+                                }
+                            }
+                        }
+                        
+                        Button {
+                            text: "Limpiar"
+                            visible: busquedaField.text.length > 0
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
+                                radius: radiusSmall
+                            }
+                            
+                            contentItem: Label {
+                                text: parent.text
+                                color: backgroundColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: "Segoe UI"
+                            }
+                            
+                            onClicked: limpiarBusqueda()
+                        }
+                        
+                        Button {
+                            text: "🔄 Actualizar"
+                            enabled: !isLoading
+                            
+                            background: Rectangle {
+                                color: parent.enabled ? 
+                                       (parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor) :
+                                       Qt.lighter(primaryColor, 1.5)
+                                radius: radiusSmall
+                            }
+                            
+                            contentItem: Label {
+                                text: parent.text
+                                color: backgroundColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: "Segoe UI"
+                            }
+                            
+                            onClicked: {
+                                if (confiConsultaModel) {
+                                    confiConsultaModel.recargarDatos()
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 // ===== FORMULARIO =====
                 GroupBox {
@@ -232,7 +542,7 @@ Item {
                         anchors.fill: parent
                         spacing: marginMedium
                         
-                        // CAMPOS PRINCIPALES
+                        // PRIMERA FILA: NOMBRE Y DOCTOR
                         GridLayout {
                             Layout.fillWidth: true
                             columns: width < baseUnit * 80 ? 1 : 2
@@ -244,23 +554,23 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Especialidad:"
+                                    text: "Nombre de la Especialidad: *"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                 }
                                 TextField {
-                                    id: nuevaEspecialidadNombre
+                                    id: nombreField
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: baseUnit * 4.5
-                                    placeholderText: "Ej: Cardiología"
+                                    placeholderText: "Ej: Cardiología, Neurología, Pediatría..."
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: nombreField.focus ? primaryColor : borderColor
+                                        border.width: nombreField.focus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -271,177 +581,247 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Doctor:"
+                                    text: "Doctor Asignado:"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                 }
-                                TextField {
-                                    id: nuevaEspecialidadDoctor
+                                ComboBox {
+                                    id: doctorComboBox
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: baseUnit * 4.5
-                                    placeholderText: "Ej: Dr. Juan Carlos García"
-                                    font.pixelSize: fontBase
-                                    font.family: "Segoe UI"
+                                    
+                                    model: []
+                                    textRole: "nombre"
+                                    valueRole: "id"
+                                    
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
+                                        border.color: doctorComboBox.pressed ? primaryColor : borderColor
                                         border.width: 1
                                         radius: radiusSmall
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: doctorComboBox.displayText
+                                        font.pixelSize: fontBase
+                                        font.family: "Segoe UI"
+                                        color: textColor
+                                        verticalAlignment: Text.AlignVCenter
+                                        leftPadding: marginSmall
+                                    }
+                                    
+                                    delegate: ItemDelegate {
+                                        width: doctorComboBox.width
+                                        height: baseUnit * 4
+                                        
+                                        background: Rectangle {
+                                            color: parent.hovered ? lightGrayColor : backgroundColor
+                                            radius: radiusSmall
+                                        }
+                                        
+                                        contentItem: ColumnLayout {
+                                            spacing: marginTiny
+                                            
+                                            Label {
+                                                text: modelData.nombre
+                                                font.pixelSize: fontBase
+                                                font.bold: true
+                                                color: textColor
+                                                font.family: "Segoe UI"
+                                            }
+                                            
+                                            Label {
+                                                text: modelData.especialidad || "Sin especialidad"
+                                                font.pixelSize: fontSmall
+                                                color: textSecondaryColor
+                                                font.family: "Segoe UI"
+                                                visible: modelData.especialidad
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                         
-                        // DETALLES, PRECIOS Y BOTONES
-                        RowLayout {
+                        // SEGUNDA FILA: PRECIOS
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: marginMedium
+                            columns: width < baseUnit * 60 ? 1 : 2
+                            rowSpacing: marginMedium
+                            columnSpacing: marginLarge
                             
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Detalles:"
+                                    text: "Precio Consulta Normal (Bs):"
                                     font.bold: true
                                     color: textColor
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                 }
-                                ScrollView {
+                                TextField {
+                                    id: precioNormalField
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: baseUnit * 4.5
-                                    clip: true
+                                    placeholderText: "0.00"
+                                    validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: TextInput.AlignRight
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: precioNormalField.focus ? successColor : borderColor
+                                        border.width: precioNormalField.focus ? 2 : 1
+                                        radius: radiusSmall
+                                    }
                                     
-                                    TextArea {
-                                        id: nuevaEspecialidadDetalles
-                                        placeholderText: "Descripción breve de la especialidad..."
-                                        font.pixelSize: fontSmall
-                                        font.family: "Segoe UI"
-                                        wrapMode: TextArea.Wrap
-                                        selectByMouse: true
-                                        
-                                        background: Rectangle {
-                                            color: backgroundColor
-                                            border.color: borderColor
-                                            border.width: 1
-                                            radius: radiusSmall
+                                    onTextChanged: {
+                                        if (text && !isNaN(parseFloat(text))) {
+                                            color = successColor
+                                        } else {
+                                            color = textColor
                                         }
                                     }
                                 }
                             }
                             
                             ColumnLayout {
+                                Layout.fillWidth: true
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Precio Normal:"
+                                    text: "Precio Consulta Emergencia (Bs):"
                                     font.bold: true
                                     color: textColor
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                 }
                                 TextField {
-                                    id: nuevaEspecialidadPrecioNormal
-                                    Layout.preferredWidth: baseUnit * 15
+                                    id: precioEmergenciaField
+                                    Layout.fillWidth: true
                                     Layout.preferredHeight: baseUnit * 4.5
                                     placeholderText: "0.00"
                                     validator: DoubleValidator { bottom: 0.0; decimals: 2 }
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
-                                    horizontalAlignment: TextInput.AlignHCenter
+                                    horizontalAlignment: TextInput.AlignRight
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: precioEmergenciaField.focus ? warningColor : borderColor
+                                        border.width: precioEmergenciaField.focus ? 2 : 1
                                         radius: radiusSmall
+                                    }
+                                    
+                                    onTextChanged: {
+                                        if (text && !isNaN(parseFloat(text))) {
+                                            color = warningColor
+                                        } else {
+                                            color = textColor
+                                        }
                                     }
                                 }
                             }
+                        }
+                        
+                        // TERCERA FILA: DETALLES
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: marginSmall
                             
-                            ColumnLayout {
-                                spacing: marginSmall
+                            Label {
+                                text: "Detalles y Descripción:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: fontBase
+                                font.family: "Segoe UI"
+                            }
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 8
+                                clip: true
                                 
-                                Label {
-                                    text: "Precio Emergencia:"
-                                    font.bold: true
-                                    color: textColor
-                                    font.pixelSize: fontSmall
-                                    font.family: "Segoe UI"
-                                }
-                                TextField {
-                                    id: nuevaEspecialidadPrecioEmergencia
-                                    Layout.preferredWidth: baseUnit * 15
-                                    Layout.preferredHeight: baseUnit * 4.5
-                                    placeholderText: "0.00"
-                                    validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                TextArea {
+                                    id: detallesField
+                                    placeholderText: "Descripción detallada de la especialidad, procedimientos que incluye, requisitos especiales, etc..."
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
-                                    horizontalAlignment: TextInput.AlignHCenter
+                                    wrapMode: TextArea.Wrap
+                                    selectByMouse: true
+                                    
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: detallesField.focus ? primaryColor : borderColor
+                                        border.width: detallesField.focus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
                             }
+                        }
+                        
+                        // CUARTA FILA: BOTONES
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: marginMedium
                             
-                            RowLayout {
-                                spacing: marginMedium
+                            Item {
+                                Layout.fillWidth: true
+                            }
+                            
+                            Button {
+                                text: "Cancelar"
+                                Layout.preferredWidth: baseUnit * 15
+                                Layout.preferredHeight: baseUnit * 5
                                 
-                                Button {
-                                    text: "Cancelar"
-                                    Layout.preferredWidth: baseUnit * 12
-                                    Layout.preferredHeight: baseUnit * 4.5
-                                    
-                                    background: Rectangle {
-                                        color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
-                                        radius: radiusSmall
-                                        border.color: borderColor
-                                        border.width: 1
-                                    }
-                                    
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: textColor
-                                        font.pixelSize: fontSmall
-                                        font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                        font.family: "Segoe UI"
-                                    }
-                                    
-                                    onClicked: limpiarFormulario()
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                                    radius: radiusSmall
+                                    border.color: borderColor
+                                    border.width: 1
                                 }
                                 
-                                Button {
-                                    text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                    enabled: nuevaEspecialidadNombre.text && nuevaEspecialidadDoctor.text && 
-                                            nuevaEspecialidadPrecioNormal.text && nuevaEspecialidadPrecioEmergencia.text
-                                    Layout.preferredWidth: baseUnit * 15
-                                    Layout.preferredHeight: baseUnit * 4.5
-                                    
-                                    background: Rectangle {
-                                        color: parent.enabled ? 
-                                               (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
-                                               Qt.lighter(successColor, 1.5)
-                                        radius: radiusSmall
-                                    }
-                                    
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: backgroundColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                        font.family: "Segoe UI"
-                                    }
-                                    
-                                    onClicked: guardarEspecialidad()
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: textColor
+                                    font.pixelSize: fontBase
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                onClicked: limpiarFormulario()
+                            }
+                            
+                            Button {
+                                text: isEditMode ? "💾 Actualizar Especialidad" : "➕ Crear Especialidad"
+                                enabled: nombreField.text.trim() !== "" && !isLoading
+                                Layout.preferredWidth: baseUnit * 25
+                                Layout.preferredHeight: baseUnit * 5
+                                
+                                background: Rectangle {
+                                    color: parent.enabled ? 
+                                           (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                                           Qt.lighter(successColor, 1.5)
+                                    radius: radiusSmall
+                                }
+                                
+                                contentItem: Label {
+                                    text: isLoading ? "⏳ Procesando..." : parent.text
+                                    color: backgroundColor
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                onClicked: {
+                                    isLoading = true
+                                    guardarEspecialidad()
                                 }
                             }
                         }
@@ -461,7 +841,7 @@ Item {
                         anchors.fill: parent
                         spacing: 0
                         
-                        // TÍTULO
+                        // TÍTULO CON CONTADOR
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -474,13 +854,37 @@ Item {
                                 color: parent.color
                             }
                             
-                            Label {
-                                anchors.centerIn: parent
-                                text: "🏥 Especialidades Registradas"
-                                font.pixelSize: fontMedium
-                                font.bold: true
-                                color: textColor
-                                font.family: "Segoe UI"
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: marginMedium
+                                
+                                Label {
+                                    text: "🏥 Especialidades Médicas Registradas"
+                                    font.pixelSize: fontMedium
+                                    font.bold: true
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: baseUnit * 12
+                                    Layout.preferredHeight: baseUnit * 4
+                                    color: primaryColor
+                                    radius: radiusLarge
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "Total: " + especialidadesData.length
+                                        color: backgroundColor
+                                        font.pixelSize: fontSmall
+                                        font.bold: true
+                                        font.family: "Segoe UI"
+                                    }
+                                }
                             }
                         }
                         
@@ -507,15 +911,11 @@ Item {
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
+                                Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.20
-                                    text: "DOCTOR"
+                                    Layout.preferredWidth: parent.width * 0.18
+                                    text: "DOCTOR ASIGNADO"
                                     font.bold: true
                                     font.pixelSize: fontSmall
                                     color: textColor
@@ -523,11 +923,7 @@ Item {
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
+                                Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                 
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.22
@@ -539,11 +935,7 @@ Item {
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
+                                Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                 
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.12
@@ -556,11 +948,7 @@ Item {
                                     wrapMode: Text.WordWrap
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
+                                Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                 
                                 Label {
                                     Layout.preferredWidth: parent.width * 0.12
@@ -573,14 +961,10 @@ Item {
                                     wrapMode: Text.WordWrap
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: borderColor
-                                }
+                                Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.16
+                                    Layout.preferredWidth: parent.width * 0.18
                                     text: "ACCIONES"
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -603,7 +987,7 @@ Item {
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
-                                    height: baseUnit * 10
+                                    height: baseUnit * 12
                                     color: index % 2 === 0 ? backgroundColor : "#f8f9fa"
                                     border.color: borderColor
                                     border.width: 1
@@ -613,106 +997,115 @@ Item {
                                         anchors.margins: marginSmall
                                         spacing: marginSmall
                                         
-                                        Label {
+                                        // ESPECIALIDAD
+                                        ColumnLayout {
                                             Layout.preferredWidth: parent.width * 0.18
-                                            text: modelData.nombre
-                                            font.bold: true
-                                            color: primaryColor
-                                            font.pixelSize: fontBase
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            wrapMode: Text.WordWrap
-                                            elide: Text.ElideRight
+                                            spacing: marginTiny
+                                            
+                                            Label {
+                                                text: modelData.Nombre || "Sin nombre"
+                                                font.bold: true
+                                                color: primaryColor
+                                                font.pixelSize: fontBase
+                                                font.family: "Segoe UI"
+                                                wrapMode: Text.WordWrap
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                            
+                                            Label {
+                                                text: "ID: " + (modelData.id || 0)
+                                                color: textSecondaryColor
+                                                font.pixelSize: fontTiny
+                                                font.family: "Segoe UI"
+                                            }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
+                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
+                                        
+                                        // DOCTOR
+                                        ColumnLayout {
+                                            Layout.preferredWidth: parent.width * 0.18
+                                            spacing: marginTiny
+                                            
+                                            Label {
+                                                text: modelData.nombre_doctor || "Sin doctor asignado"
+                                                color: modelData.nombre_doctor ? textColor : textSecondaryColor
+                                                font.pixelSize: fontBase
+                                                font.family: "Segoe UI"
+                                                font.italic: !modelData.nombre_doctor
+                                                wrapMode: Text.WordWrap
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
                                         }
                                         
-                                        Label {
-                                            Layout.preferredWidth: parent.width * 0.20
-                                            text: modelData.doctor
-                                            color: textColor
-                                            font.pixelSize: fontBase
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            wrapMode: Text.WordWrap
-                                            elide: Text.ElideRight
-                                        }
+                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
-                                        
+                                        // DETALLES
                                         ScrollView {
                                             Layout.preferredWidth: parent.width * 0.22
                                             Layout.fillHeight: true
                                             clip: true
                                             
                                             Label {
-                                                text: modelData.detalles || "Sin detalles"
-                                                color: modelData.detalles ? textColor : textSecondaryColor
+                                                text: modelData.Detalles || "Sin detalles"
+                                                color: modelData.Detalles ? textColor : textSecondaryColor
                                                 font.pixelSize: fontSmall
                                                 font.family: "Segoe UI"
-                                                font.italic: !modelData.detalles
+                                                font.italic: !modelData.Detalles
                                                 wrapMode: Text.WordWrap
                                                 width: parent.width
                                             }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
+                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                         
-                                        Label {
+                                        // PRECIO NORMAL
+                                        ColumnLayout {
                                             Layout.preferredWidth: parent.width * 0.12
-                                            text: "Bs " + modelData.precioNormal.toFixed(2)
-                                            color: successColor
-                                            font.bold: true
-                                            font.pixelSize: fontSmall
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
+                                            spacing: marginTiny
+                                            
+                                            Label {
+                                                text: "Bs " + (modelData.Precio_Normal ? modelData.Precio_Normal.toFixed(2) : "0.00")
+                                                color: successColor
+                                                font.bold: true
+                                                font.pixelSize: fontBase
+                                                font.family: "Segoe UI"
+                                                horizontalAlignment: Text.AlignHCenter
+                                                Layout.fillWidth: true
+                                            }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
+                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                         
-                                        Label {
+                                        // PRECIO EMERGENCIA
+                                        ColumnLayout {
                                             Layout.preferredWidth: parent.width * 0.12
-                                            text: "Bs " + modelData.precioEmergencia.toFixed(2)
-                                            color: warningColor
-                                            font.bold: true
-                                            font.pixelSize: fontSmall
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
+                                            spacing: marginTiny
+                                            
+                                            Label {
+                                                text: "Bs " + (modelData.Precio_Emergencia ? modelData.Precio_Emergencia.toFixed(2) : "0.00")
+                                                color: warningColor
+                                                font.bold: true
+                                                font.pixelSize: fontBase
+                                                font.family: "Segoe UI"
+                                                horizontalAlignment: Text.AlignHCenter
+                                                Layout.fillWidth: true
+                                            }
                                         }
                                         
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
+                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderColor }
                                         
+                                        // ACCIONES
                                         RowLayout {
-                                            Layout.preferredWidth: parent.width * 0.16
+                                            Layout.preferredWidth: parent.width * 0.18
                                             spacing: marginSmall
+                                            Layout.alignment: Qt.AlignHCenter
                                             
                                             Button {
-                                                Layout.preferredWidth: baseUnit * 3.5
-                                                Layout.preferredHeight: baseUnit * 3.5
+                                                Layout.preferredWidth: baseUnit * 4
+                                                Layout.preferredHeight: baseUnit * 4
                                                 text: "✏️"
                                                 
                                                 background: Rectangle {
@@ -728,12 +1121,12 @@ Item {
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 
-                                                onClicked: editarEspecialidad(index)
+                                                onClicked: editarEspecialidad(modelData)
                                             }
                                             
                                             Button {
-                                                Layout.preferredWidth: baseUnit * 3.5
-                                                Layout.preferredHeight: baseUnit * 3.5
+                                                Layout.preferredWidth: baseUnit * 4
+                                                Layout.preferredHeight: baseUnit * 4
                                                 text: "🗑️"
                                                 
                                                 background: Rectangle {
@@ -749,7 +1142,34 @@ Item {
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 
-                                                onClicked: eliminarEspecialidad(index)
+                                                onClicked: eliminarEspecialidad(modelData.id)
+                                            }
+                                            
+                                            Button {
+                                                Layout.preferredWidth: baseUnit * 4
+                                                Layout.preferredHeight: baseUnit * 4
+                                                text: "📊"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
+                                                    radius: radiusSmall
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: backgroundColor
+                                                    font.pixelSize: fontSmall
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: {
+                                                    if (confiConsultaModel) {
+                                                        const consultas = confiConsultaModel.obtenerConsultasAsociadas(modelData.id)
+                                                        console.log("Consultas asociadas:", consultas)
+                                                        mostrarExito("Consultas asociadas: " + consultas)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -776,7 +1196,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    text: "No hay especialidades registradas"
+                                    text: "No hay especialidades médicas registradas"
                                     color: textColor
                                     font.bold: true
                                     font.pixelSize: fontMedium
@@ -785,7 +1205,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    text: "Agrega la primera especialidad usando el formulario superior"
+                                    text: "Crea la primera especialidad usando el formulario superior"
                                     color: textSecondaryColor
                                     font.pixelSize: fontBase
                                     Layout.alignment: Qt.AlignHCenter
@@ -801,15 +1221,23 @@ Item {
         }
     }
     
-    // ===== EVENTOS =====
-    onEspecialidadesChanged: {
-        if (especialidades && especialidades !== especialidadesData) {
-            especialidadesData = especialidades
-            console.log("🔄 Datos de especialidades actualizados desde exterior")
+    // ===== EVENTOS Y INICIALIZACIÓN =====
+    Component.onCompleted: {
+        console.log("🏥 Componente de configuración de consultas iniciado")
+        
+        // Inicializar datos si el modelo está disponible
+        if (confiConsultaModel) {
+            actualizarDatos()
+            console.log("✅ Modelo conectado y datos inicializados")
+        } else {
+            console.log("⚠️ Modelo no disponible al inicializar")
         }
     }
     
-    Component.onCompleted: {
-        console.log("🏥 Componente de configuración de especialidades iniciado")
+    onConfiConsultaModelChanged: {
+        if (confiConsultaModel) {
+            console.log("🔄 Modelo de consultas disponible, actualizando datos...")
+            actualizarDatos()
+        }
     }
 }

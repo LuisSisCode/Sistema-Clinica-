@@ -9,11 +9,12 @@ Repositories disponibles:
 from .ConfiServiciosbasicos_repository import ConfiguracionRepository
 from .ConfiLaboratorio_repository import ConfiLaboratorioRepository
 from .ConfiEnfermeria_repository import ConfiEnfermeriaRepository
-
+from .ConfiConsulta_repository import ConfiConsultaRepository
 __all__ = [
     'ConfiguracionRepository',
     'ConfiLaboratorioRepository',
     'ConfiEnfermeriaRepository',
+    'ConfiConsultaRepository',
     
 ]
 
