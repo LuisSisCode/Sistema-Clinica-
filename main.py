@@ -28,6 +28,7 @@ from backend.models.ConfiguracionModel.ConfiServiciosbasicos_model import Config
 from backend.models.ConfiguracionModel.ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
 from backend.models.ConfiguracionModel.ConfiEnfermeria_model import ConfiEnfermeriaModel, register_confi_enfermeria_model
 from backend.models.ConfiguracionModel.ConfiConsulta_model import ConfiConsultaModel, register_confi_consulta_model
+from backend.models.ConfiguracionModel.ConfiTrabajadores_model import ConfiTrabajadoresModel, register_confi_trabajadores_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -77,6 +78,7 @@ class AppController(QObject):
         self.confi_laboratorio_model = None
         self.confi_enfermeria_model = None
         self.confi_consulta_model = None
+        self.confi_trabajadores_model = None
         self.reportes_model = None
         self.dashboard_model = None
     # ===============================
@@ -104,8 +106,8 @@ class AppController(QObject):
             self.confi_laboratorio_model = ConfiLaboratorioModel()
             self.confi_enfermeria_model = ConfiEnfermeriaModel()
             self.confi_consulta_model = ConfiConsultaModel()
+            self.confi_trabajadores_model = ConfiTrabajadoresModel()
             self.reportes_model = ReportesModel()
-
             self.dashboard_model = DashboardModel()
             print("📊 DashboardModel inicializado")
 
@@ -237,7 +239,17 @@ class AppController(QObject):
                 self.confi_consulta_model.especialidadActualizada.connect(self._on_especialidad_actualizada)
                 self.confi_consulta_model.especialidadEliminada.connect(self._on_especialidad_eliminada)
                 print("🔗 ConfiConsultaModel conectado correctamente")
+            # ✅ CONECTAR CONFI TRABAJADORES MODEL
+            if self.confi_trabajadores_model:
+                self.confi_trabajadores_model.errorOccurred.connect(self._on_model_error)
+                self.confi_trabajadores_model.successMessage.connect(self._on_model_success)
                 
+                # Conectar señales específicas del ConfiTrabajadoresModel
+                self.confi_trabajadores_model.tipoTrabajadorCreado.connect(self._on_tipo_trabajador_creado)
+                self.confi_trabajadores_model.tipoTrabajadorActualizado.connect(self._on_tipo_trabajador_actualizado)
+                self.confi_trabajadores_model.tipoTrabajadorEliminado.connect(self._on_tipo_trabajador_eliminado)
+                print("🔗 ConfiTrabajadoresModel conectado correctamente")
+
             # ✅ CONECTAR REPORTES MODEL
             if self.reportes_model:
                 self.reportes_model.reporteError.connect(self._on_model_error)
@@ -325,7 +337,9 @@ class AppController(QObject):
                     #  ESTABLECER PARA CONFI CONSULTA MODEL
                     if self.confi_consulta_model:
                         print(f"🏥 ConfiConsultaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
-                        
+                     #  ESTABLECER PARA CONFI TRABAJADORES MODEL
+                    if self.confi_trabajadores_model:
+                        print(f"👥 ConfiTrabajadoresModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")    
                 else:
                     print("⚠️ Usuario administrador no tiene ID válido")
             else:
@@ -581,7 +595,36 @@ class AppController(QObject):
         else:
             print(f"❌ Error eliminando especialidad: {message}")
             self.showNotification("Error", f"Error eliminando especialidad: {message}")
+     # ✅ HANDLERS PARA CONFI TRABAJADORES MODEL
+    @Slot(bool, str)
+    def _on_tipo_trabajador_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de trabajador"""
+        if success:
+            print(f"👥 Tipo de trabajador creado exitosamente: {message}")
+            self.showNotification("Tipo Creado", message)
+        else:
+            print(f"❌ Error creando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error creando tipo: {message}")
 
+    @Slot(bool, str)
+    def _on_tipo_trabajador_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de trabajador"""
+        if success:
+            print(f"✏️ Tipo de trabajador actualizado exitosamente: {message}")
+            self.showNotification("Tipo Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error actualizando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_trabajador_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de trabajador"""
+        if success:
+            print(f"🗑️ Tipo de trabajador eliminado exitosamente: {message}")
+            self.showNotification("Tipo Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error eliminando tipo: {message}")
     # ← SACAR ESTOS MÉTODOS FUERA, AL NIVEL DE LA CLASE
     @Slot(str)
     def _on_model_error(self, mensaje: str):
@@ -597,7 +640,37 @@ class AppController(QObject):
     
     # ===============================
     # GETTERS PARA MODELS (ACCESO DESDE QML)
-    # ===============================
+    # ✅ HANDLERS PARA TIPO TRABAJOS MODEL
+    @Slot(bool, str)
+    def _on_tipo_trabajador_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de trabajador"""
+        if success:
+            print(f"👷‍♂️ Tipo de trabajador creado exitosamente: {message}")
+            self.showNotification("Tipo Creado", message)
+        else:
+            print(f"❌ Error creando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error creando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_trabajador_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de trabajador"""
+        if success:
+            print(f"✏️ Tipo de trabajador actualizado exitosamente: {message}")
+            self.showNotification("Tipo Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error actualizando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_trabajador_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de trabajador"""
+        if success:
+            print(f"🗑️ Tipo de trabajador eliminado exitosamente: {message}")
+            self.showNotification("Tipo Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error eliminando tipo: {message}")
+    
     
     @Property(QObject, notify=modelsReady)
     def inventario_model_instance(self):
@@ -654,6 +727,12 @@ class AppController(QObject):
     def configuracion_model_instance(self):
         """Propiedad para acceder al ConfiguracionModel desde QML"""
         return self.configuracion_model
+    
+    # ✅ GETTER PARA CONFI TRABAJADORES MODEL  
+    @Property(QObject, notify=modelsReady)
+    def confi_trabajadores_model_instance(self):
+        """Propiedad para acceder al ConfiTrabajadoresModel desde QML"""
+        return self.confi_trabajadores_model
 
     # ✅ GETTER PARA CONFI LABORATORIO MODEL
     @Property(QObject, notify=modelsReady)
@@ -1285,6 +1364,7 @@ def register_qml_types():
         register_confi_laboratorio_model()
         register_confi_enfermeria_model()
         register_confi_consulta_model()
+        register_confi_trabajadores_model()
         register_reportes_model()
         register_dashboard_model()
         print("✅ Tipos QML registrados correctamente")
@@ -1300,6 +1380,7 @@ def register_data_models():
         register_confi_laboratorio_model()
         register_confi_enfermeria_model()
         register_confi_consulta_model()
+        register_confi_trabajadores_model()
         register_reportes_model()
         print("✅ Modelos de datos registrados correctamente")
         

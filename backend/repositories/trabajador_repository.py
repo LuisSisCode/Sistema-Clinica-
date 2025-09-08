@@ -252,8 +252,9 @@ class TrabajadorRepository(BaseRepository):
         LEFT JOIN Trabajadores t ON tt.id = t.Id_Tipo_Trabajador
         GROUP BY tt.id, tt.Tipo, tt.descripcion
         ORDER BY tt.Tipo
-        return self._execute_query(query)
         """
+        return self._execute_query(query)
+        
     
     def get_worker_type_by_id(self, tipo_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene tipo de trabajador por ID"""

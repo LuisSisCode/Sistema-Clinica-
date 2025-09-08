@@ -920,8 +920,7 @@ Item {
             
             // Búsqueda por texto en nombre, especialidad o matrícula
             if (textoBusqueda.length > 0 && mostrar) {
-                var nombreCompleto = trabajador.nombre_completo || 
-                                    (trabajador.Nombre + " " + trabajador.Apellido_Paterno + " " + trabajador.Apellido_Materno)
+                var nombreCompleto = trabajador.nombre_completo || ""
                 var especialidad = trabajador.Especialidad || ""
                 var matricula = trabajador.Matricula || ""
                 
@@ -936,9 +935,8 @@ Item {
                 // Formatear datos para la vista con datos reales
                 var trabajadorFormateado = {
                     trabajadorId: trabajador.id.toString(),
-                    nombreCompleto: trabajador.nombre_completo || 
-                                (trabajador.Nombre + " " + trabajador.Apellido_Paterno + " " + trabajador.Apellido_Materno),
-                    tipoTrabajador: trabajador.tipo_nombre,
+                    nombreCompleto: trabajador.nombre_completo || "",
+                    tipoTrabajador: trabajador.tipo_nombre || "",
                     especialidad: trabajador.Especialidad || "Sin especialidad",
                     matricula: trabajador.Matricula || "Sin matrícula",
                     fechaRegistro: new Date().toISOString().split('T')[0]
@@ -1565,6 +1563,9 @@ Item {
                     tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
                 }
                 
+                // ✅ AGREGAR ESTA LÍNEA:
+                aplicarFiltros()
+                
                 console.log("🎯 Inicialización completa")
             } else {
                 console.log("⚠️ TrabajadorModel no disponible")
@@ -1581,12 +1582,16 @@ Item {
             console.log("📊 Total trabajadores:", trabajadorModel.totalTrabajadores)
             
             // Actualizar automáticamente
-            Qt.callLater(actualizarInmediato)
+            aplicarFiltros()
         }
         
         function onTiposTrabajadorChanged() {
             console.log("🏷️ Signal tiposTrabajadorChanged detectado")
             console.log("📊 Total tipos:", trabajadorModel.tiposTrabajador.length)
+            
+            // Actualizar ComboBoxes
+            filtroTipo.model = getTiposTrabajadoresNombres()
+            tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
         }
     }
 }
