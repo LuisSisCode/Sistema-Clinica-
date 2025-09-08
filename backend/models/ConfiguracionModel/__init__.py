@@ -12,11 +12,13 @@ from .ConfiServiciosbasicos_model import ConfiguracionModel, register_configurac
 from .ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
 from .ConfiEnfermeria_model import ConfiEnfermeriaModel, register_confi_enfermeria_model
 from .ConfiConsulta_model import ConfiConsultaModel,register_confi_consulta_model
+from .ConfiTrabajadores_model import ConfiTrabajadoresModel, register_confi_trabajadores_model
 __all__ = [
     'ConfiguracionModel', 'register_configuracion_model',
     'ConfiLaboratorioModel', 'register_confi_laboratorio_model',
     'ConfiEnfermeriaModel', 'register_confi_enfermeria_model',
     'ConfiConsultaModel', 'register_confi_consulta_model',
+    'ConfiTrabajadoresModel', 'register_confi_trabajadores_model'
 ]
 
 print("🎯 Models QObject de configuración cargados")
