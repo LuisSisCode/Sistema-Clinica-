@@ -98,37 +98,37 @@ Item {
         {
             id: "laboratorio",
             title: "Laboratorio",
-            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Laboratorio.png",
+            icon: "Resources/iconos/Laboratorio.png",
             description: "Configura tipos de análisis, equipos y parámetros de laboratorio clínico"
         },
         {
             id: "enfermeria",
             title: "Enfermería",
-            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Enfermeria.png",
+            icon: "Resources/iconos/Enfermeria.png",
             description: "Gestiona protocolos de cuidados, procedimientos y planes de enfermería"
         },
         {
             id: "consultas",
             title: "Consultas",
-            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Consulta.png",
+            icon: "Resources/iconos/Consulta.png",
             description: "Administra especialidades médicas,precios de consultas"
         },
         {
             id: "servicios",
             title: "Servicios Básicos",
-            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ServiciosBasicos.png",
+            icon: "Resources/iconos/ServiciosBasicos.png",
             description: "Controla gastos operativos, categorías financieras y configuraciones"
         },
         {
             id: "usuarios",
             title: "Usuarios",
-            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/usuario.png",
+            icon: "Resources/iconos/usuario.png",
             description: "Define roles, permisos de acceso y políticas de seguridad del sistema"
         },
         {
             id: "personal",
             title: "Personal",
-            icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Trabajadores.png",
+            icon: "Resources/iconos/Trabajadores.png",
             description: "Organiza departamentos, especialidades y estructura organizacional"
         }
     ]
@@ -149,7 +149,7 @@ Item {
                 Layout.fillWidth: true
                 title: "Centro de Configuraciones"
                 subtitle: "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
-                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/configuraciones.png"
+                icon: "Resources/iconos/configuraciones.png"
                 headerColor: primaryColor
             }
             

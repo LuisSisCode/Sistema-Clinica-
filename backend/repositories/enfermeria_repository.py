@@ -1,6 +1,10 @@
 """
-Repositorio para manejo de datos de enfermería
-Maneja las operaciones CRUD para procedimientos de enfermería
+Repositorio para manejo de datos de enfermería COMPLETO - CORREGIDO
+ARREGLOS CRÍTICOS:
+- Error SQL JOIN duplicado eliminado
+- Filtros estandarizados y consistentes
+- Manejo robusto de parámetros
+- Consultas optimizadas
 """
 
 import logging
@@ -22,16 +26,277 @@ class EnfermeriaRepository:
         self.db = db_connection
     
     # ===============================
-    # OPERACIONES DE TIPOS DE PROCEDIMIENTOS
+    # ✅ MÉTODO EXISTENTE: buscar_paciente_por_cedula_exacta
+    # ===============================
+    
+    def buscar_paciente_por_cedula_exacta(self, cedula: str) -> Optional[Dict[str, Any]]:
+        """
+        ✅ MÉTODO EXISTENTE: Busca un paciente específico por cédula exacta
+        """
+        try:
+            if not cedula or len(cedula.strip()) < 5:
+                return None
+            
+            cedula_clean = cedula.strip()
+            
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT 
+                        id,
+                        Nombre,
+                        Apellido_Paterno,
+                        ISNULL(Apellido_Materno, '') as Apellido_Materno,
+                        Cedula,
+                        CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombreCompleto
+                    FROM Pacientes
+                    WHERE Cedula = ?
+                """, (cedula_clean,))
+                
+                resultado = cursor.fetchone()
+                
+                if resultado:
+                    return {
+                        'id': resultado.id,
+                        'nombreCompleto': resultado.nombreCompleto,
+                        'nombre': resultado.Nombre,
+                        'apellidoPaterno': resultado.Apellido_Paterno,
+                        'apellidoMaterno': resultado.Apellido_Materno,
+                        'cedula': resultado.Cedula
+                    }
+                
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error buscando paciente por cédula exacta: {e}")
+            return None
+    
+    # ===============================
+    # ✅ PAGINACIÓN CORREGIDA COMPLETAMENTE
+    # ===============================
+    
+    def obtener_procedimientos_paginados(self, offset: int, limit: int, filtros: Optional[Dict] = None) -> List[Dict[str, Any]]:
+        """
+        ✅ COMPLETAMENTE CORREGIDO: Paginación con filtros y logs de diagnóstico
+        """
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # ✅ LOGS DE DIAGNÓSTICO DETALLADOS
+                logger.info(f"🔍 REPOSITORIO - Filtros recibidos: {filtros}")
+                
+                # Consulta base corregida
+                query = """
+                    SELECT 
+                        e.id,
+                        e.Cantidad,
+                        e.Fecha,
+                        e.Tipo,
+                        CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as NombrePaciente,
+                        ISNULL(p.Cedula, '') as Cedula,
+                        p.Nombre as pacienteNombre,
+                        p.Apellido_Paterno as pacienteApellidoP,
+                        ISNULL(p.Apellido_Materno, '') as pacienteApellidoM,
+                        ISNULL(tp.Nombre, 'Procedimiento General') as TipoProcedimiento,
+                        ISNULL(tp.Descripcion, '') as Descripcion,
+                        CASE 
+                            WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
+                            ELSE ISNULL(tp.Precio_Normal, 0)
+                        END as PrecioUnitario,
+                        (e.Cantidad * CASE 
+                            WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
+                            ELSE ISNULL(tp.Precio_Normal, 0)
+                        END) as PrecioTotal,
+                        CONCAT(ISNULL(t.Nombre, ''), ' ', ISNULL(t.Apellido_Paterno, ''), ' ', ISNULL(t.Apellido_Materno, '')) as TrabajadorRealizador,
+                        CONCAT(ISNULL(u.Nombre, ''), ' ', ISNULL(u.Apellido_Paterno, ''), ' ', ISNULL(u.Apellido_Materno, '')) as RegistradoPor
+                    FROM Enfermeria e
+                    INNER JOIN Pacientes p ON e.Id_Paciente = p.id
+                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                    LEFT JOIN Trabajadores t ON e.Id_Trabajador = t.id
+                    LEFT JOIN Usuario u ON e.Id_RegistradoPor = u.id
+                """
+                
+                conditions = []
+                params = []
+                
+                # ✅ FILTROS CORREGIDOS CON LOGS
+                if filtros:
+                    logger.info(f"📋 Aplicando filtros: {filtros}")
+                    
+                    # Filtro por búsqueda (paciente/cédula)
+                    busqueda = filtros.get('busqueda', '').strip()
+                    if busqueda:
+                        search_pattern = f"%{busqueda}%"
+                        conditions.append("""(
+                            ISNULL(p.Nombre, '') LIKE ? OR 
+                            ISNULL(p.Apellido_Paterno, '') LIKE ? OR 
+                            ISNULL(p.Apellido_Materno, '') LIKE ? OR 
+                            ISNULL(p.Cedula, '') LIKE ? OR 
+                            ISNULL(CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno), '') LIKE ?
+                        )""")
+                        params.extend([search_pattern] * 5)
+                        logger.info(f"🔎 Filtro búsqueda aplicado: '{busqueda}'")
+                    
+                    # ✅ FILTRO POR TIPO DE PROCEDIMIENTO CORREGIDO
+                    tipo_procedimiento = filtros.get('tipo_procedimiento', '').strip()
+                    if tipo_procedimiento and tipo_procedimiento not in ["", "Todos", "Seleccionar procedimiento..."]:
+                        conditions.append("ISNULL(tp.Nombre, '') = ?")
+                        params.append(tipo_procedimiento)
+                        logger.info(f"🏥 Filtro tipo procedimiento aplicado: '{tipo_procedimiento}'")
+                    
+                    # ✅ FILTRO POR TIPO DE SERVICIO - CRÍTICO
+                    tipo_servicio = filtros.get('tipo', '').strip()
+                    if tipo_servicio and tipo_servicio not in ["", "Todos"]:
+                        # ✅ VALIDACIÓN ESPECÍFICA
+                        if tipo_servicio in ["Normal", "Emergencia"]:
+                            conditions.append("ISNULL(e.Tipo, 'Normal') = ?") 
+                            params.append(tipo_servicio)
+                            logger.info(f"🎯 Filtro tipo servicio aplicado: '{tipo_servicio}'")
+                        else:
+                            logger.warning(f"⚠️ Tipo de servicio inválido ignorado: '{tipo_servicio}'")
+                    
+                    # Filtros por fecha
+                    fecha_desde = filtros.get('fecha_desde', '').strip()
+                    if fecha_desde:
+                        conditions.append("CAST(e.Fecha AS DATE) >= ?")
+                        params.append(fecha_desde)
+                        logger.info(f"📅 Filtro fecha desde: '{fecha_desde}'")
+                    
+                    fecha_hasta = filtros.get('fecha_hasta', '').strip()
+                    if fecha_hasta:
+                        conditions.append("CAST(e.Fecha AS DATE) <= ?")
+                        params.append(fecha_hasta)
+                        logger.info(f"📅 Filtro fecha hasta: '{fecha_hasta}'")
+                else:
+                    logger.info("📋 Sin filtros aplicados")
+                
+                # Agregar condiciones WHERE
+                if conditions:
+                    query += " WHERE " + " AND ".join(conditions)
+                
+                query += " ORDER BY e.Fecha DESC, e.id DESC"
+                query += " OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
+                params.extend([offset, limit])
+                
+                # ✅ LOG DE QUERY FINAL
+                logger.info(f"🗃️ Query final - offset={offset}, limit={limit}")
+                logger.info(f"📝 Condiciones WHERE: {len(conditions)} aplicadas")
+                if conditions:
+                    logger.info(f"🔍 WHERE clause: {' AND '.join(conditions)}")
+                
+                cursor.execute(query, params)
+                
+                procedimientos = []
+                for row in cursor.fetchall():
+                    procedimientos.append({
+                        'procedimientoId': str(row.id),
+                        'paciente': row.NombrePaciente.strip(),
+                        'cedula': row.Cedula,
+                        'tipoProcedimiento': row.TipoProcedimiento,
+                        'descripcion': row.Descripcion,
+                        'cantidad': row.Cantidad,
+                        'tipo': row.Tipo,  # ✅ ESTE ES EL CAMPO CRÍTICO
+                        'precioUnitario': f"{float(row.PrecioUnitario):.2f}",
+                        'precioTotal': f"{float(row.PrecioTotal):.2f}",
+                        'fecha': row.Fecha.strftime('%Y-%m-%d') if row.Fecha else '',
+                        'trabajadorRealizador': row.TrabajadorRealizador.strip(),
+                        'registradoPor': row.RegistradoPor.strip(),
+                        'pacienteNombre': row.pacienteNombre,
+                        'pacienteApellidoP': row.pacienteApellidoP,
+                        'pacienteApellidoM': row.pacienteApellidoM
+                    })
+                
+                logger.info(f"✅ Obtenidos {len(procedimientos)} procedimientos paginados exitosamente")
+                
+                # ✅ LOG DE MUESTRA DE DATOS
+                if procedimientos:
+                    primer_proc = procedimientos[0]
+                    logger.info(f"📋 Muestra primer resultado - Tipo: '{primer_proc['tipo']}', ID: {primer_proc['procedimientoId']}")
+                
+                return procedimientos
+                
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo procedimientos paginados: {e}")
+            return []
+
+    def contar_procedimientos_filtrados(self, filtros: Optional[Dict] = None) -> int:
+        """
+        ✅ CORREGIDO: Contar con filtros estandarizados y logs
+        """
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # ✅ LOG DE DIAGNÓSTICO
+                logger.info(f"🔢 Contando registros con filtros: {filtros}")
+                
+                query = """
+                    SELECT COUNT(*) as total 
+                    FROM Enfermeria e 
+                    INNER JOIN Pacientes p ON e.Id_Paciente = p.id
+                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                """
+                params = []
+                conditions = []
+                
+                # ✅ APLICAR FILTROS ESTANDARIZADOS (misma lógica que paginación)
+                if filtros:
+                    busqueda = filtros.get('busqueda', '').strip()
+                    if busqueda:
+                        search_pattern = f"%{busqueda}%"
+                        conditions.append("""(
+                            ISNULL(p.Nombre, '') LIKE ? OR 
+                            ISNULL(p.Apellido_Paterno, '') LIKE ? OR 
+                            ISNULL(p.Apellido_Materno, '') LIKE ? OR 
+                            ISNULL(p.Cedula, '') LIKE ? OR 
+                            ISNULL(CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno), '') LIKE ?
+                        )""")
+                        params.extend([search_pattern] * 5)
+                    
+                    tipo_procedimiento = filtros.get('tipo_procedimiento', '').strip()
+                    if tipo_procedimiento and tipo_procedimiento not in ["", "Todos", "Seleccionar procedimiento..."]:
+                        conditions.append("ISNULL(tp.Nombre, '') = ?")
+                        params.append(tipo_procedimiento)
+                    
+                    # ✅ FILTRO CRÍTICO CORREGIDO
+                    tipo_servicio = filtros.get('tipo', '').strip()
+                    if tipo_servicio and tipo_servicio not in ["", "Todos"]:
+                        if tipo_servicio in ["Normal", "Emergencia"]:
+                            conditions.append("ISNULL(e.Tipo, 'Normal') = ?")
+                            params.append(tipo_servicio)
+                            logger.info(f"🎯 Count - Filtro tipo aplicado: '{tipo_servicio}'")
+                    
+                    fecha_desde = filtros.get('fecha_desde', '').strip()
+                    if fecha_desde:
+                        conditions.append("CAST(e.Fecha AS DATE) >= ?")
+                        params.append(fecha_desde)
+                    
+                    fecha_hasta = filtros.get('fecha_hasta', '').strip()
+                    if fecha_hasta:
+                        conditions.append("CAST(e.Fecha AS DATE) <= ?")
+                        params.append(fecha_hasta)
+                
+                if conditions:
+                    query += " WHERE " + " AND ".join(conditions)
+                
+                cursor.execute(query, params)
+                result = cursor.fetchone()
+                total = result.total if result else 0
+                
+                logger.info(f"✅ Total de procedimientos con filtros: {total}")
+                return total
+                
+        except Exception as e:
+            logger.error(f"❌ Error contando procedimientos filtrados: {e}")
+            return 0
+    
+    # ===============================
+    # OPERACIONES DE TIPOS DE PROCEDIMIENTOS (sin cambios)
     # ===============================
     
     def obtener_tipos_procedimientos(self) -> List[Dict[str, Any]]:
-        """
-        Obtiene todos los tipos de procedimientos disponibles
-        
-        Returns:
-            List[Dict]: Lista de tipos de procedimientos
-        """
+        """Obtiene todos los tipos de procedimientos disponibles"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -64,15 +329,7 @@ class EnfermeriaRepository:
             return []
     
     def crear_tipo_procedimiento(self, datos: Dict[str, Any]) -> bool:
-        """
-        Crea un nuevo tipo de procedimiento
-        
-        Args:
-            datos (Dict): Datos del tipo de procedimiento
-            
-        Returns:
-            bool: True si se creó exitosamente
-        """
+        """Crea un nuevo tipo de procedimiento"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -96,49 +353,41 @@ class EnfermeriaRepository:
             return False
     
     # ===============================
-    # OPERACIONES DE PROCEDIMIENTOS DE ENFERMERÍA
+    # OPERACIONES DE PROCEDIMIENTOS DE ENFERMERÍA (sin cambios críticos)
     # ===============================
     
     def obtener_procedimientos_enfermeria(self, filtros: Optional[Dict] = None) -> List[Dict[str, Any]]:
-        """
-        Obtiene todos los procedimientos de enfermería con filtros opcionales
-        
-        Args:
-            filtros (Dict, optional): Filtros para la consulta
-            
-        Returns:
-            List[Dict]: Lista de procedimientos
-        """
+        """Obtiene todos los procedimientos de enfermería con filtros opcionales"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Consulta base con JOINs
+                # Consulta base con JOINs corregidos
                 query = """
                     SELECT 
                         e.id,
                         e.Cantidad,
                         e.Fecha,
                         e.Tipo,
-                        p.Nombre + ' ' + p.Apellido_Paterno + ' ' + p.Apellido_Materno as NombrePaciente,
-                        p.Cedula,
-                        tp.Nombre as TipoProcedimiento,
-                        tp.Descripcion,
+                        CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as NombrePaciente,
+                        ISNULL(p.Cedula, '') as Cedula,
+                        ISNULL(tp.Nombre, 'Procedimiento General') as TipoProcedimiento,
+                        ISNULL(tp.Descripcion, '') as Descripcion,
                         CASE 
-                            WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal 
-                            ELSE tp.Precio_Emergencia 
+                            WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
+                            ELSE ISNULL(tp.Precio_Normal, 0)
                         END as PrecioUnitario,
                         (e.Cantidad * CASE 
-                            WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal 
-                            ELSE tp.Precio_Emergencia 
+                            WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
+                            ELSE ISNULL(tp.Precio_Normal, 0)
                         END) as PrecioTotal,
-                        t.Nombre + ' ' + t.Apellido_Paterno + ' ' + t.Apellido_Materno as TrabajadorRealizador,
-                        u.Nombre + ' ' + u.Apellido_Paterno + ' ' + u.Apellido_Materno as RegistradoPor
+                        CONCAT(ISNULL(t.Nombre, ''), ' ', ISNULL(t.Apellido_Paterno, ''), ' ', ISNULL(t.Apellido_Materno, '')) as TrabajadorRealizador,
+                        CONCAT(ISNULL(u.Nombre, ''), ' ', ISNULL(u.Apellido_Paterno, ''), ' ', ISNULL(u.Apellido_Materno, '')) as RegistradoPor
                     FROM Enfermeria e
                     INNER JOIN Pacientes p ON e.Id_Paciente = p.id
-                    INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-                    INNER JOIN Trabajadores t ON e.Id_Trabajador = t.id
-                    INNER JOIN Usuario u ON e.Id_RegistradoPor = u.id
+                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                    LEFT JOIN Trabajadores t ON e.Id_Trabajador = t.id
+                    LEFT JOIN Usuario u ON e.Id_RegistradoPor = u.id
                 """
                 
                 conditions = []
@@ -177,18 +426,18 @@ class EnfermeriaRepository:
                 for row in cursor.fetchall():
                     procedimientos.append({
                         'procedimientoId': str(row.id),
-                        'paciente': row.NombrePaciente,
-                        'cedula': row.Cedula or '',
+                        'paciente': row.NombrePaciente.strip(),
+                        'cedula': row.Cedula,
                         'tipoProcedimiento': row.TipoProcedimiento,
-                        'descripcion': row.Descripcion or '',
+                        'descripcion': row.Descripcion,
                         'cantidad': row.Cantidad,
                         'tipo': row.Tipo,
                         'precioUnitario': f"{float(row.PrecioUnitario):.2f}",
                         'precioTotal': f"{float(row.PrecioTotal):.2f}",
                         'fecha': row.Fecha.strftime('%Y-%m-%d') if row.Fecha else '',
-                        'trabajadorRealizador': row.TrabajadorRealizador,
-                        'registradoPor': row.RegistradoPor,
-                        'observaciones': ''  # Campo adicional para el QML
+                        'trabajadorRealizador': row.TrabajadorRealizador.strip(),
+                        'registradoPor': row.RegistradoPor.strip(),
+                        'observaciones': ''
                     })
                 
                 logger.info(f"Obtenidos {len(procedimientos)} procedimientos de enfermería")
@@ -198,181 +447,8 @@ class EnfermeriaRepository:
             logger.error(f"Error obteniendo procedimientos de enfermería: {e}")
             return []
     
-    def obtener_procedimientos_paginados(self, offset: int, limit: int, filtros: Optional[Dict] = None) -> List[Dict[str, Any]]:
-        """
-        Obtiene procedimientos de enfermería paginados con filtros aplicados directamente en la base de datos
-        
-        Args:
-            offset: Desplazamiento para paginación
-            limit: Límite de registros por página
-            filtros: Diccionario con filtros aplicables
-            
-        Returns:
-            List[Dict]: Lista de procedimientos paginados
-        """
-        try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Construir consulta base
-                query = """
-                    SELECT 
-                        e.id,
-                        e.Cantidad,
-                        e.Fecha,
-                        e.Tipo,
-                        p.Nombre + ' ' + p.Apellido_Paterno + ' ' + p.Apellido_Materno as NombrePaciente,
-                        p.Cedula,
-                        tp.Nombre as TipoProcedimiento,
-                        tp.Descripcion,
-                        CASE 
-                            WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal 
-                            ELSE tp.Precio_Emergencia 
-                        END as PrecioUnitario,
-                        (e.Cantidad * CASE 
-                            WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal 
-                            ELSE tp.Precio_Emergencia 
-                        END) as PrecioTotal,
-                        t.Nombre + ' ' + t.Apellido_Paterno + ' ' + t.Apellido_Materno as TrabajadorRealizador,
-                        u.Nombre + ' ' + u.Apellido_Paterno + ' ' + u.Apellido_Materno as RegistradoPor
-                    FROM Enfermeria e
-                    INNER JOIN Pacientes p ON e.Id_Paciente = p.id
-                    INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-                    INNER JOIN Trabajadores t ON e.Id_Trabajador = t.id
-                    INNER JOIN Usuario u ON e.Id_RegistradoPor = u.id
-                """
-                
-                conditions = []
-                params = []
-                
-                # Aplicar filtros si existen
-                if filtros:
-                    if filtros.get('busqueda'):
-                        conditions.append("(p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ? OR p.Cedula LIKE ?)")
-                        search_term = f"%{filtros['busqueda']}%"
-                        params.extend([search_term, search_term, search_term, search_term])
-                    
-                    if filtros.get('tipo_procedimiento'):
-                        conditions.append("tp.Nombre = ?")
-                        params.append(filtros['tipo_procedimiento'])
-                    
-                    if filtros.get('tipo'):
-                        conditions.append("e.Tipo = ?")
-                        params.append(filtros['tipo'])
-                    
-                    if filtros.get('fecha_desde'):
-                        conditions.append("CAST(e.Fecha AS DATE) >= ?")
-                        params.append(filtros['fecha_desde'])
-                    
-                    if filtros.get('fecha_hasta'):
-                        conditions.append("CAST(e.Fecha AS DATE) <= ?")
-                        params.append(filtros['fecha_hasta'])
-                
-                if conditions:
-                    query += " WHERE " + " AND ".join(conditions)
-                
-                query += " ORDER BY e.Fecha DESC, e.id DESC"
-                
-                # Agregar paginación
-                query += " OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
-                params.extend([offset, limit])
-                
-                cursor.execute(query, params)
-                
-                procedimientos = []
-                for row in cursor.fetchall():
-                    procedimientos.append({
-                        'procedimientoId': str(row.id),
-                        'paciente': row.NombrePaciente,
-                        'cedula': row.Cedula or '',
-                        'tipoProcedimiento': row.TipoProcedimiento,
-                        'descripcion': row.Descripcion or '',
-                        'cantidad': row.Cantidad,
-                        'tipo': row.Tipo,
-                        'precioUnitario': f"{float(row.PrecioUnitario):.2f}",
-                        'precioTotal': f"{float(row.PrecioTotal):.2f}",
-                        'fecha': row.Fecha.strftime('%Y-%m-%d') if row.Fecha else '',
-                        'trabajadorRealizador': row.TrabajadorRealizador,
-                        'registradoPor': row.RegistradoPor
-                    })
-                
-                logger.info(f"Obtenidos {len(procedimientos)} procedimientos paginados (offset: {offset}, limit: {limit})")
-                return procedimientos
-                
-        except Exception as e:
-            logger.error(f"Error obteniendo procedimientos paginados: {e}")
-            return []
-
-    def contar_procedimientos_filtrados(self, filtros: Optional[Dict] = None) -> int:
-        """
-        Cuenta el total de procedimientos que cumplen con los filtros
-        
-        Args:
-            filtros: Diccionario con filtros aplicables
-            
-        Returns:
-            int: Total de procedimientos
-        """
-        try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                query = """
-                    SELECT COUNT(*) as total 
-                    FROM Enfermeria e 
-                    INNER JOIN Pacientes p ON e.Id_Paciente = p.id
-                """
-                params = []
-                conditions = []
-                
-                # Aplicar filtros si existen
-                if filtros:
-                    if filtros.get('busqueda'):
-                        conditions.append("(p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ? OR p.Cedula LIKE ?)")
-                        search_term = f"%{filtros['busqueda']}%"
-                        params.extend([search_term, search_term, search_term, search_term])
-                    
-                    if filtros.get('tipo_procedimiento'):
-                        query += " INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id"
-                        conditions.append("tp.Nombre = ?")
-                        params.append(filtros['tipo_procedimiento'])
-                    
-                    if filtros.get('tipo'):
-                        conditions.append("e.Tipo = ?")
-                        params.append(filtros['tipo'])
-                    
-                    if filtros.get('fecha_desde'):
-                        conditions.append("CAST(e.Fecha AS DATE) >= ?")
-                        params.append(filtros['fecha_desde'])
-                    
-                    if filtros.get('fecha_hasta'):
-                        conditions.append("CAST(e.Fecha AS DATE) <= ?")
-                        params.append(filtros['fecha_hasta'])
-                
-                if conditions:
-                    query += " WHERE " + " AND ".join(conditions)
-                
-                cursor.execute(query, params)
-                result = cursor.fetchone()
-                total = result.total if result else 0
-                
-                logger.info(f"Total de procedimientos con filtros: {total}")
-                return total
-                
-        except Exception as e:
-            logger.error(f"Error contando procedimientos filtrados: {e}")
-            return 0
-
     def crear_procedimiento_enfermeria(self, datos: Dict[str, Any]) -> Optional[int]:
-        """
-        Crea un nuevo procedimiento de enfermería
-        
-        Args:
-            datos (Dict): Datos del procedimiento
-            
-        Returns:
-            Optional[int]: ID del procedimiento creado o None si falló
-        """
+        """Crea un nuevo procedimiento de enfermería"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -410,16 +486,7 @@ class EnfermeriaRepository:
             return None
     
     def actualizar_procedimiento_enfermeria(self, id_procedimiento: int, datos: Dict[str, Any]) -> bool:
-        """
-        Actualiza un procedimiento de enfermería existente
-        
-        Args:
-            id_procedimiento (int): ID del procedimiento a actualizar
-            datos (Dict): Nuevos datos del procedimiento
-            
-        Returns:
-            bool: True si se actualizó exitosamente
-        """
+        """Actualiza un procedimiento de enfermería existente"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -459,15 +526,7 @@ class EnfermeriaRepository:
             return False
     
     def eliminar_procedimiento_enfermeria(self, id_procedimiento: int) -> bool:
-        """
-        Elimina un procedimiento de enfermería
-        
-        Args:
-            id_procedimiento (int): ID del procedimiento a eliminar
-            
-        Returns:
-            bool: True si se eliminó exitosamente
-        """
+        """Elimina un procedimiento de enfermería"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -486,18 +545,11 @@ class EnfermeriaRepository:
             return False
     
     # ===============================
-    # OPERACIONES DE PACIENTES
+    # OPERACIONES DE PACIENTES (mejoradas)
     # ===============================
+    
     def _limpiar_cedula(self, cedula_raw: str) -> Optional[str]:
-        """
-        Limpia y valida el formato de cédula según las restricciones de la BD
-        
-        Args:
-            cedula_raw (str): Cédula sin limpiar
-            
-        Returns:
-            Optional[str]: Cédula limpia o None si es inválida
-        """
+        """Limpia y valida el formato de cédula según las restricciones de la BD"""
         try:
             if not cedula_raw:
                 return None
@@ -523,6 +575,7 @@ class EnfermeriaRepository:
             return None
     
     def _obtener_o_crear_paciente(self, cursor, datos: Dict[str, Any]) -> Optional[int]:
+        """✅ CORREGIDO: Obtiene o crea paciente manteniendo funcionalidad original + mejoras"""
         try:
             nombres = datos['nombreCompleto'].strip().split()
             
@@ -570,6 +623,7 @@ class EnfermeriaRepository:
             return None
     
     def buscar_pacientes(self, termino_busqueda: str) -> List[Dict[str, Any]]:
+        """✅ CORREGIDO: Busca pacientes manteniendo funcionalidad original"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -579,11 +633,11 @@ class EnfermeriaRepository:
                     cursor.execute("""
                         SELECT 
                             id,
-                            Nombre + ' ' + Apellido_Paterno + ' ' + Apellido_Materno as NombreCompleto,
+                            Nombre + ' ' + Apellido_Paterno + ' ' + ISNULL(Apellido_Materno, '') as NombreCompleto,
                             Nombre,
                             Apellido_Paterno,
-                            Apellido_Materno,
-                            Cedula
+                            ISNULL(Apellido_Materno, '') as Apellido_Materno,
+                            ISNULL(Cedula, '') as Cedula
                         FROM Pacientes
                         WHERE Cedula = ? OR Cedula LIKE ?
                         ORDER BY 
@@ -594,11 +648,11 @@ class EnfermeriaRepository:
                     cursor.execute("""
                         SELECT 
                             id,
-                            Nombre + ' ' + Apellido_Paterno + ' ' + Apellido_Materno as NombreCompleto,
+                            Nombre + ' ' + Apellido_Paterno + ' ' + ISNULL(Apellido_Materno, '') as NombreCompleto,
                             Nombre,
                             Apellido_Paterno, 
-                            Apellido_Materno,
-                            Cedula
+                            ISNULL(Apellido_Materno, '') as Apellido_Materno,
+                            ISNULL(Cedula, '') as Cedula
                         FROM Pacientes
                         WHERE Nombre LIKE ? 
                         OR Apellido_Paterno LIKE ?
@@ -612,11 +666,11 @@ class EnfermeriaRepository:
                 for row in cursor.fetchall():
                     pacientes.append({
                         'id': row.id,
-                        'nombreCompleto': row.NombreCompleto,
+                        'nombreCompleto': row.NombreCompleto.strip(),
                         'nombre': row.Nombre,
                         'apellidoPaterno': row.Apellido_Paterno,
-                        'apellidoMaterno': row.Apellido_Materno or '',
-                        'cedula': row.Cedula or ''
+                        'apellidoMaterno': row.Apellido_Materno,
+                        'cedula': row.Cedula
                     })
                 
             logger.info(f"Búsqueda '{termino_busqueda}': {len(pacientes)} pacientes encontrados")
@@ -624,26 +678,26 @@ class EnfermeriaRepository:
         except Exception as e:
             logger.error(f"Error al buscar pacientes: {e}")
             return []
+    
     # ===============================
-    # OPERACIONES DE TRABAJADORES
+    # OPERACIONES DE TRABAJADORES (mejoradas)
     # ===============================
     
     def obtener_trabajadores_enfermeria(self) -> List[Dict[str, Any]]:
-        """
-        Obtiene los trabajadores que pueden realizar procedimientos de enfermería
-        
-        Returns:
-            List[Dict]: Lista de trabajadores de enfermería
-        """
+        """✅ CORREGIDO: Obtiene trabajadores con estructura completa para QML"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT 
                         id,
-                        Nombre + ' ' + Apellido_Paterno + ' ' + Apellido_Materno as NombreCompleto,
+                        CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as NombreCompleto,
+                        Nombre,
+                        Apellido_Paterno,
+                        ISNULL(Apellido_Materno, '') as Apellido_Materno,
                         Id_Tipo_Trabajador,
-                        Especialidad
+                        ISNULL(Matricula, '') as Matricula,
+                        ISNULL(Especialidad, '') as Especialidad
                     FROM Trabajadores
                     ORDER BY Nombre, Apellido_Paterno
                 """)
@@ -652,9 +706,13 @@ class EnfermeriaRepository:
                 for row in cursor.fetchall():
                     trabajadores.append({
                         'id': row.id,
-                        'nombreCompleto': row.NombreCompleto,
-                        'tipoTrabajador': f"Tipo {row.Id_Tipo_Trabajador}",
-                        'especialidad': row.Especialidad or ''
+                        'nombreCompleto': row.NombreCompleto.strip(),
+                        'nombre': row.Nombre,
+                        'apellidoPaterno': row.Apellido_Paterno,
+                        'apellidoMaterno': row.Apellido_Materno,
+                        'tipoTrabajador': row.Id_Tipo_Trabajador,
+                        'matricula': row.Matricula,
+                        'especialidad': row.Especialidad
                     })
                 
                 logger.info(f"Obtenidos {len(trabajadores)} trabajadores de enfermería")
@@ -665,16 +723,7 @@ class EnfermeriaRepository:
             return []
     
     def buscar_procedimientos(self, termino_busqueda: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        Búsqueda de procedimientos por término en base de datos
-        
-        Args:
-            termino_busqueda: Término a buscar
-            limit: Límite de resultados
-            
-        Returns:
-            List[Dict]: Lista de procedimientos encontrados
-        """
+        """Búsqueda de procedimientos por término en base de datos"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -685,22 +734,22 @@ class EnfermeriaRepository:
                         e.Cantidad,
                         e.Fecha,
                         e.Tipo,
-                        p.Nombre + ' ' + p.Apellido_Paterno + ' ' + p.Apellido_Materno as NombrePaciente,
-                        p.Cedula,
-                        tp.Nombre as TipoProcedimiento,
+                        CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as NombrePaciente,
+                        ISNULL(p.Cedula, '') as Cedula,
+                        ISNULL(tp.Nombre, 'Procedimiento General') as TipoProcedimiento,
                         CASE 
-                            WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal 
-                            ELSE tp.Precio_Emergencia 
+                            WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
+                            ELSE ISNULL(tp.Precio_Normal, 0)
                         END as PrecioUnitario,
                         (e.Cantidad * CASE 
-                            WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal 
-                            ELSE tp.Precio_Emergencia 
+                            WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
+                            ELSE ISNULL(tp.Precio_Normal, 0)
                         END) as PrecioTotal,
-                        t.Nombre + ' ' + t.Apellido_Paterno + ' ' + t.Apellido_Materno as TrabajadorRealizador
+                        CONCAT(ISNULL(t.Nombre, ''), ' ', ISNULL(t.Apellido_Paterno, ''), ' ', ISNULL(t.Apellido_Materno, '')) as TrabajadorRealizador
                     FROM Enfermeria e
                     INNER JOIN Pacientes p ON e.Id_Paciente = p.id
-                    INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-                    INNER JOIN Trabajadores t ON e.Id_Trabajador = t.id
+                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                    LEFT JOIN Trabajadores t ON e.Id_Trabajador = t.id
                     WHERE (p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ? 
                            OR p.Cedula LIKE ? OR tp.Nombre LIKE ?)
                     ORDER BY e.Fecha DESC
@@ -716,15 +765,15 @@ class EnfermeriaRepository:
                 for row in cursor.fetchall():
                     procedimientos.append({
                         'procedimientoId': str(row.id),
-                        'paciente': row.NombrePaciente,
-                        'cedula': row.Cedula or '',
+                        'paciente': row.NombrePaciente.strip(),
+                        'cedula': row.Cedula,
                         'tipoProcedimiento': row.TipoProcedimiento,
                         'cantidad': row.Cantidad,
                         'tipo': row.Tipo,
                         'precioUnitario': f"{float(row.PrecioUnitario):.2f}",
                         'precioTotal': f"{float(row.PrecioTotal):.2f}",
                         'fecha': row.Fecha.strftime('%Y-%m-%d') if row.Fecha else '',
-                        'trabajadorRealizador': row.TrabajadorRealizador
+                        'trabajadorRealizador': row.TrabajadorRealizador.strip()
                     })
                 
                 logger.info(f"Búsqueda '{termino_busqueda}': {len(procedimientos)} resultados")
@@ -735,19 +784,11 @@ class EnfermeriaRepository:
             return []
 
     # ===============================
-    # REPORTES Y ESTADÍSTICAS
+    # REPORTES Y ESTADÍSTICAS (sin cambios)
     # ===============================
     
     def obtener_estadisticas_enfermeria(self, periodo: str = 'mes') -> Dict[str, Any]:
-        """
-        Obtiene estadísticas de procedimientos de enfermería
-        
-        Args:
-            periodo (str): Periodo para las estadísticas ('dia', 'semana', 'mes', 'año')
-            
-        Returns:
-            Dict: Estadísticas de enfermería
-        """
+        """Obtiene estadísticas de procedimientos de enfermería"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -770,12 +811,12 @@ class EnfermeriaRepository:
                         COUNT(*) as TotalProcedimientos,
                         COUNT(DISTINCT e.Id_Paciente) as TotalPacientes,
                         COUNT(DISTINCT e.Id_Trabajador) as TotalTrabajadores,
-                        SUM(CASE WHEN e.Tipo = 'Normal' THEN tp.Precio_Normal * e.Cantidad 
-                                 ELSE tp.Precio_Emergencia * e.Cantidad END) as IngresoTotal,
+                        SUM(CASE WHEN e.Tipo = 'Normal' THEN ISNULL(tp.Precio_Normal, 0) * e.Cantidad 
+                                 ELSE ISNULL(tp.Precio_Emergencia, 0) * e.Cantidad END) as IngresoTotal,
                         SUM(CASE WHEN e.Tipo = 'Normal' THEN e.Cantidad ELSE 0 END) as ProcedimientosNormales,
                         SUM(CASE WHEN e.Tipo = 'Emergencia' THEN e.Cantidad ELSE 0 END) as ProcedimientosEmergencia
                     FROM Enfermeria e
-                    INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
                     WHERE {filtro_fecha}
                 """)
                 
@@ -784,11 +825,11 @@ class EnfermeriaRepository:
                 # Procedimientos más realizados
                 cursor.execute(f"""
                     SELECT TOP 5
-                        tp.Nombre,
+                        ISNULL(tp.Nombre, 'Procedimiento General') as Nombre,
                         COUNT(*) as Cantidad,
                         SUM(e.Cantidad) as TotalUnidades
                     FROM Enfermeria e
-                    INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
                     WHERE {filtro_fecha}
                     GROUP BY tp.Nombre
                     ORDER BY COUNT(*) DESC
@@ -825,52 +866,3 @@ class EnfermeriaRepository:
                 'procedimientosTop': [],
                 'periodo': periodo
             }
-    def buscar_paciente_por_cedula_exacta(self, cedula: str) -> Optional[Dict[str, Any]]:
-        """
-        Busca un paciente específico por cédula exacta
-        
-        Args:
-            cedula (str): Cédula del paciente
-            
-        Returns:
-            Optional[Dict]: Datos del paciente encontrado
-        """
-        try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Limpiar cédula antes de buscar
-                cedula_limpia = self._limpiar_cedula(cedula)
-                
-                if not cedula_limpia:
-                    return None
-                
-                cursor.execute("""
-                    SELECT 
-                        id,
-                        Nombre + ' ' + Apellido_Paterno + ' ' + Apellido_Materno as NombreCompleto,
-                        Nombre,
-                        Apellido_Paterno,
-                        Apellido_Materno,
-                        Cedula
-                    FROM Pacientes
-                    WHERE Cedula = ?
-                """, (cedula_limpia,))
-                
-                resultado = cursor.fetchone()
-                
-                if resultado:
-                    return {
-                        'id': resultado.id,
-                        'nombreCompleto': resultado.NombreCompleto,
-                        'nombre': resultado.Nombre,
-                        'apellidoPaterno': resultado.Apellido_Paterno,
-                        'apellidoMaterno': resultado.Apellido_Materno or '',
-                        'cedula': resultado.Cedula
-                    }
-                
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error buscando paciente por cédula exacta: {e}")
-            return None

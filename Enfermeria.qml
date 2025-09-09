@@ -8,11 +8,12 @@ Item {
     objectName: "enfermeriaRoot"
     
     // ===============================
-    // 1. SECCIÓN DE PROPIEDADES
+    // 1. PROPIEDADES CORREGIDAS
     // ===============================
     
     // PROPIEDADES BÁSICAS
     property var enfermeriaModel: null
+    property bool modeloConectado: false
     
     // PROPIEDADES DE ESTILO ADAPTATIVO
     readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
@@ -21,7 +22,7 @@ Item {
     readonly property real iconSize: Math.max(baseUnit * 3, 24)
     readonly property real buttonIconSize: Math.max(baseUnit * 2, 18)
     
-    // PROPIEDADES DE COLOR
+    // PROPIEDADES DE COLOR (sin cambios)
     readonly property color primaryColor: "#e91e63"
     readonly property color primaryColorHover: "#d81b60"
     readonly property color primaryColorPressed: "#c2185b"
@@ -39,7 +40,7 @@ Item {
     readonly property color accentColor: "#10B981"
     readonly property color lineColor: "#D1D5DB"
     
-    // DISTRIBUCIÓN DE COLUMNAS
+    // DISTRIBUCIÓN DE COLUMNAS (sin cambios)
     readonly property real colId: 0.05
     readonly property real colPaciente: 0.18
     readonly property real colProcedimiento: 0.16
@@ -50,18 +51,24 @@ Item {
     readonly property real colFecha: 0.10
     readonly property real colTrabajador: 0.15
     
-    // PROPIEDADES DE PAGINACIÓN
-    property int itemsPerPageEnfermeria: calcularElementosPorPagina()
-    property int currentPageEnfermeria: 0
-    property int totalPagesEnfermeria: 0
+    // ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
+    readonly property int currentPageEnfermeria: enfermeriaModel && modeloConectado ? 
+        (enfermeriaModel.currentPageProperty || 0) : 0
+    readonly property int totalPagesEnfermeria: enfermeriaModel && modeloConectado ? 
+        (enfermeriaModel.totalPagesProperty || 1) : 1
+    readonly property int itemsPerPageEnfermeria: enfermeriaModel && modeloConectado ? 
+        (enfermeriaModel.itemsPerPageProperty || 6) : 6
+    readonly property int totalItemsEnfermeria: enfermeriaModel && modeloConectado ? 
+        (enfermeriaModel.totalRecordsProperty || 0) : 0
     
     // PROPIEDADES DEL FORMULARIO
     property bool showNewProcedureDialog: false
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
+    property bool formEnabled: true
     
-    // PROPIEDADES DE FILTROS
+    // ✅ PROPIEDADES DE FILTROS ESTANDARIZADAS
     property var filtrosActivos: ({
         "busqueda": "",
         "tipo_procedimiento": "",
@@ -70,77 +77,170 @@ Item {
         "fecha_hasta": ""
     })
     
-    // DATOS DEL MODELO
-    property var trabajadoresDisponibles: enfermeriaModel ? enfermeriaModel.trabajadoresEnfermeria : []
-    property var tiposProcedimientos: enfermeriaModel ? enfermeriaModel.tiposProcedimientos : []
+    // ✅ DATOS DEL MODELO CON PARSING SEGURO
+    property var trabajadoresDisponibles: []
+    property var tiposProcedimientos: []
+    
+    // ✅ FUNCIÓN PARA PARSING SEGURO DE JSON
+    function parseJsonSafe(jsonString, defaultValue) {
+        try {
+            if (!jsonString || jsonString === "" || jsonString === "[]") {
+                return defaultValue || []
+            }
+            
+            var parsed = JSON.parse(jsonString)
+            return Array.isArray(parsed) ? parsed : defaultValue || []
+        } catch (error) {
+            console.log("⚠️ Error parsing JSON:", error, "- String:", jsonString)
+            return defaultValue || []
+        }
+    }
+    
+    // ✅ ACTUALIZAR DATOS DESDE MODELO DE FORMA SEGURA
+    function actualizarDatosModelo() {
+        if (enfermeriaModel && modeloConectado) {
+            try {
+                trabajadoresDisponibles = parseJsonSafe(enfermeriaModel.trabajadoresJson, [])
+                tiposProcedimientos = parseJsonSafe(enfermeriaModel.tiposProcedimientosJson, [])
+                
+                console.log("📊 Datos actualizados - Trabajadores:", trabajadoresDisponibles.length, 
+                           "Tipos:", tiposProcedimientos.length)
+            } catch (error) {
+                console.log("❌ Error actualizando datos del modelo:", error)
+                trabajadoresDisponibles = []
+                tiposProcedimientos = []
+            }
+        } else {
+            trabajadoresDisponibles = []
+            tiposProcedimientos = []
+        }
+    }
     
     // ===============================
-    // 2. SECCIÓN DE CONEXIONES
+    // 2. CONEXIONES MEJORADAS
     // ===============================
     
     Connections {
         target: appController
         function onModelsReady() {
-            console.log("Modelos listos, conectando EnfermeriaModel...")
+            console.log("🔗 Modelos listos, conectando EnfermeriaModel...")
             conectarModelo()
         }
     }
     
+    // ✅ TIMER SIMPLIFICADO PARA ACTUALIZACIÓN
+    Timer {
+        id: updateTimer
+        interval: 200
+        running: false
+        repeat: false
+        onTriggered: {
+            if (modeloConectado && enfermeriaModel) {
+                updatePaginatedModel()
+            }
+        }
+    }
+    
+    // ✅ TIMER PARA PARSING DE DATOS
+    Timer {
+        id: dataParseTimer
+        interval: 100
+        running: false
+        repeat: false
+        onTriggered: actualizarDatosModelo()
+    }
+    
+    // ✅ CONEXIONES CORREGIDAS CON VALIDACIONES
     Connections {
         target: enfermeriaModel
-        enabled: enfermeriaModel !== null
-        
-        function onProcedimientoCreado(datosJson) {
-            console.log("Procedimiento creado:", datosJson)
-            showNewProcedureDialog = false
-            selectedRowIndex = -1
-            isEditMode = false  // Resetear modo
-            editingIndex = -1   // Resetear índice
-            cargarPagina()
+        enabled: enfermeriaModel !== null && modeloConectado
+
+        function onCurrentPagePropertyChanged() {
+            console.log("📄 Página actual cambiada:", currentPageEnfermeria)
+            updateTimer.restart()
         }
         
-        // NUEVA CONEXIÓN PARA ACTUALIZACIÓN
+        function onTotalPagesPropertyChanged() {
+            console.log("📊 Total de páginas cambiado:", totalPagesEnfermeria)
+        }
+        
+        function onTotalRecordsPropertyChanged() {
+            console.log("📈 Total de registros cambiado:", totalItemsEnfermeria)
+        }
+        
+        function onProcedimientosRecientesChanged() {
+            console.log("🩹 Signal: Procedimientos actualizados")
+            updateTimer.restart()
+        }
+        
+        function onTiposProcedimientosChanged() {
+            console.log("🔧 Signal: Tipos de procedimientos actualizados")
+            dataParseTimer.restart()
+        }
+        
+        function onTrabajadoresChanged() {
+            console.log("👥 Signal: Trabajadores actualizados")
+            dataParseTimer.restart()
+        }
+        
+        function onProcedimientoCreado(datosJson) {
+            console.log("✅ Procedimiento creado:", datosJson)
+            limpiarYCerrarDialogo()
+            updateTimer.restart()
+        }
+        
         function onProcedimientoActualizado(datosJson) {
-            console.log("Procedimiento actualizado:", datosJson)
-            showNewProcedureDialog = false
-            selectedRowIndex = -1
-            isEditMode = false  // Resetear modo
-            editingIndex = -1   // Resetear índice
-            cargarPagina()
+            console.log("✅ Procedimiento actualizado:", datosJson)
+            limpiarYCerrarDialogo()
+            updateTimer.restart()
         }
         
         function onProcedimientoEliminado(procedimientoId) {
-            console.log("Procedimiento eliminado:", procedimientoId)
+            console.log("🗑️ Procedimiento eliminado:", procedimientoId)
             selectedRowIndex = -1
-            cargarPagina()
+            updateTimer.restart()
         }
         
         function onPacienteEncontradoPorCedula(pacienteData) {
-            console.log("Paciente encontrado:", pacienteData.nombreCompleto)
+            console.log("👤 Paciente encontrado:", pacienteData.nombreCompleto)
             autocompletarDatosPaciente(pacienteData)
         }
         
         function onPacienteNoEncontrado(cedula) {
-            console.log("Paciente no encontrado:", cedula)
+            console.log("❓ Paciente no encontrado:", cedula)
             marcarPacienteNoEncontrado(cedula)
         }
         
         function onEstadoCambiado(nuevoEstado) {
-            console.log("Estado enfermería:", nuevoEstado)
+            console.log("🔄 Estado enfermería:", nuevoEstado)
+            if (nuevoEstado === "listo") {
+                formEnabled = true
+            } else if (nuevoEstado === "cargando") {
+                formEnabled = false
+            }
         }
         
-        function onErrorOcurrido(mensaje, codigo) {
-            console.log("Error enfermería:", mensaje)
+        function onErrorOccurred(mensaje) {
+            console.log("❌ Error enfermería:", mensaje)
             showNotification("Error", mensaje)
+            formEnabled = true
         }
         
         function onOperacionExitosa(mensaje) {
-            console.log("Éxito enfermería:", mensaje)
+            console.log("✅ Éxito enfermería:", mensaje)
             showNotification("Éxito", mensaje)
+            
+            // ✅ CERRAR DIÁLOGO AUTOMÁTICAMENTE SOLO SI ES CREACIÓN/ACTUALIZACIÓN
+            if (showNewProcedureDialog && (mensaje.includes("creado") || mensaje.includes("actualizado"))) {
+                Qt.callLater(function() {
+                    limpiarYCerrarDialogo()
+                })
+            }
         }
     }
+    
     // ===============================
-    // 3. SECCIÓN DE MODELOS
+    // 3. MODELO CORREGIDO
     // ===============================
     
     ListModel {
@@ -148,7 +248,7 @@ Item {
     }
     
     // ===============================
-    // 4. LAYOUT PRINCIPAL
+    // 4. LAYOUT PRINCIPAL (SIN CAMBIOS CRÍTICOS)
     // ===============================
     
     ColumnLayout {
@@ -168,7 +268,7 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // HEADER
+                // HEADER (sin cambios)
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 12
@@ -273,7 +373,7 @@ Item {
                     }
                 }
                 
-                // FILTROS
+                // ✅ FILTROS CORREGIDOS
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: width < 1000 ? baseUnit * 16 : baseUnit * 8
@@ -336,18 +436,41 @@ Item {
                                 id: filtroProcedimiento
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
+
                                 model: {
                                     var modelData = ["Todos"]
-                                    if (enfermeriaModel && enfermeriaModel.tiposProcedimientos) {
-                                        for (var i = 0; i < enfermeriaModel.tiposProcedimientos.length; i++) {
-                                            var nombre = enfermeriaModel.tiposProcedimientos[i].nombre || ""
-                                            if (nombre) modelData.push(nombre)
+                                    if (tiposProcedimientos && tiposProcedimientos.length > 0) {
+                                        for (var i = 0; i < tiposProcedimientos.length; i++) {
+                                            var procedimiento = tiposProcedimientos[i]
+                                            var nombre = procedimiento.nombre || ""
+                                            if (nombre && nombre !== "Todos" && nombre.trim().length > 0) {
+                                                modelData.push(nombre)
+                                            }
                                         }
                                     }
+                                    console.log("🏥 Modelo procedimientos actualizado:", modelData.length, "elementos")
                                     return modelData
                                 }
+                                
                                 currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
+                                onCurrentIndexChanged: {
+                                    console.log("🏥 PROCEDIMIENTO FILTER CHANGED:")
+                                    console.log("   - currentIndex:", currentIndex)
+                                    console.log("   - currentText:", currentText) 
+                                    console.log("   - model length:", model.length)
+                                    console.log("   - model:", JSON.stringify(model))
+                                    
+                                    // ✅ VALIDACIÓN ADICIONAL
+                                    if (currentIndex >= 0 && currentIndex < model.length) {
+                                        console.log("   - Texto esperado:", model[currentIndex])
+                                        console.log("   - Texto actual:", currentText)
+                                        
+                                        // ✅ DELAY PARA ASEGURAR SINCRONIZACIÓN
+                                        aplicarFiltrosTimer.restart()
+                                    } else {
+                                        console.log("   - ⚠️ Índice fuera de rango")
+                                    }
+                                }
                                 
                                 contentItem: Label {
                                     text: filtroProcedimiento.displayText
@@ -357,6 +480,16 @@ Item {
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
                                     elide: Text.ElideRight
+                                }
+                            }
+                            Timer {
+                                id: aplicarFiltrosTimer
+                                interval: 100  // 100ms delay
+                                running: false
+                                repeat: false
+                                onTriggered: {
+                                    console.log("⏰ Timer ejecutado - Aplicando filtros con delay")
+                                    aplicarFiltros()
                                 }
                             }
                         }
@@ -379,7 +512,13 @@ Item {
                                 Layout.preferredHeight: baseUnit * 4
                                 model: ["Todos", "Normal", "Emergencia"]
                                 currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
+                                onCurrentIndexChanged: {
+                                    console.log("🎯 TIPO FILTER CHANGED:")
+                                    console.log("   - currentIndex:", currentIndex)
+                                    console.log("   - currentText:", currentText) 
+                                    console.log("   - model:", model)
+                                    aplicarFiltros()
+                                }
                                 
                                 contentItem: Label {
                                     text: filtroTipo.displayText
@@ -397,7 +536,19 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 4
                             placeholderText: "Buscar por paciente o cédula..."
-                            onTextChanged: aplicarFiltros()
+                            
+                            // ✅ TRIGGER MEJORADO CON TIMER
+                            onTextChanged: {
+                                filtroTimer.restart()
+                            }
+                            
+                            Timer {
+                                id: filtroTimer
+                                interval: 500
+                                running: false
+                                repeat: false
+                                onTriggered: aplicarFiltros()
+                            }
                             
                             background: Rectangle {
                                 color: whiteColor
@@ -444,7 +595,7 @@ Item {
                     }
                 }
                 
-                // TABLA
+                // TABLA (headers sin cambios, contenido corregido)
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -460,7 +611,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER DE TABLA
+                        // HEADER DE TABLA (sin cambios)
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -659,7 +810,7 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO DE LA TABLA
+                        // ✅ CONTENIDO DE LA TABLA MEJORADO
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -709,7 +860,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: model.procedimientoId
+                                                text: model.procedimientoId || "N/A"
                                                 color: textColor
                                                 font.pixelSize: fontBaseSize * 0.9
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -733,7 +884,7 @@ Item {
                                                 
                                                 Label {
                                                     width: parent.width - baseUnit
-                                                    text: model.paciente
+                                                    text: model.paciente || "Sin nombre"
                                                     color: textColor
                                                     font.pixelSize: fontBaseSize * 0.85
                                                     font.family: "Segoe UI, Arial, sans-serif"
@@ -742,7 +893,7 @@ Item {
                                                 
                                                 Label {
                                                     width: parent.width - baseUnit
-                                                    text: model.cedula ? "C.I: " + model.cedula : ""
+                                                    text: model.cedula ? "C.I: " + model.cedula : "Sin cédula"
                                                     color: textColorLight
                                                     font.pixelSize: fontBaseSize * 0.75
                                                     font.family: "Segoe UI, Arial, sans-serif"
@@ -769,7 +920,7 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.tipoProcedimiento
+                                                text: model.tipoProcedimiento || "Procedimiento General"
                                                 color: primaryColor
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -792,12 +943,12 @@ Item {
                                                 anchors.centerIn: parent
                                                 width: baseUnit * 2.5
                                                 height: baseUnit * 2.5
-                                                color: model.cantidad > 1 ? warningColor : successColor
+                                                color: (model.cantidad || 1) > 1 ? warningColor : successColor
                                                 radius: height / 2
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: model.cantidad
+                                                    text: model.cantidad || "0"
                                                     color: whiteColor
                                                     font.pixelSize: fontBaseSize * 0.75
                                                     font.bold: true
@@ -821,13 +972,13 @@ Item {
                                                 anchors.centerIn: parent
                                                 width: baseUnit * 7
                                                 height: baseUnit * 2.5
-                                                color: model.tipo === "Emergencia" ? warningColorLight : successColorLight
+                                                color: (model.tipo || "Normal") === "Emergencia" ? warningColorLight : successColorLight
                                                 radius: height / 2
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: model.tipo
-                                                    color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
+                                                    text: model.tipo || "Normal"
+                                                    color: (model.tipo || "Normal") === "Emergencia" ? "#92400E" : "#047857"
                                                     font.pixelSize: fontBaseSize * 0.75
                                                     font.family: "Segoe UI, Arial, sans-serif"
                                                 }
@@ -849,7 +1000,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: "Bs " + model.precioUnitario
+                                                text: "Bs " + (model.precioUnitario || "0.00")
                                                 color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
                                                 font.pixelSize: fontBaseSize * 0.9
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -871,7 +1022,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: "Bs " + model.precioTotal
+                                                text: "Bs " + (model.precioTotal || "0.00") 
                                                 color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
                                                 font.pixelSize: fontBaseSize * 0.9
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -893,7 +1044,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: model.fecha
+                                                text: model.fecha || "Sin fecha" 
                                                 color: textColor
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -917,7 +1068,7 @@ Item {
                                                 
                                                 Label {
                                                     width: parent.width
-                                                    text: model.trabajadorRealizador
+                                                    text: model.trabajadorRealizador || "Sin asignar"
                                                     color: textColor
                                                     font.pixelSize: fontBaseSize * 0.85
                                                     font.family: "Segoe UI, Arial, sans-serif"
@@ -982,17 +1133,23 @@ Item {
                                                 font.pixelSize: fontBaseSize * 1.2
                                             }
                                             
-                                            onClicked: eliminarProcedimiento(model.procedimientoId)
+                                            onClicked: {
+                                                var procId = model.procedimientoId
+                                                if (procId && procId !== "N/A") {
+                                                    eliminarProcedimiento(procId)
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                         
+                        // ✅ MENSAJE DE "NO HAY DATOS" MEJORADO
                         ColumnLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            visible: procedimientosPaginadosModel.count === 0
+                            visible: procedimientosPaginadosModel.count === 0 && modeloConectado
                             spacing: baseUnit * 3
                             
                             Item { Layout.fillHeight: true }
@@ -1009,7 +1166,7 @@ Item {
                                 }
                                 
                                 Label {
-                                    text: "No hay procedimientos registrados"
+                                    text: modeloConectado ? "No hay procedimientos registrados" : "Conectando con la base de datos..."
                                     color: textColor
                                     font.bold: true
                                     font.pixelSize: fontBaseSize * 1.5
@@ -1018,7 +1175,8 @@ Item {
                                 }
                                 
                                 Label {
-                                    text: "Registra el primer procedimiento haciendo clic en \"Nuevo Procedimiento\""
+                                    text: modeloConectado ? "Registra el primer procedimiento haciendo clic en \"Nuevo Procedimiento\"" : 
+                                                           "Espere mientras se cargan los datos..."
                                     color: textColorLight
                                     font.pixelSize: fontBaseSize
                                     Layout.alignment: Qt.AlignHCenter
@@ -1034,7 +1192,7 @@ Item {
                     }
                 }
                 
-                // PAGINACIÓN
+                // ✅ PAGINACIÓN CORREGIDA
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 6
@@ -1053,7 +1211,7 @@ Item {
                             Layout.preferredWidth: baseUnit * 10
                             Layout.preferredHeight: baseUnit * 4
                             text: "← Anterior"
-                            enabled: currentPageEnfermeria > 0
+                            enabled: modeloConectado && currentPageEnfermeria > 0
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
@@ -1076,11 +1234,14 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: cambiarPagina(currentPageEnfermeria - 1)
+                            onClicked: irAPaginaAnterior()
                         }
 
                         Label {
-                            text: "Página " + (currentPageEnfermeria + 1) + " de " + Math.max(1, totalPagesEnfermeria)
+                            text: modeloConectado ? 
+                                "Página " + (currentPageEnfermeria + 1) + " de " + Math.max(1, totalPagesEnfermeria) +
+                                " | Total: " + totalItemsEnfermeria + " registros" :
+                                "Conectando..."
                             color: textColor
                             font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
@@ -1091,7 +1252,7 @@ Item {
                             Layout.preferredWidth: baseUnit * 11
                             Layout.preferredHeight: baseUnit * 4
                             text: "Siguiente →"
-                            enabled: currentPageEnfermeria < totalPagesEnfermeria - 1
+                            enabled: modeloConectado && currentPageEnfermeria < (totalPagesEnfermeria - 1)
                             
                             background: Rectangle {
                                 color: parent.enabled ? 
@@ -1114,7 +1275,7 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: cambiarPagina(currentPageEnfermeria + 1)
+                            onClicked: irAPaginaSiguiente()
                         }
                     }
                 }
@@ -1123,7 +1284,7 @@ Item {
     }
 
     // ===============================
-    // 5. FORMULARIO DE NUEVO PROCEDIMIENTO
+    // 5. FORMULARIO DE NUEVO PROCEDIMIENTO (CORREGIDO)
     // ===============================
 
     Rectangle {
@@ -1135,10 +1296,7 @@ Item {
         
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                showNewProcedureDialog = false
-                selectedRowIndex = -1
-            }
+            onClicked: limpiarYCerrarDialogo()
         }
         
         Behavior on opacity {
@@ -1166,6 +1324,7 @@ Item {
             border.width: baseUnit
             z: -1
         }
+        
         property var procedimientoParaEditar: null
         property int selectedProcedureIndex: -1
         property string procedureType: "Normal"
@@ -1174,20 +1333,26 @@ Item {
         
         function updatePrices() {
             if (procedureForm.selectedProcedureIndex >= 0 && tiposProcedimientos.length > 0) {
-                var procedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex]
-                
-                var precioUnitario = 0
-                if (procedureForm.procedureType === "Emergencia") {
-                    precioUnitario = procedimiento.precioEmergencia || 0
-                } else {
-                    precioUnitario = procedimiento.precioNormal || 0
+                try {
+                    var procedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex]
+                    
+                    var precioUnitario = 0
+                    if (procedureForm.procedureType === "Emergencia") {
+                        precioUnitario = procedimiento.precioEmergencia || 0
+                    } else {
+                        precioUnitario = procedimiento.precioNormal || 0
+                    }
+                    
+                    var cantidadActual = cantidadSpinBox.value || 1
+                    var precioTotal = precioUnitario * cantidadActual
+                    
+                    procedureForm.calculatedUnitPrice = precioUnitario
+                    procedureForm.calculatedTotalPrice = precioTotal
+                } catch (e) {
+                    console.log("Error calculando precios:", e)
+                    procedureForm.calculatedUnitPrice = 0.0
+                    procedureForm.calculatedTotalPrice = 0.0
                 }
-                
-                var cantidadActual = cantidadSpinBox.value || 1
-                var precioTotal = precioUnitario * cantidadActual
-                
-                procedureForm.calculatedUnitPrice = precioUnitario
-                procedureForm.calculatedTotalPrice = precioTotal
             } else {
                 procedureForm.calculatedUnitPrice = 0.0
                 procedureForm.calculatedTotalPrice = 0.0
@@ -1197,24 +1362,13 @@ Item {
         onVisibleChanged: {
             if (visible) {
                 if (isEditMode && procedureForm.procedimientoParaEditar) {
-                    loadEditData()  // Cargar datos para edición
+                    loadEditData()
                 } else if (!isEditMode) {
-                    // Limpiar formulario para nuevo procedimiento
-                    nombrePaciente.text = ""
-                    apellidoPaterno.text = ""
-                    apellidoMaterno.text = ""
-                    cedulaPaciente.text = "" 
-                    procedimientoCombo.currentIndex = 0
-                    trabajadorCombo.currentIndex = 0
-                    normalRadio.checked = true
-                    cantidadSpinBox.value = 1
-                    procedureForm.selectedProcedureIndex = -1
-                    procedureForm.calculatedUnitPrice = 0.0
-                    procedureForm.calculatedTotalPrice = 0.0
-                    procedureForm.procedimientoParaEditar = null
+                    clearAllFields() 
                 }
             }
         }
+        
         function loadEditData() {
             if (!isEditMode || !procedureForm.procedimientoParaEditar) {
                 console.log("No hay datos para cargar en edición")
@@ -1230,8 +1384,8 @@ Item {
                 buscarPacientePorCedula(cedulaPaciente.text)
             }
             
-            // Cargar procedimiento
-            if (proc.tipoProcedimiento && tiposProcedimientos) {
+            // ✅ CARGAR PROCEDIMIENTO CON PARSING SEGURO
+            if (proc.tipoProcedimiento) {
                 for (var i = 0; i < tiposProcedimientos.length; i++) {
                     if (tiposProcedimientos[i].nombre === proc.tipoProcedimiento) {
                         procedimientoCombo.currentIndex = i + 1
@@ -1241,11 +1395,14 @@ Item {
                 }
             }
             
-            // Cargar trabajador
-            if (proc.trabajadorRealizador && trabajadoresDisponibles) {
+            // ✅ CARGAR TRABAJADOR CON PARSING SEGURO
+            if (proc.trabajadorRealizador) {
                 for (var j = 0; j < trabajadoresDisponibles.length; j++) {
-                    if (trabajadoresDisponibles[j] === proc.trabajadorRealizador) {
+                    var trabajador = trabajadoresDisponibles[j]
+                    var nombreTrabajador = trabajador.nombreCompleto || ""
+                    if (nombreTrabajador === proc.trabajadorRealizador) {
                         trabajadorCombo.currentIndex = j + 1
+                        console.log("Trabajador encontrado en índice:", j + 1, "ID real:", trabajador.id)
                         break
                     }
                 }
@@ -1266,8 +1423,7 @@ Item {
             cantidadSpinBox.value = parseInt(proc.cantidad) || 1
             
             // Actualizar precios
-            procedureForm.calculatedUnitPrice = parseFloat(proc.precioUnitario) || 0.0
-            procedureForm.calculatedTotalPrice = parseFloat(proc.precioTotal) || 0.0
+            procedureForm.updatePrices()
             
             console.log("Datos de edición cargados correctamente")
         }
@@ -1311,9 +1467,10 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                 }
                 
-                onClicked: cancelarFormulario()  // Usar función mejorada
+                onClicked: limpiarYCerrarDialogo() 
             }
         }
+        
         ScrollView {
             id: scrollView
             anchors.top: dialogHeader.bottom
@@ -1364,6 +1521,8 @@ Item {
                                 Layout.preferredWidth: baseUnit * 25 
                                 placeholderText: "Ej: 12345678 LP"
                                 font.pixelSize: fontBaseSize
+                                
+                                // ✅ VALIDATOR CORREGIDO
                                 validator: RegularExpressionValidator { 
                                     regularExpression: /^[0-9]{1,12}(\s*[A-Z]{0,3})?$/
                                 }
@@ -1395,7 +1554,7 @@ Item {
                                                 if (cedulaPaciente.buscandoPaciente) return "🔄"
                                                 if (cedulaPaciente.pacienteAutocompletado) return "✅"
                                                 if (cedulaPaciente.pacienteNoEncontrado) return "⚠️"
-                                                return cedulaPaciente.text.length >= 5 ? "🔍" : "🔒"
+                                                return cedulaPaciente.text.length >= 5 ? "🔍" : "🔓"
                                             }
                                             font.pixelSize: fontBaseSize
                                             visible: cedulaPaciente.text.length > 0
@@ -1546,17 +1705,31 @@ Item {
                                 id: procedimientoCombo
                                 Layout.fillWidth: true
                                 font.pixelSize: fontBaseSize
+                                
+                                // ✅ MODEL CORREGIDO CON PARSING SEGURO
                                 model: {
                                     var list = ["Seleccionar procedimiento..."]
-                                    for (var i = 0; i < tiposProcedimientos.length; i++) {
-                                        list.push(tiposProcedimientos[i].nombre)
+                                    if (tiposProcedimientos && tiposProcedimientos.length > 0) {
+                                        for (var i = 0; i < tiposProcedimientos.length; i++) {
+                                            var nombre = tiposProcedimientos[i].nombre || ""
+                                            if (nombre) {
+                                                list.push(nombre)
+                                            }
+                                        }
                                     }
                                     return list
                                 }
+                                
                                 onCurrentIndexChanged: {
-                                    if (currentIndex > 0) {
-                                        procedureForm.selectedProcedureIndex = currentIndex - 1
-                                        descripcionProcedimiento.text = tiposProcedimientos[procedureForm.selectedProcedureIndex].descripcion
+                                    if (currentIndex > 0 && tiposProcedimientos.length > 0) {
+                                        try {
+                                            if (currentIndex - 1 < tiposProcedimientos.length) {
+                                                procedureForm.selectedProcedureIndex = currentIndex - 1
+                                                descripcionProcedimiento.text = tiposProcedimientos[procedureForm.selectedProcedureIndex].descripcion || ""
+                                            }
+                                        } catch (e) {
+                                            console.log("Error en cambio de procedimiento:", e)
+                                        }
                                     } else {
                                         procedureForm.selectedProcedureIndex = -1
                                         descripcionProcedimiento.text = ""
@@ -1609,14 +1782,17 @@ Item {
                                 id: trabajadorCombo
                                 Layout.fillWidth: true
                                 font.pixelSize: fontBaseSize
+                                
+                                // ✅ MODEL CORREGIDO CON PARSING SEGURO
                                 model: {
                                     var modelData = ["Seleccionar trabajador..."]
                                     if (trabajadoresDisponibles && trabajadoresDisponibles.length > 0) {
                                         for (var i = 0; i < trabajadoresDisponibles.length; i++) {
-                                            var nombre = typeof trabajadoresDisponibles[i] === 'string' ? 
-                                                        trabajadoresDisponibles[i] : 
-                                                        (trabajadoresDisponibles[i].nombre || trabajadoresDisponibles[i].text || "")
-                                            if (nombre) modelData.push(nombre)
+                                            var trabajador = trabajadoresDisponibles[i]
+                                            var nombre = trabajador.nombreCompleto || ""
+                                            if (nombre) {
+                                                modelData.push(nombre)
+                                            }
                                         }
                                     }
                                     return modelData
@@ -1879,13 +2055,14 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                 }
                 
-                onClicked: cancelarFormulario()  // Usar función mejorada
+                onClicked: cancelarFormulario()
             }
             
             Button {
                 id: saveButton
                 text: isEditMode ? "Actualizar Procedimiento" : "Guardar Procedimiento"
-                enabled: procedureForm.selectedProcedureIndex >= 0 && 
+                enabled: formEnabled && 
+                        procedureForm.selectedProcedureIndex >= 0 && 
                         nombrePaciente.text.length >= 2 &&
                         apellidoPaterno.text.length >= 2 &&
                         trabajadorCombo.currentIndex > 0 &&
@@ -1917,26 +2094,14 @@ Item {
     }
 
     // ===============================
-    // 6. SECCIÓN DE FUNCIONES
+    // 6. FUNCIONES CORREGIDAS
     // ===============================
     
-    // GRUPO A - INICIALIZACIÓN
+    // GRUPO A - INICIALIZACIÓN MEJORADA
     
     Component.onCompleted: {
-        console.log("Módulo Enfermería iniciado")
+        console.log("🩹 Módulo Enfermería iniciado")
         conectarModelo()
-    }
-    
-    function initializarModelo() {
-        console.log("EnfermeriaModel disponible, inicializando datos...")
-        
-        if (enfermeriaModel) {
-            enfermeriaModel.actualizar_procedimientos()
-            enfermeriaModel.actualizar_tipos_procedimientos()
-            enfermeriaModel.actualizar_trabajadores_enfermeria()
-            
-            aplicarFiltros()
-        }
     }
     
     function conectarModelo() {
@@ -1944,315 +2109,555 @@ Item {
             enfermeriaModel = appController.enfermeria_model_instance
             
             if (enfermeriaModel) {
-                console.log("EnfermeriaModel conectado exitosamente")
+                modeloConectado = true
+                console.log("✅ EnfermeriaModel conectado exitosamente")
                 initializarModelo()
                 return true
             }
         }
+        
+        // Retry timer si no se conecta inmediatamente
+        if (!modeloConectado) {
+            retryTimer.start()
+        }
         return false
     }
     
-    // GRUPO B - PAGINACIÓN
+    Timer {
+        id: retryTimer
+        interval: 1000
+        running: false
+        repeat: false
+        onTriggered: {
+            if (!modeloConectado) {
+                console.log("🔄 Reintentando conectar EnfermeriaModel...")
+                conectarModelo()
+            }
+        }
+    }
     
-    function cargarPagina() {
-        if (!enfermeriaModel) {
-            console.log("EnfermeriaModel no disponible")
+    function initializarModelo() {
+        if (!enfermeriaModel || !modeloConectado) {
+            console.log("❌ Modelo no disponible para inicialización")
             return
         }
         
-        console.log("Cargando página", currentPageEnfermeria + 1, "desde repositorio...")
+        console.log("🚀 Inicializando datos de EnfermeriaModel...")
         
-        var resultado = enfermeriaModel.obtener_procedimientos_paginados(
-            currentPageEnfermeria, 
-            itemsPerPageEnfermeria, 
-            filtrosActivos
-        )
-        
-        if (resultado && resultado.procedimientos) {
-            procedimientosPaginadosModel.clear()
-            
-            for (var i = 0; i < resultado.procedimientos.length; i++) {
-                var proc = resultado.procedimientos[i]
-                procedimientosPaginadosModel.append(proc)
+        try {
+            // Configurar elementos por página
+            var elementosPorPagina = 6
+            if (enfermeriaModel.itemsPerPageProperty !== elementosPorPagina) {
+                enfermeriaModel.itemsPerPageProperty = elementosPorPagina
             }
             
-            totalPagesEnfermeria = resultado.total_pages || 1
+            // Cargar datos iniciales
+            enfermeriaModel.actualizar_procedimientos()
+            enfermeriaModel.actualizar_tipos_procedimientos()
+            enfermeriaModel.actualizar_trabajadores_enfermeria()
             
-            console.log("Página cargada: " + (currentPageEnfermeria + 1) + " de " + totalPagesEnfermeria + 
-                        " - " + procedimientosPaginadosModel.count + " procedimientos")
-        } else {
-            console.log("No se recibieron datos del repositorio")
+            // Actualizar datos del modelo
+            actualizarDatosModelo()
+            
+            // Aplicar filtros iniciales
+            aplicarFiltros()
+            
+            console.log("✅ Modelo inicializado correctamente")
+        } catch (error) {
+            console.log("❌ Error inicializando modelo:", error)
+        }
+    }
+    
+    // ✅ FUNCIÓN CRÍTICA: updatePaginatedModel CORREGIDA
+    function updatePaginatedModel() {
+        if (!enfermeriaModel || !modeloConectado) {
+            console.log("❌ Modelo no disponible para actualización")
+            return
+        }
+        
+        try {
+            // Limpiar modelo actual
             procedimientosPaginadosModel.clear()
-            totalPagesEnfermeria = 1
+            
+            // Obtener datos actuales del modelo
+            var procedimientos = enfermeriaModel.procedimientos || []
+            
+            if (procedimientos && procedimientos.length > 0) {
+                for (var i = 0; i < procedimientos.length; i++) {
+                    var proc = procedimientos[i]
+                    
+                    // Validar y agregar datos defensivamente
+                    procedimientosPaginadosModel.append({
+                        procedimientoId: proc.procedimientoId || "N/A",
+                        paciente: proc.paciente || "Sin nombre",
+                        cedula: proc.cedula || "",
+                        tipoProcedimiento: proc.tipoProcedimiento || "Procedimiento General",
+                        descripcion: proc.descripcion || "",
+                        cantidad: proc.cantidad || 1,
+                        tipo: proc.tipo || "Normal",
+                        precioUnitario: proc.precioUnitario || "0.00",
+                        precioTotal: proc.precioTotal || "0.00",
+                        fecha: proc.fecha || "Sin fecha",
+                        trabajadorRealizador: proc.trabajadorRealizador || "Sin asignar",
+                        registradoPor: proc.registradoPor || "Sistema",
+                        pacienteNombre: proc.pacienteNombre || "",
+                        pacienteApellidoP: proc.pacienteApellidoP || "",
+                        pacienteApellidoM: proc.pacienteApellidoM || ""
+                    })
+                }
+                
+                console.log("✅ Modelo actualizado con", procedimientosPaginadosModel.count, "elementos")
+            } else {
+                console.log("ℹ️ No hay procedimientos disponibles")
+            }
+        } catch (error) {
+            console.log("❌ Error actualizando modelo:", error)
         }
     }
     
-    function cambiarPagina(nuevaPagina) {
-        if (nuevaPagina >= 0 && nuevaPagina < totalPagesEnfermeria) {
-            currentPageEnfermeria = nuevaPagina
-            cargarPagina()
+    // GRUPO B - PAGINACIÓN CORREGIDA
+    
+    function irAPaginaAnterior() {
+        if (enfermeriaModel && modeloConectado && currentPageEnfermeria > 0) {
+            console.log("⬅️ Navegando a página anterior:", currentPageEnfermeria - 1)
+            
+            var filtros = construirFiltrosActuales()
+            enfermeriaModel.obtener_procedimientos_paginados(currentPageEnfermeria - 1, 6, filtros)
+        }
+    }
+
+    function irAPaginaSiguiente() {
+        if (enfermeriaModel && modeloConectado && currentPageEnfermeria < (totalPagesEnfermeria - 1)) {
+            console.log("➡️ Navegando a página siguiente:", currentPageEnfermeria + 1)
+            
+            var filtros = construirFiltrosActuales()
+            enfermeriaModel.obtener_procedimientos_paginados(currentPageEnfermeria + 1, 6, filtros)
         }
     }
     
-    function actualizarPaginacion() {
-        itemsPerPageEnfermeria = calcularElementosPorPagina()
-        cargarPagina()
-    }
-    
-    onHeightChanged: {
-        var nuevosElementos = calcularElementosPorPagina()
-        if (nuevosElementos !== itemsPerPageEnfermeria) {
-            actualizarPaginacion()
-        }
-    }
-    
-    // GRUPO C - FILTROS
+    // GRUPO C - FILTROS ESTANDARIZADOS
     
     function aplicarFiltros() {
-        console.log("Aplicando filtros desde repositorio...")
+        if (!enfermeriaModel || !modeloConectado) {
+            console.log("❌ Modelo no disponible para aplicar filtros")
+            return
+        }
+
+        console.log("🔍 Aplicando filtros...")
         
-        var nuevosFiltros = {
-            "busqueda": campoBusqueda.text.trim(),
-            "tipo_procedimiento": filtroProcedimiento.currentIndex > 0 ? 
-                                filtroProcedimiento.currentText : "",
-            "tipo": filtroTipo.currentIndex > 0 ? 
-                    filtroTipo.currentText : "",
-            "fecha_desde": obtenerFiltroFechaDesde(),
-            "fecha_hasta": obtenerFiltroFechaHasta()
+        // ✅ LOGS DE DEBUG PARA DIAGNOSTICAR
+        console.log("🎯 FILTROS DEBUG:")
+        console.log("   - filtroFecha.currentIndex:", filtroFecha.currentIndex)
+        console.log("   - filtroFecha.currentText:", filtroFecha.currentText)
+        console.log("   - filtroProcedimiento.currentIndex:", filtroProcedimiento.currentIndex)
+        console.log("   - filtroProcedimiento.currentText:", filtroProcedimiento.currentText)
+        console.log("   - filtroTipo.currentIndex:", filtroTipo.currentIndex)
+        console.log("   - filtroTipo.currentText:", filtroTipo.currentText)
+        console.log("   - campoBusqueda.text:", campoBusqueda.text)
+        
+        try {
+            // ✅ CONSTRUIR FILTROS CORRECTAMENTE (como en consultas)
+            var filtros = construirFiltrosActuales()
+            console.log("📋 Filtros construidos:", JSON.stringify(filtros))
+            
+            // Resetear a primera página cuando cambien filtros
+            // currentPageEnfermeria = 0  // Esta propiedad es readonly, se maneja en el modelo
+            
+            // ✅ APLICAR FILTROS CON NOMBRES ESTANDARIZADOS
+            enfermeriaModel.aplicar_filtros_y_recargar(
+                filtros.busqueda || "",
+                filtros.tipo_procedimiento || "",
+                filtros.tipo || "",
+                filtros.fecha_desde || "",
+                filtros.fecha_hasta || ""
+            )
+        } catch (error) {
+            console.log("❌ Error aplicando filtros:", error)
+        }
+    }   
+
+
+    function construirFiltrosActuales() {
+        var filtros = {}
+        
+        // Filtro por búsqueda
+        if (campoBusqueda.text.trim().length >= 2) {
+            filtros.busqueda = campoBusqueda.text.trim()
         }
         
-        filtrosActivos = nuevosFiltros
-        currentPageEnfermeria = 0
-        cargarPagina()
+        // ✅ FILTRO POR TIPO DE PROCEDIMIENTO - VALIDACIÓN MEJORADA
+        if (filtroProcedimiento.currentIndex > 0) {
+            var textoActual = filtroProcedimiento.currentText
+            var modeloActual = filtroProcedimiento.model
+            
+            console.log("🔍 VALIDANDO PROCEDIMIENTO:")
+            console.log("   - currentIndex:", filtroProcedimiento.currentIndex)
+            console.log("   - currentText:", textoActual)
+            console.log("   - modelo length:", modeloActual ? modeloActual.length : 0)
+            
+            // Validar que el texto no sea "Todos" y que el índice sea válido
+            if (textoActual && 
+                textoActual !== "Todos" && 
+                textoActual.trim().length > 0 &&
+                filtroProcedimiento.currentIndex < modeloActual.length) {
+                
+                filtros.tipo_procedimiento = textoActual
+                console.log("✅ Procedimiento válido aplicado:", textoActual)
+            } else {
+                console.log("⚠️ Procedimiento inválido ignorado:", textoActual)
+            }
+        }
+        
+        // ✅ FILTRO POR TIPO - MAPEO CORRECTO DE ÍNDICES (ya corregido antes)
+        if (filtroTipo.currentIndex > 0) {
+            if (filtroTipo.currentIndex === 1) {
+                filtros.tipo = "Normal"
+            } else if (filtroTipo.currentIndex === 2) {
+                filtros.tipo = "Emergencia"
+            }
+            
+            console.log("🎯 TIPO MAPEO:")
+            console.log("   - currentIndex:", filtroTipo.currentIndex)
+            console.log("   - Valor mapeado:", filtros.tipo)
+        }
+        
+        // Filtros de fecha (sin cambios)
+        if (filtroFecha && filtroFecha.currentIndex > 0) {
+            var hoy = new Date()
+            var fechaDesde, fechaHasta
+            
+            switch(filtroFecha.currentText) {
+                case "Hoy":
+                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+                    break
+                case "Esta Semana":
+                    var primerDiaSemana = new Date(hoy)
+                    primerDiaSemana.setDate(hoy.getDate() - hoy.getDay() + 1)
+                    fechaDesde = new Date(primerDiaSemana.getFullYear(), primerDiaSemana.getMonth(), primerDiaSemana.getDate())
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+                    break
+                case "Este Mes":
+                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+                    break
+            }
+            
+            if (fechaDesde && fechaHasta) {
+                filtros.fecha_desde = fechaDesde.toISOString().split('T')[0]
+                filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0]
+            }
+        }
+        
+        return filtros
     }
     
     function limpiarFiltros() {
-        console.log("Limpiando todos los filtros...")
+        console.log("🧹 Limpiando todos los filtros...")
         
-        filtroFecha.currentIndex = 0
-        filtroProcedimiento.currentIndex = 0
-        filtroTipo.currentIndex = 0
-        campoBusqueda.text = ""
-        
-        currentPageEnfermeria = 0
-        aplicarFiltros()
-        
-        showNotification("Info", "Filtros restablecidos")
-    }
-    
-    function obtenerFiltroFechaDesde() {
-        switch(filtroFecha.currentIndex) {
-            case 1: // Hoy
-                return new Date().toISOString().split('T')[0]
-            case 2: // Esta Semana
-                var hoy = new Date()
-                var lunes = new Date(hoy)
-                lunes.setDate(hoy.getDate() - hoy.getDay() + 1)
-                return lunes.toISOString().split('T')[0]
-            case 3: // Este Mes
-                var hoy = new Date()
-                return hoy.getFullYear() + "-" + (hoy.getMonth() + 1).toString().padStart(2, '0') + "-01"
-            default:
-                return ""
+        try {
+            // ✅ RESETEAR TODOS LOS COMBOS A ÍNDICE 0
+            if (filtroFecha) {
+                filtroFecha.currentIndex = 0
+            }
+            if (filtroProcedimiento) {
+                filtroProcedimiento.currentIndex = 0  
+            }
+            if (filtroTipo) {
+                filtroTipo.currentIndex = 0
+            }
+            if (campoBusqueda) {
+                campoBusqueda.text = ""
+            }
+            
+            // Aplicar filtros (ahora todos estarán vacíos/por defecto)
+            aplicarFiltros()
+            
+            showNotification("Info", "Filtros restablecidos")
+            console.log("✅ Filtros limpiados correctamente")
+            
+        } catch (error) {
+            console.log("❌ Error limpiando filtros:", error)
         }
     }
     
-    function obtenerFiltroFechaHasta() {
-        switch(filtroFecha.currentIndex) {
-            case 1: // Hoy
-                return new Date().toISOString().split('T')[0]
-            case 2: // Esta Semana
-                var hoy = new Date()
-                var domingo = new Date(hoy)
-                domingo.setDate(hoy.getDate() + (7 - hoy.getDay()))
-                return domingo.toISOString().split('T')[0]
-            case 3: // Este Mes
-                var hoy = new Date()
-                var ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
-                return ultimoDia.toISOString().split('T')[0]
-            default:
-                return ""
-        }
-    }
-    
-    // GRUPO D - BÚSQUEDA DE PACIENTES
+    // GRUPO D - BÚSQUEDA DE PACIENTES MEJORADA
     
     function buscarPacientePorCedula(cedula) {
-        if (!enfermeriaModel || cedula.length < 5) {
+        if (!enfermeriaModel || !modeloConectado || cedula.length < 5) {
             cedulaPaciente.buscandoPaciente = false
             return
         }
         
-        console.log("Búsqueda inteligente de paciente:", cedula)
+        console.log("🔍 Búsqueda inteligente de paciente:", cedula)
         
-        var pacienteEncontrado = enfermeriaModel.buscar_paciente_por_cedula(cedula)
-        
-        cedulaPaciente.buscandoPaciente = false
+        try {
+            var pacienteEncontrado = enfermeriaModel.buscar_paciente_por_cedula(cedula)
+            cedulaPaciente.buscandoPaciente = false
+        } catch (error) {
+            console.log("❌ Error en búsqueda de paciente:", error)
+            cedulaPaciente.buscandoPaciente = false
+        }
     }
     
     function autocompletarDatosPaciente(paciente) {
-        console.log("Autocompletando datos del paciente:", paciente.nombreCompleto)
+        console.log("👤 Autocompletando datos del paciente:", paciente.nombreCompleto)
         
-        var nombres = paciente.nombreCompleto.split(" ")
-        
-        nombrePaciente.text = nombres[0] || ""
-        apellidoPaterno.text = nombres[1] || ""
-        apellidoMaterno.text = nombres.slice(2).join(" ") || ""
-        
-        cedulaPaciente.pacienteAutocompletado = true
-        cedulaPaciente.pacienteNoEncontrado = false
-        cedulaPaciente.buscandoPaciente = false
-        
-        nombrePaciente.readOnly = true
-        apellidoPaterno.readOnly = true
-        apellidoMaterno.readOnly = true
-        
-        showNotification("Éxito", "Paciente encontrado: " + paciente.nombreCompleto)
+        try {
+            nombrePaciente.text = paciente.nombre || ""
+            apellidoPaterno.text = paciente.apellidoPaterno || ""
+            apellidoMaterno.text = paciente.apellidoMaterno || ""
+
+            cedulaPaciente.pacienteAutocompletado = true
+            cedulaPaciente.pacienteNoEncontrado = false
+            cedulaPaciente.buscandoPaciente = false
+
+            nombrePaciente.readOnly = true
+            apellidoPaterno.readOnly = true
+            apellidoMaterno.readOnly = true
+
+            showNotification("Éxito", "Paciente encontrado: " + paciente.nombreCompleto)
+        } catch (error) {
+            console.log("❌ Error autocompletando paciente:", error)
+        }
     }
     
     function marcarPacienteNoEncontrado(cedula) {
-        console.log("Paciente no encontrado. Habilitando creación:", cedula)
+        console.log("❓ Paciente no encontrado. Habilitando creación:", cedula)
         
-        cedulaPaciente.pacienteNoEncontrado = true
-        cedulaPaciente.pacienteAutocompletado = false
-        cedulaPaciente.buscandoPaciente = false
-        
-        nombrePaciente.text = ""
-        apellidoPaterno.text = ""
-        apellidoMaterno.text = ""
-        
-        nombrePaciente.readOnly = false
-        apellidoPaterno.readOnly = false
-        apellidoMaterno.readOnly = false
-        
-        nombrePaciente.forceActiveFocus()
-        
-        showNotification("Info", "Paciente no encontrado. Complete los datos para crear nuevo paciente.")
+        try {
+            cedulaPaciente.pacienteNoEncontrado = true
+            cedulaPaciente.pacienteAutocompletado = false
+            cedulaPaciente.buscandoPaciente = false
+            
+            nombrePaciente.text = ""
+            apellidoPaterno.text = ""
+            apellidoMaterno.text = ""
+            
+            nombrePaciente.readOnly = false
+            apellidoPaterno.readOnly = false
+            apellidoMaterno.readOnly = false
+            
+            nombrePaciente.forceActiveFocus()
+            
+            showNotification("Info", "Paciente no encontrado. Complete los datos para crear nuevo paciente.")
+        } catch (error) {
+            console.log("❌ Error marcando paciente no encontrado:", error)
+        }
     }
     
     function limpiarDatosPaciente() {
-        if (nombrePaciente.text === "" && apellidoPaterno.text === "" && apellidoMaterno.text === "") {
-            return
+        try {
+            if (nombrePaciente.text === "" && apellidoPaterno.text === "" && apellidoMaterno.text === "") {
+                return
+            }
+            
+            nombrePaciente.text = ""
+            apellidoPaterno.text = ""
+            apellidoMaterno.text = ""
+            
+            cedulaPaciente.pacienteAutocompletado = false
+            cedulaPaciente.pacienteNoEncontrado = false
+            cedulaPaciente.buscandoPaciente = false
+            
+            nombrePaciente.readOnly = false
+            apellidoPaterno.readOnly = false
+            apellidoMaterno.readOnly = false
+        } catch (error) {
+            console.log("❌ Error limpiando datos de paciente:", error)
         }
-        
-        nombrePaciente.text = ""
-        apellidoPaterno.text = ""
-        apellidoMaterno.text = ""
-        
-        cedulaPaciente.pacienteAutocompletado = false
-        cedulaPaciente.pacienteNoEncontrado = false
-        cedulaPaciente.buscandoPaciente = false
-        
-        nombrePaciente.readOnly = false
-        apellidoPaterno.readOnly = false
-        apellidoMaterno.readOnly = false
     }
     
-    // GRUPO E - OPERACIONES CRUD
+    // GRUPO E - OPERACIONES CRUD MEJORADAS
     
     function guardarProcedimiento() {
-        if (!enfermeriaModel) {
-            console.log("ERROR: enfermeriaModel no disponible")
+        if (!enfermeriaModel || !modeloConectado) {
+            console.log("❌ EnfermeriaModel no disponible")
+            showNotification("Error", "Modelo no disponible")
             return
         }
         
-        console.log("Iniciando guardado de procedimiento...")
-        console.log("Modo edición:", isEditMode)
-        
-        var trabajadorIdReal = -1
-        if (trabajadorCombo.currentIndex > 0) {
-            // Los trabajadores en la BD empiezan desde ID 1
-            // El combo tiene índice 0 = "Seleccionar...", índice 1 = primer trabajador real
-            trabajadorIdReal = trabajadorCombo.currentIndex
-        }
-        if (trabajadorIdReal <= 0) {
-            showNotification("Error", "Debe seleccionar un trabajador válido")
+        if (!formEnabled) {
+            console.log("⚠️ Formulario deshabilitado")
             return
         }
+        
+        console.log("💾 Iniciando guardado de procedimiento...")
+        console.log("📝 Modo edición:", isEditMode)
+        
+        try {
+            // Validar trabajador
+            var trabajadorIdReal = -1
+            if (trabajadorCombo.currentIndex > 0 && trabajadoresDisponibles.length > 0) {
+                if (trabajadorCombo.currentIndex - 1 < trabajadoresDisponibles.length) {
+                    trabajadorIdReal = trabajadoresDisponibles[trabajadorCombo.currentIndex - 1].id
+                }
+            }
+            
+            if (trabajadorIdReal <= 0) {
+                showNotification("Error", "Debe seleccionar un trabajador válido")
+                return
+            }
 
-        var datosProcedimiento = {
-            paciente: (nombrePaciente.text + " " + apellidoPaterno.text + " " + apellidoMaterno.text).trim(),
-            cedula: cedulaPaciente.text.trim(),
-            idProcedimiento: procedureForm.selectedProcedureIndex + 1,
-            cantidad: cantidadSpinBox.value,
-            tipo: procedureForm.procedureType,
-            idTrabajador: trabajadorIdReal,
-            precioUnitario: procedureForm.calculatedUnitPrice,
-            precioTotal: procedureForm.calculatedTotalPrice
-        }
-        
-        console.log("Datos del procedimiento:", JSON.stringify(datosProcedimiento, null, 2))
-        
-        // LÓGICA SEPARADA: CREAR vs ACTUALIZAR
-        if (isEditMode && procedureForm.procedimientoParaEditar) {
-            // MODO EDICIÓN - Llamar actualizar_procedimiento
-            var procedimientoId = parseInt(procedureForm.procedimientoParaEditar.procedimientoId)
+            var datosProcedimiento = {
+                paciente: (nombrePaciente.text + " " + apellidoPaterno.text + " " + apellidoMaterno.text).trim(),
+                cedula: cedulaPaciente.text.trim(),
+                idProcedimiento: procedureForm.selectedProcedureIndex + 1,
+                cantidad: cantidadSpinBox.value,
+                tipo: procedureForm.procedureType,
+                idTrabajador: trabajadorIdReal,
+                precioUnitario: procedureForm.calculatedUnitPrice,
+                precioTotal: procedureForm.calculatedTotalPrice
+            }
             
-            console.log("=== MODO EDICIÓN ===")
-            console.log("Actualizando procedimiento ID:", procedimientoId)
+            console.log("📋 Datos del procedimiento:", JSON.stringify(datosProcedimiento, null, 2))
             
-            var resultado = enfermeriaModel.actualizar_procedimiento(datosProcedimiento, procedimientoId)
-            console.log("Resultado actualización:", resultado)
+            // Deshabilitar formulario temporalmente
+            formEnabled = false
             
-        } else {
-            // MODO CREACIÓN - Llamar crear_procedimiento
-            console.log("=== MODO CREACIÓN ===")
-            console.log("Creando nuevo procedimiento")
-            
-            var resultado = enfermeriaModel.crear_procedimiento(datosProcedimiento)
-            console.log("Resultado creación:", resultado)
+            // Lógica separada: CREAR vs ACTUALIZAR
+            if (isEditMode && procedureForm.procedimientoParaEditar) {
+                // MODO EDICIÓN
+                var procedimientoId = parseInt(procedureForm.procedimientoParaEditar.procedimientoId)
+                
+                console.log("✏️ Actualizando procedimiento ID:", procedimientoId)
+                
+                var resultado = enfermeriaModel.actualizar_procedimiento(datosProcedimiento, procedimientoId)
+                console.log("📄 Resultado actualización:", resultado)
+                
+            } else {
+                // MODO CREACIÓN
+                console.log("➕ Creando nuevo procedimiento")
+                
+                var resultado = enfermeriaModel.crear_procedimiento(datosProcedimiento)
+                console.log("📄 Resultado creación:", resultado)
+            }
+        } catch (error) {
+            console.log("❌ Error en guardarProcedimiento:", error)
+            showNotification("Error", "Error guardando procedimiento: " + error.toString())
+            formEnabled = true
         }
     }
     
     function editarProcedimiento(index) {
         try {
-            console.log("Editando procedimiento en index:", index)
+            console.log("✏️ Editando procedimiento en index:", index)
             
             if (index < 0 || index >= procedimientosPaginadosModel.count) {
-                console.log("Índice inválido para edición:", index)
+                console.log("❌ Índice inválido para edición:", index)
                 return
             }
             
-            // Obtener datos del procedimiento seleccionado
             var procedimiento = procedimientosPaginadosModel.get(index)
-            console.log("Cargando datos para edición:", JSON.stringify(procedimiento))
+            console.log("📋 Cargando datos para edición:", JSON.stringify(procedimiento))
             
-            // Crear objeto con datos para edición
+            // Crear objeto para editar con validaciones
             procedureForm.procedimientoParaEditar = {
-                procedimientoId: procedimiento.procedimientoId,
-                paciente: procedimiento.paciente,
-                cedula: procedimiento.cedula,
-                tipoProcedimiento: procedimiento.tipoProcedimiento,
-                cantidad: procedimiento.cantidad,
-                tipo: procedimiento.tipo,
-                precioUnitario: procedimiento.precioUnitario,
-                precioTotal: procedimiento.precioTotal,
-                trabajadorRealizador: procedimiento.trabajadorRealizador,
-                fecha: procedimiento.fecha
+                procedimientoId: procedimiento.procedimientoId || "N/A",
+                paciente: procedimiento.paciente || "Sin nombre",
+                cedula: procedimiento.cedula || "",
+                tipoProcedimiento: procedimiento.tipoProcedimiento || "",
+                cantidad: procedimiento.cantidad || 1,
+                tipo: procedimiento.tipo || "Normal",
+                precioUnitario: procedimiento.precioUnitario || "0.00",
+                precioTotal: procedimiento.precioTotal || "0.00",
+                trabajadorRealizador: procedimiento.trabajadorRealizador || "",
+                fecha: procedimiento.fecha || ""
             }
             
-            // Activar modo edición
             isEditMode = true
             editingIndex = index
-            
-            // Abrir el diálogo
             showNewProcedureDialog = true
             
-            console.log("Modo edición activado para procedimiento ID:", procedimiento.procedimientoId)
+            console.log("✅ Modo edición activado para procedimiento ID:", procedimiento.procedimientoId)
             
         } catch (error) {
-            console.log("Error al iniciar edición:", error)
+            console.log("❌ Error al iniciar edición:", error)
             showNotification("Error", "No se pudo cargar el procedimiento para editar")
         }
     }
     
     function eliminarProcedimiento(procedimientoId) {
-        var intId = parseInt(procedimientoId)
-        enfermeriaModel.eliminar_procedimiento(intId)
-        selectedRowIndex = -1
+        try {
+            var intId = parseInt(procedimientoId)
+            if (intId > 0 && enfermeriaModel && modeloConectado) {
+                console.log("🗑️ Eliminando procedimiento ID:", intId)
+                enfermeriaModel.eliminar_procedimiento(intId)
+                selectedRowIndex = -1
+            }
+        } catch (error) {
+            console.log("❌ Error eliminando procedimiento:", error)
+            showNotification("Error", "Error eliminando procedimiento")
+        }
     }
     
-    // GRUPO F - AUXILIARES
+    function cancelarFormulario() {
+        try {
+            showNewProcedureDialog = false
+            selectedRowIndex = -1
+            isEditMode = false
+            editingIndex = -1
+            procedureForm.procedimientoParaEditar = null
+            formEnabled = true
+        } catch (error) {
+            console.log("❌ Error cancelando formulario:", error)
+        }
+    }
+    
+    function limpiarYCerrarDialogo() {
+        console.log("🚪 Cerrando diálogo de procedimiento...")
+        
+        try {
+            formEnabled = true
+            showNewProcedureDialog = false
+            selectedRowIndex = -1
+            isEditMode = false
+            editingIndex = -1
+            procedureForm.procedimientoParaEditar = null
+            clearAllFields()
+            console.log("✅ Diálogo cerrado y limpiado correctamente")
+        } catch (error) {
+            console.log("⚠️ Error limpiando diálogo:", error)
+            showNewProcedureDialog = false
+            formEnabled = true
+        }
+    }
+    
+    function clearAllFields() {
+        console.log("🧹 Limpiando todos los campos del formulario...")
+        
+        try {
+            // Limpiar datos del paciente
+            if (typeof limpiarDatosPaciente === 'function') {
+                limpiarDatosPaciente()
+            }
+            
+            // Resetear combos
+            if (procedimientoCombo) procedimientoCombo.currentIndex = 0
+            if (trabajadorCombo) trabajadorCombo.currentIndex = 0
+            
+            // Resetear radio buttons
+            if (normalRadio) normalRadio.checked = true
+            if (emergenciaRadio) emergenciaRadio.checked = false
+            
+            // Resetear cantidad
+            if (cantidadSpinBox) cantidadSpinBox.value = 1
+            
+            // Resetear propiedades del formulario
+            if (procedureForm) {
+                procedureForm.selectedProcedureIndex = -1
+                procedureForm.calculatedUnitPrice = 0.0
+                procedureForm.calculatedTotalPrice = 0.0
+                procedureForm.procedureType = "Normal"
+            }
+            
+            console.log("✅ Campos limpiados correctamente")
+        } catch (error) {
+            console.log("⚠️ Error limpiando campos:", error)
+        }
+    }
+    
+    // GRUPO F - UTILIDADES
     
     function showNotification(tipo, mensaje) {
         if (typeof appController !== 'undefined' && appController.showNotification) {
@@ -2268,12 +2673,5 @@ Item {
         var elementosCalculados = Math.floor(alturaDisponible / alturaFila)
         
         return Math.max(6, Math.min(elementosCalculados, 15))
-    }
-    function cancelarFormulario() {
-        showNewProcedureDialog = false
-        selectedRowIndex = -1
-        isEditMode = false
-        editingIndex = -1
-        procedureForm.procedimientoParaEditar = null
     }
 }

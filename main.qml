@@ -328,7 +328,7 @@ ApplicationWindow {
                             NavItemWithSubmenu {
                                 id: navItem1
                                 text: "FARMACIA"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/farmacia.png"
+                                icon: "Resources/iconos/farmacia.png"
                                 active: currentIndex === 1
                                 expanded: farmaciaExpanded
                                 
@@ -340,9 +340,9 @@ ApplicationWindow {
                                 }
                                 
                                 submenuItems: [
-                                    { text: "Ventas", icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ventas.png", subsection: 0 },
-                                    { text: "Productos", icon: "file:///D:/Sistema-Clinica-/Resources/iconos/productos.png", subsection: 1 },
-                                    { text: "Compras", icon: "file:///D:/Sistema-Clinica-/Resources/iconos/compras.png", subsection: 2 }
+                                    { text: "Ventas", icon: "Resources/iconos/ventas.png", subsection: 0 },
+                                    { text: "Productos", icon: "Resources/iconos/productos.png", subsection: 1 },
+                                    { text: "Compras", icon: "Resources/iconos/compras.png", subsection: 2 }
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {
@@ -354,7 +354,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem2
                                 text: "CONSULTAS"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Consulta.png"  // Cambia de "🩺"
+                                icon: "Resources/iconos/Consulta.png"  // Cambia de "🩺"
                                 active: currentIndex === 2
                                 onClicked: switchToPage(2)
                             }
@@ -362,7 +362,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem3
                                 text: "LABORATORIO"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Laboratorio.png"  // Cambia de "🧪"
+                                icon: "Resources/iconos/Laboratorio.png"  // Cambia de "🧪"
                                 active: currentIndex === 3
                                 onClicked: switchToPage(3)
                             }
@@ -370,7 +370,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem4
                                 text: "ENFERMERÍA"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Enfermeria.png"  // Cambia de "💉"
+                                icon: "Resources/iconos/Enfermeria.png"  // Cambia de "💉"
                                 active: currentIndex === 4
                                 onClicked: switchToPage(4)
                             }
@@ -382,7 +382,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem5
                                 text: "SERVICIOS BÁSICOS"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/ServiciosBasicos.png"  // Cambia de "📊"
+                                icon: "Resources/iconos/ServiciosBasicos.png"  // Cambia de "📊"
                                 active: currentIndex === 5
                                 onClicked: switchToPage(5)
                             }
@@ -390,7 +390,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem6
                                 text: "USUARIOS"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/usuario.png"  // Cambia de "👤"
+                                icon: "Resources/iconos/usuario.png"  // Cambia de "👤"
                                 active: currentIndex === 6
                                 onClicked: switchToPage(6)
                             }
@@ -398,7 +398,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem7
                                 text: "PERSONAL"  // Corregir texto
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/Trabajadores.png"  // Corregir icon
+                                icon: "Resources/iconos/Trabajadores.png"  // Corregir icon
                                 active: currentIndex === 7
                                 onClicked: switchToPage(7)
                             }
@@ -406,7 +406,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem8
                                 text: "REPORTES"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/reportes.png"
+                                icon: "Resources/iconos/reportes.png"
                                 active: currentIndex === 8
                                 onClicked: switchToPage(8)
                             }
@@ -418,7 +418,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem9
                                 text: "CONFIGURACIÓN"
-                                icon: "file:///D:/Sistema-Clinica-/Resources/iconos/configuraciones.png"
+                                icon: "Resources/iconos/configuraciones.png"
                                 active: currentIndex === 9
                                 onClicked: switchToPage(9)
                             }

@@ -2763,17 +2763,19 @@ Item {
             filtros.search_term = campoBusqueda.text.trim()
         }
         
-        // ✅ CORRECCIÓN: Incluir lógica completa de fechas
+        // ✅ CORRECCIÓN: Usar currentIndex en lugar de currentText
         if (filtroFecha && filtroFecha.currentIndex > 0) {
             var hoy = new Date();
             var fechaDesde, fechaHasta;
             
-            switch(filtroFecha.currentText) {
-                case "Hoy":
+            // ✅ USAR ÍNDICE EN LUGAR DE TEXTO
+            switch(filtroFecha.currentIndex) {
+                case 1: // "Hoy"
                     fechaDesde = new Date(hoy);
                     fechaHasta = new Date(hoy);
+                    console.log("✅ Aplicando filtro: Hoy")
                     break;
-                case "Esta Semana":
+                case 2: // "Esta Semana"
                     fechaDesde = new Date(hoy);
                     var diaSemana = fechaDesde.getDay();
                     var diffLunes = fechaDesde.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
@@ -2781,15 +2783,29 @@ Item {
                     
                     fechaHasta = new Date(fechaDesde);
                     fechaHasta.setDate(fechaDesde.getDate() + 6);
+                    console.log("✅ Aplicando filtro: Esta Semana")
                     break;
-                case "Este Mes":
+                case 3: // "Este Mes"
                     fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
                     fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+                    console.log("✅ Aplicando filtro: Este Mes")
                     break;
+                default:
+                    console.log("⚠️ Índice de fecha no reconocido:", filtroFecha.currentIndex)
+                    return filtros; // ✅ RETORNAR SIN FECHAS SI HAY ERROR
             }
             
-            filtros.fecha_desde = fechaDesde.toISOString().split('T')[0];
-            filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0];
+            // ✅ VALIDAR QUE LAS FECHAS EXISTAN ANTES DE CONVERTIR
+            if (fechaDesde && fechaHasta) {
+                try {
+                    filtros.fecha_desde = fechaDesde.toISOString().split('T')[0];
+                    filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0];
+                    console.log("📅 Fechas aplicadas:", filtros.fecha_desde, "al", filtros.fecha_hasta)
+                } catch (error) {
+                    console.log("❌ Error convirtiendo fechas:", error)
+                    // No agregar fechas si hay error
+                }
+            }
         }
         
         return filtros
