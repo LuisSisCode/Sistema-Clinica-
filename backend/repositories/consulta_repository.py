@@ -196,7 +196,8 @@ class ConsultaRepository(BaseRepository):
         return consultation_id
     
     def update_consultation(self, consulta_id: int, detalles: str = None, 
-                           tipo_consulta: str = None, fecha: datetime = None) -> bool:
+                       tipo_consulta: str = None, especialidad_id: int = None,
+                       fecha: datetime = None) -> bool:
         """Actualiza consulta existente"""
         # Verificar existencia
         if not self.get_by_id(consulta_id):
@@ -235,25 +236,20 @@ class ConsultaRepository(BaseRepository):
     
     #@cached_query('consultas_completas', ttl=300)  # CAMBIAR: 30 segundos en lugar de 180
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Obtiene consultas con información completa - NOMBRES CORREGIDOS SEGÚN BD REAL"""
+        """Obtiene consultas con información completa - SQL SIMPLIFICADO"""
         query = """
         SELECT 
             c.id, 
-            c.Fecha, 
+            c.Fecha,
             c.Detalles, 
             c.Tipo_Consulta as tipo_consulta,
-            -- Paciente (CON CÉDULA) 
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
             p.Cedula as paciente_cedula,
-            -- Especialidad/Servicio
             ISNULL(e.Nombre, 'Sin especialidad') as especialidad_nombre,
             ISNULL(e.Precio_Normal, 0) as Precio_Normal, 
             ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia,
-            -- Doctor - CAMBIAR LEFT JOIN por ISNULL para evitar filtrados
             ISNULL(CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')), 'Sin doctor') as doctor_nombre,
-            -- Campo combinado para QML (ESTE ES CLAVE)
             CONCAT(ISNULL(e.Nombre, 'Sin especialidad'), ' - ', ISNULL(CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno), 'Sin doctor')) as especialidad_doctor,
-            -- Precio según tipo (ESTE ES CLAVE)
             CASE 
                 WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
                 ELSE ISNULL(e.Precio_Normal, 0)
@@ -262,13 +258,12 @@ class ConsultaRepository(BaseRepository):
         LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
         LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
         LEFT JOIN Doctores d ON e.Id_Doctor = d.id
-        -- QUITAR FILTRO: WHERE c.id IS NOT NULL (esto puede estar filtrando)
         ORDER BY c.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         
         result = self._execute_query(query, (limit,))
-        print(f"🔍 Query devolvió {len(result)} consultas de BD")  # DEBUG
+        print(f"🔍 Query devolvió {len(result)} consultas de BD")
         return result
     
     def get_consultation_by_id_complete(self, consulta_id: int) -> Optional[Dict[str, Any]]:
@@ -447,24 +442,21 @@ class ConsultaRepository(BaseRepository):
         return self._execute_query(query, (usuario_id, limit))
     
     def get_consultas_paginadas(self, page: int, limit: int = 5, filters: dict = None) -> dict:
-        """Obtiene consultas con paginación real y filtros aplicados"""
+        """Obtiene consultas con paginación - SQL SIMPLIFICADO"""
         offset = page * limit
         
-        # Construir WHERE clause dinámicamente
+        # Construir WHERE clause
         where_conditions = []
         params = []
         
-        # Filtro por tipo de consulta
         if filters and filters.get('tipo_consulta'):
             where_conditions.append("c.Tipo_Consulta = ?")
             params.append(filters['tipo_consulta'])
         
-        # Filtro por especialidad
         if filters and filters.get('especialidad') and filters['especialidad'] != 'Todas':
             where_conditions.append("e.Nombre LIKE ?")
             params.append(f"%{filters['especialidad']}%")
         
-        # Filtro por búsqueda (paciente, cédula, detalles)
         if filters and filters.get('busqueda'):
             busqueda = f"%{filters['busqueda']}%"
             where_conditions.append("""(
@@ -477,16 +469,31 @@ class ConsultaRepository(BaseRepository):
             )""")
             params.extend([busqueda] * 6)
         
-        # Construir WHERE clause
+        if filters and filters.get('fecha_desde'):
+            try:
+                fecha_desde = datetime.fromisoformat(filters['fecha_desde'].replace('Z', ''))
+                where_conditions.append("CAST(c.Fecha AS DATE) >= CAST(? AS DATE)")
+                params.append(fecha_desde.strftime('%Y-%m-%d'))
+            except ValueError:
+                pass
+        
+        if filters and filters.get('fecha_hasta'):
+            try:
+                fecha_hasta = datetime.fromisoformat(filters['fecha_hasta'].replace('Z', ''))
+                where_conditions.append("CAST(c.Fecha AS DATE) <= CAST(? AS DATE)")
+                params.append(fecha_hasta.strftime('%Y-%m-%d'))
+            except ValueError:
+                pass
+        
         where_clause = ""
         if where_conditions:
             where_clause = "WHERE " + " AND ".join(where_conditions)
         
-        # Query principal con filtros
+        # Query principal simplificado
         query = f"""
         SELECT 
             c.id, 
-            c.Fecha, 
+            c.Fecha,
             c.Detalles, 
             c.Tipo_Consulta as tipo_consulta,
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
@@ -509,7 +516,6 @@ class ConsultaRepository(BaseRepository):
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
         """
         
-        # Query para contar total con los mismos filtros
         count_query = f"""
         SELECT COUNT(*) as total 
         FROM Consultas c 
@@ -520,7 +526,6 @@ class ConsultaRepository(BaseRepository):
         """
         
         try:
-            # Ejecutar queries con parámetros
             params_with_pagination = params + [offset, limit]
             consultas = self._execute_query(query, params_with_pagination)
             
@@ -537,7 +542,7 @@ class ConsultaRepository(BaseRepository):
         except Exception as e:
             print(f"Error en get_consultas_paginadas: {e}")
             return {'consultas': [], 'total': 0, 'page': 0, 'total_pages': 0, 'limit': limit}
-    
+        
     # ===============================
     # BÚSQUEDAS AVANZADAS - CORREGIDAS
     # ===============================
