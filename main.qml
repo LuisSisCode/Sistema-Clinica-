@@ -291,15 +291,21 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         spacing: baseUnit * 1.5
                         
-                        Rectangle {
-                            Layout.alignment: Qt.AlignHCenter  
-                            Image {
-                                anchors.centerIn: parent
-                                source: "iconos/logo_CMI.svg"
-                                width: Math.min(150, drawer.width * 0.8)
-                                height: Math.min(200, baseUnit * 20)
-                                fillMode: Image.PreserveAspectFit
-                                smooth: true
+                        Image {
+                            anchors.centerIn: parent
+                            source: "file:///D:/Sistema-Clinica-/Resources/iconos/logo_CMI.svg"
+                            width: Math.min(150, drawer.width * 0.8)
+                            height: Math.min(200, baseUnit * 20)
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                            
+                            // AGREGAR ESTAS LÍNEAS PARA DEBUG:
+                            onStatusChanged: {
+                                if (status === Image.Error) {
+                                    console.log("❌ Error cargando logo:", source)
+                                } else if (status === Image.Ready) {
+                                    console.log("✅ Logo cargado correctamente:", source)
+                                }
                             }
                         }
                     }                    
@@ -320,7 +326,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem0
                                 text: "VISTA GENERAL"
-                                icon: "🏠"
+                                icon: "Resources/iconos/vistageneral.png"
                                 active: currentIndex === 0
                                 onClicked: switchToPage(0)
                             }

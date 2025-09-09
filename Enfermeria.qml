@@ -327,6 +327,7 @@ Item {
                                 color: newProcedureBtn.pressed ? primaryColorPressed : 
                                     newProcedureBtn.hovered ? primaryColorHover : primaryColor
                                 radius: baseUnit * 1.2
+                                border.width: 0
                                 
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
@@ -341,12 +342,32 @@ Item {
                                     Layout.preferredHeight: baseUnit * 3
                                     color: "transparent"
                                     
+                                    Image {
+                                        id: procedureIcon
+                                        anchors.centerIn: parent
+                                        width: baseUnit * 2.5
+                                        height: baseUnit * 2.5
+                                        source: "Resources/iconos/Nueva_Consulta.png"
+                                        fillMode: Image.PreserveAspectFit
+                                        antialiasing: true
+                                        
+                                        onStatusChanged: {
+                                            if (status === Image.Error) {
+                                                console.log("Error cargando icono de procedimiento:", source)
+                                                visible = false
+                                                fallbackText.visible = true
+                                            }
+                                        }
+                                    }
+                                    
                                     Label {
+                                        id: fallbackText
                                         anchors.centerIn: parent
                                         text: "+"
                                         color: whiteColor
                                         font.pixelSize: fontBaseSize * 1.5
                                         font.bold: true
+                                        visible: false
                                     }
                                 }
                                 
@@ -1283,9 +1304,7 @@ Item {
         }
     }
 
-    // ===============================
-    // 5. FORMULARIO DE NUEVO PROCEDIMIENTO (CORREGIDO)
-    // ===============================
+    // DIÁLOGO DE NUEVO PROCEDIMIENTO - DISEÑO MEJORADO BASADO EN CONSULTAS
 
     Rectangle {
         id: newProcedureDialog
@@ -1296,7 +1315,9 @@ Item {
         
         MouseArea {
             anchors.fill: parent
-            onClicked: limpiarYCerrarDialogo()
+            onClicked: {
+                limpiarYCerrarDialogo()
+            }
         }
         
         Behavior on opacity {
@@ -1331,43 +1352,34 @@ Item {
         property real calculatedUnitPrice: 0.0
         property real calculatedTotalPrice: 0.0
         
-        function updatePrices() {
-            if (procedureForm.selectedProcedureIndex >= 0 && tiposProcedimientos.length > 0) {
-                try {
-                    var procedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex]
-                    
-                    var precioUnitario = 0
-                    if (procedureForm.procedureType === "Emergencia") {
-                        precioUnitario = procedimiento.precioEmergencia || 0
-                    } else {
-                        precioUnitario = procedimiento.precioNormal || 0
-                    }
-                    
-                    var cantidadActual = cantidadSpinBox.value || 1
-                    var precioTotal = precioUnitario * cantidadActual
-                    
-                    procedureForm.calculatedUnitPrice = precioUnitario
-                    procedureForm.calculatedTotalPrice = precioTotal
-                } catch (e) {
-                    console.log("Error calculando precios:", e)
-                    procedureForm.calculatedUnitPrice = 0.0
-                    procedureForm.calculatedTotalPrice = 0.0
+    function updatePrices() {
+        if (procedureForm.selectedProcedureIndex >= 0 && tiposProcedimientos.length > 0) {
+            try {
+                var procedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex]
+                
+                var precioUnitario = 0
+                if (procedureForm.procedureType === "Emergencia") {
+                    precioUnitario = procedimiento.precioEmergencia || 0
+                } else {
+                    precioUnitario = procedimiento.precioNormal || 0
                 }
-            } else {
+                
+                // Si el campo está vacío, cantidadActual es 0
+                var cantidadActual = parseInt(cantidadTextField.text) || 0
+                var precioTotal = precioUnitario * cantidadActual
+                
+                procedureForm.calculatedUnitPrice = precioUnitario
+                procedureForm.calculatedTotalPrice = precioTotal
+            } catch (e) {
+                console.log("Error calculando precios:", e)
                 procedureForm.calculatedUnitPrice = 0.0
                 procedureForm.calculatedTotalPrice = 0.0
             }
+        } else {
+            procedureForm.calculatedUnitPrice = 0.0
+            procedureForm.calculatedTotalPrice = 0.0
         }
-        
-        onVisibleChanged: {
-            if (visible) {
-                if (isEditMode && procedureForm.procedimientoParaEditar) {
-                    loadEditData()
-                } else if (!isEditMode) {
-                    clearAllFields() 
-                }
-            }
-        }
+    }
         
         function loadEditData() {
             if (!isEditMode || !procedureForm.procedimientoParaEditar) {
@@ -1384,7 +1396,7 @@ Item {
                 buscarPacientePorCedula(cedulaPaciente.text)
             }
             
-            // ✅ CARGAR PROCEDIMIENTO CON PARSING SEGURO
+            // Cargar procedimiento
             if (proc.tipoProcedimiento) {
                 for (var i = 0; i < tiposProcedimientos.length; i++) {
                     if (tiposProcedimientos[i].nombre === proc.tipoProcedimiento) {
@@ -1395,14 +1407,13 @@ Item {
                 }
             }
             
-            // ✅ CARGAR TRABAJADOR CON PARSING SEGURO
+            // Cargar trabajador
             if (proc.trabajadorRealizador) {
                 for (var j = 0; j < trabajadoresDisponibles.length; j++) {
                     var trabajador = trabajadoresDisponibles[j]
                     var nombreTrabajador = trabajador.nombreCompleto || ""
                     if (nombreTrabajador === proc.trabajadorRealizador) {
                         trabajadorCombo.currentIndex = j + 1
-                        console.log("Trabajador encontrado en índice:", j + 1, "ID real:", trabajador.id)
                         break
                     }
                 }
@@ -1420,12 +1431,33 @@ Item {
             }
             
             // Cargar cantidad
-            cantidadSpinBox.value = parseInt(proc.cantidad) || 1
+            cantidadTextField.text = (parseInt(proc.cantidad) || 1).toString()
             
             // Actualizar precios
             procedureForm.updatePrices()
             
             console.log("Datos de edición cargados correctamente")
+        }
+        
+        onVisibleChanged: {
+            if (visible) {
+                if (isEditMode && procedureForm.procedimientoParaEditar) {
+                    loadEditData()
+                } else if (!isEditMode) {
+                    limpiarDatosPaciente()
+                    procedimientoCombo.currentIndex = 0
+                    trabajadorCombo.currentIndex = 0
+                    normalRadio.checked = true
+                    emergenciaRadio.checked = false
+                    cantidadTextField.text = ""
+                    descripcionProcedimiento.text = ""
+                    procedureForm.selectedProcedureIndex = -1
+                    procedureForm.calculatedUnitPrice = 0.0
+                    procedureForm.calculatedTotalPrice = 0.0
+                    procedureForm.procedimientoParaEditar = null
+                    cedulaPaciente.forceActiveFocus()
+                }
+            }
         }
         
         Rectangle {
@@ -1443,6 +1475,7 @@ Item {
                 font.pixelSize: fontBaseSize * 1.2
                 font.bold: true
                 color: whiteColor
+                font.family: "Segoe UI, Arial, sans-serif"
             }
             
             Button {
@@ -1467,7 +1500,9 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                 }
                 
-                onClicked: limpiarYCerrarDialogo() 
+                onClicked: {
+                    limpiarYCerrarDialogo()
+                }
             }
         }
         
@@ -1492,6 +1527,7 @@ Item {
                     title: "DATOS DEL PACIENTE"
                     font.bold: true
                     font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
                     padding: baseUnit * 1.5
                     
                     background: Rectangle {
@@ -1500,17 +1536,9 @@ Item {
                         radius: baseUnit * 0.8
                     }
                     
-                    GridLayout {
+                    ColumnLayout {
                         width: parent.width
-                        columns: 2
-                        columnSpacing: baseUnit * 2
-                        rowSpacing: baseUnit * 1.5
-                        
-                        Label {
-                            text: "Cédula:"
-                            font.bold: true
-                            color: textColor
-                        }
+                        spacing: baseUnit * 1.5
                         
                         RowLayout {
                             Layout.fillWidth: true
@@ -1518,11 +1546,10 @@ Item {
                             
                             TextField {
                                 id: cedulaPaciente
-                                Layout.preferredWidth: baseUnit * 25 
-                                placeholderText: "Ej: 12345678 LP"
-                                font.pixelSize: fontBaseSize
-                                
-                                // ✅ VALIDATOR CORREGIDO
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 4
+                                placeholderText: "Ingrese número de cédula para buscar paciente..."
+                                inputMethodHints: Qt.ImhDigitsOnly
                                 validator: RegularExpressionValidator { 
                                     regularExpression: /^[0-9]{1,12}(\s*[A-Z]{0,3})?$/
                                 }
@@ -1543,43 +1570,18 @@ Item {
                                     border.width: cedulaPaciente.activeFocus ? 2 : 1
                                     radius: baseUnit * 0.6
                                     
-                                    Row {
+                                    Text {
                                         anchors.right: parent.right
                                         anchors.rightMargin: baseUnit
                                         anchors.verticalCenter: parent.verticalCenter
-                                        spacing: baseUnit * 0.5
-                                        
-                                        Text {
-                                            text: {
-                                                if (cedulaPaciente.buscandoPaciente) return "🔄"
-                                                if (cedulaPaciente.pacienteAutocompletado) return "✅"
-                                                if (cedulaPaciente.pacienteNoEncontrado) return "⚠️"
-                                                return cedulaPaciente.text.length >= 5 ? "🔍" : "🔓"
-                                            }
-                                            font.pixelSize: fontBaseSize
-                                            visible: cedulaPaciente.text.length > 0
+                                        text: {
+                                            if (cedulaPaciente.buscandoPaciente) return "🔄"
+                                            if (cedulaPaciente.pacienteAutocompletado) return "✅"
+                                            if (cedulaPaciente.pacienteNoEncontrado) return "⚠️"
+                                            return cedulaPaciente.text.length >= 5 ? "🔍" : "🔒"
                                         }
-                                        
-                                        Button {
-                                            width: baseUnit * 2
-                                            height: baseUnit * 2
-                                            visible: cedulaPaciente.text.length > 0
-                                            
-                                            background: Rectangle {
-                                                color: "transparent"
-                                                radius: width / 2
-                                            }
-                                            
-                                            contentItem: Text {
-                                                text: "×"
-                                                color: "#666"
-                                                font.pixelSize: fontBaseSize
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: limpiarDatosPaciente()
-                                        }
+                                        font.pixelSize: fontBaseSize * 1.2
+                                        visible: cedulaPaciente.text.length > 0
                                     }
                                 }
                                 
@@ -1598,77 +1600,254 @@ Item {
                                         buscarPacientePorCedula(cedulaPaciente.text)
                                     }
                                 }
+                            }
+                            
+                            Button {
+                                id: nuevoPacienteBtn
+                                text: "Nuevo Paciente"
+                                visible: cedulaPaciente.pacienteNoEncontrado && 
+                                        cedulaPaciente.text.length >= 5 && 
+                                        !cedulaPaciente.pacienteAutocompletado
+                                Layout.preferredHeight: baseUnit * 3
                                 
+                                background: Rectangle {
+                                    color: nuevoPacienteBtn.pressed ? "#16A085" : 
+                                        nuevoPacienteBtn.hovered ? "#1ABC9C" : "#2ECC71"
+                                    border.color: "#27AE60"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                                
+                                contentItem: RowLayout {
+                                    spacing: baseUnit * 0.5
+                                    
+                                    Text {
+                                        text: "➕"
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 0.8
+                                    }
+                                    
+                                    Label {
+                                        text: nuevoPacienteBtn.text
+                                        color: whiteColor
+                                        font.pixelSize: fontBaseSize * 0.8
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        font.bold: true
+                                    }
+                                }
+                                
+                                onClicked: habilitarNuevoPaciente()
+                                
+                                HoverHandler {
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                                
+                                ToolTip {
+                                    visible: nuevoPacienteBtn.hovered
+                                    text: "Crear nuevo paciente con cédula " + cedulaPaciente.text
+                                    delay: 500
+                                    timeout: 3000
+                                }
+                            }
+                            
+                            Button {
+                                text: "Limpiar"
+                                visible: cedulaPaciente.pacienteAutocompletado || 
+                                        nombrePaciente.text.length > 0 ||
+                                        (cedulaPaciente.text.length > 0 && !cedulaPaciente.pacienteNoEncontrado)
+                                Layout.preferredHeight: baseUnit * 3
+                                
+                                background: Rectangle {
+                                    color: "#FEE2E2"
+                                    border.color: "#F87171"
+                                    border.width: 1
+                                    radius: baseUnit * 0.5
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: "#B91C1C"
+                                    font.pixelSize: fontBaseSize * 0.8
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                
+                                onClicked: limpiarDatosPaciente()
+                                
+                                HoverHandler {
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                            }
+                        }
+                        
+                        Timer {
+                            id: buscarTimer
+                            interval: 800
+                            running: false
+                            repeat: false
+                            onTriggered: {
+                                var cedula = cedulaPaciente.text.trim()
+                                if (cedula.length >= 5) {
+                                    buscarPacientePorCedula(cedula)
+                                }
+                            }
+                        }
+                        
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: baseUnit * 2
+                            rowSpacing: baseUnit * 1.5
+                            
+                            Label {
+                                text: "Nombre:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            TextField {
+                                id: nombrePaciente
+                                Layout.fillWidth: true
+                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                            "Nombre del paciente" : "Ingrese nombre del nuevo paciente"
+                                readOnly: cedulaPaciente.pacienteAutocompletado
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
+                                                            cedulaPaciente.pacienteNoEncontrado
+                                background: Rectangle {
+                                    color: {
+                                        if (cedulaPaciente.pacienteAutocompletado) return "#F8F9FA"
+                                        if (nombrePaciente.esCampoNuevoPaciente) return "#E8F5E8"
+                                        return whiteColor
+                                    }
+                                    border.color: {
+                                        if (nombrePaciente.esCampoNuevoPaciente && nombrePaciente.activeFocus) return "#2ECC71"
+                                        if (nombrePaciente.esCampoNuevoPaciente) return "#27AE60"
+                                        return borderColor
+                                    }
+                                    border.width: nombrePaciente.esCampoNuevoPaciente ? 2 : 1
+                                    radius: baseUnit * 0.6
+                                }
+                                onTextChanged: {
+                                    if (esCampoNuevoPaciente && text.length > 0) {
+                                        color = text.length >= 2 ? textColor : "#E74C3C"
+                                    }
+                                }
                                 padding: baseUnit
                             }
-
-                            Timer {
-                                id: buscarTimer
-                                interval: 600
-                                running: false
-                                repeat: false
-                                onTriggered: buscarPacientePorCedula(cedulaPaciente.text.trim())
+                            
+                            Label {
+                                text: "Apellido Paterno:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
+                            
+                            TextField {
+                                id: apellidoPaterno
+                                Layout.fillWidth: true
+                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                                "Apellido paterno" : "Ingrese apellido paterno"
+                                readOnly: cedulaPaciente.pacienteAutocompletado
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                property bool pacienteAutocompletado: cedulaPaciente.pacienteAutocompletado
+                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
+                                                                cedulaPaciente.pacienteNoEncontrado
+                                
+                                background: Rectangle {
+                                    color: {
+                                        if (apellidoPaterno.pacienteAutocompletado) return "#F8F9FA"
+                                        if (apellidoPaterno.esCampoNuevoPaciente) return "#E8F5E8"
+                                        return whiteColor
+                                    }
+                                    border.color: {
+                                        if (apellidoPaterno.esCampoNuevoPaciente && apellidoPaterno.activeFocus) return "#2ECC71"
+                                        if (apellidoPaterno.esCampoNuevoPaciente) return "#27AE60"
+                                        return borderColor
+                                    }
+                                    border.width: apellidoPaterno.esCampoNuevoPaciente ? 2 : 1
+                                    radius: baseUnit * 0.6
+                                }
+                                onTextChanged: {
+                                    if (esCampoNuevoPaciente && text.length > 0) {
+                                        color = text.length >= 2 ? textColor : "#E74C3C"
+                                    }
+                                }
+                                padding: baseUnit
+                            }
+                            
+                            Label {
+                                text: "Apellido Materno:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            TextField {
+                                id: apellidoMaterno
+                                Layout.fillWidth: true
+                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                                "Apellido materno" : "Ingrese apellido materno (opcional)"
+                                readOnly: cedulaPaciente.pacienteAutocompletado
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                property bool pacienteAutocompletado: cedulaPaciente.pacienteAutocompletado
+                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
+                                                                cedulaPaciente.pacienteNoEncontrado
+                                
+                                background: Rectangle {
+                                    color: {
+                                        if (apellidoMaterno.pacienteAutocompletado) return "#F8F9FA"
+                                        if (apellidoMaterno.esCampoNuevoPaciente) return "#E8F5E8"
+                                        return whiteColor
+                                    }
+                                    border.color: {
+                                        if (apellidoMaterno.esCampoNuevoPaciente && apellidoMaterno.activeFocus) return "#2ECC71"
+                                        if (apellidoMaterno.esCampoNuevoPaciente) return "#27AE60"
+                                        return borderColor
+                                    }
+                                    border.width: apellidoMaterno.esCampoNuevoPaciente ? 2 : 1
+                                    radius: baseUnit * 0.6
+                                }
+                                padding: baseUnit
+                            }
+                        }
+                    }
+                }
+                
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 3
+                    visible: cedulaPaciente.pacienteNoEncontrado && !cedulaPaciente.pacienteAutocompletado
+                    color: "#D1FAE5"
+                    border.color: "#10B981"
+                    border.width: 1
+                    radius: baseUnit * 0.5
+                    
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: baseUnit
+                        
+                        Text {
+                            text: "✏️"
+                            font.pixelSize: fontBaseSize
                         }
                         
                         Label {
-                            text: "Nombre:"
+                            text: "Modo: Crear nuevo paciente con cédula " + cedulaPaciente.text
+                            color: "#047857"
+                            font.pixelSize: fontBaseSize * 0.8
                             font.bold: true
-                            color: textColor
-                        }
-                        
-                        TextField {
-                            id: nombrePaciente
-                            Layout.fillWidth: true
-                            placeholderText: "Nombre del paciente"
-                            font.pixelSize: fontBaseSize
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: "#ddd"
-                                border.width: 1
-                                radius: baseUnit * 0.5
-                            }
-                            padding: baseUnit
-                        }
-                        
-                        Label {
-                            text: "Apellido Paterno:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        TextField {
-                            id: apellidoPaterno
-                            Layout.fillWidth: true
-                            placeholderText: "Apellido paterno"
-                            font.pixelSize: fontBaseSize
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: "#ddd"
-                                border.width: 1
-                                radius: baseUnit * 0.5
-                            }
-                            padding: baseUnit
-                        }
-                        
-                        Label {
-                            text: "Apellido Materno:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        TextField {
-                            id: apellidoMaterno
-                            Layout.fillWidth: true
-                            placeholderText: "Apellido materno"
-                            font.pixelSize: fontBaseSize
-                            background: Rectangle {
-                                color: whiteColor
-                                border.color: "#ddd"
-                                border.width: 1
-                                radius: baseUnit * 0.5
-                            }
-                            padding: baseUnit
+                            font.family: "Segoe UI, Arial, sans-serif"
                         }
                     }
                 }
@@ -1678,6 +1857,7 @@ Item {
                     title: "INFORMACIÓN DEL PROCEDIMIENTO"
                     font.bold: true
                     font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
                     padding: baseUnit * 1.5
                     
                     background: Rectangle {
@@ -1699,14 +1879,14 @@ Item {
                                 font.bold: true
                                 Layout.preferredWidth: baseUnit * 15
                                 color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             ComboBox {
                                 id: procedimientoCombo
                                 Layout.fillWidth: true
                                 font.pixelSize: fontBaseSize
-                                
-                                // ✅ MODEL CORREGIDO CON PARSING SEGURO
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 model: {
                                     var list = ["Seleccionar procedimiento..."]
                                     if (tiposProcedimientos && tiposProcedimientos.length > 0) {
@@ -1737,6 +1917,16 @@ Item {
                                     procedureForm.updatePrices()
                                 }
                                 
+                                contentItem: Label {
+                                    text: procedimientoCombo.displayText
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
+                                }
+                                
                                 background: Rectangle {
                                     color: whiteColor
                                     border.color: "#ddd"
@@ -1756,6 +1946,7 @@ Item {
                                 font.bold: true
                                 Layout.preferredWidth: baseUnit * 15
                                 color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             Label {
@@ -1764,6 +1955,7 @@ Item {
                                 wrapMode: Text.WordWrap
                                 color: textColorLight
                                 font.italic: true
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                         }
                         
@@ -1776,14 +1968,14 @@ Item {
                                 font.bold: true
                                 Layout.preferredWidth: baseUnit * 15
                                 color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             ComboBox {
                                 id: trabajadorCombo
                                 Layout.fillWidth: true
                                 font.pixelSize: fontBaseSize
-                                
-                                // ✅ MODEL CORREGIDO CON PARSING SEGURO
+                                font.family: "Segoe UI, Arial, sans-serif"
                                 model: {
                                     var modelData = ["Seleccionar trabajador..."]
                                     if (trabajadoresDisponibles && trabajadoresDisponibles.length > 0) {
@@ -1796,6 +1988,16 @@ Item {
                                         }
                                     }
                                     return modelData
+                                }
+                                
+                                contentItem: Label {
+                                    text: trabajadorCombo.displayText
+                                    font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    color: textColor
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: baseUnit
+                                    elide: Text.ElideRight
                                 }
                                 
                                 background: Rectangle {
@@ -1812,10 +2014,11 @@ Item {
                             spacing: baseUnit * 2
                             
                             Label {
-                                text: "Tipo:"
+                                text: "Tipo de Servicio:"
                                 font.bold: true
                                 Layout.preferredWidth: baseUnit * 15
                                 color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             RowLayout {
@@ -1826,6 +2029,7 @@ Item {
                                     id: normalRadio
                                     text: "Normal"
                                     font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     checked: true
                                     onCheckedChanged: {
                                         if (checked) {
@@ -1833,17 +2037,36 @@ Item {
                                             procedureForm.updatePrices()
                                         }
                                     }
+                                    
+                                    contentItem: Label {
+                                        text: normalRadio.text
+                                        font.pixelSize: fontBaseSize
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        leftPadding: normalRadio.indicator.width + normalRadio.spacing
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                                 
                                 RadioButton {
                                     id: emergenciaRadio
                                     text: "Emergencia"
                                     font.pixelSize: fontBaseSize
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     onCheckedChanged: {
                                         if (checked) {
                                             procedureForm.procedureType = "Emergencia"
                                             procedureForm.updatePrices()
                                         }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: emergenciaRadio.text
+                                        font.pixelSize: fontBaseSize
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        leftPadding: emergenciaRadio.indicator.width + emergenciaRadio.spacing
+                                        verticalAlignment: Text.AlignVCenter
                                     }
                                 }
                                 
@@ -1860,50 +2083,59 @@ Item {
                                 font.bold: true
                                 Layout.preferredWidth: baseUnit * 15
                                 color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
                             }
                             
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: baseUnit
                                 
-                                SpinBox {
-                                    id: cantidadSpinBox
+                                TextField {
+                                    id: cantidadTextField
                                     Layout.preferredWidth: baseUnit * 12
                                     Layout.preferredHeight: baseUnit * 4
-                                    
-                                    from: 1
-                                    to: 50
-                                    value: 1
-                                    stepSize: 1
-                                    
-                                    textFromValue: function(value, locale) {
-                                        return value.toString()
-                                    }
-                                    
-                                    valueFromText: function(text, locale) {
-                                        var num = parseInt(text)
-                                        return isNaN(num) ? 1 : Math.max(1, Math.min(50, num))
-                                    }
-                                    
-                                    onValueChanged: {
-                                        procedureForm.updatePrices()
-                                    }
-                                    
+                                    placeholderText: "1"  // Ejemplo
+                                    inputMethodHints: Qt.ImhDigitsOnly
+                                    validator: IntValidator { bottom: 1; top: 50 }
                                     font.pixelSize: fontBaseSize
                                     font.bold: true
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                     
                                     background: Rectangle {
                                         color: whiteColor
-                                        border.color: cantidadSpinBox.activeFocus ? primaryColor : borderColor
-                                        border.width: cantidadSpinBox.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
+                                        border.color: cantidadTextField.activeFocus ? primaryColor : borderColor
+                                        border.width: cantidadTextField.activeFocus ? 2 : 1
+                                        radius: baseUnit * 0.6
                                     }
+                                    
+                                    onTextChanged: {
+                                        procedureForm.updatePrices()
+                                    }
+                                    
+                                    // Validamos al perder el foco
+                                    onFocusChanged: {
+                                        if (!focus) {
+                                            var num = parseInt(text)
+                                            if (isNaN(num) || num < 1) {
+                                                text = "1"
+                                            } else if (num > 50) {
+                                                text = "50"
+                                            }
+                                        }
+                                    }
+                                    
+                                    padding: baseUnit
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                                 
                                 Label {
-                                    text: "procedimiento(s)"
+                                    text: {
+                                        var cantidad = parseInt(cantidadTextField.text) || 1
+                                        return cantidad === 1 ? "procedimiento" : "procedimientos"
+                                    }
                                     color: textColor
                                     font.pixelSize: fontBaseSize * 0.9
+                                    font.family: "Segoe UI, Arial, sans-serif"
                                 }
                                 
                                 Item { Layout.fillWidth: true }
@@ -1917,6 +2149,7 @@ Item {
                     title: "INFORMACIÓN DE PRECIO"
                     font.bold: true
                     font.pixelSize: fontBaseSize
+                    font.family: "Segoe UI, Arial, sans-serif"
                     padding: baseUnit * 1.5
                     
                     background: Rectangle {
@@ -1938,22 +2171,17 @@ Item {
                             font.family: "Segoe UI, Arial, sans-serif"
                         }
                         
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 3
-                            color: procedureForm.procedureType === "Emergencia" ? warningColorLight : successColorLight
-                            radius: baseUnit * 0.8
-                            border.color: procedureForm.procedureType === "Emergencia" ? warningColor : successColor
-                            border.width: 1
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: procedureForm.selectedProcedureIndex >= 0 ? 
-                                    "Bs " + procedureForm.calculatedUnitPrice.toFixed(2) : "Seleccione procedimiento"
-                                font.bold: true
-                                font.pixelSize: fontBaseSize
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                color: procedureForm.procedureType === "Emergencia" ? "#92400E" : "#047857"
+                        Label {
+                            text: procedureForm.selectedProcedureIndex >= 0 ? 
+                                "Bs " + procedureForm.calculatedUnitPrice.toFixed(2) : "Seleccione procedimiento"
+                            font.bold: true
+                            font.pixelSize: fontBaseSize
+                            font.family: "Segoe UI, Arial, sans-serif"
+                            color: procedureForm.procedureType === "Emergencia" ? "#92400E" : "#047857"
+                            padding: baseUnit
+                            background: Rectangle {
+                                color: procedureForm.procedureType === "Emergencia" ? warningColorLight : successColorLight
+                                radius: baseUnit * 0.8
                             }
                         }
                         
@@ -1965,8 +2193,10 @@ Item {
                         }
                         
                         Label {
-                            text: (cantidadSpinBox.value || 1) + " procedimiento" + 
-                                ((cantidadSpinBox.value || 1) > 1 ? "s" : "")
+                            text: {
+                                var cantidad = parseInt(cantidadTextField.text) || 1
+                                return cantidad + " procedimiento" + (cantidad > 1 ? "s" : "")
+                            }
                             font.bold: true
                             color: textColor
                             font.family: "Segoe UI, Arial, sans-serif"
@@ -1987,32 +2217,33 @@ Item {
                             font.family: "Segoe UI, Arial, sans-serif"
                         }
                         
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 4
-                            color: procedureForm.procedureType === "Emergencia" ? warningColorLight : successColorLight
-                            radius: baseUnit * 0.8
-                            border.color: procedureForm.procedureType === "Emergencia" ? warningColor : successColor
-                            border.width: 2
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: procedureForm.selectedProcedureIndex >= 0 ? 
-                                    "Bs " + procedureForm.calculatedTotalPrice.toFixed(2) : "Bs 0.00"
-                                font.bold: true
-                                font.pixelSize: fontBaseSize * 1.4
-                                font.family: "Segoe UI, Arial, sans-serif"
-                                color: procedureForm.procedureType === "Emergencia" ? "#92400E" : "#047857"
+                        Label {
+                            text: procedureForm.selectedProcedureIndex >= 0 ? 
+                                "Bs " + procedureForm.calculatedTotalPrice.toFixed(2) : "Bs 0.00"
+                            font.bold: true
+                            font.pixelSize: fontBaseSize * 1.4
+                            font.family: "Segoe UI, Arial, sans-serif"
+                            color: procedureForm.procedureType === "Emergencia" ? "#92400E" : "#047857"
+                            padding: baseUnit * 1.5
+                            background: Rectangle {
+                                color: procedureForm.procedureType === "Emergencia" ? warningColorLight : successColorLight
+                                radius: baseUnit * 0.8
+                                border.color: procedureForm.procedureType === "Emergencia" ? warningColor : successColor
+                                border.width: 2
                             }
                         }
                         
                         Label {
                             Layout.columnSpan: 2
                             Layout.fillWidth: true
-                            text: procedureForm.selectedProcedureIndex >= 0 ? 
-                                "(" + procedureForm.calculatedUnitPrice.toFixed(2) + " × " + 
-                                (cantidadSpinBox.value || 1) + " = " + 
-                                procedureForm.calculatedTotalPrice.toFixed(2) + ")" : ""
+                            text: {
+                                if (procedureForm.selectedProcedureIndex >= 0) {
+                                    var cantidad = parseInt(cantidadTextField.text) || 1
+                                    return "(" + procedureForm.calculatedUnitPrice.toFixed(2) + " × " + 
+                                        cantidad + " = " + procedureForm.calculatedTotalPrice.toFixed(2) + ")"
+                                }
+                                return ""
+                            }
                             color: textColorLight
                             font.pixelSize: fontBaseSize * 0.8
                             font.family: "Segoe UI, Arial, sans-serif"
@@ -2050,45 +2281,82 @@ Item {
                     text: parent.text
                     font.pixelSize: fontBaseSize
                     font.bold: true
+                    font.family: "Segoe UI, Arial, sans-serif"
                     color: textColor
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
                 
-                onClicked: cancelarFormulario()
+                onClicked: {
+                    limpiarYCerrarDialogo()
+                }
             }
             
             Button {
-                id: saveButton
-                text: isEditMode ? "Actualizar Procedimiento" : "Guardar Procedimiento"
-                enabled: formEnabled && 
-                        procedureForm.selectedProcedureIndex >= 0 && 
-                        nombrePaciente.text.length >= 2 &&
-                        apellidoPaterno.text.length >= 2 &&
-                        trabajadorCombo.currentIndex > 0 &&
-                        cantidadSpinBox.value > 0 &&
-                        cedulaPaciente.text.length >= 5
-                
-                Layout.preferredWidth: baseUnit * 20
-                Layout.preferredHeight: baseUnit * 4.5
+                text: isEditMode ? "Actualizar" : "Guardar"
+                enabled: {
+                    var tieneProcedimiento = procedureForm.selectedProcedureIndex >= 0
+                    var tieneCedula = cedulaPaciente.text.length >= 5
+                    var tieneNombre = nombrePaciente.text.length >= 2
+                    var tieneTrabajador = trabajadorCombo.currentIndex > 0
+                    var cantidadValida = (parseInt(cantidadTextField.text) || 0) > 0
+                    
+                    if (cedulaPaciente.pacienteAutocompletado) {
+                        return tieneProcedimiento && tieneCedula && tieneNombre && tieneTrabajador && cantidadValida && formEnabled
+                    } else if (cedulaPaciente.pacienteNoEncontrado) {
+                        var tieneApellido = apellidoPaterno.text.length >= 2
+                        return tieneProcedimiento && tieneCedula && tieneNombre && tieneApellido && tieneTrabajador && cantidadValida && formEnabled
+                    }
+                    
+                    return false
+                }
+                Layout.preferredHeight: baseUnit * 4
                 
                 background: Rectangle {
-                    color: !saveButton.enabled ? "#bdc3c7" : 
-                        (saveButton.pressed ? primaryColorPressed : 
-                        (saveButton.hovered ? primaryColorHover : primaryColor))
-                    radius: baseUnit * 0.8
+                    color: {
+                        if (!parent.enabled) return "#bdc3c7"
+                        if (!formEnabled) return "#95a5a6"
+                        return primaryColor
+                    }
+                    radius: baseUnit
+                    
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: !formEnabled ? 20 : 0
+                        height: !formEnabled ? 20 : 0
+                        color: "transparent"
+                        visible: !formEnabled
+                        
+                        Rectangle {
+                            width: 4
+                            height: 4
+                            radius: 2
+                            color: whiteColor
+                            anchors.centerIn: parent
+                            
+                            SequentialAnimation on rotation {
+                                running: parent.visible
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 360; duration: 1000 }
+                            }
+                        }
+                    }
                 }
                 
                 contentItem: Label {
-                    text: parent.text
-                    font.pixelSize: fontBaseSize * 0.9
-                    font.bold: true
+                    text: !formEnabled ? "Guardando..." : parent.text
                     color: whiteColor
+                    font.bold: true
+                    font.pixelSize: fontBaseSize * 0.9
+                    font.family: "Segoe UI, Arial, sans-serif"
                     horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
                 }
                 
-                onClicked: guardarProcedimiento()
+                onClicked: {
+                    if (formEnabled) {
+                        guardarProcedimiento()
+                    }
+                }
             }
         }
     }
@@ -2517,7 +2785,8 @@ Item {
                 paciente: (nombrePaciente.text + " " + apellidoPaterno.text + " " + apellidoMaterno.text).trim(),
                 cedula: cedulaPaciente.text.trim(),
                 idProcedimiento: procedureForm.selectedProcedureIndex + 1,
-                cantidad: cantidadSpinBox.value,
+                // CORRECCIÓN: Usar cantidadTextField en lugar de cantidadSpinBox
+                cantidad: parseInt(cantidadTextField.text) || 1,
                 tipo: procedureForm.procedureType,
                 idTrabajador: trabajadorIdReal,
                 precioUnitario: procedureForm.calculatedUnitPrice,
