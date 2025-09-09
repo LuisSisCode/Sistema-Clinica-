@@ -3,17 +3,14 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Item {
-    id: configTrabajadoresRoot
+    id: confiTrabajadoresRoot
     
-    // ===== PASO 1: PROPERTY ALIAS PARA COMUNICACIÓN EXTERNA =====
-    property var tiposTrabajadores: tiposTrabajadoresData
-    
+    // ===== CONEXIÓN CON EL MODELO =====
+    property var confiTrabajadoresModel: appController.confi_trabajadores_model_instance
+    property var trabajadorModel: appController.trabajador_model_instance
     // ===== SEÑALES PARA VOLVER =====
     signal volverClicked()
     signal backToMain()
-    
-    // ===== DATOS INTERNOS =====
-    property var tiposTrabajadoresData: []
     
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
@@ -49,6 +46,46 @@ Item {
     // ===== ESTADO DE EDICIÓN =====
     property bool isEditMode: false
     property int editingIndex: -1
+    property int editingId: -1
+    
+    // ===== CONEXIONES CON SEÑALES DEL MODELO =====
+    Connections {
+        target: confiTrabajadoresModel
+        
+        function onTipoTrabajadorCreado(success, message) {
+            if (success) {
+                limpiarFormulario()
+                showSuccessMessage("Tipo de trabajador creado exitosamente")
+            } else {
+                showErrorMessage("Error al crear tipo de trabajador: " + message)
+            }
+        }
+        
+        function onTipoTrabajadorActualizado(success, message) {
+            if (success) {
+                limpiarFormulario()
+                showSuccessMessage("Tipo de trabajador actualizado exitosamente")
+            } else {
+                showErrorMessage("Error al actualizar tipo de trabajador: " + message)
+            }
+        }
+        
+        function onTipoTrabajadorEliminado(success, message) {
+            if (success) {
+                showSuccessMessage("Tipo de trabajador eliminado exitosamente")
+            } else {
+                showErrorMessage("Error al eliminar tipo de trabajador: " + message)
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            showErrorMessage(title + ": " + message)
+        }
+        
+        function onSuccessMessage(message) {
+            showSuccessMessage(message)
+        }
+    }
     
     // ===== FUNCIONES =====
     function limpiarFormulario() {
@@ -56,46 +93,73 @@ Item {
         nuevoTipoDescripcion.text = ""
         isEditMode = false
         editingIndex = -1
+        editingId = -1
     }
     
-    function editarTipoTrabajador(index) {
-        if (index >= 0 && index < tiposTrabajadoresData.length) {
-            var tipo = tiposTrabajadoresData[index]
-            nuevoTipoNombre.text = tipo.nombre
-            nuevoTipoDescripcion.text = tipo.descripcion
-            isEditMode = true
-            editingIndex = index
-        }
+    function editarTipoTrabajador(index, tipoData) {
+        nuevoTipoNombre.text = tipoData.Tipo || ""
+        nuevoTipoDescripcion.text = tipoData.descripcion || ""
+        isEditMode = true
+        editingIndex = index
+        editingId = tipoData.id || -1
     }
     
-    function eliminarTipoTrabajador(index) {
-        if (index >= 0 && index < tiposTrabajadoresData.length) {
-            tiposTrabajadoresData.splice(index, 1)
-            // Actualizar el modelo de la ListView
-            configTrabajadoresRoot.tiposTrabajadores = tiposTrabajadoresData
-            console.log("🗑️ Tipo de trabajador eliminado en índice:", index)
+    function eliminarTipoTrabajador(tipoData) {
+        if (confiTrabajadoresModel) {
+            // Verificar si hay trabajadores asociados
+            var asociados = confiTrabajadoresModel.obtenerTrabajadoresAsociados(tipoData.id)
+            if (asociados > 0) {
+                showErrorMessage("No se puede eliminar. Tiene " + asociados + " trabajadores asociados")
+                return
+            }
+            
+            confiTrabajadoresModel.eliminarTipoTrabajador(tipoData.id)
         }
     }
     
     function guardarTipoTrabajador() {
-        var nuevoTipo = {
-            nombre: nuevoTipoNombre.text,
-            descripcion: nuevoTipoDescripcion.text
+        if (!confiTrabajadoresModel) {
+            showErrorMessage("Modelo no disponible")
+            return
         }
         
-        if (isEditMode && editingIndex >= 0) {
+        var tipo = nuevoTipoNombre.text.trim()
+        var descripcion = nuevoTipoDescripcion.text.trim()
+        
+        if (!tipo) {
+            showErrorMessage("El nombre del tipo es obligatorio")
+            return
+        }
+        
+        // Validar tipo único
+        if (!confiTrabajadoresModel.validarTipoUnico(tipo, editingId)) {
+            showErrorMessage("Ya existe un tipo de trabajador con ese nombre")
+            return
+        }
+        
+        if (isEditMode && editingId > 0) {
             // Editar tipo existente
-            tiposTrabajadoresData[editingIndex] = nuevoTipo
-            console.log("✏️ Tipo de trabajador editado:", JSON.stringify(nuevoTipo))
+            confiTrabajadoresModel.actualizarTipoTrabajador(editingId, tipo, descripcion)
         } else {
             // Agregar nuevo tipo
-            tiposTrabajadoresData.push(nuevoTipo)
-            console.log("➕ Nuevo tipo de trabajador agregado:", JSON.stringify(nuevoTipo))
+            confiTrabajadoresModel.crearTipoTrabajador(tipo, descripcion)
         }
-        
-        // Actualizar el modelo y limpiar
-        configTrabajadoresRoot.tiposTrabajadores = tiposTrabajadoresData
-        limpiarFormulario()
+    }
+    
+    function showSuccessMessage(message) {
+        // Implementar notificación de éxito
+        console.log("✅ Éxito:", message)
+    }
+    
+    function showErrorMessage(message) {
+        // Implementar notificación de error
+        console.log("❌ Error:", message)
+    }
+    
+    function aplicarFiltros() {
+        if (confiTrabajadoresModel) {
+            confiTrabajadoresModel.aplicarFiltros(campoBusqueda.text)
+        }
     }
     
     // ===== LAYOUT PRINCIPAL =====
@@ -103,7 +167,7 @@ Item {
         anchors.fill: parent
         spacing: 0
         
-        // ===== HEADER PRINCIPAL UNIFICADO (ESTILO CONSISTENTE) =====
+        // ===== HEADER PRINCIPAL UNIFICADO =====
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: baseUnit * 12
@@ -139,12 +203,11 @@ Item {
                     }
                     
                     onClicked: {
-                        // Emitir señal para volver a la vista principal
                         if (typeof changeView !== "undefined") {
                             changeView("main")
                         } else {
-                            configTrabajadoresRoot.volverClicked()
-                            configTrabajadoresRoot.backToMain()
+                            confiTrabajadoresRoot.volverClicked()
+                            confiTrabajadoresRoot.backToMain()
                         }
                     }
                 }
@@ -186,6 +249,44 @@ Item {
                         font.family: "Segoe UI"
                     }
                 }
+                
+                // ===== ESTADÍSTICAS RÁPIDAS =====
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 20
+                    Layout.preferredHeight: baseUnit * 8
+                    color: backgroundColor
+                    radius: radiusMedium
+                    opacity: 0.95
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: marginSmall
+                        spacing: marginSmall
+                        
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: marginTiny
+                            
+                            Label {
+                                text: confiTrabajadoresModel ? confiTrabajadoresModel.totalTiposTrabajadores.toString() : "0"
+                                color: primaryColor
+                                font.pixelSize: fontMedium
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                            }
+                            
+                            Label {
+                                text: "Tipos Registrados"
+                                color: textColor
+                                font.pixelSize: fontTiny
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
+                }
             }
         }
         
@@ -199,6 +300,62 @@ Item {
                 anchors.fill: parent
                 anchors.margins: marginLarge
                 spacing: marginLarge
+                
+                // ===== BARRA DE BÚSQUEDA =====
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: baseUnit * 6
+                    color: backgroundColor
+                    radius: radiusMedium
+                    border.color: borderColor
+                    border.width: 1
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: marginMedium
+                        spacing: marginMedium
+                        
+                        Label {
+                            text: "🔍"
+                            font.pixelSize: fontMedium
+                            color: textSecondaryColor
+                        }
+                        
+                        TextField {
+                            id: campoBusqueda
+                            Layout.fillWidth: true
+                            placeholderText: "Buscar tipos de trabajadores..."
+                            font.pixelSize: fontBase
+                            
+                            background: Rectangle {
+                                color: "transparent"
+                            }
+                            
+                            onTextChanged: {
+                                aplicarFiltros()
+                            }
+                        }
+                        
+                        Button {
+                            text: "Limpiar"
+                            visible: campoBusqueda.text.length > 0
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                                radius: radiusSmall
+                                border.color: borderColor
+                                border.width: 1
+                            }
+                            
+                            onClicked: {
+                                campoBusqueda.text = ""
+                                if (confiTrabajadoresModel) {
+                                    confiTrabajadoresModel.limpiarFiltros()
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 // ===== FORMULARIO SUPERIOR =====
                 GroupBox {
@@ -320,7 +477,7 @@ Item {
                             
                             Button {
                                 text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                enabled: nuevoTipoNombre.text && nuevoTipoDescripcion.text
+                                enabled: nuevoTipoNombre.text.trim().length > 0 && !confiTrabajadoresModel.loading
                                 Layout.preferredWidth: baseUnit * 15
                                 Layout.preferredHeight: baseUnit * 4.5
                                 
@@ -332,7 +489,7 @@ Item {
                                 }
                                 
                                 contentItem: Label {
-                                    text: parent.text
+                                    text: confiTrabajadoresModel && confiTrabajadoresModel.loading ? "⏳ Guardando..." : parent.text
                                     color: backgroundColor
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -448,7 +605,7 @@ Item {
                             
                             ListView {
                                 id: listaTiposTrabajadores
-                                model: tiposTrabajadoresData
+                                model: confiTrabajadoresModel ? confiTrabajadoresModel.tiposTrabajadores : []
                                 
                                 delegate: Rectangle {
                                     width: ListView.view.width
@@ -464,7 +621,7 @@ Item {
                                         
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.35
-                                            text: modelData.nombre
+                                            text: modelData.Tipo || "Sin nombre"
                                             font.bold: true
                                             color: primaryColor
                                             font.pixelSize: fontBase
@@ -483,7 +640,7 @@ Item {
                                         
                                         Label {
                                             Layout.preferredWidth: parent.width * 0.45
-                                            text: modelData.descripcion
+                                            text: modelData.descripcion || "Sin descripción"
                                             color: textColor
                                             font.pixelSize: fontSmall
                                             font.family: "Segoe UI"
@@ -523,7 +680,7 @@ Item {
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 
-                                                onClicked: editarTipoTrabajador(index)
+                                                onClicked: editarTipoTrabajador(index, modelData)
                                             }
                                             
                                             Button {
@@ -544,7 +701,7 @@ Item {
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 
-                                                onClicked: eliminarTipoTrabajador(index)
+                                                onClicked: eliminarTipoTrabajador(modelData)
                                             }
                                         }
                                     }
@@ -557,7 +714,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: "transparent"
-                            visible: tiposTrabajadoresData.length === 0
+                            visible: confiTrabajadoresModel ? confiTrabajadoresModel.totalTiposTrabajadores === 0 : true
                             
                             ColumnLayout {
                                 anchors.centerIn: parent
@@ -590,6 +747,35 @@ Item {
                                 }
                             }
                         }
+                        
+                        // INDICADOR DE CARGA
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            visible: confiTrabajadoresModel ? confiTrabajadoresModel.loading : false
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: marginMedium
+                                
+                                Label {
+                                    text: "⏳"
+                                    font.pixelSize: fontTitle * 2
+                                    color: primaryColor
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: "Cargando tipos de trabajadores..."
+                                    color: textColor
+                                    font.bold: true
+                                    font.pixelSize: fontMedium
+                                    Layout.alignment: Qt.AlignHCenter
+                                    font.family: "Segoe UI"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -597,12 +783,12 @@ Item {
     }
     
     // ===== EVENTOS =====
-    function actualizarTiposTrabajadores(nuevosTipos) {
-        tiposTrabajadoresData = nuevosTipos
-        tiposTrabajadores = nuevosTipos
-    }
-    
     Component.onCompleted: {
         console.log("👥 Componente de configuración de tipos de trabajadores iniciado")
+        
+        // Cargar datos iniciales si el modelo está disponible
+        if (confiTrabajadoresModel) {
+            confiTrabajadoresModel.recargarDatos()
+        }
     }
 }

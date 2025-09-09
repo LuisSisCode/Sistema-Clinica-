@@ -1,4 +1,4 @@
-// login.qml - Interfaz de login integrada con backend de autenticación
+// login.qml - Interfaz de login con controles de ventana corregidos
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -10,7 +10,12 @@ ApplicationWindow {
     width: 800
     height: 500
     title: "Clínica App - Sistema de Acceso"
-    flags: Qt.FramelessWindowHint
+    
+    // SOLUCIÓN: Cambiar las flags para que aparezca en la barra de tareas
+    flags: Qt.Window | Qt.FramelessWindowHint
+    // Alternativa si quieres que aparezca en la barra de tareas:
+    // flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    
     color: "transparent"
 
     // Propiedades de diseño
@@ -29,6 +34,9 @@ ApplicationWindow {
     property string statusMessage: "Sistema inicializando..."
     property bool connectionOk: false
     property var currentUser: null
+    
+    // NUEVA PROPIEDAD: Para controlar si debe cerrar toda la app o solo la ventana
+    property bool closeApplicationOnExit: false
 
     // Conexiones con el backend integrado
     Connections {
@@ -86,8 +94,26 @@ ApplicationWindow {
     
     function launchMainApp() {
         console.log("🚀 Lanzando aplicación principal...")
-        // Aquí deberías lanzar main.py o la ventana principal
-        Qt.quit() // Por ahora solo cierra el login
+        // NO cerrar la aplicación, solo cerrar la ventana de login
+        mainWindow.visible = false
+        // Si necesitas crear/mostrar otra ventana aquí sería el lugar
+        // mainAppWindow.show()
+    }
+    
+    // NUEVA FUNCIÓN: Para manejar el cierre de la ventana
+    function handleWindowClose() {
+        if (closeApplicationOnExit) {
+            Qt.quit()
+        } else {
+            mainWindow.hide()
+        }
+    }
+    
+    // NUEVA FUNCIÓN: Para restaurar la ventana desde la bandeja del sistema
+    function restoreWindow() {
+        mainWindow.show()
+        mainWindow.raise()
+        mainWindow.requestActivate()
     }
 
     // Permite mover la ventana sin borde
@@ -108,6 +134,15 @@ ApplicationWindow {
                 var delta = Qt.point(mouse.x - clickPos.x, mouse.y - clickPos.y)
                 mainWindow.x += delta.x
                 mainWindow.y += delta.y
+            }
+        }
+        
+        // MEJORADO: Doble clic para maximizar/restaurar
+        onDoubleClicked: {
+            if (mainWindow.visibility === Window.Maximized) {
+                mainWindow.showNormal()
+            } else {
+                mainWindow.showMaximized()
             }
         }
     }
@@ -153,35 +188,70 @@ ApplicationWindow {
                 anchors.rightMargin: 10
                 spacing: 10
                 
-                // Botón minimizar
+                // Botón minimizar CORREGIDO
                 Rectangle {
                     width: 16
                     height: 16
                     radius: 8
-                    color: "#FFBD44"
+                    color: minimizeMouseArea.containsMouse ? "#FFD700" : "#FFBD44"
+                    
+                    // Icono de minimizar
+                    Rectangle {
+                        width: 8
+                        height: 1
+                        color: "#000"
+                        anchors.centerIn: parent
+                        opacity: 0.7
+                    }
                     
                     MouseArea {
+                        id: minimizeMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: parent.opacity = 0.8
-                        onExited: parent.opacity = 1
-                        onClicked: mainWindow.showMinimized()
+                        
+                        onClicked: {
+                            console.log("🔽 Minimizando ventana...")
+                            mainWindow.showMinimized()
+                        }
+                        
+                        // Tooltip para ayuda
+                        ToolTip.visible: containsMouse
+                        ToolTip.text: "Minimizar (F9 para restaurar)"
+                        ToolTip.delay: 1000
                     }
                 }
                 
-                // Botón cerrar
+                // Botón cerrar CORREGIDO
                 Rectangle {
                     width: 16
                     height: 16
                     radius: 8
-                    color: "#FF605C"
+                    color: closeMouseArea.containsMouse ? "#FF0000" : "#FF605C"
+                    
+                    // Icono X
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✕"
+                        color: "#000"
+                        font.pixelSize: 10
+                        font.bold: true
+                        opacity: 0.7
+                    }
                     
                     MouseArea {
+                        id: closeMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: parent.opacity = 0.8
-                        onExited: parent.opacity = 1
-                        onClicked: Qt.quit()
+                        
+                        onClicked: {
+                            console.log("❌ Cerrando ventana...")
+                            handleWindowClose()
+                        }
+                        
+                        // Tooltip
+                        ToolTip.visible: containsMouse
+                        ToolTip.text: closeApplicationOnExit ? "Cerrar aplicación" : "Cerrar ventana"
+                        ToolTip.delay: 1000
                     }
                 }
             }
@@ -319,7 +389,7 @@ ApplicationWindow {
                         }
                     }
                     
-                    // Columna derecha (formulario)
+                    // Columna derecha (formulario) - MISMO CÓDIGO...
                     Rectangle {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
@@ -460,7 +530,7 @@ ApplicationWindow {
                                 }
                             }
                             
-                            // Opción recordar
+                            // Opción recordar y configuración de cierre
                             RowLayout {
                                 Layout.fillWidth: true
                                 
@@ -474,23 +544,41 @@ ApplicationWindow {
                                 
                                 Item { Layout.fillWidth: true }
                                 
-                                Text {
-                                    text: "¿Problemas de acceso?"
-                                    font.pixelSize: 12
-                                    color: colorBoton
+                                // NUEVA OPCIÓN: Checkbox para controlar comportamiento de cierre
+                                CheckBox {
+                                    id: closeAppCheckbox
+                                    text: "Cerrar app al salir"
+                                    font.pixelSize: 10
+                                    checked: closeApplicationOnExit
+                                    enabled: !isLoading
                                     
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        enabled: !isLoading
-                                        onClicked: {
-                                            console.log("Recuperar contraseña")
-                                        }
+                                    onCheckedChanged: {
+                                        closeApplicationOnExit = checked
+                                    }
+                                    
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Si está marcado, cerrar la ventana terminará toda la aplicación"
+                                }
+                            }
+                            
+                            // Link de problemas de acceso
+                            Text {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: "¿Problemas de acceso?"
+                                font.pixelSize: 12
+                                color: colorBoton
+                                
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: !isLoading
+                                    onClicked: {
+                                        console.log("Recuperar contraseña")
                                     }
                                 }
                             }
 
-                            // Botón de login
+                            // Botón de login (mismo código anterior)
                             Button {
                                 id: loginButton
                                 Layout.fillWidth: true
@@ -577,75 +665,6 @@ ApplicationWindow {
                                     opacity = 0.8
                                 }
                             }
-                            
-                            // Panel de debug (solo en desarrollo)
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: debugContent.visible ? 120 : 0
-                                color: "#f0f0f0"
-                                radius: 5
-                                border.color: "#ddd"
-                                border.width: 1
-                                visible: debugContent.visible
-                                clip: true
-                                
-                                Behavior on Layout.preferredHeight { NumberAnimation { duration: 300 } }
-                                
-                                ColumnLayout {
-                                    id: debugContent
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    spacing: 5
-                                    visible: false // Cambiar a true para debug
-                                    
-                                    Text {
-                                        text: "🔧 Panel de Debug"
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                        color: "#666"
-                                    }
-                                    
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: "Conexión BD: " + (connectionOk ? "✅ Conectado" : "❌ Desconectado")
-                                        font.pixelSize: 9
-                                        color: "#666"
-                                        wrapMode: Text.WordWrap
-                                    }
-                                    
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: "Estado: " + statusMessage
-                                        font.pixelSize: 9
-                                        color: "#666"
-                                        wrapMode: Text.WordWrap
-                                    }
-                                    
-                                    Button {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 25
-                                        text: "Obtener usuarios de prueba"
-                                        font.pixelSize: 9
-                                        
-                                        onClicked: {
-                                            var testUsers = backend.getTestUsers()
-                                            console.log("Usuarios de prueba:", JSON.stringify(testUsers))
-                                        }
-                                    }
-                                    
-                                    Button {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 25
-                                        text: "Ver estadísticas del sistema"
-                                        font.pixelSize: 9
-                                        
-                                        onClicked: {
-                                            var stats = backend.getSystemStats()
-                                            console.log("Estadísticas:", JSON.stringify(stats))
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -720,15 +739,35 @@ ApplicationWindow {
         easing.type: Easing.OutQuad
     }
     
-    // Manejo de teclas globales
+    // MEJORADO: Manejo de teclas globales con más opciones
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_F12) {
-            // Toggle panel de debug
-            debugContent.visible = !debugContent.visible
+            // Toggle panel de debug (si lo tienes)
             event.accepted = true
         } else if (event.key === Qt.Key_Escape) {
-            Qt.quit()
+            handleWindowClose()
             event.accepted = true
+        } else if (event.key === Qt.Key_F9) {
+            // Restaurar ventana si está minimizada
+            restoreWindow()
+            event.accepted = true
+        } else if (event.key === Qt.Key_F11) {
+            // Toggle pantalla completa
+            if (mainWindow.visibility === Window.FullScreen) {
+                mainWindow.showNormal()
+            } else {
+                mainWindow.showFullScreen()
+            }
+            event.accepted = true
+        }
+    }
+    
+    // NUEVO: Manejo de eventos de la ventana
+    onVisibilityChanged: {
+        if (visibility === Window.Minimized) {
+            console.log("🔽 Ventana minimizada")
+        } else if (visibility === Window.Windowed || visibility === Window.Maximized) {
+            console.log("🔼 Ventana restaurada")
         }
     }
 }

@@ -666,7 +666,7 @@ class TrabajadorModel(QObject):
             tipos = self.repository.get_all_worker_types()
             self._tipos_trabajador = tipos
             self.tiposTrabajadorChanged.emit()
-            print(f"🏷️ Tipos de trabajador cargados: {len(tipos)}")
+            print(f"🏷️ Tipos de trabajador cargados: {len(self._tipos_trabajador)}")
                 
         except Exception as e:
             print(f"❌ Error cargando tipos de trabajador: {e}")

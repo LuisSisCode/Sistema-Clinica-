@@ -222,6 +222,10 @@ Item {
         
         function onErrorOcurrido(mensaje, codigo) {
             console.log("❌ Error enfermería:", mensaje)
+
+        function onOperacionError(mensaje) {
+            console.log("Error enfermería:", mensaje)
+
             showNotification("Error", mensaje)
             formEnabled = true
         }

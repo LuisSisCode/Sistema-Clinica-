@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
+import ClinicaApp 1.0
 
 ScrollView {
     id: dashboardRoot
@@ -23,34 +24,15 @@ ScrollView {
     readonly property color laboratorioColor: "#4ecdc4"
     readonly property color enfermeriaColor: "#9b59b6"
     readonly property color serviciosColor: "#34495e"
+
+    // CONEXIÓN CON MODELO REAL DE BD
+    property var dashboardModel: appController ? appController.dashboard_model_instance : null
     
     // Sistema de filtrado jerárquico: Año -> Mes
     property string currentPeriodType: "mes" // "hoy", "semana", "mes", "año"
     property int selectedMonth: new Date().getMonth() + 1  // Mes actual por defecto
     property int selectedYear: new Date().getFullYear()    // Año actual por defecto
     property date systemStartDate: new Date("2025-01-01") // Fecha de inicio del sistema
-    
-    // Datos base de cada módulo - SIMULADOS
-    property var farmaciaVentas: [
-        {fecha: "2025-07-16", total: 850.00},
-    ]
-    
-    property var consultasHistorial: [
-        {fecha: "2025-07-16", precio: 45.00},
-    ]
-    
-    property var laboratorioHistorial: [
-        {fecha: "2025-07-16", precio: 25.00},
-    ]
-    
-    property var enfermeriaHistorial: [
-        {fecha: "2025-07-16", precioTotal: 25.00},
-    ]
-    
-    property var serviciosBasicosGastos: [
-        {fechaGasto: "2025-07-16", monto: 450.00},
-
-    ]
     
     // Funciones de utilidad para fechas
     function getCurrentDate() {
@@ -170,70 +152,41 @@ ScrollView {
                 return true
         }
     }
-    
-    // Funciones para calcular totales por módulo
+
+    // Funciones que ahora usan datos reales del modelo
     function calculateFarmaciaTotal() {
-        var total = 0
-        for (var i = 0; i < farmaciaVentas.length; i++) {
-            if (isDateInSelectedPeriod(farmaciaVentas[i].fecha)) {
-                total += farmaciaVentas[i].total
-            }
-        }
-        return total
+        return dashboardModel ? dashboardModel.farmaciaTotal : 0
     }
     
     function calculateConsultasTotal() {
-        var total = 0
-        for (var i = 0; i < consultasHistorial.length; i++) {
-            if (isDateInSelectedPeriod(consultasHistorial[i].fecha)) {
-                total += consultasHistorial[i].precio
-            }
-        }
-        return total
+        return dashboardModel ? dashboardModel.consultasTotal : 0
     }
     
     function calculateLaboratorioTotal() {
-        var total = 0
-        for (var i = 0; i < laboratorioHistorial.length; i++) {
-            if (isDateInSelectedPeriod(laboratorioHistorial[i].fecha)) {
-                total += laboratorioHistorial[i].precio
-            }
-        }
-        return total
+        return dashboardModel ? dashboardModel.laboratorioTotal : 0
     }
     
     function calculateEnfermeriaTotal() {
-        var total = 0
-        for (var i = 0; i < enfermeriaHistorial.length; i++) {
-            if (isDateInSelectedPeriod(enfermeriaHistorial[i].fecha)) {
-                total += enfermeriaHistorial[i].precioTotal
-            }
-        }
-        return total
+        return dashboardModel ? dashboardModel.enfermeriaTotal : 0
     }
     
     function calculateServiciosBasicosTotal() {
-        var total = 0
-        for (var i = 0; i < serviciosBasicosGastos.length; i++) {
-            if (isDateInSelectedPeriod(serviciosBasicosGastos[i].fechaGasto)) {
-                total += serviciosBasicosGastos[i].monto
-            }
-        }
-        return total
+        return dashboardModel ? dashboardModel.serviciosBasicosTotal : 0
     }
     
     // Calcular totales consolidados
     function calculateTotalIngresos() {
-        return calculateFarmaciaTotal() + calculateConsultasTotal() + 
-               calculateLaboratorioTotal() + calculateEnfermeriaTotal()
+        return dashboardModel ? dashboardModel.totalIngresos : 0
     }
     
     function calculateTotalEgresos() {
-        return calculateServiciosBasicosTotal()
+        return dashboardModel ? dashboardModel.totalEgresos : 0
     }
     
     // Función para obtener el nombre del período actual
     function getPeriodLabel() {
+        if (!dashboardModel) return "CARGANDO..."
+        
         switch(currentPeriodType) {
             case "hoy": 
                 return "HOY"
@@ -254,6 +207,15 @@ ScrollView {
     Component.onCompleted: {
         if (profiler) {
             profiler.startTiming("dashboard_load")
+        }
+        
+        // Inicializar conexión con modelo
+        if (dashboardModel) {
+            console.log("📊 Dashboard conectado con modelo de BD")
+            // Establecer período inicial
+            dashboardModel.cambiarPeriodo(currentPeriodType)
+        } else {
+            console.log("⚠️ Dashboard model no disponible")
         }
     }
     
@@ -328,6 +290,9 @@ ScrollView {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     currentPeriodType = "hoy"
+                                    if (dashboardModel) {
+                                        dashboardModel.cambiarPeriodo(currentPeriodType)
+                                    }
                                     periodChanged(currentPeriodType)
                                 }
                             }
@@ -357,6 +322,9 @@ ScrollView {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     currentPeriodType = "semana"
+                                    if (dashboardModel) {
+                                        dashboardModel.cambiarPeriodo(currentPeriodType)
+                                    }
                                     periodChanged(currentPeriodType)
                                 }
                             }
@@ -393,9 +361,11 @@ ScrollView {
                                 selectedYear = model[index].value
                                 currentPeriodType = "año"
                                 
-                                // Actualizar opciones del mes para el nuevo año
-                                updateMonthsForSelectedYear()
+                                if (dashboardModel) {
+                                    dashboardModel.cambiarFechaEspecifica(selectedMonth, selectedYear)
+                                }
                                 
+                                updateMonthsForSelectedYear()
                                 periodChanged(currentPeriodType)
                             }
                         }
@@ -428,10 +398,61 @@ ScrollView {
                             onActivated: {
                                 selectedMonth = model[index].value
                                 currentPeriodType = "mes"
+                                
+                                if (dashboardModel) {
+                                    dashboardModel.cambiarFechaEspecifica(selectedMonth, selectedYear)
+                                }
+                                
                                 periodChanged(currentPeriodType)
                             }
                         }
-                    }        
+                    } 
+
+                    RoundButton {
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        Layout.alignment: Qt.AlignVCenter
+                        text: "🔄"
+                        
+                        background: Rectangle {
+                            color: whiteColor
+                            radius: 20
+                            border.color: lightGrayColor
+                            border.width: 1
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: primaryColor
+                            font.bold: true
+                            font.pixelSize: 16
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            if (dashboardModel) {
+                                console.log("🔄 Refrescando datos manualmente...")
+                                dashboardModel.refrescarDatos()
+                            }
+                        }
+                        
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Refrescar datos"
+                        
+                        // Efecto hover
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: parent.scale = 1.1
+                            onExited: parent.scale = 1.0
+                            onClicked: parent.clicked()
+                        }
+                        
+                        Behavior on scale {
+                            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                        }
+                    }
                 }
             }
             
@@ -657,12 +678,20 @@ ScrollView {
                                 }
                                 
                                 function updateChart() {
-                                    ingresosData = generateIngresosData()
-                                    egresosData = generateEgresosData()
-                                    labels = generateLabels()
+                                    if (dashboardModel) {
+                                        // Usar datos reales del modelo
+                                        ingresosData = dashboardModel.datosGraficoIngresos || []
+                                        egresosData = dashboardModel.datosGraficoEgresos || []
+                                        labels = generateLabels()
+                                    } else {
+                                        // Fallback a datos simulados
+                                        ingresosData = generateIngresosData()
+                                        egresosData = generateEgresosData()
+                                        labels = generateLabels()
+                                    }
                                     requestPaint()
                                 }
-                                
+        
                                 onPaint: {
                                     var ctx = getContext("2d")
                                     ctx.clearRect(0, 0, width, height)
@@ -1022,6 +1051,20 @@ ScrollView {
             chartCanvas.updateChart()
         }
     }
+
+    Connections {
+        target: dashboardModel
+        function onDashboardUpdated() {
+            console.log("📊 Dashboard actualizado desde BD")
+            // Forzar actualización de la UI
+            if (chartCanvas) {
+                chartCanvas.updateChart()
+            }
+        }
+        function onErrorOccurred(mensaje) {
+            console.log("❌ Error en dashboard:", mensaje)
+        }
+    }
     
     // Componentes
     component KPICard: Rectangle {
@@ -1100,7 +1143,7 @@ ScrollView {
         Rectangle {
             width: ListView.view.width
             height: 48
-            color: modelData.urgencia === "urgent" ? 
+            color: model.urgencia === "urgent" ? 
                    Qt.rgba(229/255, 115/255, 115/255, 0.1) : 
                    Qt.rgba(255/255, 193/255, 7/255, 0.1)
             radius: 8
@@ -1111,7 +1154,7 @@ ScrollView {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: 4
-                color: modelData.urgencia === "urgent" ? "#E57373" : "#ffc107"
+                color: model.urgencia === "urgent" ? "#E57373" : "#ffc107"
                 radius: 2
             }
             
@@ -1122,7 +1165,7 @@ ScrollView {
                 
                 Label {
                     Layout.preferredWidth: 120
-                    text: modelData.producto
+                    text: model.producto
                     color: textColor
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -1130,7 +1173,7 @@ ScrollView {
                 
                 Label {
                     Layout.preferredWidth: 80
-                    text: modelData.cantidad
+                    text: model.cantidad
                     color: textColor
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -1140,12 +1183,12 @@ ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 24
                     radius: 12
-                    color: modelData.urgencia === "urgent" ? "#fee2e2" : "#fef3c7"
+                    color: model.urgencia === "urgent" ? "#fee2e2" : "#fef3c7"
                     
                     Label {
                         anchors.centerIn: parent
-                        text: modelData.fecha
-                        color: modelData.urgencia === "urgent" ? "#dc2626" : "#d97706"
+                        text: model.fecha
+                        color: model.urgencia === "urgent" ? "#dc2626" : "#d97706"
                         font.pixelSize: 10
                         font.bold: true
                     }

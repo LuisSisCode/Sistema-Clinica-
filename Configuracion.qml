@@ -1253,17 +1253,6 @@ Item {
                 id: configTrabajadoresComponent
                 anchors.fill: parent
                 anchors.margins: marginMedium
-                
-                // Conectar el alias a la propiedad del root
-                tiposTrabajadores: configuracionRoot.tiposTrabajadoresModel
-                
-                // Propagación de cambios de vuelta al modelo padre
-                onTiposTrabajadoresChanged: {
-                    if (tiposTrabajadores && tiposTrabajadores !== configuracionRoot.tiposTrabajadoresModel) {
-                        configuracionRoot.tiposTrabajadoresModel = tiposTrabajadores
-                        console.log("🔄 Tipos de trabajadores actualizados hacia el modelo padre")
-                    }
-                }
             }
         }
     }
