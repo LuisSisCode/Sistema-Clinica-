@@ -40,7 +40,6 @@ Item {
     // Distribución de columnas responsive
     readonly property real colId: 0.05
     readonly property real colPaciente: 0.16
-    readonly property real colCedula: 0.08
     readonly property real colDetalle: 0.20
     readonly property real colEspecialidad: 0.22
     readonly property real colTipo: 0.09
@@ -557,27 +556,7 @@ Item {
                                 }
                                 
                                 // CÉDULA COLUMN - NUEVA
-                                Item {
-                                    Layout.preferredWidth: parent.width * colCedula
-                                    Layout.fillHeight: true
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CÉDULA"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.85
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        color: textColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                    
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        width: 1
-                                        height: parent.height
-                                        color: lineColor
-                                    }
-                                }
+
                                 
                                 // DETALLE COLUMN
                                 Item {
@@ -759,19 +738,27 @@ Item {
                                         Item {
                                             Layout.preferredWidth: parent.width * colPaciente
                                             Layout.fillHeight: true
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: baseUnit * 0.5
+                                                Label {
+                                                    width: parent.width - baseUnit
+                                                    text: model.paciente_completo || "Sin nombre"
+                                                    color: textColor
+                                                    font.pixelSize: fontBaseSize * 0.85
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                }
                                             
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                anchors.rightMargin: baseUnit
-                                                text: model.paciente_completo || "Sin nombre"  // CORREGIDO
-                                                color: textColor
-                                                font.bold: false
-                                                font.pixelSize: fontBaseSize * 0.9
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                                elide: Text.ElideRight
+                                                Label {
+                                                    width: parent.width - baseUnit
+                                                    text: model.paciente_cedula ? "C.I: " + model.paciente_cedula : "Sin cédula"
+                                                    color: textColorLight
+                                                    font.pixelSize: fontBaseSize * 0.75
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                    visible: model.paciente_cedula !== ""
+                                                }
                                             }
                                             
                                             Rectangle {
@@ -783,31 +770,7 @@ Item {
                                         }
                                         
                                         // CÉDULA COLUMN - CORREGIDO
-                                        Item {
-                                            Layout.preferredWidth: parent.width * colCedula
-                                            Layout.fillHeight: true
-                                            
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                anchors.rightMargin: baseUnit
-                                                text: model.paciente_cedula || "Sin cédula"  // CORREGIDO
-                                                color: textColorLight
-                                                font.bold: false
-                                                font.pixelSize: fontBaseSize * 0.85
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                                elide: Text.ElideRight
-                                            }
-                                            
-                                            Rectangle {
-                                                anchors.right: parent.right
-                                                width: 1
-                                                height: parent.height
-                                                color: lineColor
-                                            }
-                                        }
+                                  
                                         
                                         // DETALLE COLUMN - CORREGIDO
                                         Item {
@@ -948,11 +911,11 @@ Item {
                                                 switch(index) {
                                                     case 0: return baseUnit * 1.5 + w * colId
                                                     case 1: return baseUnit * 1.5 + w * (colId + colPaciente)
-                                                    case 2: return baseUnit * 1.5 + w * (colId + colPaciente + colCedula)
-                                                    case 3: return baseUnit * 1.5 + w * (colId + colPaciente + colCedula + colDetalle)
-                                                    case 4: return baseUnit * 1.5 + w * (colId + colPaciente + colCedula + colDetalle + colEspecialidad)
-                                                    case 5: return baseUnit * 1.5 + w * (colId + colPaciente + colCedula + colDetalle + colEspecialidad + colTipo)
-                                                    case 6: return baseUnit * 1.5 + w * (colId + colPaciente + colCedula + colDetalle + colEspecialidad + colTipo + colPrecio)
+                                                    case 2: return baseUnit * 1.5 + w * (colId + colPaciente)
+                                                    case 3: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle)
+                                                    case 4: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad)
+                                                    case 5: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad + colTipo)
+                                                    case 6: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad + colTipo + colPrecio)
                                                 }
                                             }
                                             x: xPos
@@ -1942,7 +1905,7 @@ Item {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
                     // Validaciones básicas
-                    var tieneAnalisis = analysisForm.selectedAnalysisIndex >= 0
+                    var tieneAnalisis = consultationForm.selectedAnalysisIndex >= 0
                     var tieneCedula = cedulaPaciente.text.length >= 5
                     
                     if (cedulaPaciente.pacienteAutocompletado) {

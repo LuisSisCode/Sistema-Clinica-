@@ -16,8 +16,9 @@ CREATE TABLE Trabajadores (
     Nombre VARCHAR(100) NOT NULL,
     Apellido_Paterno VARCHAR(100) NOT NULL,
     Apellido_Materno VARCHAR(100) NOT NULL,
-    descripcion VARCHAR(100),
     Id_Tipo_Trabajador INT NOT NULL,
+    Matricula,
+    Especialidad,
     FOREIGN KEY (Id_Tipo_Trabajador) REFERENCES Tipo_Trabajadores(id)
 );
 
