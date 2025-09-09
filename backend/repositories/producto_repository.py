@@ -291,79 +291,100 @@ class ProductoRepository(BaseRepository):
         
         return lotes_afectados
     
-    @ExceptionHandler.handle_exception
+    #@ExceptionHandler.handle_exception
     def aumentar_stock_compra(self, producto_id: int, cantidad_caja: int, cantidad_unitario: int, 
-                            fecha_vencimiento: str, precio_compra: float = None) -> int:
+                        fecha_vencimiento: str, precio_compra: float = None) -> int:
         """
-        Aumenta stock creando nuevo lote por compra
-        
-        Returns:
-            ID del lote creado
+        Aumenta stock creando nuevo lote por compra - CORREGIDO CON FORMATO DE FECHA
         """
         validate_required(producto_id, "producto_id")
         
-        # Crear nuevo lote
-        lote_data = {
-            'Id_Producto': producto_id,
-            'Cantidad_Caja': cantidad_caja,
-            'Cantidad_Unitario': cantidad_unitario,
-            'Fecha_Vencimiento': fecha_vencimiento
-        }
-        
-        lote_query = """
-        INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
-        OUTPUT INSERTED.id
-        VALUES (?, ?, ?, ?)
-        """
-        
-        # Actualizar stock total del producto
+        # Validar que el producto existe
         producto = self.get_by_id(producto_id)
+        if not producto:
+            print(f"❌ ERROR: Producto {producto_id} no encontrado")
+            return None
+        
+        # CORRECCIÓN: Parsear fecha de vencimiento correctamente
+        fecha_venc_formateada = self._parse_fecha_vencimiento(fecha_vencimiento)
+        print(f"📅 Fecha original: '{fecha_vencimiento}' -> Formateada: '{fecha_venc_formateada}'")
+        
+        # Calcular nuevos stocks
         nuevo_stock_caja = producto['Stock_Caja'] + cantidad_caja
         nuevo_stock_unitario = producto['Stock_Unitario'] + cantidad_unitario
         
-        producto_query = """
-        UPDATE Productos 
-        SET Stock_Caja = ?, Stock_Unitario = ?
-        WHERE id = ?
-        """
+        print(f"📦 Creando lote - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
         
-        # Actualizar precio de compra si se proporciona
-        if precio_compra:
-            producto_query = """
-            UPDATE Productos 
-            SET Stock_Caja = ?, Stock_Unitario = ?, Precio_compra = ?
-            WHERE id = ?
-            """
-            producto_params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id)
-        else:
-            producto_params = (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
-        
-        operaciones = [
-            (lote_query, (producto_id, cantidad_caja, cantidad_unitario, fecha_vencimiento)),
-            (producto_query, producto_params)
-        ]
-        
-        # Ejecutar transacción
-        # Crear el lote primero para obtener su ID
-        lote_result = self._execute_query(lote_query, (producto_id, cantidad_caja, cantidad_unitario, fecha_vencimiento), fetch_one=True)
-
-        if lote_result and isinstance(lote_result, dict) and 'id' in lote_result:
-            lote_id = lote_result['id']
-            
-            # Ahora actualizar el producto
-            producto_query_params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id) if precio_compra else (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
-            success = self._execute_query(producto_query, producto_query_params, fetch_all=False, use_cache=False)
-            
-            if success:
-                print(f"📈 Stock aumentado - Producto ID: {producto_id}, Lote ID: {lote_id}")
-                print(f"📦 Cajas: +{cantidad_caja}, Unitarios: +{cantidad_unitario}")
+        # OPERACIONES EN TRANSACCIÓN ATÓMICA
+        with self._lock:
+            conn = None
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                
+                # 1. Crear lote con fecha formateada
+                lote_query = """
+                INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
+                OUTPUT INSERTED.id
+                VALUES (?, ?, ?, ?)
+                """
+                
+                # USAR FECHA FORMATEADA
+                cursor.execute(lote_query, (producto_id, cantidad_caja, cantidad_unitario, fecha_venc_formateada))
+                lote_row = cursor.fetchone()
+                
+                if not lote_row:
+                    print(f"❌ ERROR: No se pudo crear lote para producto {producto_id}")
+                    conn.rollback()
+                    return None
+                
+                lote_id = lote_row[0]
+                print(f"✅ Lote creado - ID: {lote_id} con fecha: {fecha_venc_formateada}")
+                
+                # 2. Actualizar stock del producto
+                if precio_compra:
+                    producto_query = """
+                    UPDATE Productos 
+                    SET Stock_Caja = ?, Stock_Unitario = ?, Precio_compra = ?
+                    WHERE id = ?
+                    """
+                    producto_params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id)
+                else:
+                    producto_query = """
+                    UPDATE Productos 
+                    SET Stock_Caja = ?, Stock_Unitario = ?
+                    WHERE id = ?
+                    """
+                    producto_params = (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
+                
+                cursor.execute(producto_query, producto_params)
+                filas_afectadas = cursor.rowcount
+                
+                if filas_afectadas != 1:
+                    print(f"❌ ERROR: No se actualizó stock del producto {producto_id}")
+                    conn.rollback()
+                    return None
+                
+                # 3. COMMIT de toda la transacción
+                conn.commit()
+                
+                # 4. Invalidar caché
+                self._invalidate_cache_after_modification()
+                
+                print(f"✅ Stock aumentado exitosamente - Producto: {producto_id}, Lote: {lote_id}")
+                print(f"📈 Nuevo stock - Cajas: {nuevo_stock_caja}, Unitarios: {nuevo_stock_unitario}")
+                
                 return lote_id
-            else:
-                print(f"❌ ERROR: No se pudo actualizar stock del producto {producto_id}")
+                
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                print(f"❌ ERROR en aumentar_stock_compra: {str(e)}")
+                print(f"🔍 Producto: {producto_id}, Fecha original: '{fecha_vencimiento}', Fecha formateada: '{fecha_venc_formateada}'")
                 return None
-        else:
-            print(f"❌ ERROR: No se pudo crear lote para producto {producto_id}")
-            return None
+            finally:
+                if conn:
+                    conn.close()
     
     # ===============================
     # REPORTES Y ESTADÍSTICAS
@@ -414,3 +435,34 @@ class ProductoRepository(BaseRepository):
         WHERE (p.Stock_Caja + p.Stock_Unitario) > 0
         """
         return self._execute_query(query, fetch_one=True) or {}
+
+    def _parse_fecha_vencimiento(self, fecha_str: str) -> str:
+        """
+        Convierte fecha a formato SQL Server compatible
+        
+        Acepta formatos: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+        Retorna: YYYY-MM-DD
+        """
+        if not fecha_str:
+            # Fecha por defecto: 1 año desde hoy
+            return (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+        
+        fecha_str = fecha_str.strip()
+        
+        # Si ya está en formato correcto
+        if len(fecha_str) == 10 and fecha_str[4] == '-' and fecha_str[7] == '-':
+            return fecha_str
+        
+        # Intentar parsear diferentes formatos
+        formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
+        
+        for formato in formatos:
+            try:
+                fecha_obj = datetime.strptime(fecha_str, formato)
+                return fecha_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+        
+        # Si no se pudo parsear, usar fecha por defecto
+        print(f"⚠️ No se pudo parsear fecha '{fecha_str}', usando fecha por defecto")
+        return (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')

@@ -342,7 +342,8 @@ ApplicationWindow {
                                 submenuItems: [
                                     { text: "Ventas", icon: "Resources/iconos/ventas.png", subsection: 0 },
                                     { text: "Productos", icon: "Resources/iconos/productos.png", subsection: 1 },
-                                    { text: "Compras", icon: "Resources/iconos/compras.png", subsection: 2 }
+                                    { text: "Compras", icon: "Resources/iconos/compras.png", subsection: 2 },
+                                    { text: "Proveedores", icon: "Resources/iconos/proveedor.png", subsection: 3 }
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {
@@ -456,6 +457,16 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: currentIndex === 1
                 layer.enabled: true
+                
+                // ✅ NUEVA PROPIEDAD: Pasar ProveedorModel a Farmacia
+                property var proveedorModel: appController ? appController.proveedorModel : null
+                
+                // Conexión para capturar subsección de proveedores
+                onSubsectionChanged: {
+                    if (subsection === 3) { // Proveedores
+                        console.log("🢷 Navegando a subsección de Proveedores")
+                    }
+                }
             }
             
             // ===== CONSULTAS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
@@ -632,7 +643,7 @@ ApplicationWindow {
     
     function getCurrentPageName() {
         if (currentIndex === 1) {
-            const farmaciaSubsections = ["Ventas", "Productos", "Compras"]
+            const farmaciaSubsections = ["Ventas", "Productos", "Compras", "Proveedores"]
             return "Farmacia - " + farmaciaSubsections[farmaciaSubsection]
         }
         

@@ -499,15 +499,50 @@ class CompraModel(QObject):
     
     @Slot(int, result='QVariant')
     def get_compra_detalle(self, compra_id: int):
-        """Obtiene detalle completo de una compra"""
+        """Obtiene detalle completo de una compra CON INFORMACIÓN DE PRODUCTOS"""
         if compra_id <= 0:
             return {}
         
         try:
             compra = safe_execute(self.compra_repo.get_compra_completa, compra_id)
-            return compra if compra else {}
+            if not compra:
+                return {}
+            
+            # Formatear para QML con información de productos
+            compra_qml = {
+                'id': compra['id'],
+                'proveedor': compra.get('Proveedor_Nombre', 'Sin proveedor'),
+                'fecha': compra.get('Fecha', ''),
+                'total': float(compra.get('Total', 0)),
+                'usuario': compra.get('Usuario', 'Sin usuario'),
+                'detalles': [],
+                'resumen': {
+                    'total_productos': compra.get('total_items', 0),
+                    'total_unidades': compra.get('total_unidades', 0),
+                    'total_compra': float(compra.get('Total', 0))
+                }
+            }
+            
+            # Procesar detalles de productos
+            if compra.get('detalles'):
+                for detalle in compra['detalles']:
+                    detalle_qml = {
+                        'codigo': detalle.get('Producto_Codigo', ''),
+                        'nombre': detalle.get('Producto_Nombre', 'Producto no encontrado'),
+                        'marca': detalle.get('Marca_Nombre', 'Sin marca'),
+                        'cantidad_caja': detalle.get('Cantidad_Caja', 0),
+                        'cantidad_unitario': detalle.get('Cantidad_Unitario', 0),
+                        'cantidad_total': detalle.get('Cantidad_Total', 0),
+                        'precio_unitario': float(detalle.get('Precio_Unitario', 0)),
+                        'subtotal': float(detalle.get('Subtotal', 0)),
+                        'fecha_vencimiento': detalle.get('Fecha_Vencimiento', 'Sin fecha')
+                    }
+                    compra_qml['detalles'].append(detalle_qml)
+            
+            return compra_qml
+            
         except Exception as e:
-            self.operacionError.emit(f"Error obteniendo compra: {str(e)}")
+            self.operacionError.emit(f"Error obteniendo detalle compra: {str(e)}")
             return {}
     
     @Slot(str, str)
@@ -586,7 +621,112 @@ class CompraModel(QObject):
         print("🔄 Force refresh compras desde QML")
         self._cargar_compras_recientes()
         self._cargar_estadisticas()
+
+    @Slot(int, result='QVariant') 
+    def get_productos_resumen_compra(self, compra_id: int):
+        """Obtiene resumen de productos de una compra para mostrar en lista principal"""
+        if compra_id <= 0:
+            return {}
+        
+        try:
+            # Usar repository para obtener productos de la compra
+            productos = safe_execute(self.compra_repo.get_productos_compra_resumen, compra_id)
+            
+            if not productos:
+                return {'productos_texto': 'Sin productos', 'total_productos': 0}
+            
+            # Crear texto resumen para mostrar en tabla
+            if len(productos) <= 2:
+                # Mostrar todos si son 2 o menos
+                nombres = [p.get('Producto_Nombre', 'Sin nombre') for p in productos]
+                productos_texto = ', '.join(nombres)
+            else:
+                # Mostrar primeros 2 + "... y X más"
+                primeros_dos = [p.get('Producto_Nombre', 'Sin nombre') for p in productos[:2]]
+                restantes = len(productos) - 2
+                productos_texto = f"{', '.join(primeros_dos)}... y {restantes} más"
+            
+            return {
+                'productos_texto': productos_texto,
+                'total_productos': len(productos),
+                'productos_detalle': productos
+            }
+            
+        except Exception as e:
+            self.operacionError.emit(f"Error obteniendo productos compra: {str(e)}")
+            return {'productos_texto': 'Error', 'total_productos': 0}
     
+    @Slot(int, result=bool)
+    def eliminar_compra(self, compra_id: int) -> bool:
+        """Elimina compra completa con reversión de stock"""
+        if compra_id <= 0:
+            self.operacionError.emit("ID de compra inválido")
+            return False
+        
+        self._set_loading(True)
+        try:
+            exito = safe_execute(self.compra_repo.eliminar_compra_completa, compra_id)
+            
+            if exito:
+                # Actualizar datos
+                self._cargar_compras_recientes()
+                self._cargar_estadisticas()
+                
+                self.operacionExitosa.emit(f"Compra #{compra_id} eliminada correctamente")
+                print(f"🗑️ Compra eliminada - ID: {compra_id}")
+                return True
+            else:
+                raise CompraError("No se pudo eliminar la compra")
+                
+        except Exception as e:
+            self.operacionError.emit(f"Error eliminando compra: {str(e)}")
+            return False
+        finally:
+            self._set_loading(False)
+    
+    @Slot(int, result=bool) 
+    def duplicar_compra(self, compra_id: int) -> bool:
+        """Duplica una compra existente para facilitar edición"""
+        if compra_id <= 0:
+            self.operacionError.emit("ID de compra inválido")
+            return False
+        
+        try:
+            # Obtener compra original
+            compra_original = safe_execute(self.compra_repo.get_compra_completa, compra_id)
+            if not compra_original:
+                raise CompraError("Compra original no encontrada")
+            
+            # Preparar items para nueva compra
+            items_duplicados = []
+            for detalle in compra_original.get('detalles', []):
+                items_duplicados.append({
+                    'codigo': detalle.get('Producto_Codigo', ''),
+                    'cantidad_caja': detalle.get('Cantidad_Caja', 0),
+                    'cantidad_unitario': detalle.get('Cantidad_Unitario', 0),
+                    'precio_unitario': detalle.get('Precio_Unitario', 0),
+                    'fecha_vencimiento': (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+                })
+            
+            # Crear nueva compra
+            nueva_compra = safe_execute(
+                self.compra_repo.crear_compra,
+                compra_original['Id_Proveedor'],
+                self._usuario_actual,
+                items_duplicados
+            )
+            
+            if nueva_compra:
+                self._cargar_compras_recientes()
+                self.operacionExitosa.emit(f"Compra duplicada: #{nueva_compra['id']}")
+                return True
+            else:
+                raise CompraError("Error creando compra duplicada")
+                
+        except Exception as e:
+            self.operacionError.emit(f"Error duplicando compra: {str(e)}")
+            return False
+
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
@@ -601,6 +741,7 @@ class CompraModel(QObject):
             
             for compra_raw in compras_raw or []:
                 compra_qml = self._format_compra_for_qml(compra_raw)
+                print(f"🔍 DEBUG COMPRA QML: {compra_qml}")
                 compras_transformadas.append(compra_qml)
             
             # ASIGNAR Y EMITIR SIGNAL
@@ -678,7 +819,7 @@ class CompraModel(QObject):
             self.procesandoCompraChanged.emit()
     # Funcione para formatear compra a QML
     def _format_compra_for_qml(self, compra_raw: Dict[str, Any]) -> Dict[str, Any]:
-        """Transforma datos de Repository a formato QML"""
+        """Transforma datos de Repository a formato QML CON PRODUCTOS"""
         # Procesar fecha
         fecha_completa = compra_raw.get('Fecha', datetime.now())
         if isinstance(fecha_completa, str):
@@ -689,6 +830,40 @@ class CompraModel(QObject):
         elif not isinstance(fecha_completa, datetime):
             fecha_completa = datetime.now()
         
+        # Obtener resumen de productos para esta compra - CORREGIDO
+        try:
+            productos_raw = safe_execute(self.compra_repo.get_productos_resumen_compra, compra_raw.get('id', 0))
+            
+            if productos_raw and len(productos_raw) > 0:
+                # Crear texto resumen para mostrar en tabla
+                if len(productos_raw) == 1:
+                    # Un solo producto
+                    producto = productos_raw[0]
+                    productos_texto = f"{producto.get('Producto_Nombre', 'Sin nombre')}"
+                    total_productos = 1
+                elif len(productos_raw) <= 3:
+                    # Mostrar todos si son 3 o menos
+                    nombres = [p.get('Producto_Nombre', 'Sin nombre') for p in productos_raw]
+                    productos_texto = ', '.join(nombres)
+                    total_productos = len(productos_raw)
+                else:
+                    # Mostrar primeros 2 + "... y X más"
+                    primeros_dos = [p.get('Producto_Nombre', 'Sin nombre') for p in productos_raw[:2]]
+                    restantes = len(productos_raw) - 2
+                    productos_texto = f"{', '.join(primeros_dos)}... y {restantes} más"
+                    total_productos = len(productos_raw)
+                    
+                print(f"✅ Productos para compra {compra_raw.get('id')}: {productos_texto}")
+            else:
+                productos_texto = "Sin productos"
+                total_productos = 0
+                print(f"⚠️ No se encontraron productos para compra {compra_raw.get('id')}")
+                
+        except Exception as e:
+            print(f"❌ Error obteniendo productos para compra {compra_raw.get('id')}: {str(e)}")
+            productos_texto = "Error cargando"
+            total_productos = 0
+        
         # Formatear datos para QML
         return {
             'id': compra_raw.get('id', 0),
@@ -697,6 +872,10 @@ class CompraModel(QObject):
             'fecha': fecha_completa.strftime('%d/%m/%Y'),
             'hora': fecha_completa.strftime('%H:%M'),
             'total': float(compra_raw.get('Total', 0)),
+            
+            # PRODUCTOS - CORREGIDO
+            'productos_texto': productos_texto,
+            'total_productos': total_productos,
             
             # Campos originales para compatibilidad
             'Proveedor_Nombre': compra_raw.get('Proveedor_Nombre', ''),

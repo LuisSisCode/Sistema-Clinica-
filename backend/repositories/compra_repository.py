@@ -139,13 +139,13 @@ class CompraRepository(BaseRepository):
     @ExceptionHandler.handle_exception
     def crear_compra(self, proveedor_id: int, usuario_id: int, items_compra: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Crea nueva compra con generación automática de lotes
+        Crea nueva compra con generación automática de lotes - CORREGIDO CON ROLLBACK COMPLETO
         
         Args:
             proveedor_id: ID del proveedor
             usuario_id: ID del usuario comprador
             items_compra: Lista de items [{'codigo': str, 'cantidad_caja': int, 'cantidad_unitario': int, 
-                                          'precio_unitario': float, 'fecha_vencimiento': str}]
+                                        'precio_unitario': float, 'fecha_vencimiento': str}]
         
         Returns:
             Información completa de la compra creada
@@ -157,55 +157,277 @@ class CompraRepository(BaseRepository):
         if not items_compra:
             raise CompraError("No se proporcionaron items para la compra")
         
-        print(f"📦 Iniciando compra - Proveedor: {proveedor_id}, Items: {len(items_compra)}")
+        print(f"🛒 INICIANDO COMPRA - Proveedor: {proveedor_id}, Items: {len(items_compra)}")
         
-        # 1. Validar y preparar items
-        items_preparados = []
-        total_compra = Decimal('0.00')
-        
-        for item in items_compra:
-            item_preparado = self._validar_y_preparar_item(item)
-            items_preparados.append(item_preparado)
-            total_compra += item_preparado['subtotal']
-        
-        # 2. Crear compra principal
-        compra_data = {
-            'Id_Proveedor': proveedor_id,
-            'Id_Usuario': usuario_id,
-            'Fecha': datetime.now(),
-            'Total': float(total_compra)
-        }
-        
-        print(f"🔍 DEBUG: Datos de compra a insertar: {compra_data}")
-        compra_id = self.insert(compra_data)
-        print(f"🔍 DEBUG: ID de compra retornado: {compra_id} (tipo: {type(compra_id)})")
-
-        if not compra_id:
-            print(f"❌ ERROR: No se pudo crear la compra principal")
-            raise CompraError("Error creando compra principal")
-
-        print(f"🛒 Compra creada - ID: {compra_id}, Total: ${total_compra}")
-        
-        # 3. Procesar items y crear lotes + detalles
+        compra_id = None
         lotes_creados = []
         
-        for item in items_preparados:
-            lote_info = self._procesar_item_con_lote(compra_id, item)
-            lotes_creados.append(lote_info)
+        try:
+            # ===== FASE 1: VALIDAR Y PREPARAR ITEMS =====
+            items_preparados = []
+            total_compra = Decimal('0.00')
+            
+            print(f"📋 Validando {len(items_compra)} items...")
+            for i, item in enumerate(items_compra):
+                try:
+                    item_preparado = self._validar_y_preparar_item(item)
+                    items_preparados.append(item_preparado)
+                    total_compra += item_preparado['subtotal']
+                    print(f"  ✅ Item {i+1}: {item_preparado['codigo']} - ${item_preparado['subtotal']}")
+                except Exception as e:
+                    raise CompraError(f"Error en item {i+1} ({item.get('codigo', 'sin código')}): {str(e)}")
+            
+            print(f"💰 Total calculado: ${total_compra}")
+            
+            # ===== FASE 2: CREAR COMPRA PRINCIPAL =====
+            compra_data = {
+                'Id_Proveedor': proveedor_id,
+                'Id_Usuario': usuario_id,
+                'Fecha': datetime.now(),
+                'Total': float(total_compra)
+            }
+            
+            print(f"📝 Creando compra principal...")
+            compra_id = self.insert(compra_data)
+            
+            if not compra_id or compra_id <= 0:
+                raise CompraError("❌ FALLO CRÍTICO: No se pudo crear la compra principal")
+            
+            print(f"✅ Compra principal creada - ID: {compra_id}")
+            
+            # ===== FASE 3: PROCESAR ITEMS CON ROLLBACK AUTOMÁTICO =====
+            print(f"🔄 Procesando {len(items_preparados)} items...")
+            
+            for i, item in enumerate(items_preparados):
+                try:
+                    print(f"  📦 Procesando item {i+1}/{len(items_preparados)}: {item['codigo']}")
+                    lote_info = self._procesar_item_con_lote(compra_id, item)
+                    lotes_creados.append(lote_info)
+                    print(f"  ✅ Item {i+1} procesado - Lote: {lote_info['lote_id']}")
+                    
+                except Exception as item_error:
+                    print(f"  ❌ ERROR en item {i+1} ({item['codigo']}): {str(item_error)}")
+                    # ROLLBACK AUTOMÁTICO si falla cualquier item
+                    self._rollback_compra_completa(compra_id, lotes_creados)
+                    raise CompraError(f"Error procesando item {item['codigo']}: {str(item_error)}")
+            
+            # ===== FASE 4: VERIFICAR INTEGRIDAD FINAL =====
+            if len(lotes_creados) != len(items_preparados):
+                print(f"❌ ERROR DE INTEGRIDAD: Items esperados: {len(items_preparados)}, Lotes creados: {len(lotes_creados)}")
+                self._rollback_compra_completa(compra_id, lotes_creados)
+                raise CompraError("Error de integridad: No todos los items se procesaron correctamente")
+            
+            # ===== FASE 5: OBTENER RESULTADO FINAL =====
+            try:
+                compra_completa = self.get_compra_completa(compra_id)
+                
+                if not compra_completa:
+                    raise CompraError("Error obteniendo datos completos de la compra")
+                
+                print(f"🎉 COMPRA COMPLETADA EXITOSAMENTE")
+                print(f"   ID: {compra_id}")
+                print(f"   Total: ${total_compra}")
+                print(f"   Items: {len(lotes_creados)}")
+                print(f"   Lotes creados: {[l['lote_id'] for l in lotes_creados]}")
+                
+                return compra_completa
+                
+            except Exception as final_error:
+                print(f"❌ ERROR obteniendo compra completa: {str(final_error)}")
+                # No hacer rollback aquí porque la compra ya está creada correctamente
+                # Solo loggear el error y retornar datos básicos
+                return {
+                    'id': compra_id,
+                    'Total': float(total_compra),
+                    'detalles': lotes_creados,
+                    'error_detalle': str(final_error)
+                }
         
-        # 4. Verificar que se crearon lotes
-        if not lotes_creados:
-            # Eliminar compra si no se pudieron crear lotes
-            self.delete(compra_id)
-            raise CompraError("No se pudieron procesar los items de la compra")
-        
-        # 5. Retornar compra completa
-        compra_completa = self.get_compra_completa(compra_id)
-        
-        print(f"✅ Compra completada - ID: {compra_id}, Lotes: {len(lotes_creados)}")
-        
-        return compra_completa
+        except Exception as e:
+            print(f"❌ ERROR GENERAL EN CREAR_COMPRA: {str(e)}")
+            
+            # ROLLBACK COMPLETO si estamos en medio del proceso
+            if compra_id:
+                self._rollback_compra_completa(compra_id, lotes_creados)
+            
+            # Re-lanzar excepción para que el modelo la maneje
+            raise CompraError(f"Error creando compra: {str(e)}")
     
+    @ExceptionHandler.handle_exception
+    def eliminar_compra_completa(self, compra_id: int) -> bool:
+        """
+        Elimina compra completa revirtiendo stock automáticamente
+        
+        Returns:
+            True si se eliminó correctamente
+        """
+        validate_required(compra_id, "compra_id")
+        
+        print(f"🗑️ INICIANDO ELIMINACIÓN - Compra: {compra_id}")
+        
+        # 1. Obtener compra completa antes de eliminar
+        try:
+            compra = self.get_compra_completa(compra_id)
+            if not compra:
+                raise CompraError(f"Compra {compra_id} no encontrada")
+            
+            print(f"📋 Compra a eliminar: {compra['Proveedor_Nombre']} - ${compra['Total']}")
+            
+        except Exception as e:
+            raise CompraError(f"Error obteniendo datos de compra: {str(e)}")
+        
+        # 2. Revertir stock por cada detalle
+        stock_revertido = []
+        try:
+            for detalle in compra.get('detalles', []):
+                # Obtener info del lote
+                lote_query = "SELECT * FROM Lote WHERE id = ?"
+                lote = self._execute_query(lote_query, (detalle['Id_Lote'],), fetch_one=True)
+                
+                if lote:
+                    # Revertir stock del producto
+                    producto_id = lote['Id_Producto']
+                    cantidad_caja = lote['Cantidad_Caja']
+                    cantidad_unitario = lote['Cantidad_Unitario']
+                    
+                    # Reducir stock del producto
+                    reducir_stock_query = """
+                    UPDATE Productos 
+                    SET Stock_Caja = Stock_Caja - ?, Stock_Unitario = Stock_Unitario - ?
+                    WHERE id = ?
+                    """
+                    self._execute_query(reducir_stock_query, (cantidad_caja, cantidad_unitario, producto_id), fetch_all=False, use_cache=False)
+                    
+                    stock_revertido.append({
+                        'producto_id': producto_id,
+                        'codigo': detalle.get('Producto_Codigo', ''),
+                        'cantidad_caja': cantidad_caja,
+                        'cantidad_unitario': cantidad_unitario
+                    })
+                    
+                    print(f"  📦 Stock revertido - {detalle.get('Producto_Codigo', '')}: -{cantidad_caja}c/{cantidad_unitario}u")
+            
+        except Exception as e:
+            print(f"❌ Error revirtiendo stock: {str(e)}")
+            raise CompraError(f"Error revirtiendo stock: {str(e)}")
+        
+        # 3. Eliminar en orden correcto
+        try:
+            # 3.1 Eliminar detalles de compra
+            delete_detalles_query = "DELETE FROM DetalleCompra WHERE Id_Compra = ?"
+            detalles_eliminados = self._execute_query(delete_detalles_query, (compra_id,), fetch_all=False, use_cache=False)
+            
+            # 3.2 Eliminar lotes asociados
+            lotes_eliminados = 0
+            for detalle in compra.get('detalles', []):
+                delete_lote_query = "DELETE FROM Lote WHERE id = ?"
+                resultado = self._execute_query(delete_lote_query, (detalle['Id_Lote'],), fetch_all=False, use_cache=False)
+                if resultado > 0:
+                    lotes_eliminados += 1
+            
+            # 3.3 Eliminar compra principal
+            delete_compra_query = "DELETE FROM Compra WHERE id = ?"
+            compra_eliminada = self._execute_query(delete_compra_query, (compra_id,), fetch_all=False, use_cache=False)
+            
+            if compra_eliminada > 0:
+                print(f"✅ ELIMINACIÓN EXITOSA:")
+                print(f"   Compra: {compra_id}")
+                print(f"   Detalles: {detalles_eliminados}")
+                print(f"   Lotes: {lotes_eliminados}")
+                print(f"   Productos afectados: {len(stock_revertido)}")
+                return True
+            else:
+                raise CompraError("No se pudo eliminar la compra principal")
+                
+        except Exception as e:
+            print(f"❌ ERROR ELIMINANDO: {str(e)}")
+            raise CompraError(f"Error eliminando compra: {str(e)}")
+    
+    def _rollback_compra_completa(self, compra_id: int, lotes_creados: List[Dict[str, Any]]):
+        """
+        Rollback completo: elimina compra, lotes y restaura stocks
+        """
+        print(f"🔄 EJECUTANDO ROLLBACK COMPLETO - Compra: {compra_id}")
+        
+        try:
+            # 1. Eliminar detalles de compra
+            delete_detalles_query = "DELETE FROM DetalleCompra WHERE Id_Compra = ?"
+            self._execute_query(delete_detalles_query, (compra_id,), fetch_all=False, use_cache=False)
+            print(f"  ✅ Detalles de compra eliminados")
+            
+            # 2. Eliminar lotes y restaurar stocks
+            for lote_info in lotes_creados:
+                try:
+                    lote_id = lote_info.get('lote_id')
+                    if lote_id:
+                        # Obtener info del lote antes de eliminarlo
+                        lote_query = "SELECT * FROM Lote WHERE id = ?"
+                        lote = self._execute_query(lote_query, (lote_id,), fetch_one=True)
+                        
+                        if lote:
+                            # Eliminar lote
+                            delete_lote_query = "DELETE FROM Lote WHERE id = ?"
+                            self._execute_query(delete_lote_query, (lote_id,), fetch_all=False, use_cache=False)
+                            
+                            # Restaurar stock del producto
+                            self._restaurar_stock_producto(lote['Id_Producto'], lote['Cantidad_Caja'], lote['Cantidad_Unitario'])
+                            
+                            print(f"  ✅ Lote {lote_id} eliminado y stock restaurado")
+                            
+                except Exception as lote_error:
+                    print(f"  ❌ Error eliminando lote {lote_info.get('lote_id', 'N/A')}: {str(lote_error)}")
+            
+            # 3. Eliminar compra principal
+            delete_compra_query = "DELETE FROM Compra WHERE id = ?"
+            self._execute_query(delete_compra_query, (compra_id,), fetch_all=False, use_cache=False)
+            print(f"  ✅ Compra {compra_id} eliminada")
+            
+            print(f"🎯 ROLLBACK COMPLETADO - Compra {compra_id} y todos sus datos eliminados")
+            
+        except Exception as rollback_error:
+            print(f"❌ ERROR CRÍTICO EN ROLLBACK: {str(rollback_error)}")
+            print(f"⚠️  DATOS INCONSISTENTES - Compra: {compra_id}, revisar manualmente")
+    def get_productos_resumen_compra(self, compra_id: int) -> List[Dict[str, Any]]:
+        """Obtiene lista simplificada de productos de una compra para mostrar en tabla principal"""
+        validate_required(compra_id, "compra_id")
+        
+        query = """
+        SELECT DISTINCT
+            p.Codigo as Producto_Codigo,
+            p.Nombre as Producto_Nombre,
+            m.Nombre as Marca_Nombre,
+            COUNT(dc.id) as Items_Compra,
+            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as Total_Unidades
+        FROM DetalleCompra dc
+        INNER JOIN Lote l ON dc.Id_Lote = l.id
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        LEFT JOIN Marca m ON p.ID_Marca = m.id
+        WHERE dc.Id_Compra = ?
+        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre
+        ORDER BY p.Nombre
+        """
+        
+        return self._execute_query(query, (compra_id,))
+    def _restaurar_stock_producto(self, producto_id: int, cantidad_caja: int, cantidad_unitario: int):
+        """
+        Restaura stock de un producto específico
+        """
+        try:
+            producto = self.producto_repo.get_by_id(producto_id)
+            if producto:
+                nuevo_stock_caja = max(0, producto['Stock_Caja'] - cantidad_caja)
+                nuevo_stock_unitario = max(0, producto['Stock_Unitario'] - cantidad_unitario)
+                
+                restore_query = """
+                UPDATE Productos 
+                SET Stock_Caja = ?, Stock_Unitario = ?
+                WHERE id = ?
+                """
+                self._execute_query(restore_query, (nuevo_stock_caja, nuevo_stock_unitario, producto_id), fetch_all=False, use_cache=False)
+                
+        except Exception as e:
+            print(f"❌ Error restaurando stock producto {producto_id}: {str(e)}")
+
     def _validar_y_preparar_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """Valida y prepara un item para la compra"""
         # Validaciones básicas
@@ -246,55 +468,115 @@ class CompraRepository(BaseRepository):
         }
     
     def _procesar_item_con_lote(self, compra_id: int, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesa un item creando lote y detalle de compra"""
-        
-        # 1. Crear nuevo lote
-        lote_id = self.producto_repo.aumentar_stock_compra(
-            producto_id=item['producto_id'],
-            cantidad_caja=item['cantidad_caja'],
-            cantidad_unitario=item['cantidad_unitario'],
-            fecha_vencimiento=item['fecha_vencimiento'],
-            precio_compra=item['precio_unitario']
-        )
-        
-        if not lote_id:
-            raise CompraError(f"Error creando lote para producto {item['codigo']}")
-        
-        # 2. Crear detalle de compra
-        detalle_data = {
-            'Id_Compra': compra_id,
-            'Id_Lote': lote_id,
-            'Cantidad_Caja': item['cantidad_caja'],
-            'Cantidad_Unitario': item['cantidad_unitario'],
-            'Precio_Unitario': item['precio_unitario']
-        }
-        
-        detalle_query = """
-        INSERT INTO DetalleCompra (Id_Compra, Id_Lote, Cantidad_Caja, Cantidad_Unitario, Precio_Unitario)
-        OUTPUT INSERTED.id
-        VALUES (?, ?, ?, ?, ?)
         """
+        Procesa un item creando lote y detalle de compra - CORREGIDO CON VALIDACIONES
+        """
+        print(f"🔄 Procesando item: {item['codigo']} - Cajas: {item['cantidad_caja']}, Unitarios: {item['cantidad_unitario']}")
         
-        detalle_result = self._execute_query(
-            detalle_query,
-            (compra_id, lote_id, item['cantidad_caja'], 
-             item['cantidad_unitario'], item['precio_unitario']),
-            fetch_one=True
-        )
+        # 1. Validar compra_id
+        if not compra_id or compra_id <= 0:
+            raise CompraError(f"ID de compra inválido: {compra_id}")
         
-        detalle_id = detalle_result['id'] if detalle_result else None
+        # 2. Crear nuevo lote - CON VALIDACIÓN ROBUSTA
+        try:
+            lote_id = self.producto_repo.aumentar_stock_compra(
+                producto_id=item['producto_id'],
+                cantidad_caja=item['cantidad_caja'],
+                cantidad_unitario=item['cantidad_unitario'],
+                fecha_vencimiento=item['fecha_vencimiento'],
+                precio_compra=item['precio_unitario']
+            )
+            
+            # VALIDACIÓN CRÍTICA: Verificar que el lote se creó
+            if not lote_id or lote_id <= 0:
+                raise CompraError(f"❌ FALLO CRÍTICO: No se pudo crear lote para producto {item['codigo']}")
+            
+            print(f"✅ Lote creado exitosamente - ID: {lote_id} para producto {item['codigo']}")
+            
+        except Exception as e:
+            print(f"❌ ERROR creando lote para {item['codigo']}: {str(e)}")
+            raise CompraError(f"Error creando lote para producto {item['codigo']}: {str(e)}")
         
-        if detalle_id:
-            print(f"📝 Detalle creado - ID: {detalle_id}, Lote: {lote_id}, Producto: {item['codigo']}")
-        
-        return {
-            'detalle_id': detalle_id,
-            'lote_id': lote_id,
-            'producto_codigo': item['codigo'],
-            'cantidad_total': item['cantidad_total'],
-            'precio_unitario': item['precio_unitario']
-        }
-    
+        # 3. Crear detalle de compra - CON TRANSACCIONALIDAD
+        try:
+            detalle_data = {
+                'Id_Compra': compra_id,
+                'Id_Lote': lote_id,
+                'Cantidad_Caja': item['cantidad_caja'],
+                'Cantidad_Unitario': item['cantidad_unitario'],
+                'Precio_Unitario': item['precio_unitario']
+            }
+            
+            # Usar método insert del BaseRepository para consistencia
+            detalle_query = """
+            INSERT INTO DetalleCompra (Id_Compra, Id_Lote, Cantidad_Caja, Cantidad_Unitario, Precio_Unitario)
+            OUTPUT INSERTED.id
+            VALUES (?, ?, ?, ?, ?)
+            """
+            
+            detalle_result = self._execute_query(
+                detalle_query,
+                (compra_id, lote_id, item['cantidad_caja'], 
+                item['cantidad_unitario'], item['precio_unitario']),
+                fetch_one=True
+            )
+            
+            # VALIDACIÓN DEL RESULTADO
+            if not detalle_result or not isinstance(detalle_result, dict) or 'id' not in detalle_result:
+                # ROLLBACK: Si falló el detalle, eliminar el lote creado
+                print(f"❌ ERROR: Fallo creando DetalleCompra, eliminando lote {lote_id}")
+                self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
+                raise CompraError(f"Error creando detalle de compra para {item['codigo']}")
+            
+            detalle_id = detalle_result['id']
+            print(f"✅ Detalle creado - ID: {detalle_id}, Lote: {lote_id}, Producto: {item['codigo']}")
+            
+            return {
+                'detalle_id': detalle_id,
+                'lote_id': lote_id,
+                'producto_codigo': item['codigo'],
+                'cantidad_total': item['cantidad_total'],
+                'precio_unitario': item['precio_unitario'],
+                'subtotal': item['subtotal']
+            }
+            
+        except Exception as e:
+            # ROLLBACK: Si algo falló, eliminar el lote creado
+            print(f"❌ ERROR en detalle de compra para {item['codigo']}: {str(e)}")
+            self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
+            raise CompraError(f"Error procesando item {item['codigo']}: {str(e)}")
+    def _rollback_lote_created(self, lote_id: int, producto_id: int, cantidad_caja: int, cantidad_unitario: int):
+        """
+        Método de rollback para eliminar lote creado si falla el detalle
+        """
+        try:
+            print(f"🔄 Ejecutando rollback - Lote: {lote_id}, Producto: {producto_id}")
+            
+            # 1. Eliminar lote
+            delete_lote_query = "DELETE FROM Lote WHERE id = ?"
+            self._execute_query(delete_lote_query, (lote_id,), fetch_all=False, use_cache=False)
+            
+            # 2. Restaurar stock del producto
+            producto = self.producto_repo.get_by_id(producto_id)
+            if producto:
+                nuevo_stock_caja = producto['Stock_Caja'] - cantidad_caja
+                nuevo_stock_unitario = producto['Stock_Unitario'] - cantidad_unitario
+                
+                # Evitar stocks negativos
+                nuevo_stock_caja = max(0, nuevo_stock_caja)
+                nuevo_stock_unitario = max(0, nuevo_stock_unitario)
+                
+                restore_stock_query = """
+                UPDATE Productos 
+                SET Stock_Caja = ?, Stock_Unitario = ?
+                WHERE id = ?
+                """
+                self._execute_query(restore_stock_query, (nuevo_stock_caja, nuevo_stock_unitario, producto_id), fetch_all=False, use_cache=False)
+                
+            print(f"✅ Rollback completado - Lote {lote_id} eliminado, stock restaurado")
+            
+        except Exception as rollback_error:
+            print(f"❌ ERROR EN ROLLBACK: {str(rollback_error)} - Lote: {lote_id}")
     # ===============================
     # GESTIÓN DE PROVEEDORES
     # ===============================
