@@ -1,17 +1,16 @@
 import sys
 import os
-os.environ["QT_QUICK_CONTROLS_STYLE"] = "Universal"
-import json
-import time
-from PySide6.QtCore import QObject, Slot, QUrl, Property, Signal, QTimer, QThreadPool
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from PySide6.QtCore import QObject, Slot, QUrl, Property, Signal, QTimer, QThread, QThreadPool
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtQml import QQmlApplicationEngine
-from pathlib import Path
+from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterType
+from PySide6.QtQuick import QQuickItem
 
-from backend.core.login import LoginApplication
+# IMPORTAR NUESTRO MÓDULO DE PDF
 from generar_pdf import GeneradorReportesPDF
 
-# Models
+# IMPORTAR MODELS QOBJECT
 from backend.models.inventario_model import InventarioModel, register_inventario_model
 from backend.models.venta_model import VentaModel, register_venta_model
 from backend.models.compra_model import CompraModel, register_compra_model
@@ -24,8 +23,7 @@ from backend.models.trabajador_model import TrabajadorModel, register_trabajador
 from backend.models.enfermeria_model import EnfermeriaModel, register_enfermeria_model
 from backend.models.reportes_model import ReportesModel, register_reportes_model
 from backend.models.dashboard_model import DashboardModel, register_dashboard_model
-
-# Configuration Models
+#import configuracion 
 from backend.models.ConfiguracionModel.ConfiServiciosbasicos_model import ConfiguracionModel, register_configuracion_model
 from backend.models.ConfiguracionModel.ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
 from backend.models.ConfiguracionModel.ConfiEnfermeria_model import ConfiEnfermeriaModel, register_confi_enfermeria_model
@@ -43,43 +41,14 @@ class NotificationWorker(QObject):
         print(f"Notificación - {title}: {message}")
         self.finished.emit(title, message)
 
-class LoginManager(QObject):
-    loginSuccess = Signal('QVariant')
-    loginCancelled = Signal()
-    
-    def __init__(self):
-        super().__init__()
-        self.login_app = None
-        self.authenticated_user = None
-    
-    @Slot('QVariant')
-    def _on_user_authenticated(self, user_data):
-        self.authenticated_user = user_data
-        print(f"Usuario autenticado: {user_data}")
-        self.loginSuccess.emit(user_data)
-    
-    @Slot(bool, str, 'QVariant')
-    def _on_login_result(self, success, message, user_data):
-        if success:
-            print(f"Login exitoso: {message}")
-        else:
-            print(f"Login fallido: {message}")
-
 class AppController(QObject):
     notificationProcessed = Signal(str, str)
     modelsReady = Signal()
     
-    def __init__(self, authenticated_user=None):
+    def __init__(self):
         super().__init__()
         self.thread_pool = QThreadPool()
         self.thread_pool.setMaxThreadCount(4)
-        
-        self.authenticated_user = authenticated_user
-        self.current_user_id = None
-        
-        if authenticated_user:
-            self.current_user_id = authenticated_user.get('id')
-            print(f"Usuario autenticado: {authenticated_user.get('full_name')} (ID: {self.current_user_id})")
         
         self.notification_worker = NotificationWorker()
         self.notification_worker.finished.connect(self.notificationProcessed)
@@ -89,13 +58,12 @@ class AppController(QObject):
         self.preload_timer.timeout.connect(self._preload_components)
         
         self._navigation_cache = {}
-        self.pdf_generator = GeneradorReportesPDF()
         
-        # Initialize all models to None
-        self._init_model_attributes()
-
-    def _init_model_attributes(self):
-        """Initialize all model attributes to None"""
+        # INICIALIZAR GENERADOR DE PDF
+        self.pdf_generator = GeneradorReportesPDF()
+        print("📄 Generador de PDF inicializado")
+        
+        # MODELS QOBJECT - Se inicializarán después
         self.inventario_model = None
         self.venta_model = None
         self.compra_model = None
@@ -113,41 +81,17 @@ class AppController(QObject):
         self.confi_trabajadores_model = None
         self.reportes_model = None
         self.dashboard_model = None
-
-    # User Properties
-    @Property('QVariant', constant=True)
-    def currentUser(self):
-        return self.authenticated_user
+    # ===============================
+    # INICIALIZACIÓN DE MODELS
+    # ===============================
     
-    @Slot(result=int)
-    def getCurrentUserId(self):
-        return self.current_user_id if self.current_user_id else 0
-    
-    @Slot(result=str)
-    def getCurrentUserName(self):
-        if self.authenticated_user:
-            return self.authenticated_user.get('full_name', 'Usuario')
-        return "Usuario"
-    
-    @Slot(result=str)
-    def getCurrentUserRole(self):
-        if self.authenticated_user:
-            return self.authenticated_user.get('role', 'user')
-        return "user"
-    
-    @Slot(result=str)
-    def getCurrentUserEmail(self):
-        if self.authenticated_user:
-            return self.authenticated_user.get('email', '')
-        return ""
-
-    # Model Initialization
     @Slot()
     def initialize_models(self):
+        """Inicializa todos los models QObject"""
         try:
-            print("Inicializando Models QObject...")
+            print("🚀 Inicializando Models QObject...")
             
-            # Create model instances
+            # Crear instancias de models
             self.inventario_model = InventarioModel()
             self.venta_model = VentaModel()
             self.compra_model = CompraModel()
@@ -165,186 +109,587 @@ class AppController(QObject):
             self.confi_trabajadores_model = ConfiTrabajadoresModel()
             self.reportes_model = ReportesModel()
             self.dashboard_model = DashboardModel()
+            print("📊 DashboardModel inicializado")
 
+            # ✅ ESTABLECER CONEXIÓN DIRECTA PARA PDF
             if self.reportes_model:
                 self.reportes_model.set_app_controller(self)
+                print("📄 PDF generator conectado al ReportesModel")
 
+            # Conectar signals entre models
             self._connect_models()
-            self._establecer_usuario_autenticado()
             
-            print("Models QObject inicializados correctamente")
+            print("✅ Models QObject inicializados correctamente")
             self.modelsReady.emit()
             
         except Exception as e:
-            print(f"Error inicializando models: {e}")
+            print(f"❌ Error inicializando models: {e}")
             import traceback
             traceback.print_exc()
     
-    def _establecer_usuario_autenticado(self):
-        try:
-            if not self.current_user_id:
-                print("No hay usuario autenticado, usando fallback")
-                self._establecer_usuario_fallback()
-                return
-            
-            print(f"Estableciendo usuario autenticado en models: ID {self.current_user_id}")
-            
-            # Set user in models that require it
-            models_with_user = [
-                (self.venta_model, "VentaModel"),
-                (self.compra_model, "CompraModel"),
-                (self.consulta_model, "ConsultaModel"),
-                (self.enfermeria_model, "EnfermeriaModel")
-            ]
-            
-            for model, name in models_with_user:
-                if model:
-                    model.set_usuario_actual(self.current_user_id)
-                    print(f"Usuario establecido en {name}: {self.getCurrentUserName()}")
-            
-            # Models ready without specific user
-            ready_models = [
-                (self.gasto_model, "GastoModel"),
-                (self.trabajador_model, "TrabajadorModel"),
-                (self.confi_laboratorio_model, "ConfiLaboratorioModel"),
-                (self.confi_enfermeria_model, "ConfiEnfermeriaModel"),
-                (self.confi_consulta_model, "ConfiConsultaModel"),
-                (self.confi_trabajadores_model, "ConfiTrabajadoresModel")
-            ]
-            
-            for model, name in ready_models:
-                if model:
-                    print(f"{name} listo para usuario: {self.getCurrentUserName()}")
-            
-            print(f"Usuario {self.getCurrentUserName()} establecido en todos los models")
-                
-        except Exception as e:
-            print(f"Error estableciendo usuario autenticado: {e}")
-            self._establecer_usuario_fallback()
-
-    def _establecer_usuario_fallback(self):
-        print("Usando fallback: buscando administrador disponible")
-        
-        try:
-            if self.usuario_model:
-                administradores = self.usuario_model.obtenerAdministradores()
-                
-                if administradores and len(administradores) > 0:
-                    admin_usuario = administradores[0]
-                    usuario_id = int(admin_usuario.get('usuarioId', 0))
-                    
-                    if usuario_id > 0:
-                        self.current_user_id = usuario_id
-                        
-                        models = [self.venta_model, self.compra_model, self.consulta_model, self.enfermeria_model]
-                        for model in models:
-                            if model:
-                                model.set_usuario_actual(usuario_id)
-                        
-                        print(f"Fallback establecido: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
-                        return
-            
-            # Last resort
-            print("Último recurso: Usuario ID 1")
-            self.current_user_id = 1
-            models = [self.venta_model, self.compra_model, self.consulta_model, self.enfermeria_model]
-            for model in models:
-                if model:
-                    model.set_usuario_actual(1)
-                
-        except Exception as e:
-            print(f"Error en fallback: {e}")
-    
     def _connect_models(self):
+        """Conecta signals entre models para sincronización"""
         try:
-            # Basic connections
-            if self.venta_model:
-                self.venta_model.ventaCreada.connect(self._on_venta_creada)
-                self.venta_model.operacionError.connect(self._on_model_error)
-                self.venta_model.operacionExitosa.connect(self._on_model_success)
+            # Cuando se procesa una venta, actualizar inventario
+            self.venta_model.ventaCreada.connect(self._on_venta_creada)
             
-            if self.compra_model:
-                self.compra_model.compraCreada.connect(self._on_compra_creada)
-                self.compra_model.operacionError.connect(self._on_model_error)
-                self.compra_model.operacionExitosa.connect(self._on_model_success)
+            # Cuando se procesa una compra, actualizar inventario
+            self.compra_model.compraCreada.connect(self._on_compra_creada)
+            
+            self._establecer_usuario_por_defecto()
 
-            if self.inventario_model:
-                self.inventario_model.operacionError.connect(self._on_model_error)
-                self.inventario_model.operacionExitosa.connect(self._on_model_success)
+            # Conectar errores para mostrar en UI
+            self.inventario_model.operacionError.connect(self._on_model_error)
+            self.venta_model.operacionError.connect(self._on_model_error)
+            self.compra_model.operacionError.connect(self._on_model_error)
+            self.usuario_model.errorOccurred.connect(self._on_model_error)
+            self.gasto_model.errorOccurred.connect(self._on_model_error)
 
-            # Connect all other models
-            models = [
-                self.usuario_model, self.gasto_model, self.consulta_model, 
-                self.paciente_model, self.laboratorio_model, self.trabajador_model,
-                self.enfermeria_model, self.configuracion_model, self.confi_laboratorio_model,
-                self.confi_enfermeria_model, self.confi_consulta_model, self.confi_trabajadores_model
-            ]
+            if self.consulta_model:
+                self.consulta_model.operacionError.connect(self._on_model_error)
+                self.consulta_model.operacionExitosa.connect(self._on_model_success)
+            
+            if self.paciente_model:
+                self.paciente_model.errorOccurred.connect(self._on_model_error)
+                self.paciente_model.successMessage.connect(self._on_model_success)
+            
+            if self.laboratorio_model:
+                self.laboratorio_model.errorOcurrido.connect(self._on_model_error)
+                self.laboratorio_model.operacionExitosa.connect(self._on_model_success)
 
-            for model in models:
-                if model:
-                    if hasattr(model, 'errorOccurred'):
-                        model.errorOccurred.connect(self._on_model_error)
-                    if hasattr(model, 'successMessage'):
-                        model.successMessage.connect(self._on_model_success)
-                    if hasattr(model, 'operacionError'):
-                        model.operacionError.connect(self._on_model_error)
-                    if hasattr(model, 'operacionExitosa'):
-                        model.operacionExitosa.connect(self._on_model_success)
 
+            # ✅ CONECTAR TRABAJADOR MODEL
+            if self.trabajador_model:
+                self.trabajador_model.errorOccurred.connect(self._on_model_error)
+                self.trabajador_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del TrabajadorModel
+                self.trabajador_model.trabajadorCreado.connect(self._on_trabajador_creado)
+                self.trabajador_model.trabajadorActualizado.connect(self._on_trabajador_actualizado)
+                self.trabajador_model.trabajadorEliminado.connect(self._on_trabajador_eliminado)
+                print("🔗 TrabajadorModel conectado correctamente")
+            
+            # Conectar operaciones exitosas
+            self.inventario_model.operacionExitosa.connect(self._on_model_success)
+            self.venta_model.operacionExitosa.connect(self._on_model_success)
+            self.compra_model.operacionExitosa.connect(self._on_model_success)
+            self.usuario_model.successMessage.connect(self._on_model_success)
+            self.gasto_model.successMessage.connect(self._on_model_success)
+
+             # Conectar errores del GastoModel
+            if self.gasto_model:
+                self.gasto_model.errorOccurred.connect(self._on_model_error)
+                self.gasto_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del GastoModel
+                self.gasto_model.gastoCreado.connect(self._on_gasto_creado)
+                self.gasto_model.gastoActualizado.connect(self._on_gasto_actualizado)
+                self.gasto_model.gastoEliminado.connect(self._on_gasto_eliminado)
+                print("🔗 GastoModel conectado correctamente")
+            # ✅ CONECTAR ENFERMERIA MODEL
+            if self.enfermeria_model:
+                self.enfermeria_model.errorOccurred.connect(self._on_model_error)
+                self.enfermeria_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del EnfermeriaModel
+                self.enfermeria_model.procedimientoCreado.connect(self._on_procedimiento_creado)
+                self.enfermeria_model.procedimientoActualizado.connect(self._on_procedimiento_actualizado)
+                self.enfermeria_model.procedimientoEliminado.connect(self._on_procedimiento_eliminado)
+                print("🔗 EnfermeriaModel conectado correctamente")
+            # ✅ CONECTAR CONFIGURACION MODEL
+            if self.configuracion_model:
+                self.configuracion_model.errorOccurred.connect(self._on_model_error)
+                self.configuracion_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiguracionModel
+                self.configuracion_model.tipoGastoCreado.connect(self._on_tipo_gasto_creado)
+                self.configuracion_model.tipoGastoActualizado.connect(self._on_tipo_gasto_actualizado)
+                self.configuracion_model.tipoGastoEliminado.connect(self._on_tipo_gasto_eliminado)
+                print("🔗 ConfiguracionModel conectado correctamente")
+            
+            # ✅ CONECTAR CONFI LABORATORIO MODEL
+            if self.confi_laboratorio_model:
+                self.confi_laboratorio_model.errorOccurred.connect(self._on_model_error)
+                self.confi_laboratorio_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiLaboratorioModel
+                self.confi_laboratorio_model.tipoAnalisisCreado.connect(self._on_tipo_analisis_creado)
+                self.confi_laboratorio_model.tipoAnalisisActualizado.connect(self._on_tipo_analisis_actualizado)
+                self.confi_laboratorio_model.tipoAnalisisEliminado.connect(self._on_tipo_analisis_eliminado)
+                print("🔗 ConfiLaboratorioModel conectado correctamente")
+            
+            # ✅ CONECTAR CONFI ENFERMERIA MODEL
+            if self.confi_enfermeria_model:
+                self.confi_enfermeria_model.errorOccurred.connect(self._on_model_error)
+                self.confi_enfermeria_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiEnfermeriaModel
+                self.confi_enfermeria_model.tipoProcedimientoCreado.connect(self._on_tipo_procedimiento_creado)
+                self.confi_enfermeria_model.tipoProcedimientoActualizado.connect(self._on_tipo_procedimiento_actualizado)
+                self.confi_enfermeria_model.tipoProcedimientoEliminado.connect(self._on_tipo_procedimiento_eliminado)
+                print("🔗 ConfiEnfermeriaModel conectado correctamente")
+            
+            # ✅ CONECTAR CONFI CONSULTA MODEL
+            if self.confi_consulta_model:
+                self.confi_consulta_model.errorOccurred.connect(self._on_model_error)
+                self.confi_consulta_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiConsultaModel
+                self.confi_consulta_model.especialidadCreada.connect(self._on_especialidad_creada)
+                self.confi_consulta_model.especialidadActualizada.connect(self._on_especialidad_actualizada)
+                self.confi_consulta_model.especialidadEliminada.connect(self._on_especialidad_eliminada)
+                print("🔗 ConfiConsultaModel conectado correctamente")
+            # ✅ CONECTAR CONFI TRABAJADORES MODEL
+            if self.confi_trabajadores_model:
+                self.confi_trabajadores_model.errorOccurred.connect(self._on_model_error)
+                self.confi_trabajadores_model.successMessage.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ConfiTrabajadoresModel
+                self.confi_trabajadores_model.tipoTrabajadorCreado.connect(self._on_tipo_trabajador_creado)
+                self.confi_trabajadores_model.tipoTrabajadorActualizado.connect(self._on_tipo_trabajador_actualizado)
+                self.confi_trabajadores_model.tipoTrabajadorEliminado.connect(self._on_tipo_trabajador_eliminado)
+                print("🔗 ConfiTrabajadoresModel conectado correctamente")
+
+            # ✅ CONECTAR REPORTES MODEL
             if self.reportes_model:
                 self.reportes_model.reporteError.connect(self._on_model_error)
                 self.reportes_model.reporteGenerado.connect(self._on_reporte_generado)
+                
+                # ✅ NUEVA LÍNEA: Establecer referencia al AppController para PDF
                 self.reportes_model.set_app_controller(self)
+                print("🔗 ReportesModel conectado correctamente")
+
 
         except Exception as e:
-            print(f"Error conectando models: {e}")
+            print(f"❌ Error conectando models: {e}")
 
-    # Event Handlers
+    @Slot(bool, str, int)
+    def _on_reporte_generado(self, success: bool, message: str, total_registros: int):
+        """Handler cuando se genera un reporte"""
+        if success:
+            print(f"📊 Reporte generado exitosamente: {message} ({total_registros} registros)")
+            self.showNotification("Reporte Generado", message)
+        else:
+            print(f"❌ Error generando reporte: {message}")
+            self.showNotification("Error en Reporte", message)
+
+    @Property(QObject, notify=modelsReady)
+    def dashboard_model_instance(self):
+        """Propiedad para acceder al DashboardModel desde QML"""
+        return self.dashboard_model        
+
+    # AGREGAR ESTE GETTER PARA EL REPORTES MODEL:
+    @Property(QObject, notify=modelsReady)
+    def reportes_model_instance(self):
+        """Propiedad para acceder al ReportesModel desde QML"""
+        return self.reportes_model
+
+    def _establecer_usuario_por_defecto(self):
+        """Establece automáticamente un usuario administrador como usuario actual"""
+        try:
+            if not self.usuario_model:
+                print("⚠️ UsuarioModel no disponible para establecer usuario por defecto")
+                return
+            
+            # Obtener administradores disponibles
+            administradores = self.usuario_model.obtenerAdministradores()
+            
+            if administradores and len(administradores) > 0:
+                # Usar el primer administrador disponible
+                admin_usuario = administradores[0]
+                usuario_id = int(admin_usuario.get('usuarioId', 0))
+                
+                if usuario_id > 0:
+                    # Establecer en VentaModel
+                    if self.venta_model:
+                        self.venta_model.set_usuario_actual(usuario_id)
+                        print(f"👤 Usuario establecido en VentaModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    # Establecer en CompraModel  
+                    if self.compra_model:
+                        self.compra_model.set_usuario_actual(usuario_id)
+                        print(f"👤 Usuario establecido en CompraModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    if self.gasto_model:
+                        # El GastoModel no tiene set_usuario_actual, pero podemos notificar que está listo
+                        print(f"💰 GastoModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                        
+                    # AGREGAR PARA CONSULTAMODEL:
+                    if self.consulta_model:
+                        self.consulta_model.set_usuario_actual(usuario_id)
+                        print(f"👤 Usuario establecido en ConsultaModel: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    #  ESTABLECER PARA TRABAJADORMODEL (si lo necesita en el futuro)
+                    if self.trabajador_model:
+                        print(f"👷‍♂️ TrabajadorModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    #  ESTABLECER PARA ENFERMERIAMODEL - AGREGAR AQUÍ
+                    if self.enfermeria_model:
+                        self.enfermeria_model.set_usuario_actual(usuario_id)
+                        print(f"🩹 EnfermeriaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    #  ESTABLECER PARA CONFI LABORATORIO MODEL
+                    if self.confi_laboratorio_model:
+                        print(f"🧪 ConfiLaboratorioModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                        
+                    #  ESTABLECER PARA CONFI ENFERMERIA MODEL
+                    if self.confi_enfermeria_model:
+                        print(f"🩹 ConfiEnfermeriaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                    
+                    #  ESTABLECER PARA CONFI CONSULTA MODEL
+                    if self.confi_consulta_model:
+                        print(f"🏥 ConfiConsultaModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")
+                     #  ESTABLECER PARA CONFI TRABAJADORES MODEL
+                    if self.confi_trabajadores_model:
+                        print(f"👥 ConfiTrabajadoresModel listo para usuario: {admin_usuario.get('nombreCompleto')} (ID: {usuario_id})")    
+                else:
+                    print("⚠️ Usuario administrador no tiene ID válido")
+            else:
+                print("⚠️ No se encontraron administradores disponibles")
+                # Fallback: usar usuario ID 10 como antes
+                self._establecer_usuario_fallback()
+                
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario por defecto: {e}")
+            # Fallback en caso de error
+            self._establecer_usuario_fallback()
+
+    def _establecer_usuario_fallback(self):
+        """Fallback: establecer usuario ID 10 como antes"""
+        print("🔄 Usando fallback: Usuario ID 10")
+        if self.venta_model:
+            self.venta_model.set_usuario_actual(10)
+        if self.compra_model:
+            self.compra_model.set_usuario_actual(10)
+        # AGREGAR:
+        if self.consulta_model:
+            self.consulta_model.set_usuario_actual(10)
+            
+        if self.enfermeria_model:
+            self.enfermeria_model.set_usuario_actual(10)
+    
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
-        print(f"Venta creada por {self.getCurrentUserName()} - ID: {venta_id}, Total: ${total}")
+        """Handler cuando se crea una venta"""
+        print(f"💰 Venta creada - ID: {venta_id}, Total: ${total}")
+        # Actualizar inventario después de venta
         if self.inventario_model:
             QTimer.singleShot(1000, self.inventario_model.refresh_productos)
     
     @Slot(int, float)
     def _on_compra_creada(self, compra_id: int, total: float):
-        print(f"Compra creada por {self.getCurrentUserName()} - ID: {compra_id}, Total: ${total}")
+        """Handler cuando se crea una compra"""
+        print(f"📦 Compra creada - ID: {compra_id}, Total: ${total}")
+        # Actualizar inventario después de compra
         if self.inventario_model:
             QTimer.singleShot(1000, self.inventario_model.refresh_productos)
     
-    @Slot(bool, str, int)
-    def _on_reporte_generado(self, success: bool, message: str, total_registros: int):
+    @Slot(bool, str)
+    def _on_gasto_creado(self, success: bool, message: str):
+        """Handler cuando se crea un gasto"""
         if success:
-            print(f"Reporte generado exitosamente: {message} ({total_registros} registros)")
-            self.showNotification("Reporte Generado", message)
+            print(f"💸 Gasto creado exitosamente: {message}")
+            self.showNotification("Gasto Creado", message)
         else:
-            print(f"Error generando reporte: {message}")
-            self.showNotification("Error en Reporte", message)
+            print(f"❌ Error creando gasto: {message}")
+            self.showNotification("Error", f"Error creando gasto: {message}")
     
+    @Slot(bool, str)
+    def _on_gasto_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un gasto"""
+        if success:
+            print(f"✏️ Gasto actualizado exitosamente: {message}")
+            self.showNotification("Gasto Actualizado", message)
+        else:
+            print(f"❌ Error actualizando gasto: {message}")
+            self.showNotification("Error", f"Error actualizando gasto: {message}")
+    
+    @Slot(bool, str)
+    def _on_gasto_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un gasto"""
+        if success:
+            print(f"🗑️ Gasto eliminado exitosamente: {message}")
+            self.showNotification("Gasto Eliminado", message)
+        else:
+            print(f"❌ Error eliminando gasto: {message}")
+            self.showNotification("Error", f"Error eliminando gasto: {message}")
+    
+    # ✅ HANDLERS PARA TRABAJADOR MODEL
+    @Slot(bool, str)
+    def _on_trabajador_creado(self, success: bool, message: str):
+        """Handler cuando se crea un trabajador"""
+        if success:
+            print(f"👷‍♂️ Trabajador creado exitosamente: {message}")
+            self.showNotification("Trabajador Creado", message)
+        else:
+            print(f"❌ Error creando trabajador: {message}")
+            self.showNotification("Error", f"Error creando trabajador: {message}")
+    
+    @Slot(bool, str)
+    def _on_trabajador_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un trabajador"""
+        if success:
+            print(f"✏️ Trabajador actualizado exitosamente: {message}")
+            self.showNotification("Trabajador Actualizado", message)
+        else:
+            print(f"❌ Error actualizando trabajador: {message}")
+            self.showNotification("Error", f"Error actualizando trabajador: {message}")
+    
+    @Slot(bool, str)
+    def _on_trabajador_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un trabajador"""
+        if success:
+            print(f"🗑️ Trabajador eliminado exitosamente: {message}")
+            self.showNotification("Trabajador Eliminado", message)
+        else:
+            print(f"❌ Error eliminando trabajador: {message}")
+            self.showNotification("Error", f"Error eliminando trabajador: {message}")
+    # ✅ HANDLERS PARA ENFERMERIA MODEL
+    @Slot(bool, str)
+    def _on_procedimiento_creado(self, success: bool, message: str):
+        """Handler cuando se crea un procedimiento"""
+        if success:
+            print(f"🩹 Procedimiento creado exitosamente: {message}")
+            self.showNotification("Procedimiento Creado", message)
+        else:
+            print(f"❌ Error creando procedimiento: {message}")
+            self.showNotification("Error", f"Error creando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_procedimiento_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un procedimiento"""
+        if success:
+            print(f"✏️ Procedimiento actualizado exitosamente: {message}")
+            self.showNotification("Procedimiento Actualizado", message)
+        else:
+            print(f"❌ Error actualizando procedimiento: {message}")
+            self.showNotification("Error", f"Error actualizando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_procedimiento_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un procedimiento"""
+        if success:
+            print(f"🗑️ Procedimiento eliminado exitosamente: {message}")
+            self.showNotification("Procedimiento Eliminado", message)
+        else:
+            print(f"❌ Error eliminando procedimiento: {message}")
+            self.showNotification("Error", f"Error eliminando procedimiento: {message}")
+
+    # ✅ HANDLERS PARA CONFIGURACION MODEL
+    @Slot(bool, str)
+    def _on_tipo_gasto_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de gasto"""
+        if success:
+            print(f"💰 Tipo de gasto creado exitosamente: {message}")
+            self.showNotification("Tipo Creado", message)
+        else:
+            print(f"❌ Error creando tipo de gasto: {message}")
+            self.showNotification("Error", f"Error creando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_gasto_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de gasto"""
+        if success:
+            print(f"✏️ Tipo de gasto actualizado exitosamente: {message}")
+            self.showNotification("Tipo Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de gasto: {message}")
+            self.showNotification("Error", f"Error actualizando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_gasto_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de gasto"""
+        if success:
+            print(f"🗑️ Tipo de gasto eliminado exitosamente: {message}")
+            self.showNotification("Tipo Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de gasto: {message}")
+            self.showNotification("Error", f"Error eliminando tipo: {message}")
+    
+    # ✅ HANDLERS PARA CONFI LABORATORIO MODEL
+    @Slot(bool, str)
+    def _on_tipo_analisis_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de análisis"""
+        if success:
+            print(f"🧪 Tipo de análisis creado exitosamente: {message}")
+            self.showNotification("Análisis Creado", message)
+        else:
+            print(f"❌ Error creando tipo de análisis: {message}")
+            self.showNotification("Error", f"Error creando análisis: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_analisis_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de análisis"""
+        if success:
+            print(f"✏️ Tipo de análisis actualizado exitosamente: {message}")
+            self.showNotification("Análisis Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de análisis: {message}")
+            self.showNotification("Error", f"Error actualizando análisis: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_analisis_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de análisis"""
+        if success:
+            print(f"🗑️ Tipo de análisis eliminado exitosamente: {message}")
+            self.showNotification("Análisis Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de análisis: {message}")
+            self.showNotification("Error", f"Error eliminando análisis: {message}")
+    
+    # ✅ HANDLERS PARA CONFI ENFERMERIA MODEL
+    @Slot(bool, str)
+    def _on_tipo_procedimiento_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de procedimiento de enfermería"""
+        if success:
+            print(f"🩹 Tipo de procedimiento creado exitosamente: {message}")
+            self.showNotification("Procedimiento Creado", message)
+        else:
+            print(f"❌ Error creando tipo de procedimiento: {message}")
+            self.showNotification("Error", f"Error creando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_procedimiento_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de procedimiento de enfermería"""
+        if success:
+            print(f"✏️ Tipo de procedimiento actualizado exitosamente: {message}")
+            self.showNotification("Procedimiento Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de procedimiento: {message}")
+            self.showNotification("Error", f"Error actualizando procedimiento: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_procedimiento_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de procedimiento de enfermería"""
+        if success:
+            print(f"🗑️ Tipo de procedimiento eliminado exitosamente: {message}")
+            self.showNotification("Procedimiento Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de procedimiento: {message}")
+            self.showNotification("Error", f"Error eliminando procedimiento: {message}")
+    # ✅ HANDLERS PARA CONFI CONSULTA MODEL
+    @Slot(bool, str)
+    def _on_especialidad_creada(self, success: bool, message: str):
+        """Handler cuando se crea una especialidad"""
+        if success:
+            print(f"🏥 Especialidad creada exitosamente: {message}")
+            self.showNotification("Especialidad Creada", message)
+        else:
+            print(f"❌ Error creando especialidad: {message}")
+            self.showNotification("Error", f"Error creando especialidad: {message}")
+
+    @Slot(bool, str)
+    def _on_especialidad_actualizada(self, success: bool, message: str):
+        """Handler cuando se actualiza una especialidad"""
+        if success:
+            print(f"✏️ Especialidad actualizada exitosamente: {message}")
+            self.showNotification("Especialidad Actualizada", message)
+        else:
+            print(f"❌ Error actualizando especialidad: {message}")
+            self.showNotification("Error", f"Error actualizando especialidad: {message}")
+
+    @Slot(bool, str)
+    def _on_especialidad_eliminada(self, success: bool, message: str):
+        """Handler cuando se elimina una especialidad"""
+        if success:
+            print(f"🗑️ Especialidad eliminada exitosamente: {message}")
+            self.showNotification("Especialidad Eliminada", message)
+        else:
+            print(f"❌ Error eliminando especialidad: {message}")
+            self.showNotification("Error", f"Error eliminando especialidad: {message}")
+     # ✅ HANDLERS PARA CONFI TRABAJADORES MODEL
+    @Slot(bool, str)
+    def _on_tipo_trabajador_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de trabajador"""
+        if success:
+            print(f"👥 Tipo de trabajador creado exitosamente: {message}")
+            self.showNotification("Tipo Creado", message)
+        else:
+            print(f"❌ Error creando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error creando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_trabajador_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de trabajador"""
+        if success:
+            print(f"✏️ Tipo de trabajador actualizado exitosamente: {message}")
+            self.showNotification("Tipo Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error actualizando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_trabajador_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de trabajador"""
+        if success:
+            print(f"🗑️ Tipo de trabajador eliminado exitosamente: {message}")
+            self.showNotification("Tipo Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error eliminando tipo: {message}")
+    # ← SACAR ESTOS MÉTODOS FUERA, AL NIVEL DE LA CLASE
     @Slot(str)
     def _on_model_error(self, mensaje: str):
-        print(f"Error Model: {mensaje}")
+        """Handler para errores de models"""
+        print(f"❌ Error Model: {mensaje}")
         self.showNotification("Error", mensaje)
 
     @Slot(str)
     def _on_model_success(self, mensaje: str):
-        print(f"Éxito Model: {mensaje}")
+        """Handler para operaciones exitosas"""
+        print(f"✅ Éxito Model: {mensaje}")
+        # Opcional: mostrar notificación de éxito
+    
+    # ===============================
+    # GETTERS PARA MODELS (ACCESO DESDE QML)
+    # ✅ HANDLERS PARA TIPO TRABAJOS MODEL
+    @Slot(bool, str)
+    def _on_tipo_trabajador_creado(self, success: bool, message: str):
+        """Handler cuando se crea un tipo de trabajador"""
+        if success:
+            print(f"👷‍♂️ Tipo de trabajador creado exitosamente: {message}")
+            self.showNotification("Tipo Creado", message)
+        else:
+            print(f"❌ Error creando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error creando tipo: {message}")
 
-    # Model Properties
+    @Slot(bool, str)
+    def _on_tipo_trabajador_actualizado(self, success: bool, message: str):
+        """Handler cuando se actualiza un tipo de trabajador"""
+        if success:
+            print(f"✏️ Tipo de trabajador actualizado exitosamente: {message}")
+            self.showNotification("Tipo Actualizado", message)
+        else:
+            print(f"❌ Error actualizando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error actualizando tipo: {message}")
+
+    @Slot(bool, str)
+    def _on_tipo_trabajador_eliminado(self, success: bool, message: str):
+        """Handler cuando se elimina un tipo de trabajador"""
+        if success:
+            print(f"🗑️ Tipo de trabajador eliminado exitosamente: {message}")
+            self.showNotification("Tipo Eliminado", message)
+        else:
+            print(f"❌ Error eliminando tipo de trabajador: {message}")
+            self.showNotification("Error", f"Error eliminando tipo: {message}")
+    
+    
     @Property(QObject, notify=modelsReady)
     def inventario_model_instance(self):
+        """Propiedad para acceder al InventarioModel desde QML"""
         return self.inventario_model
     
     @Property(QObject, notify=modelsReady)
     def venta_model_instance(self):
+        """Propiedad para acceder al VentaModel desde QML"""
         return self.venta_model
     
     @Property(QObject, notify=modelsReady)
     def compra_model_instance(self):
+        """Propiedad para acceder al CompraModel desde QML"""
         return self.compra_model
     
     @Property(QObject, notify=modelsReady)
     def consulta_model_instance(self):
+        """Propiedad para acceder al ConsultaModel desde QML"""
         return self.consulta_model
 
     @Property(QObject, notify=modelsReady)
@@ -353,53 +698,519 @@ class AppController(QObject):
     
     @Property(QObject, notify=modelsReady)
     def usuario_model_instance(self):
+        """Propiedad para acceder al UsuarioModel desde QML"""
         return self.usuario_model
     
     @Property(QObject, notify=modelsReady)
     def gasto_model_instance(self):
+        """Propiedad para acceder al GastoModel desde QML"""
         return self.gasto_model
     
-    @Property(QObject, notify=modelsReady)
-    def laboratorio_model_instance(self):
-        return self.laboratorio_model
 
     @Property(QObject, notify=modelsReady)
+    def laboratorio_model_instance(self):
+        """Propiedad para acceder al LaboratorioModel desde QML"""
+        return self.laboratorio_model
+
+    # ✅ GETTER PARA TRABAJADOR MODEL
+    @Property(QObject, notify=modelsReady)
     def trabajador_model_instance(self):
+        """Propiedad para acceder al TrabajadorModel desde QML"""
         return self.trabajador_model
     
     @Property(QObject, notify=modelsReady)
     def enfermeria_model_instance(self):
+        """Propiedad para acceder al EnfermeriaModel desde QML"""
         return self.enfermeria_model
     
     @Property(QObject, notify=modelsReady)
     def configuracion_model_instance(self):
+        """Propiedad para acceder al ConfiguracionModel desde QML"""
         return self.configuracion_model
     
+    # ✅ GETTER PARA CONFI TRABAJADORES MODEL  
     @Property(QObject, notify=modelsReady)
     def confi_trabajadores_model_instance(self):
+        """Propiedad para acceder al ConfiTrabajadoresModel desde QML"""
         return self.confi_trabajadores_model
 
+    # ✅ GETTER PARA CONFI LABORATORIO MODEL
     @Property(QObject, notify=modelsReady)
     def confi_laboratorio_model_instance(self):
+        """Propiedad para acceder al ConfiLaboratorioModel desde QML"""
         return self.confi_laboratorio_model
     
+    # ✅ GETTER PARA CONFI ENFERMERIA MODEL
     @Property(QObject, notify=modelsReady)
     def confi_enfermeria_model_instance(self):
+        """Propiedad para acceder al ConfiEnfermeriaModel desde QML"""
         return self.confi_enfermeria_model
-
+    # ✅ GETTER PARA CONFI CONSULTA MODEL
     @Property(QObject, notify=modelsReady)
     def confi_consulta_model_instance(self):
+        """Propiedad para acceder al ConfiConsultaModel desde QML"""
         return self.confi_consulta_model
+    # ===============================
+    # MÉTODOS DE INTEGRACIÓN MODELS-PDF
+    # ===============================
+    
+    @Slot(str, result=str)
+    def generar_reporte_inventario(self, tipo_reporte: str):
+        """Genera reporte PDF de inventario usando el model"""
+        try:
+            if not self.inventario_model:
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            if tipo_reporte == "productos":
+                datos = self.inventario_model.productos
+            elif tipo_reporte == "vencimientos":
+                datos = self.inventario_model.get_reporte_vencimientos()
+            elif tipo_reporte == "valor":
+                datos = self.inventario_model.get_valor_inventario()
+            else:
+                datos = []
+            
+            if not datos:
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            return self.generarReportePDF(
+                datos_json, 
+                tipo_reporte, 
+                "",  # fecha_desde 
+                ""   # fecha_hasta
+            )
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte inventario: {e}")
+            return ""
+    
+    @Slot(str, result=str)
+    def generar_reporte_ventas(self, periodo: str):
+        """Genera reporte PDF de ventas usando el model"""
+        try:
+            if not self.venta_model:
+                return ""
+            
+            # Obtener datos de ventas
+            if periodo == "hoy":
+                datos = self.venta_model.ventas_hoy
+            elif periodo == "estadisticas":
+                datos = self.venta_model.get_reporte_ingresos()
+            elif periodo == "top_productos":
+                datos = self.venta_model.get_productos_mas_vendidos(30)
+            else:
+                datos = []
+            
+            if not datos:
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            return self.generarReportePDF(
+                datos_json,
+                f"ventas_{periodo}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte ventas: {e}")
+            return ""
+    
+    @Slot(str, result=str)
+    def generar_reporte_usuarios(self, tipo_reporte: str):
+        """Genera reporte PDF de usuarios usando el model"""
+        try:
+            if not self.usuario_model:
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            if tipo_reporte == "todos":
+                datos = self.usuario_model.usuarios
+            elif tipo_reporte == "estadisticas":
+                datos = self.usuario_model.estadisticas
+            elif tipo_reporte == "administradores":
+                datos = self.usuario_model.obtenerAdministradores()
+            elif tipo_reporte == "medicos":
+                datos = self.usuario_model.obtenerMedicos()
+            else:
+                datos = []
+            
+            if not datos:
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            return self.generarReportePDF(
+                datos_json,
+                f"usuarios_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte usuarios: {e}")
+            return ""
+    
+    # ✅ GENERAR REPORTE DE TRABAJADORES
+    @Slot(str, result=str)
+    def generar_reporte_trabajadores(self, tipo_reporte: str):
+        """Genera reporte PDF de trabajadores usando el model"""
+        try:
+            if not self.trabajador_model:
+                print("❌ TrabajadorModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los trabajadores
+                datos = self.trabajador_model.trabajadores
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de trabajadores
+                datos = self.trabajador_model.estadisticas
+            elif tipo_reporte == "tipos":
+                # Obtener tipos de trabajadores
+                datos = self.trabajador_model.tiposTrabajador
+            elif tipo_reporte == "laboratorio":
+                # Obtener trabajadores de laboratorio
+                datos = self.trabajador_model.obtenerTrabajadoresLaboratorio()
+            elif tipo_reporte == "enfermeria":
+                # Obtener trabajadores de enfermería
+                datos = self.trabajador_model.obtenerTrabajadoresEnfermeria()
+            elif tipo_reporte == "administrativos":
+                # Obtener trabajadores administrativos
+                datos = self.trabajador_model.obtenerTrabajadoresAdministrativos()
+            elif tipo_reporte == "sin_asignaciones":
+                # Obtener trabajadores sin asignaciones
+                datos = self.trabajador_model.obtenerTrabajadoresSinAsignaciones()
+            elif tipo_reporte == "carga_trabajo":
+                # Obtener distribución de carga de trabajo
+                datos = self.trabajador_model.obtenerDistribucionCarga()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de trabajadores")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"trabajadores_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de trabajadores generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de trabajadores: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+        
+    @Slot(str, str, str, result=str)
+    def generar_reporte_gastos(self, tipo_reporte: str, fecha_desde: str = "", fecha_hasta: str = ""):
+        """Genera reporte PDF de gastos usando el model"""
+        try:
+            if not self.gasto_model:
+                print("❌ GastoModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los gastos
+                datos = self.gasto_model.gastos
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de gastos
+                datos = self.gasto_model.estadisticas
+            elif tipo_reporte == "tipos":
+                # Obtener tipos de gastos
+                datos = self.gasto_model.tiposGastos
+            elif tipo_reporte == "periodo":
+                # Generar reporte por período específico
+                if fecha_desde and fecha_hasta:
+                    # El método generarReporte del modelo actualizará internamente
+                    self.gasto_model.generarReporte(fecha_desde, fecha_hasta)
+                    # Usar los gastos actuales como datos
+                    datos = self.gasto_model.gastos
+                else:
+                    print("⚠️ Fechas no proporcionadas para reporte de período")
+                    return ""
+            elif tipo_reporte == "dashboard":
+                # Obtener datos para dashboard
+                datos = self.gasto_model.obtenerDashboard()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de gastos")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"gastos_{tipo_reporte}",
+                fecha_desde,
+                fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de gastos generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de gastos: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
 
-    @Property(QObject, notify=modelsReady)
-    def dashboard_model_instance(self):
-        return self.dashboard_model        
+    @Slot(str, result=str)
+    def generar_reporte_configuracion(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración usando el model"""
+        try:
+            if not self.configuracion_model:
+                print("❌ ConfiguracionModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los tipos de gastos
+                datos = self.configuracion_model.tiposGastos
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de tipos de gastos
+                datos = self.configuracion_model.estadisticas
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.configuracion_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"configuracion_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
 
-    @Property(QObject, notify=modelsReady)
-    def reportes_model_instance(self):
-        return self.reportes_model
-
-    # Utility Methods
+    # ✅ GENERAR REPORTE DE CONFI LABORATORIO
+    @Slot(str, result=str)
+    def generar_reporte_confi_laboratorio(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración de laboratorio usando el model"""
+        try:
+            if not self.confi_laboratorio_model:
+                print("❌ ConfiLaboratorioModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los tipos de análisis
+                datos = self.confi_laboratorio_model.tiposAnalisis
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de tipos de análisis
+                datos = self.confi_laboratorio_model.estadisticas
+            elif tipo_reporte == "precios":
+                # Obtener análisis por rangos de precios
+                datos = self.confi_laboratorio_model.obtenerTiposAnalisisPorRangoPrecios(0, -1)
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.confi_laboratorio_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración de laboratorio")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"confi_laboratorio_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración de laboratorio generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración de laboratorio: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+    
+    # ✅ GENERAR REPORTE DE CONFI ENFERMERIA
+    @Slot(str, result=str)
+    def generar_reporte_confi_enfermeria(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración de enfermería usando el model"""
+        try:
+            if not self.confi_enfermeria_model:
+                print("❌ ConfiEnfermeriaModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los tipos de procedimientos
+                datos = self.confi_enfermeria_model.tiposProcedimientos
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de tipos de procedimientos
+                datos = self.confi_enfermeria_model.estadisticas
+            elif tipo_reporte == "precios":
+                # Obtener procedimientos por rangos de precios
+                datos = self.confi_enfermeria_model.obtenerTiposProcedimientosPorRangoPrecios(0, -1)
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.confi_enfermeria_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración de enfermería")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"confi_enfermeria_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración de enfermería generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración de enfermería: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+        
+    # ✅ GENERAR REPORTE DE CONFI CONSULTA
+    @Slot(str, result=str)
+    def generar_reporte_confi_consulta(self, tipo_reporte: str):
+        """Genera reporte PDF de configuración de consultas usando el model"""
+        try:
+            if not self.confi_consulta_model:
+                print("❌ ConfiConsultaModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todas las especialidades
+                datos = self.confi_consulta_model.especialidades
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de especialidades
+                datos = self.confi_consulta_model.estadisticas
+            elif tipo_reporte == "precios":
+                # Obtener especialidades por rangos de precios
+                datos = self.confi_consulta_model.obtenerEspecialidadesPorRangoPrecios(0, -1)
+            elif tipo_reporte == "resumen_uso":
+                # Obtener resumen de uso
+                datos = self.confi_consulta_model.obtenerResumenUso()
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de configuración de consultas")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"confi_consulta_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de configuración de consultas generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de configuración de consultas: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+    # ===============================
+    # MÉTODOS EXISTENTES (MANTENER COMPATIBILIDAD)
+    # ===============================
+    
     @Slot(str)
     def navigateToModule(self, module_name):
         if module_name not in self._navigation_cache:
@@ -431,37 +1242,60 @@ class AppController(QObject):
     def validateUserInput(self, input_text):
         return len(input_text.strip()) > 0
 
-    # PDF Generation
+    # ===== GENERACIÓN DE PDF - SIMPLIFICADO =====
     @Slot(str, str, str, str, result=str)
     def generarReportePDF(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
-        try:
-            print(f"Generando PDF: {tipo_reporte}, Período: {fecha_desde} - {fecha_hasta}")
+        """
+        Genera un PDF del reporte usando el módulo dedicado generar_pdf
+        
+        Args:
+            datos_json (str): Datos del reporte en formato JSON
+            tipo_reporte (str): Tipo de reporte (1-8)
+            fecha_desde (str): Fecha inicio
+            fecha_hasta (str): Fecha fin
             
+        Returns:
+            str: Ruta del archivo PDF generado o vacío si hay error
+        """
+        try:
+            print(f"📄 Delegando generación de PDF al módulo especializado...")
+            print(f"📊 Tipo: {tipo_reporte}, Período: {fecha_desde} - {fecha_hasta}")
+            
+            # Validar datos antes de enviar
             if not datos_json or datos_json.strip() == "":
-                print("No hay datos para generar el reporte")
+                print("❌ No hay datos para generar el reporte")
                 return ""
             
+            # Delegar al módulo especializado
             resultado = self.pdf_generator.generar_reporte_pdf(
-                datos_json, tipo_reporte, fecha_desde, fecha_hasta
+                datos_json,
+                tipo_reporte, 
+                fecha_desde,
+                fecha_hasta
             )
             
             if resultado:
-                print(f"PDF generado: {resultado}")
+                print(f"✅ PDF generado por módulo especializado: {resultado}")
                 return resultado
             else:
-                print("Error en generación de PDF")
+                print("❌ El módulo de PDF reportó un error")
                 return ""
                 
         except Exception as e:
-            print(f"Error en generación de PDF: {e}")
+            print(f"❌ Error en AppController.generarReportePDF: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
     
+    # ===== MÉTODOS AUXILIARES PARA PDFs (OPCIONAL) =====
     @Slot(result=str)
     def obtenerDirectorioReportes(self):
+        """Retorna el directorio donde se guardan los reportes"""
         return self.pdf_generator.pdf_dir
     
     @Slot(result=bool)
     def verificarDirectorioReportes(self):
+        """Verifica que el directorio de reportes esté disponible"""
         try:
             return os.path.exists(self.pdf_generator.pdf_dir)
         except:
@@ -469,75 +1303,28 @@ class AppController(QObject):
     
     @Slot(str, result=bool)
     def abrirCarpetaReportes(self, archivo_path=""):
+        """Abre la carpeta de reportes en el explorador"""
         try:
             if archivo_path:
+                # Abrir carpeta que contiene el archivo específico
                 carpeta = os.path.dirname(archivo_path)
             else:
+                # Abrir carpeta general de reportes
                 carpeta = self.pdf_generator.pdf_dir
             
+            # Abrir según el sistema operativo
             import platform
             if platform.system() == "Windows":
                 os.startfile(carpeta)
-            elif platform.system() == "Darwin":
+            elif platform.system() == "Darwin":  # macOS
                 os.system(f"open '{carpeta}'")
-            else:
+            else:  # Linux
                 os.system(f"xdg-open '{carpeta}'")
             
             return True
         except Exception as e:
-            print(f"Error abriendo carpeta: {e}")
+            print(f"❌ Error abriendo carpeta: {e}")
             return False
-
-    # Report Generation Methods
-    @Slot(str, result=str)
-    def generar_reporte_inventario(self, tipo_reporte: str):
-        try:
-            if not self.inventario_model:
-                return ""
-            
-            if tipo_reporte == "productos":
-                datos = self.inventario_model.productos
-            elif tipo_reporte == "vencimientos":
-                datos = self.inventario_model.get_reporte_vencimientos()
-            elif tipo_reporte == "valor":
-                datos = self.inventario_model.get_valor_inventario()
-            else:
-                datos = []
-            
-            if not datos:
-                return ""
-            
-            datos_json = json.dumps(datos, default=str)
-            return self.generarReportePDF(datos_json, tipo_reporte, "", "")
-            
-        except Exception as e:
-            print(f"Error generando reporte inventario: {e}")
-            return ""
-
-    @Slot(str, result=str)
-    def generar_reporte_trabajadores(self, tipo_reporte: str):
-        try:
-            if not self.trabajador_model:
-                return ""
-            
-            datos = []
-            
-            if tipo_reporte == "todos":
-                datos = self.trabajador_model.trabajadores
-            elif tipo_reporte == "estadisticas":
-                datos = self.trabajador_model.estadisticas
-            elif tipo_reporte == "tipos":
-                datos = self.trabajador_model.tiposTrabajador
-            
-            if not datos:
-                return ""
-            
-            datos_json = json.dumps(datos, default=str)
-            return self.generarReportePDF(datos_json, f"trabajadores_{tipo_reporte}", "", "")
-            
-        except Exception as e:
-            print(f"Error generando reporte de trabajadores: {e}")
-            return ""
 
 class PerformanceProfiler(QObject):
     def __init__(self):
@@ -558,9 +1345,11 @@ class PerformanceProfiler(QObject):
             del self._start_times[operation]
 
 def register_qml_types():
-    print("Registrando tipos QML...")
+    """Registra todos los tipos QML personalizados"""
+    print("📝 Registrando tipos QML...")
     
     try:
+        # Registrar Models QObject
         register_inventario_model()
         register_venta_model() 
         register_compra_model()
@@ -578,13 +1367,14 @@ def register_qml_types():
         register_confi_trabajadores_model()
         register_reportes_model()
         register_dashboard_model()
-        print("Tipos QML registrados correctamente")
+        print("✅ Tipos QML registrados correctamente")
         
     except Exception as e:
-        print(f"Error registrando tipos QML: {e}")
+        print(f"❌ Error registrando tipos QML: {e}")
         raise
 
 def register_data_models():
+    """Registra todos los modelos de datos para QML"""
     try: 
         register_trabajador_model()
         register_confi_laboratorio_model()
@@ -592,160 +1382,121 @@ def register_data_models():
         register_confi_consulta_model()
         register_confi_trabajadores_model()
         register_reportes_model()
-        print("Modelos de datos registrados correctamente")
+        print("✅ Modelos de datos registrados correctamente")
         
     except Exception as e:
-        print(f"Error registrando modelos de datos: {e}")
+        print(f"❌ Error registrando modelos de datos: {e}")
         raise e
 
 def setup_qml_context(engine, controller):
-    print("Configurando contexto QML...")
+    """Configura el contexto QML con controllers y models"""
+    print("🔧 Configurando contexto QML...")
     
     try:
         root_context = engine.rootContext()
+        
+        # Registrar AppController
         root_context.setContextProperty("appController", controller)
+        
+        # Inicializar models después de un delay para asegurar que QML esté listo
         QTimer.singleShot(100, controller.initialize_models)
-        print("Contexto QML configurado")
+        
+        print("✅ Contexto QML configurado")
         
     except Exception as e:
-        print(f"Error configurando contexto QML: {e}")
+        print(f"❌ Error configurando contexto QML: {e}")
         raise
 
 def setup_performance_monitoring(engine):
+    """Configura monitoreo de performance para QML"""
     profiler = PerformanceProfiler()
     engine.rootContext().setContextProperty("profiler", profiler)
-    print("Performance monitoring configurado")
+    print("⚡ Performance monitoring configurado")
 
 def preload_qml_files():
+    """Precarga archivos QML comunes"""
     qml_files = [
-        "Dashboard.qml", "Farmacia.qml", "Consultas.qml", "Laboratorio.qml",
-        "Enfermeria.qml", "ServiciosBasicos.qml", "Usuario.qml", "Trabajadores.qml",
-        "Reportes.qml", "Configuracion.qml"
+        "Dashboard.qml",
+        "Farmacia.qml", 
+        "Consultas.qml",
+        "Laboratorio.qml",
+        "Enfermeria.qml",
+        "ServiciosBasicos.qml",
+        "Usuario.qml",
+        "Trabajadores.qml",
+        "Reportes.qml",
+        "Configuracion.qml"
     ]
     
-    print("Precargando archivos QML...")
+    print("🔄 Precargando archivos QML...")
     loaded_count = 0
     
     for qml_file in qml_files:
         if os.path.exists(qml_file):
-            print(f"  Encontrado: {qml_file}")
+            print(f"  ✅ Encontrado: {qml_file}")
             loaded_count += 1
         else:
-            print(f"  No encontrado: {qml_file}")
+            print(f"  ⚠️ No encontrado: {qml_file}")
     
-    print(f"Archivos QML disponibles: {loaded_count}/{len(qml_files)}")
+    print(f"📂 Archivos QML disponibles: {loaded_count}/{len(qml_files)}")
 
 def main():
-    print("Iniciando Sistema de Gestión Médica...")
+    print("🚀 Iniciando Sistema de Gestión Médica...")
     
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Sistema de Gestión Médica")
-    app.setApplicationVersion("2.0.0")
-    app.setOrganizationName("Clínica María Inmaculada")
-    
-    # FASE 1: AUTENTICACIÓN
-    print("\nFASE 1: AUTENTICACIÓN")
-    print("=" * 40)
-    
-    login_manager = LoginManager()
-    authenticated_user = None
-    login_success = False
-    
-    def on_login_success(user_data):
-        nonlocal authenticated_user, login_success
-        authenticated_user = user_data
-        login_success = True
-        print(f"Login exitoso: {user_data}")
-        print("Acceso autorizado")
-    
-    def on_login_cancelled():
-        nonlocal login_success
-        login_success = False
-        print("Login cancelado")
-        app.quit()
-    
-    login_manager.loginSuccess.connect(on_login_success)
-    login_manager.loginCancelled.connect(on_login_cancelled)
+    app.setApplicationVersion("1.0.0")
+    app.setOrganizationName("Clínica Maria Inmaculada")
     
     try:
-        print("Iniciando autenticación...")
-        
-        login_manager.login_app = LoginApplication(existing_app=app)
-        
-        if login_manager.login_app.backend:
-            login_manager.login_app.backend.userAuthenticated.connect(login_manager._on_user_authenticated)
-            login_manager.login_app.backend.loginResult.connect(login_manager._on_login_result)
-        
-        result = login_manager.login_app.run(execute_app=False)
-        
-        if result != 0:
-            print("Error cargando login")
-            return result
-        
-        print("Login cargado, esperando autenticación...")
-        
-        # Esperar indefinidamente hasta login exitoso o cancelación
-        while not login_success:
-            app.processEvents()
-            time.sleep(0.05)  # Pequeña pausa para no consumir CPU al 100%
-            
-            # Si se cerró la ventana de login, salir
-            if not login_manager.login_app:
-                break
-                
-    except Exception as e:
-        print(f"Error en login: {e}")
-        return 1
-    
-    if not login_success or not authenticated_user:
-        print("Autenticación fallida")
-        return 1
-    
-    print(f"Login exitoso: {authenticated_user.get('full_name')}")
-    
-    # FASE 2: APLICACIÓN PRINCIPAL
-    print("\nFASE 2: APLICACIÓN PRINCIPAL")
-    print("=" * 40)
-    
-    try:
+        # 1. Registrar tipos QML personalizados
         register_qml_types()
         
+        # 2. Crear engine QML
         engine = QQmlApplicationEngine()
-        controller = AppController(authenticated_user)
         
+        # 3. Crear controller principal
+        controller = AppController()
+        
+        # 4. Configurar contexto QML
         setup_qml_context(engine, controller)
+        
+        # 5. Configurar monitoreo de performance
         setup_performance_monitoring(engine)
+        
+        # 6. Precargar archivos QML
         preload_qml_files()
+        
+        # ✅ 7. Registrar modelos de datos específicos
         register_data_models()
         
+        # 8. Cargar archivo QML principal
         qml_file = os.path.join(os.path.dirname(__file__), "main.qml")
         if not os.path.exists(qml_file):
-            print(f"Error: Archivo QML no encontrado: {qml_file}")
+            print(f"❌ Error: Archivo QML no encontrado: {qml_file}")
             return -1
         
         engine.load(QUrl.fromLocalFile(qml_file))
         
+        # 9. Verificar que se cargó correctamente
         if not engine.rootObjects():
-            print("Error: No se pudo cargar el archivo QML")
+            print("❌ Error: No se pudo cargar el archivo QML")
             return -1
-            
-        print(f"Engine QML activo con {len(engine.rootObjects())} objetos")
         
+        # 10. Iniciar precarga de componentes
         controller.startPreloading()
         
-        print("Sistema iniciado correctamente")
-        print("Clínica María Inmaculada - Sistema Operativo")
-        print(f"Usuario: {authenticated_user.get('full_name')} ({authenticated_user.get('role')})")
-        print(f"Email: {authenticated_user.get('email')}")
+        print("✅ Sistema iniciado correctamente")
+        print("🏥 Clínica Maria Inmaculada - Sistema Operativo")
         
-        print("Manteniendo aplicación activa...")
+        # 11. Ejecutar aplicación
         return app.exec()
         
     except Exception as e:
-        print(f"Error crítico: {e}")
+        print(f"❌ Error crítico iniciando aplicación: {e}")
         import traceback
         traceback.print_exc()
         return -1
-    
+
 if __name__ == "__main__":
     sys.exit(main())
