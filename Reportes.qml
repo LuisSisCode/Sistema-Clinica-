@@ -32,7 +32,6 @@ Item {
     property string fechaDesde: ""
     property string fechaHasta: ""
     property bool reporteGenerado: false
-    property bool mostrandoVistaPrevia: false
     property var datosReporte: []
     property var resumenReporte: ({})
 
@@ -520,7 +519,7 @@ Item {
                             
                             Button {
                                 id: generarReporteBtn
-                                text: "📊 Generar Reporte Profesional"
+                                text: "📊 Generar Reporte "
                                 Layout.preferredHeight: 50
                                 Layout.preferredWidth: 220
                                 enabled: tipoReporteSeleccionado > 0 && fechaDesde && fechaHasta
@@ -639,51 +638,57 @@ Item {
                         }
                         
                         RowLayout {
-                            spacing: 8
-                            
+                            spacing: 12
+                                                        
                             Button {
-                                text: mostrandoVistaPrevia ? "📊 Ver Datos" : "👁️ Vista Previa"
-                                Layout.preferredHeight: 40
-                                Layout.preferredWidth: 120
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(infoColor, 1.2) : infoColor
-                                    radius: 4
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 10
-                                    font.family: "Segoe UI"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: {
-                                    mostrandoVistaPrevia = !mostrandoVistaPrevia
-                                }
-                            }
-                            
-                            Button {
-                                text: "📄 Descargar PDF"
-                                Layout.preferredHeight: 40
-                                Layout.preferredWidth: 130
+                                text: "Descargar PDF"
+                                Layout.preferredHeight: 50
+                                Layout.preferredWidth: 180
                                 
                                 background: Rectangle {
                                     color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                                    radius: 4
+                                    radius: 6
+                                    
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: parent.radius
+                                        gradient: Gradient {
+                                            GradientStop { position: 0.0; color: "transparent" }
+                                            GradientStop { position: 1.0; color: "#10000000" }
+                                        }
+                                    }
                                 }
                                 
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 10
-                                    font.family: "Segoe UI"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
+                                contentItem: RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 10  // Aumenté el espaciado entre icono y texto
+                                    
+                                    Image {
+                                        source: "file:///D:/Sistema-Clinica-/Resources/iconos/descargarpdf.png"
+                                        Layout.preferredWidth: 28  // Aumentado de 20 a 28
+                                        Layout.preferredHeight: 28 // Aumentado de 20 a 28
+                                        fillMode: Image.PreserveAspectFit
+                                        smooth: true
+                                        
+                                        // Fallback si no encuentra la imagen
+                                        onStatusChanged: {
+                                            if (status === Image.Error) {
+                                                source = "Resources/iconos/descargarpdf.png"
+                                            }
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: parent.parent.text
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 13  // Aumenté ligeramente el tamaño de fuente
+                                        font.family: "Segoe UI"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                                 
                                 onClicked: descargarPDF()
@@ -718,245 +723,226 @@ Item {
                     }
                 }
                 
-                // Contenido principal (tabla o vista previa)
-                StackLayout {
+                // Contenido principal (solo tabla de datos)
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    currentIndex: mostrandoVistaPrevia ? 1 : 0
+                    color: whiteColor
                     
-                    // Vista de tabla de datos
-                    Rectangle {
-                        color: whiteColor
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 20
+                        spacing: 20
                         
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 20
-                            spacing: 20
+                        // Información del período
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 50
+                            color: "#F8F9FA"
+                            radius: 4
+                            border.color: "#E9ECEF"
+                            border.width: 1
                             
-                            // Información del período
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 50
-                                color: "#F8F9FA"
-                                radius: 4
-                                border.color: "#E9ECEF"
-                                border.width: 1
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 15
+                                spacing: 15
                                 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 15
-                                    spacing: 15
-                                    
-                                    Label {
-                                        text: "PERÍODO: " + fechaDesde + " al " + fechaHasta
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        color: textColor
-                                        font.family: "Segoe UI"
-                                    }
-                                    
-                                    Item { Layout.fillWidth: true }
-                                    
-                                    Label {
-                                        text: "Fecha: " + Qt.formatDateTime(new Date(), "dd/MM/yyyy")
-                                        font.pixelSize: 12
-                                        color: darkGrayColor
-                                        font.family: "Segoe UI"
-                                    }
+                                Label {
+                                    text: "PERÍODO: " + fechaDesde + " al " + fechaHasta
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                Label {
+                                    text: "Fecha: " + Qt.formatDateTime(new Date(), "dd/MM/yyyy")
+                                    font.pixelSize: 12
+                                    color: darkGrayColor
+                                    font.family: "Segoe UI"
                                 }
                             }
+                        }
+                        
+                        // Tabla de datos con zebra striping
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: whiteColor
+                            radius: 4
+                            border.color: "#E0E6ED"
+                            border.width: 1
                             
-                            // Tabla de datos con zebra striping
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: whiteColor
-                                radius: 4
-                                border.color: "#E0E6ED"
-                                border.width: 1
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 0
                                 
-                                ColumnLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
+                                // Encabezados de la tabla
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 45
+                                    color: blackColor
+                                    radius: 4
                                     
-                                    // Encabezados de la tabla
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 45
-                                        color: blackColor
-                                        radius: 4
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 0
                                         
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 12
-                                            spacing: 0
+                                        Repeater {
+                                            model: obtenerColumnasReporte()
                                             
-                                            Repeater {
-                                                model: obtenerColumnasReporte()
-                                                
-                                                Label {
-                                                    Layout.preferredWidth: modelData.width
-                                                    text: modelData.titulo
-                                                    font.bold: true
-                                                    font.pixelSize: 11
-                                                    font.family: "Segoe UI"
-                                                    color: whiteColor
-                                                    horizontalAlignment: modelData.align || Text.AlignLeft
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
+                                            Label {
+                                                Layout.preferredWidth: modelData.width
+                                                text: modelData.titulo
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                font.family: "Segoe UI"
+                                                color: whiteColor
+                                                horizontalAlignment: modelData.align || Text.AlignLeft
+                                                verticalAlignment: Text.AlignVCenter
                                             }
                                         }
                                     }
+                                }
+                                
+                                // Área de datos con scroll y zebra striping
+                                ScrollView {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
                                     
-                                    // Área de datos con scroll y zebra striping
-                                    ScrollView {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        clip: true
+                                    ColumnLayout {
+                                        width: parent.width
+                                        spacing: 0
                                         
-                                        ColumnLayout {
-                                            width: parent.width
-                                            spacing: 0
+                                        Repeater {
+                                            model: datosReporte.length
                                             
-                                            Repeater {
-                                                model: datosReporte.length
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 40
+                                                color: index % 2 === 0 ? whiteColor : zebraColor
+                                                border.color: "transparent"
+                                                border.width: 0
                                                 
-                                                Rectangle {
-                                                    Layout.fillWidth: true
-                                                    Layout.preferredHeight: 40
-                                                    color: index % 2 === 0 ? whiteColor : zebraColor
-                                                    border.color: "transparent"
-                                                    border.width: 0
+                                                property int rowIndex: index
+                                                
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 12
+                                                    spacing: 0
                                                     
-                                                    property int rowIndex: index
-                                                    
-                                                    RowLayout {
-                                                        anchors.fill: parent
-                                                        anchors.margins: 12
-                                                        spacing: 0
+                                                    Repeater {
+                                                        model: obtenerColumnasReporte()
                                                         
-                                                        Repeater {
-                                                            model: obtenerColumnasReporte()
-                                                            
-                                                            Label {
-                                                                Layout.preferredWidth: modelData.width
-                                                                text: obtenerValorColumna(parent.parent.rowIndex, modelData.campo)
-                                                                font.pixelSize: 10
-                                                                font.family: "Segoe UI"
-                                                                color: textColor
-                                                                horizontalAlignment: modelData.align || Text.AlignLeft
-                                                                verticalAlignment: Text.AlignVCenter
-                                                                elide: Text.ElideRight
-                                                                font.bold: modelData.campo === "valor"
-                                                            }
+                                                        Label {
+                                                            Layout.preferredWidth: modelData.width
+                                                            text: obtenerValorColumna(parent.parent.rowIndex, modelData.campo)
+                                                            font.pixelSize: 10
+                                                            font.family: "Segoe UI"
+                                                            color: textColor
+                                                            horizontalAlignment: modelData.align || Text.AlignLeft
+                                                            verticalAlignment: Text.AlignVCenter
+                                                            elide: Text.ElideRight
+                                                            font.bold: modelData.campo === "valor"
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                     }
+                                }
+                                
+                                // Fila de total
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 50
+                                    color: lightGrayColor
+                                    border.color: textColor
+                                    border.width: 1
                                     
-                                    // Fila de total
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 50
-                                        color: lightGrayColor
-                                        border.color: textColor
-                                        border.width: 1
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 5
                                         
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 12
-                                            spacing: 5
-                                            
-                                            Item {
-                                                Layout.fillWidth: true
-                                                
-                                                Label {
-                                                    anchors.right: parent.right
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    text: "TOTAL GENERAL:"
-                                                    font.bold: true
-                                                    font.pixelSize: 13
-                                                    font.family: "Segoe UI"
-                                                    color: textColor
-                                                }
-                                            }
+                                        Item {
+                                            Layout.fillWidth: true
                                             
                                             Label {
-                                                Layout.preferredWidth: 120
-                                                text: "Bs " + (resumenReporte.totalValor || 0).toFixed(2)
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: "TOTAL GENERAL:"
                                                 font.bold: true
                                                 font.pixelSize: 13
                                                 font.family: "Segoe UI"
-                                                color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
-                                                horizontalAlignment: Text.AlignRight
-                                                verticalAlignment: Text.AlignVCenter
+                                                color: textColor
                                             }
                                         }
-                                    }
-                                }
-                            }
-                            
-                            // Resumen inferior
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 70
-                                color: "#F8F9FA"
-                                radius: 4
-                                border.color: "#E9ECEF"
-                                border.width: 1
-                                
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 15
-                                    spacing: 40
-                                    
-                                    ColumnLayout {
-                                        spacing: 6
                                         
                                         Label {
-                                            text: "Total de Registros: " + datosReporte.length
-                                            font.pixelSize: 12
+                                            Layout.preferredWidth: 120
+                                            text: "Bs " + (resumenReporte.totalValor || 0).toFixed(2)
                                             font.bold: true
-                                            font.family: "Segoe UI"
-                                            color: textColor
-                                        }
-                                        
-                                        Label {
-                                            text: "Valor Total: Bs " + (resumenReporte.totalValor || 0).toFixed(2)
-                                            font.pixelSize: 12
-                                            font.bold: true
+                                            font.pixelSize: 13
                                             font.family: "Segoe UI"
                                             color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
                                         }
-                                    }
-                                    
-                                    Item { Layout.fillWidth: true }
-                                    
-                                    Label {
-                                        text: "Sistema de Gestión Médica - Clínica María Inmaculada"
-                                        font.pixelSize: 10
-                                        font.family: "Segoe UI"
-                                        color: darkGrayColor
-                                        horizontalAlignment: Text.AlignRight
                                     }
                                 }
                             }
                         }
-                    }
-                    
-                    // Vista previa del PDF (simplificada)
-                    Rectangle {
-                        color: "#F5F6FA"
                         
-                        Label {
-                            anchors.centerIn: parent
-                            text: "Vista Previa del PDF\n(Simulación)"
-                            font.pixelSize: 24
-                            font.bold: true
-                            color: darkGrayColor
-                            horizontalAlignment: Text.AlignHCenter
+                        // Resumen inferior
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 70
+                            color: "#F8F9FA"
+                            radius: 4
+                            border.color: "#E9ECEF"
+                            border.width: 1
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 15
+                                spacing: 40
+                                
+                                ColumnLayout {
+                                    spacing: 6
+                                    
+                                    Label {
+                                        text: "Total de Registros: " + datosReporte.length
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        font.family: "Segoe UI"
+                                        color: textColor
+                                    }
+                                    
+                                    Label {
+                                        text: "Valor Total: Bs " + (resumenReporte.totalValor || 0).toFixed(2)
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        font.family: "Segoe UI"
+                                        color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                Label {
+                                    text: "Sistema de Gestión Médica - Clínica María Inmaculada"
+                                    font.pixelSize: 10
+                                    font.family: "Segoe UI"
+                                    color: darkGrayColor
+                                    horizontalAlignment: Text.AlignRight
+                                }
+                            }
                         }
                     }
                 }
