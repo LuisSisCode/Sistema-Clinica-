@@ -6,9 +6,6 @@ ARREGLOS CRÍTICOS:
 - Paginación sincronizada
 - Auto-refresh optimizado
 - Manejo robusto de errores
-Modelo QObject para Enfermería ACTUALIZADO - CORREGIDO con set_usuario_actual
-Incluye: búsqueda inteligente, creación automática de pacientes, filtros del repositorio, etc.
-CORREGIDO: Usuario por defecto simple + método actualizar_procedimiento separado + set_usuario_actual
 """
 
 import logging
@@ -26,6 +23,10 @@ from ..repositories.enfermeria_repository import EnfermeriaRepository
 logger = logging.getLogger(__name__)
 
 class EnfermeriaModel(QObject):
+    """
+    Modelo QObject COMPLETO para Enfermería con funcionalidades avanzadas - CORREGIDO
+    """
+    
     # ===============================
     # SIGNALS ACTUALIZADAS
     # ===============================
@@ -45,8 +46,7 @@ class EnfermeriaModel(QObject):
     
     # Estados y notificaciones
     estadoCambiado = Signal(str, arguments=['nuevoEstado'])
-    errorOccurred = Signal(str, arguments=['mensaje'])  # CORREGIDO el nombre del signal
-    successMessage = Signal(str, arguments=['mensaje'])  # AÑADIDO para consistencia con otros modelos
+    errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
     operacionExitosa = Signal(str, arguments=['mensaje'])
     
     # Datos actualizados
@@ -54,7 +54,6 @@ class EnfermeriaModel(QObject):
     tiposProcedimientosChanged = Signal()
     trabajadoresChanged = Signal()
     
-
     # ✅ SIGNALS PARA PAGINACIÓN
     currentPageChanged = Signal()
     totalPagesChanged = Signal() 
@@ -64,11 +63,6 @@ class EnfermeriaModel(QObject):
     # Señales de compatibilidad
     operacionError = Signal(str)
     procedimientoCreado_old = Signal(bool, str)
-
-    # Señales heredadas (compatibilidad)
-    operacionError = Signal(str)  # AÑADIDO para compatibilidad con AppController
-    procedimientoCreado_old = Signal(bool, str)  # Mantener compatibilidad
-
     procedimientosActualizados = Signal()
     tiposProcedimientosActualizados = Signal()
     trabajadoresActualizados = Signal()
@@ -93,9 +87,6 @@ class EnfermeriaModel(QObject):
             self._totalPages = 0
             self._itemsPerPage = 6  # Default consistente
             self._totalRecords = 0
-
-            # ✅ USUARIO AGREGADO - igual que ConsultaModel ahora
-            self._usuario_actual_id = 10  # Usuario por defecto
             
             # ✅ FILTROS ESTANDARIZADOS (formato que espera repositorio)
             self._filtrosActuales = {
@@ -120,38 +111,6 @@ class EnfermeriaModel(QObject):
             logger.error(f"❌ Error inicializando EnfermeriaModel: {e}")
             self.errorOcurrido.emit(f"Error inicializando módulo de enfermería: {str(e)}", 'INIT_ERROR')
             self._estadoActual = "error"
-            logger.error(f"Error inicializando EnfermeriaModel: {e}")
-            self.errorOccurred.emit(f"Error inicializando módulo de enfermería: {str(e)}")
-    
-    # ===============================
-    # ✅ MÉTODO FALTANTE PARA APPCONTROLLER
-    # ===============================
-    
-    @Slot(int)
-    def set_usuario_actual(self, usuario_id: int):
-        """
-        Establece el usuario actual para las operaciones
-        MÉTODO REQUERIDO por AppController
-        """
-        try:
-            if usuario_id > 0:
-                self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario establecido en EnfermeriaModel: ID {usuario_id}")
-                self.successMessage.emit(f"Usuario {usuario_id} establecido en módulo de enfermería")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido correctamente")
-            else:
-                print(f"⚠️ ID de usuario inválido: {usuario_id}")
-                self.errorOccurred.emit("ID de usuario inválido")
-                self.operacionError.emit("ID de usuario inválido")
-        except Exception as e:
-            print(f"❌ Error estableciendo usuario en EnfermeriaModel: {e}")
-            self.errorOccurred.emit(f"Error estableciendo usuario: {str(e)}")
-            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
-    
-    @Property(int, notify=operacionExitosa)
-    def usuario_actual_id(self):
-        """Property para obtener el usuario actual"""
-        return self._usuario_actual_id
     
     # ===============================
     # PROPERTIES CORREGIDAS
@@ -438,12 +397,8 @@ class EnfermeriaModel(QObject):
         except Exception as e:
             error_msg = f"Error buscando paciente por cédula: {str(e)}"
             print(f"⚠️ {error_msg}")
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
             return {}
     
     @Slot(str, str, str, str, result=int)
@@ -453,21 +408,18 @@ class EnfermeriaModel(QObject):
         try:
             # ✅ VALIDACIONES MEJORADAS
             if not cedula or len(cedula.strip()) < 5:
-                self.errorOccurred.emit("Cédula es obligatoria (mínimo 5 dígitos)")
-                self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
+                self.errorOcurrido.emit("Cédula es obligatoria (mínimo 5 dígitos)", 'VALIDATION_ERROR')
                 return -1
             
             if not nombre or len(nombre.strip()) < 2:
-                self.errorOccurred.emit("Nombre es obligatorio")
-                self.operacionError.emit("Nombre es obligatorio")
+                self.errorOcurrido.emit("Nombre es obligatorio", 'VALIDATION_ERROR')
                 return -1
             
             if not apellido_paterno or len(apellido_paterno.strip()) < 2:
-                self.errorOccurred.emit("Apellido paterno es obligatorio")
-                self.operacionError.emit("Apellido paterno es obligatorio")
+                self.errorOcurrido.emit("Apellido paterno es obligatorio", 'VALIDATION_ERROR')
                 return -1
             
-            print(f"📄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
             
             # Buscar paciente existente primero
             paciente_existente = self.repository.buscar_paciente_por_cedula_exacta(cedula.strip())
@@ -482,8 +434,7 @@ class EnfermeriaModel(QObject):
                 'cedula': cedula.strip()
             }
             
-
-            # Usar una conexión temporal para crear el paciente
+            # Usar método interno del repository para crear paciente
             with self.db_connection.get_connection() as conn:
                 cursor = conn.cursor()
                 paciente_id = self.repository._obtener_o_crear_paciente(cursor, nuevo_paciente_data)
@@ -491,22 +442,16 @@ class EnfermeriaModel(QObject):
             
             if paciente_id and paciente_id > 0:
                 self.operacionExitosa.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
-                self.successMessage.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
                 return paciente_id
             else:
-                self.errorOccurred.emit("Error gestionando paciente")
-                self.operacionError.emit("Error gestionando paciente")
+                self.errorOcurrido.emit("Error gestionando paciente", 'PATIENT_MANAGEMENT_ERROR')
                 return -1
                 
         except Exception as e:
             error_msg = f"Error gestionando paciente: {str(e)}"
             print(f"⚠️ {error_msg}")
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'PATIENT_MANAGEMENT_EXCEPTION')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
             return -1
     
     @Slot(str, int, result='QVariantList')
@@ -535,20 +480,11 @@ class EnfermeriaModel(QObject):
     
     # ===============================
     # ✅ OPERACIONES CRUD MEJORADAS
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
-            return []
-    
-    # ===============================
-    # OPERACIONES CRUD MEJORADAS - SEPARADAS CREAR/ACTUALIZAR CON USUARIO
     # ===============================
     
     @Slot('QVariant', result=str)
     def crear_procedimiento(self, datos_procedimiento):
-        """
-        Crea nuevo procedimiento de enfermería - MEJORADO con usuario actual
-        """
+        """Crea nuevo procedimiento de enfermería"""
         try:
             self._set_estado_actual("cargando")
             
@@ -570,8 +506,6 @@ class EnfermeriaModel(QObject):
                 return self._crear_respuesta_json(False, "Error gestionando datos del paciente")
             
             # Preparar datos para repositorio
-
-            # ✅ PREPARAR DATOS CON USUARIO ACTUAL
             datos_repo = {
                 'nombreCompleto': datos.get('paciente', '').strip(),
                 'cedula': datos.get('cedula', '').strip(),
@@ -579,10 +513,7 @@ class EnfermeriaModel(QObject):
                 'cantidad': int(datos.get('cantidad', 1)),
                 'tipo': datos.get('tipo', 'Normal'),
                 'idTrabajador': int(datos.get('idTrabajador', 0)),
-
                 'idRegistradoPor': 10,  # Usuario por defecto
-
-                'idRegistradoPor': self._usuario_actual_id,  # ✅ Usar usuario actual
                 'fecha': datetime.now()
             }
             
@@ -600,7 +531,6 @@ class EnfermeriaModel(QObject):
                 self.procedimientoCreado.emit(self._crear_respuesta_json(True, procedimiento_completo))
                 self.procedimientoCreado_old.emit(True, f"Procedimiento creado: ID {procedimiento_id}")
                 self.operacionExitosa.emit(f"Procedimiento creado exitosamente: ID {procedimiento_id}")
-                self.successMessage.emit(f"Procedimiento creado exitosamente: ID {procedimiento_id}")
                 
                 self._set_estado_actual("listo")
                 return self._crear_respuesta_json(True, {'procedimiento_id': procedimiento_id})
@@ -610,13 +540,8 @@ class EnfermeriaModel(QObject):
         except Exception as e:
             error_msg = f"Error creando procedimiento: {str(e)}"
             print(f"⚠️ {error_msg}")
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
-
             self._set_estado_actual("error")
             return self._crear_respuesta_json(False, error_msg)
     
@@ -657,14 +582,7 @@ class EnfermeriaModel(QObject):
                 'idTrabajador': int(datos.get('idTrabajador', 0))
             }
             
-
             print(f"🔄 Actualizando procedimiento ID: {procedimiento_id}")
-
-            print(f"📄 Actualizando procedimiento ID: {procedimiento_id}")
-            print(f"   - Paciente ID: {paciente_id}")
-            print(f"   - Tipo procedimiento ID: {datos_repo['idProcedimiento']}")
-            print(f"   - Trabajador ID: {datos_repo['idTrabajador']}")
-
             
             # Actualizar procedimiento
             exito = self.repository.actualizar_procedimiento_enfermeria(procedimiento_id, datos_repo)
@@ -677,28 +595,21 @@ class EnfermeriaModel(QObject):
                 procedimiento_completo = self._obtener_procedimiento_completo(procedimiento_id)
                 self.procedimientoActualizado.emit(self._crear_respuesta_json(True, procedimiento_completo))
                 self.operacionExitosa.emit(f"Procedimiento {procedimiento_id} actualizado correctamente")
-                self.successMessage.emit(f"Procedimiento {procedimiento_id} actualizado correctamente")
                 
                 self._set_estado_actual("listo")
                 print(f"✅ Procedimiento {procedimiento_id} actualizado exitosamente")
                 return self._crear_respuesta_json(True, {'procedimiento_id': procedimiento_id})
             else:
                 error_msg = f"Error actualizando procedimiento {procedimiento_id} en repositorio"
-                self.errorOccurred.emit(error_msg)
-                self.operacionError.emit(error_msg)
+                self.errorOcurrido.emit(error_msg, 'UPDATE_ERROR')
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, error_msg)
                 
         except Exception as e:
             error_msg = f"Error actualizando procedimiento: {str(e)}"
             print(f"⚠️ {error_msg}")
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'UPDATE_EXCEPTION')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
-
             self._set_estado_actual("error")
             return self._crear_respuesta_json(False, error_msg)
 
@@ -717,95 +628,23 @@ class EnfermeriaModel(QObject):
                 # Emitir signals
                 self.procedimientoEliminado.emit(procedimiento_id)
                 self.operacionExitosa.emit(f"Procedimiento {procedimiento_id} eliminado correctamente")
-                self.successMessage.emit(f"Procedimiento {procedimiento_id} eliminado correctamente")
                 
                 self._set_estado_actual("listo")
                 return True
             else:
-                self.errorOccurred.emit(f"No se pudo eliminar procedimiento {procedimiento_id}")
-                self.operacionError.emit(f"No se pudo eliminar procedimiento {procedimiento_id}")
+                self.errorOcurrido.emit(f"No se pudo eliminar procedimiento {procedimiento_id}", 'DELETE_ERROR')
                 self._set_estado_actual("error")
                 return False
                 
         except Exception as e:
             error_msg = f"Error eliminando procedimiento: {str(e)}"
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'DELETE_EXCEPTION')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
-
             self._set_estado_actual("error")
             return False
     
     # ===============================
-
     # ✅ GESTIÓN DE DATOS MEJORADA
-
-    # PAGINACIÓN Y FILTROS MEJORADOS - DEL REPOSITORIO
-    # ===============================
-    
-    @Slot(int, int, 'QVariant', result='QVariant')
-    def obtener_procedimientos_paginados(self, page: int, limit: int = 6, filters=None):
-        """
-        Obtiene página específica de procedimientos con filtros aplicados en BD
-        NUEVO PATRÓN basado en ConsultaModel
-        """
-        try:
-            offset = page * limit
-            filtros_dict = filters.toVariant() if hasattr(filters, 'toVariant') else filters or {}
-            
-            print(f"📄 Obteniendo página {page + 1}, límite {limit}, filtros: {filtros_dict}")
-            
-            # Obtener procedimientos paginados del repositorio
-            procedimientos = self.repository.obtener_procedimientos_paginados(offset, limit, filtros_dict)
-            
-            # Obtener total para cálculo de páginas
-            total = self.repository.contar_procedimientos_filtrados(filtros_dict)
-            total_pages = (total + limit - 1) // limit if total > 0 else 1
-            
-            resultado = {
-                'procedimientos': procedimientos,  # USAR 'procedimientos' como key
-                'total': total,
-                'page': page,
-                'limit': limit,
-                'total_pages': total_pages
-            }
-            
-            print(f"✅ Página {page + 1} de {total_pages} - {len(procedimientos)} procedimientos")
-            return resultado
-            
-        except Exception as e:
-            error_msg = f"Error en paginación: {str(e)}"
-            print(f"⚠️ {error_msg}")
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
-            return {'procedimientos': [], 'total': 0, 'page': 0, 'total_pages': 0}
-    
-    @Slot(str, result=str)
-    def buscar_procedimientos_avanzado(self, termino_busqueda: str) -> str:
-        """Búsqueda avanzada de procedimientos - NUEVO"""
-        try:
-            resultado = self.repository.buscar_procedimientos(termino_busqueda, limit=100)
-            
-            # Emitir signal con resultados
-            self.resultadosBusqueda.emit(self._crear_respuesta_json(True, resultado))
-            
-            return self._crear_respuesta_json(True, {
-                'procedimientos': resultado,
-                'total': len(resultado)
-            })
-            
-        except Exception as e:
-            error_msg = f"Error en búsqueda: {str(e)}"
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
-            return self._crear_respuesta_json(False, error_msg)
-    
-    # ===============================
-    # GESTIÓN DE DATOS MEJORADA
-
     # ===============================
     
     @Slot()
@@ -816,8 +655,7 @@ class EnfermeriaModel(QObject):
             self._cargar_procedimientos_actuales()
             self._set_estado_actual("listo")
         except Exception as e:
-            self.errorOccurred.emit(f"Error cargando procedimientos: {str(e)}")
-            self.operacionError.emit(f"Error cargando procedimientos: {str(e)}")
+            self.errorOcurrido.emit(f"Error cargando procedimientos: {str(e)}", 'LOAD_ERROR')
             self._set_estado_actual("error")
     
     @Slot()
@@ -844,12 +682,8 @@ class EnfermeriaModel(QObject):
         except Exception as e:
             error_msg = f"Error cargando tipos de procedimientos: {str(e)}"
             print(f"⚠️ {error_msg}")
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'LOAD_TYPES_ERROR')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
     
     @Slot()
     def actualizar_trabajadores_enfermeria(self):
@@ -877,12 +711,8 @@ class EnfermeriaModel(QObject):
         except Exception as e:
             error_msg = f"Error cargando trabajadores: {str(e)}"
             print(f"⚠️ {error_msg}")
-
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'LOAD_WORKERS_ERROR')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
     
     @Slot()
     def refrescar_datos(self):
@@ -901,17 +731,12 @@ class EnfermeriaModel(QObject):
             
             self._set_estado_actual("listo")
             self.operacionExitosa.emit("Datos actualizados correctamente")
-            self.successMessage.emit("Datos actualizados correctamente")
             
         except Exception as e:
             error_msg = f"Error refrescando datos: {str(e)}"
-
             print(f"❌ {error_msg}")
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
-
-            self.errorOccurred.emit(error_msg)
-            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
     
     @Slot()
@@ -987,39 +812,33 @@ class EnfermeriaModel(QObject):
         try:
             # Validar paciente
             if not datos.get('paciente', '').strip():
-                self.errorOccurred.emit("Nombre del paciente es obligatorio")
-                self.operacionError.emit("Nombre del paciente es obligatorio")
+                self.errorOcurrido.emit("Nombre del paciente es obligatorio", 'VALIDATION_ERROR')
                 return False
             
             # Validar procedimiento
             if not datos.get('idProcedimiento') or int(datos.get('idProcedimiento', 0)) <= 0:
-                self.errorOccurred.emit("Debe seleccionar un procedimiento válido")
-                self.operacionError.emit("Debe seleccionar un procedimiento válido")
+                self.errorOcurrido.emit("Debe seleccionar un procedimiento válido", 'VALIDATION_ERROR')
                 return False
             
             # Validar trabajador
             if not datos.get('idTrabajador') or int(datos.get('idTrabajador', 0)) <= 0:
-                self.errorOccurred.emit("Debe seleccionar un trabajador válido")
-                self.operacionError.emit("Debe seleccionar un trabajador válido")
+                self.errorOcurrido.emit("Debe seleccionar un trabajador válido", 'VALIDATION_ERROR')
                 return False
             
             # Validar cantidad
             if int(datos.get('cantidad', 0)) <= 0:
-                self.errorOccurred.emit("La cantidad debe ser mayor a 0")
-                self.operacionError.emit("La cantidad debe ser mayor a 0")
+                self.errorOcurrido.emit("La cantidad debe ser mayor a 0", 'VALIDATION_ERROR')
                 return False
             
             # Validar tipo
             if datos.get('tipo') not in ['Normal', 'Emergencia']:
-                self.errorOccurred.emit("Tipo de procedimiento inválido")
-                self.operacionError.emit("Tipo de procedimiento inválido")
+                self.errorOcurrido.emit("Tipo de procedimiento inválido", 'VALIDATION_ERROR')
                 return False
             
             return True
             
         except (ValueError, TypeError) as e:
-            self.errorOccurred.emit(f"Error en validación de datos: {str(e)}")
-            self.operacionError.emit(f"Error en validación de datos: {str(e)}")
+            self.errorOcurrido.emit(f"Error en validación de datos: {str(e)}", 'VALIDATION_EXCEPTION')
             return False
     
     def _gestionar_paciente_procedimiento(self, datos: Dict[str, Any]) -> int:

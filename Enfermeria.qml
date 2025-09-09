@@ -220,7 +220,7 @@ Item {
             }
         }
         
-        function onErrorOcurrido(mensaje, codigo) {
+        function onErrorOccurred(mensaje) {
             console.log("❌ Error enfermería:", mensaje)
             showNotification("Error", mensaje)
             formEnabled = true
