@@ -587,9 +587,6 @@ Item {
                                     }
                                 }
                                 
-                                // CÉDULA COLUMN - NUEVA
-
-                                
                                 // DETALLE COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colDetalle
@@ -682,7 +679,7 @@ Item {
                                     }
                                 }
                                 
-                                // FECHA COLUMN
+                                // FECHA COLUMN (sin línea derecha)
                                 Item {
                                     Layout.preferredWidth: parent.width * colFecha
                                     Layout.fillHeight: true
@@ -936,19 +933,22 @@ Item {
                                     
                                     // LÍNEAS VERTICALES CONTINUAS
                                     Repeater {
-                                        model: 7
+                                        model: 6  // 6 líneas para 7 columnas
                                         Rectangle {
                                             property real xPos: {
-                                                var w = parent.width - baseUnit * 3
+                                                var totalWidth = parent.width - (baseUnit * 3) // Ajustar por márgenes
+                                                var cumulativeWidth = 0
+                                                
                                                 switch(index) {
-                                                    case 0: return baseUnit * 1.5 + w * colId
-                                                    case 1: return baseUnit * 1.5 + w * (colId + colPaciente)
-                                                    case 2: return baseUnit * 1.5 + w * (colId + colPaciente)
-                                                    case 3: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle)
-                                                    case 4: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad)
-                                                    case 5: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad + colTipo)
-                                                    case 6: return baseUnit * 1.5 + w * (colId + colPaciente + colDetalle + colEspecialidad + colTipo + colPrecio)
+                                                    case 0: cumulativeWidth = colId; break
+                                                    case 1: cumulativeWidth = colId + colPaciente; break
+                                                    case 2: cumulativeWidth = colId + colPaciente + colDetalle; break
+                                                    case 3: cumulativeWidth = colId + colPaciente + colDetalle + colEspecialidad; break
+                                                    case 4: cumulativeWidth = colId + colPaciente + colDetalle + colEspecialidad + colTipo; break
+                                                    case 5: cumulativeWidth = colId + colPaciente + colDetalle + colEspecialidad + colTipo + colPrecio; break
                                                 }
+                                                
+                                                return baseUnit * 1.5 + (totalWidth * cumulativeWidth)
                                             }
                                             x: xPos
                                             width: 1
@@ -1918,7 +1918,6 @@ Item {
             Button {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
-                    var tieneEspecialidad = consultationForm.selectedEspecialidadIndex >= 0
                     var tieneCedula = cedulaPaciente.text.length >= 5  
                     var tieneNombre = nombrePaciente.text.length >= 2
                     var tieneDetalles = detallesConsulta.text.length >= 10
@@ -1926,6 +1925,21 @@ Item {
                     if (cedulaPaciente.pacienteNoEncontrado) {
                         return tieneEspecialidad && tieneCedula && tieneNombre && 
                             apellidoPaterno.text.length >= 2 && tieneDetalles
+
+                    // CORREGIDO: Usar selectedEspecialidadIndex en lugar de selectedAnalysisIndex
+                    var tieneEspecialidad = consultationForm.selectedEspecialidadIndex >= 0
+                    var tieneCedula = cedulaPaciente.text.length >= 5
+                    var tieneDetalles = detallesConsulta.text.length >= 10
+                    
+                    if (cedulaPaciente.pacienteAutocompletado) {
+                        // Paciente existente encontrado
+                        return tieneEspecialidad && tieneCedula && nombrePaciente.text.length >= 2 && tieneDetalles
+                    } else if (cedulaPaciente.pacienteNoEncontrado) {
+                        // Nuevo paciente - validar campos obligatorios
+                        var tieneNombre = nombrePaciente.text.length >= 2
+                        var tieneApellido = apellidoPaterno.text.length >= 2
+                        return tieneEspecialidad && tieneCedula && tieneNombre && tieneApellido && tieneDetalles
+
                     }
                     
                     return tieneEspecialidad && tieneCedula && tieneNombre && tieneDetalles
