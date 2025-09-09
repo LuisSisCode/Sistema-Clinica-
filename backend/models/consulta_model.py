@@ -372,6 +372,7 @@ class ConsultaModel(QObject):
                 consulta_id=consulta_id,
                 detalles=datos.get('detalles'),
                 tipo_consulta=datos.get('tipo_consulta'),
+                especialidad_id=datos.get('especialidad_id'),  # Añadir este campo
                 fecha=datos.get('fecha')
             )
             

@@ -196,7 +196,8 @@ class ConsultaRepository(BaseRepository):
         return consultation_id
     
     def update_consultation(self, consulta_id: int, detalles: str = None, 
-                           tipo_consulta: str = None, fecha: datetime = None) -> bool:
+                       tipo_consulta: str = None, especialidad_id: int = None,
+                       fecha: datetime = None) -> bool:
         """Actualiza consulta existente"""
         # Verificar existencia
         if not self.get_by_id(consulta_id):

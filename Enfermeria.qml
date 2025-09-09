@@ -2308,7 +2308,7 @@ Item {
             }
         }
         
-        // ✅ FILTRO POR TIPO - MAPEO CORRECTO DE ÍNDICES (ya corregido antes)
+        // ✅ FILTRO POR TIPO - MAPEO CORRECTO DE ÍNDICES
         if (filtroTipo.currentIndex > 0) {
             if (filtroTipo.currentIndex === 1) {
                 filtros.tipo = "Normal"
@@ -2321,31 +2321,45 @@ Item {
             console.log("   - Valor mapeado:", filtros.tipo)
         }
         
-        // Filtros de fecha (sin cambios)
+        // ✅ CORRECCIÓN: Usar currentIndex en lugar de currentText para fechas
         if (filtroFecha && filtroFecha.currentIndex > 0) {
             var hoy = new Date()
             var fechaDesde, fechaHasta
             
-            switch(filtroFecha.currentText) {
-                case "Hoy":
+            // ✅ USAR ÍNDICE EN LUGAR DE TEXTO
+            switch(filtroFecha.currentIndex) {
+                case 1: // "Hoy"
                     fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
                     fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+                    console.log("✅ Aplicando filtro: Hoy")
                     break
-                case "Esta Semana":
+                case 2: // "Esta Semana"
                     var primerDiaSemana = new Date(hoy)
                     primerDiaSemana.setDate(hoy.getDate() - hoy.getDay() + 1)
                     fechaDesde = new Date(primerDiaSemana.getFullYear(), primerDiaSemana.getMonth(), primerDiaSemana.getDate())
                     fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+                    console.log("✅ Aplicando filtro: Esta Semana")
                     break
-                case "Este Mes":
+                case 3: // "Este Mes"
                     fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
                     fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+                    console.log("✅ Aplicando filtro: Este Mes")
                     break
+                default:
+                    console.log("⚠️ Índice de fecha no reconocido:", filtroFecha.currentIndex)
+                    return filtros // ✅ RETORNAR SIN FECHAS SI HAY ERROR
             }
             
+            // ✅ VALIDAR QUE LAS FECHAS EXISTAN ANTES DE CONVERTIR
             if (fechaDesde && fechaHasta) {
-                filtros.fecha_desde = fechaDesde.toISOString().split('T')[0]
-                filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0]
+                try {
+                    filtros.fecha_desde = fechaDesde.toISOString().split('T')[0]
+                    filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0]
+                    console.log("📅 Fechas aplicadas:", filtros.fecha_desde, "al", filtros.fecha_hasta)
+                } catch (error) {
+                    console.log("❌ Error convirtiendo fechas:", error)
+                    // No agregar fechas si hay error
+                }
             }
         }
         

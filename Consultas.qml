@@ -90,12 +90,12 @@ Item {
             updateEspecialidadesCombo()
         }
         
-        // CORREGIDO: Signals que SÍ existen en el model
         function onEstadoCambiado(nuevoEstado) {
             console.log("⏳ Estado:", nuevoEstado)
         }
         
-        function onErrorOcurrido(mensaje, codigo) {
+        // ✅ CORREGIDO: Signal name correcto
+        function onOperacionError(mensaje) {
             console.log("⚠️ Error:", mensaje)
             showNotification("Error", mensaje)
         }
@@ -121,9 +121,41 @@ Item {
         if (!fechaISO) return "Sin fecha"
         
         try {
-            var fecha = new Date(fechaISO)
-            return fecha.toLocaleDateString("es-ES")
+            // Si ya es un objeto Date, formatear directamente
+            if (fechaISO instanceof Date) {
+                return fechaISO.toLocaleDateString("es-ES")
+            }
+            
+            // Si es string, manejar diferentes formatos
+            if (typeof fechaISO === 'string') {
+                // Intentar parsear formato ISO con 'T'
+                if (fechaISO.includes('T')) {
+                    var fecha = new Date(fechaISO)
+                    if (!isNaN(fecha)) return fecha.toLocaleDateString("es-ES")
+                }
+                
+                // Intentar parsear formato SQL Server (YYYY-MM-DD HH:MM:SS)
+                var sqlPattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/
+                var match = fechaISO.match(sqlPattern)
+                if (match) {
+                    var fechaStr = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`
+                    var fecha = new Date(fechaStr)
+                    if (!isNaN(fecha)) return fecha.toLocaleDateString("es-ES")
+                }
+                
+                // Intentar formato simple YYYY-MM-DD
+                var simplePattern = /^(\d{4})-(\d{2})-(\d{2})/
+                match = fechaISO.match(simplePattern)
+                if (match) {
+                    fechaStr = `${match[1]}-${match[2]}-${match[3]}`
+                    fecha = new Date(fechaStr)
+                    if (!isNaN(fecha)) return fecha.toLocaleDateString("es-ES")
+                }
+            }
+            
+            return "Fecha inválida"
         } catch (e) {
+            console.log("Error formateando fecha:", fechaISO, e)
             return "Fecha inválida"
         }
     }
@@ -1173,59 +1205,41 @@ Item {
         property var consultaParaEditar: null
         
         function loadEditData() {
-            if (!isEditMode || !consultationForm.consultaParaEditar) {
-                console.log("No hay datos para cargar en edición")
-                return
-            }
+            if (!isEditMode || !consultationForm.consultaParaEditar) return;
             
-            var consulta = consultationForm.consultaParaEditar
-            console.log("Cargando datos para edición:", JSON.stringify(consulta))
+            var consulta = consultationForm.consultaParaEditar;
+            console.log("Cargando datos para edición:", JSON.stringify(consulta));
             
-            cedulaPaciente.text = consulta.pacienteCedula || ""
-            if (cedulaPaciente.text.length >= 5) {
-                buscarPacientePorCedula(cedulaPaciente.text)
-            }
+            // Cargar datos del paciente
+            cedulaPaciente.text = consulta.pacienteCedula || "";
+            nombrePaciente.text = consulta.paciente || "";
             
-            if (consulta.especialidadDoctor && consultaModel && consultaModel.especialidades) {
-                console.log("Buscando especialidad:", consulta.especialidadDoctor)
-                
+            // Buscar y seleccionar especialidad
+            if (consultaModel && consultaModel.especialidades) {
                 for (var i = 0; i < consultaModel.especialidades.length; i++) {
-                    var esp = consultaModel.especialidades[i]
-                    var espTextoCompleto = esp.text + " - " + esp.doctor_nombre
-                    var nombreEspecialidad = esp.text
+                    var esp = consultaModel.especialidades[i];
+                    var espTexto = esp.text + " - " + esp.doctor_nombre;
                     
-                    if (espTextoCompleto === consulta.especialidadDoctor || 
-                        consulta.especialidadDoctor.indexOf(nombreEspecialidad) === 0) {
-                        
-                        especialidadCombo.currentIndex = i + 1
-                        consultationForm.selectedEspecialidadIndex = i
-                        
-                        if (consultationForm.consultationType === "Normal") {
-                            consultationForm.calculatedPrice = esp.precio_normal
-                        } else {
-                            consultationForm.calculatedPrice = esp.precio_emergencia
-                        }
-                        
-                        console.log("Especialidad encontrada:", nombreEspecialidad)
-                        break
+                    if (espTexto === consulta.especialidadDoctor) {
+                        especialidadCombo.currentIndex = i + 1;
+                        consultationForm.selectedEspecialidadIndex = i;
+                        break;
                     }
                 }
             }
             
+            // Configurar tipo de consulta
             if (consulta.tipo === "Normal") {
-                normalRadio.checked = true
-                emergenciaRadio.checked = false
-                consultationForm.consultationType = "Normal"
+                normalRadio.checked = true;
+                consultationForm.consultationType = "Normal";
             } else {
-                normalRadio.checked = false
-                emergenciaRadio.checked = true
-                consultationForm.consultationType = "Emergencia"
+                emergenciaRadio.checked = true;
+                consultationForm.consultationType = "Emergencia";
             }
             
-            consultationForm.calculatedPrice = parseFloat(consulta.precio) || 0.0
-            detallesConsulta.text = consulta.detalles || ""
-            
-            console.log("Datos de edición cargados correctamente")
+            // Cargar demás campos
+            consultationForm.calculatedPrice = consulta.precio || 0;
+            detallesConsulta.text = consulta.detalles || "";
         }
         
         function updatePrices() {
@@ -1904,21 +1918,17 @@ Item {
             Button {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
-                    // Validaciones básicas
-                    var tieneAnalisis = consultationForm.selectedAnalysisIndex >= 0
-                    var tieneCedula = cedulaPaciente.text.length >= 5
+                    var tieneEspecialidad = consultationForm.selectedEspecialidadIndex >= 0
+                    var tieneCedula = cedulaPaciente.text.length >= 5  
+                    var tieneNombre = nombrePaciente.text.length >= 2
+                    var tieneDetalles = detallesConsulta.text.length >= 10
                     
-                    if (cedulaPaciente.pacienteAutocompletado) {
-                        // Paciente existente encontrado
-                        return tieneAnalisis && tieneCedula && nombrePaciente.text.length >= 2
-                    } else if (cedulaPaciente.pacienteNoEncontrado) {
-                        // Nuevo paciente - validar campos obligatorios
-                        var tieneNombre = nombrePaciente.text.length >= 2
-                        var tieneApellido = apellidoPaterno.text.length >= 2
-                        return tieneAnalisis && tieneCedula && tieneNombre && tieneApellido
+                    if (cedulaPaciente.pacienteNoEncontrado) {
+                        return tieneEspecialidad && tieneCedula && tieneNombre && 
+                            apellidoPaterno.text.length >= 2 && tieneDetalles
                     }
                     
-                    return false
+                    return tieneEspecialidad && tieneCedula && tieneNombre && tieneDetalles
                 }
                 Layout.preferredHeight: baseUnit * 4
                 
@@ -2006,15 +2016,7 @@ Item {
             aplicarFiltros()
         }
     }
-
-    // FUNCIÓN PRINCIPAL CORREGIDA - MAPEO DIRECTO DE DATOS
-    function updatePaginatedModel() {
-        if (!consultaModel) {
-            console.log("ConsultaModel no disponible")
-            return
-        }
-        
-        // Construir filtros desde la interfaz
+    function construirFiltrosActuales() {
         var filtros = {}
         
         // Filtro por tipo de consulta
@@ -2028,26 +2030,73 @@ Item {
         
         // Filtro por especialidad
         if (filtroEspecialidad && filtroEspecialidad.currentIndex > 0) {
-            var selectedIndexInMap = filtroEspecialidad.currentIndex - 1 // Restar 1 por "Todas"
+            var selectedIndexInMap = filtroEspecialidad.currentIndex - 1
             
             if (selectedIndexInMap >= 0 && selectedIndexInMap < especialidadMap.length) {
                 var selectedEspecialidad = especialidadMap[selectedIndexInMap]
                 filtros.especialidad = selectedEspecialidad.nombre
                 console.log("✅ Filtro especialidad aplicado:", selectedEspecialidad.nombre, "ID:", selectedEspecialidad.id)
-            } else {
-                console.log("⚠️ Índice fuera de rango en el mapa de especialidades:", selectedIndexInMap)
             }
-        } else {
-            console.log("🔍 Filtro especialidad no aplicado (índice 0 - Todas)")
         }
         
-        // Filtro por búsqueda de texto
+        // Filtro por búsqueda
         if (campoBusqueda && campoBusqueda.text.length >= 2) {
             filtros.busqueda = campoBusqueda.text.trim()
         }
         
-        // Obtener datos paginados desde el repositorio
-        // Aqui se pueede ajustar el límite dinámicamente si se desea
+        // ✅ FILTROS DE FECHA CORREGIDOS
+        if (filtroFecha && filtroFecha.currentIndex > 0) {
+            var hoy = new Date();
+            var fechaDesde, fechaHasta;
+            
+            switch(filtroFecha.currentIndex) {
+                case 1: // "Hoy"
+                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59);
+                    break;
+                case 2: // "Esta Semana"
+                    var diaSemana = hoy.getDay();
+                    var diffLunes = hoy.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+                    fechaDesde = new Date(hoy);
+                    fechaDesde.setDate(diffLunes);
+                    fechaDesde.setHours(0, 0, 0, 0);
+                    
+                    fechaHasta = new Date(fechaDesde);
+                    fechaHasta.setDate(fechaDesde.getDate() + 6);
+                    fechaHasta.setHours(23, 59, 59, 999);
+                    break;
+                case 3: // "Este Mes"
+                    fechaDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                    fechaHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+                    fechaHasta.setHours(23, 59, 59, 999);
+                    break;
+                default:
+                    return filtros;
+            }
+            
+            filtros.fecha_desde = fechaDesde.toISOString();
+            filtros.fecha_hasta = fechaHasta.toISOString();
+        }
+        
+        return filtros;
+    }
+
+    // FUNCIÓN PRINCIPAL CORREGIDA - MAPEO DIRECTO DE DATOS
+    function updatePaginatedModel() {
+        if (!consultaModel) {
+            console.log("ConsultaModel no disponible")
+            return
+        }
+        
+        // ✅ USAR LA FUNCIÓN CENTRALIZADA
+        var filtros = construirFiltrosActuales()
+        
+        // ✅ INVALIDAR CACHE ANTES DE CONSULTAR
+        if (consultaModel.limpiar_cache_consultas) {
+            consultaModel.limpiar_cache_consultas()
+        }
+        
+        // Obtener datos paginados
         var resultado = consultaModel.obtener_consultas_paginadas(
             currentPageConsultas, 
             6, 
@@ -2061,6 +2110,7 @@ Item {
         if (resultado && resultado.consultas) {
             for (var i = 0; i < resultado.consultas.length; i++) {
                 var consulta = resultado.consultas[i]
+                console.log("Consulta ID:", consulta.id, "Fecha cruda:", consulta.Fecha)
                 
                 consultasPaginadasModel.append({
                     id: consulta.id || "N/A",
@@ -2070,11 +2120,10 @@ Item {
                     especialidad_doctor: consulta.especialidad_doctor || "Sin especialidad/doctor",
                     tipo_consulta: consulta.tipo_consulta || "Normal",
                     precio: consulta.precio || 0,
-                    fecha: formatearFecha(consulta.Fecha)
+                    fecha: formatearFecha(consulta.Fecha)  // ✅ USAR formatearFecha
                 })
             }
             
-            // Actualizar información de paginación
             totalPagesConsultas = resultado.total_pages || 1
             
             console.log("Página " + (currentPageConsultas + 1) + " de " + totalPagesConsultas + 
@@ -2083,6 +2132,7 @@ Item {
             totalPagesConsultas = 1
             console.log("No hay datos de consultas disponibles")
         }
+        
         debugFiltros(filtros)
     }
     // Guardar una nueva consulta
@@ -2300,9 +2350,11 @@ Item {
 
     function aplicarFiltros() {
         console.log("🔍 Aplicando filtros...")
-        console.log("🔍 Filtro tipo actual:", filtroTipo.currentText, "índice:", filtroTipo.currentIndex)
         
+        // Resetear a primera página
         currentPageConsultas = 0
+        
+        // Usar la función actualizada
         updatePaginatedModel()
     }
     function updateEspecialidadesCombo() {
