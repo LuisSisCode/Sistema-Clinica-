@@ -65,7 +65,7 @@ class UsuarioModel(QObject):
     @Property(list, notify=usuariosChanged)
     def usuarios(self) -> List[Dict[str, Any]]:
         """Lista de usuarios para mostrar en QML"""
-        return self._usuarios_filtrados
+        return self._usuarios 
     
     @Property(list, notify=rolesChanged)
     def roles(self) -> List[Dict[str, Any]]:
@@ -451,17 +451,33 @@ class UsuarioModel(QObject):
             return {}
     
     # --- RECARGA DE DATOS ---
-    
+        
     @Slot()
     def recargarDatos(self):
         """Recarga todos los datos desde la base de datos"""
         try:
             self._set_loading(True)
+            print("🔄 Iniciando recarga de datos de usuarios...")
+            
+            # Cargar datos desde la base de datos
             self._cargar_datos_iniciales()
+            
+            # Emitir señal de éxito
             self.successMessage.emit("Datos recargados exitosamente")
-            print("🔄 Datos recargados desde QML")
+            print("✅ Datos recargados desde QML")
+            
+            # IMPORTANTE: Forzar emisión de señal usuariosChanged
+            print(f"📊 Total usuarios cargados: {len(self._usuarios)}")
+            print(f"📊 Total usuarios filtrados: {len(self._usuarios_filtrados)}")
+            
+            # Emitir señales de cambio para notificar a todos los QML conectados
+            self.usuariosChanged.emit()
+            self.estadisticasChanged.emit()
+            
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error recargando datos: {str(e)}")
+            error_msg = f"Error recargando datos: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.errorOccurred.emit("Error", error_msg)
         finally:
             self._set_loading(False)
     

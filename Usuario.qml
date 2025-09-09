@@ -53,9 +53,40 @@ Item {
     
     // Inicialización cuando el model esté disponible
     Component.onCompleted: {
-        if (appController && appController.usuario_model_instance) {
+        console.log("🚀 Usuario.qml iniciándose...")
+        
+        // Verificar disponibilidad del controlador
+        if (typeof appController !== "undefined" && appController.usuario_model_instance) {
+            console.log("📦 AppController disponible inmediatamente")
             usuarioModel = appController.usuario_model_instance
             rolesDisponibles = usuarioModel.obtenerRolesDisponibles()
+            console.log("👥 Roles disponibles:", rolesDisponibles.length)
+            cargarDatosOriginales()
+        } else {
+            console.log("⏳ Esperando que appController esté disponible...")
+            // Timer de seguridad para reintentar la conexión
+            timerInicializacion.start()
+        }
+    }
+
+    // AGREGAR este Timer después de Component.onCompleted
+    Timer {
+        id: timerInicializacion
+        interval: 100
+        repeat: true
+        triggeredOnStart: false
+        running: false
+        
+        onTriggered: {
+            if (typeof appController !== "undefined" && appController.usuario_model_instance) {
+                console.log("📦 AppController conectado exitosamente (vía timer)")
+                usuarioModel = appController.usuario_model_instance
+                rolesDisponibles = usuarioModel.obtenerRolesDisponibles()
+                cargarDatosOriginales()
+                stop() // Detener el timer
+            } else {
+                console.log("⏳ Aún esperando appController...")
+            }
         }
     }
     
@@ -85,20 +116,79 @@ Item {
         }
     }
 
-    // FUNCIÓN PARA CARGAR DATOS ORIGINALES
+    // AGREGAR ESTA CONEXIÓN EN Usuario.qml después de las conexiones existentes
+    Connections {
+        target: usuarioModel
+        
+        // Escuchar cuando los datos de usuarios cambian
+        function onUsuariosChanged() {
+            console.log("📊 Usuarios cambiaron - recargando datos en Usuario.qml")
+            cargarDatosOriginales()
+        }
+        
+        // Escuchar mensajes de éxito para recargar datos
+        function onSuccessMessage(message) {
+            console.log("✅ Mensaje de éxito recibido:", message)
+            // Si el mensaje es sobre usuarios, recargar datos
+            if (message.toLowerCase().includes("usuario")) {
+                cargarDatosOriginales()
+            }
+        }
+        
+        // Escuchar cuando se recarga el modelo completo
+        function onUsuarioCreado(success, message) {
+            if (success) {
+                console.log("👤 Usuario creado - recargando lista")
+                cargarDatosOriginales()
+            }
+        }
+        
+        function onUsuarioActualizado(success, message) {
+            if (success) {
+                console.log("✏️ Usuario actualizado - recargando lista")
+                cargarDatosOriginales()
+            }
+        }
+        
+        function onUsuarioEliminado(success, message) {
+            if (success) {
+                console.log("🗑️ Usuario eliminado - recargando lista")
+                cargarDatosOriginales()
+            }
+        }
+    }
+
+    // REEMPLAZAR la función cargarDatosOriginales() en Usuario.qml
     function cargarDatosOriginales() {
-        if (!usuarioModel || !usuarioModel.usuarios) return
+        if (!usuarioModel) {
+            console.log("⚠️ usuarioModel no está disponible aún")
+            return
+        }
         
-        console.log("📄 Cargando datos originales de usuarios...")
+        if (!usuarioModel.usuarios) {
+            console.log("⚠️ usuarioModel.usuarios no está disponible")
+            return
+        }
         
+        console.log("🔄 Cargando datos originales de usuarios...")
+        
+        // Limpiar datos anteriores
         usuariosOriginales = []
         
+        // Cargar nuevos datos desde el modelo
         for (var i = 0; i < usuarioModel.usuarios.length; i++) {
             usuariosOriginales.push(usuarioModel.usuarios[i])
         }
         
         console.log("✅ Usuarios originales cargados:", usuariosOriginales.length)
+        
+        // Aplicar filtros para actualizar la vista
         aplicarFiltros()
+        
+        // Log adicional para debugging
+        if (usuariosOriginales.length > 0) {
+            console.log("📊 Primer usuario cargado:", usuariosOriginales[0].Nombre, usuariosOriginales[0].correo)
+        }
     }
 
     // ===== LAYOUT PRINCIPAL RESPONSIVO =====
