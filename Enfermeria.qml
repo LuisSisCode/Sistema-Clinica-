@@ -129,7 +129,7 @@ Item {
             console.log("Estado enfermería:", nuevoEstado)
         }
         
-        function onErrorOcurrido(mensaje, codigo) {
+        function onOperacionError(mensaje) {
             console.log("Error enfermería:", mensaje)
             showNotification("Error", mensaje)
         }

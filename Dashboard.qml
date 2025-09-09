@@ -1143,7 +1143,7 @@ ScrollView {
         Rectangle {
             width: ListView.view.width
             height: 48
-            color: modelData.urgencia === "urgent" ? 
+            color: model.urgencia === "urgent" ? 
                    Qt.rgba(229/255, 115/255, 115/255, 0.1) : 
                    Qt.rgba(255/255, 193/255, 7/255, 0.1)
             radius: 8
@@ -1154,7 +1154,7 @@ ScrollView {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: 4
-                color: modelData.urgencia === "urgent" ? "#E57373" : "#ffc107"
+                color: model.urgencia === "urgent" ? "#E57373" : "#ffc107"
                 radius: 2
             }
             
@@ -1165,7 +1165,7 @@ ScrollView {
                 
                 Label {
                     Layout.preferredWidth: 120
-                    text: modelData.producto
+                    text: model.producto
                     color: textColor
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -1173,7 +1173,7 @@ ScrollView {
                 
                 Label {
                     Layout.preferredWidth: 80
-                    text: modelData.cantidad
+                    text: model.cantidad
                     color: textColor
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -1183,12 +1183,12 @@ ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 24
                     radius: 12
-                    color: modelData.urgencia === "urgent" ? "#fee2e2" : "#fef3c7"
+                    color: model.urgencia === "urgent" ? "#fee2e2" : "#fef3c7"
                     
                     Label {
                         anchors.centerIn: parent
-                        text: modelData.fecha
-                        color: modelData.urgencia === "urgent" ? "#dc2626" : "#d97706"
+                        text: model.fecha
+                        color: model.urgencia === "urgent" ? "#dc2626" : "#d97706"
                         font.pixelSize: 10
                         font.bold: true
                     }

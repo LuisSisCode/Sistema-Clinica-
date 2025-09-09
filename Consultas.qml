@@ -97,7 +97,7 @@ Item {
             console.log("⏳ Estado:", nuevoEstado)
         }
         
-        function onErrorOcurrido(mensaje, codigo) {
+        function onOperacionError(mensaje) {
             console.log("⚠️ Error:", mensaje)
             showNotification("Error", mensaje)
         }
