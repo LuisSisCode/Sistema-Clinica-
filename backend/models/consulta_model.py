@@ -730,11 +730,30 @@ class ConsultaModel(QObject):
     
     @Slot(int, int, 'QVariant', result='QVariant')
     def obtener_consultas_paginadas(self, page: int, limit: int = 5, filters=None):
-        """Obtiene página específica de consultas"""
+        """Obtiene página específica de consultas - CORREGIDO CON FORMATEO DE FECHAS"""
         try:
             filtros_dict = filters.toVariant() if hasattr(filters, 'toVariant') else filters or {}
             resultado = self.repository.get_consultas_paginadas(page, limit, filtros_dict)
+            
+            # ✅ PROCESAR FECHAS EN LAS CONSULTAS PAGINADAS
+            if 'consultas' in resultado and resultado['consultas']:
+                for consulta in resultado['consultas']:
+                    # Formatear fecha usando el mismo método que _cargar_consultas_recientes
+                    fecha_raw = consulta.get('Fecha') or consulta.get('fecha')
+                    fecha_formateada = self._formatear_fecha_python(fecha_raw)
+                    consulta['fecha'] = fecha_formateada
+                    
+                    # Asegurar que otros campos estén en el formato correcto
+                    consulta['id'] = str(consulta.get('id', 'N/A'))
+                    consulta['paciente_completo'] = consulta.get('paciente_completo') or 'Sin nombre'
+                    consulta['paciente_cedula'] = consulta.get('paciente_cedula') or 'Sin cédula'
+                    consulta['Detalles'] = consulta.get('Detalles') or 'Sin detalles'
+                    consulta['especialidad_doctor'] = consulta.get('especialidad_doctor') or 'Sin especialidad/doctor'
+                    consulta['tipo_consulta'] = consulta.get('tipo_consulta') or 'Normal'
+                    consulta['precio'] = float(consulta.get('precio') or 0)
+            
             return resultado
+            
         except Exception as e:
             self.operacionError.emit(f"Error paginación: {str(e)}")
             return {'consultas': [], 'total': 0, 'page': 0, 'total_pages': 0}
@@ -742,24 +761,63 @@ class ConsultaModel(QObject):
     # ===============================
     # MÉTODOS INTERNOS - CORREGIDOS CON NOMBRES REALES
     # ===============================
-    
+    def _formatear_fecha_python(self, fecha) -> str:
+        """Formatea fecha en Python manejando QVariant datetime - CORREGIDO"""
+        if not fecha:
+            return "Sin fecha"
+        
+        try:
+            # ✅ SOLUCIÓN: Manejar QVariant sin importación problemática
+            # Si es QVariant, extraer el valor usando .value() si existe el método
+            if hasattr(fecha, 'value') and callable(getattr(fecha, 'value')):
+                fecha = fecha.value()
+            
+            # Si es datetime, formatear directamente
+            if isinstance(fecha, datetime):
+                return fecha.strftime('%d/%m/%Y')
+            
+            # Si es string, intentar parsearlo
+            if isinstance(fecha, str):
+                if fecha == "Sin fecha":
+                    return fecha
+                # Intentar formato ISO
+                try:
+                    dt = datetime.fromisoformat(fecha.replace('Z', ''))
+                    return dt.strftime('%d/%m/%Y')
+                except:
+                    pass
+                # Si ya está formateado DD/MM/YYYY
+                if '/' in fecha and len(fecha) == 10:
+                    return fecha
+            
+            print(f"🔍 DEBUG: Tipo de fecha no reconocido: {type(fecha)} - Valor: {fecha}")
+            return "Sin fecha"
+            
+        except Exception as e:
+            print(f"❌ Error formateando fecha: {e} - Tipo: {type(fecha)} - Valor: {fecha}")
+            return "Sin fecha"
+        
     def _cargar_consultas_recientes(self):
-        """Actualiza lista interna de consultas - TOTALMENTE CORREGIDA"""
+        """Actualiza lista interna de consultas - FECHA FORMATEADA EN PYTHON"""
         try:
             consultas_raw = self.repository.get_all_with_details()
             
-            # Procesar datos para QML con nombres EXACTOS según BD real
+            # Procesar datos para QML
             self._consultasData = []
             for consulta in consultas_raw:
+                # ✅ FORMATEAR FECHA EN PYTHON SIEMPRE
+                fecha_raw = consulta.get('Fecha') or consulta.get('fecha_original')
+                fecha_formateada = self._formatear_fecha_python(fecha_raw)
+                
                 consulta_procesada = {
                     'id': str(consulta.get('id', 'N/A')),
                     'paciente_completo': consulta.get('paciente_completo') or 'Sin nombre',
                     'paciente_cedula': consulta.get('paciente_cedula') or 'Sin cédula',
-                    'Detalles': consulta.get('Detalles') or 'Sin detalles',  # CORREGIDO: Detalles con D mayúscula
+                    'Detalles': consulta.get('Detalles') or 'Sin detalles',
                     'especialidad_doctor': consulta.get('especialidad_doctor') or 'Sin especialidad/doctor',
-                    'tipo_consulta': consulta.get('tipo_consulta') or 'Normal',  # CORREGIDO: viene de alias
+                    'tipo_consulta': consulta.get('tipo_consulta') or 'Normal',
                     'precio': float(consulta.get('precio') or 0),
-                    'Fecha': consulta.get('Fecha')
+                    'fecha': fecha_formateada  # ✅ USAR FECHA FORMATEADA EN PYTHON
                 }
                 
                 self._consultasData.append(consulta_procesada)

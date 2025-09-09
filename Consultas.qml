@@ -116,48 +116,34 @@ Item {
         interval: 100
         onTriggered: updatePaginatedModel()
     }
+    function formatearFechaSegura(fechaInput) {
+        try {
+            // ✅ SOLUCIÓN: Confiar en el formateo de Python
+            if (typeof fechaInput === 'string') {
+                // Si ya viene formateado desde Python, usar directamente
+                if (fechaInput.includes('/')) {
+                    return fechaInput;
+                }
+                if (fechaInput === "Sin fecha") {
+                    return fechaInput;
+                }
+            }
+            
+            // Solo procesar si es absolutamente necesario
+            if (fechaInput instanceof Date) {
+                return fechaInput.toLocaleDateString("es-ES");
+            }
+            
+            return "Sin fecha";
+            
+        } catch (error) {
+            console.log("Error formateando fecha:", error);
+            return "Sin fecha";
+        }
+    }
 
     function formatearFecha(fechaISO) {
-        if (!fechaISO) return "Sin fecha"
-        
-        try {
-            // Si ya es un objeto Date, formatear directamente
-            if (fechaISO instanceof Date) {
-                return fechaISO.toLocaleDateString("es-ES")
-            }
-            
-            // Si es string, manejar diferentes formatos
-            if (typeof fechaISO === 'string') {
-                // Intentar parsear formato ISO con 'T'
-                if (fechaISO.includes('T')) {
-                    var fecha = new Date(fechaISO)
-                    if (!isNaN(fecha)) return fecha.toLocaleDateString("es-ES")
-                }
-                
-                // Intentar parsear formato SQL Server (YYYY-MM-DD HH:MM:SS)
-                var sqlPattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/
-                var match = fechaISO.match(sqlPattern)
-                if (match) {
-                    var fechaStr = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`
-                    var fecha = new Date(fechaStr)
-                    if (!isNaN(fecha)) return fecha.toLocaleDateString("es-ES")
-                }
-                
-                // Intentar formato simple YYYY-MM-DD
-                var simplePattern = /^(\d{4})-(\d{2})-(\d{2})/
-                match = fechaISO.match(simplePattern)
-                if (match) {
-                    fechaStr = `${match[1]}-${match[2]}-${match[3]}`
-                    fecha = new Date(fechaStr)
-                    if (!isNaN(fecha)) return fecha.toLocaleDateString("es-ES")
-                }
-            }
-            
-            return "Fecha inválida"
-        } catch (e) {
-            console.log("Error formateando fecha:", fechaISO, e)
-            return "Fecha inválida"
-        }
+        return formatearFechaSegura(fechaISO)
     }
 
     function showNotification(tipo, mensaje) {
@@ -1918,31 +1904,20 @@ Item {
             Button {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
-                    var tieneCedula = cedulaPaciente.text.length >= 5  
-                    var tieneNombre = nombrePaciente.text.length >= 2
-                    var tieneDetalles = detallesConsulta.text.length >= 10
+                    // ✅ VALIDACIÓN SIMPLIFICADA SIN VARIABLES UNDEFINED
+                    var especialidadSeleccionada = consultationForm.selectedEspecialidadIndex >= 0
+                    var cedulaValida = cedulaPaciente.text.length >= 5
+                    var nombreValido = nombrePaciente.text.length >= 2
+                    var detallesValidos = detallesConsulta.text.length >= 10
                     
                     if (cedulaPaciente.pacienteNoEncontrado) {
-                        return tieneEspecialidad && tieneCedula && tieneNombre && 
-                            apellidoPaterno.text.length >= 2 && tieneDetalles
-
-                    // CORREGIDO: Usar selectedEspecialidadIndex en lugar de selectedAnalysisIndex
-                    var tieneEspecialidad = consultationForm.selectedEspecialidadIndex >= 0
-                    var tieneCedula = cedulaPaciente.text.length >= 5
-                    var tieneDetalles = detallesConsulta.text.length >= 10
-                    
-                    if (cedulaPaciente.pacienteAutocompletado) {
-                        // Paciente existente encontrado
-                        return tieneEspecialidad && tieneCedula && nombrePaciente.text.length >= 2 && tieneDetalles
-                    } else if (cedulaPaciente.pacienteNoEncontrado) {
-                        // Nuevo paciente - validar campos obligatorios
-                        var tieneNombre = nombrePaciente.text.length >= 2
-                        var tieneApellido = apellidoPaterno.text.length >= 2
-                        return tieneEspecialidad && tieneCedula && tieneNombre && tieneApellido && tieneDetalles
-
+                        // Nuevo paciente - validar apellido paterno también
+                        var apellidoValido = apellidoPaterno.text.length >= 2
+                        return especialidadSeleccionada && cedulaValida && nombreValido && apellidoValido && detallesValidos
+                    } else {
+                        // Paciente existente o sin determinar
+                        return especialidadSeleccionada && cedulaValida && nombreValido && detallesValidos
                     }
-                    
-                    return tieneEspecialidad && tieneCedula && tieneNombre && tieneDetalles
                 }
                 Layout.preferredHeight: baseUnit * 4
                 
@@ -2097,34 +2072,24 @@ Item {
 
     // FUNCIÓN PRINCIPAL CORREGIDA - MAPEO DIRECTO DE DATOS
     function updatePaginatedModel() {
-        if (!consultaModel) {
-            console.log("ConsultaModel no disponible")
-            return
-        }
+        if (!consultaModel) return;
         
-        // ✅ USAR LA FUNCIÓN CENTRALIZADA
-        var filtros = construirFiltrosActuales()
+        var filtros = construirFiltrosActuales();
         
-        // ✅ INVALIDAR CACHE ANTES DE CONSULTAR
+        // Limpiar cache antes de consultar
         if (consultaModel.limpiar_cache_consultas) {
-            consultaModel.limpiar_cache_consultas()
+            consultaModel.limpiar_cache_consultas();
         }
         
-        // Obtener datos paginados
         var resultado = consultaModel.obtener_consultas_paginadas(
-            currentPageConsultas, 
-            6, 
-            filtros
-        )
+            currentPageConsultas, 6, filtros
+        );
         
-        // Limpiar modelo actual
-        consultasPaginadasModel.clear()
+        consultasPaginadasModel.clear();
         
-        // Llenar con los datos de la página actual
         if (resultado && resultado.consultas) {
             for (var i = 0; i < resultado.consultas.length; i++) {
-                var consulta = resultado.consultas[i]
-                console.log("Consulta ID:", consulta.id, "Fecha cruda:", consulta.Fecha)
+                var consulta = resultado.consultas[i];
                 
                 consultasPaginadasModel.append({
                     id: consulta.id || "N/A",
@@ -2134,20 +2099,13 @@ Item {
                     especialidad_doctor: consulta.especialidad_doctor || "Sin especialidad/doctor",
                     tipo_consulta: consulta.tipo_consulta || "Normal",
                     precio: consulta.precio || 0,
-                    fecha: formatearFecha(consulta.Fecha)  // ✅ USAR formatearFecha
-                })
+                    // ✅ USAR FECHA TAL COMO VIENE DE PYTHON
+                    fecha: consulta.fecha || "Sin fecha"
+                });
             }
             
-            totalPagesConsultas = resultado.total_pages || 1
-            
-            console.log("Página " + (currentPageConsultas + 1) + " de " + totalPagesConsultas + 
-                        " - Mostrando " + consultasPaginadasModel.count + " de " + (resultado.total || 0))
-        } else {
-            totalPagesConsultas = 1
-            console.log("No hay datos de consultas disponibles")
+            totalPagesConsultas = resultado.total_pages || 1;
         }
-        
-        debugFiltros(filtros)
     }
     // Guardar una nueva consulta
     function guardarConsulta() {
@@ -2490,22 +2448,28 @@ Item {
     function validarFormularioConsulta() {
         console.log("✅ Validando formulario de consulta...")
         
-        if (consultationForm.selectedEspecialidadIndex < 0) {
+        // ✅ DECLARAR VARIABLES ANTES DE USARLAS
+        var tieneEspecialidad = consultationForm.selectedEspecialidadIndex >= 0
+        var tieneCedula = cedulaPaciente.text.length >= 5
+        var tieneNombre = nombrePaciente.text.length >= 2
+        var tieneDetalles = detallesConsulta.text.length >= 10
+        
+        if (!tieneEspecialidad) {
             showNotification("Error", "Debe seleccionar una especialidad")
             return false
         }
         
-        if (!cedulaPaciente.text || cedulaPaciente.text.length < 5) {
+        if (!tieneCedula) {
             showNotification("Error", "Debe ingresar una cédula válida (mínimo 5 dígitos)")
             return false
         }
         
-        if (!nombrePaciente.text || nombrePaciente.text.length < 2) {
+        if (!tieneNombre) {
             showNotification("Error", "Nombre del paciente es obligatorio")
             return false
         }
         
-        if (!detallesConsulta.text || detallesConsulta.text.length < 10) {
+        if (!tieneDetalles) {
             showNotification("Error", "Los detalles de la consulta son obligatorios (mínimo 10 caracteres)")
             return false
         }
