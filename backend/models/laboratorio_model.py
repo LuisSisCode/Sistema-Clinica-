@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from ..core.excepciones import ExceptionHandler, ClinicaBaseException
 from ..repositories.laboratorio_repository import LaboratorioRepository
-
+from ..core.Signals_manager import get_global_signals
 class LaboratorioModel(QObject):
     """
     Modelo QObject para gestión completa de análisis de laboratorio - CORREGIDO
@@ -52,6 +52,8 @@ class LaboratorioModel(QObject):
         
         # Repository
         self.repository = LaboratorioRepository()
+        self.global_signals = get_global_signals()
+        self._conectar_senales_globales()
         
         # Estados internos
         self._examenesData = []
@@ -71,7 +73,16 @@ class LaboratorioModel(QObject):
     # ===============================
     # PROPERTIES BÁSICAS
     # ===============================
-    
+    def _conectar_senales_globales(self):
+        """Conecta con las señales globales para recibir actualizaciones"""
+        try:
+            # Conectar señales de tipos de análisis
+            self.global_signals.tiposAnalisisModificados.connect(self._actualizar_tipos_analisis_desde_signal)
+            self.global_signals.laboratorioNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            
+            print("Señales globales conectadas en LaboratorioModel")
+        except Exception as e:
+            print(f"Error conectando señales globales en LaboratorioModel: {e}")
     def _get_examenes_json(self) -> str:
         """Getter para exámenes en formato JSON"""
         return json.dumps(self._examenesData, default=str, ensure_ascii=False)
@@ -550,7 +561,25 @@ class LaboratorioModel(QObject):
             print(f"❌ Error recargando exámenes: {e}")
             self._examenesData = []
             self.examenesActualizados.emit()
+    @Slot()
+    def _actualizar_tipos_analisis_desde_signal(self):
+        """Actualiza tipos de análisis cuando recibe señal global"""
+        try:
+            print("📡 LaboratorioModel: Recibida señal de actualización de tipos de análisis")
+            self.cargarTiposAnalisis()
+            print("✅ Tipos de análisis actualizados desde señal global en LaboratorioModel")
+        except Exception as e:
+            print(f"❌ Error actualizando tipos desde señal: {e}")
 
+    @Slot(str)
+    def _manejar_actualizacion_global(self, mensaje: str):
+        """Maneja actualizaciones globales del laboratorio"""
+        try:
+            print(f"📡 LaboratorioModel: {mensaje}")
+            # Emitir señal para notificar a QML que hay cambio
+            self.tiposAnalisisActualizados.emit()
+        except Exception as e:
+            print(f"❌ Error manejando actualización global: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

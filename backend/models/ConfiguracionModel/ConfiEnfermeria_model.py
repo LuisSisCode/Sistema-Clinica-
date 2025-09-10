@@ -4,7 +4,7 @@ from PySide6.QtQml import qmlRegisterType
 
 from ...repositories.ConfiguracionRepositor import ConfiEnfermeriaRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
-
+from ...core.Signals_manager import get_global_signals
 class ConfiEnfermeriaModel(QObject):
     """
     Model QObject para gestión de configuración de tipos de procedimientos de enfermería en QML
@@ -35,7 +35,7 @@ class ConfiEnfermeriaModel(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+        self.global_signals = get_global_signals()
         # Repository
         self.repository = ConfiEnfermeriaRepository()
         
@@ -125,7 +125,7 @@ class ConfiEnfermeriaModel(QObject):
                 mensaje = f"Tipo de procedimiento creado exitosamente - ID: {procedimiento_id}"
                 self.tipoProcedimientoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_procedimientos("creado", procedimiento_id, nombre.strip())
                 print(f"✅ Tipo de procedimiento creado desde QML: {nombre}")
                 print(f"🔄 Datos actualizados automáticamente - Total: {len(self._tipos_procedimientos)}")
                 return True
@@ -188,7 +188,7 @@ class ConfiEnfermeriaModel(QObject):
                 mensaje = "Tipo de procedimiento actualizado exitosamente"
                 self.tipoProcedimientoActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_procedimientos("actualizado", procedimiento_id, nombre.strip() if nombre.strip() else "")
                 print(f"✅ Tipo de procedimiento actualizado desde QML: ID {procedimiento_id}")
                 return True
             else:
@@ -220,7 +220,7 @@ class ConfiEnfermeriaModel(QObject):
                 mensaje = "Tipo de procedimiento eliminado exitosamente"
                 self.tipoProcedimientoEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_procedimientos("eliminado", procedimiento_id, "")
                 print(f"🗑️ Tipo de procedimiento eliminado desde QML: ID {procedimiento_id}")
                 return True
             else:

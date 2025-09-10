@@ -4,7 +4,7 @@ from PySide6.QtQml import qmlRegisterType
 
 from ..repositories.trabajador_repository import TrabajadorRepository
 from ..core.excepciones import ExceptionHandler, ValidationError
-
+from ..core.Signals_manager import get_global_signals
 class TrabajadorModel(QObject):
     """
     Model QObject para gestión de trabajadores en QML
@@ -43,7 +43,8 @@ class TrabajadorModel(QObject):
         
         # Repository en lugar de service
         self.repository = TrabajadorRepository()
-        
+        self.global_signals = get_global_signals()
+        self._conectar_senales_globales()
         # Estado interno
         self._trabajadores: List[Dict[str, Any]] = []
         self._trabajadores_filtrados: List[Dict[str, Any]] = []
@@ -65,7 +66,17 @@ class TrabajadorModel(QObject):
     # ===============================
     # PROPERTIES - Datos para QML
     # ===============================
-    
+    def _conectar_senales_globales(self):
+        """Conecta con las señales globales para recibir actualizaciones"""
+        try:
+            # Conectar señales de tipos de trabajadores
+            self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_tipos_trabajadores_desde_signal)
+            self.global_signals.trabajadoresNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            
+            print("🔗 Señales globales conectadas en TrabajadorModel")
+        except Exception as e:
+            print(f"❌ Error conectando señales globales en TrabajadorModel: {e}")
+   
     @Property(list, notify=trabajadoresChanged)
     def trabajadores(self) -> List[Dict[str, Any]]:
         """Lista de trabajadores para mostrar en QML"""
@@ -690,7 +701,31 @@ class TrabajadorModel(QObject):
         if self._loading != loading:
             self._loading = loading
             self.loadingChanged.emit()
+    @Slot()
+    def _actualizar_tipos_trabajadores_desde_signal(self):
+        """Actualiza tipos de trabajadores cuando recibe señal global"""
+        try:
+            print("📡 TrabajadorModel: Recibida señal de actualización de tipos de trabajadores")
+            
+            # Invalidar cache si existe el método
+            if hasattr(self.repository, 'invalidate_worker_caches'):
+                self.repository.invalidate_worker_caches()
+                print("🗑️ Cache de tipos invalidado en TrabajadorModel")
+            
+            self._cargar_tipos_trabajador()
+            print("✅ Tipos de trabajadores actualizados desde señal global en TrabajadorModel")
+        except Exception as e:
+            print(f"❌ Error actualizando tipos desde señal: {e}")
 
+    @Slot(str)
+    def _manejar_actualizacion_global(self, mensaje: str):
+        """Maneja actualizaciones globales de trabajadores"""
+        try:
+            print(f"📡 TrabajadorModel: {mensaje}")
+            # Emitir señal para notificar a QML que hay cambios
+            self.tiposTrabajadorChanged.emit()
+        except Exception as e:
+            print(f"❌ Error manejando actualización global: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

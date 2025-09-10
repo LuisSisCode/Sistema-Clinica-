@@ -4,7 +4,7 @@ from PySide6.QtQml import qmlRegisterType
 
 from ...repositories.ConfiguracionRepositor import ConfiguracionRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
-
+from ...core.Signals_manager import get_global_signals
 class ConfiguracionModel(QObject):
     """
     Model QObject para gestión de configuración de tipos de gastos en QML
@@ -35,7 +35,7 @@ class ConfiguracionModel(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+        self.global_signals = get_global_signals()
         # Repository
         self.repository = ConfiguracionRepository()
         
@@ -110,7 +110,9 @@ class ConfiguracionModel(QObject):
                 mensaje = f"Tipo de gasto creado exitosamente - ID: {tipo_id}"
                 self.tipoGastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_gastos("creado", tipo_id, nombre.strip())
+                if hasattr(self, 'repository') and hasattr(self.repository, 'invalidate_all_caches'):
+                    self.repository.invalidate_all_caches()
                 print(f"✅ Tipo de gasto creado desde QML: {nombre}")
                 print(f"🔄 Datos actualizados automáticamente - Total: {len(self._tipos_gastos)}")
                 return True
@@ -168,7 +170,7 @@ class ConfiguracionModel(QObject):
                 mensaje = "Tipo de gasto actualizado exitosamente"
                 self.tipoGastoActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_gastos("actualizado", tipo_id, nombre.strip() if nombre.strip() else "")
                 print(f"✅ Tipo de gasto actualizado desde QML: ID {tipo_id}")
                 return True
             else:
@@ -200,7 +202,7 @@ class ConfiguracionModel(QObject):
                 mensaje = "Tipo de gasto eliminado exitosamente"
                 self.tipoGastoEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_gastos("eliminado", tipo_id, "")
                 print(f"🗑️ Tipo de gasto eliminado desde QML: ID {tipo_id}")
                 return True
             else:
