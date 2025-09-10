@@ -37,6 +37,9 @@ Item {
     readonly property color whiteColor: "#FFFFFF"
     readonly property color blueColor: "#3498db"
     
+    property bool showDeleteConfirmDialog: false
+    property var compraToDelete: null
+
     // MODELO PARA COMPRAS PAGINADAS
     ListModel {
         id: comprasPaginadasModel
@@ -92,6 +95,10 @@ Item {
                 "hora": compraRaw.hora || "Sin hora",
                 "total": compraRaw.total || 0.0,
                 
+                // NUEVOS CAMPOS - AGREGAR ESTAS LÍNEAS
+                "productos_texto": compraRaw.productos_texto || "Sin productos",
+                "total_productos": compraRaw.total_productos || 0,
+                
                 // Campos adicionales para compatibilidad
                 "Proveedor_Nombre": compraRaw.Proveedor_Nombre || "",
                 "Usuario": compraRaw.Usuario || "",
@@ -115,32 +122,36 @@ Item {
     function obtenerDetallesCompra(compraId) {
         if (!compraModel) return
         
-        console.log("🔍 Buscando detalles para:", compraId)
+        console.log("🔍 Obteniendo detalles mejorados para compra:", compraId)
         
         // Limpiar modelo antes de cargar nuevos datos
         detallesCompraModel.clear()
         
         var detalleCompra = compraModel.get_compra_detalle(compraId)
-        console.log("🔍 DEBUG: detalleCompra recibido:", JSON.stringify(detalleCompra))
+        console.log("📋 Detalle completo recibido:", JSON.stringify(detalleCompra))
         
         if (detalleCompra && detalleCompra.detalles) {
-            console.log("🔍 DEBUG: detalles encontrados:", detalleCompra.detalles.length)
+            console.log("✅ Procesando", detalleCompra.detalles.length, "productos")
             var items = detalleCompra.detalles
             
             for (var i = 0; i < items.length; i++) {
                 var item = items[i]
                 detallesCompraModel.append({
-                    codigo: item.Producto_Codigo || "",
-                    nombre: item.Producto_Nombre || "Producto no encontrado",
-                    cajas: item.Cantidad_Caja || 0,
-                    stockTotal: (item.Cantidad_Caja || 0) + (item.Cantidad_Unitario || 0),
-                    precioCompra: item.Precio_Unitario || 0
+                    codigo: item.codigo || "",
+                    nombre: item.nombre || "Producto no encontrado",
+                    marca: item.marca || "Sin marca",
+                    cantidad_caja: item.cantidad_caja || 0,
+                    cantidad_unitario: item.cantidad_unitario || 0,
+                    cantidad_total: item.cantidad_total || 0,
+                    precio_unitario: item.precio_unitario || 0,
+                    subtotal: item.subtotal || 0,
+                    fecha_vencimiento: item.fecha_vencimiento || "Sin fecha"
                 })
             }
             
-            console.log("📦 Items agregados al modelo:", detallesCompraModel.count)
+            console.log("📦 Items procesados en modal:", detallesCompraModel.count)
         } else {
-            console.log("❌ DEBUG: No se encontraron detalles")
+            console.log("❌ No se encontraron detalles de productos")
         }
     }
 
@@ -331,7 +342,6 @@ Item {
                 anchors.margins: 0
                 spacing: 0
                 
-                // Header de la tabla
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 50
@@ -342,7 +352,7 @@ Item {
                         spacing: 0
                         
                         Rectangle {
-                            Layout.preferredWidth: 120
+                            Layout.preferredWidth: 100
                             Layout.fillHeight: true
                             color: "#F8F9FA"
                             border.color: "#D5DBDB"
@@ -358,8 +368,7 @@ Item {
                         }
                         
                         Rectangle {
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: 250
+                            Layout.preferredWidth: 200
                             Layout.fillHeight: true
                             color: "#F8F9FA"
                             border.color: "#D5DBDB"
@@ -376,32 +385,20 @@ Item {
                             }
                         }
                         
+                        // NUEVA COLUMNA PRODUCTOS
                         Rectangle {
-                            Layout.preferredWidth: 140
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 250
                             Layout.fillHeight: true
                             color: "#F8F9FA"
                             border.color: "#D5DBDB"
                             border.width: 1
                             
                             Label {
-                                anchors.centerIn: parent
-                                text: "USUARIO"
-                                color: "#2C3E50"
-                                font.bold: true
-                                font.pixelSize: 12
-                            }
-                        }
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 140
-                            Layout.fillHeight: true
-                            color: "#F8F9FA"
-                            border.color: "#D5DBDB"
-                            border.width: 1
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "FECHA"
+                                anchors.left: parent.left
+                                anchors.leftMargin: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "PRODUCTOS"
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -417,7 +414,23 @@ Item {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: "TOTAL"
+                                text: "USUARIO"
+                                color: "#2C3E50"
+                                font.bold: true
+                                font.pixelSize: 12
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 120
+                            Layout.fillHeight: true
+                            color: "#F8F9FA"
+                            border.color: "#D5DBDB"
+                            border.width: 1
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "FECHA"
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -433,7 +446,23 @@ Item {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: "ACCIÓN"
+                                text: "TOTAL"
+                                color: "#2C3E50"
+                                font.bold: true
+                                font.pixelSize: 12
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 120
+                            Layout.fillHeight: true
+                            color: "#F8F9FA"
+                            border.color: "#D5DBDB"
+                            border.width: 1
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "ACCIONES"
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -467,8 +496,9 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
                                 
+                                // ID COMPRA
                                 Rectangle {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: 100
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -483,9 +513,9 @@ Item {
                                     }
                                 }
                                 
+                                // PROVEEDOR
                                 Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 250
+                                    Layout.preferredWidth: 200
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -503,13 +533,57 @@ Item {
                                             font.bold: true
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
-                                            Layout.maximumWidth: 220
+                                            Layout.maximumWidth: 180
                                         }
                                     }
                                 }
                                 
+                                // NUEVA COLUMNA: PRODUCTOS
                                 Rectangle {
-                                    Layout.preferredWidth: 140
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 250
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    RowLayout {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 12
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 8
+                                        
+                                        // Ícono de productos
+                                        Rectangle {
+                                            Layout.preferredWidth: 20
+                                            Layout.preferredHeight: 20
+                                            color: "#27AE60"
+                                            radius: 10
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: model.total_productos || 0
+                                                color: "#FFFFFF"
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
+                                        }
+                                        
+                                        // Texto de productos
+                                        Label {
+                                            text: model.productos_texto || "Sin productos"
+                                            color: "#2C3E50"
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                            Layout.maximumWidth: 200
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
+                                
+                                // USUARIO
+                                Rectangle {
+                                    Layout.preferredWidth: 120
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -527,13 +601,16 @@ Item {
                                         Label {
                                             text: model.usuario
                                             color: "#2C3E50"
-                                            font.pixelSize: 12
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                            Layout.maximumWidth: 80
                                         }
                                     }
                                 }
                                 
+                                // FECHA
                                 Rectangle {
-                                    Layout.preferredWidth: 140
+                                    Layout.preferredWidth: 120
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -569,8 +646,9 @@ Item {
                                     }
                                 }
                                 
+                                // TOTAL
                                 Rectangle {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: 100
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -578,7 +656,7 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 90
+                                        width: 85
                                         height: 28
                                         color: "#27AE60"
                                         radius: 14
@@ -588,43 +666,103 @@ Item {
                                             text: "Bs" + model.total.toFixed(2)
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 11
+                                            font.pixelSize: 10
                                         }
                                     }
                                 }
                                 
+                                // ACCIONES MEJORADAS
                                 Rectangle {
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: 120
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
                                     border.width: 1
                                     
-                                    Button {
+                                    RowLayout {
                                         anchors.centerIn: parent
-                                        width: 70
-                                        height: 30
-                                        text: "Ver"
+                                        spacing: 4
                                         
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                            radius: 15
+                                        // Botón Ver
+                                        Button {
+                                            width: 30
+                                            height: 30
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                                radius: 15
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: "👁️"
+                                                color: whiteColor
+                                                font.pixelSize: 12
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: {
+                                                console.log("👁️ Ver detalle de compra, index:", index)
+                                                selectedPurchase = model
+                                                obtenerDetallesCompra(model.id)
+                                                showPurchaseDetailsDialog = true
+                                            }
                                         }
                                         
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: whiteColor
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
+                                        // Botón Editar
+                                        Button {
+                                            width: 30
+                                            height: 30
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
+                                                radius: 15
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: "📋"
+                                                color: whiteColor
+                                                font.pixelSize: 12
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: {
+                                                console.log("📋 Duplicar compra:", model.id)
+                                                if (compraModel && compraModel.duplicar_compra) {
+                                                    var exito = compraModel.duplicar_compra(model.id)
+                                                    if (exito) {
+                                                        showNotification("Compra duplicada exitosamente", "success")
+                                                    }
+                                                } else {
+                                                    showNotification("Error: Función no disponible", "error")
+                                                }
+                                            }
                                         }
                                         
-                                        onClicked: {
-                                            console.log("👁️ Ver detalle de compra, index:", index)
-                                            selectedPurchase = model
-                                            obtenerDetallesCompra(model.id)
-                                            showPurchaseDetailsDialog = true
+                                        // Botón Eliminar
+                                        Button {
+                                            width: 30
+                                            height: 30
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                                                radius: 15
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: "🗑️"
+                                                color: whiteColor
+                                                font.pixelSize: 12
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: {
+                                                console.log("🗑️ Confirmar eliminar compra:", model.id)
+                                                compraToDelete = model
+                                                showDeleteConfirmDialog = true
+                                            }
                                         }
                                     }
                                 }
@@ -635,7 +773,7 @@ Item {
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 anchors.right: parent.right
-                                anchors.rightMargin: 100
+                                anchors.rightMargin: 120
                                 
                                 onClicked: {
                                     comprasTable.currentIndex = index
@@ -795,233 +933,757 @@ Item {
     Rectangle {
         id: modalContainer
         anchors.centerIn: parent
-        width: Math.min(700, parent.width * 0.9)
-        height: Math.min(500, parent.height * 0.9)
+        width: Math.min(900, parent.width * 0.95)
+        height: Math.min(600, parent.height * 0.9)
         
         visible: showPurchaseDetailsDialog
         z: 1001
         
         color: "#ffffff"
-        radius: 8
+        radius: 12
         border.color: "#dee2e6"
-        border.width: 1
+        border.width: 2
         
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 20
             spacing: 16
             
-            // Header
-            RowLayout {
+            // Header del modal
+            Rectangle {
                 Layout.fillWidth: true
+                Layout.preferredHeight: 80
+                color: "#F8F9FA"
+                radius: 8
+                border.color: "#DEE2E6"
+                border.width: 1
                 
-                Label {
-                    text: "Detalles de Compra: " + (selectedPurchase ? selectedPurchase.id : "")
-                    color: "#2C3E50"
-                    font.bold: true
-                    font.pixelSize: 16
-                }
-                
-                Item { Layout.fillWidth: true }
-                
-                Button {
-                    text: "Cerrar"
-                    width: 80
-                    height: 32
-                    background: Rectangle {
-                        color: "#ECF0F1"
-                        radius: 4
-                        border.color: "#BDC3C7"
-                        border.width: 1
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 16
+                    
+                    Rectangle {
+                        Layout.preferredWidth: 50
+                        Layout.preferredHeight: 50
+                        color: "#3498DB"
+                        radius: 25
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "🧾"
+                            font.pixelSize: 20
+                        }
                     }
-                    contentItem: Label {
-                        text: parent.text
-                        color: "#5D6D7E"
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    
+                    ColumnLayout {
+                        spacing: 4
+                        
+                        Label {
+                            text: "Detalles de Compra #" + (selectedPurchase ? selectedPurchase.id : "")
+                            color: "#2C3E50"
+                            font.bold: true
+                            font.pixelSize: 18
+                        }
+                        
+                        RowLayout {
+                            spacing: 20
+                            
+                            Label {
+                                text: "Proveedor: " + (selectedPurchase ? selectedPurchase.proveedor : "")
+                                color: "#7F8C8D"
+                                font.pixelSize: 12
+                            }
+                            
+                            Label {
+                                text: "Usuario: " + (selectedPurchase ? selectedPurchase.usuario : "")
+                                color: "#7F8C8D"
+                                font.pixelSize: 12
+                            }
+                            
+                            Label {
+                                text: "Fecha: " + (selectedPurchase ? selectedPurchase.fecha : "")
+                                color: "#7F8C8D"
+                                font.pixelSize: 12
+                            }
+                        }
                     }
-                    onClicked: showPurchaseDetailsDialog = false
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        text: "✕"
+                        width: 35
+                        height: 35
+                        background: Rectangle {
+                            color: "#E74C3C"
+                            radius: 17
+                        }
+                        contentItem: Label {
+                            text: parent.text
+                            color: "#FFFFFF"
+                            font.bold: true
+                            font.pixelSize: 16
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: showPurchaseDetailsDialog = false
+                    }
                 }
             }
             
-            // Tabla de productos
+            // Tabla de productos COMPLETA
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: "#FFFFFF"
                 border.color: "#D5DBDB"
                 border.width: 1
+                radius: 8
                 
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 0
                     
-                    // Header de tabla
+                    // Header de tabla mejorado
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 40
-                        color: "#F8F9FA"
+                        Layout.preferredHeight: 45
+                        color: "#34495E"
                         
                         RowLayout {
                             anchors.fill: parent
                             spacing: 0
                             
                             Rectangle {
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 80
                                 Layout.fillHeight: true
-                                color: "#F8F9FA"
-                                border.color: "#D5DBDB"
+                                color: "#34495E"
+                                border.color: "#2C3E50"
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
                                     text: "CÓDIGO"
+                                    color: "#FFFFFF"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                 }
                             }
                             
                             Rectangle {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 150
                                 Layout.fillHeight: true
-                                color: "#F8F9FA"
-                                border.color: "#D5DBDB"
+                                color: "#34495E"
+                                border.color: "#2C3E50"
                                 border.width: 1
                                 Label {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: "NOMBRE"
+                                    text: "PRODUCTO"
+                                    color: "#FFFFFF"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 100
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "MARCA"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 11
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 70
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "CAJAS"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 11
                                 }
                             }
                             
                             Rectangle {
                                 Layout.preferredWidth: 80
                                 Layout.fillHeight: true
-                                color: "#F8F9FA"
-                                border.color: "#D5DBDB"
+                                color: "#34495E"
+                                border.color: "#2C3E50"
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "CAJA"
+                                    text: "UNIDADES"
+                                    color: "#FFFFFF"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 90
                                 Layout.fillHeight: true
-                                color: "#F8F9FA"
-                                border.color: "#D5DBDB"
+                                color: "#34495E"
+                                border.color: "#2C3E50"
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "STOCK UNIDAD"
+                                    text: "PRECIO UNIT."
+                                    color: "#FFFFFF"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 120
+                                Layout.preferredWidth: 90
                                 Layout.fillHeight: true
-                                color: "#F8F9FA"
-                                border.color: "#D5DBDB"
+                                color: "#34495E"
+                                border.color: "#2C3E50"
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "PRECIO COMPRA"
+                                    text: "SUBTOTAL"
+                                    color: "#FFFFFF"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 110
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "F. VENCIM."
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 11
                                 }
                             }
                         }
                     }
                     
-                    // Contenido scrolleable
+                    // Contenido scrolleable mejorado
                     ScrollView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        clip: true
                         
                         ListView {
                             model: detallesCompraModel
                             
                             delegate: Rectangle {
                                 width: ListView.view.width
-                                height: 50
-                                color: "#FFFFFF"
+                                height: 55
+                                color: index % 2 === 0 ? "#FFFFFF" : "#F8F9FA"
                                 
                                 RowLayout {
                                     anchors.fill: parent
                                     spacing: 0
                                     
+                                    // CÓDIGO
                                     Rectangle {
-                                        Layout.preferredWidth: 100
+                                        Layout.preferredWidth: 80
                                         Layout.fillHeight: true
+                                        color: "transparent"
                                         border.color: "#D5DBDB"
                                         border.width: 1
-                                        Label {
+                                        
+                                        Rectangle {
                                             anchors.centerIn: parent
-                                            text: model.codigo || ""
-                                            font.pixelSize: 11
+                                            width: 65
+                                            height: 25
+                                            color: "#3498DB"
+                                            radius: 12
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: model.codigo || ""
+                                                color: "#FFFFFF"
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
                                         }
                                     }
                                     
+                                    // PRODUCTO
                                     Rectangle {
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 150
                                         Layout.fillHeight: true
+                                        color: "transparent"
                                         border.color: "#D5DBDB"
                                         border.width: 1
+                                        
                                         Label {
                                             anchors.left: parent.left
                                             anchors.leftMargin: 8
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: model.nombre || ""
+                                            color: "#2C3E50"
+                                            font.bold: true
                                             font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                            Layout.maximumWidth: parent.width - 16
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 80
-                                        Layout.fillHeight: true
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: model.cajas || "0"
-                                            font.pixelSize: 11
-                                        }
-                                    }
-                                    
+                                    // MARCA
                                     Rectangle {
                                         Layout.preferredWidth: 100
                                         Layout.fillHeight: true
+                                        color: "transparent"
                                         border.color: "#D5DBDB"
                                         border.width: 1
+                                        
                                         Label {
                                             anchors.centerIn: parent
-                                            text: model.stockTotal || "0"
+                                            text: model.marca || "Sin marca"
+                                            color: "#7F8C8D"
+                                            font.pixelSize: 10
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                    
+                                    // CAJAS
+                                    Rectangle {
+                                        Layout.preferredWidth: 70
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 35
+                                            height: 20
+                                            color: "#F39C12"
+                                            radius: 10
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: model.cantidad_caja || "0"
+                                                color: "#FFFFFF"
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
+                                        }
+                                    }
+                                    
+                                    // UNIDADES
+                                    Rectangle {
+                                        Layout.preferredWidth: 80
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 45
+                                            height: 20
+                                            color: "#9B59B6"
+                                            radius: 10
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: model.cantidad_total || "0"
+                                                color: "#FFFFFF"
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
+                                        }
+                                    }
+                                    
+                                    // PRECIO UNITARIO
+                                    Rectangle {
+                                        Layout.preferredWidth: 90
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "Bs" + (model.precio_unitario ? model.precio_unitario.toFixed(2) : "0.00")
+                                            color: "#E67E22"
+                                            font.bold: true
                                             font.pixelSize: 11
                                         }
                                     }
                                     
+                                    // SUBTOTAL
                                     Rectangle {
-                                        Layout.preferredWidth: 120
+                                        Layout.preferredWidth: 90
                                         Layout.fillHeight: true
+                                        color: "transparent"
                                         border.color: "#D5DBDB"
                                         border.width: 1
+                                        
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "Bs" + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
+                                            text: "Bs" + (model.subtotal ? model.subtotal.toFixed(2) : "0.00")
+                                            color: "#27AE60"
+                                            font.bold: true
                                             font.pixelSize: 11
+                                        }
+                                    }
+                                    
+                                    // FECHA VENCIMIENTO
+                                    Rectangle {
+                                        Layout.preferredWidth: 110
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            
+                                            Label {
+                                                text: "📅"
+                                                font.pixelSize: 12
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                            
+                                            Label {
+                                                text: model.fecha_vencimiento || "Sin fecha"
+                                                color: "#E74C3C"
+                                                font.bold: true
+                                                font.pixelSize: 9
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
                                         }
                                     }
                                 }
                             }
+                            
+                            // Estado vacío
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 300
+                                height: 100
+                                color: "transparent"
+                                visible: detallesCompraModel.count === 0
+                                
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 8
+                                    
+                                    Label {
+                                        text: "📦"
+                                        font.pixelSize: 32
+                                        color: "#BDC3C7"
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    Label {
+                                        text: "No se encontraron productos"
+                                        color: "#7F8C8D"
+                                        font.pixelSize: 14
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                }
+                            }
                         }
+                    }
+                }
+            }
+            
+            // RESUMEN MEJORADO
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 60
+                color: "#2C3E50"
+                radius: 8
+                
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 30
+                    
+                    // Total productos
+                    RowLayout {
+                        spacing: 8
+                        
+                        Rectangle {
+                            width: 30
+                            height: 30
+                            color: "#3498DB"
+                            radius: 15
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "📦"
+                                font.pixelSize: 14
+                            }
+                        }
+                        
+                        ColumnLayout {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Productos:"
+                                color: "#BDC3C7"
+                                font.pixelSize: 11
+                            }
+                            
+                            Label {
+                                text: detallesCompraModel.count.toString()
+                                color: "#FFFFFF"
+                                font.bold: true
+                                font.pixelSize: 14
+                            }
+                        }
+                    }
+                    
+                    // Total unidades
+                    RowLayout {
+                        spacing: 8
+                        
+                        Rectangle {
+                            width: 30
+                            height: 30
+                            color: "#9B59B6"
+                            radius: 15
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "📊"
+                                font.pixelSize: 14
+                            }
+                        }
+                        
+                        ColumnLayout {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Unidades:"
+                                color: "#BDC3C7"
+                                font.pixelSize: 11
+                            }
+                            
+                            Label {
+                                text: {
+                                    var total = 0
+                                    for (var i = 0; i < detallesCompraModel.count; i++) {
+                                        var item = detallesCompraModel.get(i)
+                                        total += (item.cantidad_total || 0)
+                                    }
+                                    return total.toString()
+                                }
+                                color: "#FFFFFF"
+                                font.bold: true
+                                font.pixelSize: 14
+                            }
+                        }
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    // Total compra
+                    RowLayout {
+                        spacing: 8
+                        
+                        Rectangle {
+                            width: 35
+                            height: 35
+                            color: "#27AE60"
+                            radius: 17
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "💰"
+                                font.pixelSize: 16
+                            }
+                        }
+                        
+                        ColumnLayout {
+                            spacing: 2
+                            
+                            Label {
+                                text: "TOTAL COMPRA:"
+                                color: "#BDC3C7"
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
+                            
+                            Label {
+                                text: "Bs" + (selectedPurchase ? selectedPurchase.total.toFixed(2) : "0.00")
+                                color: "#FFFFFF"
+                                font.bold: true
+                                font.pixelSize: 16
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Rectangle {
+        id: deleteConfirmOverlay
+        anchors.fill: parent
+        color: "#000000"
+        opacity: 0.7
+        visible: showDeleteConfirmDialog
+        z: 2000
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                showDeleteConfirmDialog = false
+            }
+        }
+    }
+
+    Rectangle {
+        id: deleteConfirmDialog
+        anchors.centerIn: parent
+        width: 400
+        height: 200
+        
+        visible: showDeleteConfirmDialog
+        z: 2001
+        
+        color: "#ffffff"
+        radius: 12
+        border.color: "#dee2e6"
+        border.width: 2
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 20
+            
+            // Header
+            RowLayout {
+                Layout.fillWidth: true
+                
+                Rectangle {
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 40
+                    color: "#dc3545"
+                    radius: 20
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "⚠️"
+                        font.pixelSize: 20
+                    }
+                }
+                
+                ColumnLayout {
+                    spacing: 4
+                    
+                    Label {
+                        text: "Confirmar Eliminación"
+                        color: "#2C3E50"
+                        font.bold: true
+                        font.pixelSize: 16
+                    }
+                    
+                    Label {
+                        text: compraToDelete ? `Compra #${compraToDelete.id} - $${compraToDelete.total}` : ""
+                        color: "#7F8C8D"
+                        font.pixelSize: 12
+                    }
+                }
+                
+                Item { Layout.fillWidth: true }
+            }
+            
+            // Mensaje
+            Label {
+                text: "¿Está seguro de eliminar esta compra?\n\n• Se revertirá el stock de todos los productos\n• Esta acción NO se puede deshacer"
+                color: "#495057"
+                font.pixelSize: 14
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
+            
+            // Botones
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                
+                Item { Layout.fillWidth: true }
+                
+                Button {
+                    Layout.preferredWidth: 100
+                    Layout.preferredHeight: 36
+                    text: "Cancelar"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? "#e9ecef" : "#f8f9fa"
+                        radius: 18
+                        border.color: "#dee2e6"
+                        border.width: 1
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: "#6c757d"
+                        font.bold: true
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        showDeleteConfirmDialog = false
+                        compraToDelete = null
+                    }
+                }
+                
+                Button {
+                    Layout.preferredWidth: 100
+                    Layout.preferredHeight: 36
+                    text: "Eliminar"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker("#dc3545", 1.1) : "#dc3545"
+                        radius: 18
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        if (compraToDelete && compraModel && compraModel.eliminar_compra) {
+                            console.log("🗑️ Eliminando compra:", compraToDelete.id)
+                            var exito = compraModel.eliminar_compra(compraToDelete.id)
+                            if (exito) {
+                                showNotification("Compra eliminada exitosamente", "success")
+                            }
+                        }
+                        
+                        showDeleteConfirmDialog = false
+                        compraToDelete = null
                     }
                 }
             }
@@ -1031,6 +1693,11 @@ Item {
     // Función para obtener total de compras
     function getTotalComprasCount() {
         return compraModel ? compraModel.total_compras_mes : 0
+    }
+    // FUNCIÓN DE NOTIFICACIÓN (agregar si no existe)
+    function showNotification(message, type) {
+        console.log(`[${type.toUpperCase()}] ${message}`)
+        // Aquí puedes implementar una notificación visual si tienes un sistema de toast
     }
 
     Component.onCompleted: {

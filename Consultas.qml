@@ -2330,51 +2330,33 @@ Item {
         updatePaginatedModel()
     }
     function updateEspecialidadesCombo() {
-        if (filtroEspecialidad && consultaModel && consultaModel.especialidades) {
-            var especialidades = ["Todas"]
-            especialidadMap = [] // Reiniciar el mapa
-            
-            for (var i = 0; i < consultaModel.especialidades.length; i++) {
-                var esp = consultaModel.especialidades[i]
-                if (esp && esp.text) {
-                    var nombreEspecialidad = esp.text
-                    especialidades.push(nombreEspecialidad)
-                    especialidadMap.push({
-                        id: esp.id,
-                        nombre: nombreEspecialidad,
-                        data: esp
-                    })
-                }
-            }
-            
-            // Solo actualizar si el modelo ha cambiado
-            var currentModel = filtroEspecialidad.model || []
-            var shouldUpdate = currentModel.length !== especialidades.length
-            
-            if (!shouldUpdate) {
-                for (var j = 0; j < currentModel.length; j++) {
-                    if (currentModel[j] !== especialidades[j]) {
-                        shouldUpdate = true
-                        break
+        if (filtroEspecialidad && consultaModel) {
+            // ✅ USAR DIRECTAMENTE LAS ESPECIALIDADES DISPONIBLES:
+            if (consultaModel.especialidades) {
+                var especialidades = ["Todas"]
+                especialidadMap = []
+                
+                for (var i = 0; i < consultaModel.especialidades.length; i++) {
+                    var esp = consultaModel.especialidades[i]
+                    if (esp && esp.text) {
+                        var nombreEspecialidad = esp.text
+                        especialidades.push(nombreEspecialidad)
+                        especialidadMap.push({
+                            id: esp.id,
+                            nombre: nombreEspecialidad,
+                            data: esp
+                        })
                     }
                 }
-            }
-            
-            if (shouldUpdate) {
-                var currentIndex = filtroEspecialidad.currentIndex
-                var currentText = filtroEspecialidad.currentText
                 
-                filtroEspecialidad.model = especialidades
+                // Actualizar modelo solo si cambió
+                var shouldUpdate = !filtroEspecialidad.model || 
+                                filtroEspecialidad.model.length !== especialidades.length
                 
-                // Restaurar la selección si es posible
-                var newIndex = especialidades.indexOf(currentText)
-                if (newIndex >= 0) {
-                    filtroEspecialidad.currentIndex = newIndex
-                } else {
-                    filtroEspecialidad.currentIndex = 0
+                if (shouldUpdate) {
+                    filtroEspecialidad.model = especialidades
+                    console.log("🔁 Combo especialidad actualizado. Elementos:", especialidades.length)
                 }
-                
-                console.log("🔁 Combo especialidad actualizado. Elementos:", especialidades.length)
             }
         }
     }

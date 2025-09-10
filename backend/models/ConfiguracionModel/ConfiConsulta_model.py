@@ -4,7 +4,7 @@ from PySide6.QtQml import qmlRegisterType
 
 from ...repositories.ConfiguracionRepositor import ConfiConsultaRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
-
+from ...core.Signals_manager import get_global_signals
 class ConfiConsultaModel(QObject):
     """
     Model QObject para gestión de configuración de especialidades/consultas en QML
@@ -35,7 +35,7 @@ class ConfiConsultaModel(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+        self.global_signals = get_global_signals()
         # Repository
         self.repository = ConfiConsultaRepository()
         
@@ -115,7 +115,7 @@ class ConfiConsultaModel(QObject):
                 mensaje = f"Especialidad creada exitosamente - ID: {especialidad_id}"
                 self.especialidadCreada.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_especialidades("creado", especialidad_id, nombre.strip())
                 print(f"✅ Especialidad creada desde QML: {nombre}")
                 print(f"📄 Datos actualizados automáticamente - Total: {len(self._especialidades)}")
                 return True
@@ -180,7 +180,7 @@ class ConfiConsultaModel(QObject):
                 mensaje = "Especialidad actualizada exitosamente"
                 self.especialidadActualizada.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_especialidades("actualizado", especialidad_id, nombre.strip() if nombre.strip() else "")
                 print(f"✅ Especialidad actualizada desde QML: ID {especialidad_id}")
                 return True
             else:
@@ -212,7 +212,7 @@ class ConfiConsultaModel(QObject):
                 mensaje = "Especialidad eliminada exitosamente"
                 self.especialidadEliminada.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_especialidades("eliminado", especialidad_id, "")
                 print(f"🗑️ Especialidad eliminada desde QML: ID {especialidad_id}")
                 return True
             else:

@@ -14,6 +14,7 @@ from generar_pdf import GeneradorReportesPDF
 from backend.models.inventario_model import InventarioModel, register_inventario_model
 from backend.models.venta_model import VentaModel, register_venta_model
 from backend.models.compra_model import CompraModel, register_compra_model
+from backend.models.proveedor_model import ProveedorModel, register_proveedor_model  # ✅ AGREGADO
 from backend.models.usuario_model import UsuarioModel, register_usuario_model
 from backend.models.consulta_model import ConsultaModel, register_consulta_model
 from backend.models.gasto_model import GastoModel, register_gasto_model
@@ -67,6 +68,7 @@ class AppController(QObject):
         self.inventario_model = None
         self.venta_model = None
         self.compra_model = None
+        self.proveedor_model = None  # ✅ AGREGADO
         self.consulta_model = None
         self.paciente_model = None
         self.usuario_model = None
@@ -81,6 +83,7 @@ class AppController(QObject):
         self.confi_trabajadores_model = None
         self.reportes_model = None
         self.dashboard_model = None
+
     # ===============================
     # INICIALIZACIÓN DE MODELS
     # ===============================
@@ -95,6 +98,7 @@ class AppController(QObject):
             self.inventario_model = InventarioModel()
             self.venta_model = VentaModel()
             self.compra_model = CompraModel()
+            self.proveedor_model = ProveedorModel()  # ✅ AGREGADO
             self.consulta_model = ConsultaModel()
             self.paciente_model = PacienteModel()
             self.usuario_model = UsuarioModel()
@@ -142,6 +146,18 @@ class AppController(QObject):
             self.inventario_model.operacionError.connect(self._on_model_error)
             self.venta_model.operacionError.connect(self._on_model_error)
             self.compra_model.operacionError.connect(self._on_model_error)
+            
+            # ✅ CONECTAR PROVEEDOR MODEL
+            if self.proveedor_model:
+                self.proveedor_model.operacionError.connect(self._on_model_error)
+                self.proveedor_model.operacionExitosa.connect(self._on_model_success)
+                
+                # Conectar señales específicas del ProveedorModel
+                self.proveedor_model.proveedorCreado.connect(self._on_proveedor_creado)
+                self.proveedor_model.proveedorActualizado.connect(self._on_proveedor_actualizado)
+                self.proveedor_model.proveedorEliminado.connect(self._on_proveedor_eliminado)
+                print("🔗 ProveedorModel conectado correctamente")
+            
             self.usuario_model.errorOccurred.connect(self._on_model_error)
             self.gasto_model.errorOccurred.connect(self._on_model_error)
 
@@ -156,7 +172,6 @@ class AppController(QObject):
             if self.laboratorio_model:
                 self.laboratorio_model.errorOcurrido.connect(self._on_model_error)
                 self.laboratorio_model.operacionExitosa.connect(self._on_model_success)
-
 
             # ✅ CONECTAR TRABAJADOR MODEL
             if self.trabajador_model:
@@ -259,11 +274,29 @@ class AppController(QObject):
                 self.reportes_model.set_app_controller(self)
                 print("🔗 ReportesModel conectado correctamente")
 
-
         except Exception as e:
             print(f"❌ Error conectando models: {e}")
 
-    @Slot(bool, str, int)
+    # ✅ HANDLERS PARA PROVEEDOR MODEL
+    @Slot(int, str)
+    def _on_proveedor_creado(self, proveedor_id: int, nombre: str):
+        """Handler cuando se crea un proveedor"""
+        print(f"🢷 Proveedor creado: {nombre} (ID: {proveedor_id})")
+        self.showNotification("Proveedor Creado", f"Proveedor '{nombre}' agregado exitosamente")
+
+    @Slot(int, str)
+    def _on_proveedor_actualizado(self, proveedor_id: int, nombre: str):
+        """Handler cuando se actualiza un proveedor"""
+        print(f"✏️ Proveedor actualizado: {nombre} (ID: {proveedor_id})")
+        self.showNotification("Proveedor Actualizado", f"Proveedor '{nombre}' actualizado exitosamente")
+
+    @Slot(int, str)
+    def _on_proveedor_eliminado(self, proveedor_id: int, nombre: str):
+        """Handler cuando se elimina un proveedor"""
+        print(f"🗑️ Proveedor eliminado: {nombre} (ID: {proveedor_id})")
+        self.showNotification("Proveedor Eliminado", f"Proveedor '{nombre}' eliminado exitosamente")
+
+    @Slot(bool, str)
     def _on_reporte_generado(self, success: bool, message: str, total_registros: int):
         """Handler cuando se genera un reporte"""
         if success:
@@ -640,37 +673,7 @@ class AppController(QObject):
     
     # ===============================
     # GETTERS PARA MODELS (ACCESO DESDE QML)
-    # ✅ HANDLERS PARA TIPO TRABAJOS MODEL
-    @Slot(bool, str)
-    def _on_tipo_trabajador_creado(self, success: bool, message: str):
-        """Handler cuando se crea un tipo de trabajador"""
-        if success:
-            print(f"👷‍♂️ Tipo de trabajador creado exitosamente: {message}")
-            self.showNotification("Tipo Creado", message)
-        else:
-            print(f"❌ Error creando tipo de trabajador: {message}")
-            self.showNotification("Error", f"Error creando tipo: {message}")
-
-    @Slot(bool, str)
-    def _on_tipo_trabajador_actualizado(self, success: bool, message: str):
-        """Handler cuando se actualiza un tipo de trabajador"""
-        if success:
-            print(f"✏️ Tipo de trabajador actualizado exitosamente: {message}")
-            self.showNotification("Tipo Actualizado", message)
-        else:
-            print(f"❌ Error actualizando tipo de trabajador: {message}")
-            self.showNotification("Error", f"Error actualizando tipo: {message}")
-
-    @Slot(bool, str)
-    def _on_tipo_trabajador_eliminado(self, success: bool, message: str):
-        """Handler cuando se elimina un tipo de trabajador"""
-        if success:
-            print(f"🗑️ Tipo de trabajador eliminado exitosamente: {message}")
-            self.showNotification("Tipo Eliminado", message)
-        else:
-            print(f"❌ Error eliminando tipo de trabajador: {message}")
-            self.showNotification("Error", f"Error eliminando tipo: {message}")
-    
+    # ===============================
     
     @Property(QObject, notify=modelsReady)
     def inventario_model_instance(self):
@@ -686,6 +689,12 @@ class AppController(QObject):
     def compra_model_instance(self):
         """Propiedad para acceder al CompraModel desde QML"""
         return self.compra_model
+    
+    # ✅ GETTER PARA PROVEEDOR MODEL
+    @Property(QObject, notify=modelsReady)
+    def proveedor_model_instance(self):
+        """Propiedad para acceder al ProveedorModel desde QML"""
+        return self.proveedor_model
     
     @Property(QObject, notify=modelsReady)
     def consulta_model_instance(self):
@@ -824,6 +833,61 @@ class AppController(QObject):
             print(f"❌ Error generando reporte ventas: {e}")
             return ""
     
+    # ✅ GENERAR REPORTE DE PROVEEDORES
+    @Slot(str, result=str)
+    def generar_reporte_proveedores(self, tipo_reporte: str):
+        """Genera reporte PDF de proveedores usando el model"""
+        try:
+            if not self.proveedor_model:
+                print("❌ ProveedorModel no disponible")
+                return ""
+            
+            # Obtener datos según tipo de reporte
+            datos = []
+            
+            if tipo_reporte == "todos":
+                # Obtener todos los proveedores
+                datos = self.proveedor_model.proveedores
+            elif tipo_reporte == "estadisticas":
+                # Obtener estadísticas de proveedores
+                datos = self.proveedor_model.resumen
+            elif tipo_reporte == "activos":
+                # Obtener proveedores activos
+                datos = [p for p in self.proveedor_model.proveedores if p.get('Estado') == 'Activo']
+            elif tipo_reporte == "compras_recientes":
+                # Obtener proveedores con compras recientes
+                datos = [p for p in self.proveedor_model.proveedores if p.get('Total_Compras', 0) > 0]
+            else:
+                print(f"⚠️ Tipo de reporte no reconocido: {tipo_reporte}")
+                return ""
+            
+            if not datos:
+                print("⚠️ No hay datos para generar el reporte de proveedores")
+                return ""
+            
+            # Convertir a JSON y generar PDF
+            import json
+            datos_json = json.dumps(datos, default=str)
+            
+            # Generar PDF con el tipo específico
+            pdf_path = self.generarReportePDF(
+                datos_json,
+                f"proveedores_{tipo_reporte}",
+                "",  # fecha_desde
+                ""   # fecha_hasta
+            )
+            
+            if pdf_path:
+                print(f"✅ Reporte de proveedores generado: {pdf_path}")
+            
+            return pdf_path
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de proveedores: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+    
     @Slot(str, result=str)
     def generar_reporte_usuarios(self, tipo_reporte: str):
         """Genera reporte PDF de usuarios usando el model"""
@@ -860,7 +924,7 @@ class AppController(QObject):
         except Exception as e:
             print(f"❌ Error generando reporte usuarios: {e}")
             return ""
-    
+
     # ✅ GENERAR REPORTE DE TRABAJADORES
     @Slot(str, result=str)
     def generar_reporte_trabajadores(self, tipo_reporte: str):
@@ -1353,6 +1417,7 @@ def register_qml_types():
         register_inventario_model()
         register_venta_model() 
         register_compra_model()
+        register_proveedor_model()  # ✅ AGREGADO
         register_usuario_model()
         register_consulta_model()
         register_gasto_model()
@@ -1377,6 +1442,7 @@ def register_data_models():
     """Registra todos los modelos de datos para QML"""
     try: 
         register_trabajador_model()
+        register_proveedor_model()  # ✅ AGREGADO
         register_confi_laboratorio_model()
         register_confi_enfermeria_model()
         register_confi_consulta_model()
@@ -1424,11 +1490,12 @@ def preload_qml_files():
         "ServiciosBasicos.qml",
         "Usuario.qml",
         "Trabajadores.qml",
+        "Proveedores.qml",  # ✅ AGREGADO
         "Reportes.qml",
         "Configuracion.qml"
     ]
     
-    print("🔄 Precargando archivos QML...")
+    print("📄 Precargando archivos QML...")
     loaded_count = 0
     
     for qml_file in qml_files:

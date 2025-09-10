@@ -4,7 +4,7 @@ from PySide6.QtQml import qmlRegisterType
 
 from ...repositories.ConfiguracionRepositor import ConfiLaboratorioRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
-
+from ...core.Signals_manager import get_global_signals
 class ConfiLaboratorioModel(QObject):
     """
     Model QObject para gestión de configuración de tipos de análisis en QML
@@ -50,7 +50,9 @@ class ConfiLaboratorioModel(QObject):
         
         # Configuración inicial
         self._cargar_datos_iniciales()
-        
+        self.global_signals = get_global_signals()
+        # Repository
+        self.repository = ConfiLaboratorioRepository()
         print("🧪 ConfiLaboratorioModel inicializado")
     
     # ===============================
@@ -113,7 +115,7 @@ class ConfiLaboratorioModel(QObject):
                 mensaje = f"Tipo de análisis creado exitosamente - ID: {tipo_id}"
                 self.tipoAnalisisCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_analisis("creado", tipo_id, nombre.strip())
                 print(f"✅ Tipo de análisis creado desde QML: {nombre}")
                 print(f"🔄 Datos actualizados automáticamente - Total: {len(self._tipos_analisis)}")
                 return True
@@ -178,6 +180,7 @@ class ConfiLaboratorioModel(QObject):
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Tipo de análisis actualizado desde QML: ID {tipo_id}")
+                self.global_signals.notificar_cambio_tipos_analisis("actualizado", tipo_id, nombre.strip() if nombre.strip() else "")
                 return True
             else:
                 error_msg = "Error actualizando tipo de análisis"
@@ -210,6 +213,7 @@ class ConfiLaboratorioModel(QObject):
                 self.successMessage.emit(mensaje)
                 
                 print(f"🗑️ Tipo de análisis eliminado desde QML: ID {tipo_id}")
+                self.global_signals.notificar_cambio_tipos_analisis("eliminado", tipo_id, "")
                 return True
             else:
                 error_msg = "Error eliminando tipo de análisis"

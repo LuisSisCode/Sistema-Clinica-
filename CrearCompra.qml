@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-// Componente independiente para crear nueva compra
+// Componente independiente para crear nueva compra - SIN gestión de proveedores
 Item {
     id: crearCompraRoot
     
@@ -58,7 +58,6 @@ Item {
     property color lightGrayColor: "#bdc3c7"
 
     // Estados de la interfaz
-    property bool showProviderDialog: false
     property bool showSuccessMessage: false
     property string successMessage: ""
     property bool showProductDropdown: false
@@ -92,7 +91,7 @@ Item {
         id: productSearchResultsModel
     }
     
-    // PROPIEDADES PARA PROVEEDORES
+    // PROPIEDADES PARA PROVEEDORES - SIMPLIFICADO
     property var providerNames: ["Seleccionar proveedor..."]
 
     // Timer para ocultar mensaje de éxito
@@ -189,6 +188,7 @@ Item {
             console.log("📦 CrearCompra: Productos en dropdown:", productSearchResultsModel.count)
         })
     }
+
     // FUNCIÓN NUEVA: Seleccionar producto existente
     function seleccionarProductoExistente(codigo, nombre) {
         console.log("✅ Seleccionando producto existente:", codigo, nombre)
@@ -393,45 +393,43 @@ Item {
         
         console.log("🚚 Total calculado:", totalCalculado)
         
-//--------------------------ACA QUEDAMOOOOOS---------------------------------------------------------
-
         // Llamar a la función central de farmacia
         var compraId = null
         try {
-        console.log("🚚 Procesando compra con CompraModel...")
+            console.log("🚚 Procesando compra con CompraModel...")
 
-        // Encontrar ID del proveedor
-        var proveedorId = 0
-        var proveedores = compraModel.proveedores || []
-        for (var p = 0; p < proveedores.length; p++) {
-            var proveedor = proveedores[p]
-            var nombreProveedor = proveedor.Nombre || proveedor.nombre
-            if (nombreProveedor === newPurchaseProvider) {
-                proveedorId = proveedor.id
-                break
+            // Encontrar ID del proveedor
+            var proveedorId = 0
+            var proveedores = compraModel.proveedores || []
+            for (var p = 0; p < proveedores.length; p++) {
+                var proveedor = proveedores[p]
+                var nombreProveedor = proveedor.Nombre || proveedor.nombre
+                if (nombreProveedor === newPurchaseProvider) {
+                    proveedorId = proveedor.id
+                    break
+                }
             }
-        }
 
-        if (proveedorId === 0) {
-            showSuccess("⚠ Error: Proveedor no válido")
-            return false
-        }
+            if (proveedorId === 0) {
+                showSuccess("⚠ Error: Proveedor no válido")
+                return false
+            }
 
-        // Establecer proveedor y limpiar items previos
-        compraModel.set_proveedor_seleccionado(proveedorId)
-        compraModel.limpiar_items_compra()
+            // Establecer proveedor y limpiar items previos
+            compraModel.set_proveedor_seleccionado(proveedorId)
+            compraModel.limpiar_items_compra()
 
-        // Agregar items a CompraModel
-        for (var j = 0; j < productosArray.length; j++) {
-            var prod = productosArray[j]
-            compraModel.agregar_item_compra(
-            prod.codigo,
-            prod.cajas || 0,
-            prod.stockTotal || prod.cantidad || 0,
-            prod.precioCompra,
-            prod.fechaVencimiento || "2025-12-31"
-            )
-        }
+            // Agregar items a CompraModel
+            for (var j = 0; j < productosArray.length; j++) {
+                var prod = productosArray[j]
+                compraModel.agregar_item_compra(
+                    prod.codigo,
+                    prod.cajas || 0,
+                    prod.stockTotal || prod.cantidad || 0,
+                    prod.precioCompra,
+                    prod.fechaVencimiento || "2025-12-31"
+                )
+            }
         } catch (e) {
             console.log("❌ Error al procesar compra:", e)
             showSuccess("⚠ Error inesperado al procesar la compra")
@@ -441,7 +439,7 @@ Item {
         // Procesar la compra
         var exito = compraModel.procesar_compra_actual()
         compraId = exito ? "PROCESSED" : null
-        // ---
+
         if (compraId) {
             console.log("✅ Compra completada en sistema central:", compraId)
             
@@ -484,7 +482,7 @@ Item {
     }
 
     // ============================================================================
-    // INTERFAZ DE USUARIO PRINCIPAL - ESTRUCTURA BIEN ORGANIZADA
+    // INTERFAZ DE USUARIO PRINCIPAL - SIN DIÁLOGO DE PROVEEDORES
     // ============================================================================
     
     Rectangle {
@@ -625,10 +623,17 @@ Item {
                         anchors.margins: spacing20
                         spacing: spacing16
                         
-                        // Fila 1: Selección de proveedor
+                        // Fila 1: Selección de proveedor - SIMPLIFICADO
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: spacing12
+                            
+                            Label {
+                                text: "🢷 Proveedor:"
+                                font.pixelSize: fontLarge
+                                font.bold: true
+                                color: textColor
+                            }
                             
                             ComboBox {
                                 id: providerCombo
@@ -660,28 +665,15 @@ Item {
                                 }
                             }
                             
-                            Button {
-                                Layout.preferredWidth: inputHeight
-                                Layout.preferredHeight: inputHeight
-                                
-                                background: Rectangle {
-                                    color: successColor
-                                    radius: radiusMedium
-                                }
-                                
-                                contentItem: Label {
-                                    text: "+"
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 18
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: showProviderDialog = true
+                            // NUEVA NOTA: Dirigir a módulo de proveedores
+                            Label {
+                                text: "💡 Para gestionar proveedores, usa el módulo Farmacia → Proveedores"
+                                color: "#666"
+                                font.pixelSize: fontSmall
+                                font.italic: true
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
                             }
-                            
-                            Item { Layout.fillWidth: true }
                         }
                         
                         // Fila 2: Título de búsqueda
@@ -1487,391 +1479,9 @@ Item {
         }
     }
 
-    // ============================================================================
-    // DIÁLOGO DE PROVEEDORES
-    // ============================================================================
-    
-    // Fondo del diálogo
-    Rectangle {
-        id: configProveedoresBackground
-        anchors.fill: parent
-        color: "black"
-        opacity: showProviderDialog ? 0.5 : 0
-        visible: opacity > 0
-        z: 50
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: showProviderDialog = false
-        }
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-
-    // Diálogo principal
-    Rectangle {
-        id: configProveedoresDialog
-        anchors.centerIn: parent
-        width: Math.min(700, parent.width * 0.9)
-        height: Math.min(600, parent.height * 0.9)
-        color: whiteColor
-        radius: radiusLarge
-        border.color: lightGrayColor
-        border.width: 2
-        visible: showProviderDialog
-        z: 51
-        
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-            
-            // Header del diálogo
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 350
-                color: whiteColor
-                radius: radiusLarge
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: spacing24
-                    spacing: spacing16
-                    
-                    Label {
-                        Layout.fillWidth: true
-                        text: "🏢 Configuración de Proveedores"
-                        font.pixelSize: fontHeader
-                        font.bold: true
-                        color: textColor
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    
-                    // Formulario para agregar nuevo proveedor
-                    GroupBox {
-                        Layout.fillWidth: true
-                        title: "Agregar Nuevo Proveedor"
-                        
-                        label: Label {
-                            text: parent.title
-                            font.pixelSize: fontLarge
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        background: Rectangle {
-                            color: "#f8f9fa"
-                            border.color: lightGrayColor
-                            border.width: 1
-                            radius: radiusMedium
-                        }
-                        
-                        GridLayout {
-                            anchors.fill: parent
-                            columns: 2
-                            rowSpacing: spacing12
-                            columnSpacing: spacing12
-                            
-                            Label {
-                                text: "Nombre Proveedor:"
-                                font.bold: true
-                                font.pixelSize: fontMedium
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProveedorNombre
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                placeholderText: "Ej: Farmacéutica Nacional S.A."
-                                font.pixelSize: fontMedium
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: radiusMedium
-                                }
-                            }
-                            
-                            Label {
-                                text: "Celular:"
-                                font.bold: true
-                                font.pixelSize: fontMedium
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProveedorCelular
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                placeholderText: "Ej: +591 67819311"
-                                font.pixelSize: fontMedium
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: radiusMedium
-                                }
-                            }
-                            
-                            Label {
-                                text: "Correo (opcional):"
-                                font.bold: true
-                                font.pixelSize: fontMedium
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProveedorCorreo
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                placeholderText: "Ej: ventas@proveedor.com"
-                                font.pixelSize: fontMedium
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: radiusMedium
-                                }
-                            }
-                            
-                            Label {
-                                text: "Ubicación:"
-                                font.bold: true
-                                font.pixelSize: fontMedium
-                                color: textColor
-                            }
-                            TextField {
-                                id: nuevoProveedorUbicacion
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                placeholderText: "Ej: Av. Principal 123, Ciudad Capital"
-                                font.pixelSize: fontMedium
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: lightGrayColor
-                                    border.width: 1
-                                    radius: radiusMedium
-                                }
-                            }
-                            
-                            Item { }
-                            Button {
-                                Layout.alignment: Qt.AlignRight
-                                Layout.preferredHeight: buttonHeight
-                                text: "➕ Agregar"
-                                enabled: nuevoProveedorNombre.text.length > 0 && nuevoProveedorCelular.text.length > 0
-                                background: Rectangle {
-                                    color: enabled ? successColor : darkGrayColor
-                                    radius: radiusMedium
-                                }
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: fontMedium
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                onClicked: {
-                                    if (nuevoProveedorNombre.text.length > 0 && nuevoProveedorUbicacion.text.length > 0) {
-                                        // Agregar al modelo central de farmacia
-                                        if (compraModel) {
-                                            var nombre = nuevoProveedorNombre.text.trim()
-                                            var ubicacion = nuevoProveedorUbicacion.text.trim()
-
-                                            var proveedorId = compraModel.crear_proveedor(
-                                                nombre,
-                                                ubicacion
-                                            )
-                                            var agregado = proveedorId > 0
-                                            if (agregado) {
-                                                // Mostrar en terminal la información agregada
-                                                console.log("✅ Proveedor agregado:", {
-                                                    id: proveedorId,
-                                                    nombre: nombre,
-                                                    ubicacion: ubicacion
-                                                })
-
-                                                // Actualizar lista de proveedores
-                                                updateProviderNames()
-
-                                                // Limpiar campos
-                                                nuevoProveedorNombre.text = ""
-                                                nuevoProveedorUbicacion.text = ""
-
-                                                showSuccess("✅ Proveedor agregado exitosamente")
-                                            } else {
-                                                showSuccess("⚠ Error al agregar proveedor")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Lista de proveedores existentes
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: spacing24
-                Layout.topMargin: 0
-                color: "transparent"
-                
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
-                    
-                    ListView {
-                        model: compraModel ? compraModel.proveedores : []
-                        delegate: Rectangle {
-                            width: ListView.view.width
-                            height: 70
-                            color: index % 2 === 0 ? "transparent" : "#fafafa"
-                            border.color: "#e8e8e8"
-                            border.width: 1
-                            radius: radiusMedium
-                            
-                            GridLayout {
-                                anchors.fill: parent
-                                anchors.margins: spacing12
-                                columns: 4
-                                rowSpacing: spacing4
-                                columnSpacing: spacing12
-                                
-                                // Nombre y Ubicación
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: spacing4
-                                    
-                                    Label {
-                                        text: (compraModel.proveedores[index] && compraModel.proveedores[index].Nombre) || model.Nombre || "Sin nombre"
-                                        font.bold: true
-                                        color: primaryColor
-                                        font.pixelSize: fontMedium
-                                    }
-                                    Label {
-                                        text: (compraModel.proveedores[index] && compraModel.proveedores[index].Direccion) || model.Direccion || "Sin ubicación"
-                                        color: textColor
-                                        font.pixelSize: fontSmall
-                                        elide: Text.ElideRight
-                                        Layout.maximumWidth: 200
-                                    }
-                                }
-                                
-                                // Celular
-                                ColumnLayout {
-                                    Layout.preferredWidth: 120
-                                    spacing: spacing4
-                                    
-                                    Label {
-                                        text: "📞 Celular"
-                                        font.bold: true
-                                        color: successColor
-                                        font.pixelSize: fontSmall
-                                    }
-                                    Label {
-                                        text: (model.telefono && model.telefono.length > 0) ? model.telefono : "Sin celular"
-                                        color: successColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                    }
-                                }
-                                
-                                // Correo
-                                ColumnLayout {
-                                    Layout.preferredWidth: 150
-                                    spacing: spacing4
-                                    
-                                    Label {
-                                        text: "✉️ Correo"
-                                        font.bold: true
-                                        color: "#3498db"
-                                        font.pixelSize: fontSmall
-                                    }
-                                    Label {
-                                        text: (model.email && model.email.length > 0) ? model.email : "Sin correo"
-                                        color: "#3498db"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        elide: Text.ElideRight
-                                        Layout.maximumWidth: 140
-                                    }
-                                }
-                                
-                                // Botón eliminar
-                                Button {
-                                    Layout.preferredWidth: 35
-                                    Layout.preferredHeight: 35
-                                    text: "🗑️"
-                                    background: Rectangle {
-                                        color: dangerColor
-                                        radius: radiusMedium
-                                    }
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: whiteColor
-                                        font.pixelSize: 14
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    onClicked: {
-                                        // Nota: Eliminación de proveedores requiere implementación en CompraModel
-                                        showSuccess("⚠️ Eliminación de proveedores no implementada aún")
-                                        // TODO: Implementar eliminación en CompraModel
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Botón cerrar
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                color: whiteColor
-                
-                RowLayout {
-                    anchors.centerIn: parent
-                    
-                    Button {
-                        text: "Cerrar"
-                        Layout.preferredWidth: 100
-                        Layout.preferredHeight: buttonHeight
-                        background: Rectangle {
-                            color: "#ECF0F1"
-                            radius: radiusMedium
-                            border.color: "#BDC3C7"
-                            border.width: 1
-                        }
-                        contentItem: Label {
-                            text: parent.text
-                            color: "#5D6D7E"
-                            font.pixelSize: fontMedium
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        onClicked: {
-                            showProviderDialog = false
-                            // Limpiar campos al cerrar
-                            nuevoProveedorNombre.text = ""
-                            nuevoProveedorCelular.text = ""
-                            nuevoProveedorCorreo.text = ""
-                            nuevoProveedorUbicacion.text = ""
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // INICIALIZACIÓN
     Component.onCompleted: {
-        console.log("✅ CrearCompra.qml inicializado")
+        console.log("✅ CrearCompra.qml inicializado (sin gestión de proveedores)")
         
         if (!compraModel || !inventarioModel) {
             console.log("⚠️ Models no disponibles aún")

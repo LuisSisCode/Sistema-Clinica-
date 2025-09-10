@@ -222,7 +222,7 @@ Item {
         tiposGastosModel.clear()
         
         // OBTENER TIPOS DIRECTAMENTE DESDE LA PROPERTY
-        var tipos = gastoModelInstance.tiposGastos
+        var tipos = gastoModelInstance.obtenerTiposParaComboBox()
         
         for (var i = 0; i < tipos.length; i++) {
             var tipo = tipos[i]
@@ -230,10 +230,10 @@ Item {
             // CREAR OBJETO CON TIPOS CONSISTENTES
             var tipoFormatted = {
                 id: parseInt(tipo.id || 0),
-                nombre: String(tipo.Nombre || "Sin nombre"),
+                nombre: String(tipo.text || tipo.Nombre || "Sin nombre"),  // ← USAR 'text' primero
                 descripcion: String(tipo.descripcion || "Tipo de gasto"),
                 ejemplos: [],
-                color: String(getColorForTipo(tipo.Nombre || ""))
+                color: String(getColorForTipo(tipo.text || tipo.Nombre || ""))
             }
             
             tiposGastosModel.append(tipoFormatted)
@@ -243,6 +243,10 @@ Item {
         
         // Actualizar ComboBox
         filtroTipoServicio.model = getTiposGastosNombres()
+
+        if (tipoGastoCombo) {
+            tipoGastoCombo.model = getTiposGastosParaCombo()
+        }
     }
     
     // ✅ NUEVA FUNCIÓN PARA CARGAR PROVEEDORES

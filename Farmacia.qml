@@ -50,6 +50,8 @@ Item {
     property var alertas: inventarioModel ? inventarioModel.alertas : []
     property var carritoItems: ventaModel ? ventaModel.carrito_items : []
 
+    signal subsectionChanged(int newSubsection)
+
     // ===== INICIALIZACIÓN Y CONEXIÓN DE MODELS =====
     
     // Inicialización de models después de que estén listos
@@ -655,6 +657,9 @@ Item {
     onCurrentSubSectionChanged: {
         console.log("Farmacia BD: Cambiando a subsección", currentSubSection)
         contentLoader.updateSource()
+        
+        // EMITIR LA NUEVA SEÑAL
+        subsectionChanged(currentSubSection)
     }
     
     // Layout principal
@@ -688,8 +693,9 @@ Item {
                 function getSourceForSubsection(subsection) {
                     switch(subsection) {
                         case 0: return "VentasMain.qml"
-                        case 1: return Qt.resolvedUrl("Productos.qml") // El nuevo Productos.qml conectado CON OVERLAY
+                        case 1: return Qt.resolvedUrl("Productos.qml")
                         case 2: return "ComprasMain.qml"
+                        case 3: return "Proveedores.qml"  // Agregar este caso
                         default: return "VentasMain.qml" 
                     }
                 }

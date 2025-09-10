@@ -31,6 +31,7 @@ clinica_app/
 │   │   ├── venta_model.py                       # Ventas + Detalles (QObject)
 │   │   ├── gasto_model.py                       # Gastos + Tipos (QObject)
 │   │   ├── auth_model.py                        # Autenticación (QObject)
+│   │   ├── proveedor_model.py
 │   │   └── dashboard_model.py                   # Estadísticas generales (QObject)
 │   │
 │   ├── repositories/                            # 📊 Acceso a datos
@@ -52,6 +53,7 @@ clinica_app/
 │   │   ├── compra_repository.py                 # Compras + Proveedores
 │   │   ├── venta_repository.py                  # Ventas + Detalles
 │   │   ├── gasto_repository.py                  # Gastos + Tipos
+│   │   ├── proveedor_repository.py                  # Gastos + Tipos
 │   │   └── estadistica_repository.py            # Consultas complejas
 │   │
 │   └── main.py                                  # Punto de entrada principal
@@ -76,6 +78,8 @@ clinica_app/
 ├── Ventas.qml
 ├── CrearVenta.qml
 ├── VentasMain.qml
+├── Proveedores.qml
+├── CrearProveedor.qml
 ├── Productos.qml
 ├── CrearProducto.qml
 ├── Farmacia.qml
