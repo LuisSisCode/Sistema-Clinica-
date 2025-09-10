@@ -105,34 +105,60 @@ Item {
     Connections {
         target: compraModel
         function onProveedoresChanged() {
-            console.log("🚚 CrearCompra: Proveedores actualizados")
+            console.log("🚚 CrearCompra: Signal proveedoresChanged recibido")
             updateProviderNames()
+        }
+        
+        function onOperacionExitosa(mensaje) {
+            if (mensaje.includes("proveedores") || mensaje.includes("actualizada")) {
+                console.log("📢 Operación exitosa relacionada con proveedores:", mensaje)
+                Qt.callLater(updateProviderNames)
+            }
         }
     }
 
     // FUNCIONES DE NEGOCIO
-    
     // Función simplificada para actualizar proveedores desde el modelo central
     function updateProviderNames() {
         var names = ["Seleccionar proveedor..."]
         
         if (compraModel && compraModel.proveedores) {
-            console.log("🔍 Proveedores disponibles:", compraModel.proveedores.length)
+            var proveedores = compraModel.proveedores
+            console.log("📝 Proveedores disponibles:", proveedores.length)
             
-            for (var i = 0; i < compraModel.proveedores.length; i++) {
-                var provider = compraModel.proveedores[i]
+            for (var i = 0; i < proveedores.length; i++) {
+                var provider = proveedores[i]
                 if (provider && (provider.Nombre || provider.nombre)) {
                     var nombreProveedor = provider.Nombre || provider.nombre
                     names.push(nombreProveedor)
                     console.log("✅ Proveedor agregado:", nombreProveedor)
                 }
             }
+            
+            console.log("📋 Lista final de proveedores:", names)
         } else {
             console.log("❌ CompraModel o proveedores no disponibles")
+            
+            // ✅ FALLBACK: Intentar force refresh si no hay datos
+            if (compraModel) {
+                console.log("🔄 Intentando force refresh como fallback...")
+                compraModel.force_refresh_proveedores()
+            }
         }
         
-        console.log("📋 Lista final de proveedores:", names)
         providerNames = names
+    }
+    Timer {
+        id: autoRefreshTimer
+        interval: 30000  // 30 segundos
+        running: false
+        repeat: true
+        onTriggered: {
+            console.log("⏰ Auto-refresh de proveedores")
+            if (compraModel) {
+                compraModel.refresh_proveedores()
+            }
+        }
     }
     
     function updatePurchaseTotal() {
@@ -629,7 +655,7 @@ Item {
                             spacing: spacing12
                             
                             Label {
-                                text: "🢷 Proveedor:"
+                                text: "🏢 Proveedor:"
                                 font.pixelSize: fontLarge
                                 font.bold: true
                                 color: textColor
@@ -664,10 +690,31 @@ Item {
                                     }
                                 }
                             }
+                            Button {
+                                Layout.preferredWidth: 40
+                                Layout.preferredHeight: inputHeight
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                    radius: radiusMedium
+                                }
+                                
+                                contentItem: Label {
+                                    text: "🔄"
+                                    color: whiteColor
+                                    font.pixelSize: 16
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: refreshProveedoresManual()
+                                
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Actualizar lista de proveedores"
+                            }
                             
-                            // NUEVA NOTA: Dirigir a módulo de proveedores
                             Label {
-                                text: "💡 Para gestionar proveedores, usa el módulo Farmacia → Proveedores"
+                                text: "💡 Para gestionar proveedores, usa Farmacia → Proveedores. Presiona 🔄 para actualizar."
                                 color: "#666"
                                 font.pixelSize: fontSmall
                                 font.italic: true
@@ -1478,22 +1525,58 @@ Item {
             }
         }
     }
+    function refreshProveedoresManual() {
+        console.log("🔄 Refrescando proveedores...")
+        if (compraModel) {
+            // 1. Force refresh con nuevo método
+            compraModel.force_refresh_proveedores()
+            
+            // 2. Debug info
+            compraModel.debug_proveedores_info()
+            
+            // 3. Actualizar lista después de un momento
+            Qt.callLater(function() {
+                updateProviderNames()
+                
+                // 4. Log final
+                console.log("📋 Proveedores después de refresh:", providerNames.length)
+            })
+        } else {
+            console.log("❌ CompraModel no disponible")
+        }
+    }
 
     // INICIALIZACIÓN
     Component.onCompleted: {
         console.log("✅ CrearCompra.qml inicializado (sin gestión de proveedores)")
         
+        // Verificar models disponibles
         if (!compraModel || !inventarioModel) {
             console.log("⚠️ Models no disponibles aún")
+            
+            // Retry después de un momento
+            Qt.callLater(function() {
+                if (compraModel) {
+                    console.log("✅ CompraModel disponible en retry")
+                    updateProviderNames()
+                }
+            })
         } else {
             console.log("✅ Models conectados correctamente")
-            updateProviderNames()
+            
+            // Refresh inicial
+            compraModel.force_refresh_proveedores()
+            Qt.callLater(updateProviderNames)
         }
         
+        // Focus en campo de producto
         Qt.callLater(function() {
             if (productCodeField) {
                 productCodeField.focus = true
             }
         })
+        
+        // Iniciar auto-refresh (opcional)
+        // autoRefreshTimer.start()
     }
 }

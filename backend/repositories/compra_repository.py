@@ -582,46 +582,51 @@ class CompraRepository(BaseRepository):
     # ===============================
     
     def get_proveedores_activos(self) -> List[Dict[str, Any]]:
-        """Obtiene proveedores con compras recientes"""
+        """Obtiene TODOS los proveedores (con y sin compras) - CORREGIDO"""
         query = """
-        SELECT p.*, 
+        SELECT p.id, p.Nombre, p.Direccion, 
                COUNT(c.id) as Total_Compras,
-               MAX(c.Fecha) as Ultima_Compra,
-               SUM(c.Total) as Monto_Total
+               ISNULL(MAX(c.Fecha), NULL) as Ultima_Compra,
+               ISNULL(SUM(c.Total), 0) as Monto_Total,
+               ISNULL(AVG(c.Total), 0) as Compra_Promedio,
+               CASE 
+                   WHEN COUNT(c.id) = 0 THEN 'Sin_Compras'
+                   WHEN MAX(c.Fecha) >= DATEADD(MONTH, -3, GETDATE()) THEN 'Activo'
+                   WHEN MAX(c.Fecha) >= DATEADD(MONTH, -12, GETDATE()) THEN 'Inactivo'
+                   ELSE 'Obsoleto'
+               END as Estado
         FROM Proveedor p
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
         GROUP BY p.id, p.Nombre, p.Direccion
-        ORDER BY Ultima_Compra DESC
+        ORDER BY p.Nombre ASC
         """
-        return self._execute_query(query)
+        
+        # ✅ FORZAR CONSULTA SIN CACHE
+        result = self._execute_query(query, use_cache=False)
+        
+        # ✅ LOG DETALLADO
+        if result:
+            print(f"📋 get_proveedores_activos: {len(result)} proveedores obtenidos")
+            for proveedor in result:
+                print(f"  - {proveedor.get('Nombre', 'Sin nombre')} (ID: {proveedor.get('id', 'N/A')}, Estado: {proveedor.get('Estado', 'N/A')})")
+        else:
+            print("⚠️ get_proveedores_activos: No se obtuvieron proveedores")
+            
+        return result or []
     
-    def crear_proveedor(self, nombre: str, direccion: str) -> int:
-        """Crea nuevo proveedor"""
-        validate_required(nombre, "nombre")
-        validate_required(direccion, "direccion")
-        
-        # Verificar que no existe
-        if self.exists_proveedor(nombre):
-            raise ValidationError("nombre", nombre, "Proveedor ya existe")
-        
-        proveedor_data = {
-            'Nombre': nombre.strip(),
-            'Direccion': direccion.strip()
-        }
-        
-        proveedor_query = """
-        INSERT INTO Proveedor (Nombre, Direccion)
-        OUTPUT INSERTED.id
-        VALUES (?, ?)
+    def get_proveedores_for_combo(self) -> List[Dict[str, Any]]:
+        """Obtiene proveedores específicamente para ComboBox (solo campos necesarios)"""
+        query = """
+        SELECT id, Nombre
+        FROM Proveedor
+        ORDER BY Nombre ASC
         """
         
-        result = self._execute_query(proveedor_query, (nombre.strip(), direccion.strip()), fetch_one=True)
-        proveedor_id = result['id'] if result else None
+        # ✅ SIEMPRE SIN CACHE PARA COMBO
+        result = self._execute_query(query, use_cache=False)
         
-        if proveedor_id:
-            print(f"🏢 Proveedor creado - ID: {proveedor_id}, Nombre: {nombre}")
-        
-        return proveedor_id
+        print(f"📋 get_proveedores_for_combo: {len(result) if result else 0} proveedores")
+        return result or []
     
     def exists_proveedor(self, nombre: str) -> bool:
         """Verifica si existe proveedor por nombre"""

@@ -3,7 +3,7 @@ import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 
-// Modal para crear/editar proveedores
+// Modal para crear/editar proveedores - SOLO 3 CAMPOS
 Rectangle {
     id: modalRoot
     anchors.fill: parent
@@ -28,7 +28,7 @@ Rectangle {
     readonly property color textColor: "#2c3e50"
     readonly property color whiteColor: "#FFFFFF"
     
-    // Estados de validación
+    // Estados de validación - SOLO 2 CAMPOS REQUERIDOS
     property bool nombreValido: nombreField.text.trim().length > 0
     property bool direccionValida: direccionField.text.trim().length > 0
     property bool formularioValido: nombreValido && direccionValida
@@ -44,8 +44,8 @@ Rectangle {
     // Container del modal
     Rectangle {
         anchors.centerIn: parent
-        width: Math.min(600, parent.width * 0.9)
-        height: Math.min(500, parent.height * 0.8)
+        width: Math.min(500, parent.width * 0.9)  // Reducido de 600 a 500
+        height: Math.min(400, parent.height * 0.8) // Reducido de 500 a 400
         
         color: whiteColor
         radius: 16
@@ -122,7 +122,7 @@ Rectangle {
                 }
             }
             
-            // Formulario
+            // Formulario - SIMPLIFICADO PARA 2 CAMPOS
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -261,128 +261,6 @@ Rectangle {
                         }
                     }
                     
-                    // Campos opcionales en dos columnas
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 2
-                        columnSpacing: 20
-                        rowSpacing: 16
-                        
-                        // Campo Teléfono
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            
-                            Label {
-                                text: "Teléfono"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: 14
-                            }
-                            
-                            TextField {
-                                id: telefonoField
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 45
-                                placeholderText: "Ej: +591 3 1234567"
-                                
-                                background: Rectangle {
-                                    color: lightGrayColor
-                                    radius: 8
-                                    border.color: telefonoField.activeFocus ? primaryColor : darkGrayColor
-                                    border.width: telefonoField.activeFocus ? 2 : 1
-                                    
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Campo Email
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            
-                            Label {
-                                text: "Email"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: 14
-                            }
-                            
-                            TextField {
-                                id: emailField
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 45
-                                placeholderText: "Ej: ventas@proveedor.com"
-                                
-                                background: Rectangle {
-                                    color: lightGrayColor
-                                    radius: 8
-                                    border.color: {
-                                        if (emailField.text.length > 0 && !isValidEmail(emailField.text)) return dangerColor
-                                        if (emailField.activeFocus) return primaryColor
-                                        return darkGrayColor
-                                    }
-                                    border.width: emailField.activeFocus ? 2 : 1
-                                    
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-                                
-                                onTextChanged: {
-                                    if (text.length > 0 && !isValidEmail(text)) {
-                                        errorEmail.text = "Formato de email inválido"
-                                        errorEmail.visible = true
-                                    } else {
-                                        errorEmail.visible = false
-                                    }
-                                }
-                            }
-                            
-                            Label {
-                                id: errorEmail
-                                text: ""
-                                color: dangerColor
-                                font.pixelSize: 12
-                                visible: false
-                            }
-                        }
-                    }
-                    
-                    // Campo Contacto
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        
-                        Label {
-                            text: "Persona de Contacto"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: 14
-                        }
-                        
-                        TextField {
-                            id: contactoField
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 45
-                            placeholderText: "Ej: Juan Pérez - Gerente de Ventas"
-                            
-                            background: Rectangle {
-                                color: lightGrayColor
-                                radius: 8
-                                border.color: contactoField.activeFocus ? primaryColor : darkGrayColor
-                                border.width: contactoField.activeFocus ? 2 : 1
-                                
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                        }
-                    }
-                    
                     // Nota sobre campos obligatorios
                     Rectangle {
                         Layout.fillWidth: true
@@ -403,7 +281,7 @@ Rectangle {
                             }
                             
                             Label {
-                                text: "Los campos marcados con (*) son obligatorios"
+                                text: "Solo se requiere nombre y dirección del proveedor"
                                 color: "#856404"
                                 font.pixelSize: 12
                                 Layout.fillWidth: true
@@ -482,24 +360,15 @@ Rectangle {
         }
     }
     
-    // Funciones auxiliares
-    function isValidEmail(email) {
-        if (!email || email.trim().length === 0) return true // Email opcional
-        var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        return re.test(email)
-    }
-    
+    // Funciones - SIMPLIFICADAS PARA 2 CAMPOS
     function procesarFormulario() {
         if (!proveedorModel) {
-            console.log("❌ ProveedorModel no disponible")
+            console.log("⚠ ProveedorModel no disponible")
             return
         }
         
         var nombre = nombreField.text.trim()
         var direccion = direccionField.text.trim()
-        var telefono = telefonoField.text.trim()
-        var email = emailField.text.trim()
-        var contacto = contactoField.text.trim()
         
         console.log("📝 Procesando formulario:", editMode ? "Editar" : "Crear")
         console.log("   Nombre:", nombre)
@@ -508,23 +377,17 @@ Rectangle {
         var exito = false
         
         if (editMode && proveedorData) {
-            // Modo edición
+            // Modo edición - SOLO 3 CAMPOS (id, nombre, dirección)
             exito = proveedorModel.actualizar_proveedor(
                 proveedorData.id,
                 nombre,
-                direccion,
-                telefono,
-                email,
-                contacto
+                direccion
             )
         } else {
-            // Modo creación
+            // Modo creación - SOLO 2 CAMPOS (nombre, dirección)
             exito = proveedorModel.crear_proveedor(
                 nombre,
-                direccion,
-                telefono,
-                email,
-                contacto
+                direccion
             )
         }
         
@@ -537,23 +400,16 @@ Rectangle {
     function limpiarFormulario() {
         nombreField.text = ""
         direccionField.text = ""
-        telefonoField.text = ""
-        emailField.text = ""
-        contactoField.text = ""
         
         // Ocultar errores
         errorNombre.visible = false
         errorDireccion.visible = false
-        errorEmail.visible = false
     }
     
     function cargarDatos() {
         if (editMode && proveedorData) {
             nombreField.text = proveedorData.Nombre || ""
             direccionField.text = proveedorData.Direccion || ""
-            telefonoField.text = proveedorData.Telefono || ""
-            emailField.text = proveedorData.Email || ""
-            contactoField.text = proveedorData.Contacto || ""
             
             console.log("📋 Datos cargados para edición:", proveedorData.Nombre)
         } else {
@@ -581,6 +437,6 @@ Rectangle {
     }
     
     Component.onCompleted: {
-        console.log("📝 CrearProveedor modal inicializado")
+        console.log("📝 CrearProveedor modal inicializado - SIMPLIFICADO")
     }
 }

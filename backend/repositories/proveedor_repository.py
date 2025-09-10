@@ -8,36 +8,64 @@ from ..core.excepciones import (
 )
 
 class ProveedorRepository(BaseRepository):
-    """Repository especializado para gestión de proveedores"""
+    """Repository especializado para gestión de proveedores - SOLO 3 CAMPOS"""
     
     def __init__(self):
         super().__init__('Proveedor', 'proveedores')
-        print("🏢 ProveedorRepository inicializado")
+        print("🏢 ProveedorRepository inicializado - SIMPLIFICADO")
     
     def get_active(self) -> List[Dict[str, Any]]:
-        """Obtiene proveedores activos con estadísticas"""
+        """Obtiene proveedores activos con estadísticas - CORREGIDO PARA DATOS ACTUALES"""
         query = """
-        SELECT p.*, 
-               COUNT(c.id) as Total_Compras,
-               ISNULL(SUM(c.Total), 0) as Monto_Total,
-               ISNULL(AVG(c.Total), 0) as Compra_Promedio,
-               MAX(c.Fecha) as Ultima_Compra,
-               CASE 
-                   WHEN MAX(c.Fecha) >= DATEADD(MONTH, -3, GETDATE()) THEN 'Activo'
-                   WHEN MAX(c.Fecha) >= DATEADD(MONTH, -12, GETDATE()) THEN 'Inactivo'
-                   WHEN COUNT(c.id) = 0 THEN 'Sin_Compras'
-                   ELSE 'Obsoleto'
-               END as Estado
+        SELECT p.id, p.Nombre, p.Direccion, 
+            COUNT(c.id) as Total_Compras,
+            ISNULL(SUM(c.Total), 0) as Monto_Total,
+            ISNULL(AVG(c.Total), 0) as Compra_Promedio,
+            CASE 
+                WHEN MAX(c.Fecha) IS NULL THEN NULL
+                ELSE MAX(c.Fecha)
+            END as Ultima_Compra,
+            CASE 
+                WHEN MAX(c.Fecha) >= DATEADD(MONTH, -3, GETDATE()) THEN 'Activo'
+                WHEN MAX(c.Fecha) >= DATEADD(MONTH, -12, GETDATE()) THEN 'Inactivo'
+                WHEN COUNT(c.id) = 0 THEN 'Sin_Compras'
+                ELSE 'Obsoleto'
+            END as Estado
         FROM Proveedor p
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
         GROUP BY p.id, p.Nombre, p.Direccion
         ORDER BY p.Nombre ASC
         """
-        return self._execute_query(query)
+        
+        # ✅ FORZAR CONSULTA SIN CACHE PARA DATOS ACTUALES
+        resultados = self._execute_query(query, use_cache=False)
+        
+        # ✅ PROCESAR FECHAS SEGURAMENTE
+        for resultado in resultados:
+            if resultado.get('Ultima_Compra') is None:
+                resultado['Ultima_Compra'] = None
+            elif isinstance(resultado.get('Ultima_Compra'), datetime):
+                resultado['Ultima_Compra'] = resultado['Ultima_Compra'].strftime('%Y-%m-%d')
+        
+        # ✅ LOG DETALLADO PARA DEBUG
+        print(f"📊 get_active: {len(resultados)} proveedores obtenidos (SIN CACHE)")
+        
+        # Log de proveedores con compras
+        proveedores_con_compras = [r for r in resultados if r.get('Total_Compras', 0) > 0]
+        if proveedores_con_compras:
+            print("📋 Proveedores con compras encontrados:")
+            for prov in proveedores_con_compras:
+                nombre = prov.get('Nombre', 'Sin nombre')
+                compras = prov.get('Total_Compras', 0)
+                monto = prov.get('Monto_Total', 0)
+                estado = prov.get('Estado', 'Sin estado')
+                print(f"   • {nombre}: {compras} compras, Bs{monto}, Estado: {estado}")
+        
+        return resultados
     
     @ExceptionHandler.handle_exception
-    def crear_proveedor(self, nombre: str, direccion: str, telefono: str = "", email: str = "", contacto: str = "") -> int:
-        """Crea nuevo proveedor con validaciones completas"""
+    def crear_proveedor(self, nombre: str, direccion: str) -> int:
+        """Crea nuevo proveedor - SOLO 3 CAMPOS"""
         validate_required(nombre, "nombre")
         validate_required(direccion, "direccion")
         
@@ -50,10 +78,7 @@ class ProveedorRepository(BaseRepository):
         
         proveedor_data = {
             'Nombre': nombre,
-            'Direccion': direccion,
-            'Telefono': telefono.strip() if telefono else "",
-            'Email': email.strip() if email else "",
-            'Contacto': contacto.strip() if contacto else ""
+            'Direccion': direccion
         }
         
         proveedor_id = self.insert(proveedor_data)
@@ -65,7 +90,7 @@ class ProveedorRepository(BaseRepository):
     
     @ExceptionHandler.handle_exception
     def actualizar_proveedor(self, proveedor_id: int, datos: Dict[str, Any]) -> bool:
-        """Actualiza proveedor existente"""
+        """Actualiza proveedor existente - SOLO 3 CAMPOS"""
         validate_required(proveedor_id, "proveedor_id")
         validate_required(datos, "datos")
         
@@ -81,9 +106,9 @@ class ProveedorRepository(BaseRepository):
                 if self.existe_proveedor(nombre_nuevo):
                     raise ValidationError("Nombre", nombre_nuevo, "Ya existe un proveedor con este nombre")
         
-        # Limpiar datos
+        # Limpiar datos - SOLO CAMPOS VÁLIDOS
         datos_limpios = {}
-        for campo in ['Nombre', 'Direccion', 'Telefono', 'Email', 'Contacto']:
+        for campo in ['Nombre', 'Direccion']:
             if campo in datos:
                 datos_limpios[campo] = datos[campo].strip() if datos[campo] else ""
         
@@ -126,23 +151,35 @@ class ProveedorRepository(BaseRepository):
         return resultado['count'] > 0 if resultado else False
     
     def buscar_proveedores(self, termino: str) -> List[Dict[str, Any]]:
-        """Busca proveedores por nombre, dirección o contacto"""
+        """Busca proveedores por nombre o dirección - CORREGIDO FECHAS"""
         if not termino or len(termino.strip()) < 2:
             return []
         
         query = """
-        SELECT p.*, 
+        SELECT p.id, p.Nombre, p.Direccion, 
                COUNT(c.id) as Total_Compras,
                ISNULL(SUM(c.Total), 0) as Monto_Total,
-               MAX(c.Fecha) as Ultima_Compra
+               CASE 
+                   WHEN MAX(c.Fecha) IS NULL THEN NULL
+                   ELSE MAX(c.Fecha)
+               END as Ultima_Compra
         FROM Proveedor p
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
-        WHERE p.Nombre LIKE ? OR p.Direccion LIKE ? OR p.Contacto LIKE ? OR p.Email LIKE ?
-        GROUP BY p.id, p.Nombre, p.Direccion, p.Telefono, p.Email, p.Contacto
+        WHERE p.Nombre LIKE ? OR p.Direccion LIKE ?
+        GROUP BY p.id, p.Nombre, p.Direccion
         ORDER BY p.Nombre
         """
         termino_like = f"%{termino.strip()}%"
-        return self._execute_query(query, (termino_like, termino_like, termino_like, termino_like))
+        resultados = self._execute_query(query, (termino_like, termino_like))
+        
+        # ✅ FILTRAR VALORES NULL EN FECHAS
+        for resultado in resultados:
+            if resultado.get('Ultima_Compra') is None:
+                resultado['Ultima_Compra'] = None
+            elif isinstance(resultado.get('Ultima_Compra'), datetime):
+                resultado['Ultima_Compra'] = resultado['Ultima_Compra'].strftime('%Y-%m-%d')
+        
+        return resultados
     
     def get_historial_compras(self, proveedor_id: int, limite: int = 50) -> List[Dict[str, Any]]:
         """Obtiene historial de compras de un proveedor"""
@@ -177,13 +214,27 @@ class ProveedorRepository(BaseRepository):
             ISNULL(AVG(c.Total), 0) as Compra_Promedio,
             ISNULL(MIN(c.Total), 0) as Compra_Minima,
             ISNULL(MAX(c.Total), 0) as Compra_Maxima,
-            MIN(c.Fecha) as Primera_Compra,
-            MAX(c.Fecha) as Ultima_Compra
+            CASE 
+                WHEN MIN(c.Fecha) IS NULL THEN NULL
+                ELSE MIN(c.Fecha)
+            END as Primera_Compra,
+            CASE 
+                WHEN MAX(c.Fecha) IS NULL THEN NULL
+                ELSE MAX(c.Fecha)
+            END as Ultima_Compra
         FROM Compra c
         WHERE c.Id_Proveedor = ?
         """
         
         stats = self._execute_query(stats_query, (proveedor_id,), fetch_one=True)
+        
+        # ✅ LIMPIAR FECHAS NULL
+        if stats:
+            for campo in ['Primera_Compra', 'Ultima_Compra']:
+                if stats.get(campo) is None:
+                    stats[campo] = None
+                elif isinstance(stats.get(campo), datetime):
+                    stats[campo] = stats[campo].strftime('%Y-%m-%d')
         
         # Productos más comprados
         productos_query = """
@@ -228,7 +279,7 @@ class ProveedorRepository(BaseRepository):
         }
     
     def get_resumen_todos_proveedores(self) -> Dict[str, Any]:
-        """Obtiene resumen estadístico de todos los proveedores"""
+        """Obtiene resumen estadístico de todos los proveedores - SIN CACHE"""
         query = """
         SELECT 
             COUNT(DISTINCT p.id) as Total_Proveedores,
@@ -240,9 +291,10 @@ class ProveedorRepository(BaseRepository):
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
         """
         
-        resumen = self._execute_query(query, fetch_one=True)
+        # ✅ FORZAR SIN CACHE
+        resumen = self._execute_query(query, fetch_one=True, use_cache=False)
         
-        # Top 5 proveedores por monto
+        # Top 5 proveedores por monto - TAMBIÉN SIN CACHE
         top_proveedores_query = """
         SELECT TOP 5
             p.Nombre,
@@ -254,16 +306,22 @@ class ProveedorRepository(BaseRepository):
         ORDER BY Monto_Total DESC
         """
         
-        top_proveedores = self._execute_query(top_proveedores_query)
+        top_proveedores = self._execute_query(top_proveedores_query, use_cache=False)
         
-        return {
+        result = {
             'resumen': resumen or {},
             'top_proveedores': top_proveedores or []
         }
+        
+        # ✅ LOG DEL RESUMEN
+        if resumen:
+            print(f"📊 Resumen proveedores: {resumen.get('Total_Proveedores', 0)} total, {resumen.get('Proveedores_Activos', 0)} activos")
+        
+        return result
     
     def get_proveedores_paginados(self, pagina: int = 1, por_pagina: int = 10, 
-                                 termino_busqueda: str = "") -> Dict[str, Any]:
-        """Obtiene proveedores con paginación y búsqueda"""
+                             termino_busqueda: str = "") -> Dict[str, Any]:
+        """Obtiene proveedores con paginación - CORREGIDO PARA DATOS ACTUALES"""
         offset = (pagina - 1) * por_pagina
         
         # Construir WHERE clause
@@ -271,38 +329,47 @@ class ProveedorRepository(BaseRepository):
         params = []
         
         if termino_busqueda and termino_busqueda.strip():
-            where_clause = """
-            WHERE p.Nombre LIKE ? OR p.Direccion LIKE ? 
-               OR p.Contacto LIKE ? OR p.Email LIKE ?
-            """
+            where_clause = "WHERE p.Nombre LIKE ? OR p.Direccion LIKE ?"
             termino_like = f"%{termino_busqueda.strip()}%"
-            params = [termino_like, termino_like, termino_like, termino_like]
+            params = [termino_like, termino_like]
         
-        # Query para datos
+        # Query para datos - FORZAR DATOS ACTUALES
         data_query = f"""
-        SELECT p.*, 
-               COUNT(c.id) as Total_Compras,
-               ISNULL(SUM(c.Total), 0) as Monto_Total,
-               ISNULL(AVG(c.Total), 0) as Compra_Promedio,
-               MAX(c.Fecha) as Ultima_Compra,
-               CASE 
-                   WHEN MAX(c.Fecha) >= DATEADD(MONTH, -3, GETDATE()) THEN 'Activo'
-                   WHEN MAX(c.Fecha) >= DATEADD(MONTH, -12, GETDATE()) THEN 'Inactivo'
-                   WHEN COUNT(c.id) = 0 THEN 'Sin_Compras'
-                   ELSE 'Obsoleto'
-               END as Estado
+        SELECT p.id, p.Nombre, p.Direccion, 
+            COUNT(c.id) as Total_Compras,
+            ISNULL(SUM(c.Total), 0) as Monto_Total,
+            ISNULL(AVG(c.Total), 0) as Compra_Promedio,
+            CASE 
+                WHEN MAX(c.Fecha) IS NULL THEN NULL
+                ELSE MAX(c.Fecha)
+            END as Ultima_Compra,
+            CASE 
+                WHEN MAX(c.Fecha) >= DATEADD(MONTH, -3, GETDATE()) THEN 'Activo'
+                WHEN MAX(c.Fecha) >= DATEADD(MONTH, -12, GETDATE()) THEN 'Inactivo'
+                WHEN COUNT(c.id) = 0 THEN 'Sin_Compras'
+                ELSE 'Obsoleto'
+            END as Estado
         FROM Proveedor p
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
         {where_clause}
-        GROUP BY p.id, p.Nombre, p.Direccion, p.Telefono, p.Email, p.Contacto
+        GROUP BY p.id, p.Nombre, p.Direccion
         ORDER BY p.Nombre
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
         """
         
         data_params = params + [offset, por_pagina]
-        data = self._execute_query(data_query, tuple(data_params))
         
-        # Query para total
+        # ✅ FORZAR CONSULTA SIN CACHE
+        data = self._execute_query(data_query, tuple(data_params), use_cache=False)
+        
+        # ✅ LIMPIAR FECHAS NULL EN RESULTADOS
+        for resultado in data:
+            if resultado.get('Ultima_Compra') is None:
+                resultado['Ultima_Compra'] = None
+            elif isinstance(resultado.get('Ultima_Compra'), datetime):
+                resultado['Ultima_Compra'] = resultado['Ultima_Compra'].strftime('%Y-%m-%d')
+        
+        # Query para total - TAMBIÉN SIN CACHE
         count_query = f"""
         SELECT COUNT(DISTINCT p.id) as total
         FROM Proveedor p
@@ -310,8 +377,11 @@ class ProveedorRepository(BaseRepository):
         {where_clause}
         """
         
-        total_result = self._execute_query(count_query, tuple(params), fetch_one=True)
+        total_result = self._execute_query(count_query, tuple(params), fetch_one=True, use_cache=False)
         total = total_result['total'] if total_result else 0
+        
+        # ✅ LOG DETALLADO
+        print(f"📊 get_proveedores_paginados: Página {pagina}, {len(data)} de {total} (SIN CACHE)")
         
         return {
             'data': data,
@@ -319,4 +389,89 @@ class ProveedorRepository(BaseRepository):
             'pagina': pagina,
             'por_pagina': por_pagina,
             'paginas': (total + por_pagina - 1) // por_pagina
+        }
+    
+    def invalidate_proveedores_cache(self):
+        """Invalida específicamente el cache de proveedores"""
+        try:
+            if hasattr(self, '_cache_manager') and self._cache_manager:
+                # Invalidar patrones específicos de proveedores
+                patterns_to_invalidate = [
+                    'proveedores*',
+                    'proveedor_*', 
+                    'get_active*',
+                    'get_proveedores_paginados*',
+                    'get_estadisticas*',
+                    'get_resumen*'
+                ]
+                
+                for pattern in patterns_to_invalidate:
+                    self._cache_manager.invalidate_pattern(pattern)
+                    print(f"🗑️ Pattern invalidado: {pattern}")
+                
+                print("✅ Cache de proveedores invalidado completamente")
+                
+        except Exception as e:
+            print(f"❌ Error invalidando cache: {str(e)}")
+
+    def _execute_query_force_fresh(self, query: str, params=None, fetch_one=False):
+        """Ejecuta query FORZADAMENTE sin cache para datos críticos"""
+        # Guardar estado de cache actual
+        original_use_cache = getattr(self, '_use_cache_default', True)
+        
+        try:
+            # Desactivar cache temporalmente
+            self._use_cache_default = False
+            
+            # Ejecutar query
+            result = self._execute_query(query, params, fetch_one=fetch_one, use_cache=False)
+            
+            print(f"🔍 Query ejecutada FORZADAMENTE sin cache: {len(str(query)[:50])}...")
+            return result
+            
+        finally:
+            # Restaurar estado de cache
+            self._use_cache_default = original_use_cache
+
+    # ✅ 6. MÉTODO PARA OBTENER ESTADÍSTICAS ESPECÍFICAS DE PROVEEDOR SIN CACHE
+    def get_estadisticas_proveedor_fresh(self, proveedor_id: int) -> Dict[str, Any]:
+        """Obtiene estadísticas FRESCAS de un proveedor específico"""
+        validate_required(proveedor_id, "proveedor_id")
+        
+        # Estadísticas generales - SIN CACHE
+        stats_query = """
+        SELECT 
+            COUNT(c.id) as Total_Compras,
+            ISNULL(SUM(c.Total), 0) as Monto_Total,
+            ISNULL(AVG(c.Total), 0) as Compra_Promedio,
+            ISNULL(MIN(c.Total), 0) as Compra_Minima,
+            ISNULL(MAX(c.Total), 0) as Compra_Maxima,
+            CASE 
+                WHEN MIN(c.Fecha) IS NULL THEN NULL
+                ELSE MIN(c.Fecha)
+            END as Primera_Compra,
+            CASE 
+                WHEN MAX(c.Fecha) IS NULL THEN NULL
+                ELSE MAX(c.Fecha)
+            END as Ultima_Compra
+        FROM Compra c
+        WHERE c.Id_Proveedor = ?
+        """
+        
+        stats = self._execute_query_force_fresh(stats_query, (proveedor_id,), fetch_one=True)
+        
+        # ✅ LIMPIAR FECHAS NULL
+        if stats:
+            for campo in ['Primera_Compra', 'Ultima_Compra']:
+                if stats.get(campo) is None:
+                    stats[campo] = None
+                elif isinstance(stats.get(campo), datetime):
+                    stats[campo] = stats[campo].strftime('%Y-%m-%d')
+        
+        print(f"📊 Estadísticas frescas proveedor {proveedor_id}: {stats.get('Total_Compras', 0) if stats else 0} compras")
+        
+        return {
+            'estadisticas_generales': stats or {},
+            'productos_mas_comprados': [],  # Simplificado por ahora
+            'compras_por_mes': []  # Simplificado por ahora
         }
