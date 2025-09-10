@@ -3,1165 +3,1356 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-Popup {
-    id: crearProductoDialog
+// Componente para crear/editar producto - CON SISTEMA DE LOTES COMPLETO
+Item {
+    id: crearProductoRoot
     
-    // ===============================
-    // PROPIEDADES PÚBLICAS
-    // ===============================
-    
+    // Propiedades de comunicación
+    property var inventarioModel: null
+    property var farmaciaData: null
     property bool modoEdicion: false
     property var productoData: null
     property var marcasModel: []
-
-    property color primaryColor: "#273746"
-    property color successColor: "#27ae60"
-    property color dangerColor: "#E74C3C"
-    property color lightGrayColor: "#ECF0F1"
-    property color textColor: "#2c3e50"
-    property real baseUnit: 8
-    property real fontBaseSize: 12
     
-    // Estado de carga de marcas
-    property bool marcasCargadas: false
-    property bool datosProductoCargados: false
-    
-    // ===============================
-    // SEÑALES
-    // ===============================
-    
+    // Señales
     signal productoCreado(var producto)
-    signal productoActualizado(var producto)
-    signal cancelado()
-    signal cerrarSolicitado()
+    signal productoActualizado(var producto) 
+    signal cancelarCreacion()
+    signal volverALista()
     
-    // ===============================
-    // PROPIEDADES INTERNAS
-    // ===============================
+    // Métricas del diseño
+    readonly property real baseSpacing: 20
+    readonly property real cardPadding: 24
+    readonly property real inputHeight: 48
+    readonly property real buttonHeight: 50
+    readonly property real headerHeight: 70
+    readonly property real sectionSpacing: 20
     
-    property bool formularioValido: {
-        return codigoField.text.trim() !== "" &&
-               nombreField.text.trim() !== "" &&
+    // Colores
+    readonly property color primaryBlue: "#2563EB"
+    readonly property color successGreen: "#059669"
+    readonly property color warningAmber: "#D97706"
+    readonly property color dangerRed: "#DC2626"
+    readonly property color grayLight: "#F3F4F6"
+    readonly property color grayMedium: "#6B7280"
+    readonly property color grayDark: "#374151"
+    readonly property color white: "#FFFFFF"
+    readonly property color borderColor: "#D1D5DB"
+    
+    // Estados
+    property bool showSuccessMessage: false
+    property string successMessage: ""
+    property bool marcasCargadas: false
+    
+    // Datos del formulario - PRODUCTO
+    property string inputProductCode: ""
+    property string inputProductName: ""
+    property string inputProductDetails: ""
+    property real inputPurchasePrice: 0.0
+    property real inputSalePrice: 0.0
+    property string inputMeasureUnit: "Tabletas"
+    property real calculatedMargin: 0.0
+
+    // Datos del formulario - PRIMER LOTE
+    property string inputExpirationDate: ""
+    property int inputStockBox: 0
+    property int inputStockUnit: 0
+    property string inputSupplier: ""
+    
+    // Validación
+    property bool isFormValid: {
+        return inputProductCode.length > 0 &&
+               inputProductName.length > 0 &&
+               inputPurchasePrice > 0 &&
+               inputSalePrice > 0 &&
                marcaCombo.currentIndex >= 0 &&
-               parseFloat(precioCompraField.text || "0") > 0 &&
-               parseFloat(precioVentaField.text || "0") > 0
+               inputExpirationDate.length > 0 &&
+               (inputStockBox > 0 || inputStockUnit > 0)  // Al menos algo de stock
     }
-    
-    // ===============================
-    // CONFIGURACIÓN DEL DIÁLOGO
-    // ===============================
-    
-    modal: true
-    closePolicy: Popup.CloseOnEscape
-    
-    // Tamaño y posición
-    width: Math.min(800, parent.width * 0.9)
-    height: Math.min(700, parent.height * 0.9)
-    x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
-    
-    // Fondo personalizado
-    background: Rectangle {
-        color: "white"
-        radius: baseUnit
-        border.color: lightGrayColor
-        border.width: 2
-        
-        // Sombra
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -4
-            z: -1
-            color: "transparent"
-            border.color: "#00000020"
-            border.width: 4
-            radius: baseUnit + 2
-        }
-    }
-    
-    Component.onCompleted: {
-        console.log("🆕 CrearProducto inicializado")
-        console.log("🔧 Modo edición:", modoEdicion)
-        console.log("🏷️ Marcas recibidas:", marcasModel.length)
-        
-        // Esperar un momento antes de cargar datos para evitar condiciones de carrera
-        inicializacionTimer.start()
-    }
-    
-    // Timer para inicialización controlada
+
+    // Timer para notificaciones
     Timer {
-        id: inicializacionTimer
-        interval: 100
-        running: false
-        repeat: false
-        
-        onTriggered: {
-            // Verificar si tenemos marcas
-            if (marcasModel.length === 0) {
-                console.log("⚠️ Esperando carga de marcas...")
-                esperarMarcasTimer.start()
-                return
-            }
-            
-            marcasCargadas = true
-            
-            if (modoEdicion && productoData) {
-                console.log("📦 Cargando datos para edición...")
-                cargarDatosProducto()
-            }
-        }
+        id: successTimer
+        interval: 3000
+        onTriggered: showSuccessMessage = false
     }
-    
-    // Timer para esperar marcas
-    Timer {
-        id: esperarMarcasTimer
-        interval: 250
-        running: false
-        repeat: true
+
+    // FUNCIONES
+    function cargarMarcasDisponibles() {
+        if (!inventarioModel) return
         
-        property int intentos: 0
-        readonly property int maxIntentos: 10
-        
-        onTriggered: {
-            intentos++
-            
-            if (marcasModel.length > 0) {
-                console.log("✅ Marcas cargadas exitosamente:", marcasModel.length)
+        try {
+            var marcas = inventarioModel.get_marcas_disponibles()
+            if (marcas && marcas.length > 0) {
+                marcasModel = marcas
                 marcasCargadas = true
-                stop()
-                
-                if (modoEdicion && productoData) {
-                    cargarDatosProducto()
-                }
-            } else if (intentos >= maxIntentos) {
-                console.log("❌ Timeout esperando marcas, abriendo sin marcas")
-                stop()
+            } else {
+                marcasModel = []
             }
+        } catch (error) {
+            marcasModel = []
         }
-        
-        onRunningChanged: {
-            if (!running) {
-                intentos = 0
-            }
+        marcasCargadas = true
+    }
+    
+    function calcularMargen() {
+        if (inputPurchasePrice > 0 && inputSalePrice > 0) {
+            calculatedMargin = ((inputSalePrice - inputPurchasePrice) / inputPurchasePrice) * 100
+        } else {
+            calculatedMargin = 0
         }
     }
     
-    onClosed: {
+    function validarFechaVencimiento() {
+        if (!inputExpirationDate) return false
+        
+        // Validar formato YYYY-MM-DD o DD/MM/YYYY
+        var regex1 = /^\d{4}-\d{2}-\d{2}$/  // YYYY-MM-DD
+        var regex2 = /^\d{2}\/\d{2}\/\d{4}$/ // DD/MM/YYYY
+        
+        if (!regex1.test(inputExpirationDate) && !regex2.test(inputExpirationDate)) {
+            return false
+        }
+        
+        // Validar que la fecha sea futura
+        var fechaIngresada = new Date(inputExpirationDate)
+        var hoy = new Date()
+        
+        return fechaIngresada > hoy
+    }
+    
+    function formatearFechaParaBD() {
+        if (!inputExpirationDate) return ""
+        
+        // Si ya está en formato YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(inputExpirationDate)) {
+            return inputExpirationDate
+        }
+        
+        // Si está en formato DD/MM/YYYY, convertir
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(inputExpirationDate)) {
+            var partes = inputExpirationDate.split('/')
+            return partes[2] + '-' + partes[1] + '-' + partes[0]
+        }
+        
+        return inputExpirationDate
+    }
+    
+    function guardarProducto() {
+        if (!isFormValid) {
+            showNotification("Complete todos los campos obligatorios")
+            return false
+        }
+        
+        if (!validarFechaVencimiento()) {
+            showNotification("Fecha de vencimiento inválida o en el pasado")
+            return false
+        }
+        
+        // Datos del producto
+        var producto = {
+            codigo: inputProductCode.trim(),
+            nombre: inputProductName.trim(),
+            detalles: inputProductDetails.trim(),
+            id_marca: marcaCombo.currentValue,
+            precio_compra: inputPurchasePrice,
+            precio_venta: inputSalePrice,
+            unidad_medida: inputMeasureUnit,
+            // Stock inicial - será usado por el primer lote
+            stock_caja: inputStockBox,
+            stock_unitario: inputStockUnit,
+            // Datos del primer lote
+            fecha_vencimiento: formatearFechaParaBD(),
+            proveedor: inputSupplier.trim()
+        }
+        
+        if (modoEdicion) {
+            // En modo edición, solo actualizar datos básicos del producto
+            // (no crear nuevo lote)
+            producto.id = productoData.id
+            productoActualizado(producto)
+            showNotification("Producto actualizado correctamente")
+        } else {
+            // Crear producto nuevo con primer lote
+            productoCreado(producto)
+            showNotification("Producto y primer lote creados correctamente")
+        }
+        
+        Qt.callLater(function() {
+            limpiarFormulario()
+            volverALista()
+        })
+        
+        return true
+    }
+    
+    function limpiarFormulario() {
+        // Limpiar datos del producto
+        inputProductCode = ""
+        inputProductName = ""
+        inputProductDetails = ""
+        inputPurchasePrice = 0.0
+        inputSalePrice = 0.0
+        calculatedMargin = 0.0
+        
+        // Limpiar datos del primer lote
+        inputExpirationDate = ""
+        inputStockBox = 0
+        inputStockUnit = 0
+        inputSupplier = ""
+        
+        // Limpiar campos UI
+        codigoField.text = ""
+        nombreField.text = ""
+        detallesField.text = ""
+        precioCompraField.text = ""
+        precioVentaField.text = ""
+        fechaVencimientoField.text = ""
+        stockCajaField.text = ""
+        stockUnitarioField.text = ""
+        proveedorField.text = ""
+        
+        if (marcaCombo) marcaCombo.currentIndex = -1
+        if (unidadCombo) unidadCombo.currentIndex = 0
+    }
+    
+    function showNotification(message) {
+        successMessage = message
+        showSuccessMessage = true
+        successTimer.restart()
+    }
+    
+    function abrirCrearProducto(modo = false, datos = null) {
+        modoEdicion = modo
+        productoData = datos
+        cargarMarcasDisponibles()
         limpiarFormulario()
-        datosProductoCargados = false
+        
+        if (modoEdicion && productoData) {
+            Qt.callLater(cargarDatosProducto)
+        }
     }
     
-    // ===============================
-    // CONTENIDO PRINCIPAL
-    // ===============================
-    
-    contentItem: ColumnLayout {
-        spacing: 0
+    function cargarDatosProducto() {
+        if (!productoData) return
         
-        // ===============================
-        // ENCABEZADO PERSONALIZADO
-        // ===============================
+        // Cargar solo datos básicos del producto en modo edición
+        inputProductCode = productoData.codigo || ""
+        inputProductName = productoData.nombre || ""
+        inputProductDetails = productoData.detalles || ""
+        inputPurchasePrice = productoData.precio_compra || 0
+        inputSalePrice = productoData.precio_venta || 0
         
+        codigoField.text = inputProductCode
+        nombreField.text = inputProductName
+        detallesField.text = inputProductDetails
+        precioCompraField.text = inputPurchasePrice.toString()
+        precioVentaField.text = inputSalePrice.toString()
+        
+        calcularMargen()
+        
+        // En modo edición, no cargar datos de lote
+        // (el usuario debe ir a "Gestión de Lotes" para eso)
+    }
+
+    function obtenerFechaSugerida() {
+        // Sugerir fecha 1 año en el futuro
+        var fecha = new Date()
+        fecha.setFullYear(fecha.getFullYear() + 1)
+        return fecha.toISOString().split('T')[0] // Formato YYYY-MM-DD
+    }
+
+    // Manejo de teclas
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Escape) {
+            event.accepted = true
+            cancelarCreacion()
+            volverALista()
+        }
+    }
+
+    // INTERFAZ PRINCIPAL
+    Rectangle {
+        anchors.fill: parent
+        color: grayLight
+        focus: true
+        
+        // Header
         Rectangle {
-            Layout.fillWidth: true
-            height: baseUnit * 7
-            color: primaryColor
-            radius: baseUnit
+            id: header
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: headerHeight
+            color: white
             
-            // Solo redondear esquinas superiores
             Rectangle {
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
-                height: baseUnit
-                color: primaryColor
+                height: 1
+                color: borderColor
             }
             
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: baseUnit * 1.5
-                spacing: baseUnit
+                anchors.leftMargin: baseSpacing
+                anchors.rightMargin: baseSpacing
+                spacing: baseSpacing
                 
-                // Ícono a la izquierda
-                Rectangle {
-                    Layout.preferredWidth: baseUnit * 4
-                    Layout.preferredHeight: baseUnit * 4
-                    Layout.alignment: Qt.AlignVCenter
-                    color: "white"
-                    radius: baseUnit * 2
-                    
-                    Text {
-                        anchors.centerIn: parent
-                        text: modoEdicion ? "✏️" : "➕"
-                        font.pixelSize: fontBaseSize * 1.2
-                    }
-                }
-                
-                // Textos en el centro
-                Column {
-                    Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
-                    spacing: baseUnit * 0.25
-                    
-                    Text {
-                        text: modoEdicion ? "Editar Producto" : "Crear Nuevo Producto"
-                        color: "white"
-                        font.bold: true
-                        font.pixelSize: fontBaseSize * 1.4
-                    }
-                    
-                    Text {
-                        text: modoEdicion ? "Modificar información del producto" : "Agregar producto al inventario"
-                        color: "#E8F4FD"
-                        font.pixelSize: fontBaseSize * 0.9
-                    }
-                }
-                
-                // Botón cerrar a la derecha
+                // Botón volver
                 Button {
-                    Layout.preferredWidth: baseUnit * 4
-                    Layout.preferredHeight: baseUnit * 4
-                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 44
+                    Layout.preferredHeight: 44
                     
                     background: Rectangle {
-                        color: parent.pressed ? "#40FFFFFF" : "transparent"
-                        radius: baseUnit * 2
+                        color: parent.pressed ? "#E5E7EB" : "#F9FAFB"
+                        border.color: borderColor
+                        border.width: 1
+                        radius: 8
                     }
                     
                     contentItem: Text {
-                        text: "✕"
-                        color: "white"
-                        font.pixelSize: fontBaseSize * 1.5
+                        text: "←"
+                        color: primaryBlue
+                        font.pixelSize: 18
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
                     onClicked: {
-                        cerrarSolicitado()
-                        crearProductoDialog.close()
+                        cancelarCreacion()
+                        volverALista()
+                    }
+                }
+                
+                // Título
+                RowLayout {
+                    spacing: 12
+                    
+                    Rectangle {
+                        width: 40
+                        height: 40
+                        color: modoEdicion ? warningAmber : primaryBlue
+                        radius: 8
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: modoEdicion ? "✏" : "+"
+                            color: white
+                            font.pixelSize: 16
+                            font.bold: true
+                        }
+                    }
+                    
+                    Column {
+                        spacing: 2
+                        
+                        Text {
+                            text: modoEdicion ? "Editar Producto" : "Nuevo Producto + Primer Lote"
+                            font.pixelSize: 20
+                            font.bold: true
+                            color: grayDark
+                        }
+                        
+                        Text {
+                            text: modoEdicion ? "Actualizar información del producto" : "Crear producto e inventario inicial"
+                            font.pixelSize: 14
+                            color: grayMedium
+                        }
+                    }
+                }
+                
+                Item { Layout.fillWidth: true }
+                
+                // Estado del formulario
+                Rectangle {
+                    Layout.preferredWidth: 140
+                    Layout.preferredHeight: 36
+                    color: isFormValid ? "#ECFDF5" : "#FEF2F2"
+                    border.color: isFormValid ? successGreen : dangerRed
+                    border.width: 1
+                    radius: 6
+                    
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 8
+                        
+                        Text {
+                            text: isFormValid ? "✓" : "!"
+                            color: isFormValid ? successGreen : dangerRed
+                            font.pixelSize: 14
+                            font.bold: true
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        
+                        Text {
+                            text: isFormValid ? "Completo" : "Incompleto"
+                            color: isFormValid ? "#065F46" : "#991B1B"
+                            font.pixelSize: 13
+                            font.bold: true
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
             }
         }
         
-        // ===============================
-        // CONTENIDO PRINCIPAL (SCROLLABLE)
-        // ===============================
-        
+        // Contenido principal
         ScrollView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            anchors.top: header.bottom
+            anchors.bottom: footer.top
+            anchors.left: parent.left
+            anchors.right: parent.right
             clip: true
-            contentWidth: availableWidth
             
-            // ColumnLayout principal para apilar los grupos de campos
             ColumnLayout {
-                width: parent.width
-                spacing: baseUnit * 1.5
+                width: parent.parent.width
+                spacing: sectionSpacing
                 
-                // ===============================
-                // GRUPO: INFORMACIÓN BÁSICA
-                // ===============================
-
-                GroupBox {
+                // Margen superior
+                Item { Layout.preferredHeight: baseSpacing }
+                
+                // Sección: Información básica del producto
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.margins: baseUnit
-                    padding: baseUnit
-                    
-                    background: Rectangle {
-                        color: "#FAFBFC"
-                        border.color: "#E1E8ED"
-                        border.width: 1
-                        radius: baseUnit * 0.5
-                    }
+                    Layout.leftMargin: baseSpacing
+                    Layout.rightMargin: baseSpacing
+                    Layout.preferredHeight: basicInfoContent.height + cardPadding * 2
+                    color: white
+                    radius: 12
+                    border.color: borderColor
+                    border.width: 1
                     
                     ColumnLayout {
-                        anchors.fill: parent
-                        spacing: baseUnit
+                        id: basicInfoContent
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: cardPadding
+                        spacing: 16
                         
-                        // Título dentro del contenedor
-                        RowLayout {
-                            Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                        Row {
+                            spacing: 8
                             
                             Rectangle {
-                                width: basicInfoLabel.width + baseUnit
-                                height: baseUnit * 2.5
-                                color: primaryColor
-                                radius: baseUnit * 0.25
+                                width: 24
+                                height: 24
+                                color: primaryBlue
+                                radius: 4
                                 
                                 Text {
-                                    id: basicInfoLabel
                                     anchors.centerIn: parent
-                                    text: "📋 Información Básica"
-                                    color: "white"
+                                    text: "1"
+                                    color: white
                                     font.bold: true
-                                    font.pixelSize: fontBaseSize * 0.8
+                                    font.pixelSize: 12
+                                }
+                            }
+                            
+                            Text {
+                                text: "Información Básica del Producto"
+                                font.pixelSize: 16
+                                font.bold: true
+                                color: grayDark
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+                        
+                        // Fila 1: Código y Nombre
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 16
+                            
+                            // Código
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Código *"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: codigoField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextEdit {
+                                        id: codigoField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextEdit.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        
+                                        onTextChanged: inputProductCode = text
+                                        
+                                        Text {
+                                            text: "PAR001"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Nombre
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Nombre del Producto *"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: nombreField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextEdit {
+                                        id: nombreField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextEdit.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        
+                                        onTextChanged: inputProductName = text
+                                        
+                                        Text {
+                                            text: "Paracetamol 500mg"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
                                 }
                             }
                         }
                         
-                        // Fila 1: Código, Nombre y Marca en la misma línea
+                        // Fila 2: Marca y Unidad
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: baseUnit
+                            spacing: 16
                             
-                            // Campo Código
+                            // Marca
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: parent.width * 0.3
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: "Código *"
-                                    color: textColor
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize
-                                }
-                                
-                                TextField {
-                                    id: codigoField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    placeholderText: "Ej: PARA001"
-                                    font.pixelSize: fontBaseSize
-                                    leftPadding: baseUnit
-                                    rightPadding: baseUnit
-                                    
-                                    background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? primaryColor : "#D1D9E0"
-                                        border.width: parent.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                }
-                            }
-                            
-                            // Campo Nombre
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: parent.width * 0.4
-                                spacing: baseUnit * 0.5
-                                
-                                Text {
-                                    text: "Nombre *"
-                                    color: textColor
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize
-                                }
-                                
-                                TextField {
-                                    id: nombreField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    placeholderText: "Ej: Paracetamol 500mg"
-                                    font.pixelSize: fontBaseSize
-                                    leftPadding: baseUnit
-                                    rightPadding: baseUnit
-                                    
-                                    background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? primaryColor : "#D1D9E0"
-                                        border.width: parent.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                }
-                            }
-                            
-                            // Campo Marca - CORREGIDO
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: parent.width * 0.3
-                                spacing: baseUnit * 0.5
+                                spacing: 6
                                 
                                 Text {
                                     text: "Marca *"
-                                    color: textColor
+                                    font.pixelSize: 14
                                     font.bold: true
-                                    font.pixelSize: fontBaseSize
+                                    color: grayDark
                                 }
                                 
                                 ComboBox {
                                     id: marcaCombo
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
+                                    Layout.preferredHeight: inputHeight
                                     model: marcasModel
                                     textRole: "Nombre"
                                     valueRole: "id"
-                                    font.pixelSize: fontBaseSize
-                                    leftPadding: baseUnit
-                                    rightPadding: baseUnit
+                                    font.pixelSize: 14
                                     
-                                    // MEJORA: Placeholder cuando no hay marcas
                                     displayText: {
-                                        if (!marcasCargadas) {
-                                            return "Cargando marcas..."
-                                        }
-                                        if (currentIndex === -1) {
-                                            return "Seleccionar marca..."
-                                        }
+                                        if (!marcasCargadas) return "Cargando marcas..."
+                                        if (currentIndex === -1) return "Seleccionar marca"
                                         return currentText
                                     }
                                     
                                     enabled: marcasCargadas && marcasModel.length > 0
                                     
                                     background: Rectangle {
-                                        color: parent.enabled ? "white" : "#f5f5f5"
-                                        border.color: parent.activeFocus ? primaryColor : "#D1D9E0"
-                                        border.width: parent.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                    
-                                    onCurrentIndexChanged: {
-                                        if (currentIndex >= 0) {
-                                            console.log("🏷️ Marca seleccionada:", currentText)
-                                        }
-                                    }
-                                    
-                                    // Indicador de carga mejorado
-                                    indicator: BusyIndicator {
-                                        visible: !marcasCargadas
-                                        running: !marcasCargadas
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: 10
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: 16
-                                        height: 16
+                                        color: parent.enabled ? white : "#F9FAFB"
+                                        border.color: parent.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 8
                                     }
                                 }
                             }
-                        }
-                        
-                        // Fila 2: Descripción (ancho completo) - CORREGIDO
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: baseUnit * 0.5
                             
-                            Text {
-                                text: "Descripción"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize
-                            }
-                            
-                            ScrollView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: baseUnit * 6
-                                clip: true
+                            // Unidad
+                            ColumnLayout {
+                                Layout.preferredWidth: 160
+                                spacing: 6
                                 
-                                TextArea {
-                                    id: descripcionField  // CAMBIADO: Mantener nombre consistente
-                                    placeholderText: "Descripción del producto (opcional)"
-                                    wrapMode: TextArea.Wrap
-                                    font.pixelSize: fontBaseSize
-                                    leftPadding: baseUnit
-                                    rightPadding: baseUnit
-                                    topPadding: baseUnit * 0.5
-                                    bottomPadding: baseUnit * 0.5
+                                Text {
+                                    text: "Unidad de Medida"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                ComboBox {
+                                    id: unidadCombo
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
+                                    font.pixelSize: 14
                                     
                                     background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? primaryColor : "#D1D9E0"
-                                        border.width: parent.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
+                                        color: white
+                                        border.color: parent.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 8
+                                    }
+                                    
+                                    onCurrentTextChanged: inputMeasureUnit = currentText
+                                    
+                                    Component.onCompleted: {
+                                        currentIndex = 0
+                                        inputMeasureUnit = currentText
                                     }
                                 }
                             }
                         }
-                    }
-                }
-                
-                // ===============================
-                // GRUPO: PRECIOS
-                // ===============================
-
-                GroupBox {
-                    Layout.fillWidth: true
-                    Layout.margins: baseUnit
-                    padding: baseUnit
-                    
-                    background: Rectangle {
-                        color: "#FAFBFC"
-                        border.color: "#E1E8ED"
-                        border.width: 1
-                        radius: baseUnit * 0.5
-                    }
-                    
-                    ColumnLayout {
-                        width: parent.width
-                        spacing: baseUnit
                         
-                        // Título dentro del contenedor
-                        RowLayout {
-                            Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                        // Descripción
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            
+                            Text {
+                                text: "Descripción (Opcional)"
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: grayDark
+                            }
                             
                             Rectangle {
-                                width: preciosLabel.width + baseUnit
-                                height: baseUnit * 2.5
-                                color: "#e67e22"
-                                radius: baseUnit * 0.25
-                                
-                                Text {
-                                    id: preciosLabel
-                                    anchors.centerIn: parent
-                                    text: "💰 Precios"
-                                    color: "white"
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize * 0.8
-                                }
-                            }
-                        }
-                        
-                        // Fila 1: Precio de Compra y Precio de Venta
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: baseUnit * 1.5
-                            
-                            // Campo Precio de Compra
-                            ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: baseUnit * 0.5
+                                Layout.preferredHeight: 80
+                                color: white
+                                border.color: detallesField.activeFocus ? primaryBlue : borderColor
+                                border.width: 1
+                                radius: 8
                                 
-                                Text {
-                                    text: "Precio de Compra *"
-                                    color: textColor
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize
-                                }
-                                
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: baseUnit * 0.5
+                                Flickable {
+                                    id: flick
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    contentWidth: width
+                                    contentHeight: detallesField.implicitHeight
+                                    clip: true
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: baseUnit * 3
-                                        Layout.preferredHeight: baseUnit * 3.5
-                                        color: "#FFF3E0"
-                                        border.color: "#e67e22"
-                                        border.width: 1
-                                        radius: baseUnit * 0.5
+                                    function ensureVisible(r) {
+                                        if (contentY >= r.y)
+                                            contentY = r.y;
+                                        else if (contentY+height <= r.y+r.height)
+                                            contentY = r.y+r.height-height;
+                                    }
+                                    
+                                    TextEdit {
+                                        id: detallesField
+                                        width: parent.width
+                                        height: Math.max(implicitHeight, 64)
+                                        wrapMode: TextEdit.Wrap
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        
+                                        onCursorRectangleChanged: flick.ensureVisible(cursorRectangle)
+                                        onTextChanged: inputProductDetails = text
                                         
                                         Text {
-                                            anchors.centerIn: parent
-                                            text: "Bs"
-                                            color: "#e67e22"
-                                            font.bold: true
-                                            font.pixelSize: fontBaseSize * 1.2
+                                            text: "Descripción detallada del medicamento..."
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
                                         }
                                     }
                                     
-                                    TextField {
-                                    id: precioCompraField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    placeholderText: "0.00"
-                                    font.pixelSize: fontBaseSize
-                                    leftPadding: baseUnit
-                                    rightPadding: baseUnit
-                                    validator: DoubleValidator {
-                                        bottom: 0.0
-                                        decimals: 2
+                                    ScrollBar.vertical: ScrollBar {
+                                        policy: ScrollBar.AsNeeded
+                                        width: 8
                                     }
-                                    
-                                    onTextChanged: calcularMargen()
-                                    
-                                    background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? "#e67e22" : "#D1D9E0"
-                                        border.width: parent.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Campo Precio de Venta
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: baseUnit * 0.5
-                            
-                            Text {
-                                text: "Precio de Venta *"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: baseUnit * 0.5
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: baseUnit * 3
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    color: "#E8F5E8"
-                                    border.color: successColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.5
-                                    
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "Bs"
-                                        color: successColor
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 1.2
-                                    }
-                                }
-                                
-                                TextField {
-                                    id: precioVentaField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    placeholderText: "0.00"
-                                    font.pixelSize: fontBaseSize
-                                    leftPadding: baseUnit
-                                    rightPadding: baseUnit
-                                    validator: DoubleValidator {
-                                        bottom: 0.0
-                                        decimals: 2
-                                    }
-                                    
-                                    onTextChanged: calcularMargen()
-                                    
-                                    background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? successColor : "#D1D9E0"
-                                        border.width: parent.activeFocus ? 2 : 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Fila 2: Margen de Ganancia (calculado automáticamente)
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: baseUnit * 0.5
-                        
-                        Text {
-                            text: "Margen de Ganancia"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontBaseSize
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: baseUnit * 3.5
-                            color: "#F0F8FF"
-                            border.color: "#3498db"
-                            border.width: 1
-                            radius: baseUnit * 0.5
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: baseUnit
-                                spacing: baseUnit
-                                
-                                Text {
-                                    text: "📈"
-                                    font.pixelSize: fontBaseSize * 1.2
-                                }
-                                
-                                Text {
-                                    text: "Margen:"
-                                    color: "#3498db"
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize
-                                }
-                                
-                                Text {
-                                    id: margenText
-                                    text: "0%"
-                                    color: "#2c3e50"
-                                    font.bold: true
-                                    font.pixelSize: fontBaseSize * 1.1
-                                }
-                                
-                                Item {
-                                    Layout.fillWidth: true
                                 }
                             }
                         }
                     }
                 }
-            }
-            
-            // ===============================
-            // GRUPO: STOCK INICIAL (solo visible al crear)
-            // ===============================
-
-            GroupBox {
-                Layout.fillWidth: true
-                Layout.margins: baseUnit
-                visible: !modoEdicion
-                padding: baseUnit
                 
-                background: Rectangle {
-                    color: "#F8F9FA"
-                    border.color: lightGrayColor
+                // Sección: Precios
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: baseSpacing
+                    Layout.rightMargin: baseSpacing
+                    Layout.preferredHeight: pricesContent.height + cardPadding * 2
+                    color: white
+                    radius: 12
+                    border.color: borderColor
                     border.width: 1
-                    radius: baseUnit * 0.5
+                    
+                    ColumnLayout {
+                        id: pricesContent
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: cardPadding
+                        spacing: 16
+                        
+                        Row {
+                            spacing: 8
+                            
+                            Rectangle {
+                                width: 24
+                                height: 24
+                                color: successGreen
+                                radius: 4
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "2"
+                                    color: white
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                }
+                            }
+                            
+                            Text {
+                                text: "Precios y Margen"
+                                font.pixelSize: 16
+                                font.bold: true
+                                color: grayDark
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+                        
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 20
+                            
+                            // Precio de Compra
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Precio de Compra (Bs) *"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: precioCompraField.activeFocus ? successGreen : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextInput {
+                                        id: precioCompraField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                        
+                                        onTextChanged: {
+                                            var cleanText = text.replace(/[^0-9.]/g, '');
+                                            if (cleanText !== text) {
+                                                text = cleanText;
+                                            }
+                                            
+                                            inputPurchasePrice = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0;
+                                            calcularMargen();
+                                        }
+                                        
+                                        Text {
+                                            text: "0.00"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Precio de Venta
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Precio de Venta (Bs) *"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: precioVentaField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextInput {
+                                        id: precioVentaField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                        
+                                        onTextChanged: {
+                                            var cleanText = text.replace(/[^0-9.]/g, '');
+                                            if (cleanText !== text) {
+                                                text = cleanText;
+                                            }
+                                            
+                                            inputSalePrice = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0;
+                                            calcularMargen();
+                                        }
+                                        
+                                        Text {
+                                            text: "0.00"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Margen
+                            ColumnLayout {
+                                Layout.preferredWidth: 120
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Margen"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: calculatedMargin >= 0 ? "#ECFDF5" : "#FEF2F2"
+                                    border.color: calculatedMargin >= 0 ? successGreen : dangerRed
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: calculatedMargin.toFixed(1) + "%"
+                                        color: calculatedMargin >= 0 ? "#065F46" : "#991B1B"
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Sección: Primer Lote (nueva y más importante)
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: baseSpacing
+                    Layout.rightMargin: baseSpacing
+                    Layout.preferredHeight: loteContent.height + cardPadding * 2
+                    color: white
+                    radius: 12
+                    border.color: warningAmber
+                    border.width: 2
+                    visible: !modoEdicion  // Solo en creación
+                    
+                    ColumnLayout {
+                        id: loteContent
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: cardPadding
+                        spacing: 16
+                        
+                        Row {
+                            spacing: 8
+                            
+                            Rectangle {
+                                width: 24
+                                height: 24
+                                color: warningAmber
+                                radius: 4
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "3"
+                                    color: white
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                }
+                            }
+                            
+                            Column {
+                                spacing: 2
+                                anchors.verticalCenter: parent.verticalCenter
+                                
+                                Text {
+                                    text: "Primer Lote de Inventario *"
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Text {
+                                    text: "Información del stock inicial que estás registrando"
+                                    font.pixelSize: 12
+                                    color: grayMedium
+                                    font.italic: true
+                                }
+                            }
+                        }
+                        
+                        // Fila 1: Fecha de vencimiento
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            
+                            Text {
+                                text: "Fecha de Vencimiento *"
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: grayDark
+                            }
+                            
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: fechaVencimientoField.activeFocus ? warningAmber : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextInput {
+                                        id: fechaVencimientoField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        
+                                        onTextChanged: inputExpirationDate = text
+                                        
+                                        Text {
+                                            text: "YYYY-MM-DD o DD/MM/YYYY"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                                
+                                Button {
+                                    Layout.preferredWidth: 140
+                                    Layout.preferredHeight: inputHeight - 6
+                                    text: "Sugerir (+1 año)"
+                                    
+                                    background: Rectangle {
+                                        color: parent.pressed ? "#FEF3C7" : "#FFFBEB"
+                                        border.color: warningAmber
+                                        border.width: 1
+                                        radius: 6
+                                    }
+                                    
+                                    contentItem: Text {
+                                        text: parent.text
+                                        color: "#92400E"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    
+                                    onClicked: {
+                                        var fechaSugerida = obtenerFechaSugerida()
+                                        fechaVencimientoField.text = fechaSugerida
+                                        inputExpirationDate = fechaSugerida
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Fila 2: Stock inicial
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 16
+                            
+                            // Stock en Cajas
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Stock en Cajas *"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: stockCajaField.activeFocus ? warningAmber : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextInput {
+                                        id: stockCajaField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        inputMethodHints: Qt.ImhDigitsOnly
+                                        horizontalAlignment: TextInput.AlignHCenter
+                                        
+                                        onTextChanged: {
+                                            var cleanText = text.replace(/[^0-9]/g, '');
+                                            if (cleanText !== text) {
+                                                text = cleanText;
+                                            }
+                                            
+                                            inputStockBox = text.length > 0 ? (parseInt(text) || 0) : 0;
+                                        }
+                                        
+                                        Text {
+                                            text: "0"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Stock Unitario
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Stock Unitario *"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: stockUnitarioField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    TextInput {
+                                        id: stockUnitarioField
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 14
+                                        color: grayDark
+                                        inputMethodHints: Qt.ImhDigitsOnly
+                                        horizontalAlignment: TextInput.AlignHCenter
+                                        
+                                        onTextChanged: {
+                                            var cleanText = text.replace(/[^0-9]/g, '');
+                                            if (cleanText !== text) {
+                                                text = cleanText;
+                                            }
+                                            
+                                            inputStockUnit = text.length > 0 ? (parseInt(text) || 0) : 0;
+                                        }
+                                        
+                                        Text {
+                                            text: "0"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font: parent.font
+                                            verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Total
+                            ColumnLayout {
+                                Layout.preferredWidth: 100
+                                spacing: 6
+                                
+                                Text {
+                                    text: "Total"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: "#F0F9FF"
+                                    border.color: primaryBlue
+                                    border.width: 1
+                                    radius: 8
+                                    
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (inputStockBox + inputStockUnit).toString()
+                                        color: primaryBlue
+                                        font.pixelSize: 16
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Fila 3: Proveedor (opcional)
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            
+                            Text {
+                                text: "Proveedor (Opcional)"
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: grayDark
+                            }
+                            
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: inputHeight
+                                color: white
+                                border.color: proveedorField.activeFocus ? primaryBlue : borderColor
+                                border.width: 1
+                                radius: 8
+                                
+                                TextInput {
+                                    id: proveedorField
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    selectByMouse: true
+                                    font.pixelSize: 14
+                                    color: grayDark
+                                    
+                                    onTextChanged: inputSupplier = text
+                                    
+                                    Text {
+                                        text: "Nombre del proveedor..."
+                                        color: grayMedium
+                                        visible: !parent.text
+                                        font: parent.font
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Nota informativa
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 50
+                            color: "#FEF3C7"
+                            border.color: warningAmber
+                            border.width: 1
+                            radius: 8
+                            
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                
+                                Text {
+                                    text: "ℹ"
+                                    color: warningAmber
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                
+                                Text {
+                                    text: "Este será el primer lote de inventario. Luego podrás agregar más lotes con diferentes fechas."
+                                    color: "#92400E"
+                                    font.pixelSize: 13
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
+                        }
+                    }
                 }
                 
-                ColumnLayout {
-                    width: parent.width
-                    spacing: baseUnit
-                    
-                    // Título dentro del contenedor
-                    RowLayout {
-                        Layout.alignment: Qt.AlignTop | Qt.AlignLeft
-                        
-                        Rectangle {
-                            width: stockLabel.width + baseUnit
-                            height: baseUnit * 2.5
-                            color: "#17a2b8"
-                            radius: baseUnit * 0.25
-                            
-                            Text {
-                                id: stockLabel
-                                anchors.centerIn: parent
-                                text: "📦 Stock Inicial"
-                                color: "white"
-                                font.bold: true
-                                font.pixelSize: fontBaseSize * 0.8
-                            }
-                        }
-                    }
-                    
-                    // GridLayout 2 columnas para stock
-                    GridLayout {
-                        width: parent.width
-                        columns: 2
-                        columnSpacing: baseUnit
-                        rowSpacing: baseUnit
-                        
-                        // Stock en Cajas
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: baseUnit * 0.5
-                            
-                            Text {
-                                text: "Stock en Cajas"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: baseUnit * 0.5
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: baseUnit * 3
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    color: "#E3F2FD"
-                                    border.color: "#17a2b8"
-                                    border.width: 1
-                                    radius: baseUnit * 0.5
-                                    
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "📦"
-                                        font.pixelSize: fontBaseSize * 1.1
-                                    }
-                                }
-                                
-                                TextField {
-                                    id: stockCajaField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    placeholderText: "0"
-                                    text: "0"
-                                    font.pixelSize: fontBaseSize
-                                    validator: IntValidator {
-                                        bottom: 0
-                                    }
-                                    
-                                    background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? "#17a2b8" : lightGrayColor
-                                        border.width: 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Stock Unitario
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: baseUnit * 0.5
-                            
-                            Text {
-                                text: "Stock Unitario"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: fontBaseSize
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: baseUnit * 0.5
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: baseUnit * 3
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    color: "#E8F5E8"
-                                    border.color: successColor
-                                    border.width: 1
-                                    radius: baseUnit * 0.5
-                                    
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "🔢"
-                                        font.pixelSize: fontBaseSize * 1.1
-                                    }
-                                }
-                                
-                                TextField {
-                                    id: stockUnitarioField
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: baseUnit * 3.5
-                                    placeholderText: "0"
-                                    text: "0"
-                                    font.pixelSize: fontBaseSize
-                                    validator: IntValidator {
-                                        bottom: 0
-                                    }
-                                    
-                                    background: Rectangle {
-                                        color: "white"
-                                        border.color: parent.activeFocus ? successColor : lightGrayColor
-                                        border.width: 1
-                                        radius: baseUnit * 0.5
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Margen inferior
+                Item { Layout.preferredHeight: 80 }
             }
         }
-    }
-    
-    // ===============================
-    // PIE DE PÁGINA CON BOTONES
-    // ===============================
-    
-    Rectangle {
-        Layout.fillWidth: true
-        height: baseUnit * 7
-        color: "#F8F9FA"
-        border.color: lightGrayColor
-        border.width: 1
-        radius: baseUnit
         
-        // Solo redondear esquinas inferiores
+        // Footer con botones de acción
         Rectangle {
-            anchors.top: parent.top
+            id: footer
+            anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            height: baseUnit
-            color: "#F8F9FA"
-        }
-        
-        // RowLayout para organizar horizontalmente los elementos del pie
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: baseUnit
-            spacing: baseUnit
+            height: 80
+            color: white
             
-            // Barra de notificación
             Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: baseUnit * 4
-                color: formularioValido ? "#d4edda" : "#f8d7da"
-                border.color: formularioValido ? successColor : dangerColor
-                border.width: 1
-                radius: baseUnit * 0.5
-                
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: baseUnit * 0.5
-                    spacing: baseUnit * 0.5
-                    
-                    Text {
-                        text: formularioValido ? "✅" : "⚠️"
-                        font.pixelSize: fontBaseSize * 1.2
-                    }
-                    
-                    Text {
-                        Layout.fillWidth: true
-                        text: {
-                            if (!marcasCargadas) {
-                                return "Cargando marcas..."
-                            }
-                            return formularioValido ? 
-                                  "Formulario completo - Listo para guardar" : 
-                                  "Complete los campos obligatorios (*)"
-                        }
-                        color: formularioValido ? "#155724" : "#721c24"
-                        font.pixelSize: fontBaseSize * 0.9
-                        font.bold: true
-                        wrapMode: Text.WordWrap
-                    }
-                }
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: borderColor
             }
             
-            // Botones a la derecha
             RowLayout {
-                spacing: baseUnit
+                anchors.centerIn: parent
+                spacing: 16
                 
-                // Botón Cancelar
                 Button {
-                    Layout.preferredWidth: baseUnit * 10
-                    Layout.preferredHeight: baseUnit * 4
-                    text: "Cancelar"
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: buttonHeight
                     
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker("#6c757d", 1.2) : "#6c757d"
-                        radius: baseUnit * 0.5
+                        color: parent.pressed ? "#F3F4F6" : white
+                        border.color: borderColor
+                        border.width: 1
+                        radius: 8
                     }
                     
                     contentItem: Text {
-                        text: parent.text
-                        color: "white"
+                        text: "Cancelar"
+                        color: grayDark
+                        font.pixelSize: 14
                         font.bold: true
-                        font.pixelSize: fontBaseSize
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
                     onClicked: {
-                        cancelado()
-                        cerrarSolicitado()
-                        crearProductoDialog.close()
+                        limpiarFormulario()
+                        cancelarCreacion()
+                        volverALista()
                     }
                 }
                 
-                // Botón Guardar
                 Button {
-                    Layout.preferredWidth: baseUnit * 12
-                    Layout.preferredHeight: baseUnit * 4
-                    text: modoEdicion ? "Actualizar" : "Crear"
-                    enabled: formularioValido && marcasCargadas
+                    Layout.preferredWidth: modoEdicion ? 180 : 220
+                    Layout.preferredHeight: buttonHeight
+                    enabled: isFormValid && marcasCargadas
                     
                     background: Rectangle {
-                        color: parent.enabled ? 
-                              (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) : 
-                              "#cccccc"
-                        radius: baseUnit * 0.5
+                        color: parent.enabled ? (parent.pressed ? "#1D4ED8" : primaryBlue) : "#E5E7EB"
+                        radius: 8
                     }
                     
                     contentItem: Text {
-                        text: parent.text
-                        color: "white"
+                        text: modoEdicion ? "Actualizar Producto" : "Crear Producto + Lote"
+                        color: parent.parent.enabled ? white : grayMedium
+                        font.pixelSize: 14
                         font.bold: true
-                        font.pixelSize: fontBaseSize
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: {
-                        if (modoEdicion) {
-                            actualizarProducto()
-                        } else {
-                            crearProducto()
-                        }
-                        crearProductoDialog.close()
-                    }
+                    onClicked: guardarProducto()
+                }
+            }
+        }
+        
+        // Notificación de éxito
+        Rectangle {
+            anchors.bottom: footer.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: baseSpacing
+            width: Math.min(parent.width - baseSpacing * 2, 400)
+            height: 50
+            color: successGreen
+            radius: 8
+            visible: showSuccessMessage
+            opacity: showSuccessMessage ? 1.0 : 0.0
+            z: 100
+            
+            Behavior on opacity {
+                NumberAnimation { duration: 300 }
+            }
+            
+            Row {
+                anchors.centerIn: parent
+                spacing: 12
+                
+                Text {
+                    text: "✓"
+                    color: white
+                    font.pixelSize: 16
+                    font.bold: true
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                
+                Text {
+                    text: successMessage
+                    color: white
+                    font.pixelSize: 14
+                    font.bold: true
+                    anchors.verticalCenter: parent.verticalCenter
                 }
             }
         }
     }
-}
 
-    // ===============================
-    // FUNCIONES - CORREGIDAS
-    // ===============================
-    
-    function cargarDatosProducto() {
-        if (!productoData) {
-            console.log("❌ No hay datos de producto para cargar")
-            return
+    // Inicialización
+    Component.onCompleted: {
+        if (inventarioModel) {
+            cargarMarcasDisponibles()
         }
         
-        console.log("📦 Cargando datos del producto...")
-        
-        // CORREGIDO: Cargar campos básicos con manejo robusto de diferentes formatos
-        codigoField.text = obtenerValorCampo(productoData, ["codigo", "Codigo"]) || ""
-        nombreField.text = obtenerValorCampo(productoData, ["nombre", "Nombre"]) || ""
-        
-        // CORREGIDO: Cargar descripción con múltiples nombres posibles
-        var detalles = obtenerValorCampo(productoData, [
-            "detalles", "Detalles", "Producto_Detalles", 
-            "descripcion", "descripcion", "Descripcion"
-        ]) || ""
-        descripcionField.text = detalles
-        
-        // CORREGIDO: Cargar precios con conversión segura
-        var precioCompra = obtenerValorNumerico(productoData, [
-            "precioCompra", "precio_compra", "Precio_compra"
-        ]) || 0
-        var precioVenta = obtenerValorNumerico(productoData, [
-            "precioVenta", "precio_venta", "Precio_venta"
-        ]) || 0
-        
-        precioCompraField.text = precioCompra.toFixed(2)
-        precioVentaField.text = precioVenta.toFixed(2)
-        
-        // CORREGIDO: Cargar marca con búsqueda mejorada
-        cargarMarcaDelProducto()
-        
-        // Calcular margen
-        calcularMargen()
-        
-        datosProductoCargados = true
-        console.log("✅ Datos del producto cargados exitosamente")
-    }
-    
-    // NUEVA FUNCIÓN: Obtener valor de campo con múltiples nombres posibles
-    function obtenerValorCampo(objeto, nombres) {
-        for (var i = 0; i < nombres.length; i++) {
-            var valor = objeto[nombres[i]]
-            if (valor !== undefined && valor !== null && valor !== "") {
-                return valor
+        Qt.callLater(function() {
+            if (codigoField) {
+                codigoField.forceActiveFocus()
             }
-        }
-        return null
-    }
-    
-    // NUEVA FUNCIÓN: Obtener valor numérico con conversión segura
-    function obtenerValorNumerico(objeto, nombres) {
-        var valor = obtenerValorCampo(objeto, nombres)
-        if (valor === null) return 0
-        
-        var numero = parseFloat(valor)
-        return isNaN(numero) ? 0 : numero
-    }
-    
-    // NUEVA FUNCIÓN: Cargar marca del producto
-    function cargarMarcaDelProducto() {
-        if (!marcasCargadas || marcasModel.length === 0) {
-            console.log("⚠️ No se pueden cargar marcas todavía")
-            return
-        }
-        
-        // CORREGIDO: Buscar marca con múltiples campos posibles
-        var marcaId = obtenerValorNumerico(productoData, [
-            "idMarca", "id_marca", "ID_Marca", "Marca_ID"
-        ])
-        var marcaNombre = obtenerValorCampo(productoData, [
-            "marcaNombre", "marca_nombre", "Marca_Nombre", "idMarca"
-        ])
-        
-        console.log("🏷️ Buscando marca - ID:", marcaId, "Nombre:", marcaNombre)
-        
-        var encontrado = false
-        
-        // Buscar por ID primero
-        if (marcaId > 0) {
-            for (var i = 0; i < marcasModel.length; i++) {
-                if (marcasModel[i].id == marcaId) {
-                    marcaCombo.currentIndex = i
-                    console.log("✅ Marca encontrada por ID:", marcasModel[i].Nombre)
-                    encontrado = true
-                    break
-                }
-            }
-        }
-        
-        // Si no se encontró por ID, buscar por nombre
-        if (!encontrado && marcaNombre) {
-            for (var j = 0; j < marcasModel.length; j++) {
-                if (marcasModel[j].Nombre === marcaNombre) {
-                    marcaCombo.currentIndex = j
-                    console.log("✅ Marca encontrada por nombre:", marcasModel[j].Nombre)
-                    encontrado = true
-                    break
-                }
-            }
-        }
-        
-        if (!encontrado) {
-            console.log("⚠️ No se encontró la marca en la lista")
-            marcaCombo.currentIndex = -1
-        }
-    }
-    
-    function calcularMargen() {
-        var precioCompra = parseFloat(precioCompraField.text || "0")
-        var precioVenta = parseFloat(precioVentaField.text || "0")
-        
-        if (precioCompra > 0 && precioVenta > 0) {
-            var margen = ((precioVenta - precioCompra) / precioCompra) * 100
-            margenText.text = margen.toFixed(1) + "%"
-        } else {
-            margenText.text = "0%"
-        }
-    }
-    
-    // CORREGIDO: Crear producto con campo detalles correcto
-    function crearProducto() {
-        var producto = {
-            codigo: codigoField.text.trim(),
-            nombre: nombreField.text.trim(),
-            detalles: descripcionField.text.trim(),  // CORREGIDO: usar "detalles" no "descripcion"
-            id_marca: marcaCombo.currentValue,
-            precio_compra: parseFloat(precioCompraField.text || "0"),
-            precio_venta: parseFloat(precioVentaField.text || "0"),
-            stock_caja: parseInt(stockCajaField.text || "0"),
-            stock_unitario: parseInt(stockUnitarioField.text || "0")
-        }
-        
-        console.log("📦 Creando producto:", producto.codigo)
-        productoCreado(producto)
-    }
-    
-    // CORREGIDO: Actualizar producto con campo detalles correcto  
-    function actualizarProducto() {
-        var producto = {
-            id: productoData.id,
-            codigo: codigoField.text.trim(),
-            nombre: nombreField.text.trim(),
-            detalles: descripcionField.text.trim(),  // CORREGIDO: usar "detalles" no "descripcion"
-            id_marca: marcaCombo.currentValue,
-            precio_compra: parseFloat(precioCompraField.text || "0"),
-            precio_venta: parseFloat(precioVentaField.text || "0")
-        }
-        
-        console.log("📝 Actualizando producto:", producto.codigo)
-        productoActualizado(producto)
-    }
-    
-    function limpiarFormulario() {
-        codigoField.text = ""
-        nombreField.text = ""
-        descripcionField.text = ""
-        precioCompraField.text = ""
-        precioVentaField.text = ""
-        stockCajaField.text = "0"
-        stockUnitarioField.text = "0"
-        marcaCombo.currentIndex = -1
-        margenText.text = "0%"
-        datosProductoCargados = false
-    }
-    
-    // Función para abrir el diálogo - MEJORADA
-    function abrirDialog(modo = false, datos = null) {
-        console.log("🚀 Abriendo diálogo - Modo edición:", modo)
-        
-        modoEdicion = modo
-        productoData = datos
-        
-        // Limpiar estado previo
-        limpiarFormulario()
-        datosProductoCargados = false
-        
-        // Iniciar proceso de carga
-        inicializacionTimer.start()
-        open()
+        })
     }
 }
