@@ -7,6 +7,9 @@ import Clinica.Models 1.0
 Item {
     id: laboratorioRoot
     objectName: "laboratorioRoot"
+    enabled: !confirmDeleteDialog.showDialog || 
+                (this === confirmDeleteDialog) || 
+                (this === deleteConfirmContent)
 
     // ACCESO AL MODELO DE BACKEND
     property var laboratorioModel: null
@@ -1057,7 +1060,7 @@ Item {
                                                 var analisisId = parseInt(model.analisisId)
                                                 editarAnalisis(index, analisisId)
                                             }
-                                            
+
                                             onHoveredChanged: {
                                                 editIcon.opacity = hovered ? 0.7 : 1.0
                                             }
@@ -1082,11 +1085,8 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                var analisisId = parseInt(model.analisisId)
-                                                if (laboratorioModel) {
-                                                    laboratorioModel.eliminarExamen(analisisId)
-                                                }
-                                                selectedRowIndex = -1
+                                                confirmDeleteDialog.analisisIdToDelete = model.analisisId
+                                                confirmDeleteDialog.showDialog = true
                                             }
                                             
                                             onHoveredChanged: {
@@ -2153,7 +2153,123 @@ Item {
             }
         }
     }
+    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    Rectangle {
+        id: confirmDeleteDialog
+        anchors.centerIn: parent
+        width: 400
+        height: 200
+        color: "black"
+        visible: showDialog
+        z: 2000
+        
+        property string analisisIdToDelete: ""
+        property bool showDialog: false
+        
+        opacity: showDialog ? 0.5 : 0
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 200 }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                confirmDeleteDialog.showDialog = false
+            }
+        }
+    }
 
+    Rectangle {
+        id: deleteConfirmContent
+        anchors.centerIn: parent
+        width: 400
+        height: 200
+        color: whiteColor
+        radius: 8
+        border.color: dangerColor
+        border.width: 2
+        visible: confirmDeleteDialog.showDialog
+        z: 2001
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 15
+            
+            Label {
+                text: "⚠️ ¿Estás seguro de eliminar este análisis?"
+                font.pixelSize: fontBaseSize * 1.1
+                font.bold: true
+                color: textColor
+                Layout.alignment: Qt.AlignHCenter
+                horizontalAlignment: Text.AlignHCenter
+            }
+            
+            Label {
+                text: "Esta acción no se puede deshacer."
+                font.pixelSize: fontBaseSize * 0.9
+                color: textColorLight
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 15
+                
+                Button {
+                    text: "Cancelar"
+                    width: 100
+                    height: 35
+                    
+                    background: Rectangle {
+                        color: lightGrayColor
+                        radius: 4
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: textColor
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        confirmDeleteDialog.showDialog = false
+                    }
+                }
+                
+                Button {
+                    text: "Eliminar"
+                    width: 100
+                    height: 35
+                    
+                    background: Rectangle {
+                        color: dangerColor
+                        radius: 4
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        var analisisId = parseInt(confirmDeleteDialog.analisisIdToDelete)
+                        if (laboratorioModel) {
+                            laboratorioModel.eliminarExamen(analisisId)
+                        }
+                        selectedRowIndex = -1
+                        confirmDeleteDialog.showDialog = false
+                    }
+                }
+            }
+        }
+    }
     // ✅ FUNCIONES JAVASCRIPT CORREGIDAS
 
     function aplicarFiltros() {
