@@ -112,35 +112,49 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (producto_id,))
     
     def get_lotes_por_vencer(self, dias_adelante: int = 90) -> List[Dict[str, Any]]:
-        """Obtiene lotes que vencen en X días"""
+        """Obtiene lotes que vencen en X días - CORREGIDO"""
         query = """
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre, m.Nombre as Marca_Nombre,
-               (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
-               DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) as Dias_Para_Vencer
+            (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
+            DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) as Dias_Para_Vencer
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE l.Fecha_Vencimiento <= DATEADD(DAY, ?, GETDATE())
-          AND l.Fecha_Vencimiento >= GETDATE()
-          AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+        AND l.Fecha_Vencimiento >= GETDATE()
+        AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
         ORDER BY l.Fecha_Vencimiento ASC
         """
-        return self._execute_query(query, (dias_adelante,), use_cache=False)
-    
+        
+        try:
+            result = self._execute_query(query, (dias_adelante,), use_cache=False)
+            print(f"📅 Lotes por vencer en {dias_adelante} días: {len(result) if result else 0}")
+            return result or []
+        except Exception as e:
+            print(f"❌ Error en get_lotes_por_vencer: {e}")
+            return []
+        
     def get_lotes_vencidos(self) -> List[Dict[str, Any]]:
-        """Obtiene lotes vencidos con stock"""
+        """Obtiene lotes vencidos con stock - CORREGIDO"""
         query = """
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre, m.Nombre as Marca_Nombre,
-               (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
-               DATEDIFF(DAY, l.Fecha_Vencimiento, GETDATE()) as Dias_Vencido
+            (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
+            DATEDIFF(DAY, l.Fecha_Vencimiento, GETDATE()) as Dias_Vencido
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE l.Fecha_Vencimiento < GETDATE()
-          AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+        AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
         ORDER BY l.Fecha_Vencimiento ASC
         """
-        return self._execute_query(query, use_cache=False)
+        
+        try:
+            result = self._execute_query(query, use_cache=False)
+            print(f"⚠️ Lotes vencidos con stock: {len(result) if result else 0}")
+            return result or []
+        except Exception as e:
+            print(f"❌ Error en get_lotes_vencidos: {e}")
+            return []
     
     def verificar_disponibilidad_fifo(self, producto_id: int, cantidad_necesaria: int) -> Dict[str, Any]:
         """
