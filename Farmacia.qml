@@ -36,6 +36,7 @@ Item {
                appController.venta_model_instance !== null && 
                appController.compra_model_instance !== null
     }
+    property var proveedorModel: appController ? appController.proveedor_model_instance : null
     property bool dataLoading: false
 
     // Properties para acceso reactivo a models QObject (CONECTADOS A BD)
@@ -681,8 +682,8 @@ Item {
                 property var inventarioModel: farmaciaRoot.inventarioModel
                 property var ventaModel: farmaciaRoot.ventaModel  
                 property var compraModel: farmaciaRoot.compraModel
-                property var farmaciaData: farmaciaRoot  // Para compatibilidad
-                
+                property var proveedorModel: farmaciaRoot.proveedorModel  // ✅ AGREGAR ESTA LÍNEA
+                property var farmaciaData: farmaciaRoot
                 function updateSource() {
                     var newSource = getSourceForSubsection(currentSubSection)
                     if (source.toString() !== newSource) {
@@ -695,7 +696,7 @@ Item {
                         case 0: return "VentasMain.qml"
                         case 1: return Qt.resolvedUrl("Productos.qml")
                         case 2: return "ComprasMain.qml"
-                        case 3: return "Proveedores.qml"  // Agregar este caso
+                        case 3: return "Proveedores.qml"  
                         default: return "VentasMain.qml" 
                     }
                 }

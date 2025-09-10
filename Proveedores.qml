@@ -9,7 +9,7 @@ Item {
     objectName: "proveedoresRoot"
     
     // Propiedades de control
-    property var proveedorModel: parent.proveedorModel || null
+    property var proveedorModel: appController ? appController.proveedor_model_instance : null
     property bool showProveedorDetailsDialog: false
     property bool showCreateProveedorDialog: false
     property bool showDeleteConfirmDialog: false
@@ -54,6 +54,25 @@ Item {
         function onProveedorEliminado(id, nombre) {
             console.log("🗑️ Proveedor eliminado:", nombre)
             showDeleteConfirmDialog = false
+        }
+    }
+    Connections {
+        target: typeof compraModel !== 'undefined' ? compraModel : null
+        function onCompraCreada(compraId, total) {
+            console.log("🛒 Nueva compra detectada:", compraId, "Total:", total)
+            console.log("🔄 Refrescando proveedores automáticamente...")
+            
+            // Refresh automático después de 1 segundo
+            Qt.callLater(function() {
+                if (proveedorModel) {
+                    proveedorModel.force_complete_refresh()
+                }
+            })
+        }
+        
+        function onProveedorDatosActualizados() {
+            console.log("📢 Signal: Datos de proveedores actualizados por compra")
+            // El refresh ya se hizo automáticamente
         }
     }
 
@@ -305,27 +324,51 @@ Item {
             Item { Layout.fillWidth: true }
             
             Button {
-                Layout.preferredWidth: 120
+                id: refreshButton
+                Layout.preferredWidth: 40
                 Layout.preferredHeight: 40
-                text: "🔄 Actualizar"
+                
+                property bool isRefreshing: false
+                property int refreshCounter: 0
                 
                 background: Rectangle {
-                    color: parent.pressed ? Qt.darker(blueColor, 1.1) : blueColor
-                    radius: 8
+                    color: {
+                        if (refreshButton.isRefreshing) return "#f39c12"  // Orange cuando está refrescando
+                        if (parent.pressed) return Qt.darker("#3498db", 1.2)
+                        return "#3498db"  // Blue normal
+                    }
+                    radius: 20
+                    
+                    // Animación de rotación cuando está refrescando
+                    RotationAnimation {
+                        id: rotationAnimation
+                        target: refreshIcon
+                        from: 0
+                        to: 360
+                        duration: 1000
+                        running: refreshButton.isRefreshing
+                        loops: Animation.Infinite
+                    }
                 }
                 
                 contentItem: Label {
-                    text: parent.text
-                    color: whiteColor
-                    font.bold: true
+                    id: refreshIcon
+                    text: refreshButton.isRefreshing ? "⏳" : "🔄"
+                    color: "#ffffff"
+                    font.pixelSize: 16
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
                 
                 onClicked: {
-                    if (proveedorModel) {
-                        proveedorModel.refresh_proveedores()
-                    }
+                    performCompleteRefresh()
+                }
+                
+                ToolTip.visible: hovered
+                ToolTip.text: {
+                    if (isRefreshing) return "Actualizando proveedores..."
+                    if (refreshCounter > 0) return `Actualizado ${refreshCounter} veces`
+                    return "Actualizar lista de proveedores (fuerza recarga desde BD)"
                 }
             }
         }
@@ -488,6 +531,11 @@ Item {
                             width: proveedoresTable.width
                             height: 70
                             
+                            // ✅ AGREGAR DEBUG PARA VER LOS DATOS
+                            Component.onCompleted: {
+                                console.log("🔍 DEBUG Proveedor item:", JSON.stringify(modelData))
+                            }
+                            
                             Rectangle {
                                 anchors.fill: parent
                                 color: proveedoresTable.currentIndex === index ? "#E3F2FD" : "transparent"
@@ -498,7 +546,7 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
                                 
-                                // ID
+                                // ID - ✅ CORREGIDO
                                 Rectangle {
                                     Layout.preferredWidth: 80
                                     Layout.fillHeight: true
@@ -508,14 +556,14 @@ Item {
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: model.id || 0
+                                        text: modelData.id || model.id || 0  // ✅ PROBAR AMBAS PROPIEDADES
                                         color: blueColor
                                         font.bold: true
                                         font.pixelSize: 14
                                     }
                                 }
                                 
-                                // NOMBRE
+                                // NOMBRE - ✅ CORREGIDO
                                 Rectangle {
                                     Layout.preferredWidth: 200
                                     Layout.fillHeight: true
@@ -530,7 +578,7 @@ Item {
                                         spacing: 4
                                         
                                         Label {
-                                            text: model.Nombre || "Sin nombre"
+                                            text: modelData.Nombre || model.Nombre || "Proveedor sin nombre"  // ✅ PROBAR AMBAS
                                             color: textColor
                                             font.bold: true
                                             font.pixelSize: 13
@@ -539,7 +587,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: model.Contacto || "Sin contacto"
+                                            text: "Proveedor"  // ✅ TEXTO FIJO YA QUE NO HAY CONTACTO
                                             color: darkGrayColor
                                             font.pixelSize: 10
                                             elide: Text.ElideRight
@@ -548,7 +596,7 @@ Item {
                                     }
                                 }
                                 
-                                // DIRECCIÓN
+                                // DIRECCIÓN - ✅ CORREGIDO
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.minimumWidth: 250
@@ -564,7 +612,7 @@ Item {
                                         spacing: 2
                                         
                                         Label {
-                                            text: model.Direccion || "Sin dirección"
+                                            text: modelData.Direccion || model.Direccion || "Sin dirección especificada"  // ✅ PROBAR AMBAS
                                             color: textColor
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
@@ -573,7 +621,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: model.Email || model.Telefono || ""
+                                            text: ""  // ✅ VACÍO YA QUE NO HAY EMAIL/TELÉFONO
                                             color: darkGrayColor
                                             font.pixelSize: 10
                                             elide: Text.ElideRight
@@ -582,7 +630,7 @@ Item {
                                     }
                                 }
                                 
-                                // COMPRAS
+                                // COMPRAS - ✅ CORREGIDO
                                 Rectangle {
                                     Layout.preferredWidth: 120
                                     Layout.fillHeight: true
@@ -603,7 +651,7 @@ Item {
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: model.Total_Compras || 0
+                                                text: getProveedorField(modelData, model, "Total_Compras", 0)
                                                 color: whiteColor
                                                 font.bold: true
                                                 font.pixelSize: 10
@@ -612,7 +660,7 @@ Item {
                                         
                                         Label {
                                             text: {
-                                                var fecha = model.Ultima_Compra
+                                                var fecha = getSafeDate(modelData, model, "Ultima_Compra")
                                                 if (!fecha) return "Sin compras"
                                                 return "Última: " + formatDate(fecha)
                                             }
@@ -623,7 +671,7 @@ Item {
                                     }
                                 }
                                 
-                                // TOTAL GASTADO
+                                // TOTAL GASTADO - ✅ CORREGIDO
                                 Rectangle {
                                     Layout.preferredWidth: 120
                                     Layout.fillHeight: true
@@ -640,7 +688,10 @@ Item {
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "Bs" + (model.Monto_Total ? model.Monto_Total.toFixed(2) : "0.00")
+                                            text: {
+                                                var monto = getProveedorField(modelData, model, "Monto_Total", 0)
+                                                return "Bs" + parseFloat(monto).toFixed(2)
+                                            }
                                             color: whiteColor
                                             font.bold: true
                                             font.pixelSize: 10
@@ -648,7 +699,7 @@ Item {
                                     }
                                 }
                                 
-                                // ESTADO
+                                // ESTADO - ✅ CORREGIDO
                                 Rectangle {
                                     Layout.preferredWidth: 100
                                     Layout.fillHeight: true
@@ -661,7 +712,7 @@ Item {
                                         width: 80
                                         height: 24
                                         color: {
-                                            var estado = model.Estado || "Sin_Compras"
+                                            var estado = modelData.Estado || model.Estado || "Sin_Compras"
                                             switch(estado) {
                                                 case "Activo": return successColor
                                                 case "Inactivo": return warningColor
@@ -675,7 +726,7 @@ Item {
                                         Label {
                                             anchors.centerIn: parent
                                             text: {
-                                                var estado = model.Estado || "Sin_Compras"
+                                                var estado = modelData.Estado || model.Estado || "Sin_Compras"
                                                 switch(estado) {
                                                     case "Activo": return "Activo"
                                                     case "Inactivo": return "Inactivo"
@@ -691,7 +742,7 @@ Item {
                                     }
                                 }
                                 
-                                // ACCIONES
+                                // ACCIONES - ✅ MANTENER IGUAL PERO CORREGIR IDs
                                 Rectangle {
                                     Layout.preferredWidth: 150
                                     Layout.fillHeight: true
@@ -722,10 +773,11 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                console.log("👁️ Ver detalles proveedor:", model.id)
-                                                selectedProveedor = model
-                                                if (proveedorModel) {
-                                                    proveedorModel.seleccionar_proveedor(model.id)
+                                                var id = modelData.id || model.id || 0  // ✅ CORREGIDO
+                                                console.log("👁️ Ver detalles proveedor:", id)
+                                                selectedProveedor = modelData || model
+                                                if (proveedorModel && id > 0) {
+                                                    proveedorModel.seleccionar_proveedor(id)
                                                 }
                                                 showProveedorDetailsDialog = true
                                             }
@@ -750,9 +802,10 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                console.log("✏️ Editar proveedor:", model.id)
+                                                var id = modelData.id || model.id || 0  // ✅ CORREGIDO
+                                                console.log("✏️ Editar proveedor:", id)
                                                 editMode = true
-                                                selectedProveedor = model
+                                                selectedProveedor = modelData || model
                                                 showCreateProveedorDialog = true
                                             }
                                         }
@@ -776,8 +829,9 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                console.log("🗑️ Confirmar eliminar proveedor:", model.id)
-                                                proveedorToDelete = model
+                                                var id = modelData.id || model.id || 0  // ✅ CORREGIDO
+                                                console.log("🗑️ Confirmar eliminar proveedor:", id)
+                                                proveedorToDelete = modelData || model
                                                 showDeleteConfirmDialog = true
                                             }
                                         }
@@ -785,6 +839,7 @@ Item {
                                 }
                             }
                             
+                            // MouseArea para seleccionar fila - ✅ CORREGIDO
                             MouseArea {
                                 anchors.left: parent.left
                                 anchors.top: parent.top
@@ -797,9 +852,10 @@ Item {
                                 }
                                 
                                 onDoubleClicked: {
-                                    selectedProveedor = model
-                                    if (proveedorModel) {
-                                        proveedorModel.seleccionar_proveedor(model.id)
+                                    var id = modelData.id || model.id || 0  // ✅ CORREGIDO
+                                    selectedProveedor = modelData || model
+                                    if (proveedorModel && id > 0) {
+                                        proveedorModel.seleccionar_proveedor(id)
                                     }
                                     showProveedorDetailsDialog = true
                                 }
@@ -1104,19 +1160,537 @@ Item {
             }
         }
     }
+    Rectangle {
+        id: proveedorDetailsOverlay
+        anchors.fill: parent
+        color: "#80000000"
+        visible: showProveedorDetailsDialog
+        z: 1500
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                showProveedorDetailsDialog = false
+            }
+        }
+        
+        Rectangle {
+            id: proveedorDetailsDialog
+            anchors.centerIn: parent
+            width: Math.min(700, parent.width * 0.9)
+            height: Math.min(600, parent.height * 0.9)
+            
+            color: whiteColor
+            radius: 16
+            border.color: "#dee2e6"
+            border.width: 2
+            
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {} // Evitar cerrar al hacer clic dentro
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 20
+                
+                // Header
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+                    
+                    Rectangle {
+                        Layout.preferredWidth: 50
+                        Layout.preferredHeight: 50
+                        color: blueColor
+                        radius: 25
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "🏢"
+                            font.pixelSize: 20
+                        }
+                    }
+                    
+                    ColumnLayout {
+                        spacing: 4
+                        
+                        Label {
+                            text: "Detalles del Proveedor"
+                            color: textColor
+                            font.bold: true
+                            font.pixelSize: 24
+                        }
+                        
+                        Label {
+                            text: selectedProveedor ? selectedProveedor.Nombre : "Proveedor"
+                            color: darkGrayColor
+                            font.pixelSize: 16
+                        }
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        Layout.preferredWidth: 35
+                        Layout.preferredHeight: 35
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                            radius: 17
+                        }
+                        
+                        contentItem: Label {
+                            text: "✕"
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 16
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            showProveedorDetailsDialog = false
+                        }
+                    }
+                }
+                
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    
+                    ColumnLayout {
+                        width: parent.parent.width - 40
+                        spacing: 24
+                        
+                        // Información básica
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 120
+                            color: "#F8F9FA"
+                            radius: 12
+                            border.color: "#E9ECEF"
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 20
+                                spacing: 12
+                                
+                                Label {
+                                    text: "Información Básica"
+                                    font.bold: true
+                                    font.pixelSize: 16
+                                    color: textColor
+                                }
+                                
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 2
+                                    columnSpacing: 30
+                                    rowSpacing: 8
+                                    
+                                    Label {
+                                        text: "Nombre:"
+                                        font.bold: true
+                                        color: darkGrayColor
+                                    }
+                                    
+                                    Label {
+                                        text: selectedProveedor ? selectedProveedor.Nombre : "N/A"
+                                        color: textColor
+                                        Layout.fillWidth: true
+                                    }
+                                    
+                                    Label {
+                                        text: "Dirección:"
+                                        font.bold: true
+                                        color: darkGrayColor
+                                    }
+                                    
+                                    Label {
+                                        text: selectedProveedor ? selectedProveedor.Direccion : "N/A"
+                                        color: textColor
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Estadísticas de compras
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 160
+                            color: "#E8F5E8"
+                            radius: 12
+                            border.color: successColor
+                            border.width: 1
+                            
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 20
+                                spacing: 16
+                                
+                                Label {
+                                    text: "Estadísticas de Compras"
+                                    font.bold: true
+                                    font.pixelSize: 16
+                                    color: textColor
+                                }
+                                
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 4
+                                    columnSpacing: 20
+                                    rowSpacing: 12
+                                    
+                                    // Total Compras
+                                    ColumnLayout {
+                                        spacing: 4
+                                        
+                                        Label {
+                                            text: "Total Compras"
+                                            font.pixelSize: 12
+                                            color: darkGrayColor
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 60
+                                            Layout.preferredHeight: 35
+                                            color: blueColor
+                                            radius: 18
+                                            Layout.alignment: Qt.AlignHCenter
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: selectedProveedor ? getProveedorField(selectedProveedor, {}, "Total_Compras", 0) : "0"
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 14
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Monto Total
+                                    ColumnLayout {
+                                        spacing: 4
+                                        
+                                        Label {
+                                            text: "Monto Total"
+                                            font.pixelSize: 12
+                                            color: darkGrayColor
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 90
+                                            Layout.preferredHeight: 35
+                                            color: successColor
+                                            radius: 18
+                                            Layout.alignment: Qt.AlignHCenter
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: {
+                                                    if (!selectedProveedor) return "Bs0.00"
+                                                    var monto = getProveedorField(selectedProveedor, {}, "Monto_Total", 0)
+                                                    return "Bs" + parseFloat(monto).toFixed(2)
+                                                }
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 12
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Compra Promedio
+                                    ColumnLayout {
+                                        spacing: 4
+                                        
+                                        Label {
+                                            text: "Promedio"
+                                            font.pixelSize: 12
+                                            color: darkGrayColor
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 90
+                                            Layout.preferredHeight: 35
+                                            color: warningColor
+                                            radius: 18
+                                            Layout.alignment: Qt.AlignHCenter
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: {
+                                                    if (!selectedProveedor) return "Bs0.00"
+                                                    var promedio = getProveedorField(selectedProveedor, {}, "Compra_Promedio", 0)
+                                                    return "Bs" + parseFloat(promedio).toFixed(2)
+                                                }
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 12
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Estado
+                                    ColumnLayout {
+                                        spacing: 4
+                                        
+                                        Label {
+                                            text: "Estado"
+                                            font.pixelSize: 12
+                                            color: darkGrayColor
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 80
+                                            Layout.preferredHeight: 35
+                                            color: {
+                                                if (!selectedProveedor) return darkGrayColor
+                                                var estado = getProveedorField(selectedProveedor, {}, "Estado", "Sin_Compras")
+                                                switch(estado) {
+                                                    case "Activo": return successColor
+                                                    case "Inactivo": return warningColor
+                                                    case "Sin_Compras": return darkGrayColor
+                                                    case "Obsoleto": return dangerColor
+                                                    default: return darkGrayColor
+                                                }
+                                            }
+                                            radius: 18
+                                            Layout.alignment: Qt.AlignHCenter
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: {
+                                                    if (!selectedProveedor) return "N/A"
+                                                    var estado = getProveedorField(selectedProveedor, {}, "Estado", "Sin_Compras")
+                                                    switch(estado) {
+                                                        case "Activo": return "Activo"
+                                                        case "Inactivo": return "Inactivo"
+                                                        case "Sin_Compras": return "Sin Compras"
+                                                        case "Obsoleto": return "Obsoleto"
+                                                        default: return "Desconocido"
+                                                    }
+                                                }
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Historial de compras (simplificado ya que no tenemos los detalles completos)
+                        Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 180
+                                color: "#FFF9E6"
+                                radius: 12
+                                border.color: warningColor
+                                border.width: 1
+                                
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 20
+                                    spacing: 16
+                                    
+                                    Label {
+                                        text: "Información Adicional"
+                                        font.bold: true
+                                        font.pixelSize: 16
+                                        color: textColor
+                                    }
+                                    
+                                    Label {
+                                        text: {
+                                            if (!selectedProveedor) return "No hay información disponible"
+                                            
+                                            var fecha = getSafeDate(selectedProveedor, {}, "Ultima_Compra")
+                                            if (!fecha) {
+                                                return "No hay compras registradas"
+                                            }
+                                            
+                                            return "Última compra: " + formatDate(fecha)
+                                        }
+                                        color: darkGrayColor
+                                        font.pixelSize: 14
+                                    }
+                                    
+                                    Label {
+                                        text: selectedProveedor ? `ID del proveedor: ${selectedProveedor.id}` : "N/A"
+                                        color: darkGrayColor
+                                        font.pixelSize: 12
+                                    }
+                                    
+                                    Item {
+                                        Layout.fillHeight: true
+                                    }
+                                }
+                            }
+                    }
+                }
+                
+                // Botones de acción
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
+                        text: "Editar"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(warningColor, 1.1) : warningColor
+                            radius: 20
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 14
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            editMode = true
+                            showProveedorDetailsDialog = false
+                            showCreateProveedorDialog = true
+                        }
+                    }
+                    
+                    Button {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
+                        text: "Cerrar"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? "#e9ecef" : "#f8f9fa"
+                            radius: 20
+                            border.color: "#dee2e6"
+                            border.width: 1
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: "#6c757d"
+                            font.bold: true
+                            font.pixelSize: 14
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            showProveedorDetailsDialog = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function performCompleteRefresh() {
+        console.log("🔄 REFRESH COMPLETO iniciado por usuario")
+        
+        if (!proveedorModel) {
+            console.log("❌ ProveedorModel no disponible")
+            return
+        }
+        
+        // Estado visual
+        refreshButton.isRefreshing = true
+        refreshButton.refreshCounter++
+        
+        // Logs para debug
+        console.log("📊 Estado antes del refresh:")
+        console.log("   - Proveedores en lista:", proveedorModel.total_proveedores)
+        console.log("   - Página actual:", proveedorModel.pagina_actual)
+        
+        // Ejecutar refresh
+        try {
+            proveedorModel.force_complete_refresh()
+            
+            // Esperar un momento y verificar resultado
+            Qt.callLater(function() {
+                console.log("📊 Estado después del refresh:")
+                console.log("   - Proveedores en lista:", proveedorModel.total_proveedores)
+                
+                // Finalizar estado visual
+                refreshButton.isRefreshing = false
+                
+                // Feedback visual adicional
+                refreshIcon.text = "✅"
+                Qt.callLater(function() {
+                    refreshIcon.text = "🔄"
+                })
+            })
+            
+        } catch (error) {
+            console.log("❌ Error en refresh:", error)
+            refreshButton.isRefreshing = false
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN: Auto-refresh periódico
+    Timer {
+        id: autoRefreshTimer
+        interval: 60000  // 1 minuto
+        running: false   // Desactivado por defecto, se puede activar
+        repeat: true
+        onTriggered: {
+            console.log("⏰ Auto-refresh de proveedores")
+            if (proveedorModel && !refreshButton.isRefreshing) {
+                proveedorModel.refresh_proveedores()
+            }
+        }
+    }
 
     // FUNCIONES AUXILIARES
     function formatDate(dateString) {
-        if (!dateString) return "N/A"
+        if (!dateString || dateString === null || dateString === undefined) {
+            return "Sin compras"
+        }
+        
+        if (typeof dateString === 'string') {
+            dateString = dateString.trim()
+            if (dateString === '' || dateString === 'null' || dateString === 'undefined') {
+                return "Sin compras"
+            }
+        }
+        
         try {
-            var date = new Date(dateString)
-            return date.toLocaleDateString("es-ES", {
+            // Crear fecha en zona horaria local
+            var date = new Date(dateString + 'T00:00:00')
+            
+            if (isNaN(date.getTime())) {
+                return "Sin compras"
+            }
+
+            // Ajustar por diferencia de zona horaria
+            var timezoneOffset = date.getTimezoneOffset() * 60000
+            var adjustedDate = new Date(date.getTime() + timezoneOffset)
+            
+            return adjustedDate.toLocaleDateString("es-ES", {
                 day: "2-digit",
                 month: "2-digit", 
                 year: "numeric"
             })
         } catch (e) {
-            return "N/A"
+            console.log("⚠️ Error formateando fecha:", dateString, e)
+            return "Sin compras"
         }
     }
     
@@ -1124,15 +1698,89 @@ Item {
         console.log(`[${type.toUpperCase()}] ${message}`)
         // TODO: Implementar sistema de notificaciones visual
     }
+    
+    function getProveedorField(modelData, model, field, defaultValue = "") {
+        return modelData[field] || model[field] || defaultValue
+    }
+
+    // ✅ FUNCIÓN AUXILIAR PARA OBTENER FECHA SEGURA
+    function getSafeDate(modelData, model, field) {
+        var fecha = modelData[field] || model[field]
+        if (!fecha || fecha === null || fecha === undefined) {
+            return null
+        }
+        return fecha
+    }
 
     Component.onCompleted: {
-        console.log("=== MÓDULO DE PROVEEDORES INICIALIZADO ===")
+        console.log("🏢 Módulo Proveedores inicializado")
+        
+        // Verificar disponibilidad de models
+        if (proveedorModel) {
+            console.log("✅ ProveedorModel disponible")
+            console.log("📊 Proveedores iniciales:", proveedorModel.total_proveedores)
+        } else {
+            console.log("❌ ProveedorModel no disponible")
+        }
+        
+        // Verificar si CompraModel está disponible para sync
+        if (typeof compraModel !== 'undefined' && compraModel) {
+            console.log("✅ CompraModel disponible para sync automático")
+            
+            // Configurar sync si es posible
+            if (proveedorModel && typeof proveedorModel.set_compra_model_reference === 'function') {
+                proveedorModel.set_compra_model_reference(compraModel)
+                console.log("🔗 Sync automático configurado")
+            }
+        } else {
+            console.log("⚠️ CompraModel no disponible - sin sync automático")
+        }
+    }
+    function debugProveedoresInfo() {
         if (!proveedorModel) {
-            console.log("❌ ERROR: ProveedorModel no está disponible")
+            console.log("❌ DEBUG: ProveedorModel no disponible")
             return
         }
         
-        console.log("✅ ProveedorModel conectado correctamente")
-        console.log("=== MÓDULO LISTO ===")
+        console.log("🔍 DEBUG INFO PROVEEDORES:")
+        console.log("   - Total proveedores:", proveedorModel.total_proveedores)
+        console.log("   - Página actual:", proveedorModel.pagina_actual)
+        console.log("   - Total páginas:", proveedorModel.total_paginas)
+        console.log("   - Búsqueda actual:", proveedorModel.termino_busqueda || "sin filtro")
+        console.log("   - Estado loading:", proveedorModel.loading)
+        
+        // Verificar lista de proveedores
+        var proveedoresList = proveedorModel.proveedores || []
+        console.log("   - Proveedores en memoria:", proveedoresList.length)
+        
+        if (proveedoresList.length > 0) {
+            console.log("📋 Últimos 3 proveedores:")
+            for (var i = Math.max(0, proveedoresList.length - 3); i < proveedoresList.length; i++) {
+                var prov = proveedoresList[i]
+                console.log(`     ${i+1}. ${prov.Nombre || 'Sin nombre'} - Compras: ${prov.Total_Compras || 0} - Monto: Bs${prov.Monto_Total || 0}`)
+            }
+        }
+    }
+    function editarProveedor(proveedor) {
+        console.log("✏️ Editando proveedor:", proveedor.Nombre)
+        
+        if (crearProveedorModal) {
+            crearProveedorModal.editMode = true
+            crearProveedorModal.proveedorData = proveedor
+            crearProveedorModal.visible = true
+        }
+    }
+
+    function verDetalles(proveedorId) {
+        console.log("👁️ Ver detalles proveedor:", proveedorId)
+        
+        if (proveedorModel) {
+            proveedorModel.seleccionar_proveedor(proveedorId)
+            
+            // Refresh automático de datos después de seleccionar
+            Qt.callLater(function() {
+                console.log("📊 Proveedor seleccionado, datos actualizados")
+            })
+        }
     }
 }

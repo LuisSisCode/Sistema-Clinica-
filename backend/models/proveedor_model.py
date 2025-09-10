@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, Qt
 from PySide6.QtQml import qmlRegisterType
 from typing import List, Dict, Any, Optional
 import json
@@ -11,7 +11,7 @@ from ..core.excepciones import (
 
 class ProveedorModel(QObject):
     """
-    Model QObject para gestión de proveedores
+    Model QObject para gestión de proveedores - SOLO 3 CAMPOS
     Conecta directamente con QML mediante Signals/Slots/Properties
     """
     
@@ -68,12 +68,14 @@ class ProveedorModel(QObject):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update_proveedores)
         self.update_timer.start(300000)  # 5 minutos
+        # Reference a CompraModel para sync
+        self._compra_model_ref = None
         
         # Cargar datos iniciales
         self._cargar_proveedores()
         self._cargar_resumen()
         
-        print("🏢 ProveedorModel inicializado")
+        print("🏢 ProveedorModel inicializado - SIMPLIFICADO")
     
     # ===============================
     # PROPERTIES PARA QML
@@ -185,18 +187,32 @@ class ProveedorModel(QObject):
     
     @Slot()
     def refresh_proveedores(self):
-        """Refresca la lista de proveedores"""
-        self._cargar_proveedores()
-        self._cargar_resumen()
+        """Refresca la lista de proveedores - MEJORADO CON FORCE REFRESH"""
+        print("🔄 REFRESH MANUAL de proveedores iniciado...")
+        
+        try:
+            # Force refresh con invalidación completa
+            self._cargar_proveedores(force_refresh=True)
+            self._cargar_resumen()
+            
+            # Log detallado
+            print(f"📊 Proveedores después de refresh: {len(self._proveedores)}")
+            
+            # Mensaje de éxito
+            self.operacionExitosa.emit(f"Lista actualizada: {len(self._proveedores)} proveedores")
+            
+        except Exception as e:
+            error_msg = f"Error refrescando proveedores: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
     
     # ===============================
-    # SLOTS PARA QML - CRUD PROVEEDORES
+    # SLOTS PARA QML - CRUD PROVEEDORES - SIMPLIFICADO
     # ===============================
     
-    @Slot(str, str, str, str, str, result=bool)
-    def crear_proveedor(self, nombre: str, direccion: str, telefono: str = "", 
-                       email: str = "", contacto: str = "") -> bool:
-        """Crea nuevo proveedor"""
+    @Slot(str, str, result=bool)
+    def crear_proveedor(self, nombre: str, direccion: str) -> bool:
+        """Crea nuevo proveedor - SOLO 2 CAMPOS REQUERIDOS"""
         if not nombre or not nombre.strip():
             self.operacionError.emit("Nombre de proveedor requerido")
             return False
@@ -211,10 +227,7 @@ class ProveedorModel(QObject):
             proveedor_id = safe_execute(
                 self.proveedor_repo.crear_proveedor,
                 nombre.strip(),
-                direccion.strip(),
-                telefono.strip(),
-                email.strip(),
-                contacto.strip()
+                direccion.strip()
             )
             
             if proveedor_id:
@@ -237,10 +250,9 @@ class ProveedorModel(QObject):
         finally:
             self._set_loading(False)
     
-    @Slot(int, str, str, str, str, str, result=bool)
-    def actualizar_proveedor(self, proveedor_id: int, nombre: str, direccion: str, 
-                           telefono: str = "", email: str = "", contacto: str = "") -> bool:
-        """Actualiza proveedor existente"""
+    @Slot(int, str, str, result=bool)
+    def actualizar_proveedor(self, proveedor_id: int, nombre: str, direccion: str) -> bool:
+        """Actualiza proveedor existente - SOLO 3 CAMPOS"""
         if proveedor_id <= 0:
             self.operacionError.emit("ID de proveedor inválido")
             return False
@@ -258,10 +270,7 @@ class ProveedorModel(QObject):
         try:
             datos = {
                 'Nombre': nombre.strip(),
-                'Direccion': direccion.strip(),
-                'Telefono': telefono.strip(),
-                'Email': email.strip(),
-                'Contacto': contacto.strip()
+                'Direccion': direccion.strip()
             }
             
             exito = safe_execute(
@@ -415,13 +424,139 @@ class ProveedorModel(QObject):
             self.operacionError.emit(f"Error obteniendo estadísticas: {str(e)}")
             return {}
     
+    @Slot(int, float)
+    def _on_proveedor_compra_completada(self, proveedor_id: int, monto_compra: float):
+        """Slot que se ejecuta cuando se completa una compra con un proveedor - MEJORADO"""
+        print(f"📢 RECIBIDO: Compra completada con proveedor {proveedor_id} por Bs{monto_compra}")
+        
+        try:
+            # 1. Invalidar cache INMEDIATAMENTE
+            self._invalidate_complete_cache()
+            
+            # 2. Force refresh datos CON DELAY para BD
+            QTimer.singleShot(0, lambda: self._force_refresh_after_purchase_with_delay(proveedor_id))            
+            # 3. Mensaje inmediato
+            self.operacionExitosa.emit(f"Proveedor actualizado - Nueva compra: Bs{monto_compra:.2f}")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando proveedor después de compra: {str(e)}")
+    
+    @Slot()
+    def _force_refresh_after_purchase(self):
+        """Force refresh después de cualquier compra"""
+        print("🔄 FORCE REFRESH de proveedores después de compra")
+        
+        try:
+            # Invalidar todo el cache
+            if hasattr(self.proveedor_repo, '_cache_manager'):
+                self.proveedor_repo._cache_manager.invalidate_pattern('proveedores*')
+                print("🗑️ Cache completo de proveedores invalidado")
+            
+            # Recargar todo
+            self._cargar_proveedores()
+            self._cargar_resumen()
+            
+            # Si hay un proveedor seleccionado, actualizarlo
+            if self._proveedor_actual.get('id'):
+                proveedor_id = self._proveedor_actual['id']
+                self.seleccionar_proveedor(proveedor_id)
+                print(f"🔄 Proveedor seleccionado ({proveedor_id}) actualizado")
+            
+            print("✅ Force refresh de proveedores completado")
+            
+        except Exception as e:
+            print(f"❌ Error en force refresh: {str(e)}")
+
+    @Slot()
+    def force_complete_refresh(self):
+        """Force refresh completo con log detallado - MEJORADO"""
+        print("🔄 FORCE COMPLETE REFRESH - Iniciado por usuario")
+        
+        try:
+            # 1. Invalidar cache AGRESIVAMENTE
+            self._invalidate_complete_cache()
+            
+            # 2. Reset de datos locales
+            self._proveedores = []
+            self._proveedor_actual = {}
+            self._historial_compras = []
+            self._estadisticas = {}
+            
+            # 3. Recargar FORZADAMENTE desde BD
+            print("🔄 Recargando datos desde BD...")
+            self._cargar_proveedores(force_refresh=True)
+            self._cargar_resumen()
+            
+            # 4. Log resultado detallado
+            total_proveedores = len(self._proveedores)
+            proveedores_activos = len([p for p in self._proveedores if p.get('Estado') == 'Activo'])
+            proveedores_con_compras = len([p for p in self._proveedores if p.get('Total_Compras', 0) > 0])
+            
+            print(f"✅ REFRESH COMPLETADO:")
+            print(f"   Total proveedores: {total_proveedores}")
+            print(f"   Proveedores activos: {proveedores_activos}")
+            print(f"   Proveedores con compras: {proveedores_con_compras}")
+            
+            # 5. Emitir mensaje de éxito DETALLADO
+            self.operacionExitosa.emit(f"✅ Actualización completa: {total_proveedores} proveedores ({proveedores_activos} activos, {proveedores_con_compras} con compras)")
+            
+        except Exception as e:
+            error_msg = f"Error en actualización completa: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+    @Slot(int, float)
+    def _on_compra_created(self, compra_id: int, monto_compra: float):
+        """Slot que se ejecuta cuando se crea cualquier compra"""
+        print(f"🛒 NUEVA COMPRA DETECTADA: ID {compra_id}, Monto: Bs{monto_compra}")
+        
+        # Force refresh inmediato
+        Qt.callLater(lambda: self._force_refresh_complete_immediate())
+
+    def set_compra_model_reference(self, compra_model):
+        """Establece referencia bidireccional con CompraModel - MEJORADO"""
+        self._compra_model_ref = compra_model
+        
+        if compra_model:
+            try:
+                # Conectar signals de CompraModel - VALIDAR ANTES DE CONECTAR
+                if hasattr(compra_model, 'proveedorCompraCompletada'):
+                    compra_model.proveedorCompraCompletada.connect(self._on_proveedor_compra_completada)
+                    print("🔗 Signal proveedorCompraCompletada conectado")
+                
+                if hasattr(compra_model, 'proveedorDatosActualizados'):
+                    compra_model.proveedorDatosActualizados.connect(self._force_refresh_after_purchase)
+                    print("🔗 Signal proveedorDatosActualizados conectado")
+                
+                if hasattr(compra_model, 'compraCreada'):
+                    compra_model.compraCreada.connect(self._on_compra_created)
+                    print("🔗 Signal compraCreada conectado")
+                
+                # Establecer referencia bidireccional
+                if hasattr(compra_model, 'set_proveedor_model_reference'):
+                    compra_model.set_proveedor_model_reference(self)
+                    print("🔗 Referencia bidireccional establecida")
+                
+                print("✅ ProveedorModel conectado a CompraModel para sync automático")
+                
+            except Exception as e:
+                print(f"❌ Error conectando signals: {str(e)}")
+        else:
+            print("❌ CompraModel es None, no se pueden establecer conexiones")
+
+    
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
     
-    def _cargar_proveedores(self):
-        """Carga proveedores con paginación"""
+    def _cargar_proveedores(self, force_refresh=False):
+        """Carga proveedores con paginación - MEJORADO CON FORCE REFRESH"""
         try:
+            print(f"📋 Cargando proveedores - Página: {self._pagina_actual}, Búsqueda: '{self._termino_busqueda}', Force: {force_refresh}")
+            
+            # Si es force refresh, invalidar cache antes
+            if force_refresh:
+                self._invalidate_complete_cache()
+            
             resultado = safe_execute(
                 self.proveedor_repo.get_proveedores_paginados,
                 self._pagina_actual,
@@ -433,10 +568,25 @@ class ProveedorModel(QObject):
                 self._proveedores = resultado['data']
                 self._total_proveedores = resultado['total']
                 self._total_paginas = resultado['paginas']
+                
+                print(f"✅ Proveedores cargados: {len(self._proveedores)} de {self._total_proveedores}")
+                
+                # Log detallado de proveedores con compras recientes
+                proveedores_activos = [p for p in self._proveedores if p.get('Estado') == 'Activo']
+                if proveedores_activos:
+                    print("📊 Proveedores ACTIVOS encontrados:")
+                    for prov in proveedores_activos:
+                        nombre = prov.get('Nombre', 'Sin nombre')
+                        compras = prov.get('Total_Compras', 0)
+                        monto = prov.get('Monto_Total', 0)
+                        ultima = prov.get('Ultima_Compra', 'Sin fecha')
+                        print(f"   • {nombre}: {compras} compras, Bs{monto}, última: {ultima}")
+                
             else:
                 self._proveedores = []
                 self._total_proveedores = 0
                 self._total_paginas = 0
+                print("⚠️ No se obtuvieron proveedores")
             
             self.proveedoresChanged.emit()
             
@@ -453,7 +603,7 @@ class ProveedorModel(QObject):
             self.resumenChanged.emit()
             
         except Exception as e:
-            print(f"❌ Error cargando resumen: {e}")
+            print(f"⚠ Error cargando resumen: {e}")
     
     def _auto_update_proveedores(self):
         """Actualización automática de proveedores"""
@@ -462,13 +612,73 @@ class ProveedorModel(QObject):
                 self._cargar_proveedores()
                 self._cargar_resumen()
             except Exception as e:
-                print(f"❌ Error en auto-update proveedores: {e}")
+                print(f"⚠ Error en auto-update proveedores: {e}")
     
     def _set_loading(self, loading: bool):
         """Actualiza estado de carga"""
         if self._loading != loading:
             self._loading = loading
             self.loadingChanged.emit()
+
+    def _invalidate_complete_cache(self):
+        """Invalida completamente el cache de proveedores"""
+        try:
+            if hasattr(self.proveedor_repo, '_cache_manager'):
+                # Invalidar TODOS los patrones relacionados
+                self.proveedor_repo._cache_manager.invalidate_pattern('proveedores*')
+                self.proveedor_repo._cache_manager.invalidate_pattern('compras*')
+                self.proveedor_repo._cache_manager.clear()  # Clear completo si es necesario
+                print("🗑️ Cache completo de proveedores invalidado")
+            
+        except Exception as e:
+            print(f"❌ Error invalidando cache: {str(e)}")
+    def _force_refresh_after_purchase_with_delay(self, proveedor_id: int):
+        """Force refresh con delay para dar tiempo a la BD"""
+        print(f"🔄 FORCE REFRESH CON DELAY - Proveedor: {proveedor_id}")
+        
+        try:
+            # Esperar un poco más para que la BD se actualice
+            QTimer.singleShot(1000, lambda: self._execute_delayed_refresh(proveedor_id))
+        
+        except Exception as e:
+            print(f"❌ Error en refresh con delay: {str(e)}")   
+
+    def _execute_delayed_refresh(self, proveedor_id: int):
+        """Ejecuta el refresh real después del delay"""
+        try:
+            print(f"⏰ Ejecutando refresh delayed para proveedor {proveedor_id}")
+            
+            # 1. Recargar datos completos
+            self._cargar_proveedores()
+            self._cargar_resumen()
+            
+            # 2. Si hay un proveedor seleccionado, actualizarlo
+            if self._proveedor_actual.get('id') == proveedor_id:
+                self.seleccionar_proveedor(proveedor_id)
+                print(f"🔄 Proveedor seleccionado ({proveedor_id}) actualizado")
+            
+            print("✅ Refresh delayed completado")
+            
+        except Exception as e:
+            print(f"❌ Error en refresh delayed: {str(e)}")
+    def _force_refresh_complete_immediate(self):
+        """Force refresh completo inmediato"""
+        print("🔄 FORCE REFRESH INMEDIATO COMPLETO")
+        
+        try:
+            # 1. Invalidar cache
+            self._invalidate_complete_cache()
+            
+            # 2. Recargar datos
+            self._cargar_proveedores()
+            self._cargar_resumen()
+            
+            # 3. Log resultado
+            total_proveedores = len(self._proveedores)
+            print(f"✅ REFRESH INMEDIATO COMPLETADO: {total_proveedores} proveedores")
+            
+        except Exception as e:
+            print(f"❌ Error en refresh inmediato: {str(e)}")
 
 # Registrar el tipo para QML
 def register_proveedor_model():
