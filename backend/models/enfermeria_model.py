@@ -15,9 +15,9 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QJsonValue, QTimer
 from PySide6.QtQml import qmlRegisterType
-
 from ..core.database_conexion import DatabaseConnection
 from ..repositories.enfermeria_repository import EnfermeriaRepository
+from ..core.Signals_manager import get_global_signals
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -74,7 +74,8 @@ class EnfermeriaModel(QObject):
             # Inicializar conexión y repositorio
             self.db_connection = DatabaseConnection()
             self.repository = EnfermeriaRepository(self.db_connection)
-            
+            self.global_signals = get_global_signals()
+            self._conectar_senales_globales()
             # Estados internos
             self._procedimientosData = []
             self._tiposProcedimientosData = []
@@ -115,7 +116,16 @@ class EnfermeriaModel(QObject):
     # ===============================
     # PROPERTIES CORREGIDAS
     # ===============================
-    
+    def _conectar_senales_globales(self):
+        """Conecta con las señales globales para recibir actualizaciones"""
+        try:
+            # Conectar señales de tipos de procedimientos
+            self.global_signals.tiposProcedimientosModificados.connect(self._actualizar_tipos_procedimientos_desde_signal)
+            self.global_signals.enfermeriaNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            
+            print("🔗 Señales globales conectadas en EnfermeriaModel")
+        except Exception as e:
+            print(f"❌ Error conectando señales globales en EnfermeriaModel: {e}")
     def _get_procedimientos_json(self) -> str:
         """Getter para procedimientos en formato JSON"""
         import json
@@ -914,7 +924,25 @@ class EnfermeriaModel(QObject):
             if hasattr(self, '_autoRefreshTimer'):
                 self._autoRefreshTimer.stop()
                 print("⏰ Auto-refresh desactivado")
+    @Slot()
+    def _actualizar_tipos_procedimientos_desde_signal(self):
+        """Actualiza tipos de procedimientos cuando recibe señal global"""
+        try:
+            print("📡 EnfermeriaModel: Recibida señal de actualización de tipos de procedimientos")
+            self.actualizar_tipos_procedimientos()
+            print("✅ Tipos de procedimientos actualizados desde señal global en EnfermeriaModel")
+        except Exception as e:
+            print(f"❌ Error actualizando tipos desde señal: {e}")
 
+    @Slot(str)
+    def _manejar_actualizacion_global(self, mensaje: str):
+        """Maneja actualizaciones globales de enfermería"""
+        try:
+            print(f"📡 EnfermeriaModel: {mensaje}")
+            # Emitir señal para notificar a QML que hay cambios
+            self.tiposProcedimientosActualizados.emit()
+        except Exception as e:
+            print(f"❌ Error manejando actualización global: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

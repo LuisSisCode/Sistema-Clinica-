@@ -5,6 +5,7 @@ from datetime import datetime
 
 from ..repositories.gasto_repository import GastoRepository
 from ..core.excepciones import ExceptionHandler, ValidationError
+from ..core.Signals_manager import get_global_signals
 
 class GastoModel(QObject):
     """
@@ -44,7 +45,9 @@ class GastoModel(QObject):
         
         # Repository en lugar de service
         self.repository = GastoRepository()
-        
+        self.global_signals = get_global_signals()
+        self._conectar_senales_globales()
+    
         # Estado interno
         self._gastos: List[Dict[str, Any]] = []
         self._gastos_filtrados: List[Dict[str, Any]] = []
@@ -69,7 +72,17 @@ class GastoModel(QObject):
     # ===============================
     # FUNCIÓN HELPER PARA FECHAS QML
     # ===============================
-    
+    def _conectar_senales_globales(self):
+        """Conecta con las señales globales para recibir actualizaciones"""
+        try:
+            # Conectar señales de tipos de gastos
+            self.global_signals.tiposGastosModificados.connect(self._actualizar_tipos_gastos_desde_signal)
+            self.global_signals.configuracionGastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            self.global_signals.gastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            
+            print("🔗 Señales globales conectadas en GastoModel")
+        except Exception as e:
+            print(f"❌ Error conectando señales globales en GastoModel: {e}")
     def _convert_dates_for_qml(self, data: Any) -> Any:
         """Convierte fechas Python datetime a strings para compatibilidad con QML"""
         if isinstance(data, list):
@@ -311,7 +324,7 @@ class GastoModel(QObject):
                 mensaje = f"Tipo de gasto creado exitosamente - ID: {tipo_id}"
                 self.tipoGastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_gastos("creado", tipo_id, nombre.strip())
                 print(f"✅ Tipo gasto creado desde QML: {nombre}")
                 return True
             else:
@@ -816,7 +829,31 @@ class GastoModel(QObject):
         if self._loading != loading:
             self._loading = loading
             self.loadingChanged.emit()
-
+    @Slot()
+    def _actualizar_tipos_gastos_desde_signal(self):
+        """Actualiza tipos de gastos cuando recibe señal global"""
+        try:
+            print("📡 GastoModel: Recibida señal de actualización de tipos de gastos")
+            
+            # ✅ INVALIDAR CACHE ANTES DE RECARGAR
+            if hasattr(self.repository, 'invalidate_expense_caches'):
+                self.repository.invalidate_expense_caches()
+                print("🗑️ Cache de tipos invalidado en GastoModel")
+            # Ahora recargar
+            self._cargar_tipos_gastos()
+            
+            print("✅ Tipos de gastos actualizados desde señal global en GastoModel")
+        except Exception as e:
+            print(f"❌ Error actualizando tipos desde señal: {e}")
+    @Slot(str)
+    def _manejar_actualizacion_global(self, mensaje: str):
+        """Maneja actualizaciones globales de gastos"""
+        try:
+            print(f"📡 GastoModel: {mensaje}")
+            # Emitir señal para notificar a QML que hay cambios
+            self.tiposGastosChanged.emit()
+        except Exception as e:
+            print(f"❌ Error manejando actualización global: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

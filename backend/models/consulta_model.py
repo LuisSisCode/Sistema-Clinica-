@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from ..core.excepciones import ExceptionHandler, ClinicaBaseException
 from ..repositories.consulta_repository import ConsultaRepository
 from ..repositories.doctor_repository import DoctorRepository
+from ..core.Signals_manager import get_global_signals
 
 class ConsultaModel(QObject):
     """
@@ -57,7 +58,8 @@ class ConsultaModel(QObject):
         # Repositories
         self.repository = ConsultaRepository()
         self.doctor_repo = DoctorRepository()
-        
+        self.global_signals = get_global_signals()
+        self._conectar_senales_globales()
         # Estados internos
         self._consultasData = []
         self._especialidadesData = []
@@ -78,7 +80,16 @@ class ConsultaModel(QObject):
     # ===============================
     # ✅ MÉTODO FALTANTE PARA APPCONTROLLER
     # ===============================
-    
+    def _conectar_senales_globales(self):
+        """Conecta con las señales globales para recibir actualizaciones"""
+        try:
+            # Conectar señales de especialidades
+            self.global_signals.especialidadesModificadas.connect(self._actualizar_especialidades_desde_signal)
+            self.global_signals.consultasNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            
+            print("🔗 Señales globales conectadas en ConsultaModel")
+        except Exception as e:
+            print(f"❌ Error conectando señales globales en ConsultaModel: {e}")
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
         """
@@ -875,7 +886,40 @@ class ConsultaModel(QObject):
         else:
             if hasattr(self, '_autoRefreshTimer'):
                 self._autoRefreshTimer.stop()
-
+    @Slot()
+    def _actualizar_especialidades_desde_signal(self):
+        """Actualiza especialidades cuando recibe señal global"""
+        try:
+            print("📡 ConsultaModel: Recibida señal de actualización de especialidades")
+            
+            # Invalidar cache del repository principal
+            if hasattr(self.repository, 'invalidate_consultation_caches'):
+                self.repository.invalidate_consultation_caches()
+                print("🗑️ Cache invalidado en ConsultaModel")
+            
+            # ✅ FORZAR INVALIDACIÓN COMPLETA DEL DOCTOR REPOSITORY
+            if hasattr(self.doctor_repo, 'invalidate_cache'):
+                self.doctor_repo.invalidate_cache()
+                print("🗑️ Cache de doctor_repo invalidado")
+            
+            # ✅ INVALIDAR CACHE MANUALMENTE SI ES NECESARIO
+            from ..core.cache_system import invalidate_after_update
+            invalidate_after_update(['doctores', 'especialidades'])
+            print("🗑️ Cache doctores/especialidades invalidado manualmente")
+            
+            self.cargar_especialidades()
+            print("✅ Especialidades actualizadas desde señal global en ConsultaModel")
+        except Exception as e:
+            print(f"❌ Error actualizando especialidades desde señal: {e}")
+    @Slot(str)
+    def _manejar_actualizacion_global(self, mensaje: str):
+        """Maneja actualizaciones globales de consultas"""
+        try:
+            print(f"📡 ConsultaModel: {mensaje}")
+            # Emitir señal para notificar a QML que hay cambios
+            self.especialidadesChanged.emit()
+        except Exception as e:
+            print(f"❌ Error manejando actualización global: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

@@ -4,7 +4,7 @@ from PySide6.QtQml import qmlRegisterType
 
 from ...repositories.ConfiguracionRepositor import ConfiTrabajadoresRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
-
+from ...core.Signals_manager import get_global_signals
 class ConfiTrabajadoresModel(QObject):
     """
     Model QObject para gestión de configuración de tipos de trabajadores en QML
@@ -35,7 +35,7 @@ class ConfiTrabajadoresModel(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+        self.global_signals = get_global_signals()
         # Repository
         self.repository = ConfiTrabajadoresRepository()
         
@@ -110,7 +110,7 @@ class ConfiTrabajadoresModel(QObject):
                 mensaje = f"Tipo de trabajador creado exitosamente - ID: {tipo_id}"
                 self.tipoTrabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_trabajadores("creado", tipo_id, tipo.strip())
                 print(f"✅ Tipo de trabajador creado desde QML: {tipo}")
                 print(f"🔄 Datos actualizados automáticamente - Total: {len(self._tipos_trabajadores)}")
                 return True
@@ -168,7 +168,7 @@ class ConfiTrabajadoresModel(QObject):
                 mensaje = "Tipo de trabajador actualizado exitosamente"
                 self.tipoTrabajadorActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_trabajadores("actualizado", tipo_id, tipo.strip() if tipo.strip() else "")
                 print(f"✅ Tipo de trabajador actualizado desde QML: ID {tipo_id}")
                 return True
             else:
@@ -200,7 +200,7 @@ class ConfiTrabajadoresModel(QObject):
                 mensaje = "Tipo de trabajador eliminado exitosamente"
                 self.tipoTrabajadorEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+                self.global_signals.notificar_cambio_tipos_trabajadores("eliminado", tipo_id, "")
                 print(f"🗑️ Tipo de trabajador eliminado desde QML: ID {tipo_id}")
                 return True
             else:
