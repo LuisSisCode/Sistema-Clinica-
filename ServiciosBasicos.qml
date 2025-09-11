@@ -1189,32 +1189,29 @@ Item {
                                     
                                     // BOTONES DE ACCIÓN
                                     RowLayout {
-                                        anchors.top: parent.top
+                                        anchors.verticalCenter: parent.verticalCenter
                                         anchors.right: parent.right
-                                        anchors.margins: marginSmall * 0.5
+                                        anchors.rightMargin: marginSmall * 0.5
                                         spacing: marginSmall * 0.25
                                         visible: selectedRowIndex === index
                                         z: 10
                                         
                                         Button {
                                             id: editButton
-                                            width: Math.max(20, baseUnit * 1.5)
-                                            height: width
-                                            text: "✏️"
+                                            width: baseUnit * 2.2
+                                            height: baseUnit * 2.2
                                             
                                             background: Rectangle {
-                                                color: warningColor
-                                                radius: width / 2
-                                                border.color: "#f1c40f"
-                                                border.width: 1
+                                                color: "transparent"
                                             }
                                             
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontTiny
+                                            Image {
+                                                id: editIcon
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 1.2
+                                                height: baseUnit * 1.2
+                                                source: "Resources/iconos/editar.svg"
+                                                fillMode: Image.PreserveAspectFit
                                             }
                                             
                                             onClicked: {
@@ -1229,34 +1226,39 @@ Item {
                                                 }
                                                 showNewGastoDialog = true
                                             }
+                                            
+                                            onHoveredChanged: {
+                                                editIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
                                         }
                                         
                                         Button {
                                             id: deleteButton
-                                            width: Math.max(20, baseUnit * 1.5)
-                                            height: width
-                                            text: "🗑️"
+                                            width: baseUnit * 2.2
+                                            height: baseUnit * 2.2
                                             
                                             background: Rectangle {
-                                                color: dangerColor
-                                                radius: width / 2
-                                                border.color: "#c0392b"
-                                                border.width: 1
+                                                color: "transparent"
                                             }
                                             
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: fontTiny
+                                            Image {
+                                                id: deleteIcon
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 1.2
+                                                height: baseUnit * 1.2
+                                                source: "Resources/iconos/eliminar.svg"
+                                                fillMode: Image.PreserveAspectFit
                                             }
                                             
                                             onClicked: {
                                                 var gastoId = model.gastoId
                                                 confirmDeleteDialog.gastoIdToDelete = gastoId
                                                 confirmDeleteDialog.open()
-                                            } 
+                                            }
+                                            
+                                            onHoveredChanged: {
+                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
                                         }
                                     }
                                 }

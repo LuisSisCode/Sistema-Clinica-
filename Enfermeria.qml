@@ -1128,6 +1128,7 @@ Item {
                                         z: 10
                                         
                                         Button {
+                                            id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
                                             
@@ -1135,15 +1136,24 @@ Item {
                                                 color: "transparent"
                                             }
                                             
-                                            Label {
+                                            Image {
+                                                id: editIcon
                                                 anchors.centerIn: parent
-                                                text: "✏️"
-                                                font.pixelSize: fontBaseSize * 1.2
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                source: "Resources/iconos/editar.svg"
+                                                fillMode: Image.PreserveAspectFit
                                             }
                                             
                                             onClicked: editarProcedimiento(index)
+                                            
+                                            onHoveredChanged: {
+                                                editIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
                                         }
+
                                         Button {
+                                            id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
                                             
@@ -1151,10 +1161,13 @@ Item {
                                                 color: "transparent"
                                             }
                                             
-                                            Label {
+                                            Image {
+                                                id: deleteIcon
                                                 anchors.centerIn: parent
-                                                text: "🗑️"
-                                                font.pixelSize: fontBaseSize * 1.2
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                source: "Resources/iconos/eliminar.svg"
+                                                fillMode: Image.PreserveAspectFit
                                             }
                                             
                                             onClicked: {
@@ -1163,6 +1176,10 @@ Item {
                                                     procedimientoIdToDelete = procId
                                                     showConfirmDeleteDialog = true
                                                 }
+                                            }
+                                            
+                                            onHoveredChanged: {
+                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
                                             }
                                         }
                                     }

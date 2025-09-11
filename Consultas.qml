@@ -985,7 +985,7 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                consultationForm.consultaParaEditar = {
+                                                consultationFormDialog.consultaParaEditar = {
                                                     consultaId: model.id,
                                                     paciente: model.paciente_completo,
                                                     pacienteCedula: model.paciente_cedula,
@@ -1143,107 +1143,103 @@ Item {
         }
     }
 
-    // DIÁLOGO DE NUEVA CONSULTA CON BLOQUEO MODAL
-    Rectangle {
-        id: newConsultationDialog
-        anchors.fill: parent
-        color: "black"
-        opacity: showNewConsultationDialog ? 0.5 : 0
-        visible: opacity > 0
-        z: 100
-        
-        // ✅ BLOQUEO: MouseArea sin acción para evitar cierre accidental
-        MouseArea {
-            anchors.fill: parent
-            // Eliminado el onClicked para que no se pueda cerrar haciendo clic afuera
-        }
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-
-    Rectangle {
-        id: consultationForm
+    // DIÁLOGO MODAL DE NUEVA/EDITAR CONSULTA (IGUAL QUE ENFERMERÍA)
+    Dialog {
+        id: consultationFormDialog
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.95, 700)
         height: Math.min(parent.height * 0.95, 800)
-        color: whiteColor
-        radius: baseUnit * 1.5
-        border.color: "#DDD"
-        border.width: 1
+        modal: true
+        closePolicy: Popup.NoAutoClose
         visible: showNewConsultationDialog
-        z: 101
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -baseUnit
-            color: "transparent"
-            radius: parent.radius + baseUnit
-            border.color: "#20000000"
-            border.width: baseUnit
-            z: -1
+        
+        title: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: baseUnit * 1.5
+            border.color: "#DDD"
+            border.width: 1
+            
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -baseUnit
+                color: "transparent"
+                radius: parent.radius + baseUnit
+                border.color: "#20000000"
+                border.width: baseUnit
+                z: -1
+            }
         }
         
+        property var consultaParaEditar: null
         property int selectedEspecialidadIndex: -1
         property string consultationType: "Normal"
         property real calculatedPrice: 0.0
-        property var consultaParaEditar: null
         
-        function loadEditData() {
-            if (!isEditMode || !consultationForm.consultaParaEditar) return;
+        function updatePrices() {
+            if (consultationFormDialog.selectedEspecialidadIndex >= 0 && consultaModel && consultaModel.especialidades) {
+                var especialidad = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
+                if (consultationFormDialog.consultationType === "Normal") {
+                    consultationFormDialog.calculatedPrice = especialidad.precio_normal
+                } else {
+                    consultationFormDialog.calculatedPrice = especialidad.precio_emergencia
+                }
+            } else {
+                consultationFormDialog.calculatedPrice = 0.0
+            }
+        }
             
-            var consulta = consultationForm.consultaParaEditar;
-            console.log("Cargando datos para edición:", JSON.stringify(consulta));
+        function loadEditData() {
+            if (!isEditMode || !consultationFormDialog.consultaParaEditar) {
+                console.log("No hay datos para cargar en edición")
+                return
+            }
+            
+            var consulta = consultationFormDialog.consultaParaEditar
+            console.log("Cargando datos para edición:", JSON.stringify(consulta))
             
             // Cargar datos del paciente
-            cedulaPaciente.text = consulta.pacienteCedula || "";
-            nombrePaciente.text = consulta.paciente || "";
+            cedulaPaciente.text = consulta.pacienteCedula || ""
+            nombrePaciente.text = consulta.paciente || ""
+            
+            if (cedulaPaciente.text.length >= 5) {
+                buscarPacientePorCedula(cedulaPaciente.text)
+            }
             
             // Buscar y seleccionar especialidad
             if (consultaModel && consultaModel.especialidades) {
                 for (var i = 0; i < consultaModel.especialidades.length; i++) {
-                    var esp = consultaModel.especialidades[i];
-                    var espTexto = esp.text + " - " + esp.doctor_nombre;
+                    var esp = consultaModel.especialidades[i]
+                    var espTexto = esp.text + " - " + esp.doctor_nombre
                     
                     if (espTexto === consulta.especialidadDoctor) {
-                        especialidadCombo.currentIndex = i + 1;
-                        consultationForm.selectedEspecialidadIndex = i;
-                        break;
+                        especialidadCombo.currentIndex = i + 1
+                        consultationFormDialog.selectedEspecialidadIndex = i
+                        break
                     }
                 }
             }
             
             // Configurar tipo de consulta
             if (consulta.tipo === "Normal") {
-                normalRadio.checked = true;
-                consultationForm.consultationType = "Normal";
+                normalRadio.checked = true
+                consultationFormDialog.consultationType = "Normal"
             } else {
-                emergenciaRadio.checked = true;
-                consultationForm.consultationType = "Emergencia";
+                emergenciaRadio.checked = true
+                consultationFormDialog.consultationType = "Emergencia"
             }
             
             // Cargar demás campos
-            consultationForm.calculatedPrice = consulta.precio || 0;
-            detallesConsulta.text = consulta.detalles || "";
-        }
-        
-        function updatePrices() {
-            if (consultationForm.selectedEspecialidadIndex >= 0 && consultaModel && consultaModel.especialidades) {
-                var especialidad = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
-                if (consultationForm.consultationType === "Normal") {
-                    consultationForm.calculatedPrice = especialidad.precio_normal
-                } else {
-                    consultationForm.calculatedPrice = especialidad.precio_emergencia
-                }
-            } else {
-                consultationForm.calculatedPrice = 0.0
-            }
+            consultationFormDialog.calculatedPrice = consulta.precio || 0
+            detallesConsulta.text = consulta.detalles || ""
+            
+            console.log("Datos de edición cargados correctamente")
         }
         
         onVisibleChanged: {
             if (visible) {
-                if (isEditMode && consultationForm.consultaParaEditar) {
+                if (isEditMode && consultationFormDialog.consultaParaEditar) {
                     loadEditData()
                 } else if (!isEditMode) {
                     limpiarDatosPaciente()
@@ -1251,9 +1247,9 @@ Item {
                     normalRadio.checked = true
                     emergenciaRadio.checked = false
                     detallesConsulta.text = ""
-                    consultationForm.selectedEspecialidadIndex = -1
-                    consultationForm.calculatedPrice = 0.0
-                    consultationForm.consultaParaEditar = null
+                    consultationFormDialog.selectedEspecialidadIndex = -1
+                    consultationFormDialog.calculatedPrice = 0.0
+                    consultationFormDialog.consultaParaEditar = null
                     cedulaPaciente.forceActiveFocus()
                 }
             }
@@ -1396,6 +1392,7 @@ Item {
                                     }
                                 }
                             }
+                            
                             Button {
                                 id: nuevoPacienteBtn
                                 text: "Nuevo Paciente"
@@ -1528,7 +1525,6 @@ Item {
                                     border.width: nombrePaciente.esCampoNuevoPaciente ? 2 : 1
                                     radius: baseUnit * 0.6
                                 }
-                                // Validación simple: al menos 2 caracteres si es nuevo paciente
                                 onTextChanged: {
                                     if (esCampoNuevoPaciente && text.length > 0) {
                                         color = text.length >= 2 ? textColor : "#E74C3C"
@@ -1618,6 +1614,7 @@ Item {
                         }
                     }
                 }
+                
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 3
@@ -1693,11 +1690,11 @@ Item {
                                 }
                                 onCurrentIndexChanged: {
                                     if (currentIndex > 0 && consultaModel && consultaModel.especialidades) {
-                                        consultationForm.selectedEspecialidadIndex = currentIndex - 1
-                                        consultationForm.updatePrices()
+                                        consultationFormDialog.selectedEspecialidadIndex = currentIndex - 1
+                                        consultationFormDialog.updatePrices()
                                     } else {
-                                        consultationForm.selectedEspecialidadIndex = -1
-                                        consultationForm.calculatedPrice = 0.0
+                                        consultationFormDialog.selectedEspecialidadIndex = -1
+                                        consultationFormDialog.calculatedPrice = 0.0
                                     }
                                 }
                                 
@@ -1744,8 +1741,8 @@ Item {
                                     checked: true
                                     onCheckedChanged: {
                                         if (checked) {
-                                            consultationForm.consultationType = "Normal"
-                                            consultationForm.updatePrices()
+                                            consultationFormDialog.consultationType = "Normal"
+                                            consultationFormDialog.updatePrices()
                                         }
                                     }
                                     
@@ -1766,8 +1763,8 @@ Item {
                                     font.family: "Segoe UI, Arial, sans-serif"
                                     onCheckedChanged: {
                                         if (checked) {
-                                            consultationForm.consultationType = "Emergencia"
-                                            consultationForm.updatePrices()
+                                            consultationFormDialog.consultationType = "Emergencia"
+                                            consultationFormDialog.updatePrices()
                                         }
                                     }
                                     
@@ -1815,15 +1812,15 @@ Item {
                         }
                         
                         Label {
-                            text: consultationForm.selectedEspecialidadIndex >= 0 ? 
-                                "Bs " + consultationForm.calculatedPrice.toFixed(2) : "Seleccione especialidad"
+                            text: consultationFormDialog.selectedEspecialidadIndex >= 0 ? 
+                                "Bs " + consultationFormDialog.calculatedPrice.toFixed(2) : "Seleccione especialidad"
                             font.bold: true
                             font.pixelSize: fontBaseSize * 1.1
                             font.family: "Segoe UI, Arial, sans-serif"
-                            color: consultationForm.consultationType === "Emergencia" ? warningColor : successColor
+                            color: consultationFormDialog.consultationType === "Emergencia" ? warningColor : successColor
                             padding: baseUnit
                             background: Rectangle {
-                                color: consultationForm.consultationType === "Emergencia" ? warningColorLight : successColorLight
+                                color: consultationFormDialog.consultationType === "Emergencia" ? warningColorLight : successColorLight
                                 radius: baseUnit * 0.8
                             }
                         }
@@ -1904,18 +1901,15 @@ Item {
             Button {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
-                    // ✅ VALIDACIÓN SIMPLIFICADA SIN VARIABLES UNDEFINED
-                    var especialidadSeleccionada = consultationForm.selectedEspecialidadIndex >= 0
+                    var especialidadSeleccionada = consultationFormDialog.selectedEspecialidadIndex >= 0
                     var cedulaValida = cedulaPaciente.text.length >= 5
                     var nombreValido = nombrePaciente.text.length >= 2
                     var detallesValidos = detallesConsulta.text.length >= 10
                     
                     if (cedulaPaciente.pacienteNoEncontrado) {
-                        // Nuevo paciente - validar apellido paterno también
                         var apellidoValido = apellidoPaterno.text.length >= 2
                         return especialidadSeleccionada && cedulaValida && nombreValido && apellidoValido && detallesValidos
                     } else {
-                        // Paciente existente o sin determinar
                         return especialidadSeleccionada && cedulaValida && nombreValido && detallesValidos
                     }
                 }
@@ -2362,7 +2356,7 @@ Item {
             
         } catch (error) {
             console.log("❌ Error en coordinador de guardado:", error.message)
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             showNotification("Error", "Error procesando solicitud: " + error.message)
         }
     }
@@ -2379,7 +2373,7 @@ Item {
             }
             
             // Mostrar loading
-            consultationForm.enabled = false
+            consultationFormDialog.enabled = false
             
             // 1. Gestionar paciente (buscar o crear)
             var pacienteId = buscarOCrearPacientePorCedula()
@@ -2411,7 +2405,7 @@ Item {
             
         } catch (error) {
             console.log("❌ Error creando consulta:", error.message)
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             showNotification("Error", error.message)
         }
     }
@@ -2429,15 +2423,15 @@ Item {
             }
             
             // Validar que estamos en modo edición
-            if (!isEditMode || !consultationForm.consultaParaEditar) {
+            if (!isEditMode || !consultationFormDialog.consultaParaEditar) {
                 throw new Error("No hay consulta seleccionada para editar")
             }
             
             // Mostrar loading
-            consultationForm.enabled = false
+            consultationFormDialog.enabled = false
             
             // 1. Obtener consulta existente
-            var consultaId = consultationForm.consultaParaEditar.consultaId
+            var consultaId = consultationFormDialog.consultaParaEditar.consultaId
             if (!consultaId || consultaId <= 0) {
                 throw new Error("ID de consulta inválido: " + consultaId)
             }
@@ -2462,7 +2456,7 @@ Item {
             
         } catch (error) {
             console.log("❌ Error actualizando consulta:", error.message)
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             showNotification("Error", error.message)
         }
     }
@@ -2673,7 +2667,7 @@ Item {
         console.log("✅ Validando formulario de consulta...")
         
         // ✅ DECLARAR VARIABLES ANTES DE USARLAS
-        var tieneEspecialidad = consultationForm.selectedEspecialidadIndex >= 0
+        var tieneEspecialidad = consultationFormDialog.selectedEspecialidadIndex >= 0
         var tieneCedula = cedulaPaciente.text.length >= 5
         var tieneNombre = nombrePaciente.text.length >= 2
         var tieneDetalles = detallesConsulta.text.length >= 10
@@ -2721,7 +2715,7 @@ Item {
                 throw new Error("Índice de especialidad fuera de rango")
             }
             
-            var especialidadSeleccionada = consultaModel.especialidades[consultationForm.selectedEspecialidadIndex]
+            var especialidadSeleccionada = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
             var especialidadId = especialidadSeleccionada.id
             
             if (!especialidadId || especialidadId <= 0) {
@@ -2729,7 +2723,7 @@ Item {
             }
             
             // Obtener tipo de consulta
-            var tipoConsulta = consultationForm.consultationType.toLowerCase()
+            var tipoConsulta = consultationFormDialog.consultationType.toLowerCase()
             
             return {
                 especialidadId: especialidadId,
@@ -2770,11 +2764,11 @@ Item {
                 }
             })
             
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             
         } catch (error) {
             console.log("❌ Error procesando resultado de creación consulta:", error.message)
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             throw error
         }
     }
@@ -2806,11 +2800,11 @@ Item {
                 }
             })
             
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             
         } catch (error) {
             console.log("❌ Error procesando resultado de actualización consulta:", error.message)
-            consultationForm.enabled = true
+            consultationFormDialog.enabled = true
             throw error
         }
     }
