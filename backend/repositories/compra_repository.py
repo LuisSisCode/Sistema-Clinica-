@@ -132,6 +132,97 @@ class CompraRepository(BaseRepository):
         """
         return self._execute_query(query, params)
     
+    def get_compras_filtradas(self, fecha_desde: str = None, fecha_hasta: str = None, 
+                         proveedor_id: int = None, termino_busqueda: str = None,
+                         ordenamiento: str = "fecha_desc") -> List[Dict[str, Any]]:
+        """
+        Obtiene compras filtradas con búsqueda mejorada
+        """
+        try:
+            where_conditions = []
+            params = []
+            
+            # Filtro por fechas
+            if fecha_desde and fecha_hasta:
+                where_conditions.append("c.Fecha BETWEEN ? AND ?")
+                params.extend([fecha_desde, fecha_hasta])
+            elif fecha_desde:
+                where_conditions.append("c.Fecha >= ?")
+                params.append(fecha_desde)
+            elif fecha_hasta:
+                where_conditions.append("c.Fecha <= ?")
+                params.append(fecha_hasta)
+            
+            # Filtro por proveedor específico
+            if proveedor_id and proveedor_id > 0:
+                where_conditions.append("c.Id_Proveedor = ?")
+                params.append(proveedor_id)
+            
+            # ✅ BÚSQUEDA MEJORADA - ID, proveedor y productos
+            if termino_busqueda and termino_busqueda.strip():
+                termino_like = f"%{termino_busqueda.strip()}%"
+                # Buscar en: ID compra, nombre proveedor, código producto, nombre producto
+                search_condition = """(
+                    CAST(c.id AS VARCHAR) LIKE ? 
+                    OR p.Nombre LIKE ? 
+                    OR EXISTS (
+                        SELECT 1 FROM DetalleCompra dc2
+                        INNER JOIN Lote l2 ON dc2.Id_Lote = l2.id
+                        INNER JOIN Productos prod ON l2.Id_Producto = prod.id
+                        WHERE dc2.Id_Compra = c.id 
+                        AND (prod.Codigo LIKE ? OR prod.Nombre LIKE ?)
+                    )
+                )"""
+                where_conditions.append(search_condition)
+                params.extend([termino_like, termino_like, termino_like, termino_like])
+            
+            # Construir WHERE clause
+            where_clause = ""
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
+            
+            # Construir ORDER BY
+            order_clause = self._build_order_clause(ordenamiento)
+            
+            # Query principal
+            query = f"""
+            SELECT c.*, p.Nombre as Proveedor_Nombre, u.Nombre + ' ' + u.Apellido_Paterno as Usuario
+            FROM Compra c
+            INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
+            INNER JOIN Usuario u ON c.Id_Usuario = u.id
+            {where_clause}
+            {order_clause}
+            """
+            
+            print(f"🔍 Query filtros mejorada: {query}")
+            print(f"📊 Parámetros: {params}")
+            
+            result = self._execute_query(query, tuple(params) if params else (), use_cache=False)
+            
+            print(f"✅ Compras filtradas encontradas: {len(result) if result else 0}")
+            return result or []
+            
+        except Exception as e:
+            print(f"❌ Error en get_compras_filtradas: {str(e)}")
+            raise CompraError(f"Error aplicando filtros: {str(e)}")
+        
+    def get_proveedores_for_combo(self) -> List[Dict[str, Any]]:
+        """Obtiene proveedores específicamente para ComboBox (solo campos necesarios) - MEJORADO"""
+        query = """
+        SELECT p.id, p.Nombre,
+            COUNT(c.id) as Total_Compras
+        FROM Proveedor p
+        LEFT JOIN Compra c ON p.id = c.Id_Proveedor
+        GROUP BY p.id, p.Nombre
+        ORDER BY p.Nombre ASC
+        """
+        
+        # ✅ SIEMPRE SIN CACHE PARA COMBO
+        result = self._execute_query(query, use_cache=False)
+        
+        print(f"📋 get_proveedores_for_combo: {len(result) if result else 0} proveedores")
+        return result or []
+    
     # ===============================
     # CREACIÓN DE COMPRAS CON LOTES
     # ===============================
@@ -817,3 +908,72 @@ class CompraRepository(BaseRepository):
         result = self._execute_query(query)
         
         return result
+    def _build_order_clause(self, ordenamiento: str) -> str:
+        """Construye cláusula ORDER BY según tipo de ordenamiento"""
+        order_map = {
+            "fecha_desc": "ORDER BY c.Fecha DESC",
+            "fecha_asc": "ORDER BY c.Fecha ASC",
+            "monto_desc": "ORDER BY c.Total DESC",
+            "monto_asc": "ORDER BY c.Total ASC",
+            "proveedor_asc": "ORDER BY p.Nombre ASC, c.Fecha DESC",
+            "proveedor_desc": "ORDER BY p.Nombre DESC, c.Fecha DESC"
+        }
+        
+        return order_map.get(ordenamiento, "ORDER BY c.Fecha DESC")
+    # ===============================
+    # MÉTODO ADICIONAL PARA ESTADÍSTICAS DE FILTROS
+    # ===============================
+
+    def get_estadisticas_filtros(self, fecha_desde: str = None, fecha_hasta: str = None,
+                            proveedor_id: int = None) -> Dict[str, Any]:
+        """Obtiene estadísticas de compras filtradas"""
+        try:
+            where_conditions = []
+            params = []
+            
+            if fecha_desde and fecha_hasta:
+                where_conditions.append("c.Fecha BETWEEN ? AND ?")
+                params.extend([fecha_desde, fecha_hasta])
+            
+            if proveedor_id and proveedor_id > 0:
+                where_conditions.append("c.Id_Proveedor = ?")
+                params.append(proveedor_id)
+            
+            where_clause = ""
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
+            
+            query = f"""
+            SELECT 
+                COUNT(c.id) as Total_Compras,
+                ISNULL(SUM(c.Total), 0) as Monto_Total,
+                ISNULL(AVG(c.Total), 0) as Compra_Promedio,
+                ISNULL(MIN(c.Total), 0) as Compra_Minima,
+                ISNULL(MAX(c.Total), 0) as Compra_Maxima,
+                COUNT(DISTINCT c.Id_Proveedor) as Proveedores_Distintos
+            FROM Compra c
+            {where_clause}
+            """
+            
+            result = self._execute_query(query, tuple(params) if params else (), 
+                                    fetch_one=True, use_cache=False)
+            
+            return result or {
+                'Total_Compras': 0,
+                'Monto_Total': 0,
+                'Compra_Promedio': 0,
+                'Compra_Minima': 0,
+                'Compra_Maxima': 0,
+                'Proveedores_Distintos': 0
+            }
+            
+        except Exception as e:
+            print(f"❌ Error estadísticas filtros: {str(e)}")
+            return {
+                'Total_Compras': 0,
+                'Monto_Total': 0,
+                'Compra_Promedio': 0,
+                'Compra_Minima': 0,
+                'Compra_Maxima': 0,
+                'Proveedores_Distintos': 0
+            }
