@@ -1,9 +1,8 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import QtQuick.Controls.Material 2.15
 
-// Componente principal del módulo de Ventas - Vista simplificada
+// Componente principal del módulo de Ventas - Vista con filtros modernos
 Item {
     id: ventasRoot
     
@@ -17,8 +16,15 @@ Item {
     
     // Propiedades de control de vistas
     property bool detalleVentaDialogOpen: false
-    property string filtroActual: "Todos"
     property var ventaSeleccionada: null
+
+    // Propiedades de filtros
+    property string filtroTemporal: "Hoy"
+    property string filtroEstado: "Todas"
+    property string busquedaID: ""
+    property string fechaDesde: ""
+    property string fechaHasta: ""
+    property bool mostrarRangoPersonalizado: false
 
     // Propiedades de paginación para ventas
     property int itemsPerPageVentas: 10
@@ -74,18 +80,6 @@ Item {
         id: ventasPaginadasModel
     }
 
-    // Base de datos de productos vendidos (para detalles)
-    property var productosVendidosDatabase: ({
-        "V001": [
-            {codigo: "MED001", nombre: "Paracetamol 500mg", precio: 15.50, cantidad: 2, subtotal: 31.00},
-            {codigo: "MED002", nombre: "Ibuprofeno 400mg", precio: 15.25, cantidad: 4, subtotal: 61.00}
-        ],
-        "V002": [
-            {codigo: "MED003", nombre: "Loratadina 10mg", precio: 18.90, cantidad: 1, subtotal: 18.90},
-            {codigo: "MED002", nombre: "Amoxicilina 500mg", precio: 23.10, cantidad: 1, subtotal: 23.10}
-        ]
-    })
-
     // CONEXIÓN CON DATOS CENTRALES
     Connections {
         target: ventaModel
@@ -97,21 +91,11 @@ Item {
 
     // FUNCIÓN para actualizar paginación de ventas
     function actualizarPaginacionVentas() {
-        if (!ventaModel) {
-            console.log("🐛 DEBUG QML: ventaModel es null")
-            return
-        }
-        
-        console.log("🐛 DEBUG QML: ventaModel disponible:", ventaModel)
-        console.log("🐛 DEBUG QML: ventaModel.total_ventas_hoy:", ventaModel.total_ventas_hoy)
-        console.log("🐛 DEBUG QML: ventaModel.ventas_hoy:", ventaModel.ventas_hoy)
-        console.log("🐛 DEBUG QML: Tipo de ventas_hoy:", typeof ventaModel.ventas_hoy)
+        if (!ventaModel) return
         
         var totalItems = ventaModel.total_ventas_hoy
-        console.log("🐛 DEBUG QML: totalItems calculado:", totalItems)
         totalPagesVentas = Math.ceil(totalItems / itemsPerPageVentas)
         
-        // Ajustar página actual si es necesario
         if (currentPageVentas >= totalPagesVentas && totalPagesVentas > 0) {
             currentPageVentas = totalPagesVentas - 1
         }
@@ -119,79 +103,54 @@ Item {
             currentPageVentas = 0
         }
         
-        // Limpiar modelo paginado
         ventasPaginadasModel.clear()
         
-        // Calcular índices
         var startIndex = currentPageVentas * itemsPerPageVentas
         var endIndex = Math.min(startIndex + itemsPerPageVentas, totalItems)
         
-        // Agregar elementos de la página actual
         var ventasArray = ventaModel.ventas_hoy || []
         for (var i = startIndex; i < endIndex; i++) {
             if (i < ventasArray.length) {
                 ventasPaginadasModel.append(ventasArray[i])
             }
         }
-        
-        console.log("📄 Ventas: Página", currentPageVentas + 1, "de", totalPagesVentas,
-                    "- Mostrando", ventasPaginadasModel.count, "de", totalItems)
     }
 
-    // Función para mostrar detalles de venta
-    function mostrarDetalleVenta(index) {
-        console.log("🔍 Ventas: Mostrando detalle de venta, index:", index)
-        console.log("🔍 Ventas: Tipo de index:", typeof index)
+    // Función para aplicar filtros
+    function aplicarFiltros() {
+        console.log("🔍 Aplicando filtros:", filtroTemporal, filtroEstado, busquedaID)
         
         if (!ventaModel) {
             console.log("❌ VentaModel no disponible")
             return
         }
         
-        var ventasArray = ventaModel.ventas_hoy || []
-        console.log("🔍 DEBUG: ventasArray:", JSON.stringify(ventasArray))
-        console.log("🔍 DEBUG: ventasArray.length:", ventasArray.length)
-        console.log("🔍 DEBUG: Tipo de ventasArray:", typeof ventasArray)
+        // Llamar al nuevo slot del VentaModel
+        ventaModel.aplicar_filtros(
+            filtroTemporal,     // "Hoy", "Ayer", "7 días", "30 días", "Personalizado"
+            filtroEstado,       // "Todas", "Activas", "Anuladas"  
+            busquedaID,         // ID de venta a buscar
+            fechaDesde,         // Fecha desde (formato YYYY-MM-DD)
+            fechaHasta          // Fecha hasta (formato YYYY-MM-DD)
+        )
+    }
+
+    // Función para mostrar detalles de venta
+    function mostrarDetalleVenta(index) {
+        if (!ventaModel) return
         
-        // Validar índice
-        if (typeof index !== 'number' || index < 0 || index >= ventasArray.length) {
-            console.log("❌ Índice inválido:", index, "Array length:", ventasArray.length)
-            return
-        }
+        var ventasArray = ventaModel.ventas_hoy || []
+        if (index < 0 || index >= ventasArray.length) return
         
         try {
             ventaSeleccionada = ventasArray[index]
-            console.log("🔍 DEBUG: Venta seleccionada:", JSON.stringify(ventaSeleccionada))
-            console.log("🔍 DEBUG: Tipo de ventaSeleccionada:", typeof ventaSeleccionada)
-            
-            // Validar que la venta seleccionada es un objeto válido
-            if (!ventaSeleccionada || typeof ventaSeleccionada !== 'object') {
-                console.log("❌ Venta seleccionada no es válida:", typeof ventaSeleccionada)
-                return
-            }
-            
-            // Validar que tiene ID
             var ventaId = ventaSeleccionada.id || ventaSeleccionada.idVenta
-            if (!ventaId) {
-                console.log("❌ Venta sin ID válido:", ventaSeleccionada)
-                return
-            }
+            if (!ventaId) return
             
-            // Limpiar modelo de detalles
             productosDetalleModel.clear()
-            
-            // Obtener detalles reales desde VentaModel
-            console.log("📋 Obteniendo detalles de venta ID:", ventaId)
-            console.log("📋 Tipo de ventaId:", typeof ventaId)
-            
             var detalleVenta = ventaModel.obtener_detalle_venta(parseInt(ventaId))
             
-            console.log("📦 Detalle de venta obtenido:", JSON.stringify(detalleVenta))
-            console.log("📦 Tipo de detalleVenta:", typeof detalleVenta)
-            
-            // Validar respuesta del modelo
             if (!detalleVenta || typeof detalleVenta !== 'object') {
-                console.log("❌ Detalle de venta no válido:", typeof detalleVenta)
                 productosDetalleModel.append({
                     codigo: "---",
                     nombre: "Error obteniendo detalles",
@@ -203,21 +162,11 @@ Item {
                 return
             }
             
-            // Verificar si hay detalles de productos
             var detallesArray = detalleVenta.detalles || []
-            console.log("📦 Detalles array:", JSON.stringify(detallesArray))
-            console.log("📦 Tipo de detallesArray:", typeof detallesArray)
-            console.log("📦 Longitud:", detallesArray.length)
             
-            // ✅ CORRECCIÓN CRÍTICA: Arrays de Python en QML no siempre son Array.isArray() === true
-            // Pero SÍ tienen la propiedad length y se pueden iterar
             if (detallesArray && typeof detallesArray === 'object' && detallesArray.length > 0) {
-                console.log("✅ Procesando", detallesArray.length, "detalles válidos")
-                
                 for (var i = 0; i < detallesArray.length; i++) {
                     var detalle = detallesArray[i]
-                    console.log("📦 Procesando detalle", i, ":", JSON.stringify(detalle))
-                    
                     if (detalle && typeof detalle === 'object') {
                         var cantidad = parseFloat(detalle.cantidad || detalle.Cantidad_Unitario || 0)
                         var precio = parseFloat(detalle.precio || detalle.Precio_Unitario || 0)
@@ -229,16 +178,9 @@ Item {
                             cantidad: cantidad,
                             subtotal: cantidad * precio
                         })
-                        
-                        console.log("✅ Detalle agregado:", detalle.codigo || detalle.Producto_Codigo)
-                    } else {
-                        console.log("⚠️ Detalle", i, "no es válido:", typeof detalle)
                     }
                 }
             } else {
-                console.log("📦 No hay detalles válidos - detallesArray:", detallesArray)
-                console.log("📦 Tipo:", typeof detallesArray, "Length:", detallesArray ? detallesArray.length : "undefined")
-                
                 productosDetalleModel.append({
                     codigo: "---",
                     nombre: "No hay productos registrados",
@@ -248,14 +190,9 @@ Item {
                 })
             }
             
-            console.log("📋 Total items agregados al modelo:", productosDetalleModel.count)
             detalleVentaDialogOpen = true
             
         } catch (e) {
-            console.log("❌ Error al mostrar detalle:", e.message)
-            console.log("❌ Stack trace:", e.stack)
-            
-            // Mostrar modal con error
             productosDetalleModel.clear()
             productosDetalleModel.append({
                 codigo: "ERROR",
@@ -290,7 +227,6 @@ Item {
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                     
-                    // Efecto de hover opcional
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
@@ -366,7 +302,6 @@ Item {
                         ColorAnimation { duration: 150 }
                     }
                     
-                    // Sombra sutil
                     Rectangle {
                         anchors.fill: parent
                         anchors.topMargin: 2
@@ -397,11 +332,9 @@ Item {
                 }
                 
                 onClicked: {
-                    console.log("🛒 Navegando a CrearVenta")
-                    navegarACrearVenta() // Emitir señal para navegar
+                    navegarACrearVenta()
                 }
                 
-                // Efecto hover
                 MouseArea {
                     anchors.fill: parent
                     hoverEnabled: true
@@ -416,63 +349,414 @@ Item {
             }
         }
 
-        // Filtros de período
-        RowLayout {
+        // SECCIÓN DE FILTROS MODERNOS
+        Rectangle {
             Layout.fillWidth: true
-            Layout.topMargin: marginSmall
-            spacing: marginSmall
+            Layout.preferredHeight: mostrarRangoPersonalizado ? 140 : 90
+            color: "#f8f9fa"
+            radius: radiusMedium
+            border.color: "#e9ecef"
+            border.width: 1
             
-            Button {
-                id: filtroTodos
-                text: "Todos"
+            Behavior on Layout.preferredHeight {
+                NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: marginMedium
+                spacing: marginMedium
                 
-                property bool isSelected: filtroActual === "Todos"
-                
-                background: Rectangle {
-                    color: parent.isSelected ? "#3498db" : (parent.pressed ? "#e3f2fd" : "transparent")
-                    border.color: parent.isSelected ? "#3498db" : "#bdc3c7"
-                    border.width: 1
-                    radius: 20
-                }
-                
-                contentItem: RowLayout {
-                    spacing: marginTiny
+                // Primera fila de filtros
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: marginMedium
                     
-                    Label {
-                        text: "📊"
-                        font.pixelSize: fontSmall
-                    }
-                    
-                    Label {
-                        text: parent.parent.text
-                        color: parent.parent.isSelected ? whiteColor : textColor
-                        font.bold: parent.parent.isSelected
-                        font.pixelSize: fontSmall
-                    }
-                    
-                    Rectangle {
-                        visible: parent.parent.isSelected
-                        width: 20
-                        height: 16
-                        color: whiteColor
-                        radius: 8
+                    // Filtros Temporales
+                    ColumnLayout {
+                        spacing: marginTiny
                         
                         Label {
-                            anchors.centerIn: parent
-                            text: ventaModel ? ventaModel.total_ventas_hoy.toString() : "0"
-                            color: "#3498db"
+                            text: "📅 Período"
+                            color: textColor
                             font.bold: true
-                            font.pixelSize: fontTiny
+                            font.pixelSize: fontSmall + 4
+                        }
+                        
+                        RowLayout {
+                            spacing: marginTiny
+                            
+                            Repeater {
+                                model: ["Hoy", "Ayer", "7 días", "30 días", "Personalizado"]
+                                
+                                Button {
+                                    property bool isSelected: {
+                                        if (modelData === "Personalizado") return mostrarRangoPersonalizado
+                                        return filtroTemporal === modelData
+                                    }
+                                    
+                                    Layout.preferredHeight: buttonHeight
+                                    
+                                    background: Rectangle {
+                                        color: {
+                                            if (parent.isSelected) return primaryColor
+                                            if (parent.pressed) return Qt.lighter(primaryColor, 1.8)
+                                            if (parent.hovered) return Qt.lighter(primaryColor, 1.6)
+                                            return "transparent"
+                                        }
+                                        border.color: parent.isSelected ? primaryColor : lightGrayColor
+                                        border.width: 1
+                                        radius: radiusSmall + 10
+                                        
+                                        Behavior on color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: modelData
+                                        color: parent.isSelected ? whiteColor : textColor
+                                        font.bold: parent.isSelected
+                                        font.pixelSize: fontSmall + 4
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    
+                                    hoverEnabled: true
+                                    
+                                    onClicked: {
+                                        if (modelData === "Personalizado") {
+                                            mostrarRangoPersonalizado = !mostrarRangoPersonalizado
+                                            if (mostrarRangoPersonalizado) {
+                                                filtroTemporal = "Personalizado"
+                                            }
+                                        } else {
+                                            mostrarRangoPersonalizado = false
+                                            filtroTemporal = modelData
+                                        }
+                                        aplicarFiltros()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Separador vertical
+                    Rectangle {
+                        Layout.preferredWidth: 1
+                        Layout.fillHeight: true
+                        color: lightGrayColor
+                        Layout.topMargin: marginSmall
+                        Layout.bottomMargin: marginSmall
+                    }
+                    
+                    // Filtros por Estado
+                    ColumnLayout {
+                        spacing: marginTiny
+                        
+                        Label {
+                            text: "🔄 Estado"
+                            color: textColor
+                            font.bold: true
+                            font.pixelSize: fontSmall + 4
+                        }
+                        
+                        RowLayout {
+                            spacing: marginTiny
+                            
+                            Repeater {
+                                model: [
+                                    {text: "Todas", color: "#6c757d"},
+                                    {text: "Activas", color: "#28a745"},
+                                    {text: "Anuladas", color: "#dc3545"}
+                                ]
+                                
+                                Button {
+                                    property bool isSelected: filtroEstado === modelData.text
+                                    
+                                    Layout.preferredHeight: buttonHeight
+                                    
+                                    background: Rectangle {
+                                        color: {
+                                            if (parent.isSelected) return modelData.color
+                                            if (parent.pressed) return Qt.lighter(modelData.color, 1.8)
+                                            if (parent.hovered) return Qt.lighter(modelData.color, 1.6)
+                                            return "transparent"
+                                        }
+                                        border.color: parent.isSelected ? modelData.color : lightGrayColor
+                                        border.width: 1
+                                        radius: radiusSmall+ 5
+                                        
+                                        Behavior on color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: modelData.text
+                                        color: parent.isSelected ? whiteColor : textColor
+                                        font.bold: parent.isSelected
+                                        font.pixelSize: fontSmall + 4
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    
+                                    hoverEnabled: true
+                                    
+                                    onClicked: {
+                                        filtroEstado = modelData.text
+                                        aplicarFiltros()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Separador vertical
+                    Rectangle {
+                        Layout.preferredWidth: 1
+                        Layout.fillHeight: true
+                        color: lightGrayColor
+                        Layout.topMargin: marginSmall
+                        Layout.bottomMargin: marginSmall
+                    }
+                    
+                    // Búsqueda por ID
+                    ColumnLayout {
+                        spacing: marginTiny
+                        
+                        Label {
+                            text: "🔍 Buscar ID"
+                            color: textColor
+                            font.bold: true
+                            font.pixelSize: fontSmall + 4
+                        }
+                        
+                        RowLayout {
+                            spacing: marginTiny
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 160
+                                Layout.preferredHeight: buttonHeight
+                                color: whiteColor
+                                border.color: busquedaTextField.activeFocus ? primaryColor : lightGrayColor
+                                border.width: busquedaTextField.activeFocus ? 2 : 1
+                                radius: radiusSmall
+                                
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                                
+                                TextField {
+                                    id: busquedaTextField
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    
+                                    placeholderText: "ID de venta..."
+                                    font.pixelSize: fontSmall + 4
+                                    color: textColor
+                                    
+                                    background: Rectangle {
+                                        color: "transparent"
+                                    }
+                                    
+                                    onTextChanged: {
+                                        busquedaID = text
+                                        if (text.length === 0 || text.length >= 2) {
+                                            aplicarFiltros()
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Button {
+                                Layout.preferredWidth: 50
+                                Layout.preferredHeight: buttonHeight
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
+                                    radius: radiusSmall + 5
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: "🔍"
+                                    color: whiteColor
+                                    font.pixelSize: fontMedium
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    aplicarFiltros()
+                                }
+                            }
+                        }
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    // Botón limpiar filtros
+                    Button {
+                        Layout.preferredHeight: buttonHeight
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(warningColor, 1.2) : "transparent"
+                            border.color: warningColor
+                            border.width: 1
+                            radius: radiusSmall
+                            
+                            Behavior on color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                        
+                        contentItem: RowLayout {
+                            spacing: marginTiny
+                            
+                            Label {
+                                text: "🗑️"
+                                font.pixelSize: fontSmall + 4
+                            }
+                            
+                            Label {
+                                text: "Limpiar"
+                                color: warningColor
+                                font.bold: true
+                                font.pixelSize: fontSmall + 4
+                            }
+                        }
+                        
+                        onClicked: {
+                            filtroTemporal = "Hoy"
+                            filtroEstado = "Todas"
+                            busquedaID = ""
+                            busquedaTextField.text = ""
+                            mostrarRangoPersonalizado = false
+                            fechaDesde = ""
+                            fechaHasta = ""
+                            aplicarFiltros()
                         }
                     }
                 }
                 
-                onClicked: {
-                    filtroActual = "Todos"
+                // Segunda fila - Rango personalizado (solo visible cuando se selecciona)
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: mostrarRangoPersonalizado
+                    spacing: marginMedium
+                    
+                    Label {
+                        text: "📅 Rango personalizado:"
+                        color: textColor
+                        font.bold: true
+                        font.pixelSize: fontSmall + 4
+                    }
+                    
+                    RowLayout {
+                        spacing: marginTiny
+                        
+                        Label {
+                            text: "Desde:"
+                            color: darkGrayColor
+                            font.pixelSize: fontSmall + 4
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: controlHeight
+                            color: whiteColor
+                            border.color: fechaDesdeField.activeFocus ? primaryColor : lightGrayColor
+                            border.width: fechaDesdeField.activeFocus ? 2 : 1
+                            radius: radiusSmall
+                            
+                            TextField {
+                                id: fechaDesdeField
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                
+                                placeholderText: "YYYY-MM-DD"
+                                font.pixelSize: fontSmall + 4
+                                color: textColor
+                                text: fechaDesde
+                                
+                                background: Rectangle {
+                                    color: "transparent"
+                                }
+                                
+                                onTextChanged: {
+                                    fechaDesde = text
+                                }
+                            }
+                        }
+                        
+                        Label {
+                            text: "Hasta:"
+                            color: darkGrayColor
+                            font.pixelSize: fontSmall + 4
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: controlHeight
+                            color: whiteColor
+                            border.color: fechaHastaField.activeFocus ? primaryColor : lightGrayColor
+                            border.width: fechaHastaField.activeFocus ? 2 : 1
+                            radius: radiusSmall + 10
+                            
+                            TextField {
+                                id: fechaHastaField
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                
+                                placeholderText: "YYYY-MM-DD"
+                                font.pixelSize: fontSmall + 4
+                                color: textColor
+                                text: fechaHasta
+                                
+                                background: Rectangle {
+                                    color: "transparent"
+                                }
+                                
+                                onTextChanged: {
+                                    fechaHasta = text
+                                }
+                            }
+                        }
+                        
+                        Button {
+                            Layout.preferredHeight: controlHeight
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                                radius: radiusSmall + 5
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: Label {
+                                text: "Aplicar"
+                                color: whiteColor
+                                font.bold: true
+                                font.pixelSize: fontSmall + 4
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            
+                            onClicked: {
+                                aplicarFiltros()
+                            }
+                        }
+                    }
+                    
+                    Item { Layout.fillWidth: true }
                 }
             }
-
-            Item { Layout.fillWidth: true }
         }
 
         // Tabla de ventas 
@@ -776,7 +1060,6 @@ Item {
                                         }
                                         
                                         onClicked: {
-                                            console.log("👁️ Ver detalle de venta, index:", index)
                                             mostrarDetalleVenta(index)
                                         }
                                     }
@@ -928,7 +1211,7 @@ Item {
         }
     }
 
-    // MODAL DE DETALLE DE VENTA
+    // MODAL DE DETALLE DE VENTA (sin cambios)
     Rectangle {
         id: modalOverlay
         anchors.fill: parent
@@ -1451,13 +1734,8 @@ Item {
         }
     }
 
-    // Función para obtener total de ventas
-    function getTotalVentasCount() {
-        return ventaModel ? ventaModel.total_ventas_hoy : 0
-    }
-
     Component.onCompleted: {
-        console.log("=== MÓDULO DE VENTAS SIMPLIFICADO INICIALIZADO ===")
+        console.log("=== MÓDULO DE VENTAS CON FILTROS INICIALIZADO ===")
         
         if (!ventaModel || !inventarioModel || !compraModel) {
             console.log("❌ ERROR: Models no están disponibles")
@@ -1468,18 +1746,16 @@ Item {
         actualizarPaginacionVentas()
         console.log("=== MÓDULO LISTO ===")
     }
+    
     Item {
         anchors.fill: parent
         focus: true
         
         Keys.onEscapePressed: {
             console.log("Escape pressed in Ventas.qml")
-            // Forzar el foco de vuelta al padre y propagar el evento
             ventasMainRoot.forceActiveFocus()
-            // También puedes emitir una señal si es necesario
         }
         
-        // Asegurar que este elemento esté siempre al fondo en términos de foco
         z: -1
     }
 }

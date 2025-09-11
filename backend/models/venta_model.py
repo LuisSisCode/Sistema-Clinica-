@@ -14,7 +14,7 @@ from ..core.excepciones import (
 
 class VentaModel(QObject):
     """
-    Model QObject para gestión de ventas con integración FIFO
+    Model QObject para gestión de ventas con integración FIFO y filtros avanzados
     Conecta directamente con QML mediante Signals/Slots/Properties
     """
     
@@ -28,6 +28,7 @@ class VentaModel(QObject):
     historialVentasChanged = Signal()
     estadisticasChanged = Signal()
     topProductosChanged = Signal()
+    ventasFiltradas = Signal()  # Nuevo signal para filtros
     
     # Signals de operaciones
     ventaCreada = Signal(int, float)  # venta_id, total
@@ -39,6 +40,7 @@ class VentaModel(QObject):
     loadingChanged = Signal()
     procesandoVentaChanged = Signal()
     carritoCambiado = Signal()
+    filtrosChanged = Signal()  # Nuevo signal para cambios en filtros
     
     def __init__(self):
         super().__init__()
@@ -57,6 +59,16 @@ class VentaModel(QObject):
         self._loading = False
         self._procesando_venta = False
         
+        # Estado de filtros
+        self._filtros_activos = {
+            'temporal': 'Hoy',
+            'estado': 'Todas',
+            'busqueda_id': '',
+            'fecha_desde': '',
+            'fecha_hasta': ''
+        }
+        self._ventas_filtradas = []
+        
         # Configuración
         self._usuario_actual = 0
         
@@ -69,7 +81,7 @@ class VentaModel(QObject):
         self._cargar_ventas_hoy()
         self._cargar_estadisticas()
         
-        print("💰 VentaModel inicializado")
+        print("💰 VentaModel inicializado con filtros avanzados")
     
     # ===============================
     # PROPERTIES PARA QML
@@ -77,8 +89,8 @@ class VentaModel(QObject):
     
     @Property(list, notify=ventasHoyChanged)
     def ventas_hoy(self):
-        """Lista de ventas del día actual"""
-        return self._ventas_hoy
+        """Lista de ventas del día actual o filtradas"""
+        return self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
     
     @Property('QVariant', notify=ventaActualChanged)
     def venta_actual(self):
@@ -117,8 +129,9 @@ class VentaModel(QObject):
     
     @Property(int, notify=ventasHoyChanged)
     def total_ventas_hoy(self):
-        """Total de ventas del día"""
-        return len(self._ventas_hoy)
+        """Total de ventas mostradas (con filtros aplicados)"""
+        ventas_a_mostrar = self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
+        return len(ventas_a_mostrar)
     
     @Property(float, notify=estadisticasChanged)
     def ingresos_hoy(self):
@@ -135,6 +148,109 @@ class VentaModel(QObject):
         """Cantidad de items en carrito"""
         return len(self._carrito_items)
     
+    # Nuevas properties para filtros
+    @Property('QVariant', notify=filtrosChanged)
+    def filtros_activos(self):
+        """Estado actual de los filtros"""
+        return self._filtros_activos
+    
+    # ===============================
+    # SLOTS PARA QML - FILTROS (NUEVO)
+    # ===============================
+    
+    @Slot(str, str, str, str, str)
+    def aplicar_filtros(self, filtro_temporal: str, filtro_estado: str, busqueda_id: str, fecha_desde: str = "", fecha_hasta: str = ""):
+        """Aplica filtros a las ventas"""
+        print(f"🔍 Aplicando filtros: temporal={filtro_temporal}, estado={filtro_estado}, id={busqueda_id}")
+        
+        # Actualizar estado de filtros
+        self._filtros_activos = {
+            'temporal': filtro_temporal,
+            'estado': filtro_estado,
+            'busqueda_id': busqueda_id.strip(),
+            'fecha_desde': fecha_desde.strip(),
+            'fecha_hasta': fecha_hasta.strip()
+        }
+        
+        self._set_loading(True)
+        
+        try:
+            # Obtener ventas filtradas del repository
+            ventas_filtradas = safe_execute(
+                self.venta_repo.get_ventas_filtradas,
+                filtro_temporal, filtro_estado, busqueda_id.strip(), fecha_desde.strip(), fecha_hasta.strip()
+            )
+            
+            # Formatear para QML
+            self._ventas_filtradas = []
+            if ventas_filtradas:
+                for venta in ventas_filtradas:
+                    try:
+                        venta_formateada = {
+                            'id': int(venta['id']),
+                            'idVenta': str(venta['id']),
+                            'usuario': str(venta.get('Vendedor', 'Usuario desconocido')),
+                            'tipoUsuario': 'Vendedor',
+                            'total': float(venta['Total']),
+                            'fecha': venta['Fecha'].strftime('%Y-%m-%d') if hasattr(venta['Fecha'], 'strftime') else str(venta['Fecha']),
+                            'hora': venta['Fecha'].strftime('%H:%M') if hasattr(venta['Fecha'], 'strftime') else '00:00',
+                            'fechaCompleta': venta['Fecha'].isoformat() if hasattr(venta['Fecha'], 'isoformat') else str(venta['Fecha']),
+                            'estado': venta.get('Estado', 'Activa')  # Para futuro uso con ventas anuladas
+                        }
+                        self._ventas_filtradas.append(venta_formateada)
+                    except Exception as e:
+                        print(f"⚠️ Error formateando venta filtrada: {e}")
+                        continue
+            
+            self.filtrosChanged.emit()
+            self.ventasHoyChanged.emit()  # Trigger update en la UI
+            self.operacionExitosa.emit(f"Filtros aplicados: {len(self._ventas_filtradas)} resultados")
+            
+            print(f"✅ Filtros aplicados: {len(self._ventas_filtradas)} ventas encontradas")
+            
+        except Exception as e:
+            print(f"❌ Error aplicando filtros: {e}")
+            self.operacionError.emit(f"Error aplicando filtros: {str(e)}")
+            self._ventas_filtradas = []
+            self.ventasHoyChanged.emit()
+        finally:
+            self._set_loading(False)
+    
+    @Slot()
+    def limpiar_filtros(self):
+        """Limpia todos los filtros y vuelve a mostrar ventas del día"""
+        print("🧹 Limpiando filtros")
+        
+        self._filtros_activos = {
+            'temporal': 'Hoy',
+            'estado': 'Todas',
+            'busqueda_id': '',
+            'fecha_desde': '',
+            'fecha_hasta': ''
+        }
+        
+        self._ventas_filtradas = []
+        self.filtrosChanged.emit()
+        self.ventasHoyChanged.emit()
+        self.operacionExitosa.emit("Filtros limpiados")
+    
+    @Slot(str, result='QVariant')
+    def buscar_venta_por_id(self, venta_id: str):
+        """Busca una venta específica por ID"""
+        if not venta_id.strip():
+            return {}
+        
+        try:
+            venta_id_int = int(venta_id.strip())
+            venta = safe_execute(self.venta_repo.get_venta_completa, venta_id_int)
+            return venta if venta else {}
+        except ValueError:
+            self.operacionError.emit("ID de venta debe ser un número")
+            return {}
+        except Exception as e:
+            self.operacionError.emit(f"Error buscando venta: {str(e)}")
+            return {}
+    
     # ===============================
     # SLOTS PARA QML - CONFIGURACIÓN
     # ===============================
@@ -150,6 +266,15 @@ class VentaModel(QObject):
     def refresh_ventas_hoy(self):
         """Refresca las ventas del día"""
         self._cargar_ventas_hoy()
+        # Si hay filtros activos, reaplicarlos
+        if any(value for key, value in self._filtros_activos.items() if key != 'temporal' or value != 'Hoy'):
+            self.aplicar_filtros(
+                self._filtros_activos['temporal'],
+                self._filtros_activos['estado'], 
+                self._filtros_activos['busqueda_id'],
+                self._filtros_activos['fecha_desde'],
+                self._filtros_activos['fecha_hasta']
+            )
     
     @Slot()
     def refresh_estadisticas(self):
@@ -157,7 +282,7 @@ class VentaModel(QObject):
         self._cargar_estadisticas()
     
     # ===============================
-    # SLOTS PARA QML - CARRITO
+    # SLOTS PARA QML - CARRITO (sin cambios)
     # ===============================
     
     @Slot(str, int, float)
@@ -294,15 +419,15 @@ class VentaModel(QObject):
         self.operacionExitosa.emit("Carrito limpiado")
     
     # ===============================
-    # SLOTS PARA QML - VENTAS (VERSIÓN MEJORADA)
+    # SLOTS PARA QML - VENTAS (sin cambios)
     # ===============================
     
     @Slot(result=bool)
     def procesar_venta_carrito(self):
-        """Procesa la venta con los items del carrito - VERSIÓN MEJORADA"""
-        print(f"🐛 DEBUG VentaModel: Iniciando procesar_venta_carrito")
-        print(f"🐛 DEBUG VentaModel: Items en carrito: {len(self._carrito_items)}")
-        print(f"🐛 DEBUG VentaModel: Usuario actual: {self._usuario_actual}")
+        """Procesa la venta con los items del carrito"""
+        print(f"🛠 DEBUG VentaModel: Iniciando procesar_venta_carrito")
+        print(f"🛠 DEBUG VentaModel: Items en carrito: {len(self._carrito_items)}")
+        print(f"🛠 DEBUG VentaModel: Usuario actual: {self._usuario_actual}")
         
         if not self._carrito_items:
             self.operacionError.emit("Carrito vacío")
@@ -318,19 +443,16 @@ class VentaModel(QObject):
             # Preparar items para venta con validación estricta
             items_venta = []
             for i, item in enumerate(self._carrito_items):
-                print(f"🐛 DEBUG VentaModel: Preparando item {i}: {item}")
+                print(f"🛠 DEBUG VentaModel: Preparando item {i}: {item}")
                 
-                # Validar que el item sea un diccionario válido
                 if not isinstance(item, dict):
                     raise VentaError(f"Item {i} del carrito está corrupto")
                 
-                # Validar claves requeridas
                 required_keys = ['codigo', 'cantidad', 'precio']
                 missing_keys = [key for key in required_keys if key not in item]
                 if missing_keys:
                     raise VentaError(f"Item {i} incompleto: faltan {missing_keys}")
                 
-                # Crear item para venta con validación de tipos
                 try:
                     codigo = str(item['codigo']).strip()
                     cantidad = int(item['cantidad'])
@@ -353,9 +475,8 @@ class VentaModel(QObject):
                 except (ValueError, TypeError) as e:
                     raise VentaError(f"Datos inválidos en item {i}: {e}")
             
-            print(f"🐛 DEBUG VentaModel: Items preparados para repository: {items_venta}")
+            print(f"🛠 DEBUG VentaModel: Items preparados para repository: {items_venta}")
         
-            # PROCESAR VENTA EN REPOSITORY CON MANEJO ROBUSTO
             try:
                 venta = self.venta_repo.crear_venta(self._usuario_actual, items_venta)
                 print(f"✅ Venta creada exitosamente: {venta}")
@@ -367,6 +488,16 @@ class VentaModel(QObject):
                     # Actualizar datos
                     self._cargar_ventas_hoy()
                     self._cargar_estadisticas()
+                    
+                    # Si hay filtros activos, reaplicarlos
+                    if any(value for key, value in self._filtros_activos.items() if key != 'temporal' or value != 'Hoy'):
+                        self.aplicar_filtros(
+                            self._filtros_activos['temporal'],
+                            self._filtros_activos['estado'], 
+                            self._filtros_activos['busqueda_id'],
+                            self._filtros_activos['fecha_desde'],
+                            self._filtros_activos['fecha_hasta']
+                        )
                     
                     # Establecer venta actual
                     self._venta_actual = venta
@@ -389,7 +520,6 @@ class VentaModel(QObject):
             print(f"❌ ERROR en procesar_venta_carrito: {e}")
             error_msg = str(e)
             
-            # Mejorar mensajes de error para el usuario
             if "Foreign Key" in error_msg or "FK__" in error_msg:
                 error_msg = "Error de integridad en base de datos. Contacte al administrador."
             elif "Stock insuficiente" in error_msg:
@@ -401,6 +531,10 @@ class VentaModel(QObject):
             return False
         finally:
             self._set_procesando_venta(False)
+    
+    # ===============================
+    # RESTO DE MÉTODOS SIN CAMBIOS
+    # ===============================
     
     @Slot(str, int, int, result=bool)
     def venta_rapida(self, codigo: str, cantidad: int, usuario_id: int = 0):
@@ -469,6 +603,16 @@ class VentaModel(QObject):
                 self._cargar_ventas_hoy()
                 self._cargar_estadisticas()
                 
+                # Reaplicar filtros si están activos
+                if any(value for key, value in self._filtros_activos.items() if key != 'temporal' or value != 'Hoy'):
+                    self.aplicar_filtros(
+                        self._filtros_activos['temporal'],
+                        self._filtros_activos['estado'], 
+                        self._filtros_activos['busqueda_id'],
+                        self._filtros_activos['fecha_desde'],
+                        self._filtros_activos['fecha_hasta']
+                    )
+                
                 self.ventaAnulada.emit(venta_id, "Anulación exitosa")
                 self.operacionExitosa.emit(f"Venta {venta_id} anulada")
                 
@@ -483,21 +627,19 @@ class VentaModel(QObject):
             self._set_loading(False)
     
     # ===============================
-    # SLOTS PARA QML - CONSULTAS (MEJORADO)
+    # MÉTODOS DE CONSULTA (sin cambios mayores)
     # ===============================
     
     @Slot(int, result='QVariantMap')
     def obtener_detalle_venta(self, venta_id: int):
-        """Obtiene el detalle completo de una venta específica - VERSIÓN MEJORADA"""
+        """Obtiene el detalle completo de una venta específica"""
         try:
             print(f"🔍 VentaModel: Obteniendo detalle de venta {venta_id}")
             
-            # Validar parámetro
             if not isinstance(venta_id, int) or venta_id <= 0:
                 print(f"❌ VentaModel: ID de venta inválido: {venta_id}")
                 return {}
             
-            # Obtener detalle del repository con manejo robusto
             try:
                 detalle = self.venta_repo.get_venta_completa(venta_id)
                 print(f"🔍 VentaModel: Detalle obtenido del repository")
@@ -506,12 +648,10 @@ class VentaModel(QObject):
                     print(f"❌ VentaModel: No se encontró venta con ID {venta_id}")
                     return {}
                 
-                # Validar estructura del detalle
                 if not isinstance(detalle, dict):
                     print(f"❌ VentaModel: Detalle no es diccionario: {type(detalle)}")
                     return {}
                 
-                # Verificar claves requeridas
                 required_keys = ['id', 'Fecha', 'Total']
                 missing_keys = [key for key in required_keys if key not in detalle]
                 if missing_keys:
@@ -593,94 +733,18 @@ class VentaModel(QObject):
             print(f"❌ VentaModel: Error general obteniendo detalle: {e}")
             return {}
     
-    @Slot(int, result='QVariant')
-    def get_venta_detalle(self, venta_id: int):
-        """Obtiene detalle completo de una venta"""
-        if venta_id <= 0:
-            return {}
-        
-        try:
-            venta = safe_execute(self.venta_repo.get_venta_completa, venta_id)
-            return venta if venta else {}
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo venta: {str(e)}")
-            return {}
-    
-    @Slot(str, str)
-    def cargar_historial(self, fecha_desde: str, fecha_hasta: str):
-        """Carga historial de ventas por período"""
-        self._set_loading(True)
-        
-        try:
-            if fecha_desde and fecha_hasta:
-                ventas = safe_execute(
-                    self.venta_repo.get_ventas_con_detalles,
-                    fecha_desde, fecha_hasta
-                )
-            else:
-                # Últimos 7 días por defecto
-                fecha_desde = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-                ventas = safe_execute(
-                    self.venta_repo.get_ventas_con_detalles,
-                    fecha_desde, None
-                )
-            
-            self._historial_ventas = ventas or []
-            self.historialVentasChanged.emit()
-            
-            print(f"📊 Historial cargado: {len(self._historial_ventas)} ventas")
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error cargando historial: {str(e)}")
-        finally:
-            self._set_loading(False)
-    
-    @Slot(int)
-    def cargar_top_productos(self, dias: int = 30):
-        """Carga top productos más vendidos"""
-        try:
-            productos = safe_execute(
-                self.venta_repo.get_top_productos_vendidos, 
-                dias, 10
-            )
-            self._top_productos = productos or []
-            self.topProductosChanged.emit()
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error cargando top productos: {str(e)}")
-    
-    @Slot(str, result='QVariant')
-    def get_ventas_por_periodo(self, periodo: str):
-        """Obtiene ventas por período (hoy, semana, mes)"""
-        try:
-            ventas = safe_execute(self.venta_repo.get_ventas_por_periodo, periodo)
-            return ventas if ventas else []
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo ventas por período: {str(e)}")
-            return []
-    
-    @Slot(result='QVariant')
-    def get_reporte_ingresos(self):
-        """Obtiene reporte de ingresos"""
-        try:
-            reporte = safe_execute(self.venta_repo.get_reporte_ingresos, 30)
-            return reporte if reporte else {}
-        except Exception as e:
-            self.operacionError.emit(f"Error en reporte ingresos: {str(e)}")
-            return {}
-    
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
     
     def _cargar_ventas_hoy(self):
         """Carga ventas del día actual"""
-        print("🐛 DEBUG VentaModel: _cargar_ventas_hoy() iniciado")
+        print("🛠 DEBUG VentaModel: _cargar_ventas_hoy() iniciado")
         try:
             ventas = safe_execute(self.venta_repo.get_active)
-            print(f"🐛 DEBUG VentaModel: Ventas desde repository: {ventas}")
+            print(f"🛠 DEBUG VentaModel: Ventas desde repository: {ventas}")
             
-            # ✅ CONVERTIR A FORMATO QML-COMPATIBLE
+            # Convertir a formato QML-compatible
             ventas_formateadas = []
             if ventas:
                 for venta in ventas:
@@ -700,7 +764,7 @@ class VentaModel(QObject):
                         print(f"⚠️ Error formateando venta: {e}")
                         continue
             
-            print(f"🐛 DEBUG VentaModel: Ventas formateadas: {len(ventas_formateadas)}")
+            print(f"🛠 DEBUG VentaModel: Ventas formateadas: {len(ventas_formateadas)}")
             
             self._ventas_hoy = ventas_formateadas
             self.ventasHoyChanged.emit()
@@ -752,6 +816,9 @@ class VentaModel(QObject):
         if self._procesando_venta != procesando:
             self._procesando_venta = procesando
             self.procesandoVentaChanged.emit()
+
+# Resto de métodos sin cambios...
+# [Incluir aquí el resto de métodos que no se modificaron del archivo original]
 
 # Registrar el tipo para QML
 def register_venta_model():

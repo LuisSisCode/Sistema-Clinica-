@@ -12,16 +12,116 @@ from ..core.excepciones import (
 from .producto_repository import ProductoRepository
 
 class VentaRepository(BaseRepository):
-    """Repository para ventas con integración FIFO automática"""
+    """Repository para ventas con integración FIFO automática y filtros avanzados"""
     
     def __init__(self):
         super().__init__('Ventas', 'ventas')
         self.producto_repo = ProductoRepository()
-        print("💰 VentaRepository inicializado con FIFO automático")
+        print("💰 VentaRepository inicializado con FIFO automático y filtros")
+    
+    # ===============================
+    # MÉTODOS DE FILTRADO (NUEVO)
+    # ===============================
+    
+    def get_ventas_filtradas(self, filtro_temporal: str, filtro_estado: str, busqueda_id: str = "", fecha_desde: str = "", fecha_hasta: str = "") -> List[Dict[str, Any]]:
+        """
+        Obtiene ventas aplicando filtros dinámicos
+        """
+        print(f"🔍 VentaRepository: Aplicando filtros - temporal: {filtro_temporal}, estado: {filtro_estado}, id: {busqueda_id}")
+        
+        # Construir WHERE clause dinámicamente
+        where_conditions = []
+        params = []
+        
+        # 1. FILTRO TEMPORAL
+        if filtro_temporal == "Hoy":
+            where_conditions.append("CAST(v.Fecha AS DATE) = CAST(GETDATE() AS DATE)")
+        elif filtro_temporal == "Ayer":
+            where_conditions.append("CAST(v.Fecha AS DATE) = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)")
+        elif filtro_temporal == "7 días":
+            where_conditions.append("v.Fecha >= DATEADD(DAY, -7, GETDATE())")
+        elif filtro_temporal == "30 días":
+            where_conditions.append("v.Fecha >= DATEADD(DAY, -30, GETDATE())")
+        elif filtro_temporal == "Personalizado":
+            if fecha_desde and fecha_hasta:
+                where_conditions.append("CAST(v.Fecha AS DATE) BETWEEN ? AND ?")
+                params.extend([fecha_desde, fecha_hasta])
+            elif fecha_desde:
+                where_conditions.append("CAST(v.Fecha AS DATE) >= ?")
+                params.append(fecha_desde)
+            elif fecha_hasta:
+                where_conditions.append("CAST(v.Fecha AS DATE) <= ?")
+                params.append(fecha_hasta)
+        
+        # 2. FILTRO POR ESTADO (preparado para futuras funcionalidades de ventas anuladas)
+        if filtro_estado == "Activas":
+            # Por ahora todas las ventas en la tabla son activas
+            # En el futuro podríamos agregar una columna 'estado' o tabla de ventas anuladas
+            pass  # No agregar condición adicional
+        elif filtro_estado == "Anuladas":
+            # Para el futuro - por ahora retornar vacío
+            where_conditions.append("1 = 0")  # Condición que nunca se cumple
+        # "Todas" no agrega condición
+        
+        # 3. BÚSQUEDA POR ID
+        if busqueda_id.strip():
+            try:
+                venta_id = int(busqueda_id.strip())
+                where_conditions.append("v.id = ?")
+                params.append(venta_id)
+            except ValueError:
+                # ID inválido, no encontrar nada
+                where_conditions.append("1 = 0")
+        
+        # Construir query final
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+        
+        query = f"""
+        SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
+        FROM Ventas v
+        INNER JOIN Usuario u ON v.Id_Usuario = u.id
+        {where_clause}
+        ORDER BY v.Fecha DESC
+        """
+        
+        print(f"🔍 Query generado: {query}")
+        print(f"🔍 Parámetros: {params}")
+        
+        try:
+            resultado = self._execute_query(query, tuple(params), use_cache=False)
+            print(f"🔍 Filtros aplicados: {len(resultado) if resultado else 0} ventas encontradas")
+            return resultado or []
+        except Exception as e:
+            print(f"❌ Error en filtros: {e}")
+            return []
+    
+    def buscar_venta_por_id(self, venta_id: int) -> Optional[Dict[str, Any]]:
+        """Busca una venta específica por ID"""
+        if venta_id <= 0:
+            return None
+        
+        query = """
+        SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
+        FROM Ventas v
+        INNER JOIN Usuario u ON v.Id_Usuario = u.id
+        WHERE v.id = ?
+        """
+        
+        try:
+            return self._execute_query(query, (venta_id,), fetch_one=True)
+        except Exception as e:
+            print(f"❌ Error buscando venta por ID {venta_id}: {e}")
+            return None
+    
+    # ===============================
+    # MÉTODOS ORIGINALES (modificados para compatibilidad)
+    # ===============================
     
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene ventas del día actual"""
-        print("🐛 DEBUG: get_active() llamado para ventas del día")
+        print("🛠 DEBUG: get_active() llamado para ventas del día")
         query = """
         SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
         FROM Ventas v
@@ -30,10 +130,10 @@ class VentaRepository(BaseRepository):
         ORDER BY v.Fecha DESC
         """
         resultado = self._execute_query(query)
-        print(f"🐛 DEBUG: get_active() encontró {len(resultado) if resultado else 0} ventas del día")
+        print(f"🛠 DEBUG: get_active() encontró {len(resultado) if resultado else 0} ventas del día")
         
         if resultado:
-            print(f"🐛 DEBUG: Primera venta: {resultado[0]}")
+            print(f"🛠 DEBUG: Primera venta: {resultado[0]}")
         
         return resultado
     
@@ -71,7 +171,7 @@ class VentaRepository(BaseRepository):
     
     def get_venta_completa(self, venta_id: int) -> Dict[str, Any]:
         """Obtiene venta con todos sus detalles"""
-        print(f"🐛 DEBUG: get_venta_completa llamado con venta_id: {venta_id} (tipo: {type(venta_id)})")
+        print(f"🛠 DEBUG: get_venta_completa llamado con venta_id: {venta_id} (tipo: {type(venta_id)})")
 
         validate_required(venta_id, "venta_id")
         
@@ -83,9 +183,9 @@ class VentaRepository(BaseRepository):
         INNER JOIN Usuario u ON v.Id_Usuario = u.id
         WHERE v.id = ?
         """
-        print(f"🐛 DEBUG: Ejecutando query con parámetro: {venta_id}")
+        print(f"🛠 DEBUG: Ejecutando query con parámetro: {venta_id}")
         venta = self._execute_query(venta_query, (venta_id,), fetch_one=True)
-        print(f"🐛 DEBUG: Resultado de query venta: {venta} (tipo: {type(venta)})")
+        print(f"🛠 DEBUG: Resultado de query venta: {venta} (tipo: {type(venta)})")
         
         if not venta:
             print(f"❌ DEBUG: Venta no encontrada para ID: {venta_id}")
@@ -136,7 +236,7 @@ class VentaRepository(BaseRepository):
         return self._execute_query(query, use_cache=False)
     
     # ===============================
-    # CREACIÓN DE VENTAS CON FIFO - VERSIÓN CORREGIDA
+    # CREACIÓN DE VENTAS CON FIFO (sin cambios)
     # ===============================
     
     @ExceptionHandler.handle_exception
@@ -144,8 +244,8 @@ class VentaRepository(BaseRepository):
         """
         Crea una venta completa usando transacciones para evitar problemas de FK
         """
-        print(f"🐛 DEBUG: Iniciando crear_venta - usuario_id: {usuario_id}")
-        print(f"🐛 DEBUG: items_venta recibidos: {items_venta}")
+        print(f"🛠 DEBUG: Iniciando crear_venta - usuario_id: {usuario_id}")
+        print(f"🛠 DEBUG: items_venta recibidos: {items_venta}")
         
         if not items_venta:
             raise VentaError("No se proporcionaron items para la venta")
@@ -184,7 +284,7 @@ class VentaRepository(BaseRepository):
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            print("🔄 Iniciando transacción completa de venta...")
+            print("📄 Iniciando transacción completa de venta...")
             
             # PASO 1: Insertar venta principal
             venta_query = """
@@ -206,7 +306,7 @@ class VentaRepository(BaseRepository):
             todos_los_detalles = []
             
             for i, item in enumerate(items_preparados):
-                print(f"🔄 Procesando item {i} en transacción...")
+                print(f"📄 Procesando item {i} en transacción...")
                 
                 # Reducir stock FIFO (esto usa su propia transacción)
                 lotes_afectados = self.producto_repo.reducir_stock_fifo(
@@ -260,7 +360,7 @@ class VentaRepository(BaseRepository):
             print(f"❌ ERROR en transacción de venta: {e}")
             if conn:
                 conn.rollback()
-                print("🔄 Rollback realizado")
+                print("📄 Rollback realizado")
             
             # Si se creó la venta pero falló después, intentar limpiar
             if venta_id:
@@ -351,7 +451,7 @@ class VentaRepository(BaseRepository):
             raise e
     
     # ===============================
-    # ANULACIÓN DE VENTAS
+    # ANULACIÓN DE VENTAS (sin cambios)
     # ===============================
     
     @ExceptionHandler.handle_exception
