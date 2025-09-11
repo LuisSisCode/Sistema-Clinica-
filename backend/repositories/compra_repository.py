@@ -222,7 +222,7 @@ class CompraRepository(BaseRepository):
         
         print(f"📋 get_proveedores_for_combo: {len(result) if result else 0} proveedores")
         return result or []
-    
+        
     # ===============================
     # CREACIÓN DE COMPRAS CON LOTES
     # ===============================
