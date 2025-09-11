@@ -50,6 +50,11 @@ Item {
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
+
+    // PROPIEDADES PARA DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    property string consultaIdToDelete: ""
+    property bool showConfirmDeleteDialog: false
+
     // PAGINACIÓN ADAPTATIVA
     property int itemsPerPageConsultas: 8 // Valor inicial, se ajustará dinámicamente
     property int currentPageConsultas: 0
@@ -1020,17 +1025,12 @@ Item {
                                                 source: "Resources/iconos/eliminar.svg"
                                                 fillMode: Image.PreserveAspectFit
                                             }
-                                            
+                                                                                        
                                             onClicked: {
                                                 var consultaId = model.id
-                                                
-                                                if (consultaModel.eliminar_consulta(parseInt(consultaId))) {
-                                                    selectedRowIndex = -1
-                                                    updatePaginatedModel()
-                                                    console.log("✅ Consulta eliminada de BD ID:", consultaId)
-                                                } else {
-                                                    console.log("❌ Error eliminando consulta ID:", consultaId)
-                                                    showNotification("Error", "No se pudo eliminar la consulta")
+                                                if (consultaId && consultaId !== "N/A") {
+                                                    consultaIdToDelete = consultaId
+                                                    showConfirmDeleteDialog = true
                                                 }
                                             }
                                             
@@ -1143,27 +1143,26 @@ Item {
         }
     }
 
-    // DIÁLOGO DE NUEVA CONSULTA - MANTENIDO IGUAL
-    
+    // DIÁLOGO DE NUEVA CONSULTA CON BLOQUEO MODAL
     Rectangle {
         id: newConsultationDialog
         anchors.fill: parent
         color: "black"
         opacity: showNewConsultationDialog ? 0.5 : 0
         visible: opacity > 0
+        z: 100
         
+        // ✅ BLOQUEO: MouseArea sin acción para evitar cierre accidental
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                limpiarYCerrarDialogoConsulta()
-            }
+            // Eliminado el onClicked para que no se pueda cerrar haciendo clic afuera
         }
         
         Behavior on opacity {
             NumberAnimation { duration: 200 }
         }
     }
-    
+
     Rectangle {
         id: consultationForm
         anchors.centerIn: parent
@@ -1174,6 +1173,7 @@ Item {
         border.color: "#DDD"
         border.width: 1
         visible: showNewConsultationDialog
+        z: 101
 
         Rectangle {
             anchors.fill: parent
@@ -1940,6 +1940,248 @@ Item {
                 
                 onClicked: {
                     guardarConsulta()
+                }
+            }
+        }
+    }
+
+    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    Dialog {
+        id: confirmDeleteDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.9, 480)
+        height: Math.min(parent.height * 0.55, 320)
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        visible: showConfirmDeleteDialog
+        z: 102
+        
+        title: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: baseUnit * 0.8
+            border.color: "#e0e0e0"
+            border.width: 1
+            
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -3
+                color: "transparent"
+                radius: parent.radius + 3
+                border.color: "#30000000"
+                border.width: 3
+                z: -1
+            }
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+            
+            // Header personalizado con ícono
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 75
+                color: "#fff5f5"
+                radius: baseUnit * 0.8
+                
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: baseUnit * 0.8
+                    color: parent.color
+                }
+                
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: baseUnit * 2
+                    
+                    Rectangle {
+                        Layout.preferredWidth: 45
+                        Layout.preferredHeight: 45
+                        color: "#fee2e2"
+                        radius: 22
+                        border.color: "#fecaca"
+                        border.width: 2
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "⚠️"
+                            font.pixelSize: fontBaseSize * 1.8
+                        }
+                    }
+                    
+                    ColumnLayout {
+                        spacing: baseUnit * 0.25
+                        
+                        Label {
+                            text: "Confirmar Eliminación"
+                            font.pixelSize: fontBaseSize * 1.3
+                            font.bold: true
+                            color: "#dc2626"
+                            Layout.alignment: Qt.AlignLeft
+                        }
+                        
+                        Label {
+                            text: "Acción irreversible"
+                            font.pixelSize: fontBaseSize * 0.9
+                            color: "#7f8c8d"
+                            Layout.alignment: Qt.AlignLeft
+                        }
+                    }
+                }
+            }
+            
+            // Contenido principal
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "transparent"
+                
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: baseUnit * 2
+                    spacing: baseUnit
+                    
+                    Item { Layout.preferredHeight: baseUnit * 0.5 }
+                    
+                    Label {
+                        text: "¿Estás seguro de eliminar esta consulta?"
+                        font.pixelSize: fontBaseSize * 1.1
+                        font.bold: true
+                        color: textColor
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        font.family: "Segoe UI, Arial, sans-serif"
+                    }
+                    
+                    Label {
+                        text: "Esta acción no se puede deshacer y el registro de la consulta se eliminará permanentemente."
+                        font.pixelSize: fontBaseSize
+                        color: "#6b7280"
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.maximumWidth: parent.width - baseUnit * 4
+                        font.family: "Segoe UI, Arial, sans-serif"
+                    }
+                    
+                    Item { Layout.fillHeight: true }
+                    
+                    // Botones
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: baseUnit * 3
+                        Layout.bottomMargin: baseUnit
+                        Layout.topMargin: baseUnit
+                        
+                        Button {
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 45
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#e5e7eb" : 
+                                    (parent.hovered ? "#f3f4f6" : "#f9fafb")
+                                radius: baseUnit * 0.6
+                                border.color: "#d1d5db"
+                                border.width: 1
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: baseUnit * 0.5
+                                
+                                Label {
+                                    text: "✕"
+                                    color: "#6b7280"
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                Label {
+                                    text: "Cancelar"
+                                    color: "#374151"
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    Layout.alignment: Qt.AlignVCenter
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                            }
+                            
+                            onClicked: {
+                                showConfirmDeleteDialog = false
+                                consultaIdToDelete = ""
+                            }
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
+                        
+                        Button {
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 45
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#dc2626" : 
+                                    (parent.hovered ? "#ef4444" : "#f87171")
+                                radius: baseUnit * 0.6
+                                border.width: 0
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: baseUnit * 0.5
+                                
+                                Label {
+                                    text: "🗑️"
+                                    color: whiteColor
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                Label {
+                                    text: "Eliminar"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    Layout.alignment: Qt.AlignVCenter
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                            }
+                            
+                            onClicked: {
+                                console.log("🗑️ Confirmando eliminación de consulta...")
+                                
+                                var consultaId = parseInt(consultaIdToDelete)
+                                if (consultaModel.eliminar_consulta(consultaId)) {
+                                    selectedRowIndex = -1
+                                    updatePaginatedModel()
+                                    console.log("✅ Consulta eliminada de BD ID:", consultaId)
+                                    showNotification("Éxito", "Consulta eliminada correctamente")
+                                } else {
+                                    console.log("❌ Error eliminando consulta ID:", consultaId)
+                                    showNotification("Error", "No se pudo eliminar la consulta")
+                                }
+                                
+                                showConfirmDeleteDialog = false
+                                consultaIdToDelete = ""
+                            }
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
+                    }
                 }
             }
         }

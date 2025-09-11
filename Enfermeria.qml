@@ -22,6 +22,10 @@ Item {
     readonly property real iconSize: Math.max(baseUnit * 3, 24)
     readonly property real buttonIconSize: Math.max(baseUnit * 2, 18)
     
+    // PROPIEDADES PARA DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    property string procedimientoIdToDelete: ""
+    property bool showConfirmDeleteDialog: false
+
     // PROPIEDADES DE COLOR (sin cambios)
     readonly property color primaryColor: "#e91e63"
     readonly property color primaryColorHover: "#d81b60"
@@ -1139,7 +1143,6 @@ Item {
                                             
                                             onClicked: editarProcedimiento(index)
                                         }
-
                                         Button {
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
@@ -1157,7 +1160,8 @@ Item {
                                             onClicked: {
                                                 var procId = model.procedimientoId
                                                 if (procId && procId !== "N/A") {
-                                                    eliminarProcedimiento(procId)
+                                                    procedimientoIdToDelete = procId
+                                                    showConfirmDeleteDialog = true
                                                 }
                                             }
                                         }
@@ -1304,46 +1308,33 @@ Item {
         }
     }
 
-    // DIÁLOGO DE NUEVO PROCEDIMIENTO - DISEÑO MEJORADO BASADO EN CONSULTAS
-
-    Rectangle {
-        id: newProcedureDialog
-        anchors.fill: parent
-        color: "black"
-        opacity: showNewProcedureDialog ? 0.5 : 0
-        visible: opacity > 0
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                limpiarYCerrarDialogo()
-            }
-        }
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
-    }
-
-    Rectangle {
-        id: procedureForm
+    // DIÁLOGO MODAL DE NUEVO/EDITAR PROCEDIMIENTO (manteniendo diseño original)
+    Dialog {
+        id: procedureFormDialog
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.95, 700)
         height: Math.min(parent.height * 0.95, 800)
-        color: whiteColor
-        radius: baseUnit * 1.5
-        border.color: "#DDD"
-        border.width: 1
+        modal: true
+        closePolicy: Popup.NoAutoClose
         visible: showNewProcedureDialog
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -baseUnit
-            color: "transparent"
-            radius: parent.radius + baseUnit
-            border.color: "#20000000"
-            border.width: baseUnit
-            z: -1
+        
+        title: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: baseUnit * 1.5
+            border.color: "#DDD"
+            border.width: 1
+            
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -baseUnit
+                color: "transparent"
+                radius: parent.radius + baseUnit
+                border.color: "#20000000"
+                border.width: baseUnit
+                z: -1
+            }
         }
         
         property var procedimientoParaEditar: null
@@ -1352,62 +1343,58 @@ Item {
         property real calculatedUnitPrice: 0.0
         property real calculatedTotalPrice: 0.0
         
-    function updatePrices() {
-        if (procedureForm.selectedProcedureIndex >= 0 && tiposProcedimientos.length > 0) {
-            try {
-                var procedimiento = tiposProcedimientos[procedureForm.selectedProcedureIndex]
-                
-                var precioUnitario = 0
-                if (procedureForm.procedureType === "Emergencia") {
-                    precioUnitario = procedimiento.precioEmergencia || 0
-                } else {
-                    precioUnitario = procedimiento.precioNormal || 0
+        function updatePrices() {
+            if (procedureFormDialog.selectedProcedureIndex >= 0 && tiposProcedimientos.length > 0) {
+                try {
+                    var procedimiento = tiposProcedimientos[procedureFormDialog.selectedProcedureIndex]
+                    
+                    var precioUnitario = 0
+                    if (procedureFormDialog.procedureType === "Emergencia") {
+                        precioUnitario = procedimiento.precioEmergencia || 0
+                    } else {
+                        precioUnitario = procedimiento.precioNormal || 0
+                    }
+                    
+                    var cantidadActual = parseInt(cantidadTextField.text) || 0
+                    var precioTotal = precioUnitario * cantidadActual
+                    
+                    procedureFormDialog.calculatedUnitPrice = precioUnitario
+                    procedureFormDialog.calculatedTotalPrice = precioTotal
+                } catch (e) {
+                    console.log("Error calculando precios:", e)
+                    procedureFormDialog.calculatedUnitPrice = 0.0
+                    procedureFormDialog.calculatedTotalPrice = 0.0
                 }
-                
-                // Si el campo está vacío, cantidadActual es 0
-                var cantidadActual = parseInt(cantidadTextField.text) || 0
-                var precioTotal = precioUnitario * cantidadActual
-                
-                procedureForm.calculatedUnitPrice = precioUnitario
-                procedureForm.calculatedTotalPrice = precioTotal
-            } catch (e) {
-                console.log("Error calculando precios:", e)
-                procedureForm.calculatedUnitPrice = 0.0
-                procedureForm.calculatedTotalPrice = 0.0
+            } else {
+                procedureFormDialog.calculatedUnitPrice = 0.0
+                procedureFormDialog.calculatedTotalPrice = 0.0
             }
-        } else {
-            procedureForm.calculatedUnitPrice = 0.0
-            procedureForm.calculatedTotalPrice = 0.0
         }
-    }
-        
+            
         function loadEditData() {
-            if (!isEditMode || !procedureForm.procedimientoParaEditar) {
+            if (!isEditMode || !procedureFormDialog.procedimientoParaEditar) {
                 console.log("No hay datos para cargar en edición")
                 return
             }
             
-            var proc = procedureForm.procedimientoParaEditar
+            var proc = procedureFormDialog.procedimientoParaEditar
             console.log("Cargando datos para edición:", JSON.stringify(proc))
             
-            // Cargar datos del paciente
             cedulaPaciente.text = proc.cedula || ""
             if (cedulaPaciente.text.length >= 5) {
                 buscarPacientePorCedula(cedulaPaciente.text)
             }
             
-            // Cargar procedimiento
             if (proc.tipoProcedimiento) {
                 for (var i = 0; i < tiposProcedimientos.length; i++) {
                     if (tiposProcedimientos[i].nombre === proc.tipoProcedimiento) {
                         procedimientoCombo.currentIndex = i + 1
-                        procedureForm.selectedProcedureIndex = i
+                        procedureFormDialog.selectedProcedureIndex = i
                         break
                     }
                 }
             }
             
-            // Cargar trabajador
             if (proc.trabajadorRealizador) {
                 for (var j = 0; j < trabajadoresDisponibles.length; j++) {
                     var trabajador = trabajadoresDisponibles[j]
@@ -1419,29 +1406,25 @@ Item {
                 }
             }
             
-            // Cargar tipo
             if (proc.tipo === "Normal") {
                 normalRadio.checked = true
                 emergenciaRadio.checked = false
-                procedureForm.procedureType = "Normal"
+                procedureFormDialog.procedureType = "Normal"
             } else {
                 normalRadio.checked = false
                 emergenciaRadio.checked = true
-                procedureForm.procedureType = "Emergencia"
+                procedureFormDialog.procedureType = "Emergencia"
             }
             
-            // Cargar cantidad
             cantidadTextField.text = (parseInt(proc.cantidad) || 1).toString()
-            
-            // Actualizar precios
-            procedureForm.updatePrices()
+            procedureFormDialog.updatePrices()
             
             console.log("Datos de edición cargados correctamente")
         }
         
         onVisibleChanged: {
             if (visible) {
-                if (isEditMode && procedureForm.procedimientoParaEditar) {
+                if (isEditMode && procedureFormDialog.procedimientoParaEditar) {
                     loadEditData()
                 } else if (!isEditMode) {
                     limpiarDatosPaciente()
@@ -1451,10 +1434,10 @@ Item {
                     emergenciaRadio.checked = false
                     cantidadTextField.text = ""
                     descripcionProcedimiento.text = ""
-                    procedureForm.selectedProcedureIndex = -1
-                    procedureForm.calculatedUnitPrice = 0.0
-                    procedureForm.calculatedTotalPrice = 0.0
-                    procedureForm.procedimientoParaEditar = null
+                    procedureFormDialog.selectedProcedureIndex = -1
+                    procedureFormDialog.calculatedUnitPrice = 0.0
+                    procedureFormDialog.calculatedTotalPrice = 0.0
+                    procedureFormDialog.procedimientoParaEditar = null
                     cedulaPaciente.forceActiveFocus()
                 }
             }
@@ -1904,17 +1887,17 @@ Item {
                                     if (currentIndex > 0 && tiposProcedimientos.length > 0) {
                                         try {
                                             if (currentIndex - 1 < tiposProcedimientos.length) {
-                                                procedureForm.selectedProcedureIndex = currentIndex - 1
-                                                descripcionProcedimiento.text = tiposProcedimientos[procedureForm.selectedProcedureIndex].descripcion || ""
+                                                procedureFormDialog.selectedProcedureIndex = currentIndex - 1
+                                                descripcionProcedimiento.text = tiposProcedimientos[procedureFormDialog.selectedProcedureIndex].descripcion || ""
                                             }
                                         } catch (e) {
                                             console.log("Error en cambio de procedimiento:", e)
                                         }
                                     } else {
-                                        procedureForm.selectedProcedureIndex = -1
+                                        procedureFormDialog.selectedProcedureIndex = -1
                                         descripcionProcedimiento.text = ""
                                     }
-                                    procedureForm.updatePrices()
+                                    procedureFormDialog.updatePrices()
                                 }
                                 
                                 contentItem: Label {
@@ -2033,8 +2016,8 @@ Item {
                                     checked: true
                                     onCheckedChanged: {
                                         if (checked) {
-                                            procedureForm.procedureType = "Normal"
-                                            procedureForm.updatePrices()
+                                            procedureFormDialog.procedureType = "Normal"
+                                            procedureFormDialog.updatePrices()
                                         }
                                     }
                                     
@@ -2055,8 +2038,8 @@ Item {
                                     font.family: "Segoe UI, Arial, sans-serif"
                                     onCheckedChanged: {
                                         if (checked) {
-                                            procedureForm.procedureType = "Emergencia"
-                                            procedureForm.updatePrices()
+                                            procedureFormDialog.procedureType = "Emergencia"
+                                            procedureFormDialog.updatePrices()
                                         }
                                     }
                                     
@@ -2094,7 +2077,7 @@ Item {
                                     id: cantidadTextField
                                     Layout.preferredWidth: baseUnit * 12
                                     Layout.preferredHeight: baseUnit * 4
-                                    placeholderText: "1"  // Ejemplo
+                                    placeholderText: "1"
                                     inputMethodHints: Qt.ImhDigitsOnly
                                     validator: IntValidator { bottom: 1; top: 50 }
                                     font.pixelSize: fontBaseSize
@@ -2109,10 +2092,9 @@ Item {
                                     }
                                     
                                     onTextChanged: {
-                                        procedureForm.updatePrices()
+                                        procedureFormDialog.updatePrices()
                                     }
                                     
-                                    // Validamos al perder el foco
                                     onFocusChanged: {
                                         if (!focus) {
                                             var num = parseInt(text)
@@ -2172,15 +2154,15 @@ Item {
                         }
                         
                         Label {
-                            text: procedureForm.selectedProcedureIndex >= 0 ? 
-                                "Bs " + procedureForm.calculatedUnitPrice.toFixed(2) : "Seleccione procedimiento"
+                            text: procedureFormDialog.selectedProcedureIndex >= 0 ? 
+                                "Bs " + procedureFormDialog.calculatedUnitPrice.toFixed(2) : "Seleccione procedimiento"
                             font.bold: true
                             font.pixelSize: fontBaseSize
                             font.family: "Segoe UI, Arial, sans-serif"
-                            color: procedureForm.procedureType === "Emergencia" ? "#92400E" : "#047857"
+                            color: procedureFormDialog.procedureType === "Emergencia" ? "#92400E" : "#047857"
                             padding: baseUnit
                             background: Rectangle {
-                                color: procedureForm.procedureType === "Emergencia" ? warningColorLight : successColorLight
+                                color: procedureFormDialog.procedureType === "Emergencia" ? warningColorLight : successColorLight
                                 radius: baseUnit * 0.8
                             }
                         }
@@ -2218,17 +2200,17 @@ Item {
                         }
                         
                         Label {
-                            text: procedureForm.selectedProcedureIndex >= 0 ? 
-                                "Bs " + procedureForm.calculatedTotalPrice.toFixed(2) : "Bs 0.00"
+                            text: procedureFormDialog.selectedProcedureIndex >= 0 ? 
+                                "Bs " + procedureFormDialog.calculatedTotalPrice.toFixed(2) : "Bs 0.00"
                             font.bold: true
                             font.pixelSize: fontBaseSize * 1.4
                             font.family: "Segoe UI, Arial, sans-serif"
-                            color: procedureForm.procedureType === "Emergencia" ? "#92400E" : "#047857"
+                            color: procedureFormDialog.procedureType === "Emergencia" ? "#92400E" : "#047857"
                             padding: baseUnit * 1.5
                             background: Rectangle {
-                                color: procedureForm.procedureType === "Emergencia" ? warningColorLight : successColorLight
+                                color: procedureFormDialog.procedureType === "Emergencia" ? warningColorLight : successColorLight
                                 radius: baseUnit * 0.8
-                                border.color: procedureForm.procedureType === "Emergencia" ? warningColor : successColor
+                                border.color: procedureFormDialog.procedureType === "Emergencia" ? warningColor : successColor
                                 border.width: 2
                             }
                         }
@@ -2237,10 +2219,10 @@ Item {
                             Layout.columnSpan: 2
                             Layout.fillWidth: true
                             text: {
-                                if (procedureForm.selectedProcedureIndex >= 0) {
+                                if (procedureFormDialog.selectedProcedureIndex >= 0) {
                                     var cantidad = parseInt(cantidadTextField.text) || 1
-                                    return "(" + procedureForm.calculatedUnitPrice.toFixed(2) + " × " + 
-                                        cantidad + " = " + procedureForm.calculatedTotalPrice.toFixed(2) + ")"
+                                    return "(" + procedureFormDialog.calculatedUnitPrice.toFixed(2) + " × " + 
+                                        cantidad + " = " + procedureFormDialog.calculatedTotalPrice.toFixed(2) + ")"
                                 }
                                 return ""
                             }
@@ -2248,7 +2230,7 @@ Item {
                             font.pixelSize: fontBaseSize * 0.8
                             font.family: "Segoe UI, Arial, sans-serif"
                             horizontalAlignment: Text.AlignHCenter
-                            visible: procedureForm.selectedProcedureIndex >= 0
+                            visible: procedureFormDialog.selectedProcedureIndex >= 0
                         }
                     }
                 }
@@ -2295,7 +2277,7 @@ Item {
             Button {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
-                    var tieneProcedimiento = procedureForm.selectedProcedureIndex >= 0
+                    var tieneProcedimiento = procedureFormDialog.selectedProcedureIndex >= 0
                     var tieneCedula = cedulaPaciente.text.length >= 5
                     var tieneNombre = nombrePaciente.text.length >= 2
                     var tieneTrabajador = trabajadorCombo.currentIndex > 0
@@ -2355,6 +2337,239 @@ Item {
                 onClicked: {
                     if (formEnabled) {
                         guardarProcedimiento()
+                    }
+                }
+            }
+        }
+    }
+
+    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    Dialog {
+        id: confirmDeleteDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.9, 480)
+        height: Math.min(parent.height * 0.55, 320)
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        visible: showConfirmDeleteDialog
+        
+        title: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: baseUnit * 0.8
+            border.color: "#e0e0e0"
+            border.width: 1
+            
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -3
+                color: "transparent"
+                radius: parent.radius + 3
+                border.color: "#30000000"
+                border.width: 3
+                z: -1
+            }
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+            
+            // Header personalizado con ícono
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 75
+                color: "#fff5f5"
+                radius: baseUnit * 0.8
+                
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: baseUnit * 0.8
+                    color: parent.color
+                }
+                
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: baseUnit * 2
+                    
+                    Rectangle {
+                        Layout.preferredWidth: 45
+                        Layout.preferredHeight: 45
+                        color: "#fee2e2"
+                        radius: 22
+                        border.color: "#fecaca"
+                        border.width: 2
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "⚠️"
+                            font.pixelSize: fontBaseSize * 1.8
+                        }
+                    }
+                    
+                    ColumnLayout {
+                        spacing: baseUnit * 0.25
+                        
+                        Label {
+                            text: "Confirmar Eliminación"
+                            font.pixelSize: fontBaseSize * 1.3
+                            font.bold: true
+                            color: "#dc2626"
+                            Layout.alignment: Qt.AlignLeft
+                        }
+                        
+                        Label {
+                            text: "Acción irreversible"
+                            font.pixelSize: fontBaseSize * 0.9
+                            color: "#7f8c8d"
+                            Layout.alignment: Qt.AlignLeft
+                        }
+                    }
+                }
+            }
+            
+            // Contenido principal
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "transparent"
+                
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: baseUnit * 2
+                    spacing: baseUnit
+                    
+                    Item { Layout.preferredHeight: baseUnit * 0.5 }
+                    
+                    Label {
+                        text: "¿Estás seguro de eliminar este procedimiento?"
+                        font.pixelSize: fontBaseSize * 1.1
+                        font.bold: true
+                        color: textColor
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        font.family: "Segoe UI, Arial, sans-serif"
+                    }
+                    
+                    Label {
+                        text: "Esta acción no se puede deshacer y el registro del procedimiento se eliminará permanentemente."
+                        font.pixelSize: fontBaseSize
+                        color: "#6b7280"
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.maximumWidth: parent.width - baseUnit * 4
+                        font.family: "Segoe UI, Arial, sans-serif"
+                    }
+                    
+                    Item { Layout.fillHeight: true }
+                    
+                    // Botones
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: baseUnit * 3
+                        Layout.bottomMargin: baseUnit
+                        Layout.topMargin: baseUnit
+                        
+                        Button {
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 45
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#e5e7eb" : 
+                                    (parent.hovered ? "#f3f4f6" : "#f9fafb")
+                                radius: baseUnit * 0.6
+                                border.color: "#d1d5db"
+                                border.width: 1
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: baseUnit * 0.5
+                                
+                                Label {
+                                    text: "✕"
+                                    color: "#6b7280"
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                Label {
+                                    text: "Cancelar"
+                                    color: "#374151"
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    Layout.alignment: Qt.AlignVCenter
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                            }
+                            
+                            onClicked: {
+                                showConfirmDeleteDialog = false
+                                procedimientoIdToDelete = ""
+                            }
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
+                        
+                        Button {
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 45
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#dc2626" : 
+                                    (parent.hovered ? "#ef4444" : "#f87171")
+                                radius: baseUnit * 0.6
+                                border.width: 0
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: baseUnit * 0.5
+                                
+                                Label {
+                                    text: "🗑️"
+                                    color: whiteColor
+                                    font.pixelSize: fontBaseSize * 0.9
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                Label {
+                                    text: "Eliminar"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize
+                                    Layout.alignment: Qt.AlignVCenter
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                            }
+                            
+                            onClicked: {
+                                console.log("🗑️ Confirmando eliminación de procedimiento...")
+                                
+                                var procedimientoId = parseInt(procedimientoIdToDelete)
+                                eliminarProcedimiento(procedimientoId)
+                                
+                                showConfirmDeleteDialog = false
+                                procedimientoIdToDelete = ""
+                            }
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
                     }
                 }
             }
@@ -2784,13 +2999,12 @@ Item {
             var datosProcedimiento = {
                 paciente: (nombrePaciente.text + " " + apellidoPaterno.text + " " + apellidoMaterno.text).trim(),
                 cedula: cedulaPaciente.text.trim(),
-                idProcedimiento: procedureForm.selectedProcedureIndex + 1,
-                // CORRECCIÓN: Usar cantidadTextField en lugar de cantidadSpinBox
+                idProcedimiento: procedureFormDialog.selectedProcedureIndex + 1,  // ← CORREGIDO
                 cantidad: parseInt(cantidadTextField.text) || 1,
-                tipo: procedureForm.procedureType,
+                tipo: procedureFormDialog.procedureType,  // ← CORREGIDO
                 idTrabajador: trabajadorIdReal,
-                precioUnitario: procedureForm.calculatedUnitPrice,
-                precioTotal: procedureForm.calculatedTotalPrice
+                precioUnitario: procedureFormDialog.calculatedUnitPrice,  // ← CORREGIDO
+                precioTotal: procedureFormDialog.calculatedTotalPrice  // ← CORREGIDO
             }
             
             console.log("📋 Datos del procedimiento:", JSON.stringify(datosProcedimiento, null, 2))
@@ -2799,9 +3013,9 @@ Item {
             formEnabled = false
             
             // Lógica separada: CREAR vs ACTUALIZAR
-            if (isEditMode && procedureForm.procedimientoParaEditar) {
+            if (isEditMode && procedureFormDialog.procedimientoParaEditar) {
                 // MODO EDICIÓN
-                var procedimientoId = parseInt(procedureForm.procedimientoParaEditar.procedimientoId)
+                var procedimientoId = parseInt(procedureFormDialog.procedimientoParaEditar.procedimientoId) 
                 
                 console.log("✏️ Actualizando procedimiento ID:", procedimientoId)
                 
@@ -2835,7 +3049,7 @@ Item {
             console.log("📋 Cargando datos para edición:", JSON.stringify(procedimiento))
             
             // Crear objeto para editar con validaciones
-            procedureForm.procedimientoParaEditar = {
+            procedureFormDialog.procedimientoParaEditar = {
                 procedimientoId: procedimiento.procedimientoId || "N/A",
                 paciente: procedimiento.paciente || "Sin nombre",
                 cedula: procedimiento.cedula || "",
@@ -2867,6 +3081,7 @@ Item {
                 console.log("🗑️ Eliminando procedimiento ID:", intId)
                 enfermeriaModel.eliminar_procedimiento(intId)
                 selectedRowIndex = -1
+                showNotification("Éxito", "Procedimiento eliminado correctamente")
             }
         } catch (error) {
             console.log("❌ Error eliminando procedimiento:", error)
@@ -2896,7 +3111,7 @@ Item {
             selectedRowIndex = -1
             isEditMode = false
             editingIndex = -1
-            procedureForm.procedimientoParaEditar = null
+            procedureFormDialog.procedimientoParaEditar = null
             clearAllFields()
             console.log("✅ Diálogo cerrado y limpiado correctamente")
         } catch (error) {
@@ -2905,7 +3120,6 @@ Item {
             formEnabled = true
         }
     }
-    
     function clearAllFields() {
         console.log("🧹 Limpiando todos los campos del formulario...")
         
@@ -2924,14 +3138,14 @@ Item {
             if (emergenciaRadio) emergenciaRadio.checked = false
             
             // Resetear cantidad
-            if (cantidadSpinBox) cantidadSpinBox.value = 1
+            if (cantidadTextField) cantidadTextField.text = ""  // ← CORREGIDO
             
             // Resetear propiedades del formulario
-            if (procedureForm) {
-                procedureForm.selectedProcedureIndex = -1
-                procedureForm.calculatedUnitPrice = 0.0
-                procedureForm.calculatedTotalPrice = 0.0
-                procedureForm.procedureType = "Normal"
+            if (procedureFormDialog) {  // ← CORREGIDO
+                procedureFormDialog.selectedProcedureIndex = -1  // ← CORREGIDO
+                procedureFormDialog.calculatedUnitPrice = 0.0  // ← CORREGIDO
+                procedureFormDialog.calculatedTotalPrice = 0.0  // ← CORREGIDO
+                procedureFormDialog.procedureType = "Normal"  // ← CORREGIDO
             }
             
             console.log("✅ Campos limpiados correctamente")
