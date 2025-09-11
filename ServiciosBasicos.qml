@@ -1408,340 +1408,363 @@ Item {
         }
     }
 
-    // ✅ DIÁLOGO DE NUEVO GASTO - ACTUALIZADO CON COMBOBOX DE PROVEEDORES
-    Rectangle {
+    // ✅ DIÁLOGO DE NUEVO GASTO - CON BLOQUEO TOTAL COMO EL DE ELIMINAR
+    Dialog {
         id: gastoForm
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.7, 500)
         height: Math.min(parent.height * 0.75, 550)
-        color: whiteColor
-        radius: 8
-        border.color: "#DDD"
-        border.width: 1
+        modal: true
+        closePolicy: Popup.NoAutoClose
         visible: showNewGastoDialog
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -baseUnit
-            color: "transparent"
-            radius: parent.radius + baseUnit
-            border.color: "#20000000"
-            border.width: baseUnit
-            z: -1
-        }
         
         property int selectedTipoGastoIndex: -1
-        property int selectedProveedorIndex: -1  // ✅ NUEVA PROPERTY
+        property int selectedProveedorIndex: -1
         
-        // HEADER
-        Rectangle {
-            id: dialogHeader
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 50
-            color: primaryColor
+        // Remover el título por defecto para usar nuestro diseño personalizado
+        title: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: 8
+            border.color: "#DDD"
+            border.width: 1
             
-            Label {
-                anchors.centerIn: parent
-                text: isEditMode ? "EDITAR GASTO" : "NUEVO GASTO"
-                font.pixelSize: 16
-                font.bold: true
-                color: whiteColor
+            // Sombra sutil
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -baseUnit
+                color: "transparent"
+                radius: parent.radius + baseUnit
+                border.color: "#20000000"
+                border.width: baseUnit
+                z: -1
             }
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
             
-            Button {
-                anchors.right: parent.right
-                anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                width: 30
-                height: 30
-                background: Rectangle {
-                    color: "transparent"
-                    radius: width / 2
+            // HEADER
+            Rectangle {
+                id: dialogHeader
+                Layout.fillWidth: true
+                Layout.preferredHeight: 50
+                color: primaryColor
+                radius: 8
+                
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 8
+                    color: parent.color
                 }
                 
-                contentItem: Text {
-                    text: "×"
-                    color: whiteColor
-                    font.pixelSize: 20
+                Label {
+                    anchors.centerIn: parent
+                    text: isEditMode ? "EDITAR GASTO" : "NUEVO GASTO"
+                    font.pixelSize: 16
                     font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                    color: whiteColor
                 }
                 
-                onClicked: {
-                    showNewGastoDialog = false
-                    selectedRowIndex = -1
-                    isEditMode = false
-                    editingGastoData = null
-                }
-            }
-        }
-        
-        // CONTENIDO PRINCIPAL
-        ScrollView {
-            id: scrollView
-            anchors.top: dialogHeader.bottom
-            anchors.topMargin: 15
-            anchors.bottom: buttonRow.top
-            anchors.bottomMargin: 15
-            anchors.left: parent.left
-            anchors.leftMargin: 20
-            anchors.right: parent.right
-            anchors.rightMargin: 20
-            clip: true
-            
-            Column {
-                width: scrollView.width - 5
-                spacing: 15
-                
-                // CAMPO TIPO DE GASTO
-                Column {
-                    width: parent.width
-                    spacing: 5
+                Button {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 30
+                    height: 30
+                    background: Rectangle {
+                        color: "transparent"
+                        radius: width / 2
+                    }
                     
-                    Label {
-                        text: "Tipo de Gasto:"
+                    contentItem: Text {
+                        text: "×"
+                        color: whiteColor
+                        font.pixelSize: 20
                         font.bold: true
-                        color: textColor
-                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     
-                    ComboBox {
-                        id: tipoGastoCombo
-                        width: parent.width
-                        height: 40
-                        model: getTiposGastosParaCombo()
-                        onCurrentIndexChanged: {
-                            if (currentIndex > 0) {
-                                gastoForm.selectedTipoGastoIndex = currentIndex - 1
-                            } else {
-                                gastoForm.selectedTipoGastoIndex = -1
-                            }
-                        }
-                    }
-                }
-                
-                // CAMPO MONTO
-                Column {
-                    width: parent.width
-                    spacing: 5
-                    
-                    Label {
-                        text: "Monto (Bs):"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: 14
-                    }
-                    
-                    TextField {
-                        id: montoField
-                        width: parent.width
-                        height: 40
-                        placeholderText: "0.00"
-                        validator: DoubleValidator { bottom: 0.0; decimals: 2 }
-                    }
-                }
-                
-                // CAMPO FECHA
-                Column {
-                    width: parent.width
-                    spacing: 5
-                    
-                    Label {
-                        text: "Fecha del Gasto:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: 14
-                    }
-                    
-                    TextField {
-                        id: fechaGastoField
-                        width: parent.width
-                        height: 40
-                        placeholderText: "YYYY-MM-DD"
-                        text: Qt.formatDate(new Date(), "yyyy-MM-dd")
-                        inputMethodHints: Qt.ImhDate  
-
-                        // ✅ NUEVA VALIDACIÓN EN TIEMPO REAL
-                        onTextChanged: {
-                            var datePattern = /^\d{4}-\d{2}-\d{2}$/
-                            if (text.length === 10 && !datePattern.test(text)) {
-                                color = "#e74c3c"  // Rojo si formato incorrecto
-                            } else {
-                                color = "#2c3e50"  // Normal
-                            }
-                        }
-                    }
-                }
-                
-                // ✅ CAMPO PROVEEDOR - CAMBIO DE TEXTFIELD A COMBOBOX
-                Column {
-                    width: parent.width
-                    spacing: 5
-                    
-                    Label {
-                        text: "Proveedor/Empresa:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: 14
-                    }
-                    
-                    ComboBox {
-                        id: proveedorCombo
-                        width: parent.width
-                        height: 40
-                        model: getProveedoresParaCombo()
-                        onCurrentIndexChanged: {
-                            if (currentIndex > 0) {
-                                gastoForm.selectedProveedorIndex = currentIndex - 1
-                            } else {
-                                gastoForm.selectedProveedorIndex = -1
-                            }
-                        }
-                    }
-                }
-                
-                // CAMPO DESCRIPCIÓN
-                Column {
-                    width: parent.width
-                    spacing: 5
-                    
-                    Label {
-                        text: "Descripción:"
-                        font.bold: true
-                        color: textColor
-                        font.pixelSize: 14
-                    }
-                    
-                    TextArea {
-                        id: descripcionField
-                        width: parent.width
-                        height: 100
-                        placeholderText: "Descripción detallada del gasto..."
-                        wrapMode: TextArea.Wrap
+                    onClicked: {
+                        showNewGastoDialog = false
+                        selectedRowIndex = -1
+                        isEditMode = false
+                        editingGastoData = null
                     }
                 }
             }
-        }
-        
-        // BOTONES
-        Row {
-            id: buttonRow
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 15
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 15
-            height: 40
             
-            Button {
-                id: cancelButton
-                width: 120
-                height: 40
-                text: "Cancelar"
+            // CONTENIDO PRINCIPAL
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "transparent"
                 
-                background: Rectangle {
-                    color: cancelButton.pressed ? "#e0e0e0" : "#f8f9fa"
-                    border.color: "#ddd"
-                    border.width: 1
-                    radius: 5
-                }
-                
-                contentItem: Label {
-                    text: parent.text
-                    font.pixelSize: 14
-                    color: textColor
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                
-                onClicked: {
-                    showNewGastoDialog = false
-                    selectedRowIndex = -1
-                    isEditMode = false
-                    editingGastoData = null
-                }
-            }
-            
-            Button {
-                id: saveButton
-                width: 120
-                height: 40
-                text: isEditMode ? "Actualizar" : "Guardar"
-                enabled: gastoForm.selectedTipoGastoIndex >= 0 && 
-                    descripcionField.text.length > 0 &&
-                    montoField.text.length > 0 &&
-                    gastoForm.selectedProveedorIndex >= 0 &&
-                    fechaGastoField.text.length > 0 
+                ScrollView {
+                    id: scrollView
+                    anchors.fill: parent
+                    anchors.margins: 20
+                    anchors.topMargin: 15
+                    anchors.bottomMargin: 70
+                    clip: true
+                    
+                    Column {
+                        width: scrollView.width - 5
+                        spacing: 15
                         
-                
-                background: Rectangle {
-                    color: !saveButton.enabled ? "#bdc3c7" : 
-                        (saveButton.pressed ? Qt.darker(primaryColor, 1.1) : primaryColor)
-                    radius: 5
+                        // CAMPO TIPO DE GASTO
+                        Column {
+                            width: parent.width
+                            spacing: 5
+                            
+                            Label {
+                                text: "Tipo de Gasto:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: 14
+                            }
+                            
+                            ComboBox {
+                                id: tipoGastoCombo
+                                width: parent.width
+                                height: 40
+                                model: getTiposGastosParaCombo()
+                                onCurrentIndexChanged: {
+                                    if (currentIndex > 0) {
+                                        gastoForm.selectedTipoGastoIndex = currentIndex - 1
+                                    } else {
+                                        gastoForm.selectedTipoGastoIndex = -1
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // CAMPO MONTO
+                        Column {
+                            width: parent.width
+                            spacing: 5
+                            
+                            Label {
+                                text: "Monto (Bs):"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: 14
+                            }
+                            
+                            TextField {
+                                id: montoField
+                                width: parent.width
+                                height: 40
+                                placeholderText: "0.00"
+                                validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                            }
+                        }
+                        
+                        // CAMPO FECHA
+                        Column {
+                            width: parent.width
+                            spacing: 5
+                            
+                            Label {
+                                text: "Fecha del Gasto:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: 14
+                            }
+                            
+                            TextField {
+                                id: fechaGastoField
+                                width: parent.width
+                                height: 40
+                                placeholderText: "YYYY-MM-DD"
+                                text: Qt.formatDate(new Date(), "yyyy-MM-dd")
+                                inputMethodHints: Qt.ImhDate  
+
+                                onTextChanged: {
+                                    var datePattern = /^\d{4}-\d{2}-\d{2}$/
+                                    if (text.length === 10 && !datePattern.test(text)) {
+                                        color = "#e74c3c"
+                                    } else {
+                                        color = "#2c3e50"
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // CAMPO PROVEEDOR
+                        Column {
+                            width: parent.width
+                            spacing: 5
+                            
+                            Label {
+                                text: "Proveedor/Empresa:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: 14
+                            }
+                            
+                            ComboBox {
+                                id: proveedorCombo
+                                width: parent.width
+                                height: 40
+                                model: getProveedoresParaCombo()
+                                onCurrentIndexChanged: {
+                                    if (currentIndex > 0) {
+                                        gastoForm.selectedProveedorIndex = currentIndex - 1
+                                    } else {
+                                        gastoForm.selectedProveedorIndex = -1
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // CAMPO DESCRIPCIÓN
+                        Column {
+                            width: parent.width
+                            spacing: 5
+                            
+                            Label {
+                                text: "Descripción:"
+                                font.bold: true
+                                color: textColor
+                                font.pixelSize: 14
+                            }
+                            
+                            TextArea {
+                                id: descripcionField
+                                width: parent.width
+                                height: 100
+                                placeholderText: "Descripción detallada del gasto..."
+                                wrapMode: TextArea.Wrap
+                            }
+                        }
+                    }
                 }
+            }
+            
+            // BOTONES
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 70
+                color: "transparent"
                 
-                contentItem: Label {
-                    text: parent.text
-                    font.pixelSize: 14
-                    font.bold: true
-                    color: whiteColor
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                
-                onClicked: {
-                    // Validaciones adicionales
-                    if (gastoForm.selectedTipoGastoIndex < 0) {
-                        showErrorMessage("Error de validación", "Selecciona un tipo de gasto")
-                        return
+                Row {
+                    id: buttonRow
+                    anchors.centerIn: parent
+                    spacing: 15
+                    
+                    Button {
+                        id: cancelButton
+                        width: 120
+                        height: 40
+                        text: "Cancelar"
+                        
+                        background: Rectangle {
+                            color: cancelButton.pressed ? "#e0e0e0" : "#f8f9fa"
+                            border.color: "#ddd"
+                            border.width: 1
+                            radius: 5
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            font.pixelSize: 14
+                            color: textColor
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            showNewGastoDialog = false
+                            selectedRowIndex = -1
+                            isEditMode = false
+                            editingGastoData = null
+                        }
                     }
                     
-                    if (gastoForm.selectedProveedorIndex < 0) {
-                        showErrorMessage("Error de validación", "Selecciona un proveedor")
-                        return
-                    }
-                    
-                    if (parseFloat(montoField.text) <= 0) {
-                        showErrorMessage("Error de validación", "El monto debe ser mayor a 0")
-                        return
-                    }
-                    if (!fechaGastoField.text || fechaGastoField.text.length < 10) {
-                        showErrorMessage("Error de validación", "Ingresa una fecha válida (YYYY-MM-DD)")
-                        return
-                    }
-                    
-                    // ✅ OBTENER NOMBRE DEL PROVEEDOR SELECCIONADO
-                    var proveedorSeleccionado = proveedoresModel.get(gastoForm.selectedProveedorIndex)
-                    var proveedorNombre = proveedorSeleccionado.nombre
-                    
-                    var gastoData = {
-                        descripcion: descripcionField.text.trim(),
-                        monto: parseFloat(montoField.text).toFixed(2),
-                        fechaGasto: fechaGastoField.text,
-                        proveedor: proveedorNombre  // ✅ USAR NOMBRE DEL PROVEEDOR
-                    }
-                    
-                    console.log("Enviando datos del formulario:", JSON.stringify(gastoData))
-                    
-                    var success = false
-                    
-                    // ✅ USAR LAS FUNCIONES DIRECTAS CORREGIDAS
-                    if (isEditMode && editingGastoData) {
-                        success = actualizarGastoDirecto(editingGastoData.gastoId, gastoData)
-                    } else {
-                        success = crearGastoDirecto(gastoData)
-                    }
-                    
-                    if (!success) {
-                        showErrorMessage("Error", "No se pudo guardar el gasto. Revisa los datos.")
+                    Button {
+                        id: saveButton
+                        width: 120
+                        height: 40
+                        text: isEditMode ? "Actualizar" : "Guardar"
+                        enabled: gastoForm.selectedTipoGastoIndex >= 0 && 
+                            descripcionField.text.length > 0 &&
+                            montoField.text.length > 0 &&
+                            gastoForm.selectedProveedorIndex >= 0 &&
+                            fechaGastoField.text.length > 0 
+                                
+                        
+                        background: Rectangle {
+                            color: !saveButton.enabled ? "#bdc3c7" : 
+                                (saveButton.pressed ? Qt.darker(primaryColor, 1.1) : primaryColor)
+                            radius: 5
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            font.pixelSize: 14
+                            font.bold: true
+                            color: whiteColor
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            // Validaciones adicionales
+                            if (gastoForm.selectedTipoGastoIndex < 0) {
+                                showErrorMessage("Error de validación", "Selecciona un tipo de gasto")
+                                return
+                            }
+                            
+                            if (gastoForm.selectedProveedorIndex < 0) {
+                                showErrorMessage("Error de validación", "Selecciona un proveedor")
+                                return
+                            }
+                            
+                            if (parseFloat(montoField.text) <= 0) {
+                                showErrorMessage("Error de validación", "El monto debe ser mayor a 0")
+                                return
+                            }
+                            if (!fechaGastoField.text || fechaGastoField.text.length < 10) {
+                                showErrorMessage("Error de validación", "Ingresa una fecha válida (YYYY-MM-DD)")
+                                return
+                            }
+                            
+                            var proveedorSeleccionado = proveedoresModel.get(gastoForm.selectedProveedorIndex)
+                            var proveedorNombre = proveedorSeleccionado.nombre
+                            
+                            var gastoData = {
+                                descripcion: descripcionField.text.trim(),
+                                monto: parseFloat(montoField.text).toFixed(2),
+                                fechaGasto: fechaGastoField.text,
+                                proveedor: proveedorNombre
+                            }
+                            
+                            console.log("Enviando datos del formulario:", JSON.stringify(gastoData))
+                            
+                            var success = false
+                            
+                            if (isEditMode && editingGastoData) {
+                                success = actualizarGastoDirecto(editingGastoData.gastoId, gastoData)
+                            } else {
+                                success = crearGastoDirecto(gastoData)
+                            }
+                            
+                            if (!success) {
+                                showErrorMessage("Error", "No se pudo guardar el gasto. Revisa los datos.")
+                            }
+                        }
                     }
                 }
             }
         }
         
-        // ✅ CARGAR DATOS EN MODO EDICIÓN - ACTUALIZADO PARA PROVEEDORES
+        // CARGAR DATOS EN MODO EDICIÓN
         onVisibleChanged: {
             if (visible && isEditMode) {
                 // Buscar el tipo de gasto correspondiente
@@ -1754,7 +1777,7 @@ Item {
                     }
                 }
                 
-                // ✅ BUSCAR EL PROVEEDOR CORRESPONDIENTE
+                // Buscar el proveedor correspondiente
                 var proveedorNombre = editingGastoData.proveedor
                 for (var j = 0; j < proveedoresModel.count; j++) {
                     if (proveedoresModel.get(j).nombre === proveedorNombre) {
@@ -1771,113 +1794,250 @@ Item {
             } else if (visible && !isEditMode) {
                 // Limpiar formulario para nuevo gasto
                 tipoGastoCombo.currentIndex = 0
-                proveedorCombo.currentIndex = 0  // ✅ LIMPIAR COMBOBOX DE PROVEEDOR
+                proveedorCombo.currentIndex = 0
                 descripcionField.text = ""
                 montoField.text = ""
                 fechaGastoField.text = Qt.formatDate(new Date(), "yyyy-MM-dd")
                 gastoForm.selectedTipoGastoIndex = -1
-                gastoForm.selectedProveedorIndex = -1  // ✅ LIMPIAR ÍNDICE PROVEEDOR
+                gastoForm.selectedProveedorIndex = -1
             }
         }
     }
 
-    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN MEJORADO
     Dialog {
         id: confirmDeleteDialog
         anchors.centerIn: parent
-        width: Math.min(parent.width * 0.8, 400)
-        height: Math.min(parent.height * 0.4, 200)
+        width: Math.min(parent.width * 0.9, 480)
+        height: Math.min(parent.height * 0.55, 320)
         modal: true
-        title: "Confirmar Eliminación"
+        closePolicy: Popup.NoAutoClose
         
         property string gastoIdToDelete: ""
         
+        // Remover el título por defecto para usar nuestro diseño personalizado
+        title: ""
+        
         background: Rectangle {
             color: whiteColor
-            radius: baseUnit * 0.5
-            border.color: warningColor
-            border.width: 2
+            radius: baseUnit * 0.8
+            border.color: "#e0e0e0"
+            border.width: 1
+            
+            // Sombra sutil
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -3
+                color: "transparent"
+                radius: parent.radius + 3
+                border.color: "#30000000"
+                border.width: 3
+                z: -1
+            }
         }
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: marginLarge
-            spacing: marginLarge
+            spacing: 0
             
-            Label {
-                text: "⚠️ ¿Estás seguro de eliminar este gasto?"
-                font.pixelSize: fontMedium
-                font.bold: true
-                color: textColor
-                Layout.alignment: Qt.AlignHCenter
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-            }
-            
-            Label {
-                text: "Esta acción no se puede deshacer."
-                font.pixelSize: fontBase
-                color: "#7f8c8d"
-                Layout.alignment: Qt.AlignHCenter
-            }
-            
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: marginMedium
+            // Header personalizado con ícono
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 75
+                color: "#fff5f5"
+                radius: baseUnit * 0.8
                 
-                Button {
-                    text: "Cancelar"
-                    Layout.preferredWidth: 100
-                    
-                    background: Rectangle {
-                        color: lightGrayColor
-                        radius: baseUnit * 0.3
-                    }
-                    
-                    contentItem: Label {
-                        text: parent.text
-                        color: textColor
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    
-                    onClicked: confirmDeleteDialog.close()
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: baseUnit * 0.8
+                    color: parent.color
                 }
                 
-                Button {
-                    text: "Eliminar"
-                    Layout.preferredWidth: 100
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: marginMedium
                     
-                    background: Rectangle {
-                        color: dangerColor
-                        radius: baseUnit * 0.3
+                    // Ícono de advertencia
+                    Rectangle {
+                        Layout.preferredWidth: 45
+                        Layout.preferredHeight: 45
+                        color: "#fee2e2"
+                        radius: 22
+                        border.color: "#fecaca"
+                        border.width: 2
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "⚠️"
+                            font.pixelSize: fontLarge
+                        }
                     }
                     
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
+                    ColumnLayout {
+                        spacing: marginSmall * 0.25
+                        
+                        Label {
+                            text: "Confirmar Eliminación"
+                            font.pixelSize: fontLarge
+                            font.bold: true
+                            color: "#dc2626"
+                            Layout.alignment: Qt.AlignLeft
+                        }
+                        
+                        Label {
+                            text: "Acción irreversible"
+                            font.pixelSize: fontSmall
+                            color: "#7f8c8d"
+                            Layout.alignment: Qt.AlignLeft
+                        }
+                    }
+                }
+            }
+            
+            // Contenido principal
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "transparent"
+                
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: marginMedium
+                    spacing: marginSmall
+                    
+                    Item { Layout.preferredHeight: marginSmall * 0.5 }
+                    
+                    Label {
+                        text: "¿Estás seguro de eliminar este gasto?"
+                        font.pixelSize: fontMedium
                         font.bold: true
+                        color: textColor
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
                     }
                     
-                    onClicked: {
-                        console.log("🗑️ Confirmando eliminación...")
+                    Label {
+                        text: "Esta acción no se puede deshacer y el registro se eliminará permanentemente."
+                        font.pixelSize: fontBase
+                        color: "#6b7280"
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.maximumWidth: parent.width - marginMedium * 2
+                    }
+                    
+                    Item { Layout.fillHeight: true }
+                    
+                    // Botones mejorados
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: marginLarge
+                        Layout.bottomMargin: marginSmall
+                        Layout.topMargin: marginSmall
                         
-                        // ✅ USAR LA FUNCIÓN DIRECTA CORREGIDA
-                        var success = eliminarGastoDirecto(confirmDeleteDialog.gastoIdToDelete)
-                        
-                        if (!success) {
-                            showErrorMessage("Error", "No se pudo eliminar el gasto.")
+                        Button {
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 45
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#e5e7eb" : 
+                                    (parent.hovered ? "#f3f4f6" : "#f9fafb")
+                                radius: baseUnit * 0.6
+                                border.color: "#d1d5db"
+                                border.width: 1
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: marginSmall * 0.5
+                                
+                                Label {
+                                    text: "✕"
+                                    color: "#6b7280"
+                                    font.pixelSize: fontSmall
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                Label {
+                                    text: "Cancelar"
+                                    color: "#374151"
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                            }
+                            
+                            onClicked: confirmDeleteDialog.close()
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
                         }
                         
-                        selectedRowIndex = -1
-                        confirmDeleteDialog.close()
+                        Button {
+                            Layout.preferredWidth: 130
+                            Layout.preferredHeight: 45
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#dc2626" : 
+                                    (parent.hovered ? "#ef4444" : "#f87171")
+                                radius: baseUnit * 0.6
+                                border.width: 0
+                                
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            
+                            contentItem: RowLayout {
+                                spacing: marginSmall * 0.5
+                                
+                                Label {
+                                    text: "🗑️"
+                                    color: whiteColor
+                                    font.pixelSize: fontSmall
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                                
+                                Label {
+                                    text: "Eliminar"
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                            }
+                            
+                            onClicked: {
+                                console.log("🗑️ Confirmando eliminación...")
+                                
+                                // ✅ USAR LA FUNCIÓN DIRECTA CORREGIDA
+                                var success = eliminarGastoDirecto(confirmDeleteDialog.gastoIdToDelete)
+                                
+                                if (!success) {
+                                    showErrorMessage("Error", "No se pudo eliminar el gasto.")
+                                }
+                                
+                                selectedRowIndex = -1
+                                confirmDeleteDialog.close()
+                            }
+                            
+                            HoverHandler {
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    
+
     // COMPONENTE DE LOADING
     Rectangle {
         id: loadingIndicator
