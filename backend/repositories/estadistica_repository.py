@@ -357,7 +357,7 @@ class EstadisticaRepository(BaseRepository):
         SELECT 
             m.Nombre as marca,
             COUNT(p.id) as productos_marca,
-            SUM(p.Stock_Caja + p.Stock_Unitario) as stock_total_marca,
+            SUM(p.Stock_Caja * p.Stock_Unitario) as stock_total_marca,
             AVG(p.Precio_venta) as precio_promedio_marca
         FROM Marca m
         LEFT JOIN Productos p ON m.id = p.ID_Marca

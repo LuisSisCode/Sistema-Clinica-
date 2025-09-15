@@ -192,7 +192,8 @@ class ProveedorRepository(BaseRepository):
             c.Total,
             u.Nombre + ' ' + u.Apellido_Paterno as Usuario,
             COUNT(dc.id) as Items_Comprados,
-            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as Unidades_Totales
+            SUM(dc.Cantidad_Caja) as Total_Cajas,
+            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Total_Unidades
         FROM Compra c
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         LEFT JOIN DetalleCompra dc ON c.id = dc.Id_Compra

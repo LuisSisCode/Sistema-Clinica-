@@ -39,21 +39,23 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (codigo,), fetch_one=True)
     
     def get_productos_con_marca(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los productos con información de marca"""
+        """Obtiene todos los productos con información de marca - CORREGIDO"""
         query = """
         SELECT 
             p.id, p.Codigo, p.Nombre, p.Detalles as Producto_Detalles,
-            p.Precio_compra, p.Precio_venta, p.Stock_Caja, p.Stock_Unitario,
-            p.Unidad_Medida, p.Fecha_Venc,
+            p.Precio_compra, p.Precio_venta, p.Unidad_Medida, p.Fecha_Venc,
             m.id as Marca_ID, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
-            (p.Stock_Caja + p.Stock_Unitario) as Stock_Total
+            
+            -- CORRECCIÓN: Calcular stocks correctamente desde lotes
+            ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Caja,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
+            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         ORDER BY p.Nombre
         """
-        # DEBUG: Agregar logging detallado
         result = self._execute_query(query)
-        
         return result
     
     def buscar_productos(self, termino: str, incluir_sin_stock: bool = False) -> List[Dict[str, Any]]:
@@ -65,7 +67,8 @@ class ProductoRepository(BaseRepository):
         
         query = f"""
         SELECT p.*, m.Nombre as Marca_Nombre,
-               (p.Stock_Caja + p.Stock_Unitario) as Stock_Total
+                (SELECT ISNULL(SUM(l.Cantidad_Caja), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Total_Cajas,
+                (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Stock_Total
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?) {stock_condition}
@@ -75,14 +78,21 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (termino_like, termino_like))
     
     def get_productos_bajo_stock(self, stock_minimo: int = 10) -> List[Dict[str, Any]]:
-        """Obtiene productos con stock bajo"""
+        """Obtiene productos con stock bajo - CORREGIDO"""
         query = """
-        SELECT p.*, m.Nombre as Marca_Nombre,
-               (p.Stock_Caja + p.Stock_Unitario) as Stock_Total
+        SELECT 
+            p.*, m.Nombre as Marca_Nombre,
+            
+            -- CORRECCIÓN: Calcular stocks correctamente desde lotes
+            ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Total_Cajas,
+            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (p.Stock_Caja + p.Stock_Unitario) <= ?
-        ORDER BY (p.Stock_Caja + p.Stock_Unitario) ASC
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) 
+            FROM Lote l WHERE l.Id_Producto = p.id) <= ?
+        ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) 
+                FROM Lote l WHERE l.Id_Producto = p.id) ASC
         """
         return self._execute_query(query, (stock_minimo,), use_cache=False)
     

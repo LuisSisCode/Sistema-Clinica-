@@ -78,12 +78,6 @@ class CompraModel(QObject):
         print(f"🔍 DEBUG: Compras cargadas en __init__: {len(self._compras_recientes)}")
         self._cargar_proveedores()
         self._cargar_estadisticas()
-        # Inicializar filtros
-        self._filtro_periodo = ''
-        self._filtro_proveedor = 'all'
-        self._filtro_ordenamiento = 'fecha_desc'
-        self._filtro_busqueda = ''
-        
         print("📦 CompraModel inicializado")
     
     # ===============================
@@ -166,18 +160,7 @@ class CompraModel(QObject):
         total = len(self._compras_recientes)
         print(f"🔍 DEBUG Property: total_compras_mes = {total}")
         return total
-    
-    @Property('QVariant', notify=filtrosChanged)
-    def filtros_activos(self):
-        """Información de filtros activos"""
-        return {
-            'periodo': getattr(self, '_filtro_periodo', ''),
-            'proveedor': getattr(self, '_filtro_proveedor', 'all'),
-            'ordenamiento': getattr(self, '_filtro_ordenamiento', 'fecha_desc'),
-            'busqueda': getattr(self, '_filtro_busqueda', ''),
-            'total_activos': self._contar_filtros_activos()
-        }
-    
+
     # ===============================
     # SLOTS PARA QML - CONFIGURACIÓN
     # ===============================
@@ -307,14 +290,14 @@ class CompraModel(QObject):
                     item_existente = item
                     break
             
-            cantidad_total = cantidad_caja + cantidad_unitario
+            cantidad_total = cantidad_caja * cantidad_unitario
             subtotal = cantidad_total * precio_unitario
             
             if item_existente:
                 # Actualizar item existente
                 item_existente['cantidad_caja'] += cantidad_caja
                 item_existente['cantidad_unitario'] += cantidad_unitario
-                item_existente['cantidad_total'] = item_existente['cantidad_caja'] + item_existente['cantidad_unitario']
+                item_existente['cantidad_total'] = item_existente['cantidad_caja'] * item_existente['cantidad_unitario']
                 item_existente['subtotal'] = item_existente['cantidad_total'] * precio_unitario
                 item_existente['fecha_vencimiento'] = fecha_vencimiento  # Actualizar fecha
             else:
@@ -367,7 +350,7 @@ class CompraModel(QObject):
             if item['codigo'] == codigo.strip():
                 item['cantidad_caja'] = nueva_cantidad_caja
                 item['cantidad_unitario'] = nueva_cantidad_unitario
-                item['cantidad_total'] = nueva_cantidad_caja + nueva_cantidad_unitario
+                item['cantidad_total'] = nueva_cantidad_caja * nueva_cantidad_unitario
                 item['subtotal'] = item['cantidad_total'] * item['precio_unitario']
                 break
         
@@ -597,34 +580,7 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error obteniendo detalle compra: {str(e)}")
             return {}
     
-    @Slot(str, str)
-    def cargar_historial(self, fecha_desde: str, fecha_hasta: str):
-        """Carga historial de compras por período"""
-        self._set_loading(True)
-        
-        try:
-            if fecha_desde and fecha_hasta:
-                compras = safe_execute(
-                    self.compra_repo.get_compras_con_detalles,
-                    fecha_desde, fecha_hasta
-                )
-            else:
-                # Último mes por defecto
-                fecha_desde = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-                compras = safe_execute(
-                    self.compra_repo.get_compras_con_detalles,
-                    fecha_desde, None
-                )
-            
-            self._historial_compras = compras or []
-            self.historialComprasChanged.emit()
-            
-            print(f"📊 Historial compras cargado: {len(self._historial_compras)} compras")
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error cargando historial: {str(e)}")
-        finally:
-            self._set_loading(False)
+    
     
     @Slot(int)
     def cargar_top_productos_comprados(self, dias: int = 30):
@@ -735,49 +691,6 @@ class CompraModel(QObject):
             return False
         finally:
             self._set_loading(False)
-    
-    @Slot(int, result=bool) 
-    def duplicar_compra(self, compra_id: int) -> bool:
-        """Duplica una compra existente para facilitar edición"""
-        if compra_id <= 0:
-            self.operacionError.emit("ID de compra inválido")
-            return False
-        
-        try:
-            # Obtener compra original
-            compra_original = safe_execute(self.compra_repo.get_compra_completa, compra_id)
-            if not compra_original:
-                raise CompraError("Compra original no encontrada")
-            
-            # Preparar items para nueva compra
-            items_duplicados = []
-            for detalle in compra_original.get('detalles', []):
-                items_duplicados.append({
-                    'codigo': detalle.get('Producto_Codigo', ''),
-                    'cantidad_caja': detalle.get('Cantidad_Caja', 0),
-                    'cantidad_unitario': detalle.get('Cantidad_Unitario', 0),
-                    'precio_unitario': detalle.get('Precio_Unitario', 0),
-                    'fecha_vencimiento': (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
-                })
-            
-            # Crear nueva compra
-            nueva_compra = safe_execute(
-                self.compra_repo.crear_compra,
-                compra_original['Id_Proveedor'],
-                self._usuario_actual,
-                items_duplicados
-            )
-            
-            if nueva_compra:
-                self._cargar_compras_recientes()
-                self.operacionExitosa.emit(f"Compra duplicada: #{nueva_compra['id']}")
-                return True
-            else:
-                raise CompraError("Error creando compra duplicada")
-                
-        except Exception as e:
-            self.operacionError.emit(f"Error duplicando compra: {str(e)}")
-            return False
 
     @Slot()
     def refresh_proveedores(self):
@@ -844,43 +757,11 @@ class CompraModel(QObject):
         except Exception as e:
             print(f"  - Error consulta directa: {str(e)}")
 
-    @Slot(str)
-    def aplicar_filtro_periodo(self, periodo: str):
-        """Aplica filtro de período (today, week, 3months)"""
-        self._filtro_periodo = periodo
-        print(f"🗓️ Filtro período aplicado: {periodo}")
-        self._aplicar_filtros_compras()
 
-    @Slot(str)
     def aplicar_filtro_proveedor(self, proveedor_filtro: str):
         """Aplica filtro por proveedor"""
         self._filtro_proveedor = proveedor_filtro
         print(f"🏢 Filtro proveedor aplicado: {proveedor_filtro}")
-        self._aplicar_filtros_compras()
-
-    @Slot(str)
-    def aplicar_filtro_ordenamiento(self, orden: str):
-        """Aplica ordenamiento (fecha_desc, fecha_asc, monto_desc, etc.)"""
-        self._filtro_ordenamiento = orden
-        print(f"📊 Ordenamiento aplicado: {orden}")
-        self._aplicar_filtros_compras()
-
-    @Slot(str)
-    def aplicar_filtro_busqueda(self, termino: str):
-        """Aplica filtro de búsqueda general"""
-        self._filtro_busqueda = termino.strip()
-        print(f"🔍 Búsqueda aplicada: {self._filtro_busqueda}")
-        self._aplicar_filtros_compras()
-
-    @Slot()
-    def limpiar_todos_los_filtros(self):
-        """Limpia todos los filtros aplicados"""
-        self._filtro_periodo = ''
-        self._filtro_proveedor = 'all'
-        self._filtro_ordenamiento = 'fecha_desc'
-        self._filtro_busqueda = ''
-        
-        print("🧹 Todos los filtros limpiados")
         self._aplicar_filtros_compras()
 
     @Slot(result='QVariant')
@@ -1159,88 +1040,40 @@ class CompraModel(QObject):
             except Exception as e:
                 print(f"❌ Error conectando signals: {str(e)}")
 
-    def _contar_filtros_activos(self):
-        """Cuenta filtros activos"""
-        count = 0
-        if getattr(self, '_filtro_periodo', ''): count += 1
-        if getattr(self, '_filtro_proveedor', 'all') != 'all': count += 1
-        if getattr(self, '_filtro_ordenamiento', 'fecha_desc') != 'fecha_desc': count += 1
-        if getattr(self, '_filtro_busqueda', ''): count += 1
-        return count
-    # ===============================
-    # LÓGICA PRINCIPAL DE FILTROS
-    # ===============================
-
-    def _aplicar_filtros_compras(self):
-        """Aplica todos los filtros y actualiza compras_recientes"""
+    def crear_producto_completo(self, producto_data):
+        """Crea producto + primer lote desde QML"""
         try:
-            # Obtener fechas según período
-            fecha_desde, fecha_hasta = self._calcular_fechas_periodo(self._filtro_periodo)
-            
-            # Obtener ID proveedor
-            proveedor_id = None
-            if self._filtro_proveedor and self._filtro_proveedor != 'all':
-                try:
-                    proveedor_id = int(self._filtro_proveedor)
-                except ValueError:
-                    proveedor_id = None
-            
-            # Llamar al repository con filtros
-            compras_filtradas = safe_execute(
-                self.compra_repo.get_compras_filtradas,
-                fecha_desde=fecha_desde,
-                fecha_hasta=fecha_hasta,
-                proveedor_id=proveedor_id,
-                termino_busqueda=self._filtro_busqueda,
-                ordenamiento=self._filtro_ordenamiento
+            # Usar el producto_repo que ya tienes
+            resultado = safe_execute(
+                self.producto_repo.crear_producto_con_primer_lote,
+                producto_data
             )
             
-            # Procesar para QML
-            if compras_filtradas:
-                compras_transformadas = []
-                for compra_raw in compras_filtradas:
-                    compra_qml = self._format_compra_for_qml(compra_raw)
-                    compras_transformadas.append(compra_qml)
-                
-                self._compras_recientes = compras_transformadas
+            if resultado:
+                self.operacionExitosa.emit(f"Producto creado: {producto_data['nombre']}")
+                return True
             else:
-                self._compras_recientes = []
-            
-            # Emitir cambios
-            self.comprasRecientesChanged.emit()
-            self.filtrosChanged.emit()
-            
-            print(f"✅ Filtros aplicados: {len(self._compras_recientes)} compras encontradas")
-            
+                raise Exception("Error creando producto")
+                
         except Exception as e:
-            print(f"❌ Error aplicando filtros: {str(e)}")
-            self.operacionError.emit(f"Error aplicando filtros: {str(e)}")
+            self.operacionError.emit(f"Error: {str(e)}")
+            return False
 
-    def _calcular_fechas_periodo(self, periodo: str):
-        """Calcula fechas desde/hasta según período seleccionado"""
-        if not periodo:
-            return None, None
+    @Slot(result=list)
+    def get_marcas_disponibles(self):
+        """Obtiene marcas para el ComboBox"""
+        try:
+            return safe_execute(self.producto_repo.get_marcas_activas) or []
+        except Exception as e:
+            return []
         
-        hoy = datetime.now()
-        
-        if periodo == "today":
-            fecha_desde = hoy.strftime('%Y-%m-%d 00:00:00')
-            fecha_hasta = hoy.strftime('%Y-%m-%d 23:59:59')
-        elif periodo == "week":
-            # Hace 7 días hasta hoy
-            hace_semana = hoy - timedelta(days=7)
-            fecha_desde = hace_semana.strftime('%Y-%m-%d 00:00:00')
-            fecha_hasta = hoy.strftime('%Y-%m-%d 23:59:59')
-        elif periodo == "3months":
-            # Hace 3 meses hasta hoy
-            hace_3_meses = hoy - timedelta(days=90)
-            fecha_desde = hace_3_meses.strftime('%Y-%m-%d 00:00:00')
-            fecha_hasta = hoy.strftime('%Y-%m-%d 23:59:59')
-        else:
-            return None, None
-        
-        print(f"📅 Período {periodo}: {fecha_desde} a {fecha_hasta}")
-        return fecha_desde, fecha_hasta
+    # En CompraModel.py
+    def _validar_fecha_vencimiento(self, fecha_str):
+        """Convierte DD/MM/YYYY a YYYY-MM-DD"""
+        if '/' in fecha_str:
+            parts = fecha_str.split('/')
+            return f"{parts[2]}-{parts[1]}-{parts[0]}"
+        return fecha_str
 
 # Registrar el tipo para QML
 def register_compra_model():

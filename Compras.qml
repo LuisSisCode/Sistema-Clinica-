@@ -40,12 +40,6 @@ Item {
     property bool showDeleteConfirmDialog: false
     property var compraToDelete: null
 
-    // Filtros nuevos
-    property bool collapsibleFilters: false
-    property string currentPeriodFilter: ""
-    property string currentProveedorFilter: "all"
-    property string currentOrdenFilter: "fecha_desc"
-
     // MODELO PARA COMPRAS PAGINADAS
     ListModel {
         id: comprasPaginadasModel
@@ -53,20 +47,13 @@ Item {
     ListModel {
         id: detallesCompraModel
     }
-    
-    // CONEXIÓN CON DATOS CENTRALES
-    Connections {
-        target: compraModel
-        function onProveedoresChanged() {
-            cargarProveedoresEnCombo()
-        }
-        
-        function onComprasRecientesChanged() {
-            console.log("🚚 Compras: Compras recientes actualizadas")
-            actualizarPaginacionCompras()
+    // Detectar cuando el usuario regresa al módulo
+    onVisibleChanged: {
+        if (visible) {
+            console.log("🔄 Módulo compras visible, actualizando lista")
+            Qt.callLater(actualizarPaginacionCompras)
         }
     }
-    
     // FUNCIÓN para actualizar paginación de compras
     function actualizarPaginacionCompras() {
         if (!compraModel) return
@@ -126,6 +113,7 @@ Item {
         if (comprasPaginadasModel.count > 0) {
             console.log("🔍 DEBUG QML - Primer elemento en modelo:", JSON.stringify(comprasPaginadasModel.get(0)))
         }
+        console.log("📄 Vista actualizada: Página", currentPageCompras + 1, "de", totalPagesCompras)
     }
     
     // Función para obtener detalles de una compra
@@ -153,12 +141,11 @@ Item {
                     cantidad_caja: item.cantidad_caja || 0,
                     cantidad_unitario: item.cantidad_unitario || 0,
                     cantidad_total: item.cantidad_total || 0,
-                    precio_unitario: item.precio_unitario || 0,
-                    subtotal: item.subtotal || 0,
+                    // CORREGIDO: El precio ya es el costo total, no se multiplica
+                    costo_total: item.costo_total || item.precio_unitario || item.subtotal || 0,
                     fecha_vencimiento: item.fecha_vencimiento || "Sin fecha"
                 })
             }
-            
             console.log("📦 Items procesados en modal:", detallesCompraModel.count)
         } else {
             console.log("❌ No se encontraron detalles de productos")
@@ -312,579 +299,6 @@ Item {
                 }
             }
         }
-
-        // Filtros de búsqueda
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: collapsibleFilters ? 145 : 65
-            color: "#F8F9FA"
-            radius: 12
-            border.color: "#E9ECEF"
-            border.width: 1
-            
-            Behavior on Layout.preferredHeight {
-                NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
-            }
-            
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 10
-                spacing: 12
-                
-                // Fila principal de filtros básicos
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 16
-                    
-                    // Búsqueda general
-                    RowLayout {
-                        spacing: 8
-                        
-                        Rectangle {
-                            width: 32
-                            height: 32
-                            color: "#6C757D"
-                            radius: 16
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "🔍"
-                                font.pixelSize: 16
-                            }
-                        }
-                        
-                        TextField {
-                            id: searchField
-                            Layout.preferredWidth: 220
-                            Layout.preferredHeight: 40
-                            placeholderText: "Buscar por ID, proveedor, productos..."
-                            font.pixelSize: 14
-                            
-                            background: Rectangle {
-                                color: "#FFFFFF"
-                                radius: 20
-                                border.color: parent.activeFocus ? "#007BFF" : "#DEE2E6"
-                                border.width: 2
-                                
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                            }
-                            Timer {
-                                id: searchTimer
-                                interval: 500 // 500ms de delay
-                                onTriggered: {
-                                    if (compraModel) {
-                                        compraModel.aplicar_filtro_busqueda(searchField.text)
-                                    }
-                                }
-                            }
-                            
-                            leftPadding: 16
-                            rightPadding: 16
-                            onTextChanged: {
-                                searchTimer.restart()
-                            }
-                        }
-                    }
-                    
-                    // Separador visual
-                    Rectangle {
-                        width: 2
-                        height: 30
-                        color: "#DEE2E6"
-                        radius: 1
-                    }
-                    
-                    // Filtros rápidos de fecha
-                    RowLayout {
-                        spacing: 8
-                        
-                        Label {
-                            text: "Período:"
-                            color: "#495057"
-                            font.bold: true
-                            font.pixelSize: 12
-                        }
-                        
-                        // Botón Hoy - MEJORADO
-                        Button {
-                            id: todayBtn
-                            property bool isActive: currentPeriodFilter === "today"
-                            
-                            Layout.preferredWidth: 70
-                            Layout.preferredHeight: 32
-                            text: "Hoy"
-                            
-                            background: Rectangle {
-                                color: parent.isActive ? "#28A745" : 
-                                    parent.hovered ? "#E9F7EF" :
-                                    parent.pressed ? Qt.darker("#F8F9FA", 1.1) : "#F8F9FA"
-                                radius: 16
-                                border.color: parent.isActive ? "#28A745" : 
-                                    parent.hovered ? "#28A745" : "#DEE2E6"
-                                border.width: parent.isActive ? 2 : 1
-                                
-                                // Sombra cuando está activo
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.topMargin: 2
-                                    color: parent.parent.isActive ? "#00000020" : "transparent"
-                                    radius: 16
-                                    z: -1
-                                    visible: parent.parent.isActive
-                                }
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                            }
-                            
-                            contentItem: RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                
-                                Label {
-                                    text: "📅"
-                                    font.pixelSize: 10
-                                    visible: parent.parent.isActive
-                                }
-                                
-                                Label {
-                                    text: parent.parent.text
-                                    color: parent.parent.isActive ? "#FFFFFF" : "#495057"
-                                    font.bold: parent.parent.isActive
-                                    font.pixelSize: 11
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                            }
-                            
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    var nuevoEstado = currentPeriodFilter !== "today"
-                                    currentPeriodFilter = nuevoEstado ? "today" : ""
-                                    
-                                    console.log("Filtro período: today, activo:", nuevoEstado)
-                                    
-                                    if (compraModel) {
-                                        compraModel.aplicar_filtro_periodo(currentPeriodFilter)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Botón Semana - MEJORADO
-                        Button {
-                            id: weekBtn
-                            property bool isActive: currentPeriodFilter === "week"
-                            
-                            Layout.preferredWidth: 70
-                            Layout.preferredHeight: 32
-                            text: "Semana"
-                            
-                            background: Rectangle {
-                                color: parent.isActive ? "#17A2B8" : 
-                                    parent.hovered ? "#E1F5FE" :
-                                    parent.pressed ? Qt.darker("#F8F9FA", 1.1) : "#F8F9FA"
-                                radius: 16
-                                border.color: parent.isActive ? "#17A2B8" : 
-                                    parent.hovered ? "#17A2B8" : "#DEE2E6"
-                                border.width: parent.isActive ? 2 : 1
-                                
-                                // Sombra cuando está activo
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.topMargin: 2
-                                    color: parent.parent.isActive ? "#00000020" : "transparent"
-                                    radius: 16
-                                    z: -1
-                                    visible: parent.parent.isActive
-                                }
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                            }
-                            
-                            contentItem: RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                
-                                Label {
-                                    text: "📊"
-                                    font.pixelSize: 10
-                                    visible: parent.parent.isActive
-                                }
-                                
-                                Label {
-                                    text: parent.parent.text
-                                    color: parent.parent.isActive ? "#FFFFFF" : "#495057"
-                                    font.bold: parent.parent.isActive
-                                    font.pixelSize: 11
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                            }
-                            
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    var nuevoEstado = currentPeriodFilter !== "week"
-                                    currentPeriodFilter = nuevoEstado ? "week" : ""
-                                    
-                                    console.log("Filtro período: week, activo:", nuevoEstado)
-                                    
-                                    if (compraModel) {
-                                        compraModel.aplicar_filtro_periodo(currentPeriodFilter)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Botón 3 Meses - MEJORADO
-                        Button {
-                            id: monthsBtn
-                            property bool isActive: currentPeriodFilter === "3months"
-                            
-                            Layout.preferredWidth: 70
-                            Layout.preferredHeight: 32
-                            text: "3 Meses"
-                            
-                            background: Rectangle {
-                                color: parent.isActive ? "#6F42C1" : 
-                                    parent.hovered ? "#F3E5F5" :
-                                    parent.pressed ? Qt.darker("#F8F9FA", 1.1) : "#F8F9FA"
-                                radius: 16
-                                border.color: parent.isActive ? "#6F42C1" : 
-                                    parent.hovered ? "#6F42C1" : "#DEE2E6"
-                                border.width: parent.isActive ? 2 : 1
-                                
-                                // Sombra cuando está activo
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.topMargin: 2
-                                    color: parent.parent.isActive ? "#00000020" : "transparent"
-                                    radius: 16
-                                    z: -1
-                                    visible: parent.parent.isActive
-                                }
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 200 }
-                                }
-                            }
-                            
-                            contentItem: RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                
-                                Label {
-                                    text: "📈"
-                                    font.pixelSize: 10
-                                    visible: parent.parent.isActive
-                                }
-                                
-                                Label {
-                                    text: parent.parent.text
-                                    color: parent.parent.isActive ? "#FFFFFF" : "#495057"
-                                    font.bold: parent.parent.isActive
-                                    font.pixelSize: 11
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                            }
-                            
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    var nuevoEstado = currentPeriodFilter !== "3months"
-                                    currentPeriodFilter = nuevoEstado ? "3months" : ""
-                                    
-                                    console.log("Filtro período: 3months, activo:", nuevoEstado)
-                                    
-                                    if (compraModel) {
-                                        compraModel.aplicar_filtro_periodo(currentPeriodFilter)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    // Botón expandir filtros avanzados
-                    Button {
-                        Layout.preferredWidth: 140
-                        Layout.preferredHeight: 36
-                        text: collapsibleFilters ? "Menos filtros" : "Más filtros"
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker("#007BFF", 1.1) : "#007BFF"
-                            radius: 18
-                            
-                            Behavior on color {
-                                ColorAnimation { duration: 150 }
-                            }
-                        }
-                        
-                        contentItem: RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 6
-                            
-                            Label {
-                                text: parent.parent.text
-                                color: "#FFFFFF"
-                                font.bold: true
-                                font.pixelSize: 12
-                            }
-                            
-                            Label {
-                                text: collapsibleFilters ? "▲" : "▼"
-                                color: "#FFFFFF"
-                                font.pixelSize: 10
-                            }
-                        }
-                        
-                        onClicked: {
-                            collapsibleFilters = !collapsibleFilters
-                        }
-                    }
-                }
-                
-                // Filtros avanzados (colapsables) - CORREGIDOS
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: collapsibleFilters ? 70 : 0
-                    color: "transparent"
-                    visible: collapsibleFilters
-                    clip: true
-                    
-                    Behavior on Layout.preferredHeight {
-                        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
-                    }
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.topMargin: collapsibleFilters ? 8 : 0
-                        spacing: 20
-                        
-                        // Filtro por Proveedor - CORREGIDO
-                        ColumnLayout {
-                            spacing: 4
-                            Layout.preferredWidth: 200
-                            
-                            Label {
-                                text: "Proveedor:"
-                                color: "#495057"
-                                font.bold: true
-                                font.pixelSize: 11
-                            }
-                            
-                            ComboBox {
-                                id: proveedorCombo
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 36
-                                currentIndex: 0
-                                
-                                // CORRECCIÓN: modelo simple con textRole
-                                textRole: "text"
-                                valueRole: "value"
-                                
-                                model: ListModel {
-                                    id: proveedorComboModel
-                                    ListElement { text: "Todos los proveedores"; value: "all" }
-                                }
-                                
-                                background: Rectangle {
-                                    color: "#FFFFFF"
-                                    radius: 18
-                                    border.color: parent.activeFocus ? "#007BFF" : "#CED4DA"
-                                    border.width: 1
-                                }
-                                
-                                // CORRECCIÓN: contentItem simplificado
-                                contentItem: Text {
-                                    leftPadding: 12
-                                    rightPadding: parent.indicator.width + parent.spacing
-                                    text: parent.currentText
-                                    font.pixelSize: 12
-                                    color: "#495057"
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                                
-                                indicator: Label {
-                                    x: parent.width - width - 8
-                                    y: parent.topPadding + (parent.availableHeight - height) / 2
-                                    text: "▼"
-                                    color: "#6C757D"
-                                    font.pixelSize: 10
-                                }
-                                
-                                onCurrentIndexChanged: {
-                                    if (currentIndex >= 0 && proveedorComboModel.count > 0) {
-                                        var selectedItem = proveedorComboModel.get(currentIndex)
-                                        if (selectedItem && compraModel) {
-                                            console.log("Proveedor seleccionado:", selectedItem.text, "valor:", selectedItem.value)
-                                            compraModel.aplicar_filtro_proveedor(selectedItem.value)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Ordenamiento - CORREGIDO
-                        ColumnLayout {
-                            spacing: 4
-                            Layout.preferredWidth: 160
-                            
-                            Label {
-                                text: "Ordenar por:"
-                                color: "#495057"
-                                font.bold: true
-                                font.pixelSize: 11
-                            }
-                            
-                            ComboBox {
-                                id: ordenCombo
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 36
-                                currentIndex: 0
-                                
-                                // CORRECCIÓN: modelo de strings simple
-                                model: [
-                                    "Fecha (Reciente)",
-                                    "Fecha (Antigua)", 
-                                    "Monto (Mayor)",
-                                    "Monto (Menor)",
-                                    "Proveedor (A-Z)",
-                                    "Proveedor (Z-A)"
-                                ]
-                                
-                                background: Rectangle {
-                                    color: "#FFFFFF"
-                                    radius: 18
-                                    border.color: parent.activeFocus ? "#007BFF" : "#CED4DA"
-                                    border.width: 1
-                                }
-                                
-                                // CORRECCIÓN: contentItem simplificado
-                                contentItem: Text {
-                                    leftPadding: 12
-                                    rightPadding: parent.indicator.width + parent.spacing
-                                    text: parent.currentText
-                                    font.pixelSize: 12
-                                    color: "#495057"
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                                
-                                indicator: Label {
-                                    x: parent.width - width - 8
-                                    y: parent.topPadding + (parent.availableHeight - height) / 2
-                                    text: "▼"
-                                    color: "#6C757D"
-                                    font.pixelSize: 10
-                                }
-                                
-                                onCurrentTextChanged: {
-                                    console.log("Ordenamiento seleccionado:", currentText)
-                                    
-                                    if (compraModel) {
-                                        var ordenMap = {
-                                            "Fecha (Reciente)": "fecha_desc",
-                                            "Fecha (Antigua)": "fecha_asc",
-                                            "Monto (Mayor)": "monto_desc",
-                                            "Monto (Menor)": "monto_asc",
-                                            "Proveedor (A-Z)": "proveedor_asc",
-                                            "Proveedor (Z-A)": "proveedor_desc"
-                                        }
-                                        
-                                        var ordenValue = ordenMap[currentText] || "fecha_desc"
-                                        compraModel.aplicar_filtro_ordenamiento(ordenValue)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        // Botón limpiar filtros - CORREGIDO
-                        Button {
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
-                            text: "Limpiar"
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker("#6C757D", 1.1) : "#6C757D"
-                                radius: 16
-                            }
-                            
-                            contentItem: RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                
-                                Label {
-                                    text: "🧹"
-                                    font.pixelSize: 12
-                                }
-                                
-                                Label {
-                                    text: "Limpiar"
-                                    color: "#FFFFFF"
-                                    font.bold: true
-                                    font.pixelSize: 11
-                                }
-                            }
-                            
-                            onClicked: {
-                                console.log("Limpiando todos los filtros")
-                                
-                                // Limpiar UI - CORREGIDO
-                                searchField.text = ""
-                                proveedorCombo.currentIndex = 0
-                                ordenCombo.currentIndex = 0
-                                
-                                // ✅ RESETEO EXPLÍCITO DE BOTONES DE PERÍODO
-                                todayBtn.isActive = false
-                                weekBtn.isActive = false
-                                monthsBtn.isActive = false
-                                
-                                // Resetear variables de filtro
-                                currentPeriodFilter = ""
-                                currentProveedorFilter = "all"
-                                currentOrdenFilter = "fecha_desc"
-                                
-                                // Restaurar proveedores completos
-                                cargarProveedoresEnCombo()
-                                
-                                if (compraModel) {
-                                    compraModel.limpiar_todos_los_filtros()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Tabla de compras
         Rectangle {
             Layout.fillWidth: true
@@ -1003,7 +417,7 @@ Item {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: "TOTAL"
+                                text: "TOTAL GASTADO"  // TÍTULO CORREGIDO
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -1149,14 +563,9 @@ Item {
                                     RowLayout {
                                         anchors.centerIn: parent
                                         spacing: 6
-                                        
+                            
                                         Label {
-                                            text: "👤"
-                                            font.pixelSize: 12
-                                        }
-                                        
-                                        Label {
-                                            text: model.usuario
+                                           text: model.usuario
                                             color: "#2C3E50"
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -1179,13 +588,7 @@ Item {
                                         
                                         RowLayout {
                                             spacing: 4
-                                            
-                                            Label {
-                                                text: "📅"
-                                                font.pixelSize: 10
-                                                color: "#3498DB"
-                                            }
-                                            
+                                                                                     
                                             Label {
                                                 text: model.fecha
                                                 color: "#3498DB"
@@ -1203,7 +606,7 @@ Item {
                                     }
                                 }
                                 
-                                // TOTAL
+                                // TOTAL GASTADO (CORREGIDO)
                                 Rectangle {
                                     Layout.preferredWidth: 100
                                     Layout.fillHeight: true
@@ -1220,7 +623,7 @@ Item {
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "Bs" + model.total.toFixed(2)
+                                            text: "Bs" + model.total.toFixed(2)  // Solo mostramos el total registrado
                                             color: "#FFFFFF"
                                             font.bold: true
                                             font.pixelSize: 10
@@ -1265,38 +668,7 @@ Item {
                                                 showPurchaseDetailsDialog = true
                                             }
                                         }
-                                        
-                                        // Botón Editar
-                                        Button {
-                                            width: 30
-                                            height: 30
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
-                                                radius: 15
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: "📋"
-                                                color: whiteColor
-                                                font.pixelSize: 12
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("📋 Duplicar compra:", model.id)
-                                                if (compraModel && compraModel.duplicar_compra) {
-                                                    var exito = compraModel.duplicar_compra(model.id)
-                                                    if (exito) {
-                                                        showNotification("Compra duplicada exitosamente", "success")
-                                                    }
-                                                } else {
-                                                    showNotification("Error: Función no disponible", "error")
-                                                }
-                                            }
-                                        }
-                                        
+
                                         // Botón Eliminar
                                         Button {
                                             width: 30
@@ -1470,7 +842,7 @@ Item {
         }
     }
 
-    // MODAL DE DETALLE DE COMPRA
+    // MODAL DE DETALLE DE COMPRA (CORREGIDO)
     Rectangle {
         id: modalOverlay
         anchors.fill: parent
@@ -1526,11 +898,6 @@ Item {
                         color: "#3498DB"
                         radius: 25
                         
-                        Label {
-                            anchors.centerIn: parent
-                            text: "🧾"
-                            font.pixelSize: 20
-                        }
                     }
                     
                     ColumnLayout {
@@ -1589,7 +956,7 @@ Item {
                 }
             }
             
-            // Tabla de productos COMPLETA
+            // Tabla de productos COMPLETAMENTE CORREGIDA
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -1698,22 +1065,7 @@ Item {
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "PRECIO UNIT."
-                                    color: "#FFFFFF"
-                                    font.bold: true
-                                    font.pixelSize: 11
-                                }
-                            }
-                            
-                            Rectangle {
-                                Layout.preferredWidth: 90
-                                Layout.fillHeight: true
-                                color: "#34495E"
-                                border.color: "#2C3E50"
-                                border.width: 1
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "SUBTOTAL"
+                                    text: "COSTO TOTAL"  // TÍTULO CORREGIDO
                                     color: "#FFFFFF"
                                     font.bold: true
                                     font.pixelSize: 11
@@ -1869,7 +1221,7 @@ Item {
                                         }
                                     }
                                     
-                                    // PRECIO UNITARIO
+                                    // COSTO TOTAL (CORREGIDO)
                                     Rectangle {
                                         Layout.preferredWidth: 90
                                         Layout.fillHeight: true
@@ -1879,24 +1231,7 @@ Item {
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "Bs" + (model.precio_unitario ? model.precio_unitario.toFixed(2) : "0.00")
-                                            color: "#E67E22"
-                                            font.bold: true
-                                            font.pixelSize: 11
-                                        }
-                                    }
-                                    
-                                    // SUBTOTAL
-                                    Rectangle {
-                                        Layout.preferredWidth: 90
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "Bs" + (model.subtotal ? model.subtotal.toFixed(2) : "0.00")
+                                            text: "Bs" + (model.costo_total ? model.costo_total.toFixed(2) : "0.00")
                                             color: "#27AE60"
                                             font.bold: true
                                             font.pixelSize: 11
@@ -1914,12 +1249,6 @@ Item {
                                         ColumnLayout {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            
-                                            Label {
-                                                text: "📅"
-                                                font.pixelSize: 12
-                                                Layout.alignment: Qt.AlignHCenter
-                                            }
                                             
                                             Label {
                                                 text: model.fecha_vencimiento || "Sin fecha"
@@ -1965,7 +1294,7 @@ Item {
                 }
             }
             
-            // RESUMEN MEJORADO
+            // RESUMEN CORREGIDO
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 60
@@ -2011,52 +1340,8 @@ Item {
                             }
                         }
                     }
-                    
-                    // Total unidades
-                    RowLayout {
-                        spacing: 8
-                        
-                        Rectangle {
-                            width: 30
-                            height: 30
-                            color: "#9B59B6"
-                            radius: 15
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "📊"
-                                font.pixelSize: 14
-                            }
-                        }
-                        
-                        ColumnLayout {
-                            spacing: 2
-                            
-                            Label {
-                                text: "Unidades:"
-                                color: "#BDC3C7"
-                                font.pixelSize: 11
-                            }
-                            
-                            Label {
-                                text: {
-                                    var total = 0
-                                    for (var i = 0; i < detallesCompraModel.count; i++) {
-                                        var item = detallesCompraModel.get(i)
-                                        total += (item.cantidad_total || 0)
-                                    }
-                                    return total.toString()
-                                }
-                                color: "#FFFFFF"
-                                font.bold: true
-                                font.pixelSize: 14
-                            }
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    // Total compra
+             
+                    // Total compra (CORREGIDO)
                     RowLayout {
                         spacing: 8
                         
@@ -2077,7 +1362,7 @@ Item {
                             spacing: 2
                             
                             Label {
-                                text: "TOTAL COMPRA:"
+                                text: "TOTAL GASTADO:"  // TEXTO CORREGIDO
                                 color: "#BDC3C7"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -2095,6 +1380,7 @@ Item {
             }
         }
     }
+    
     Rectangle {
         id: deleteConfirmOverlay
         anchors.fill: parent
@@ -2158,7 +1444,7 @@ Item {
                     }
                     
                     Label {
-                        text: compraToDelete ? `Compra #${compraToDelete.id} - $${compraToDelete.total}` : ""
+                        text: compraToDelete ? `Compra #${compraToDelete.id} - Bs${compraToDelete.total}` : ""
                         color: "#7F8C8D"
                         font.pixelSize: 12
                     }
@@ -2236,6 +1522,7 @@ Item {
                             var exito = compraModel.eliminar_compra(compraToDelete.id)
                             if (exito) {
                                 showNotification("Compra eliminada exitosamente", "success")
+                                actualizarPaginacionCompras()
                             }
                         }
                         
@@ -2256,78 +1543,31 @@ Item {
         console.log(`[${type.toUpperCase()}] ${message}`)
         // Aquí puedes implementar una notificación visual si tienes un sistema de toast
     }
-    function cargarProveedoresEnCombo() {
-        if (!compraModel) return
-        
-        console.log("📋 Cargando proveedores en ComboBox...")
-        var proveedores = compraModel.obtener_proveedores_para_filtro()
-        
-        // Limpiar modelo actual
-        proveedorComboModel.clear()
-        
-        // Siempre agregar "Todos los proveedores" primero
-        proveedorComboModel.append({
-            "text": "Todos los proveedores",
-            "value": "all"
-        })
-        
-        // Agregar proveedores al modelo
-        for (var i = 0; i < proveedores.length; i++) {
-            proveedorComboModel.append({
-                "text": proveedores[i].text,
-                "value": proveedores[i].value
-            })
+
+    Connections {
+        target: compraModel
+        function onComprasActualizadas() {
+            console.log("📋 Signal: Compras actualizadas, refrescando vista")
+            actualizarPaginacionCompras()
         }
         
-        // Forzar la selección inicial a "Todos los proveedores"
-        proveedorCombo.currentIndex = 0
-        
-        console.log("✅ Proveedores cargados en combo:", proveedores.length + 1)
-    }
-
-    function filtrarProveedoresCombo(termino) {
-        if (!compraModel) return
-            
-        // Obtener todos los proveedores
-            var todosProveedores = compraModel.obtener_proveedores_para_filtro()
-            
-        // Limpiar modelo
-        proveedorComboModel.clear()
-        proveedorComboModel.append({"text": "Todos los proveedores", "value": "all"})
-            
-        // Filtrar y agregar
-        for (var i = 0; i < todosProveedores.length; i++) {
-            var proveedor = todosProveedores[i]
-            if (!termino || proveedor.text.toLowerCase().includes(termino.toLowerCase())) {
-                proveedorComboModel.append({
-                    "text": proveedor.text,
-                    "value": proveedor.value
-                })
+        function onOperacionExitosa(mensaje) {
+            if (mensaje.includes("compra") || mensaje.includes("eliminad")) {
+                console.log("📢 Operación exitosa:", mensaje)
+                Qt.callLater(actualizarPaginacionCompras)
             }
         }
     }
-
-    function resetearBotonesPeriodo() {
-        todayBtn.isActive = false
-        weekBtn.isActive = false
-        monthsBtn.isActive = false
-        currentPeriodFilter = ""
-    }
-
+ 
     Component.onCompleted: {
-        console.log("=== MÓDULO DE COMPRAS SIMPLIFICADO INICIALIZADO ===")
-
+        console.log("=== MÓDULO DE COMPRAS INICIALIZADO ===")
+        
         if (!compraModel) {
-            console.log("❌ ERROR: CompraModel no está disponible")
+            console.log("❌ ERROR: CompraModel no disponible")
             return
         }
         
-        console.log("✅ CompraModel conectado correctamente")
-        actualizarPaginacionCompras()
-        
-        // ✅ NUEVO: Cargar proveedores para filtro
-        cargarProveedoresEnCombo()
-        
-        console.log("=== MÓDULO LISTO ===")
+        console.log("✅ CompraModel conectado")
+        Qt.callLater(actualizarPaginacionCompras)
     }
 }

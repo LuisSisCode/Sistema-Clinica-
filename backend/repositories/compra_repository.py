@@ -53,7 +53,8 @@ class CompraRepository(BaseRepository):
             p.Direccion as Proveedor_Direccion,
             u.Nombre + ' ' + u.Apellido_Paterno as Usuario,
             COUNT(dc.id) as Items_Comprados,
-            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as Unidades_Totales
+            SUM(dc.Cantidad_Caja) as Total_Cajas,
+            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Unidades_Totales
         FROM Compra c
         INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
@@ -65,7 +66,7 @@ class CompraRepository(BaseRepository):
         return self._execute_query(query, tuple(params))
     
     def get_compra_completa(self, compra_id: int) -> Dict[str, Any]:
-        """Obtiene compra con todos sus detalles"""
+        """Obtiene compra con todos sus detalles - CORREGIDO"""
         validate_required(compra_id, "compra_id")
         
         # Datos principales de la compra
@@ -82,7 +83,7 @@ class CompraRepository(BaseRepository):
         if not compra:
             raise CompraError(f"Compra no encontrada: {compra_id}", compra_id=compra_id)
         
-        # Detalles de la compra - CORRECCIÓN APLICADA
+        # Detalles de la compra - CORREGIDO: Sin multiplicación por cantidad
         detalles_query = """
         SELECT 
             dc.*,
@@ -90,8 +91,9 @@ class CompraRepository(BaseRepository):
             p.Codigo as Producto_Codigo,
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca_Nombre,
-            (dc.Cantidad_Caja + dc.Cantidad_Unitario) as Cantidad_Total,
-            (dc.Cantidad_Caja + dc.Cantidad_Unitario) * dc.Precio_Unitario as Subtotal
+            (dc.Cantidad_Caja * dc.Cantidad_Unitario) as Cantidad_Total,
+            dc.Precio_Unitario as Subtotal,
+            dc.Precio_Unitario as Costo_Total
         FROM DetalleCompra dc
         INNER JOIN Lote l ON dc.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
@@ -132,97 +134,6 @@ class CompraRepository(BaseRepository):
         """
         return self._execute_query(query, params)
     
-    def get_compras_filtradas(self, fecha_desde: str = None, fecha_hasta: str = None, 
-                         proveedor_id: int = None, termino_busqueda: str = None,
-                         ordenamiento: str = "fecha_desc") -> List[Dict[str, Any]]:
-        """
-        Obtiene compras filtradas con búsqueda mejorada
-        """
-        try:
-            where_conditions = []
-            params = []
-            
-            # Filtro por fechas
-            if fecha_desde and fecha_hasta:
-                where_conditions.append("c.Fecha BETWEEN ? AND ?")
-                params.extend([fecha_desde, fecha_hasta])
-            elif fecha_desde:
-                where_conditions.append("c.Fecha >= ?")
-                params.append(fecha_desde)
-            elif fecha_hasta:
-                where_conditions.append("c.Fecha <= ?")
-                params.append(fecha_hasta)
-            
-            # Filtro por proveedor específico
-            if proveedor_id and proveedor_id > 0:
-                where_conditions.append("c.Id_Proveedor = ?")
-                params.append(proveedor_id)
-            
-            # ✅ BÚSQUEDA MEJORADA - ID, proveedor y productos
-            if termino_busqueda and termino_busqueda.strip():
-                termino_like = f"%{termino_busqueda.strip()}%"
-                # Buscar en: ID compra, nombre proveedor, código producto, nombre producto
-                search_condition = """(
-                    CAST(c.id AS VARCHAR) LIKE ? 
-                    OR p.Nombre LIKE ? 
-                    OR EXISTS (
-                        SELECT 1 FROM DetalleCompra dc2
-                        INNER JOIN Lote l2 ON dc2.Id_Lote = l2.id
-                        INNER JOIN Productos prod ON l2.Id_Producto = prod.id
-                        WHERE dc2.Id_Compra = c.id 
-                        AND (prod.Codigo LIKE ? OR prod.Nombre LIKE ?)
-                    )
-                )"""
-                where_conditions.append(search_condition)
-                params.extend([termino_like, termino_like, termino_like, termino_like])
-            
-            # Construir WHERE clause
-            where_clause = ""
-            if where_conditions:
-                where_clause = "WHERE " + " AND ".join(where_conditions)
-            
-            # Construir ORDER BY
-            order_clause = self._build_order_clause(ordenamiento)
-            
-            # Query principal
-            query = f"""
-            SELECT c.*, p.Nombre as Proveedor_Nombre, u.Nombre + ' ' + u.Apellido_Paterno as Usuario
-            FROM Compra c
-            INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
-            INNER JOIN Usuario u ON c.Id_Usuario = u.id
-            {where_clause}
-            {order_clause}
-            """
-            
-            print(f"🔍 Query filtros mejorada: {query}")
-            print(f"📊 Parámetros: {params}")
-            
-            result = self._execute_query(query, tuple(params) if params else (), use_cache=False)
-            
-            print(f"✅ Compras filtradas encontradas: {len(result) if result else 0}")
-            return result or []
-            
-        except Exception as e:
-            print(f"❌ Error en get_compras_filtradas: {str(e)}")
-            raise CompraError(f"Error aplicando filtros: {str(e)}")
-        
-    def get_proveedores_for_combo(self) -> List[Dict[str, Any]]:
-        """Obtiene proveedores específicamente para ComboBox (solo campos necesarios) - MEJORADO"""
-        query = """
-        SELECT p.id, p.Nombre,
-            COUNT(c.id) as Total_Compras
-        FROM Proveedor p
-        LEFT JOIN Compra c ON p.id = c.Id_Proveedor
-        GROUP BY p.id, p.Nombre
-        ORDER BY p.Nombre ASC
-        """
-        
-        # ✅ SIEMPRE SIN CACHE PARA COMBO
-        result = self._execute_query(query, use_cache=False)
-        
-        print(f"📋 get_proveedores_for_combo: {len(result) if result else 0} proveedores")
-        return result or []
-        
     # ===============================
     # CREACIÓN DE COMPRAS CON LOTES
     # ===============================
@@ -230,13 +141,14 @@ class CompraRepository(BaseRepository):
     @ExceptionHandler.handle_exception
     def crear_compra(self, proveedor_id: int, usuario_id: int, items_compra: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Crea nueva compra con generación automática de lotes - CORREGIDO CON ROLLBACK COMPLETO
+        Crea nueva compra con generación automática de lotes - CORREGIDO
         
         Args:
             proveedor_id: ID del proveedor
             usuario_id: ID del usuario comprador
             items_compra: Lista de items [{'codigo': str, 'cantidad_caja': int, 'cantidad_unitario': int, 
                                         'precio_unitario': float, 'fecha_vencimiento': str}]
+                          IMPORTANTE: precio_unitario es el COSTO TOTAL del producto, no por unidad
         
         Returns:
             Información completa de la compra creada
@@ -263,8 +175,9 @@ class CompraRepository(BaseRepository):
                 try:
                     item_preparado = self._validar_y_preparar_item(item)
                     items_preparados.append(item_preparado)
-                    total_compra += item_preparado['subtotal']
-                    print(f"  ✅ Item {i+1}: {item_preparado['codigo']} - ${item_preparado['subtotal']}")
+                    # CORREGIDO: No multiplicar, precio_unitario YA es el costo total
+                    total_compra += Decimal(str(item_preparado['precio_unitario']))
+                    print(f"  ✅ Item {i+1}: {item_preparado['codigo']} - ${item_preparado['precio_unitario']}")
                 except Exception as e:
                     raise CompraError(f"Error en item {i+1} ({item.get('codigo', 'sin código')}): {str(e)}")
             
@@ -478,6 +391,7 @@ class CompraRepository(BaseRepository):
         except Exception as rollback_error:
             print(f"❌ ERROR CRÍTICO EN ROLLBACK: {str(rollback_error)}")
             print(f"⚠️  DATOS INCONSISTENTES - Compra: {compra_id}, revisar manualmente")
+    
     def get_productos_resumen_compra(self, compra_id: int) -> List[Dict[str, Any]]:
         """Obtiene lista simplificada de productos de una compra para mostrar en tabla principal"""
         validate_required(compra_id, "compra_id")
@@ -488,7 +402,7 @@ class CompraRepository(BaseRepository):
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca_Nombre,
             COUNT(dc.id) as Items_Compra,
-            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as Total_Unidades
+            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Total_Unidades
         FROM DetalleCompra dc
         INNER JOIN Lote l ON dc.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
@@ -499,6 +413,7 @@ class CompraRepository(BaseRepository):
         """
         
         return self._execute_query(query, (compra_id,))
+    
     def _restaurar_stock_producto(self, producto_id: int, cantidad_caja: int, cantidad_unitario: int):
         """
         Restaura stock de un producto específico
@@ -520,12 +435,12 @@ class CompraRepository(BaseRepository):
             print(f"❌ Error restaurando stock producto {producto_id}: {str(e)}")
 
     def _validar_y_preparar_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Valida y prepara un item para la compra"""
+        """Valida y prepara un item para la compra - CORREGIDO"""
         # Validaciones básicas
         codigo = item.get('codigo', '').strip()
         cantidad_caja = item.get('cantidad_caja', 0)
         cantidad_unitario = item.get('cantidad_unitario', 0)
-        precio_unitario = item.get('precio_unitario', 0)
+        precio_unitario = item.get('precio_unitario', 0)  # ESTE ES EL COSTO TOTAL
         fecha_vencimiento = item.get('fecha_vencimiento', '')
         
         validate_required(codigo, "codigo")
@@ -541,9 +456,8 @@ class CompraRepository(BaseRepository):
         if not producto:
             raise ProductoNotFoundError(codigo=codigo)
         
-        # Calcular totales
-        cantidad_total = cantidad_caja + cantidad_unitario
-        subtotal = Decimal(str(cantidad_total)) * Decimal(str(precio_unitario))
+        # Calcular totales - CORREGIDO: precio_unitario YA es el costo total
+        cantidad_total = cantidad_caja * cantidad_unitario
         
         return {
             'codigo': codigo,
@@ -552,15 +466,14 @@ class CompraRepository(BaseRepository):
             'cantidad_caja': cantidad_caja,
             'cantidad_unitario': cantidad_unitario,
             'cantidad_total': cantidad_total,
-            'precio_unitario': precio_unitario,
+            'precio_unitario': precio_unitario,  # COSTO TOTAL del producto
             'fecha_vencimiento': fecha_vencimiento,
-            'subtotal': subtotal,
             'producto': producto
         }
     
     def _procesar_item_con_lote(self, compra_id: int, item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Procesa un item creando lote y detalle de compra - CORREGIDO CON VALIDACIONES
+        Procesa un item creando lote y detalle de compra - CORREGIDO
         """
         print(f"🔄 Procesando item: {item['codigo']} - Cajas: {item['cantidad_caja']}, Unitarios: {item['cantidad_unitario']}")
         
@@ -570,12 +483,16 @@ class CompraRepository(BaseRepository):
         
         # 2. Crear nuevo lote - CON VALIDACIÓN ROBUSTA
         try:
+            # IMPORTANTE: El precio que pasamos al lote debe ser por unidad para el cálculo de stock
+            # Pero en la BD se guarda como costo total en DetalleCompra
+            precio_por_unidad = item['precio_unitario'] / item['cantidad_total'] if item['cantidad_total'] > 0 else 0
+            
             lote_id = self.producto_repo.aumentar_stock_compra(
                 producto_id=item['producto_id'],
                 cantidad_caja=item['cantidad_caja'],
                 cantidad_unitario=item['cantidad_unitario'],
                 fecha_vencimiento=item['fecha_vencimiento'],
-                precio_compra=item['precio_unitario']
+                precio_compra=precio_por_unidad  # Precio por unidad para el producto
             )
             
             # VALIDACIÓN CRÍTICA: Verificar que el lote se creó
@@ -588,14 +505,14 @@ class CompraRepository(BaseRepository):
             print(f"❌ ERROR creando lote para {item['codigo']}: {str(e)}")
             raise CompraError(f"Error creando lote para producto {item['codigo']}: {str(e)}")
         
-        # 3. Crear detalle de compra - CON TRANSACCIONALIDAD
+        # 3. Crear detalle de compra - El precio_unitario aquí es el COSTO TOTAL
         try:
             detalle_data = {
                 'Id_Compra': compra_id,
                 'Id_Lote': lote_id,
                 'Cantidad_Caja': item['cantidad_caja'],
                 'Cantidad_Unitario': item['cantidad_unitario'],
-                'Precio_Unitario': item['precio_unitario']
+                'Precio_Unitario': item['precio_unitario']  # COSTO TOTAL del producto
             }
             
             # Usar método insert del BaseRepository para consistencia
@@ -627,8 +544,8 @@ class CompraRepository(BaseRepository):
                 'lote_id': lote_id,
                 'producto_codigo': item['codigo'],
                 'cantidad_total': item['cantidad_total'],
-                'precio_unitario': item['precio_unitario'],
-                'subtotal': item['subtotal']
+                'precio_unitario': item['precio_unitario'],  # COSTO TOTAL
+                'costo_total': item['precio_unitario']  # COSTO TOTAL
             }
             
         except Exception as e:
@@ -636,6 +553,7 @@ class CompraRepository(BaseRepository):
             print(f"❌ ERROR en detalle de compra para {item['codigo']}: {str(e)}")
             self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
             raise CompraError(f"Error procesando item {item['codigo']}: {str(e)}")
+    
     def _rollback_lote_created(self, lote_id: int, producto_id: int, cantidad_caja: int, cantidad_unitario: int):
         """
         Método de rollback para eliminar lote creado si falla el detalle
@@ -668,12 +586,13 @@ class CompraRepository(BaseRepository):
             
         except Exception as rollback_error:
             print(f"❌ ERROR EN ROLLBACK: {str(rollback_error)} - Lote: {lote_id}")
+    
     # ===============================
     # GESTIÓN DE PROVEEDORES
     # ===============================
     
     def get_proveedores_activos(self) -> List[Dict[str, Any]]:
-        """Obtiene TODOS los proveedores (con y sin compras) - CORREGIDO"""
+        """Obtiene TODOS los proveedores (con y sin compras)"""
         query = """
         SELECT p.id, p.Nombre, p.Direccion, 
                COUNT(c.id) as Total_Compras,
@@ -692,10 +611,8 @@ class CompraRepository(BaseRepository):
         ORDER BY p.Nombre ASC
         """
         
-        # ✅ FORZAR CONSULTA SIN CACHE
         result = self._execute_query(query, use_cache=False)
         
-        # ✅ LOG DETALLADO
         if result:
             print(f"📋 get_proveedores_activos: {len(result)} proveedores obtenidos")
             for proveedor in result:
@@ -713,7 +630,6 @@ class CompraRepository(BaseRepository):
         ORDER BY Nombre ASC
         """
         
-        # ✅ SIEMPRE SIN CACHE PARA COMBO
         result = self._execute_query(query, use_cache=False)
         
         print(f"📋 get_proveedores_for_combo: {len(result) if result else 0} proveedores")
@@ -789,16 +705,16 @@ class CompraRepository(BaseRepository):
         }
     
     def get_productos_mas_comprados(self, dias: int = 30, limit: int = 10) -> List[Dict[str, Any]]:
-        """Productos más comprados en período"""
+        """Productos más comprados en período - CORREGIDO"""
         query = f"""
         SELECT TOP {limit}
             p.Codigo,
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca_Nombre,
-            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as Cantidad_Comprada,
+            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Cantidad_Comprada,
             COUNT(DISTINCT c.id) as Num_Compras,
-            SUM((dc.Cantidad_Caja + dc.Cantidad_Unitario) * dc.Precio_Unitario) as Costo_Total,
-            AVG(dc.Precio_Unitario) as Precio_Promedio
+            SUM(dc.Precio_Unitario) as Costo_Total,
+            AVG(dc.Precio_Unitario / (dc.Cantidad_Caja * dc.Cantidad_Unitario)) as Precio_Promedio_Unitario
         FROM Compra c
         INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
         INNER JOIN Lote l ON dc.Id_Lote = l.id
@@ -862,7 +778,7 @@ class CompraRepository(BaseRepository):
         }
     
     def verificar_integridad_compra(self, compra_id: int) -> Dict[str, Any]:
-        """Verifica la integridad de una compra"""
+        """Verifica la integridad de una compra - CORREGIDO"""
         compra = self.get_compra_completa(compra_id)
         
         if not compra:
@@ -870,9 +786,9 @@ class CompraRepository(BaseRepository):
         
         errores = []
         
-        # Verificar que el total coincide
+        # CORREGIDO: Solo sumar los precios sin multiplicar
         total_calculado = sum(
-            (detalle['Cantidad_Caja'] + detalle['Cantidad_Unitario']) * detalle['Precio_Unitario']
+            detalle['Precio_Unitario']  # Ya es el costo total
             for detalle in compra['detalles']
         )
         
@@ -885,7 +801,7 @@ class CompraRepository(BaseRepository):
             lote = self._execute_query(lote_query, (detalle['Id_Lote'],), fetch_one=True)
             if not lote:
                 errores.append(f"Lote {detalle['Id_Lote']} no existe")
-            elif (lote['Cantidad_Caja'] + lote['Cantidad_Unitario']) <= 0:
+            elif (lote['Cantidad_Caja'] * lote['Cantidad_Unitario']) <= 0:
                 errores.append(f"Lote {detalle['Id_Lote']} sin stock")
         
         return {
@@ -894,32 +810,7 @@ class CompraRepository(BaseRepository):
             'total_db': compra['Total'],
             'total_calculado': total_calculado
         }
-    def get_active(self) -> List[Dict[str, Any]]:
-        """Obtiene compras del mes actual"""
-        query = """
-        SELECT c.*, p.Nombre as Proveedor_Nombre, u.Nombre + ' ' + u.Apellido_Paterno as Usuario
-        FROM Compra c
-        INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
-        INNER JOIN Usuario u ON c.Id_Usuario = u.id
-        WHERE MONTH(c.Fecha) = MONTH(GETDATE()) AND YEAR(c.Fecha) = YEAR(GETDATE())
-        ORDER BY c.Fecha DESC
-        """
-        
-        result = self._execute_query(query)
-        
-        return result
-    def _build_order_clause(self, ordenamiento: str) -> str:
-        """Construye cláusula ORDER BY según tipo de ordenamiento"""
-        order_map = {
-            "fecha_desc": "ORDER BY c.Fecha DESC",
-            "fecha_asc": "ORDER BY c.Fecha ASC",
-            "monto_desc": "ORDER BY c.Total DESC",
-            "monto_asc": "ORDER BY c.Total ASC",
-            "proveedor_asc": "ORDER BY p.Nombre ASC, c.Fecha DESC",
-            "proveedor_desc": "ORDER BY p.Nombre DESC, c.Fecha DESC"
-        }
-        
-        return order_map.get(ordenamiento, "ORDER BY c.Fecha DESC")
+    
     # ===============================
     # MÉTODO ADICIONAL PARA ESTADÍSTICAS DE FILTROS
     # ===============================
