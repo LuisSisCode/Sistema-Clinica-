@@ -1285,7 +1285,12 @@ class InventarioModel(QObject):
         try:
             producto = safe_execute(self.producto_repo.get_by_codigo, codigo)
             if producto:
-                return (producto.get('Stock_Caja', 0) + producto.get('Stock_Unitario', 0))
+                # CORRECCIÓN: Usar datos de lotes en lugar de tabla productos
+                stock_total = producto.get('Stock_Total', 0)
+                if stock_total == 0:
+                    # Fallback: calcular desde stock individual
+                    return (producto.get('Stock_Caja', 0) + producto.get('Stock_Unitario', 0))
+                return stock_total
             return 0
         except Exception:
             return 0

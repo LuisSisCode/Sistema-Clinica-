@@ -501,7 +501,7 @@ Item {
                     }
                 }
                 
-                // TABLA MODERNA CON LÍNEAS VERTICALES - ACTUALIZADA CON CÉDULA
+                // TABLA MODERNA CON LÍNEAS VERTICALES - REDISEÑADA BASADA EN LABORATORIO
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -517,7 +517,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER CON LÍNEAS VERTICALES - ACTUALIZADO
+                        // HEADER CON LÍNEAS VERTICALES
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -670,7 +670,7 @@ Item {
                                     }
                                 }
                                 
-                                // FECHA COLUMN (sin línea derecha)
+                                // FECHA COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colFecha
                                     Layout.fillHeight: true
@@ -730,7 +730,7 @@ Item {
                                         anchors.rightMargin: baseUnit * 1.5
                                         spacing: 0
                                         
-                                        // ID COLUMN - CORREGIDO
+                                        // ID COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colId
                                             Layout.fillHeight: true
@@ -739,7 +739,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: model.id || "N/A"  // CORREGIDO: usar model.id
+                                                text: model.id || "N/A"
                                                 color: textColor
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.9
@@ -754,30 +754,32 @@ Item {
                                             }
                                         }
                                         
-                                        // PACIENTE COLUMN - CORREGIDO
+                                        // PACIENTE COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colPaciente
                                             Layout.fillHeight: true
+                                            
                                             Column {
                                                 anchors.fill: parent
                                                 anchors.margins: baseUnit * 0.5
+                                                
                                                 Label {
                                                     width: parent.width - baseUnit
                                                     text: model.paciente_completo || "Sin nombre"
                                                     color: textColor
+                                                    font.bold: false
                                                     font.pixelSize: fontBaseSize * 0.85
                                                     font.family: "Segoe UI, Arial, sans-serif"
                                                     elide: Text.ElideRight
                                                 }
-                                            
+                                                
                                                 Label {
                                                     width: parent.width - baseUnit
-                                                    text: model.paciente_cedula ? "C.I: " + model.paciente_cedula : "Sin cédula"
+                                                    text: "CI: " + (model.paciente_cedula || "Sin cédula")
                                                     color: textColorLight
                                                     font.pixelSize: fontBaseSize * 0.75
                                                     font.family: "Segoe UI, Arial, sans-serif"
                                                     elide: Text.ElideRight
-                                                    visible: model.paciente_cedula !== ""
                                                 }
                                             }
                                             
@@ -789,10 +791,7 @@ Item {
                                             }
                                         }
                                         
-                                        // CÉDULA COLUMN - CORREGIDO
-                                  
-                                        
-                                        // DETALLE COLUMN - CORREGIDO
+                                        // DETALLE COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colDetalle
                                             Layout.fillHeight: true
@@ -803,7 +802,7 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.Detalles || "Sin detalles"  // CORREGIDO: Detalles con D mayúscula
+                                                text: model.Detalles || "Sin detalles"
                                                 color: textColor
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
@@ -821,7 +820,7 @@ Item {
                                             }
                                         }
                                         
-                                        // ESPECIALIDAD COLUMN - CORREGIDO
+                                        // ESPECIALIDAD COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colEspecialidad
                                             Layout.fillHeight: true
@@ -832,7 +831,7 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.especialidad_doctor || "Sin especialidad/doctor"  // CORREGIDO
+                                                text: model.especialidad_doctor || "Sin especialidad/doctor"
                                                 color: primaryColor
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
@@ -850,7 +849,7 @@ Item {
                                             }
                                         }
                                         
-                                        // TIPO COLUMN - CORREGIDO
+                                        // TIPO COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colTipo
                                             Layout.fillHeight: true
@@ -859,13 +858,13 @@ Item {
                                                 anchors.centerIn: parent
                                                 width: baseUnit * 7
                                                 height: baseUnit * 2.5
-                                                color: (model.tipo_consulta === "Emergencia") ? warningColorLight : successColorLight  // CORREGIDO
+                                                color: model.tipo_consulta === "Emergencia" ? warningColorLight : successColorLight
                                                 radius: height / 2
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: model.tipo_consulta || "Normal"  // CORREGIDO
-                                                    color: (model.tipo_consulta === "Emergencia") ? "#92400E" : "#047857"
+                                                    text: model.tipo_consulta || "Normal"
+                                                    color: model.tipo_consulta === "Emergencia" ? "#92400E" : "#047857"
                                                     font.pixelSize: fontBaseSize * 0.75
                                                     font.bold: false
                                                     font.family: "Segoe UI, Arial, sans-serif"
@@ -880,7 +879,7 @@ Item {
                                             }
                                         }
                                         
-                                        // PRECIO COLUMN - CORREGIDO
+                                        // PRECIO COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colPrecio
                                             Layout.fillHeight: true
@@ -889,8 +888,8 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: "Bs " + (model.precio ? model.precio.toFixed(2) : "0.00")  // CORREGIDO
-                                                color: (model.tipo_consulta === "Emergencia") ? "#92400E" : "#047857"
+                                                text: "Bs " + (model.precio || "0.00")
+                                                color: model.tipo_consulta === "Emergencia" ? "#92400E" : "#047857"
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.9
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -904,7 +903,7 @@ Item {
                                             }
                                         }
                                         
-                                        // FECHA COLUMN - CORREGIDO
+                                        // FECHA COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colFecha
                                             Layout.fillHeight: true
@@ -913,7 +912,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
-                                                text: model.fecha || "Sin fecha"  // CORREGIDO
+                                                text: model.fecha || "Sin fecha"
                                                 color: textColor
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
@@ -921,33 +920,7 @@ Item {
                                             }
                                         }
                                     }
-                                    
-                                    // LÍNEAS VERTICALES CONTINUAS
-                                    Repeater {
-                                        model: 6  // 6 líneas para 7 columnas
-                                        Rectangle {
-                                            property real xPos: {
-                                                var totalWidth = parent.width - (baseUnit * 3) // Ajustar por márgenes
-                                                var cumulativeWidth = 0
-                                                
-                                                switch(index) {
-                                                    case 0: cumulativeWidth = colId; break
-                                                    case 1: cumulativeWidth = colId + colPaciente; break
-                                                    case 2: cumulativeWidth = colId + colPaciente + colDetalle; break
-                                                    case 3: cumulativeWidth = colId + colPaciente + colDetalle + colEspecialidad; break
-                                                    case 4: cumulativeWidth = colId + colPaciente + colDetalle + colEspecialidad + colTipo; break
-                                                    case 5: cumulativeWidth = colId + colPaciente + colDetalle + colEspecialidad + colTipo + colPrecio; break
-                                                }
-                                                
-                                                return baseUnit * 1.5 + (totalWidth * cumulativeWidth)
-                                            }
-                                            x: xPos
-                                            width: 1
-                                            height: parent.height
-                                            color: lineColor
-                                            z: 1
-                                        }
-                                    }
+
                                     
                                     MouseArea {
                                         anchors.fill: parent
@@ -1025,7 +998,7 @@ Item {
                                                 source: "Resources/iconos/eliminar.svg"
                                                 fillMode: Image.PreserveAspectFit
                                             }
-                                                                                        
+                                            
                                             onClicked: {
                                                 var consultaId = model.id
                                                 if (consultaId && consultaId !== "N/A") {
@@ -1041,6 +1014,50 @@ Item {
                                     }
                                 }
                             }
+                        }
+                        
+                        // ESTADO VACÍO PARA TABLA SIN DATOS
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            visible: consultasPaginadasModel.count === 0
+                            spacing: baseUnit * 3
+                            
+                            Item { Layout.fillHeight: true }
+                            
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignHCenter
+                                spacing: baseUnit * 2
+                                
+                                Label {
+                                    text: "🩺"
+                                    font.pixelSize: fontBaseSize * 3
+                                    color: "#E5E7EB"
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: "No hay consultas registradas"
+                                    color: textColor
+                                    font.bold: true
+                                    font.pixelSize: fontBaseSize * 1.5
+                                    Layout.alignment: Qt.AlignHCenter
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                }
+                                
+                                Label {
+                                    text: "Registra la primera consulta haciendo clic en \"Nueva Consulta\""
+                                    color: textColorLight
+                                    font.pixelSize: fontBaseSize
+                                    Layout.alignment: Qt.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    horizontalAlignment: Text.AlignHCenter
+                                    font.family: "Segoe UI, Arial, sans-serif"
+                                    Layout.maximumWidth: baseUnit * 40
+                                }
+                            }
+                            
+                            Item { Layout.fillHeight: true }
                         }
                     }
                 }

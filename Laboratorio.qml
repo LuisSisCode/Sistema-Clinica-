@@ -998,29 +998,6 @@ Item {
                                         }
                                     }
                                     
-                                    // LÍNEAS VERTICALES CONTINUAS
-                                    Repeater {
-                                        model: 7
-                                        Rectangle {
-                                            property real xPos: {
-                                                var w = parent.width - baseUnit * 3
-                                                switch(index) {
-                                                    case 0: return baseUnit * 1.5 + w * colId
-                                                    case 1: return baseUnit * 1.5 + w * (colId + colPaciente)
-                                                    case 2: return baseUnit * 1.5 + w * (colId + colPaciente + colAnalisis)
-                                                    case 3: return baseUnit * 1.5 + w * (colId + colPaciente + colAnalisis + colTipo)
-                                                    case 4: return baseUnit * 1.5 + w * (colId + colPaciente + colAnalisis + colTipo + colPrecio)
-                                                    case 5: return baseUnit * 1.5 + w * (colId + colPaciente + colAnalisis + colTipo + colPrecio + colTrabajador)
-                                                    case 6: return baseUnit * 1.5 + w * (colId + colPaciente + colAnalisis + colTipo + colPrecio + colTrabajador + colRegistradoPor)
-                                                }
-                                            }
-                                            x: xPos
-                                            width: 1
-                                            height: parent.height
-                                            color: lineColor
-                                            z: 1
-                                        }
-                                    }
                                     
                                     MouseArea {
                                         anchors.fill: parent

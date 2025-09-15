@@ -18,10 +18,11 @@ class ProductoRepository(BaseRepository):
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene productos activos (con stock > 0)"""
         query = """
-        SELECT p.*, m.Nombre as Marca_Nombre 
+        SELECT p.*, m.Nombre as Marca_Nombre,
+            ISNULL((SELECT SUM(l.Cantidad_Caja + l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Calculado
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (p.Stock_Caja + p.Stock_Unitario) > 0
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0
         ORDER BY p.Nombre
         """
         return self._execute_query(query)
@@ -46,10 +47,10 @@ class ProductoRepository(BaseRepository):
             p.Precio_compra, p.Precio_venta, p.Unidad_Medida, p.Fecha_Venc,
             m.id as Marca_ID, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
             
-            -- CORRECCIÓN: Calcular stocks correctamente desde lotes
+            -- CORRECCIÓN: SUMAR en lugar de multiplicar
             ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Caja,
             ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
-            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            ISNULL((SELECT SUM(l.Cantidad_Caja + l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
             
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
@@ -63,17 +64,18 @@ class ProductoRepository(BaseRepository):
         if not termino:
             return []
         
-        stock_condition = "" if incluir_sin_stock else "AND (p.Stock_Caja + p.Stock_Unitario) > 0"
+        stock_condition = "" if incluir_sin_stock else "AND (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0"
         
         query = f"""
         SELECT p.*, m.Nombre as Marca_Nombre,
                 (SELECT ISNULL(SUM(l.Cantidad_Caja), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Total_Cajas,
-                (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Stock_Total
+                (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Stock_Total
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?) {stock_condition}
         ORDER BY p.Nombre
         """
+        
         termino_like = f"%{termino}%"
         return self._execute_query(query, (termino_like, termino_like))
     
@@ -83,17 +85,18 @@ class ProductoRepository(BaseRepository):
         SELECT 
             p.*, m.Nombre as Marca_Nombre,
             
-            -- CORRECCIÓN: Calcular stocks correctamente desde lotes
+            -- CORRECCIÓN: SUMAR en lugar de multiplicar
             ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Total_Cajas,
-            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            ISNULL((SELECT SUM(l.Cantidad_Caja + l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
             
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) 
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) 
             FROM Lote l WHERE l.Id_Producto = p.id) <= ?
-        ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) 
+        ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) 
                 FROM Lote l WHERE l.Id_Producto = p.id) ASC
         """
+
         return self._execute_query(query, (stock_minimo,), use_cache=False)
     
     # ===============================
@@ -286,26 +289,6 @@ class ProductoRepository(BaseRepository):
                 'stock_nuevo': nueva_cantidad_caja + nueva_cantidad_unitario
             })
         
-        # Actualizar también el stock total del producto
-        producto = self.get_by_id(producto_id)
-        nuevo_stock_total = (producto['Stock_Caja'] + producto['Stock_Unitario']) - cantidad
-        
-        # Distribuir la reducción proporcionalmente
-        if producto['Stock_Unitario'] >= cantidad:
-            nuevo_stock_unitario = producto['Stock_Unitario'] - cantidad
-            nuevo_stock_caja = producto['Stock_Caja']
-        else:
-            cantidad_restante_prod = cantidad - producto['Stock_Unitario']
-            nuevo_stock_unitario = 0
-            nuevo_stock_caja = producto['Stock_Caja'] - cantidad_restante_prod
-        
-        update_producto_query = """
-        UPDATE Productos 
-        SET Stock_Caja = ?, Stock_Unitario = ?
-        WHERE id = ?
-        """
-        operaciones.append((update_producto_query, (nuevo_stock_caja, nuevo_stock_unitario, producto_id)))
-        
         # Ejecutar todas las operaciones en transacción
         success = self.execute_transaction(operaciones)
         
@@ -334,8 +317,8 @@ class ProductoRepository(BaseRepository):
         print(f"📅 Fecha original: '{fecha_vencimiento}' -> Formateada: '{fecha_venc_formateada}'")
         
         # Calcular nuevos stocks
-        nuevo_stock_caja = producto['Stock_Caja'] + cantidad_caja
-        nuevo_stock_unitario = producto['Stock_Unitario'] + cantidad_unitario
+        # No calcular stocks de tabla Productos - Los lotes manejan todo
+        print(f"📦 Creando lote - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
         
         print(f"📦 Creando lote - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
         
@@ -365,29 +348,20 @@ class ProductoRepository(BaseRepository):
                 lote_id = lote_row[0]
                 print(f"✅ Lote creado - ID: {lote_id} con fecha: {fecha_venc_formateada}")
                 
-                # 2. Actualizar stock del producto
+                # 2. Actualizar SOLO precio si se proporciona (NO stock)
                 if precio_compra:
                     producto_query = """
                     UPDATE Productos 
-                    SET Stock_Caja = ?, Stock_Unitario = ?, Precio_compra = ?
+                    SET Precio_compra = ?
                     WHERE id = ?
                     """
-                    producto_params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id)
-                else:
-                    producto_query = """
-                    UPDATE Productos 
-                    SET Stock_Caja = ?, Stock_Unitario = ?
-                    WHERE id = ?
-                    """
-                    producto_params = (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
-                
-                cursor.execute(producto_query, producto_params)
-                filas_afectadas = cursor.rowcount
-                
-                if filas_afectadas != 1:
-                    print(f"❌ ERROR: No se actualizó stock del producto {producto_id}")
-                    conn.rollback()
-                    return None
+                    cursor.execute(producto_query, (precio_compra, producto_id))
+                    filas_afectadas = cursor.rowcount
+                    
+                    if filas_afectadas != 1:
+                        print(f"❌ ERROR: No se actualizó precio del producto {producto_id}")
+                        conn.rollback()
+                        return None
                 
                 # 3. COMMIT de toda la transacción
                 conn.commit()
@@ -396,7 +370,7 @@ class ProductoRepository(BaseRepository):
                 self._invalidate_cache_after_modification()
                 
                 print(f"✅ Stock aumentado exitosamente - Producto: {producto_id}, Lote: {lote_id}")
-                print(f"📈 Nuevo stock - Cajas: {nuevo_stock_caja}, Unitarios: {nuevo_stock_unitario}")
+        
                 
                 return lote_id
                 
@@ -435,7 +409,7 @@ class ProductoRepository(BaseRepository):
             SUM(dv.Cantidad_Unitario) as Total_Vendido,
             COUNT(dv.id) as Num_Ventas,
             AVG(dv.Precio_Unitario) as Precio_Promedio,
-            (p.Stock_Caja + p.Stock_Unitario) as Stock_Actual
+            (SELECT ISNULL(SUM(l2.Cantidad_Caja + l2.Cantidad_Unitario), 0) FROM Lote l2 WHERE l2.Id_Producto = p.id) as Stock_Actual
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         INNER JOIN Lote l ON p.id = l.Id_Producto
@@ -451,12 +425,18 @@ class ProductoRepository(BaseRepository):
         """Valor total del inventario"""
         query = """
         SELECT 
-            SUM((p.Stock_Caja + p.Stock_Unitario) * p.Precio_compra) as Valor_Compra,
-            SUM((p.Stock_Caja + p.Stock_Unitario) * p.Precio_venta) as Valor_Venta,
+            SUM(stock_calculado.Stock_Real * p.Precio_compra) as Valor_Compra,
+            SUM(stock_calculado.Stock_Real * p.Precio_venta) as Valor_Venta,
             COUNT(*) as Total_Productos,
-            SUM(p.Stock_Caja + p.Stock_Unitario) as Total_Unidades
+            SUM(stock_calculado.Stock_Real) as Total_Unidades
         FROM Productos p
-        WHERE (p.Stock_Caja + p.Stock_Unitario) > 0
+        INNER JOIN (
+            SELECT l.Id_Producto, 
+                SUM(l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Real
+            FROM Lote l
+            GROUP BY l.Id_Producto
+            HAVING SUM(l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+        ) stock_calculado ON p.id = stock_calculado.Id_Producto
         """
         return self._execute_query(query, fetch_one=True) or {}
 

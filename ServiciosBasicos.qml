@@ -404,10 +404,6 @@ Item {
         errorDialog.open()
     }
     
-    // PROPIEDAD PARA EXPONER EL MODELO DE DATOS
-    property alias tiposGastosModel: tiposGastosModel
-    property alias proveedoresModel: proveedoresModel
-    
     // MODELO DE TIPOS DE GASTOS LOCAL (FALLBACK)
     ListModel {
         id: tiposGastosModel
