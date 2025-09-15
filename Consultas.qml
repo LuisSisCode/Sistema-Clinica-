@@ -153,7 +153,8 @@ Item {
 
     function showNotification(tipo, mensaje) {
         if (typeof appController !== 'undefined') {
-            appController.showNotification(tipo, mensaje)
+            console.log("Exito para consulta")
+            //appController.showNotification(tipo, mensaje)
         } else {
             console.log(`${tipo}: ${mensaje}`)
         }
@@ -2727,11 +2728,12 @@ Item {
             if (!consultaModel || !consultaModel.especialidades) {
                 throw new Error("No hay especialidades disponibles")
             }
-            
-            if (consultationForm.selectedEspecialidadIndex >= consultaModel.especialidades.length) {
+
+            // CORREGIDO: Cambiar consultationForm por consultationFormDialog
+            if (consultationFormDialog.selectedEspecialidadIndex >= consultaModel.especialidades.length) {
                 throw new Error("Índice de especialidad fuera de rango")
             }
-            
+
             var especialidadSeleccionada = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
             var especialidadId = especialidadSeleccionada.id
             

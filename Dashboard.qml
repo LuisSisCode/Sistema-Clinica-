@@ -205,10 +205,6 @@ ScrollView {
     signal periodChanged(string newPeriodType)
     
     Component.onCompleted: {
-        if (profiler) {
-            profiler.startTiming("dashboard_load")
-        }
-        
         // Inicializar conexión con modelo
         if (dashboardModel) {
             console.log("📊 Dashboard conectado con modelo de BD")
@@ -1194,12 +1190,6 @@ ScrollView {
                     }
                 }
             }
-        }
-    }
-    
-    Component.onDestruction: {
-        if (profiler) {
-            profiler.endTiming("dashboard_load")
         }
     }
 }

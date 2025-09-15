@@ -7,8 +7,7 @@ from ..core.excepciones import ExceptionHandler, ValidationError, Authentication
 
 class UsuarioModel(QObject):
     """
-    Model QObject para gestión de usuarios en QML
-    Conecta la interfaz QML con el UsuarioRepository
+    Model QObject para gestión de usuarios en QML - CON AUTENTICACIÓN ESTANDARIZADA
     """
     
     # ===============================
@@ -33,12 +32,18 @@ class UsuarioModel(QObject):
     loadingChanged = Signal()
     errorOccurred = Signal(str, str)  # title, message
     successMessage = Signal(str)
+    operacionError = Signal(str, arguments=['mensaje'])  # Para compatibilidad
+    operacionExitosa = Signal(str, arguments=['mensaje'])
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
         # Referencias a repositories
         self.repository = UsuarioRepository()
+        
+        # ✅ AUTENTICACIÓN ESTANDARIZADA
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        print("🎯 UsuarioModel inicializado - Esperando autenticación")
         
         # Estado interno
         self._usuarios: List[Dict[str, Any]] = []
@@ -55,11 +60,44 @@ class UsuarioModel(QObject):
         
         # Configuración inicial
         self._cargar_datos_iniciales()
-        
-        print("🎯 UsuarioModel inicializado")
     
     # ===============================
-    # PROPERTIES - Datos para QML
+    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """Establece el usuario actual para las operaciones"""
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en UsuarioModel: {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de usuarios")
+            else:
+                print(f"⚠️ ID de usuario inválido en UsuarioModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en UsuarioModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    # ===============================
+    # PROPERTIES - Datos para QML (SIN CAMBIOS)
     # ===============================
     
     @Property(list, notify=usuariosChanged)
@@ -108,33 +146,22 @@ class UsuarioModel(QObject):
         return self._filtro_busqueda
     
     # ===============================
-    # SLOTS - Métodos llamables desde QML
+    # ✅ OPERACIONES CRUD - CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
-    
-    # --- OPERACIONES CRUD ---
     
     @Slot(str, str, str, str, str, str, int, bool, result=bool)
     def crearUsuario(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                    correo: str, contrasena: str, confirmar_contrasena: str, 
+                    nombre_usuario: str, contrasena: str, confirmar_contrasena: str, 
                     rol_id: int, estado: bool) -> bool:
-        """
-        Crea nuevo usuario desde QML
-        
-        Args:
-            nombre: Nombre del usuario
-            apellido_paterno: Apellido paterno
-            apellido_materno: Apellido materno
-            correo: Correo electrónico
-            contrasena: Contraseña
-            confirmar_contrasena: Confirmación de contraseña
-            rol_id: ID del rol
-            estado: Estado activo/inactivo
-            
-        Returns:
-            True si se creó exitosamente
-        """
+        """Crea nuevo usuario - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"👥 Creando usuario por usuario autenticado: {self._usuario_actual_id}")
             
             # Validar contraseñas coinciden
             if contrasena != confirmar_contrasena:
@@ -146,7 +173,7 @@ class UsuarioModel(QObject):
                 nombre=nombre.strip(),
                 apellido_paterno=apellido_paterno.strip(),
                 apellido_materno=apellido_materno.strip(),
-                correo=correo.strip(),
+                nombre_usuario=nombre_usuario.strip(),
                 contrasena=contrasena,
                 rol_id=rol_id,
                 estado=estado
@@ -162,7 +189,7 @@ class UsuarioModel(QObject):
                 self.usuarioCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Usuario creado desde QML: {correo}")
+                print(f"✅ Usuario creado por {self._usuario_actual_id}: {nombre_usuario}")
                 return True
             else:
                 self.usuarioCreado.emit(False, "Error creando usuario")
@@ -183,10 +210,16 @@ class UsuarioModel(QObject):
     
     @Slot(int, str, str, str, str, int, bool, result=bool)
     def actualizarUsuario(self, usuario_id: int, nombre: str, apellido_paterno: str, 
-                         apellido_materno: str, correo: str, rol_id: int, estado: bool) -> bool:
-        """Actualiza usuario existente desde QML"""
+                         apellido_materno: str, nombre_usuario: str, rol_id: int, estado: bool) -> bool:
+        """Actualiza usuario existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"✏️ Actualizando usuario ID: {usuario_id} por usuario: {self._usuario_actual_id}")
             
             # Actualizar usando el repository
             success = self.repository.update_user(
@@ -194,7 +227,7 @@ class UsuarioModel(QObject):
                 nombre=nombre.strip() if nombre else None,
                 apellido_paterno=apellido_paterno.strip() if apellido_paterno else None,
                 apellido_materno=apellido_materno.strip() if apellido_materno else None,
-                correo=correo.strip() if correo else None,
+                nombre_usuario=nombre_usuario.strip() if nombre_usuario else None,
                 rol_id=rol_id if rol_id > 0 else None,
                 estado=estado
             )
@@ -209,7 +242,7 @@ class UsuarioModel(QObject):
                 self.usuarioActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Usuario actualizado desde QML: ID {usuario_id}")
+                print(f"✅ Usuario actualizado por {self._usuario_actual_id}")
                 return True
             else:
                 self.usuarioActualizado.emit(False, "Error actualizando usuario")
@@ -230,9 +263,15 @@ class UsuarioModel(QObject):
     
     @Slot(int, result=bool)
     def eliminarUsuario(self, usuario_id: int) -> bool:
-        """Elimina usuario desde QML"""
+        """Elimina usuario - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"🗑️ Eliminando usuario ID: {usuario_id} por usuario: {self._usuario_actual_id}")
             
             # Eliminar usando el repository
             success = self.repository.delete(usuario_id)
@@ -247,7 +286,7 @@ class UsuarioModel(QObject):
                 self.usuarioEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"🗑️ Usuario eliminado desde QML: ID {usuario_id}")
+                print(f"✅ Usuario eliminado por {self._usuario_actual_id}")
                 return True
             else:
                 self.usuarioEliminado.emit(False, "Usuario no encontrado")
@@ -261,7 +300,9 @@ class UsuarioModel(QObject):
         finally:
             self._set_loading(False)
     
-    # --- BÚSQUEDA Y FILTROS ---
+    # ===============================
+    # BÚSQUEDA Y FILTROS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot(str, str, str)
     def aplicarFiltros(self, filtro_rol: str, filtro_estado: str, texto_busqueda: str):
@@ -292,7 +333,7 @@ class UsuarioModel(QObject):
                 usuarios_filtrados = [
                     u for u in usuarios_filtrados 
                     if (termino in (u.get('Nombre', '') + ' ' + u.get('Apellido_Paterno', '')).lower() or 
-                        termino in u.get('correo', '').lower())
+                        termino in u.get('nombre_usuario', '').lower())
                 ]
             
             # Actualizar lista filtrada
@@ -306,7 +347,7 @@ class UsuarioModel(QObject):
     
     @Slot(str, result=list)
     def buscarUsuarios(self, termino: str) -> List[Dict[str, Any]]:
-        """Búsqueda avanzada de usuarios"""
+        """Búsqueda avanzada de usuarios - SIN VERIFICACIÓN (solo lectura)"""
         try:
             if not termino.strip():
                 return self._usuarios
@@ -329,22 +370,24 @@ class UsuarioModel(QObject):
         self.usuariosChanged.emit()
         print("🧹 Filtros limpiados")
     
-    # --- AUTENTICACIÓN ---
+    # ===============================
+    # AUTENTICACIÓN (SIN VERIFICACIÓN - ES EL SISTEMA DE AUTH)
+    # ===============================
     
     @Slot(str, str)
-    def login(self, correo: str, contrasena: str):
-        """Autentica usuario desde QML"""
+    def login(self, nombre_usuario: str, contrasena: str):
+        """Autentica usuario desde QML - SIN VERIFICACIÓN (es el login)"""
         try:
             self._set_loading(True)
             
-            usuario = self.repository.authenticate(correo, contrasena)
+            usuario = self.repository.authenticate(nombre_usuario, contrasena)
             
             if usuario:
                 self._usuario_actual = usuario
                 mensaje = f"Bienvenido, {usuario.get('Nombre', '')} {usuario.get('Apellido_Paterno', '')}"
                 self.loginCompleted.emit(True, mensaje, usuario)
                 self.successMessage.emit(mensaje)
-                print(f"🔑 Login exitoso desde QML: {correo}")
+                print(f"🔑 Login exitoso desde QML: {nombre_usuario}")
             else:
                 self.loginCompleted.emit(False, "Credenciales inválidas", {})
                 
@@ -361,22 +404,31 @@ class UsuarioModel(QObject):
     
     @Slot()
     def logout(self):
-        """Cierra sesión desde QML"""
+        """Cierra sesión desde QML - SIN VERIFICACIÓN (es el logout)"""
         try:
             self._usuario_actual = None
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO AUTENTICADO
             self.logoutCompleted.emit(True, "Sesión cerrada correctamente")
             print("🚪 Logout exitoso desde QML")
         except Exception as e:
             error_msg = f"Error en logout: {str(e)}"
             self.logoutCompleted.emit(False, error_msg)
     
-    # --- OPERACIONES ESPECIALES ---
+    # ===============================
+    # ✅ OPERACIONES ESPECIALES - CON VERIFICACIÓN DE AUTENTICACIÓN
+    # ===============================
     
     @Slot(int, str, str, result=bool)
     def cambiarContrasena(self, usuario_id: int, contrasena_actual: str, nueva_contrasena: str) -> bool:
-        """Cambiar contraseña de usuario"""
+        """Cambiar contraseña de usuario - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"🔐 Cambio de contraseña ID: {usuario_id} por usuario: {self._usuario_actual_id}")
             
             success = self.repository.change_password(usuario_id, contrasena_actual, nueva_contrasena)
             
@@ -398,9 +450,15 @@ class UsuarioModel(QObject):
     
     @Slot(int, str, result=bool)
     def resetearContrasena(self, usuario_id: int, nueva_contrasena: str) -> bool:
-        """Reset de contraseña por administrador"""
+        """Reset de contraseña por administrador - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"🔓 Reset contraseña ID: {usuario_id} por admin: {self._usuario_actual_id}")
             
             success = self.repository.reset_password(usuario_id, nueva_contrasena)
             
@@ -420,7 +478,9 @@ class UsuarioModel(QObject):
         finally:
             self._set_loading(False)
     
-    # --- CONSULTAS ESPECÍFICAS ---
+    # ===============================
+    # CONSULTAS ESPECÍFICAS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot(result=list)
     def obtenerAdministradores(self) -> List[Dict[str, Any]]:
@@ -450,7 +510,9 @@ class UsuarioModel(QObject):
             self.errorOccurred.emit("Error", f"Error obteniendo usuario: {str(e)}")
             return {}
     
-    # --- RECARGA DE DATOS ---
+    # ===============================
+    # RECARGA DE DATOS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
         
     @Slot()
     def recargarDatos(self):
@@ -490,7 +552,9 @@ class UsuarioModel(QObject):
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error recargando usuarios: {str(e)}")
     
-    # --- UTILIDADES ---
+    # ===============================
+    # UTILIDADES (SIN VERIFICACIÓN)
+    # ===============================
     
     @Slot(result=list)
     def obtenerRolesDisponibles(self) -> List[str]:
@@ -518,10 +582,10 @@ class UsuarioModel(QObject):
             self.errorOccurred.emit("Error", f"Error limpiando caché: {str(e)}")
     
     @Slot(str, result=bool)
-    def validarEmail(self, email: str) -> bool:
-        """Valida formato de email"""
+    def validarUsuario(self, nombre_usuario: str) -> bool:
+        """Valida formato de nombre de usuario"""
         try:
-            return self.repository.email_exists(email) == False  # Email válido si NO existe
+            return self.repository.username_exists(nombre_usuario) == False  # Usuario válido si NO existe
         except Exception:
             return False
     
@@ -535,7 +599,7 @@ class UsuarioModel(QObject):
             return "Desconocido"
     
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÉTODOS PRIVADOS (SIN CAMBIOS)
     # ===============================
     
     def _cargar_datos_iniciales(self):
@@ -590,6 +654,34 @@ class UsuarioModel(QObject):
             self._loading = loading
             self.loadingChanged.emit()
 
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para UsuarioModel"""
+        try:
+            print("🚨 UsuarioModel: Iniciando desconexión de emergencia...")
+            
+            # Establecer estado shutdown
+            self._loading = False
+            self._usuario_actual_id = 0
+            self._usuario_actual = None
+            
+            # Limpiar datos
+            self._usuarios = []
+            self._usuarios_filtrados = []
+            self._roles = []
+            self._estadisticas = {}
+            
+            # Limpiar filtros
+            self._filtro_rol = "Todos los roles"
+            self._filtro_estado = "Todos"
+            self._filtro_busqueda = ""
+            
+            self.repository = None
+            
+            print("✅ UsuarioModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión UsuarioModel: {e}")
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================
@@ -597,7 +689,6 @@ class UsuarioModel(QObject):
 def register_usuario_model():
     """Registra el UsuarioModel para uso en QML"""
     qmlRegisterType(UsuarioModel, "ClinicaModels", 1, 0, "UsuarioModel")
-    print("🔗 UsuarioModel registrado para QML")
+    print("📗 UsuarioModel con autenticación registrado para QML")
 
-# Para facilitar la importación
 __all__ = ['UsuarioModel', 'register_usuario_model']

@@ -1,4 +1,4 @@
-// login.qml - Interfaz de login con controles de ventana corregidos
+// login.qml - Interfaz de login corregida
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -11,11 +11,7 @@ ApplicationWindow {
     height: 500
     title: "Clínica App - Sistema de Acceso"
     
-    // SOLUCIÓN: Cambiar las flags para que aparezca en la barra de tareas
     flags: Qt.Window | Qt.FramelessWindowHint
-    // Alternativa si quieres que aparezca en la barra de tareas:
-    // flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
-    
     color: "transparent"
 
     // Propiedades de diseño
@@ -31,62 +27,31 @@ ApplicationWindow {
     // Estados de la aplicación
     property bool isLoading: false
     property bool isClosing: false
-    property string statusMessage: "Sistema inicializando..."
-    property bool connectionOk: false
+    property string statusMessage: "Sistema listo para autenticar"
+    property bool connectionOk: true
     property var currentUser: null
-    
-    // NUEVA PROPIEDAD: Para controlar si debe cerrar toda la app o solo la ventana
-    property bool closeApplicationOnExit: false
+    property bool closeApplicationOnExit: true
 
-    // Conexiones con el backend integrado
+    // Conexiones con AuthModel
     Connections {
-        target: backend
+        target: authModel
         
-        function onConnectionStatus(connected, message) {
-            connectionOk = connected
-            statusMessage = message
-            console.log("Estado conexión:", connected, message)
-        }
-        
-        function onLoginResult(success, message, userData) {
+        function onLoginSuccessful(success, message, userData) {
             isLoading = false
-            
-            if (success) {
-                console.log("✅ Login exitoso:", JSON.stringify(userData))
-                currentUser = userData
-                statusMessage = "Acceso concedido - Iniciando aplicación..."
-                
-                // Guardar credenciales si está marcado recordar
-                if (rememberPassword.checked) {
-                    saveCredentials(usernameField.text, userData.token)
-                }
-                
-                // Mostrar animación de éxito y luego cerrar
-                successAnimation.start()
-                
-            } else {
-                console.log("❌ Login fallido:", message)
-                statusMessage = message
-                showErrorAnimation()
-                
-                // Limpiar contraseña en caso de error
-                passwordField.clear()
-                passwordField.focus = true
-            }
+            currentUser = userData
+            statusMessage = "Acceso concedido - Iniciando aplicación..."
+            successAnimation.start()
         }
         
-        function onUserAuthenticated(userData) {
-            console.log("Usuario autenticado:", JSON.stringify(userData))
-            // Aquí puedes añadir lógica adicional después de la autenticación
+        function onLoginFailed(message) {
+            isLoading = false
+            statusMessage = message
+            showErrorAnimation()
+            passwordField.clear()
+            passwordField.forceActiveFocus()
         }
     }
 
-    // Funciones auxiliares
-    function saveCredentials(email, token) {
-        // En un entorno real, usar almacenamiento seguro
-        console.log("Guardando credenciales para:", email)
-    }
-    
     function showErrorAnimation() {
         errorShake.start()
         errorTimer.start()
@@ -94,26 +59,15 @@ ApplicationWindow {
     
     function launchMainApp() {
         console.log("🚀 Lanzando aplicación principal...")
-        // NO cerrar la aplicación, solo cerrar la ventana de login
         mainWindow.visible = false
-        // Si necesitas crear/mostrar otra ventana aquí sería el lugar
-        // mainAppWindow.show()
     }
     
-    // NUEVA FUNCIÓN: Para manejar el cierre de la ventana
     function handleWindowClose() {
         if (closeApplicationOnExit) {
             Qt.quit()
         } else {
             mainWindow.hide()
         }
-    }
-    
-    // NUEVA FUNCIÓN: Para restaurar la ventana desde la bandeja del sistema
-    function restoreWindow() {
-        mainWindow.show()
-        mainWindow.raise()
-        mainWindow.requestActivate()
     }
 
     // Permite mover la ventana sin borde
@@ -123,7 +77,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 40
-        property point clickPos: "0,0"
+        property point clickPos: Qt.point(0, 0)
         
         onPressed: function(mouse) {
             clickPos = Qt.point(mouse.x, mouse.y)
@@ -137,7 +91,6 @@ ApplicationWindow {
             }
         }
         
-        // MEJORADO: Doble clic para maximizar/restaurar
         onDoubleClicked: {
             if (mainWindow.visibility === Window.Maximized) {
                 mainWindow.showNormal()
@@ -188,14 +141,13 @@ ApplicationWindow {
                 anchors.rightMargin: 10
                 spacing: 10
                 
-                // Botón minimizar CORREGIDO
+                // Botón minimizar
                 Rectangle {
                     width: 16
                     height: 16
                     radius: 8
                     color: minimizeMouseArea.containsMouse ? "#FFD700" : "#FFBD44"
                     
-                    // Icono de minimizar
                     Rectangle {
                         width: 8
                         height: 1
@@ -208,27 +160,17 @@ ApplicationWindow {
                         id: minimizeMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        
-                        onClicked: {
-                            console.log("🔽 Minimizando ventana...")
-                            mainWindow.showMinimized()
-                        }
-                        
-                        // Tooltip para ayuda
-                        ToolTip.visible: containsMouse
-                        ToolTip.text: "Minimizar (F9 para restaurar)"
-                        ToolTip.delay: 1000
+                        onClicked: mainWindow.showMinimized()
                     }
                 }
                 
-                // Botón cerrar CORREGIDO
+                // Botón cerrar
                 Rectangle {
                     width: 16
                     height: 16
                     radius: 8
                     color: closeMouseArea.containsMouse ? "#FF0000" : "#FF605C"
                     
-                    // Icono X
                     Text {
                         anchors.centerIn: parent
                         text: "✕"
@@ -242,16 +184,7 @@ ApplicationWindow {
                         id: closeMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        
-                        onClicked: {
-                            console.log("❌ Cerrando ventana...")
-                            handleWindowClose()
-                        }
-                        
-                        // Tooltip
-                        ToolTip.visible: containsMouse
-                        ToolTip.text: closeApplicationOnExit ? "Cerrar aplicación" : "Cerrar ventana"
-                        ToolTip.delay: 1000
+                        onClicked: handleWindowClose()
                     }
                 }
             }
@@ -270,19 +203,11 @@ ApplicationWindow {
                     color: "white"
                 }
                 
-                // Indicador de conexión
                 Rectangle {
                     width: 8
                     height: 8
                     radius: 4
                     color: connectionOk ? "#00d63f" : "#ff3838"
-                    
-                    SequentialAnimation on opacity {
-                        running: !connectionOk
-                        loops: Animation.Infinite
-                        NumberAnimation { from: 1; to: 0.3; duration: 500 }
-                        NumberAnimation { from: 0.3; to: 1; duration: 500 }
-                    }
                 }
             }
         }
@@ -336,35 +261,13 @@ ApplicationWindow {
                             height: width
                             color: "transparent"
                             
-                            Image {
-                                id: loginImage
-                                anchors.fill: parent
-                                source: "Image/Image_login/logologinn.png"
-                                fillMode: Image.PreserveAspectFit
-                                opacity: 0.8
-                                visible: status === Image.Ready
-                                
-                                NumberAnimation on y {
-                                    from: -5; to: 5
-                                    duration: 3000
-                                    loops: Animation.Infinite
-                                    easing.type: Easing.InOutQuad
-                                    running: loginImage.visible
-                                }
-                            }
-                            
-                            Rectangle {
-                                anchors.fill: parent
-                                color: "transparent"
-                                visible: loginImage.status !== Image.Ready
-                                
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "🏥"
-                                    font.pixelSize: 120
-                                    color: "white"
-                                    opacity: 0.6
-                                }
+                            // Icono alternativo si no encuentra la imagen
+                            Text {
+                                anchors.centerIn: parent
+                                text: "🏥"
+                                font.pixelSize: 120
+                                color: "white"
+                                opacity: 0.6
                             }
                         }
                         
@@ -389,7 +292,7 @@ ApplicationWindow {
                         }
                     }
                     
-                    // Columna derecha (formulario) - MISMO CÓDIGO...
+                    // Columna derecha (formulario)
                     Rectangle {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
@@ -418,7 +321,7 @@ ApplicationWindow {
                             
                             Item { Layout.preferredHeight: 20 }
 
-                            // Campo de email
+                            // Campo de usuario
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 50
@@ -438,7 +341,7 @@ ApplicationWindow {
                                         
                                         Text {
                                             anchors.centerIn: parent
-                                            text: "📧"
+                                            text: "👤"
                                             font.pixelSize: 18
                                             opacity: 0.6
                                         }
@@ -448,15 +351,13 @@ ApplicationWindow {
                                         id: usernameField
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
-                                        placeholderText: "Email del usuario"
+                                        placeholderText: "Nombre de usuario"
                                         font.pixelSize: 14
                                         selectByMouse: true
                                         background: null
                                         enabled: !isLoading
                                         
-                                        scale: 1
-                                        Behavior on scale { NumberAnimation { duration: 200 } }
-                                        onFocusChanged: if (activeFocus) scale = 1.02; else scale = 1
+                                        Keys.onTabPressed: passwordField.forceActiveFocus()
                                     }
                                 }
                             }
@@ -498,12 +399,10 @@ ApplicationWindow {
                                         background: null
                                         enabled: !isLoading
                                         
-                                        scale: 1
-                                        Behavior on scale { NumberAnimation { duration: 200 } }
-                                        onFocusChanged: if (activeFocus) scale = 1.02; else scale = 1
-                                        
                                         Keys.onReturnPressed: {
-                                            if (!isLoading) loginButton.clicked()
+                                            if (!isLoading && loginButton.enabled) {
+                                                loginButton.clicked()
+                                            }
                                         }
                                     }
                                     
@@ -530,7 +429,7 @@ ApplicationWindow {
                                 }
                             }
                             
-                            // Opción recordar y configuración de cierre
+                            // Opciones
                             RowLayout {
                                 Layout.fillWidth: true
                                 
@@ -544,103 +443,66 @@ ApplicationWindow {
                                 
                                 Item { Layout.fillWidth: true }
                                 
-                                // NUEVA OPCIÓN: Checkbox para controlar comportamiento de cierre
                                 CheckBox {
                                     id: closeAppCheckbox
                                     text: "Cerrar app al salir"
                                     font.pixelSize: 10
                                     checked: closeApplicationOnExit
                                     enabled: !isLoading
-                                    
-                                    onCheckedChanged: {
-                                        closeApplicationOnExit = checked
-                                    }
-                                    
-                                    ToolTip.visible: hovered
-                                    ToolTip.text: "Si está marcado, cerrar la ventana terminará toda la aplicación"
-                                }
-                            }
-                            
-                            // Link de problemas de acceso
-                            Text {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: "¿Problemas de acceso?"
-                                font.pixelSize: 12
-                                color: colorBoton
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    enabled: !isLoading
-                                    onClicked: {
-                                        console.log("Recuperar contraseña")
-                                    }
+                                    onCheckedChanged: closeApplicationOnExit = checked
                                 }
                             }
 
-                            // Botón de login (mismo código anterior)
-                            Button {
+                            // Botón de login personalizado
+                            Rectangle {
                                 id: loginButton
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 50
-                                text: isLoading ? "VERIFICANDO..." : "INGRESAR"
-                                font.pixelSize: 16
-                                font.bold: true
+                                radius: 5
                                 enabled: !isLoading && connectionOk && 
                                         usernameField.text.length > 0 && 
                                         passwordField.text.length > 0
 
-                                contentItem: Text {
-                                    text: parent.text
-                                    font: parent.font
+                                // Color del botón basado en estado
+                                color: {
+                                    if (!enabled) return "#cccccc"
+                                    if (mouseArea.pressed) return Qt.darker(colorBoton, 1.2)
+                                    if (mouseArea.containsMouse) return colorHover
+                                    return colorBoton
+                                }
+
+                                // Texto del botón
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: isLoading ? "VERIFICANDO..." : "INGRESAR"
+                                    font.pixelSize: 16
+                                    font.bold: true
                                     color: "white"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
                                 }
 
-                                background: Rectangle {
-                                    radius: 5
-                                    color: {
-                                        if (!parent.enabled) return "#cccccc"
-                                        if (parent.down) return Qt.darker(colorBoton, 1.2)
-                                        if (parent.hovered) return colorHover
-                                        return colorBoton
-                                    }
-                                    
-                                    gradient: Gradient {
-                                        GradientStop { 
-                                            position: 0.0
-                                            color: parent.enabled ? Qt.lighter(parent.color, 1.1) : "#cccccc"
+                                // Efecto de mouse
+                                MouseArea {
+                                    id: mouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: loginButton.enabled
+                                    onClicked: {
+                                        if (!connectionOk) {
+                                            statusMessage = "Error: No hay conexión con la base de datos"
+                                            return
                                         }
-                                        GradientStop { 
-                                            position: 1.0
-                                            color: parent.color
-                                        }
+                                        
+                                        isLoading = true
+                                        statusMessage = "Verificando credenciales..."
+                                        
+                                        // Usar AuthModel para login
+                                        authModel.login(usernameField.text.trim(), passwordField.text)
                                     }
-                                    
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                }
-
-                                scale: loginButton.down ? 0.98 : 1.0
-                                Behavior on scale { NumberAnimation { duration: 100 } }
-                                
-                                onClicked: {
-                                    if (!connectionOk) {
-                                        statusMessage = "Error: No hay conexión con la base de datos"
-                                        return
-                                    }
-                                    
-                                    isLoading = true
-                                    statusMessage = "Verificando credenciales..."
-                                    
-                                    // Llamar al backend para autenticar
-                                    backend.authenticateUser(usernameField.text.trim(), passwordField.text)
                                 }
                             }
                             
                             // Indicador de carga
                             BusyIndicator {
-                                id: loadingIndicator
                                 Layout.alignment: Qt.AlignHCenter
                                 running: isLoading
                                 visible: running
@@ -650,20 +512,13 @@ ApplicationWindow {
                             
                             // Estado del sistema
                             Text {
-                                id: statusText
                                 Layout.fillWidth: true
                                 text: statusMessage
                                 horizontalAlignment: Text.AlignHCenter
                                 color: connectionOk ? colorTexto : "#ff3838"
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
-
-                                opacity: 0
-                                Behavior on opacity { NumberAnimation { duration: 300 } }
-                                
-                                Component.onCompleted: {
-                                    opacity = 0.8
-                                }
+                                opacity: 0.8
                             }
                         }
                     }
@@ -715,18 +570,13 @@ ApplicationWindow {
             }
         }
         
-        onFinished: {
-            console.log("🚀 Cerrando login y abriendo aplicación principal")
-            launchMainApp()
-        }
+        onFinished: launchMainApp()
     }
     
     // Animación de entrada
     Component.onCompleted: {
         mainWindow.opacity = 0
         startupAnimation.start()
-        
-        // Enfocar campo de usuario al iniciar
         usernameField.forceActiveFocus()
     }
     
@@ -739,35 +589,21 @@ ApplicationWindow {
         easing.type: Easing.OutQuad
     }
     
-    // MEJORADO: Manejo de teclas globales con más opciones
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_F12) {
-            // Toggle panel de debug (si lo tienes)
-            event.accepted = true
-        } else if (event.key === Qt.Key_Escape) {
-            handleWindowClose()
-            event.accepted = true
-        } else if (event.key === Qt.Key_F9) {
-            // Restaurar ventana si está minimizada
-            restoreWindow()
-            event.accepted = true
-        } else if (event.key === Qt.Key_F11) {
-            // Toggle pantalla completa
-            if (mainWindow.visibility === Window.FullScreen) {
-                mainWindow.showNormal()
-            } else {
-                mainWindow.showFullScreen()
+    // Manejo de teclas
+    Item {
+        focus: true
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+                handleWindowClose()
+                event.accepted = true
+            } else if (event.key === Qt.Key_F11) {
+                if (mainWindow.visibility === Window.FullScreen) {
+                    mainWindow.showNormal()
+                } else {
+                    mainWindow.showFullScreen()
+                }
+                event.accepted = true
             }
-            event.accepted = true
-        }
-    }
-    
-    // NUEVO: Manejo de eventos de la ventana
-    onVisibilityChanged: {
-        if (visibility === Window.Minimized) {
-            console.log("🔽 Ventana minimizada")
-        } else if (visibility === Window.Windowed || visibility === Window.Maximized) {
-            console.log("🔼 Ventana restaurada")
         }
     }
 }

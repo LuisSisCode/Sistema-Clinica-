@@ -9,6 +9,7 @@ clinica_app/
 │   │   ├── excepciones.py                        # Excepciones personalizadas
 │   │   ├── cache_system.py                      # Sistema de caché completo
 │   │   ├── base_repository.py                   # Repositorio base
+│   │   ├── Signals_manager.py
 │   │   └── utils.py                             # Utilidades generales
 │   │
 │   ├── models/                                  # 🎯 QObject Models para QML
@@ -17,8 +18,8 @@ clinica_app/
 │   │   │   ├── ConfiEnfermeria_model.py
 │   │   │   ├── ConfiLaboratorio_model.py
 │   │   │   ├── ConfiServiciosbasicos_model.py
-│   │   │   └── # falta archivos py para otras configuraciones
-│   │   ├── __init__.py
+│   │   │   └── ConfiTrabajadores_model.py
+│   │   │   
 │   │   ├── usuario_model.py                     # Usuario + Roles (QObject)
 │   │   ├── enfermeria_model.py                     # Usuario + Roles (QObject)
 │   │   ├── paciente_model.py                    # Pacientes (QObject)
@@ -32,6 +33,7 @@ clinica_app/
 │   │   ├── gasto_model.py                       # Gastos + Tipos (QObject)
 │   │   ├── auth_model.py                        # Autenticación (QObject)
 │   │   ├── proveedor_model.py
+│   │   ├── reportes_model.py
 │   │   └── dashboard_model.py                   # Estadísticas generales (QObject)
 │   │
 │   ├── repositories/                            # 📊 Acceso a datos
@@ -40,10 +42,13 @@ clinica_app/
 │   │   │   ├── ConfiEnfermeria_repository.py
 │   │   │   ├── ConfiLaboratorio_repository.py
 │   │   │   ├── ConfiServiciosbasicos_repository.py
-│   │   │   └── # falta archivos py para otras configuraciones
+│   │   │   └── ConfiTrabajadores_repository.py
+│   │   │   
 │   │   ├── __init__.py
 │   │   ├── usuario_repository.py                # Usuario + Roles
-│   │   ├── enfermeria_repository.py                # Usuario + Roles
+│   │   ├── auth_repository.py   
+│   │   ├── reportes_repository.py              
+│   │   ├── enfermeria_repository.py             
 │   │   ├── paciente_repository.py               # Pacientes
 │   │   ├── doctor_repository.py                 # Doctores + Especialidades
 │   │   ├── trabajador_repository.py             # Trabajadores + Tipos
@@ -53,8 +58,8 @@ clinica_app/
 │   │   ├── compra_repository.py                 # Compras + Proveedores
 │   │   ├── venta_repository.py                  # Ventas + Detalles
 │   │   ├── gasto_repository.py                  # Gastos + Tipos
-│   │   ├── proveedor_repository.py                  # Gastos + Tipos
-│   │   └── estadistica_repository.py            # Consultas complejas
+│   │   └── proveedor_repository.py                  # Gastos + Tipos
+│   │   
 │   │
 │   └── main.py                                  # Punto de entrada principal
 │                             
@@ -99,9 +104,11 @@ clinica_app/
 ├── ConfiTrabajadores.qml
 ├── ConfiUsuarios.qml
 ├── Reportes.qml
+├── login.qml
 ├── main.qml
-│                             
-├── main.py						# Script ejecución con usuario predeterminado de ID = 10
+│     
+├── generar_pdf.py	                        
+├── main.py						# Script ejecucion con login
 └── .env                                 			# Variables entorno
 
 ## CAMBIOS PRINCIPALES VS ARQUITECTURA API

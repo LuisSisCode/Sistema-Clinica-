@@ -3,6 +3,7 @@ import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import QtQml 2.15
+import Qt5Compat.GraphicalEffects
 
 ApplicationWindow {
     id: mainWindow
@@ -38,18 +39,57 @@ ApplicationWindow {
     property int currentIndex: 0
     property bool farmaciaExpanded: false
     property int farmaciaSubsection: 0
-    
+
     
     Universal.theme: Universal.Light
     Universal.accent: primaryColor
     Universal.background: lightGrayColor
     Universal.foreground: textColor
+
+    Component.onCompleted: {
+        console.log("✅ main.qml cargado correctamente")
+        
+        // Verificar si authModel está disponible
+        if (typeof authModel === "undefined") {
+            console.log("⚠️ authModel no está disponible aún")
+        } else {
+            console.log("✅ authModel disponible:", authModel)
+        }
+    }
     
-    // HEADER ADAPTATIVO MEJORADO
+    // ===== CONEXIONES CON MODELOS =====
+    Connections {
+        target: appController
+        function onModelsReady() {
+            console.log("🔗 Models listos desde AppController")
+            if (appController.inventario_model_instance) {
+                console.log("📦 Productos disponibles BD:", appController.inventario_model_instance.totalProductos)
+            }
+            if (appController.proveedor_model_instance) {
+                console.log("📋 Proveedores BD:", appController.proveedor_model_instance.totalProveedores)
+            }
+            if (appController.venta_model_instance) {
+                console.log("💰 Ventas del día BD:", appController.venta_model_instance.ventasHoy.length)
+            }
+        }
+    }
+    
+    // Conexión con AuthModel si está disponible
+    Connections {
+        target: typeof authModel !== 'undefined' ? authModel : null
+        function onCurrentUserChanged() {
+            console.log("Usuario autenticado cambiado")
+        }
+        function onLogoutCompleted() {
+            console.log("Logout completado")
+        }
+    }
+    
+    // HEADER ADAPTATIVO MEJORADO - SOLO PERFIL Y CERRAR SESIÓN
     header: ToolBar {
+        id: mainToolBar
         objectName: "mainToolBar"
-        // PASO 1: Aumentar altura mínima del header
-        height: Math.max(70, baseUnit * 9) // Incrementado de 60 a 70, y de 8 a 9
+        height: Math.max(70, baseUnit * 9)
         
         background: Rectangle {
             gradient: Gradient {
@@ -61,27 +101,25 @@ ApplicationWindow {
         }
         
         RowLayout {
+            id: headerLayout
             anchors.fill: parent
-            // PASO 2: Reducir márgenes laterales para aprovechar mejor el espacio
-            anchors.leftMargin: baseUnit * 1.5  // Reducido de baseUnit * 2
-            anchors.rightMargin: baseUnit * 1.5 // Reducido de baseUnit * 2
+            anchors.leftMargin: baseUnit * 1.5
+            anchors.rightMargin: baseUnit * 1.5
             anchors.topMargin: baseUnit * 1.2
             anchors.bottomMargin: baseUnit * 1.2
-            spacing: baseUnit * 1.5 // Reducido para optimizar espacio
+            spacing: baseUnit * 1.5
             
             // BOTÓN DE MENÚ ADAPTATIVO
             RoundButton {
                 objectName: "menuToggleButton"
-                // PASO 3: Ajustar tamaño del botón menú
-                Layout.preferredWidth: baseUnit * 6   // Incrementado de 5 a 6
-                Layout.preferredHeight: baseUnit * 6  // Incrementado de 5 a 6
+                Layout.preferredWidth: baseUnit * 6
+                Layout.preferredHeight: baseUnit * 6
                 Layout.alignment: Qt.AlignVCenter
                 text: "☰"
                 
                 background: Rectangle {
                     color: whiteColor
-                    radius: baseUnit * 1.2
-                    // Añadir sombra sutil
+                    radius: baseUnit * 1
                     border.color: "#10000000"
                     border.width: 1
                 }
@@ -90,7 +128,7 @@ ApplicationWindow {
                     text: parent.text
                     color: primaryColor
                     font.bold: true
-                    font.pixelSize: fontBaseSize * 1.4 // Ligeramente más grande
+                    font.pixelSize: fontBaseSize * 1.2
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -103,24 +141,23 @@ ApplicationWindow {
             
             // BREADCRUMB ADAPTATIVO MEJORADO
             RowLayout {
-                Layout.fillWidth: false // Cambiado para no expandirse demasiado
-                Layout.preferredWidth: Math.min(400, mainWindow.width * 0.3) // Limitar ancho máximo
-                spacing: baseUnit * 0.8
+                Layout.fillWidth: false
+                Layout.preferredWidth: Math.min(300, mainWindow.width * 0.25)
+                spacing: baseUnit * 0.6
                 
                 Label {
                     text: "🏥"
                     color: whiteColor
-                    font.pixelSize: fontBaseSize * 1.1
+                    font.pixelSize: fontBaseSize * 1.0
                 }
                 
                 Label {
                     text: "Clínica María Inmaculada"
                     color: whiteColor
-                    font.pixelSize: fontBaseSize * 0.95
-                    // PASO 4: Mejorar responsividad del texto
-                    visible: mainWindow.width > 800 // Cambiado de 600 a 800
+                    font.pixelSize: fontBaseSize * 0.85
+                    visible: mainWindow.width > 700
                     elide: Text.ElideRight
-                    Layout.maximumWidth: 200
+                    Layout.maximumWidth: 150
                 }
                 
                 Label {
@@ -141,71 +178,78 @@ ApplicationWindow {
                 }
             }
             
-            // PASO 5: Espaciador flexible optimizado
+            // Espaciador flexible
             Item { 
                 Layout.fillWidth: true 
-                Layout.minimumWidth: baseUnit * 2 // Asegurar espacio mínimo
+                Layout.minimumWidth: baseUnit * 1
             }
-            
-            // PERFIL DE USUARIO ADAPTATIVO MEJORADO
+
+            // PERFIL DE USUARIO COMPACTO
             Rectangle {
-                // PASO 6: Mejorar el ancho y responsividad del perfil
+                id: userProfileContainer
                 Layout.preferredWidth: {
-                    if (mainWindow.width < 900) return Math.max(120, baseUnit * 15)
-                    else if (mainWindow.width < 1200) return Math.max(160, baseUnit * 20)
-                    else return Math.max(200, baseUnit * 25) // Más ancho en pantallas grandes
+                    if (mainWindow.width < 800) return Math.max(120, baseUnit * 14)
+                    else if (mainWindow.width < 1100) return Math.max(150, baseUnit * 18)
+                    else return Math.max(180, baseUnit * 22)
                 }
-                Layout.preferredHeight: baseUnit * 7 // Incrementado de 6 a 7
+                Layout.preferredHeight: baseUnit * 6
                 Layout.alignment: Qt.AlignVCenter
                 
-                color: whiteColor
-                radius: baseUnit * 1.8 // Esquinas más redondeadas
+                color: userProfileMouseArea.containsMouse || userMenu.visible ? Qt.lighter(whiteColor, 0.95) : whiteColor
+                radius: baseUnit * 1.5
+                border.color: userMenu.visible ? primaryColor : "#20000000"
+                border.width: userMenu.visible ? 1.5 : 1
                 
-                // PASO 7: Añadir sombra sutil
-                border.color: "#15000000"
-                border.width: 1
+                // Efecto de sombra suave
+                layer.enabled: true
+                layer.effect: DropShadow {
+                    horizontalOffset: 0
+                    verticalOffset: 2
+                    radius: 6
+                    samples: 12
+                    color: "#30000000"
+                }
                 
+                // Usar Layout en lugar de anchors para el contenido interno
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: baseUnit * 1.2 // Incrementado de 0.8
+                    anchors.margins: baseUnit * 1.2
                     spacing: baseUnit * 1.2
                     
-                    // Avatar más grande
+                    // Avatar compacto
                     Rectangle {
-                        Layout.preferredWidth: baseUnit * 5.5  // Incrementado de 4.5
-                        Layout.preferredHeight: baseUnit * 5.5 // Incrementado de 4.5
+                        Layout.preferredWidth: baseUnit * 4
+                        Layout.preferredHeight: baseUnit * 4
                         Layout.alignment: Qt.AlignVCenter
                         color: primaryColor
-                        radius: baseUnit * 2.75
+                        radius: baseUnit * 2
                         
                         Label {
                             anchors.centerIn: parent
-                            text: "AM"
+                            text: getCurrentUserInitials()
                             color: whiteColor
                             font.bold: true
-                            font.pixelSize: fontBaseSize * 1.1 // Ligeramente más grande
+                            font.pixelSize: fontBaseSize * 1.2
                         }
                     }
                     
-                    // PASO 8: Información del usuario mejorada
+                    // Información del usuario compacta
                     Column {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
                         spacing: baseUnit * 0.3
-                        // PASO 9: Mejorar responsividad del texto del perfil
-                        visible: parent.parent.width > 140 // Incrementado de 120
                         
                         Label {
-                            text: "Dr. Admin"
+                            text: getCurrentUserName()
                             color: textColor
                             font.bold: true
-                            font.pixelSize: fontBaseSize * 0.95 // Ligeramente más grande
+                            font.pixelSize: fontBaseSize * 0.9
                             elide: Text.ElideRight
                             width: Math.min(implicitWidth, parent.width)
                         }
                         
                         Label {
-                            text: "Administrador"
+                            text: getCurrentUserRole()
                             color: darkGrayColor
                             font.pixelSize: fontBaseSize * 0.75
                             elide: Text.ElideRight
@@ -215,37 +259,154 @@ ApplicationWindow {
                     
                     // Icono dropdown
                     Label {
-                        text: "▼"
-                        color: darkGrayColor
-                        font.pixelSize: fontBaseSize * 0.85
+                        text: userMenu.visible ? "▲" : "▼"
+                        color: primaryColor
+                        font.pixelSize: fontBaseSize * 0.9
                         Layout.alignment: Qt.AlignVCenter
-                        visible: parent.parent.width > 140
+                        Layout.rightMargin: baseUnit * 0.3
                     }
                 }
                 
-                // PASO 10: Mejorar interacción visual
                 MouseArea {
+                    id: userProfileMouseArea
                     anchors.fill: parent
                     hoverEnabled: true
-                    
-                    onEntered: parent.color = Qt.lighter(whiteColor, 0.95)
-                    onExited: parent.color = whiteColor
+                    cursorShape: Qt.PointingHandCursor
                     
                     onClicked: {
-                        Qt.callLater(function() {
-                            appController.showNotification("Usuario", "Menú de usuario - Próximamente")
-                        })
+                        userMenu.visible = !userMenu.visible
+                    }
+                }
+            }
+        }
+        
+        // MENÚ DESPLEGABLE SIMPLIFICADO - SOLO PERFIL Y CERRAR SESIÓN
+        Rectangle {
+            id: userMenu
+            width: Math.max(180, baseUnit * 22)
+            height: baseUnit * 8 // Altura reducida para solo 2 opciones
+            
+            // Posicionamiento absoluto respecto al perfil de usuario
+            x: userProfileContainer.x + userProfileContainer.width - width
+            y: userProfileContainer.y + userProfileContainer.height + baseUnit * 0.5
+            
+            color: whiteColor
+            radius: baseUnit * 1.5
+            border.color: "#40000000"
+            border.width: 1
+            
+            // Sombra más pronunciada para mejor visibilidad
+            layer.enabled: true
+            layer.effect: DropShadow {
+                horizontalOffset: 0
+                verticalOffset: 4
+                radius: 10
+                samples: 16
+                color: "#60000000"
+            }
+            
+            visible: false
+            z: 1000
+            
+            Column {
+                anchors.fill: parent
+                anchors.margins: baseUnit * 1.0
+                spacing: baseUnit * 0.5
+                
+                // Opción: Ver Perfil
+                Rectangle {
+                    width: parent.width
+                    height: baseUnit * 3
+                    color: mouseArea1.containsMouse ? "#f0f0f0" : "transparent"
+                    radius: baseUnit * 0.5
+                    
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: baseUnit * 0.8
+                        
+                        Text {
+                            text: "👤"
+                            font.pixelSize: fontBaseSize
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        Text {
+                            text: "Ver Perfil"
+                            font.pixelSize: fontBaseSize * 0.85
+                            color: textColor
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                    
+                    MouseArea {
+                        id: mouseArea1
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            userMenu.visible = false
+                            showUserProfile()
+                        }
                     }
                 }
                 
-                // Animación suave para cambios de color
-                Behavior on color { 
-                    ColorAnimation { duration: 150 } 
+                // Separador
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: "#e0e0e0"
+                }
+                
+                // Opción: Cerrar Sesión
+                Rectangle {
+                    width: parent.width
+                    height: baseUnit * 3
+                    color: mouseArea2.containsMouse ? "#fff0f0" : "transparent"
+                    radius: baseUnit * 0.5
+                    
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: baseUnit * 0.8
+                        
+                        Text {
+                            text: "🚪"
+                            font.pixelSize: fontBaseSize
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        Text {
+                            text: "Cerrar Sesión"
+                            font.pixelSize: fontBaseSize * 0.85
+                            font.bold: true
+                            color: dangerColor
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                    
+                    MouseArea {
+                        id: mouseArea2
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            userMenu.visible = false
+                            confirmLogout()
+                        }
+                    }
                 }
             }
         }
     }
 
+    // Click fuera para cerrar menú - Colocado al final del archivo principal
+    MouseArea {
+        anchors.fill: parent
+        z: 999
+        visible: userMenu.visible
+        onClicked: {
+            userMenu.visible = false
+        }
+    }
     
     // ESTRUCTURA PRINCIPAL ADAPTATIVA
     RowLayout {
@@ -292,14 +453,13 @@ ApplicationWindow {
                         spacing: baseUnit * 1.5
                         
                         Image {
-                            anchors.centerIn: parent
-                            source: "file:///D:/Sistema-Clinica-/Resources/iconos/logo_CMI.svg"
-                            width: Math.min(150, drawer.width * 0.8)
-                            height: Math.min(200, baseUnit * 20)
+                            Layout.alignment: Qt.AlignHCenter
+                            source: "Resources/iconos/logo_CMI.svg"
+                            Layout.preferredWidth: Math.min(150, drawer.width * 0.8)
+                            Layout.preferredHeight: Math.min(200, baseUnit * 20)
                             fillMode: Image.PreserveAspectFit
                             smooth: true
                             
-                            // AGREGAR ESTAS LÍNEAS PARA DEBUG:
                             onStatusChanged: {
                                 if (status === Image.Error) {
                                     console.log("❌ Error cargando logo:", source)
@@ -338,6 +498,7 @@ ApplicationWindow {
                                 active: currentIndex === 1
                                 expanded: farmaciaExpanded
                                 
+                                
                                 onMainClicked: {
                                     farmaciaExpanded = !farmaciaExpanded
                                     if (!farmaciaExpanded) {
@@ -349,7 +510,7 @@ ApplicationWindow {
                                     { text: "Ventas", icon: "Resources/iconos/ventas.png", subsection: 0 },
                                     { text: "Productos", icon: "Resources/iconos/productos.png", subsection: 1 },
                                     { text: "Compras", icon: "Resources/iconos/compras.png", subsection: 2 },
-                                    { text: "Proveedores", icon: "Resources/iconos/proveedor.png", subsection: 3 }
+                                    { text: "Proveedores", icon: "Resources/iconos/Trabajadores.png", subsection: 3 }
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {
@@ -361,7 +522,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem2
                                 text: "CONSULTAS"
-                                icon: "Resources/iconos/Consulta.png"  // Cambia de "🩺"
+                                icon: "Resources/iconos/Consulta.png"
                                 active: currentIndex === 2
                                 onClicked: switchToPage(2)
                             }
@@ -369,7 +530,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem3
                                 text: "LABORATORIO"
-                                icon: "Resources/iconos/Laboratorio.png"  // Cambia de "🧪"
+                                icon: "Resources/iconos/Laboratorio.png"
                                 active: currentIndex === 3
                                 onClicked: switchToPage(3)
                             }
@@ -377,7 +538,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem4
                                 text: "ENFERMERÍA"
-                                icon: "Resources/iconos/Enfermeria.png"  // Cambia de "💉"
+                                icon: "Resources/iconos/Enfermeria.png"
                                 active: currentIndex === 4
                                 onClicked: switchToPage(4)
                             }
@@ -389,7 +550,7 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem5
                                 text: "SERVICIOS BÁSICOS"
-                                icon: "Resources/iconos/ServiciosBasicos.png"  // Cambia de "📊"
+                                icon: "Resources/iconos/ServiciosBasicos.png"
                                 active: currentIndex === 5
                                 onClicked: switchToPage(5)
                             }
@@ -397,15 +558,15 @@ ApplicationWindow {
                             NavItem {
                                 id: navItem6
                                 text: "USUARIOS"
-                                icon: "Resources/iconos/usuario.png"  // Cambia de "👤"
+                                icon: "Resources/iconos/usuario.png"
                                 active: currentIndex === 6
                                 onClicked: switchToPage(6)
                             }
                             
                             NavItem {
                                 id: navItem7
-                                text: "PERSONAL"  // Corregir texto
-                                icon: "Resources/iconos/Trabajadores.png"  // Corregir icon
+                                text: "PERSONAL"
+                                icon: "Resources/iconos/Trabajadores.png"
                                 active: currentIndex === 7
                                 onClicked: switchToPage(7)
                             }
@@ -464,13 +625,10 @@ ApplicationWindow {
                 visible: currentIndex === 1
                 layer.enabled: true
                 
-                // ✅ NUEVA PROPIEDAD: Pasar ProveedorModel a Farmacia
-                property var proveedorModel: appController ? appController.proveedorModel : null
-                
-                // Conexión para capturar subsección de proveedores
-                onSubsectionChanged: {
-                    if (subsection === 3) { // Proveedores
-                        console.log("🢷 Navegando a subsección de Proveedores")
+                property int currentFarmaciaSubsection: farmaciaSubsection
+                onCurrentFarmaciaSubsectionChanged: {
+                    if (currentFarmaciaSubsection === 3) {
+                        console.log("🟷 Navegando a subsección de Proveedores")
                     }
                 }
             }
@@ -500,7 +658,6 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: currentIndex === 4
                 layer.enabled: true
-                      
             }   
             
             // ===== SERVICIOS BÁSICOS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
@@ -515,10 +672,8 @@ ApplicationWindow {
                 onIrAConfigServiciosBasicos: {
                     console.log("🚀 Señal irAConfigServiciosBasicos recibida desde ServiciosBasicos")
                     
-                    // ===== PASO 4a: OBTENER MODELO DE DATOS DESDE SERVICIOS BÁSICOS =====
                     var tiposGastosData = []
                     
-                    // Convertir ListModel a Array para transferencia
                     for (var i = 0; i < serviciosPage.tiposGastosModel.count; i++) {
                         var item = serviciosPage.tiposGastosModel.get(i)
                         tiposGastosData.push({
@@ -531,17 +686,14 @@ ApplicationWindow {
                     
                     console.log("📊 Datos de tipos de gastos obtenidos:", JSON.stringify(tiposGastosData))
                     
-                    // ===== PASO 4b: ASIGNAR DATOS AL MÓDULO CONFIGURACIÓN =====
                     if (configuracionPage.item) {
                         configuracionPage.item.tiposGastosModel = tiposGastosData
                     }
                     console.log("📤 Datos transferidos a configuracionPage.tiposGastosModel")
                     
-                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN =====
                     configuracionPage.changeView("servicios")
                     console.log("🔄 Vista de configuración cambiada a: servicios")
                     
-                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN =====
                     switchToPage(9)
                     console.log("🎯 Navegación completada hacia módulo Configuración")
                 }
@@ -564,14 +716,11 @@ ApplicationWindow {
                 visible: currentIndex === 7
                 layer.enabled: true
                 
-                // ===== PASO 4: NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN Y PASO DE DATOS =====
                 onIrAConfigPersonal: {
                     console.log("🚀 Señal irAConfigPersonal recibida desde Trabajadores")
                     
-                    // ===== PASO 4a: OBTENER Y CONVERTIR EL MODELO DE DATOS =====
                     var tiposTrabajadoresData = []
                     
-                    // El ListModel no se puede pasar directamente, convertir a array de objetos JavaScript
                     for (var i = 0; i < trabajadoresPage.tiposTrabajadoresModel.count; i++) {
                         var item = trabajadoresPage.tiposTrabajadoresModel.get(i)
                         tiposTrabajadoresData.push({
@@ -584,15 +733,12 @@ ApplicationWindow {
                     
                     console.log("📊 Datos de tipos de trabajadores obtenidos:", JSON.stringify(tiposTrabajadoresData))
                     
-                    // ===== PASO 4b: ASIGNAR DATOS CONVERTIDOS AL MÓDULO CONFIGURACIÓN =====
                     configuracionPage.tiposTrabajadoresModel = tiposTrabajadoresData
                     console.log("📤 Datos transferidos a configuracionPage.tiposTrabajadoresModel")
                     
-                    // ===== PASO 4c: CAMBIAR VISTA INTERNA DE CONFIGURACIÓN A "PERSONAL" =====
                     configuracionPage.changeView("personal")
                     console.log("🔄 Vista de configuración cambiada a: personal")
                     
-                    // ===== PASO 4d: CAMBIAR VISTA PRINCIPAL A CONFIGURACIÓN (PÁGINA 9) =====
                     switchToPage(9)
                     console.log("🎯 Navegación completada hacia módulo Configuración - Personal")
                 }
@@ -608,7 +754,6 @@ ApplicationWindow {
             }
             
             // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPIEDADES DE MODELOS =====
-            // ===== CONFIGURACIÓN PAGE CON ACCESO A PROPIEDADES DE MODELOS =====
             Loader {
                 id: configuracionPage
                 objectName: "configuracionPage" 
@@ -617,7 +762,6 @@ ApplicationWindow {
                 layer.enabled: true
                 source: "Configuracion.qml"
                 
-                // Acceso a las propiedades a través del item cargado
                 readonly property var tiposGastosModel: item ? item.tiposGastosModel : []
                 readonly property var especialidadesModel: item ? item.especialidadesModel : []
                 
@@ -660,42 +804,83 @@ ApplicationWindow {
         return pageNames[currentIndex] || "Dashboard"
     }
 
-    // ===== FUNCIONES AUXILIARES PARA DEBUG Y MONITOREO =====
-
-    // ===== FUNCIÓN AUXILIAR PARA MONITOREAR EL FLUJO DE DATOS =====
-    function logEspecialidadesSync() {
-        if (consultasPage && configuracionPage) {
-            console.log("📊 Estado de sincronización de especialidades:")
-            console.log("   - Consultas tiene:", consultasPage.especialidades ? consultasPage.especialidades.length : 0, "especialidades")
-            console.log("   - Configuración tiene:", configuracionPage.especialidadesModel ? configuracionPage.especialidadesModel.length : 0, "especialidades")
+    // ===== FUNCIONES PARA OBTENER DATOS DEL USUARIO DESDE BD =====
+    function getCurrentUserInitials() {
+        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+            const name = authModel.userName
+            const parts = name.split(" ")
+            if (parts.length >= 2) {
+                return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+            } else if (parts.length === 1) {
+                return parts[0].substring(0, 2).toUpperCase()
+            }
         }
+        return "US"
     }
     
-    // ===== FUNCIÓN AUXILIAR PARA MONITOREAR EL FLUJO DE DATOS DE TRABAJADORES =====
-    function logTiposTrabajadoresSync() {
-        if (trabajadoresPage && configuracionPage) {
-            console.log("📊 Estado de sincronización de tipos de trabajadores:")
-            console.log("   - Trabajadores tiene:", trabajadoresPage.tiposTrabajadoresModel ? trabajadoresPage.tiposTrabajadoresModel.count : 0, "tipos")
-            console.log("   - Configuración tiene:", configuracionPage.tiposTrabajadoresModel ? configuracionPage.tiposTrabajadoresModel.length : 0, "tipos")
+    function getCurrentUserName() {
+        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+            const userName = authModel.userName
+            const userRole = authModel.userRole
+            if (userRole && userRole.toLowerCase().includes("medico")) {
+                return "Dr. " + userName.split(" ")[0]
+            }
+            return userName.split(" ")[0] || "Usuario"
         }
+        return "Usuario"
     }
     
-    // ===== FUNCIÓN AUXILIAR PARA SINCRONIZACIÓN BIDIRECCIONAL (OPCIONAL) =====
-    function syncEspecialidadesFromConfig() {
-        if (configuracionPage && consultasPage && configuracionPage.especialidadesModel) {
-            // Sincronizar cambios desde configuración hacia consultas
-            consultasPage.especialidades = configuracionPage.especialidadesModel
-            console.log("🔄 Especialidades sincronizadas desde Configuración hacia Consultas")
+    function getCurrentUserFullName() {
+        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+            return authModel.userName
         }
+        return "Usuario"
+    }
+    
+    function getCurrentUserRole() {
+        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+            return authModel.userRole
+        }
+        return "Sin sesión"
+    }
+    
+    function getCurrentUserEmail() {
+        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+            return authModel.userEmail
+        }
+        return ""
+    }
+    
+    function canAccessModule(moduleName) {
+        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+            switch(moduleName) {
+                case "farmacia":
+                    return authModel.canAccessFarmacia()
+                case "usuarios":
+                    return authModel.canAccessUsuarios()
+                case "reportes":
+                    return authModel.canAccessReportes()
+                default:
+                    return true
+            }
+        }
+        return true
     }
 
-    // ===== FUNCIÓN AUXILIAR PARA SINCRONIZACIÓN BIDIRECCIONAL DE TRABAJADORES (OPCIONAL) =====
-    function syncTiposTrabajadoresFromConfig() {
-        if (configuracionPage && trabajadoresPage && configuracionPage.tiposTrabajadoresModel) {
-            // Esta función puede ser utilizada para sincronizar cambios desde configuración hacia trabajadores
-            // en caso de que se requiera sincronización bidireccional en el futuro
-            console.log("🔄 Tipos de trabajadores podrían sincronizarse desde Configuración hacia Trabajadores")
-        }
+    // FUNCIONES PARA MANEJAR PERFIL Y LOGOUT
+    function showUserProfile() {
+        console.log("Navegando a perfil de usuario")
+        switchToPage(9) // Ir a configuración donde está la info del usuario
+    }
+
+    function confirmLogout() {
+        console.log("Iniciando logout...")
+        appController.showNotification("Cerrando Sesión", "Hasta pronto!")
+        Qt.callLater(function() {
+            if (typeof authModel !== "undefined") {
+                authModel.logout()
+            }
+        })
     }
 
     // ===== COMPONENTES ADAPTATIVOS =====
@@ -906,10 +1091,10 @@ ApplicationWindow {
             spacing: baseUnit * 0.25
             visible: expanded
             opacity: expanded ? 1.0 : 0.0
-            height: expanded ? implicitHeight : 0
+            Layout.preferredHeight: expanded ? implicitHeight : 0
             
             Behavior on opacity { NumberAnimation { duration: 200 } }
-            Behavior on height { NumberAnimation { duration: 200 } }
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 200 } }
             
             Repeater {
                 model: submenuItems
@@ -930,8 +1115,8 @@ ApplicationWindow {
                         
                         Image {
                             source: modelData.icon
-                            Layout.preferredWidth: fontBaseSize * 2.0  // Aumentado de 1.0 a 1.5
-                            Layout.preferredHeight: fontBaseSize * 2.0 // Aumentado de 1.0 a 1.5
+                            Layout.preferredWidth: fontBaseSize * 2.0
+                            Layout.preferredHeight: fontBaseSize * 2.0
                             fillMode: Image.PreserveAspectFit
                             smooth: true
                         }
@@ -971,18 +1156,102 @@ ApplicationWindow {
             }
         }
     }
+
+    // Componente MenuItem personalizado
+    component MenuItem: Rectangle {
+        property string icon: ""
+        property string text: ""
+        property bool bold: false
+        signal clicked()
+        
+        Layout.fillWidth: true
+        Layout.preferredHeight: baseUnit * 4.5
+        color: menuItemMouseArea.containsMouse ? "#f8f9fa" : "transparent"
+        radius: baseUnit * 1.0
+        
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: baseUnit * 1.5
+            spacing: baseUnit * 1.2
+            
+            Label {
+                text: parent.parent.icon
+                font.pixelSize: fontBaseSize * 1.1
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            
+            Label {
+                text: parent.parent.text
+                color: textColor
+                font.pixelSize: fontBaseSize * 0.9
+                font.bold: parent.parent.bold
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+        
+        MouseArea {
+            id: menuItemMouseArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: parent.clicked()
+        }
+        
+        Behavior on color {
+            ColorAnimation { duration: 100 }
+        }
+    }
     
-    // ===== CONEXIONES ADICIONALES PARA MONITOREO (OPCIONAL) =====
+    // ===== FUNCIONES AUXILIARES PARA DEBUG Y MONITOREO =====
+    function logEspecialidadesSync() {
+        if (consultasPage && configuracionPage) {
+            console.log("📊 Estado de sincronización de especialidades:")
+            console.log("   - Consultas tiene:", consultasPage.especialidades ? consultasPage.especialidades.length : 0, "especialidades")
+            console.log("   - Configuración tiene:", configuracionPage.especialidadesModel ? configuracionPage.especialidadesModel.length : 0, "especialidades")
+        }
+    }
+    
+    function logTiposTrabajadoresSync() {
+        if (trabajadoresPage && configuracionPage) {
+            console.log("📊 Estado de sincronización de tipos de trabajadores:")
+            console.log("   - Trabajadores tiene:", trabajadoresPage.tiposTrabajadoresModel ? trabajadoresPage.tiposTrabajadoresModel.count : 0, "tipos")
+            console.log("   - Configuración tiene:", configuracionPage.tiposTrabajadoresModel ? configuracionPage.tiposTrabajadoresModel.length : 0, "tipos")
+        }
+    }
+    
+    function syncEspecialidadesFromConfig() {
+        if (configuracionPage && consultasPage && configuracionPage.especialidadesModel) {
+            consultasPage.especialidades = configuracionPage.especialidadesModel
+            console.log("🔄 Especialidades sincronizadas desde Configuración hacia Consultas")
+        }
+    }
+
+    function syncTiposTrabajadoresFromConfig() {
+        if (configuracionPage && trabajadoresPage && configuracionPage.tiposTrabajadoresModel) {
+            console.log("🔄 Tipos de trabajadores podrían sincronizarse desde Configuración hacia Trabajadores")
+        }
+    }
 
     // Timer para monitoreo periódico de sincronización (solo en desarrollo)
     Timer {
         id: syncMonitorTimer
-        interval: 10000 // 10 segundos
-        running: false // Cambiar a true solo para debug
+        interval: 10000
+        running: false
         repeat: true
         onTriggered: {
             logEspecialidadesSync()
             logTiposTrabajadoresSync()
+        }
+    }
+
+    // Click fuera para cerrar menú
+    MouseArea {
+        anchors.fill: parent
+        z: 999
+        visible: userProfileContainer.state === "menuOpen"
+        onClicked: {
+            userProfileContainer.state = ""
         }
     }
 }

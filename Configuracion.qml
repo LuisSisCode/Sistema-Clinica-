@@ -64,11 +64,10 @@ Item {
     property string currentView: "main"
     property bool showChangePasswordDialog: false
     
-    // ===== DATOS DEL USUARIO =====
+    // ===== DATOS DEL USUARIO ACTUALIZADOS =====
     property string currentUser: "Dr. María González"
     property string currentUserInitials: "MG"
     property string currentUserRole: "Médico General"
-    property string currentUserEmail: "maria.gonzalez@mariainmaculada.com"
     property string currentUsername: "dr.maria"
     
     // ===== FUNCIONES =====
@@ -731,13 +730,7 @@ Item {
                 ProfileField { 
                     label: "Usuario"
                     value: currentUsername
-                    icon: "🔑"
-                }
-                
-                ProfileField { 
-                    label: "Email"
-                    value: currentUserEmail
-                    icon: "📧"
+                    icon: "👤"
                 }
             }
             

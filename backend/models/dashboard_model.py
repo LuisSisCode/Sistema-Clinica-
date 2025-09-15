@@ -258,6 +258,15 @@ class DashboardModel(QObject):
             print(f"❌ Error refrescando datos: {e}")
             self.errorOccurred.emit(f"Error refrescando datos: {str(e)}")
     
+    def cleanup(self):
+        """Limpia recursos del dashboard"""
+        try:
+            if hasattr(self, '_refresh_timer') and self._refresh_timer.isActive():
+                self._refresh_timer.stop()
+                print("⏹️ Timer del dashboard detenido")
+        except Exception as e:
+            print(f"Error limpiando dashboard: {e}")
+            
     # ===============================
     # MÉTODOS PRIVADOS - CARGA DE DATOS
     # ===============================
@@ -633,6 +642,53 @@ class DashboardModel(QObject):
             self._actualizar_todos_los_datos()
         except Exception as e:
             print(f"❌ Error en auto-refresh: {e}")
+
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para DashboardModel"""
+        try:
+            print("🚨 DashboardModel: Iniciando desconexión de emergencia...")
+            
+            # Detener timer inmediatamente
+            if hasattr(self, '_refresh_timer') and self._refresh_timer.isActive():
+                self._refresh_timer.stop()
+                print("   ⏹️ Refresh timer detenido")
+            
+            # Desconectar señales
+            signals_to_disconnect = [
+                'farmaciaDataChanged', 'consultasDataChanged', 'laboratorioDataChanged',
+                'enfermeriaDataChanged', 'serviciosBasicosDataChanged', 'graficoDataChanged',
+                'alertasChanged', 'periodoChanged', 'dashboardUpdated', 'errorOccurred'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar datos
+            self._farmacia_total = 0.0
+            self._consultas_total = 0.0
+            self._laboratorio_total = 0.0
+            self._enfermeria_total = 0.0
+            self._servicios_basicos_total = 0.0
+            self._grafico_ingresos = []
+            self._grafico_egresos = []
+            self._alertas_vencimientos = []
+            
+            # Anular repositorios
+            self.estadistica_repo = None
+            self.venta_repo = None
+            self.gasto_repo = None
+            self.consulta_repo = None
+            self.laboratorio_repo = None
+            self.enfermeria_repo = None
+            
+            print("✅ DashboardModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión DashboardModel: {e}")
 
 # ===============================
 # REGISTRO QML

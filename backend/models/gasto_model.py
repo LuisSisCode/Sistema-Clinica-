@@ -9,8 +9,7 @@ from ..core.Signals_manager import get_global_signals
 
 class GastoModel(QObject):
     """
-    Model QObject para gestión de gastos en QML
-    Conecta la interfaz QML con el GastoRepository
+    Model QObject para gestión de gastos en QML - CON AUTENTICACIÓN ESTANDARIZADA
     """
     
     # ===============================
@@ -20,7 +19,7 @@ class GastoModel(QObject):
     # Señales para cambios en datos
     gastosChanged = Signal()
     tiposGastosChanged = Signal()
-    proveedoresChanged = Signal()  # NUEVA SEÑAL
+    proveedoresChanged = Signal()
     estadisticasChanged = Signal()
     
     # Señales para operaciones
@@ -39,6 +38,8 @@ class GastoModel(QObject):
     loadingChanged = Signal()
     errorOccurred = Signal(str, str)  # title, message
     successMessage = Signal(str)
+    operacionError = Signal(str, arguments=['mensaje'])  # Para compatibilidad
+    operacionExitosa = Signal(str, arguments=['mensaje'])
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,11 +49,15 @@ class GastoModel(QObject):
         self.global_signals = get_global_signals()
         self._conectar_senales_globales()
     
+        # ✅ AUTENTICACIÓN ESTANDARIZADA
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        print("💸 GastoModel inicializado - Esperando autenticación")
+        
         # Estado interno
         self._gastos: List[Dict[str, Any]] = []
         self._gastos_filtrados: List[Dict[str, Any]] = []
         self._tipos_gastos: List[Dict[str, Any]] = []
-        self._proveedores: List[Dict[str, Any]] = []  # NUEVA PROPIEDAD
+        self._proveedores: List[Dict[str, Any]] = []
         self._estadisticas: Dict[str, Any] = {}
         self._loading: bool = False
         
@@ -66,23 +71,56 @@ class GastoModel(QObject):
         
         # Configuración inicial
         self._cargar_datos_iniciales()
-        
-        print("💸 GastoModel inicializado con soporte para proveedores")
     
     # ===============================
-    # FUNCIÓN HELPER PARA FECHAS QML
+    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
     # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """Establece el usuario actual para las operaciones"""
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en GastoModel: {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de gastos")
+            else:
+                print(f"⚠️ ID de usuario inválido en GastoModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en GastoModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    # ===============================
+    # CONEXIONES Y FUNCIONES HELPER (SIN CAMBIOS)
+    # ===============================
+    
     def _conectar_senales_globales(self):
         """Conecta con las señales globales para recibir actualizaciones"""
         try:
-            # Conectar señales de tipos de gastos
             self.global_signals.tiposGastosModificados.connect(self._actualizar_tipos_gastos_desde_signal)
             self.global_signals.configuracionGastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             self.global_signals.gastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            
             print("🔗 Señales globales conectadas en GastoModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en GastoModel: {e}")
+    
     def _convert_dates_for_qml(self, data: Any) -> Any:
         """Convierte fechas Python datetime a strings para compatibilidad con QML"""
         if isinstance(data, list):
@@ -93,7 +131,6 @@ class GastoModel(QObject):
                 if isinstance(value, datetime):
                     converted[key] = value.strftime('%Y-%m-%d %H:%M:%S')
                 elif key.lower() in ['fecha', 'fecha_gasto', 'ultimo_gasto', 'tipo_fecha_creacion'] and value:
-                    # Campos específicos de fecha
                     if hasattr(value, 'strftime'):
                         converted[key] = value.strftime('%Y-%m-%d %H:%M:%S')
                     else:
@@ -105,7 +142,7 @@ class GastoModel(QObject):
             return data
     
     # ===============================
-    # PROPERTIES - Datos para QML
+    # PROPERTIES - Datos para QML (SIN CAMBIOS)
     # ===============================
     
     @Property(list, notify=gastosChanged)
@@ -120,7 +157,7 @@ class GastoModel(QObject):
     
     @Property(list, notify=proveedoresChanged)
     def proveedores(self) -> List[Dict[str, Any]]:
-        """Lista de proveedores disponibles - NUEVA PROPIEDAD"""
+        """Lista de proveedores disponibles"""
         return self._convert_dates_for_qml(self._proveedores)
     
     @Property('QVariantMap', notify=estadisticasChanged)
@@ -139,23 +176,23 @@ class GastoModel(QObject):
         return len(self._gastos_filtrados)
     
     # ===============================
-    # SLOTS - Métodos llamables desde QML
+    # ✅ OPERACIONES CRUD GASTOS - CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
-    # --- OPERACIONES CRUD GASTOS ---
-    
-    @Slot(int, float, int, str, str, str, result=bool)
-    def crearGasto(self, tipo_gasto_id: int, monto: float, usuario_id: int,
-                descripcion: str = "", fecha_gasto: str = "", proveedor: str = "") -> bool:
-        """Crea nuevo gasto desde QML"""
+    @Slot(int, float, str, str, str, result=bool)
+    def crearGasto(self, tipo_gasto_id: int, monto: float, descripcion: str = "", 
+                   fecha_gasto: str = "", proveedor: str = "") -> bool:
+        """Crea nuevo gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
             
-            # DEBUG: Imprimir todos los parámetros recibidos
-            print(f"🔍 CREANDO GASTO - Parámetros recibidos:")
+            print(f"💰 Creando gasto - Usuario: {self._usuario_actual_id}")
             print(f"   - tipo_gasto_id: {tipo_gasto_id}")
             print(f"   - monto: {monto}")
-            print(f"   - usuario_id: {usuario_id}")
             print(f"   - descripcion: '{descripcion}'")
             print(f"   - fecha_gasto: '{fecha_gasto}'")
             print(f"   - proveedor: '{proveedor}'")
@@ -169,15 +206,13 @@ class GastoModel(QObject):
                     print(f"   - Error convirtiendo fecha: {e}")
                     fecha_obj = None
             
-            # VALIDAR QUE EL PROVEEDOR NO ESTÉ VACÍO
             proveedor_final = proveedor.strip() if proveedor else None
-            print(f"   - proveedor_final: '{proveedor_final}'")
             
-            # Crear usando repository
+            # ✅ USAR usuario_actual_id EN LUGAR DE PARÁMETRO
             gasto_id = self.repository.create_expense(
                 tipo_gasto_id=tipo_gasto_id,
                 monto=monto,
-                usuario_id=usuario_id,
+                usuario_id=self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
                 fecha=fecha_obj,
                 descripcion=descripcion if descripcion else None,
                 proveedor=proveedor_final
@@ -191,20 +226,16 @@ class GastoModel(QObject):
                 self.gastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Gasto creado desde QML: {monto} - Proveedor: '{proveedor_final}'")
+                print(f"✅ Gasto creado por usuario {self._usuario_actual_id}: {monto}")
                 return True
             else:
                 error_msg = "Error creando gasto"
                 self.gastoCreado.emit(False, error_msg)
-                print(f"⚠ {error_msg}")
                 return False
                 
         except Exception as e:
             error_msg = f"Error inesperado: {str(e)}"
             print(f"⚠ Exception en crearGasto: {error_msg}")
-            import traceback
-            traceback.print_exc()
-            
             self.gastoCreado.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
             return False
@@ -214,18 +245,15 @@ class GastoModel(QObject):
     @Slot(int, float, int, str, str, str, result=bool) 
     def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0, 
                 descripcion: str = "", proveedor: str = "", fecha_gasto: str = "") -> bool:
-        """Actualiza gasto existente desde QML (ahora permite actualizar fecha)"""
+        """Actualiza gasto existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
             
-            # DEBUG: Imprimir todos los parámetros recibidos
-            print(f"✏️ ACTUALIZANDO GASTO - Parámetros recibidos:")
-            print(f"   - gasto_id: {gasto_id}")
-            print(f"   - monto: {monto}")
-            print(f"   - tipo_gasto_id: {tipo_gasto_id}")
-            print(f"   - descripcion: '{descripcion}'")
-            print(f"   - proveedor: '{proveedor}'")
-            print(f"   - fecha_gasto: '{fecha_gasto}'")
+            print(f"✏️ Actualizando gasto ID: {gasto_id} por usuario: {self._usuario_actual_id}")
             
             kwargs = {}
             if monto > 0:
@@ -237,16 +265,12 @@ class GastoModel(QObject):
             if proveedor:
                 kwargs['proveedor'] = proveedor.strip()
             
-            # ✅ NUEVA LÓGICA PARA FECHA
             if fecha_gasto:
                 try:
                     fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
                     kwargs['fecha'] = fecha_obj
-                    print(f"   - fecha_obj convertida: {fecha_obj}")
                 except Exception as e:
                     print(f"Error convirtiendo fecha: {e}")
-            
-            print(f"   - kwargs a enviar: {kwargs}")
             
             success = self.repository.update_expense(gasto_id, **kwargs)
             
@@ -257,20 +281,15 @@ class GastoModel(QObject):
                 self.gastoActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"✅ Gasto actualizado desde QML: ID {gasto_id} - Proveedor: '{proveedor}'")
+                print(f"✅ Gasto actualizado por usuario {self._usuario_actual_id}")
                 return True
             else:
                 error_msg = "Error actualizando gasto"
                 self.gastoActualizado.emit(False, error_msg)
-                print(f"⚠ {error_msg}")
                 return False
                 
         except Exception as e:
             error_msg = f"Error inesperado: {str(e)}"
-            print(f"⚠ Exception en actualizarGasto: {error_msg}")
-            import traceback
-            traceback.print_exc()
-            
             self.gastoActualizado.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
             return False
@@ -279,9 +298,15 @@ class GastoModel(QObject):
     
     @Slot(int, result=bool)
     def eliminarGasto(self, gasto_id: int) -> bool:
-        """Elimina gasto desde QML"""
+        """Elimina gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"🗑️ Eliminando gasto ID: {gasto_id} por usuario: {self._usuario_actual_id}")
             
             success = self.repository.delete(gasto_id)
             
@@ -293,7 +318,7 @@ class GastoModel(QObject):
                 self.gastoEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
-                print(f"🗑️ Gasto eliminado desde QML: ID {gasto_id}")
+                print(f"✅ Gasto eliminado por usuario {self._usuario_actual_id}")
                 return True
             else:
                 error_msg = "Error eliminando gasto"
@@ -308,13 +333,21 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    # --- OPERACIONES CRUD TIPOS GASTOS ---
+    # ===============================
+    # ✅ OPERACIONES CRUD TIPOS GASTOS - CON VERIFICACIÓN DE AUTENTICACIÓN
+    # ===============================
     
     @Slot(str, result=bool)
     def crearTipoGasto(self, nombre: str) -> bool:
-        """Crea nuevo tipo de gasto desde QML"""
+        """Crea nuevo tipo de gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"📂 Creando tipo de gasto por usuario: {self._usuario_actual_id}")
             
             tipo_id = self.repository.create_expense_type(nombre.strip())
             
@@ -325,7 +358,7 @@ class GastoModel(QObject):
                 self.tipoGastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 self.global_signals.notificar_cambio_tipos_gastos("creado", tipo_id, nombre.strip())
-                print(f"✅ Tipo gasto creado desde QML: {nombre}")
+                print(f"✅ Tipo gasto creado por usuario {self._usuario_actual_id}: {nombre}")
                 return True
             else:
                 error_msg = "Error creando tipo de gasto"
@@ -342,9 +375,15 @@ class GastoModel(QObject):
     
     @Slot(int, str, result=bool)
     def actualizarTipoGasto(self, tipo_id: int, nombre: str) -> bool:
-        """Actualiza tipo de gasto existente"""
+        """Actualiza tipo de gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"✏️ Actualizando tipo gasto ID: {tipo_id} por usuario: {self._usuario_actual_id}")
             
             success = self.repository.update_expense_type(tipo_id, nombre.strip())
             
@@ -371,9 +410,15 @@ class GastoModel(QObject):
     
     @Slot(int, result=bool)
     def eliminarTipoGasto(self, tipo_id: int) -> bool:
-        """Elimina tipo de gasto"""
+        """Elimina tipo de gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_loading(True)
+            
+            print(f"🗑️ Eliminando tipo gasto ID: {tipo_id} por usuario: {self._usuario_actual_id}")
             
             success = self.repository.delete_expense_type(tipo_id)
             
@@ -398,11 +443,13 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    # --- GESTIÓN DE PROVEEDORES - NUEVOS MÉTODOS ---
+    # ===============================
+    # GESTIÓN DE PROVEEDORES (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot(result=list)
     def obtenerProveedoresParaComboBox(self) -> List[Dict[str, Any]]:
-        """Obtiene proveedores formateados para ComboBox de QML - NUEVO"""
+        """Obtiene proveedores formateados para ComboBox"""
         try:
             proveedores_combo = self.repository.get_providers_for_combobox()
             return self._convert_dates_for_qml(proveedores_combo)
@@ -412,7 +459,7 @@ class GastoModel(QObject):
     
     @Slot(str, result='QVariantMap')
     def obtenerProveedorPorNombre(self, nombre: str) -> Dict[str, Any]:
-        """Busca proveedor por nombre exacto - NUEVO"""
+        """Busca proveedor por nombre exacto"""
         try:
             proveedor = self.repository.get_provider_by_name(nombre)
             return self._convert_dates_for_qml(proveedor) if proveedor else {}
@@ -422,7 +469,7 @@ class GastoModel(QObject):
     
     @Slot(str, result=bool)
     def proveedorExiste(self, nombre: str) -> bool:
-        """Verifica si existe un proveedor con el nombre dado - NUEVO"""
+        """Verifica si existe un proveedor con el nombre dado"""
         try:
             return self.repository.provider_exists(nombre)
         except Exception as e:
@@ -431,7 +478,7 @@ class GastoModel(QObject):
     
     @Slot()
     def recargarProveedores(self):
-        """Recarga lista de proveedores - NUEVO"""
+        """Recarga lista de proveedores"""
         try:
             self._cargar_proveedores()
             self.successMessage.emit("Proveedores recargados exitosamente")
@@ -439,7 +486,9 @@ class GastoModel(QObject):
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error recargando proveedores: {str(e)}")
     
-    # --- BÚSQUEDA Y FILTROS ---
+    # ===============================
+    # BÚSQUEDA Y FILTROS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot(str, int, str, str, float, float)
     def aplicarFiltros(self, termino_busqueda: str, tipo_gasto_id: int, fecha_desde: str, 
@@ -521,7 +570,9 @@ class GastoModel(QObject):
         self.gastosChanged.emit()
         print("🧹 Filtros limpiados")
     
-    # --- REPORTES ---
+    # ===============================
+    # REPORTES (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot(str, str, bool)
     def generarReporte(self, fecha_desde: str, fecha_hasta: str, incluir_detalles: bool = True):
@@ -559,7 +610,9 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    # --- CONSULTAS ESPECÍFICAS ---
+    # ===============================
+    # CONSULTAS ESPECÍFICAS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot(int, result='QVariantMap')
     def obtenerGastoPorId(self, gasto_id: int) -> Dict[str, Any]:
@@ -594,7 +647,9 @@ class GastoModel(QObject):
             self.errorOccurred.emit("Error", f"Error obteniendo dashboard: {str(e)}")
             return {}
     
-    # --- RECARGA DE DATOS ---
+    # ===============================
+    # RECARGA DE DATOS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot()
     def recargarDatos(self):
@@ -609,7 +664,9 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
     
-    # --- UTILIDADES ---
+    # ===============================
+    # UTILIDADES (SIN VERIFICACIÓN)
+    # ===============================
     
     @Slot(result=list)
     def obtenerTiposParaComboBox(self) -> List[Dict[str, Any]]:
@@ -617,14 +674,12 @@ class GastoModel(QObject):
         try:
             tipos_formateados = []
             
-            # Agregar opción "Todos"
             tipos_formateados.append({
                 'id': 0,
                 'text': 'Todos los tipos',
                 'data': {}
             })
             
-            # Agregar tipos existentes
             for tipo in self._tipos_gastos:
                 tipos_formateados.append({
                     'id': tipo.get('id', 0),
@@ -644,64 +699,48 @@ class GastoModel(QObject):
         return f"Bs{precio:,.2f}"
     
     # ===============================
-    # MÉTODOS DE PAGINACIÓN - CORREGIDOS Y MEJORADOS
+    # PAGINACIÓN (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
     @Slot(int, int, 'QVariantMap', result=list)
     def obtenerGastosPaginados(self, offset: int, limit: int, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Obtiene gastos paginados desde QML - MEJORADO CON FILTRO "TODOS"""
+        """Obtiene gastos paginados desde QML"""
         try:
-            # Validar parámetros
             if offset < 0:
                 offset = 0
             if limit <= 0:
                 limit = 10
             
-            print(f"📊 Obteniendo gastos paginados: offset={offset}, limit={limit}, filters={filters}")
+            print(f"📊 Obteniendo gastos paginados: offset={offset}, limit={limit}")
             
-            # Procesar filtros para soportar "todos los períodos"
             processed_filters = {}
             if filters:
-                # Copiar filtros básicos
                 if 'tipo_id' in filters:
                     processed_filters['tipo_id'] = filters['tipo_id']
                 
-                # Procesar filtros temporales mejorados
                 if 'mes' in filters and 'año' in filters:
                     mes_valor = filters['mes']
                     año_valor = filters['año']
                     
-                    # mes = 0 significa "todos los períodos"
-                    # mes = -1 significa "todo el año especificado"
-                    # mes > 0 significa mes específico
                     if mes_valor == 0:
-                        # No agregar filtro temporal (mostrar todos)
                         pass  
                     elif mes_valor == -1:
-                        # Mostrar todo el año
                         processed_filters['mes'] = -1
                         processed_filters['año'] = año_valor
                     else:
-                        # Mes específico
                         processed_filters['mes'] = mes_valor
                         processed_filters['año'] = año_valor
             
-            print(f"🔍 Filtros procesados: {processed_filters}")
-            
-            # Obtener datos del repository
             gastos = self.repository.get_paginated_expenses(offset, limit, processed_filters)
             
-            # CONVERSIÓN ESPECÍFICA PARA QML CON FECHAS CORREGIDAS
             gastos_convertidos = []
             for gasto in gastos:
                 gasto_convertido = {}
                 for key, value in gasto.items():
                     if key == 'Fecha' and value:
-                        # Asegurar que la fecha esté en formato string para QML
                         if hasattr(value, 'strftime'):
                             gasto_convertido[key] = value.strftime('%Y-%m-%d')
                         elif isinstance(value, str):
-                            # Si ya es string, asegurar formato correcto
                             try:
                                 fecha_obj = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
                                 gasto_convertido[key] = fecha_obj.strftime('%Y-%m-%d')
@@ -719,19 +758,13 @@ class GastoModel(QObject):
             
         except Exception as e:
             error_msg = f"Error obteniendo gastos: {str(e)}"
-            print(f"⚠ {error_msg}")
-            import traceback
-            traceback.print_exc()
             self.errorOccurred.emit("Error", error_msg)
             return []
 
     @Slot('QVariantMap', result=int)
     def obtenerTotalGastos(self, filters: Dict[str, Any] = None) -> int:
-        """Obtiene total de gastos con filtros mejorados - INCLUYENDO FILTRO "TODOS"""
+        """Obtiene total de gastos con filtros"""
         try:
-            print(f"📊 Contando gastos con filtros: {filters}")
-            
-            # Procesar filtros igual que en obtenerGastosPaginados
             processed_filters = {}
             if filters:
                 if 'tipo_id' in filters:
@@ -742,28 +775,22 @@ class GastoModel(QObject):
                     año_valor = filters['año']
                     
                     if mes_valor == 0:
-                        # No agregar filtro temporal (mostrar todos)
                         pass  
                     elif mes_valor == -1:
-                        # Mostrar todo el año
                         processed_filters['mes'] = -1
                         processed_filters['año'] = año_valor
                     else:
-                        # Mes específico
                         processed_filters['mes'] = mes_valor
                         processed_filters['año'] = año_valor
             
             total = self.repository.get_expenses_count(processed_filters)
-            print(f"✅ Total gastos encontrados: {total}")
             return total
         except Exception as e:
-            error_msg = f"Error contando gastos: {str(e)}"
-            print(f"⚠ {error_msg}")
-            self.errorOccurred.emit("Error", error_msg)
+            self.errorOccurred.emit("Error", f"Error contando gastos: {str(e)}")
             return 0
     
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÉTODOS PRIVADOS (SIN CAMBIOS)
     # ===============================
     
     def _cargar_datos_iniciales(self):
@@ -771,7 +798,7 @@ class GastoModel(QObject):
         try:
             self._cargar_gastos()
             self._cargar_tipos_gastos()
-            self._cargar_proveedores()  # NUEVA CARGA
+            self._cargar_proveedores()
             self._cargar_estadisticas()
             print("📊 Datos iniciales de gastos cargados (incluyendo proveedores)")
         except Exception as e:
@@ -803,7 +830,7 @@ class GastoModel(QObject):
             self._tipos_gastos = []
     
     def _cargar_proveedores(self):
-        """Carga lista de proveedores - NUEVO MÉTODO"""
+        """Carga lista de proveedores"""
         try:
             proveedores = self.repository.get_all_providers()
             self._proveedores = proveedores
@@ -829,31 +856,63 @@ class GastoModel(QObject):
         if self._loading != loading:
             self._loading = loading
             self.loadingChanged.emit()
+    
     @Slot()
     def _actualizar_tipos_gastos_desde_signal(self):
         """Actualiza tipos de gastos cuando recibe señal global"""
         try:
             print("📡 GastoModel: Recibida señal de actualización de tipos de gastos")
             
-            # ✅ INVALIDAR CACHE ANTES DE RECARGAR
             if hasattr(self.repository, 'invalidate_expense_caches'):
                 self.repository.invalidate_expense_caches()
                 print("🗑️ Cache de tipos invalidado en GastoModel")
-            # Ahora recargar
-            self._cargar_tipos_gastos()
             
+            self._cargar_tipos_gastos()
             print("✅ Tipos de gastos actualizados desde señal global en GastoModel")
         except Exception as e:
             print(f"❌ Error actualizando tipos desde señal: {e}")
+    
     @Slot(str)
     def _manejar_actualizacion_global(self, mensaje: str):
         """Maneja actualizaciones globales de gastos"""
         try:
             print(f"📡 GastoModel: {mensaje}")
-            # Emitir señal para notificar a QML que hay cambios
             self.tiposGastosChanged.emit()
         except Exception as e:
             print(f"❌ Error manejando actualización global: {e}")
+
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para GastoModel"""
+        try:
+            print("🚨 GastoModel: Iniciando desconexión de emergencia...")
+            
+            # Establecer estado shutdown
+            self._loading = False
+            self._usuario_actual_id = 0
+            
+            # Limpiar datos
+            self._gastos = []
+            self._gastos_filtrados = []
+            self._tipos_gastos = []
+            self._proveedores = []
+            self._estadisticas = {}
+            
+            # Desconectar señales globales
+            try:
+                if hasattr(self, 'global_signals'):
+                    self.global_signals.tiposGastosModificados.disconnect(self._actualizar_tipos_gastos_desde_signal)
+                    self.global_signals.configuracionGastosNecesitaActualizacion.disconnect(self._manejar_actualizacion_global)
+                    self.global_signals.gastosNecesitaActualizacion.disconnect(self._manejar_actualizacion_global)
+            except:
+                pass
+            
+            self.repository = None
+            
+            print("✅ GastoModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión GastoModel: {e}")
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================
@@ -861,7 +920,6 @@ class GastoModel(QObject):
 def register_gasto_model():
     """Registra el GastoModel para uso en QML"""
     qmlRegisterType(GastoModel, "ClinicaModels", 1, 0, "GastoModel")
-    print("🔗 GastoModel registrado para QML con soporte para proveedores")
+    print("📗 GastoModel con autenticación registrado para QML")
 
-# Para facilitar la importación
 __all__ = ['GastoModel', 'register_gasto_model']

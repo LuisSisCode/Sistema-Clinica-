@@ -9,7 +9,7 @@ from ..core.excepciones import (
 )
 from ..core.cache_system import cached_query
 from ..core.utils import (
-    validate_required_string, validate_email, get_current_datetime
+    validate_required_string, get_current_datetime
 )
 
 class AuthRepository(BaseRepository):
@@ -31,23 +31,23 @@ class AuthRepository(BaseRepository):
     # AUTENTICACIÓN
     # ===============================
     
-    def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
+    def authenticate_user(self, username: str, password: str) -> Dict[str, Any]:
         """
-        Autentica usuario con email y contraseña
+        Autentica usuario con nombre de usuario y contraseña
         
         Args:
-            email: Correo electrónico del usuario
+            username: Nombre de usuario
             password: Contraseña en texto plano
             
         Returns:
             Dict con resultado de autenticación
         """
         # Validaciones
-        email = validate_email(email, "email")
+        username = validate_required_string(username, "username", 3)
         validate_required_string(password, "password", 6)
         
-        # Buscar usuario por email
-        user = self.get_user_by_email(email)
+        # Buscar usuario por nombre de usuario
+        user = self.get_user_by_username(username)
         if not user:
             return {
                 'success': False,
@@ -65,7 +65,7 @@ class AuthRepository(BaseRepository):
         
         # Verificar contraseña (en implementación real, usar hash)
         # Por simplicidad, asumir contraseña plana por ahora
-        stored_password = user.get('Password', '')
+        stored_password = user.get('contrasena', '')
         if not self._verify_password(password, stored_password):
             return {
                 'success': False,
@@ -180,7 +180,7 @@ class AuthRepository(BaseRepository):
         """Obtiene usuarios activos con información básica"""
         query = """
         SELECT u.id, u.Nombre, u.Apellido_Paterno, u.Apellido_Materno,
-               u.correo, u.Estado, u.fecha_creacion,
+               u.nombre_usuario, u.Estado, u.fecha_creacion,
                r.id as rol_id, r.nombre as rol_nombre
         FROM Usuario u
         LEFT JOIN Rol r ON u.rol_id = r.id
@@ -189,15 +189,15 @@ class AuthRepository(BaseRepository):
         """
         return self._execute_query(query)
     
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        """Obtiene usuario por email"""
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Obtiene usuario por nombre de usuario"""
         query = """
-        SELECT u.*, r.nombre as rol_nombre
+        SELECT u.*, r.Nombre as rol_nombre
         FROM Usuario u
-        LEFT JOIN Rol r ON u.rol_id = r.id
-        WHERE u.correo = ?
+        LEFT JOIN Roles r ON u.Id_Rol = r.id
+        WHERE u.nombre_usuario = ?
         """
-        return self._execute_query(query, (email.strip().lower(),), fetch_one=True)
+        return self._execute_query(query, (username.strip().lower(),), fetch_one=True)
     
     def get_user_by_id_with_role(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene usuario por ID con información de rol"""
@@ -210,7 +210,7 @@ class AuthRepository(BaseRepository):
         return self._execute_query(query, (user_id,), fetch_one=True)
     
     def create_user(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                   email: str, password: str, rol_id: int = 1) -> int:
+                   username: str, password: str, rol_id: int = 1) -> int:
         """
         Crea nuevo usuario
         
@@ -218,7 +218,7 @@ class AuthRepository(BaseRepository):
             nombre: Nombre del usuario
             apellido_paterno: Apellido paterno
             apellido_materno: Apellido materno
-            email: Correo electrónico
+            username: Nombre de usuario
             password: Contraseña en texto plano
             rol_id: ID del rol (por defecto 1)
             
@@ -229,12 +229,12 @@ class AuthRepository(BaseRepository):
         nombre = validate_required_string(nombre, "nombre", 2)
         apellido_paterno = validate_required_string(apellido_paterno, "apellido_paterno", 2)
         apellido_materno = validate_required_string(apellido_materno, "apellido_materno", 2)
-        email = validate_email(email, "email")
+        username = self._validate_username_format(username)
         validate_required_string(password, "password", 6)
         
-        # Verificar que el email no exista
-        if self.email_exists(email):
-            raise ValidationError("email", email, "Email ya registrado")
+        # Verificar que el username no exista
+        if self.username_exists(username):
+            raise ValidationError("username", username, "Nombre de usuario ya registrado")
         
         # Hash de la contraseña (simplificado)
         password_hash = self._hash_password(password)
@@ -243,15 +243,15 @@ class AuthRepository(BaseRepository):
             'Nombre': nombre.strip().title(),
             'Apellido_Paterno': apellido_paterno.strip().title(),
             'Apellido_Materno': apellido_materno.strip().title(),
-            'correo': email.strip().lower(),
-            'Password': password_hash,
+            'nombre_usuario': username.strip().lower(),
+            'contrasena': password_hash,
             'rol_id': rol_id,
             'Estado': 1,
             'fecha_creacion': get_current_datetime()
         }
         
         user_id = self.insert(user_data)
-        print(f"👤 Usuario creado: {email} - ID: {user_id}")
+        print(f"👤 Usuario creado: {username} - ID: {user_id}")
         
         return user_id
     
@@ -260,19 +260,19 @@ class AuthRepository(BaseRepository):
         validate_required_string(new_password, "new_password", 6)
         
         password_hash = self._hash_password(new_password)
-        success = self.update(user_id, {'Password': password_hash})
+        success = self.update(user_id, {'contrasena': password_hash})
         
         if success:
             # Invalidar todas las sesiones del usuario
             self._invalidate_user_sessions(user_id)
-            print(f"🔑 Contraseña actualizada para usuario ID: {user_id}")
+            print(f"🔒 Contraseña actualizada para usuario ID: {user_id}")
         
         return success
     
-    def email_exists(self, email: str) -> bool:
-        """Verifica si existe un email"""
-        query = "SELECT COUNT(*) as count FROM Usuario WHERE correo = ?"
-        result = self._execute_query(query, (email.strip().lower(),), fetch_one=True)
+    def username_exists(self, username: str) -> bool:
+        """Verifica si existe un nombre de usuario"""
+        query = "SELECT COUNT(*) as count FROM Usuario WHERE nombre_usuario = ?"
+        result = self._execute_query(query, (username.strip().lower(),), fetch_one=True)
         return result['count'] > 0 if result else False
     
     # ===============================
@@ -284,7 +284,7 @@ class AuthRepository(BaseRepository):
         query = """
         SELECT s.id, s.token, s.Fecha_Creacion, s.Fecha_Ultimo_Acceso, s.Fecha_Expiracion,
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo,
-               u.correo as usuario_email, r.nombre as rol_nombre
+               u.nombre_usuario as usuario_username, r.nombre as rol_nombre
         FROM Sesiones_Usuario s
         INNER JOIN Usuario u ON s.Id_Usuario = u.id
         LEFT JOIN Rol r ON u.rol_id = r.id
@@ -375,6 +375,20 @@ class AuthRepository(BaseRepository):
         """Verifica contraseña contra hash"""
         return self._hash_password(password) == password_hash
     
+    def _validate_username_format(self, username: str) -> str:
+        """Valida formato de nombre de usuario"""
+        username = username.strip().lower()
+        
+        if len(username) < 3:
+            raise ValidationError("username", username, "Nombre de usuario debe tener mínimo 3 caracteres")
+        
+        # Validar caracteres permitidos
+        import re
+        if not re.match(r'^[a-zA-Z0-9._-]+$', username):
+            raise ValidationError("username", username, "Nombre de usuario solo puede contener letras, números, puntos, guiones y guiones bajos")
+        
+        return username
+    
     def _create_user_session(self, user_id: int, session_token: str) -> Optional[int]:
         """Crea nueva sesión de usuario"""
         try:
@@ -459,7 +473,7 @@ class AuthRepository(BaseRepository):
             'apellido_paterno': user['Apellido_Paterno'],
             'apellido_materno': user['Apellido_Materno'],
             'nombre_completo': f"{user['Nombre']} {user['Apellido_Paterno']} {user['Apellido_Materno']}",
-            'correo': user['correo'],
+            'nombre_usuario': user['nombre_usuario'],
             'rol_id': user.get('rol_id'),
             'rol_nombre': user.get('rol_nombre', 'Usuario'),
             'estado': user.get('Estado', False),

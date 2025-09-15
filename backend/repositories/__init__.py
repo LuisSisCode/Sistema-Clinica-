@@ -7,7 +7,7 @@ Repositories disponibles:
 - CompraRepository: Compras con creación automática de lotes
 """
 
-from .auth_repository import AuthRepository           # 0
+from .auth_repository import AuthRepository          # 0
 from .producto_repository import ProductoRepository         # 1
 from .venta_repository import VentaRepository               # 2
 from .compra_repository import CompraRepository             # 3

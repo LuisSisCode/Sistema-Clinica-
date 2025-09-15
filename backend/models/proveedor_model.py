@@ -680,6 +680,54 @@ class ProveedorModel(QObject):
         except Exception as e:
             print(f"❌ Error en refresh inmediato: {str(e)}")
 
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para ProveedorModel"""
+        try:
+            print("🚨 ProveedorModel: Iniciando desconexión de emergencia...")
+            
+            # Detener timers
+            if hasattr(self, 'search_timer') and self.search_timer.isActive():
+                self.search_timer.stop()
+                print("   ⏹️ Search timer detenido")
+                
+            if hasattr(self, 'update_timer') and self.update_timer.isActive():
+                self.update_timer.stop()
+                print("   ⏹️ Update timer detenido")
+            
+            # Romper referencia bidireccional
+            self._compra_model_ref = None
+            
+            # Desconectar señales
+            signals_to_disconnect = [
+                'proveedoresChanged', 'proveedorActualChanged', 'historialComprasChanged',
+                'estadisticasChanged', 'resumenChanged', 'proveedorCreado', 'proveedorActualizado',
+                'proveedorEliminado', 'operacionExitosa', 'operacionError', 'loadingChanged',
+                'searchResultsChanged'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar datos
+            self._proveedores = []
+            self._proveedor_actual = {}
+            self._historial_compras = []
+            self._estadisticas = {}
+            self._resumen = {}
+            self._search_results = []
+            
+            # Anular repository
+            self.proveedor_repo = None
+            
+            print("✅ ProveedorModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión ProveedorModel: {e}")
+
 # Registrar el tipo para QML
 def register_proveedor_model():
     qmlRegisterType(ProveedorModel, "ClinicaModels", 1, 0, "ProveedorModel")
