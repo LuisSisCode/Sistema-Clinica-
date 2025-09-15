@@ -483,6 +483,56 @@ class PacienteModel(QObject):
             self._loading = loading
             self.loadingChanged.emit()
 
+    def generic_emergency_disconnect(self, model_name: str):
+        """Desconexión genérica para modelos sin timers complejos"""
+        try:
+            print(f"🚨 {model_name}: Iniciando desconexión de emergencia...")
+            
+            # Buscar y detener cualquier timer
+            for attr_name in dir(self):
+                if 'timer' in attr_name.lower() and not attr_name.startswith('__'):
+                    try:
+                        timer = getattr(self, attr_name)
+                        if hasattr(timer, 'isActive') and hasattr(timer, 'stop') and timer.isActive():
+                            timer.stop()
+                            print(f"   ⏹️ {attr_name} detenido")
+                    except:
+                        pass
+            
+            # Establecer estado shutdown si existe
+            if hasattr(self, '_loading'):
+                self._loading = False
+            if hasattr(self, '_estadoActual'):
+                self._estadoActual = "shutdown"
+            
+            # Desconectar todas las señales posibles
+            for attr_name in dir(self):
+                if (not attr_name.startswith('__') and 
+                    hasattr(getattr(self, attr_name), 'disconnect')):
+                    try:
+                        getattr(self, attr_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar listas y diccionarios de datos
+            for attr_name in dir(self):
+                if not attr_name.startswith('__'):
+                    try:
+                        attr_value = getattr(self, attr_name)
+                        if isinstance(attr_value, list) and attr_name.startswith('_'):
+                            setattr(self, attr_name, [])
+                        elif isinstance(attr_value, dict) and attr_name.startswith('_'):
+                            setattr(self, attr_name, {})
+                    except:
+                        pass
+            
+            print(f"✅ {model_name}: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión {model_name}: {e}")
+    def emergency_disconnect(self):
+        """Desconexión de emergencia"""
+        generic_emergency_disconnect(self, self.__class__.__name__)
 # ===============================
 # REGISTRO PARA QML
 # ===============================

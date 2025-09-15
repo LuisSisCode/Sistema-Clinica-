@@ -69,7 +69,8 @@ class ConsultaModel(QObject):
         self._estadoActual = "listo"  # listo, cargando, error
         
         # ✅ AGREGAR: Usuario actual para compatibilidad con AppController
-        self._usuario_actual_id = 10  # Usuario por defecto
+        self._usuario_actual_id = 0  # Cambio de 10 a 0
+        print("🩺 ConsultaModel inicializado - Esperando autenticación")
         
         # Configuración
         self._autoRefreshInterval = 30000  # 30 segundos
@@ -93,16 +94,15 @@ class ConsultaModel(QObject):
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
         """
-        Establece el usuario actual para las operaciones
-        MÉTODO REQUERIDO por AppController
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
         """
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario establecido en ConsultaModel: ID {usuario_id}")
+                print(f"👤 Usuario autenticado establecido en ConsultaModel: {usuario_id}")
                 self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de consultas")
             else:
-                print(f"⚠️ ID de usuario inválido: {usuario_id}")
+                print(f"⚠️ ID de usuario inválido en ConsultaModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
         except Exception as e:
             print(f"❌ Error estableciendo usuario en ConsultaModel: {e}")
@@ -298,20 +298,16 @@ class ConsultaModel(QObject):
     
     @Slot('QVariant', result=str)
     def crear_consulta(self, datos_consulta):
-        """
-        Crea nueva consulta médica - CORREGIDO con usuario actual
-        datos_consulta: {
-            'paciente_id': int,
-            'especialidad_id': int,
-            'detalles': str,
-            'tipo_consulta': 'normal|emergencia',
-            'fecha': str (opcional)
-        }
-        """
+        """Crea nueva consulta médica - CORREGIDO con verificación de autenticación"""
         try:
+            # ✅ VERIFICACIÓN DE AUTENTICACIÓN PRIMERO
+            if self._usuario_actual_id <= 0:
+                self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            
             self._set_estado_actual("cargando")
             
-            # Convertir QJSValue a diccionario de Python
+            # Convertir QJSValue to diccionario de Python
             if hasattr(datos_consulta, 'toVariant'):
                 datos = datos_consulta.toVariant()
             else:
@@ -332,9 +328,9 @@ class ConsultaModel(QObject):
             if len(detalles) < 10:
                 raise ValueError("Detalles muy cortos (mínimo 10 caracteres)")
             
-            # ✅ USAR usuario actual en lugar de hardcoded
+            # ✅ USAR usuario actual autenticado
             consulta_id = self.repository.create_consultation(
-                usuario_id=self._usuario_actual_id,  # Usar usuario actual
+                usuario_id=self._usuario_actual_id,  # Usar usuario autenticado
                 paciente_id=paciente_id,
                 especialidad_id=especialidad_id,
                 detalles=detalles,
@@ -342,8 +338,8 @@ class ConsultaModel(QObject):
             )
             
             if consulta_id:
-                # CAMBIAR: Forzar refresh inmediato en lugar de usar signals
-                self._cargar_consultas_recientes()  # Recargar inmediatamente
+                # Forzar refresh inmediato
+                self._cargar_consultas_recientes()
                 self._cargar_estadisticas_dashboard()
                 
                 # Invalidar cache manualmente
@@ -369,8 +365,13 @@ class ConsultaModel(QObject):
     
     @Slot(int, 'QVariant', result=str)
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
-        """Actualiza consulta existente - CORREGIDO"""
+        """Actualiza consulta existente - CORREGIDO con verificación de autenticación"""
         try:
+            # ✅ VERIFICACIÓN DE AUTENTICACIÓN
+            if self._usuario_actual_id <= 0:
+                self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            
             self._set_estado_actual("cargando")
             
             # Convertir QJSValue a diccionario
@@ -383,7 +384,7 @@ class ConsultaModel(QObject):
                 consulta_id=consulta_id,
                 detalles=datos.get('detalles'),
                 tipo_consulta=datos.get('tipo_consulta'),
-                especialidad_id=datos.get('especialidad_id'),  # Añadir este campo
+                especialidad_id=datos.get('especialidad_id'),
                 fecha=datos.get('fecha')
             )
             
@@ -414,8 +415,13 @@ class ConsultaModel(QObject):
     
     @Slot(int, result=bool)
     def eliminar_consulta(self, consulta_id: int) -> bool:
-        """Elimina consulta médica"""
+        """Elimina consulta médica - CORREGIDO con verificación de autenticación"""
         try:
+            # ✅ VERIFICACIÓN DE AUTENTICACIÓN
+            if self._usuario_actual_id <= 0:
+                self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+                return False
+            
             self._set_estado_actual("cargando")
             
             exito = self.repository.delete(consulta_id)
@@ -920,6 +926,126 @@ class ConsultaModel(QObject):
             self.especialidadesChanged.emit()
         except Exception as e:
             print(f"❌ Error manejando actualización global: {e}")
+
+    def cleanup(self):
+        """
+        Limpia completamente todos los recursos del ConsultaModel
+        Detiene timers, desconecta señales y libera memoria
+        """
+        try:
+            print("🧹 Iniciando limpieza completa de ConsultaModel...")
+            
+            # 1. DETENER TODOS LOS TIMERS ACTIVOS
+            if hasattr(self, '_autoRefreshTimer'):
+                try:
+                    if self._autoRefreshTimer.isActive():
+                        self._autoRefreshTimer.stop()
+                        print("⏹️ Timer de auto-refresh detenido")
+                    self._autoRefreshTimer.deleteLater()
+                except Exception as e:
+                    print(f"⚠️ Error deteniendo auto-refresh timer: {e}")
+            
+            # 2. DESCONECTAR SEÑALES GLOBALES
+            try:
+                if hasattr(self, 'global_signals'):
+                    # Desconectar todas las señales globales
+                    try:
+                        self.global_signals.especialidadesModificadas.disconnect(self._actualizar_especialidades_desde_signal)
+                    except:
+                        pass
+                    
+                    try:
+                        self.global_signals.consultasNecesitaActualizacion.disconnect(self._manejar_actualizacion_global)
+                    except:
+                        pass
+                    
+                    print("🔌 Señales globales desconectadas")
+            except Exception as e:
+                print(f"⚠️ Error desconectando señales globales: {e}")
+            
+            # 3. LIMPIAR REPOSITORIOS Y DATOS
+            try:
+                # Invalidar caches de repositorios
+                if hasattr(self, 'repository') and hasattr(self.repository, 'invalidate_consultation_caches'):
+                    self.repository.invalidate_consultation_caches()
+                    print("🗑️ Cache de consultas invalidado")
+                
+                if hasattr(self, 'doctor_repo') and hasattr(self.doctor_repo, 'invalidate_cache'):
+                    self.doctor_repo.invalidate_cache()
+                    print("🗑️ Cache de doctores invalidado")
+                
+                # Limpiar datos en memoria
+                self._consultasData = []
+                self._especialidadesData = []
+                self._doctoresData = []
+                self._dashboardData = {}
+                self._estadisticasData = {}
+                
+                print("📊 Datos en memoria liberados")
+            except Exception as e:
+                print(f"⚠️ Error limpiando datos: {e}")
+            
+            # 4. DESCONECTAR SEÑALES PROPIAS (opcional, para liberación completa)
+            try:
+                # Desconectar todas las señales propias
+                self.consultaCreada.disconnect()
+                self.consultaActualizada.disconnect()
+                self.consultaEliminada.disconnect()
+                self.pacienteEncontradoPorCedula.disconnect()
+                self.pacienteNoEncontrado.disconnect()
+                self.resultadosBusqueda.disconnect()
+                self.filtrosAplicados.disconnect()
+                self.dashboardActualizado.disconnect()
+                self.estadisticasCalculadas.disconnect()
+                self.estadoCambiado.disconnect()
+                self.operacionError.disconnect()
+                self.operacionExitosa.disconnect()
+                self.consultasRecientesChanged.disconnect()
+                self.especialidadesChanged.disconnect()
+                self.doctoresDisponiblesChanged.disconnect()
+                
+                print("🔌 Señales propias desconectadas")
+            except Exception as e:
+                print(f"⚠️ Error desconectando señales propias: {e}")
+            
+            # 5. RESETEAR ESTADOS
+            self._estadoActual = "inactivo"
+            self._usuario_actual_id = 0
+            self._is_initializing = False
+            
+            print("✅ Limpieza completa de ConsultaModel finalizada")
+            
+        except Exception as e:
+            print(f"❌ Error crítico durante cleanup de ConsultaModel: {e}")
+            # Asegurarse de que al menos los timers se detengan
+            try:
+                if hasattr(self, '_autoRefreshTimer') and self._autoRefreshTimer.isActive():
+                    self._autoRefreshTimer.stop()
+            except:
+                pass
+
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para ConsultaModel"""
+        try:
+            print("🚨 ConsultaModel: Iniciando desconexión de emergencia...")
+            
+            # Detener timer
+            if hasattr(self, '_autoRefreshTimer') and self._autoRefreshTimer.isActive():
+                self._autoRefreshTimer.stop()
+                print("   ⏹️ Auto-refresh timer detenido")
+            
+            # Forzar estado shutdown
+            self._estadoActual = "shutdown"
+            self._is_initializing = False
+            
+            # Usar el cleanup existente que es bastante completo
+            self.cleanup()
+            
+            print("✅ ConsultaModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión ConsultaModel: {e}")
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================

@@ -45,7 +45,7 @@ class UsuarioRepository(BaseRepository):
             u.Nombre,
             u.Apellido_Paterno,
             u.Apellido_Materno,
-            u.correo,
+            u.nombre_usuario,
             u.Estado,
             r.id as rol_id,
             r.Nombre as rol_nombre,
@@ -65,7 +65,7 @@ class UsuarioRepository(BaseRepository):
             u.Nombre,
             u.Apellido_Paterno,
             u.Apellido_Materno,
-            u.correo,
+            u.nombre_usuario,
             u.Estado,
             r.id as rol_id,
             r.Nombre as rol_nombre,
@@ -77,7 +77,7 @@ class UsuarioRepository(BaseRepository):
         return self._execute_query(query, (usuario_id,), fetch_one=True)
     
     def create_user(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                   correo: str, contrasena: str, rol_id: int, estado: bool = True) -> int:
+                   nombre_usuario: str, contrasena: str, rol_id: int, estado: bool = True) -> int:
         """
         Crea nuevo usuario con validaciones completas
         
@@ -85,7 +85,7 @@ class UsuarioRepository(BaseRepository):
             nombre: Nombre del usuario
             apellido_paterno: Apellido paterno
             apellido_materno: Apellido materno  
-            correo: Email único
+            nombre_usuario: Nombre de usuario único
             contrasena: Contraseña en texto plano (se hasheará)
             rol_id: ID del rol asignado
             estado: Estado activo/inactivo
@@ -101,18 +101,19 @@ class UsuarioRepository(BaseRepository):
         validate_required(nombre, "nombre")
         validate_required(apellido_paterno, "apellido_paterno")
         validate_required(apellido_materno, "apellido_materno")
-        validate_required(correo, "correo")
+        validate_required(nombre_usuario, "nombre_usuario")
         validate_required(contrasena, "contrasena")
         validate_required(rol_id, "rol_id")
         
-        validate_email(correo)
+        # Validar formato de nombre de usuario
+        self._validate_username_format(nombre_usuario)
         
         # Validar contraseña fuerte
         self._validate_password_strength(contrasena)
         
-        # Verificar que el email no exista
-        if self.email_exists(correo):
-            raise ValidationError("correo", correo, "Email ya existe en el sistema")
+        # Verificar que el usuario no exista
+        if self.username_exists(nombre_usuario):
+            raise ValidationError("nombre_usuario", nombre_usuario, "Nombre de usuario ya existe en el sistema")
         
         # Verificar que el rol exista y esté activo
         if not self._role_exists_and_active(rol_id):
@@ -126,7 +127,7 @@ class UsuarioRepository(BaseRepository):
             'Nombre': nombre.strip(),
             'Apellido_Paterno': apellido_paterno.strip(),
             'Apellido_Materno': apellido_materno.strip(),
-            'correo': correo.lower().strip(),
+            'nombre_usuario': nombre_usuario.lower().strip(),
             'contrasena': hashed_password,
             'Id_Rol': rol_id,
             'Estado': estado
@@ -138,7 +139,7 @@ class UsuarioRepository(BaseRepository):
         return user_id
     
     def update_user(self, usuario_id: int, nombre: str = None, apellido_paterno: str = None,
-                   apellido_materno: str = None, correo: str = None, rol_id: int = None,
+                   apellido_materno: str = None, nombre_usuario: str = None, rol_id: int = None,
                    estado: bool = None) -> bool:
         """
         Actualiza usuario existente (sin cambiar contraseña)
@@ -170,15 +171,15 @@ class UsuarioRepository(BaseRepository):
             validate_required(apellido_materno, "apellido_materno")
             update_data['Apellido_Materno'] = apellido_materno.strip()
         
-        if correo is not None:
-            validate_email(correo)
-            correo = correo.lower().strip()
+        if nombre_usuario is not None:
+            self._validate_username_format(nombre_usuario)
+            nombre_usuario = nombre_usuario.lower().strip()
             
-            # Verificar que el nuevo email no exista (excepto el mismo usuario)
-            if correo != existing_user['correo'] and self.email_exists(correo):
-                raise ValidationError("correo", correo, "Email ya existe en el sistema")
+            # Verificar que el nuevo usuario no exista (excepto el mismo usuario)
+            if nombre_usuario != existing_user['nombre_usuario'] and self.username_exists(nombre_usuario):
+                raise ValidationError("nombre_usuario", nombre_usuario, "Nombre de usuario ya existe en el sistema")
             
-            update_data['correo'] = correo
+            update_data['nombre_usuario'] = nombre_usuario
         
         if rol_id is not None:
             if not self._role_exists_and_active(rol_id):
@@ -232,7 +233,7 @@ class UsuarioRepository(BaseRepository):
         success = self.update(usuario_id, {'contrasena': hashed_new_password})
         
         if success:
-            print(f"🔐 Contraseña cambiada: Usuario ID {usuario_id}")
+            print(f"🔒 Contraseña cambiada: Usuario ID {usuario_id}")
         
         return success
     
@@ -258,7 +259,7 @@ class UsuarioRepository(BaseRepository):
         success = self.update(usuario_id, {'contrasena': hashed_password})
         
         if success:
-            print(f"🔐 Contraseña reseteada: Usuario ID {usuario_id}")
+            print(f"🔓 Contraseña reseteada: Usuario ID {usuario_id}")
         
         return success
     
@@ -266,50 +267,45 @@ class UsuarioRepository(BaseRepository):
     # OPERACIONES DE AUTENTICACIÓN
     # ===============================
     
-    def authenticate(self, correo: str, contrasena: str) -> Optional[Dict[str, Any]]:
-        """
-        Autentica usuario por email y contraseña
-        
-        Args:
-            correo: Email del usuario
-            contrasena: Contraseña en texto plano
-            
-        Returns:
-            Datos del usuario autenticado o None si falla
-        """
-        validate_required(correo, "correo")
+    def authenticate(self, nombre_usuario: str, contrasena: str) -> Optional[Dict[str, Any]]:
+        """Autentica usuario por nombre de usuario y contraseña"""
+        validate_required(nombre_usuario, "nombre_usuario")
         validate_required(contrasena, "contrasena")
-        validate_email(correo)
         
-        # Obtener usuario por email
-        user = self.get_by_email(correo.lower().strip())
+        # Obtener usuario por nombre de usuario
+        user = self.get_by_username(nombre_usuario.lower().strip())
+        print(f"📋 Usuario encontrado: {user}")  # DEBUG
+        
         if not user:
-            raise AuthenticationError(correo)
+            raise AuthenticationError(nombre_usuario)
         
         # Verificar que esté activo
         if not user.get('Estado', False):
             raise AuthenticationError("Usuario inactivo")
         
-        # Verificar contraseña
-        if not self._verify_password(contrasena, user['contrasena']):
-            raise AuthenticationError(correo)
+        # COMPARACIÓN DIRECTA (temporal)
+        stored_password = user.get('contrasena', '')
+        print(f"🔒 BD: {stored_password} | Input: {contrasena}")  # DEBUG
+        
+        if stored_password != contrasena:
+            raise AuthenticationError(nombre_usuario)
         
         # Obtener información completa con rol
         authenticated_user = self.get_by_id_with_role(user['id'])
         
         if authenticated_user:
-            print(f"🔑 Usuario autenticado: {authenticated_user['correo']}")
+            print(f"✅ Usuario autenticado: {authenticated_user['nombre_usuario']}")
         
         return authenticated_user
+        
+    def get_by_username(self, nombre_usuario: str) -> Optional[Dict[str, Any]]:
+        """Obtiene usuario por nombre de usuario"""
+        query = "SELECT * FROM Usuario WHERE nombre_usuario = ?"
+        return self._execute_query(query, (nombre_usuario.lower().strip(),), fetch_one=True)
     
-    def get_by_email(self, correo: str) -> Optional[Dict[str, Any]]:
-        """Obtiene usuario por email"""
-        query = "SELECT * FROM Usuario WHERE correo = ?"
-        return self._execute_query(query, (correo.lower().strip(),), fetch_one=True)
-    
-    def email_exists(self, correo: str) -> bool:
-        """Verifica si existe un email en el sistema"""
-        return self.exists('correo', correo.lower().strip())
+    def username_exists(self, nombre_usuario: str) -> bool:
+        """Verifica si existe un nombre de usuario en el sistema"""
+        return self.exists('nombre_usuario', nombre_usuario.lower().strip())
     
     # ===============================
     # CONSULTAS ESPECÍFICAS
@@ -358,7 +354,7 @@ class UsuarioRepository(BaseRepository):
     
     def search_users(self, search_term: str, limit: int = 20) -> List[Dict[str, Any]]:
         """
-        Búsqueda avanzada de usuarios por nombre, apellidos o email
+        Búsqueda avanzada de usuarios por nombre, apellidos o nombre de usuario
         
         Args:
             search_term: Término de búsqueda
@@ -374,7 +370,7 @@ class UsuarioRepository(BaseRepository):
         FROM Usuario u
         INNER JOIN Roles r ON u.Id_Rol = r.id
         WHERE (u.Nombre LIKE ? OR u.Apellido_Paterno LIKE ? OR 
-               u.Apellido_Materno LIKE ? OR u.correo LIKE ?)
+               u.Apellido_Materno LIKE ? OR u.nombre_usuario LIKE ?)
         ORDER BY u.Estado DESC, u.Nombre, u.Apellido_Paterno
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
@@ -461,6 +457,16 @@ class UsuarioRepository(BaseRepository):
         # Opcional: Agregar más validaciones
         # - Mayúsculas, minúsculas, números, símbolos
         # - No contraseñas comunes
+    
+    def _validate_username_format(self, nombre_usuario: str):
+        """Valida formato de nombre de usuario"""
+        if len(nombre_usuario.strip()) < 3:
+            raise ValidationError("nombre_usuario", nombre_usuario, "Nombre de usuario debe tener mínimo 3 caracteres")
+        
+        # Opcional: Validar caracteres permitidos
+        import re
+        if not re.match(r'^[a-zA-Z0-9._-]+$', nombre_usuario):
+            raise ValidationError("nombre_usuario", nombre_usuario, "Nombre de usuario solo puede contener letras, números, puntos, guiones y guiones bajos")
         
     def _role_exists_and_active(self, rol_id: int) -> bool:
         """Verifica que el rol existe y está activo"""

@@ -1,6 +1,6 @@
 """
-Modelo QObject para Gestión de Laboratorio - CORREGIDO con Paginación Exitosa
-Expone funcionalidad de laboratorio a QML con Signals/Slots/Properties
+LaboratorioModel - ACTUALIZADO con autenticación estandarizada
+Migrado del patrón hardcoded al patrón de ConsultaModel
 """
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
@@ -12,10 +12,11 @@ from datetime import datetime, timedelta
 from ..core.excepciones import ExceptionHandler, ClinicaBaseException
 from ..repositories.laboratorio_repository import LaboratorioRepository
 from ..core.Signals_manager import get_global_signals
+
 class LaboratorioModel(QObject):
     """
-    Modelo QObject para gestión completa de análisis de laboratorio - CORREGIDO
-    Con paginación exitosa y propiedades expuestas a QML
+    Modelo QObject para gestión completa de análisis de laboratorio
+    Con autenticación estandarizada y verificación de permisos
     """
     
     # ===============================
@@ -35,20 +36,21 @@ class LaboratorioModel(QObject):
     estadoCambiado = Signal(str, arguments=['nuevoEstado'])
     errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
     operacionExitosa = Signal(str, arguments=['mensaje'])
+    operacionError = Signal(str, arguments=['mensaje'])  # Para compatibilidad
     
     # Signals para datos
     examenesActualizados = Signal()
     tiposAnalisisActualizados = Signal()
     trabajadoresActualizados = Signal()
     
-    # ✅ NUEVOS SIGNALS PARA PAGINACIÓN
+    # Signals para paginación
     currentPageChanged = Signal()
     totalPagesChanged = Signal() 
     itemsPerPageChanged = Signal()
     totalRecordsChanged = Signal()
     
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__()
         
         # Repository
         self.repository = LaboratorioRepository()
@@ -61,126 +63,149 @@ class LaboratorioModel(QObject):
         self._trabajadoresData = []
         self._estadoActual = "listo"
         
-        # ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
+        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        print("🧪 LaboratorioModel inicializado - Esperando autenticación")
+        
+        # Propiedades de paginación
         self._currentPage = 0
         self._totalPages = 0
-        self._itemsPerPage = 6  # ✅ CAMBIO: Default a 6 en lugar de 11
+        self._itemsPerPage = 6
         self._totalRecords = 0
         
         # Configuración
         self._autoRefreshInterval = 30000
         
     # ===============================
-    # PROPERTIES BÁSICAS
+    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
     # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en LaboratorioModel: {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de laboratorio")
+            else:
+                print(f"⚠️ ID de usuario inválido en LaboratorioModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en LaboratorioModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    # ===============================
+    # CONEXIONES Y PROPIEDADES (SIN CAMBIOS)
+    # ===============================
+    
     def _conectar_senales_globales(self):
         """Conecta con las señales globales para recibir actualizaciones"""
         try:
-            # Conectar señales de tipos de análisis
             self.global_signals.tiposAnalisisModificados.connect(self._actualizar_tipos_analisis_desde_signal)
             self.global_signals.laboratorioNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            
             print("Señales globales conectadas en LaboratorioModel")
         except Exception as e:
             print(f"Error conectando señales globales en LaboratorioModel: {e}")
+    
+    # Properties básicas (sin cambios)
     def _get_examenes_json(self) -> str:
-        """Getter para exámenes en formato JSON"""
         return json.dumps(self._examenesData, default=str, ensure_ascii=False)
     
     def _get_tipos_analisis_json(self) -> str:
-        """Getter para tipos de análisis en formato JSON"""
         return json.dumps(self._tiposAnalisisData, default=str, ensure_ascii=False)
     
     def _get_trabajadores_json(self) -> str:
-        """Getter para trabajadores en formato JSON"""
         return json.dumps(self._trabajadoresData, default=str, ensure_ascii=False)
     
     def _get_estado_actual(self) -> str:
-        """Getter para estado actual"""
         return self._estadoActual
     
     def _set_estado_actual(self, nuevo_estado: str):
-        """Setter para estado actual"""
         if self._estadoActual != nuevo_estado:
             self._estadoActual = nuevo_estado
             self.estadoCambiado.emit(nuevo_estado)
     
-    # Properties básicas expuestas a QML
+    # Properties expuestas a QML
     examenesJson = Property(str, _get_examenes_json, notify=examenesActualizados)
     tiposAnalisisJson = Property(str, _get_tipos_analisis_json, notify=tiposAnalisisActualizados)
     trabajadoresJson = Property(str, _get_trabajadores_json, notify=trabajadoresActualizados)
     estadoActual = Property(str, _get_estado_actual, notify=estadoCambiado)
     
-    # ✅ NUEVAS PROPERTIES DE PAGINACIÓN PARA QML
-    
+    # Properties de paginación (sin cambios)
     def _get_current_page(self) -> int:
-        """Getter para página actual"""
         return self._currentPage
 
     def _get_total_pages(self) -> int:
-        """Getter para total de páginas"""
         return self._totalPages
 
     def _get_items_per_page(self) -> int:
-        """Getter para elementos por página"""
         return self._itemsPerPage
 
     def _set_items_per_page(self, value: int):
-        """Setter para elementos por página - PERMITE QUE QML CONFIGURE EL VALOR"""
         if value != self._itemsPerPage and value > 0:
             print(f"📊 ItemsPerPage actualizado desde QML: {self._itemsPerPage} -> {value}")
             self._itemsPerPage = value
             self.itemsPerPageChanged.emit()
 
     def _get_total_records(self) -> int:
-        """Getter para total de registros"""
         return self._totalRecords
 
-    # ✅ PROPERTIES EXPUESTAS A QML PARA PAGINACIÓN
     currentPageProperty = Property(int, _get_current_page, notify=currentPageChanged)
     totalPagesProperty = Property(int, _get_total_pages, notify=totalPagesChanged)
     itemsPerPageProperty = Property(int, _get_items_per_page, _set_items_per_page, notify=itemsPerPageChanged)
     totalRecordsProperty = Property(int, _get_total_records, notify=totalRecordsChanged)
     
-    # Properties para compatibilidad con QML existente
     @Property(list, notify=examenesActualizados)
     def examenes_paginados(self):
-        """Lista de exámenes paginados para compatibilidad"""
         return self._examenesData
     
     @Property(list, notify=tiposAnalisisActualizados)
     def tipos_analisis(self):
-        """Lista de tipos de análisis para compatibilidad"""
         return self._tiposAnalisisData
     
     @Property(list, notify=trabajadoresActualizados)
     def trabajadores_disponibles(self):
-        """Lista de trabajadores disponibles para compatibilidad"""
         return self._trabajadoresData
     
     # ===============================
-    # SLOTS PRINCIPALES CORREGIDOS
+    # SLOTS PRINCIPALES CON AUTENTICACIÓN
     # ===============================
     
     @Slot(int, int, 'QVariant', result='QVariant')
     def obtener_examenes_paginados(self, page: int, limit: int = 6, filters=None):
-        """✅ CORREGIDO: Obtiene página específica usando _itemsPerPage configurado desde QML"""
+        """Obtiene página específica - SIN VERIFICACIÓN (solo lectura)"""
         try:
             # Convertir filtros
             filtros_dict = filters.toVariant() if hasattr(filters, 'toVariant') else filters or {}
             
-            # Validar parámetros
             if page < 0:
                 page = 0
                 
-            # ✅ USAR EL VALOR CONFIGURADO DESDE QML, NO EL PARÁMETRO limit
             limit_real = self._itemsPerPage
             
-            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos (configurado desde QML)")
+            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
             
-            # Obtener datos paginados del repository
             resultado = self.repository.get_paginated_exams_with_details(
-                page, limit_real,  # ✅ USAR limit_real
+                page, limit_real,
                 filtros_dict.get('search_term', ''),
                 filtros_dict.get('tipo_analisis', ''),
                 filtros_dict.get('tipo_servicio', ''),
@@ -188,7 +213,7 @@ class LaboratorioModel(QObject):
                 filtros_dict.get('fecha_hasta', '')
             )
             
-            # ✅ ACTUALIZAR PROPIEDADES Y EMITIR SEÑALES
+            # Actualizar propiedades
             old_page = self._currentPage
             old_total_pages = self._totalPages
             old_total_records = self._totalRecords
@@ -196,11 +221,9 @@ class LaboratorioModel(QObject):
             self._currentPage = page
             self._totalRecords = resultado.get('total_records', 0)
             self._totalPages = max(1, (self._totalRecords + limit_real - 1) // limit_real)
-            
-            # Actualizar datos internos
             self._examenesData = resultado.get('examenes', [])
             
-            # ✅ EMITIR SEÑALES SOLO SI LAS PROPIEDADES CAMBIARON
+            # Emitir señales solo si cambiaron
             if old_page != self._currentPage:
                 self.currentPageChanged.emit()
             if old_total_pages != self._totalPages:
@@ -208,11 +231,9 @@ class LaboratorioModel(QObject):
             if old_total_records != self._totalRecords:
                 self.totalRecordsChanged.emit()
                 
-            # Emitir signal de datos actualizados
             self.examenesActualizados.emit()
             
             print(f"✅ Página {page + 1} cargada: {len(self._examenesData)} registros de {self._totalRecords}")
-            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
             
             return {
                 'examenes': self._examenesData,
@@ -232,9 +253,8 @@ class LaboratorioModel(QObject):
     def aplicar_filtros_y_recargar(self, search_term: str = "", tipo_analisis: str = "", 
                                   tipo_servicio: str = "", fecha_desde: str = "", 
                                   fecha_hasta: str = ""):
-        """✅ CORREGIDO: Aplica filtros y regresa a la primera página usando _itemsPerPage"""
+        """Aplica filtros - SIN VERIFICACIÓN (solo lectura)"""
         try:
-            # Resetear a página 0 siempre que cambien los filtros
             self._currentPage = 0
             
             # Limpiar parámetros
@@ -244,7 +264,6 @@ class LaboratorioModel(QObject):
             fecha_desde = fecha_desde.strip() if fecha_desde else ""
             fecha_hasta = fecha_hasta.strip() if fecha_hasta else ""
             
-            # Construir filtros
             filtros = {
                 'search_term': search_term,
                 'tipo_analisis': tipo_analisis,
@@ -253,10 +272,8 @@ class LaboratorioModel(QObject):
                 'fecha_hasta': fecha_hasta
             }
             
-            # Invalidar cache
             self.repository.invalidate_laboratory_caches()
             
-            # ✅ USAR _itemsPerPage EN LUGAR DE VALOR FIJO
             print(f"🔄 Aplicando filtros con {self._itemsPerPage} elementos por página")
             self.obtener_examenes_paginados(0, self._itemsPerPage, filtros)
             
@@ -266,12 +283,12 @@ class LaboratorioModel(QObject):
             self.errorOcurrido.emit(error_msg, 'FILTER_ERROR')
     
     # ===============================
-    # SLOTS PARA BÚSQUEDA POR CÉDULA
+    # BÚSQUEDAS POR CÉDULA (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
     @Slot(str, result='QVariantMap')
     def buscar_paciente_por_cedula(self, cedula: str):
-        """Busca un paciente específico por su cédula"""
+        """Busca un paciente específico por su cédula - SIN VERIFICACIÓN"""
         try:
             if not cedula or len(cedula.strip()) < 5:
                 return {}
@@ -284,7 +301,6 @@ class LaboratorioModel(QObject):
             if paciente and isinstance(paciente, dict):
                 print(f"👤 Paciente encontrado: {paciente.get('nombre_completo', 'N/A')}")
                 
-                # Normalizar datos para QML
                 paciente_normalizado = {
                     'id': paciente.get('id', 0),
                     'Nombre': paciente.get('Nombre', paciente.get('nombre', '')),
@@ -292,7 +308,6 @@ class LaboratorioModel(QObject):
                     'Apellido_Materno': paciente.get('Apellido_Materno', paciente.get('apellido_materno', '')),
                     'Cedula': paciente.get('Cedula', paciente.get('cedula', cedula_clean)),
                     'nombre_completo': paciente.get('nombre_completo', ''),
-                    # Aliases para compatibilidad
                     'nombre': paciente.get('Nombre', paciente.get('nombre', '')),
                     'apellido_paterno': paciente.get('Apellido_Paterno', paciente.get('apellido_paterno', '')),
                     'apellido_materno': paciente.get('Apellido_Materno', paciente.get('apellido_materno', ''))
@@ -314,21 +329,25 @@ class LaboratorioModel(QObject):
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
                                            apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente por cédula o crea uno nuevo si no existe"""
+        """Busca paciente por cédula o crea uno nuevo - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
+            if not self._verificar_autenticacion():
+                return -1
+            
             if not cedula or len(cedula.strip()) < 5:
-                self.errorOcurrido.emit("Cédula es obligatoria (mínimo 5 dígitos)", 'VALIDATION_ERROR')
+                self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
                 return -1
             
             if not nombre or len(nombre.strip()) < 2:
-                self.errorOcurrido.emit("Nombre es obligatorio", 'VALIDATION_ERROR')
+                self.operacionError.emit("Nombre es obligatorio")
                 return -1
             
             if not apellido_paterno or len(apellido_paterno.strip()) < 2:
-                self.errorOcurrido.emit("Apellido paterno es obligatorio", 'VALIDATION_ERROR')
+                self.operacionError.emit("Apellido paterno es obligatorio")
                 return -1
             
-            print(f"📄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
             
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
@@ -341,24 +360,28 @@ class LaboratorioModel(QObject):
                 self.operacionExitosa.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
                 return paciente_id
             else:
-                self.errorOcurrido.emit("Error gestionando paciente", 'PATIENT_MANAGEMENT_ERROR')
+                self.operacionError.emit("Error gestionando paciente")
                 return -1
                 
         except Exception as e:
             error_msg = f"Error gestionando paciente: {str(e)}"
             print(f"❌ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'PATIENT_MANAGEMENT_EXCEPTION')
+            self.operacionError.emit(error_msg)
             return -1
     
     # ===============================
-    # SLOTS PARA OPERACIONES CRUD
+    # OPERACIONES CRUD - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
     @Slot(int, int, str, int, str, result=str)
     def crearExamen(self, paciente_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                     trabajador_id: int = 0, detalles: str = "") -> str:
-        """Crea nuevo examen de laboratorio"""
+        """Crea nuevo examen de laboratorio - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+            if not self._verificar_autenticacion():
+                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            
             self._set_estado_actual("cargando")
             
             # Validar parámetros
@@ -369,21 +392,19 @@ class LaboratorioModel(QObject):
             if not tipo_servicio or tipo_servicio not in ['Normal', 'Emergencia']:
                 tipo_servicio = 'Normal'
             
-            usuario_id = 10  # Usuario por defecto
-            
-            print(f"🧪 Creando examen - Paciente: {paciente_id}, Tipo: {tipo_analisis_id}, Servicio: {tipo_servicio}")
+            # ✅ USAR usuario_actual_id EN LUGAR DE HARDCODED
+            print(f"🧪 Creando examen - Paciente: {paciente_id}, Tipo: {tipo_analisis_id}, Usuario: {self._usuario_actual_id}")
             
             examen_id = self.repository.create_lab_exam(
                 paciente_id=paciente_id,
                 tipo_analisis_id=tipo_analisis_id,
                 tipo=tipo_servicio,
                 trabajador_id=trabajador_id if trabajador_id > 0 else None,
-                usuario_id=usuario_id,
+                usuario_id=self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
                 detalles=detalles
             )
             
             if examen_id and examen_id > 0:
-                # Recargar datos después de crear
                 self._cargar_examenes_actuales()
                 
                 self.operacionExitosa.emit(f"Examen creado exitosamente: ID {examen_id}")
@@ -393,25 +414,28 @@ class LaboratorioModel(QObject):
                 return json.dumps({'exito': True, 'examen_id': examen_id})
             else:
                 error_msg = "Error creando examen - ID inválido"
-                self.errorOcurrido.emit(error_msg, 'CREATE_ERROR')
+                self.operacionError.emit(error_msg)
                 self._set_estado_actual("error")
                 return json.dumps({'exito': False, 'error': error_msg})
                 
         except Exception as e:
             error_msg = f"Error creando examen: {str(e)}"
             print(f"❌ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
 
     @Slot(int, int, str, int, str, result=str)
     def actualizarExamen(self, examen_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                         trabajador_id: int = 0, detalles: str = "") -> str:
-        """Actualiza examen de laboratorio existente"""
+        """Actualiza examen de laboratorio existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            
             self._set_estado_actual("cargando")
             
-            # Validar parámetros básicos
             if examen_id <= 0:
                 raise ValueError("ID de examen inválido")
             if tipo_analisis_id <= 0:
@@ -419,21 +443,15 @@ class LaboratorioModel(QObject):
             if not tipo_servicio or tipo_servicio not in ['Normal', 'Emergencia']:
                 tipo_servicio = 'Normal'
             
-            print(f"📝 Actualizando examen ID: {examen_id}")
-            print(f"   - Tipo análisis ID: {tipo_analisis_id}")  
-            print(f"   - Tipo servicio: {tipo_servicio}")
-            print(f"   - Trabajador ID: {trabajador_id}")
-            print(f"   - Detalles: {detalles}")
+            print(f"🔄 Actualizando examen ID: {examen_id} por usuario: {self._usuario_actual_id}")
             
-            # Verificar que el examen existe
             examen_actual = self.repository.get_by_id(examen_id)
             if not examen_actual:
                 error_msg = f"Examen con ID {examen_id} no encontrado"
-                self.errorOcurrido.emit(error_msg, 'EXAM_NOT_FOUND')
+                self.operacionError.emit(error_msg)
                 self._set_estado_actual("error")
                 return json.dumps({"exito": False, "error": error_msg})
             
-            # Usar el método del repository para actualizar
             exito = self.repository.update_lab_exam(
                 lab_id=examen_id,
                 tipo_analisis_id=tipo_analisis_id,
@@ -443,7 +461,6 @@ class LaboratorioModel(QObject):
             )
             
             if exito:
-                # Invalidar cache y recargar datos
                 self.repository.invalidate_laboratory_caches()
                 self._cargar_examenes_actuales()
                 
@@ -459,27 +476,32 @@ class LaboratorioModel(QObject):
                 })
             else:
                 error_msg = "Error actualizando examen en la base de datos"
-                self.errorOcurrido.emit(error_msg, 'UPDATE_ERROR')
+                self.operacionError.emit(error_msg)
                 self._set_estado_actual("error")
                 return json.dumps({"exito": False, "error": error_msg})
                 
         except Exception as e:
             error_msg = f"Error actualizando examen: {str(e)}"
             print(f"❌ {error_msg}")
-            self.errorOcurrido.emit(error_msg, 'UPDATE_EXCEPTION')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({"exito": False, "error": error_msg})
 
     @Slot(int, result=bool)
     def eliminarExamen(self, examen_id: int) -> bool:
-        """Elimina examen de laboratorio"""
+        """Elimina examen de laboratorio - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             self._set_estado_actual("cargando")
+            
+            print(f"🗑️ Eliminando examen ID: {examen_id} por usuario: {self._usuario_actual_id}")
             
             exito = self.repository.delete(examen_id)
             
             if exito:
-                # Recargar datos después de eliminar
                 self._cargar_examenes_actuales()
                 
                 self.examenEliminado.emit(examen_id)
@@ -487,18 +509,18 @@ class LaboratorioModel(QObject):
                 self._set_estado_actual("listo")
                 return True
             else:
-                self.errorOcurrido.emit(f"No se pudo eliminar el examen {examen_id}", 'DELETE_ERROR')
+                self.operacionError.emit(f"No se pudo eliminar el examen {examen_id}")
                 self._set_estado_actual("error")
                 return False
                 
         except Exception as e:
             error_msg = f"Error eliminando examen: {str(e)}"
-            self.errorOcurrido.emit(error_msg, 'DELETE_EXCEPTION')
+            self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return False
     
     # ===============================
-    # SLOTS PARA GESTIÓN DE DATOS
+    # GESTIÓN DE DATOS (SIN CAMBIOS - LECTURA)
     # ===============================
     
     @Slot()
@@ -525,17 +547,14 @@ class LaboratorioModel(QObject):
     
     @Slot()
     def refrescarDatos(self):
-        """✅ CORREGIDO: Refresca todos los datos del modelo usando _itemsPerPage"""
+        """Refresca todos los datos del modelo"""
         try:
             self._set_estado_actual("cargando")
             
             print("🔄 Refrescando todos los datos del modelo...")
             
-            # Cargar datos de referencia
             self.cargarTiposAnalisis()
             self.cargarTrabajadores()
-            
-            # Recargar exámenes actuales
             self._cargar_examenes_actuales()
             
             self._set_estado_actual("listo")
@@ -548,19 +567,19 @@ class LaboratorioModel(QObject):
             self._set_estado_actual("error")
     
     # ===============================
-    # MÉTODOS INTERNOS CORREGIDOS
+    # MÉTODOS INTERNOS (SIN CAMBIOS)
     # ===============================
     
     def _cargar_examenes_actuales(self):
-        """✅ CORREGIDO: Carga exámenes actuales usando _itemsPerPage configurado"""
+        """Carga exámenes actuales usando paginación configurada"""
         try:
             print(f"🔄 Recargando exámenes con {self._itemsPerPage} elementos por página")
-            # Usar el método de paginación con filtros vacíos
             self.obtener_examenes_paginados(self._currentPage, self._itemsPerPage, {})
         except Exception as e:
             print(f"❌ Error recargando exámenes: {e}")
             self._examenesData = []
             self.examenesActualizados.emit()
+    
     @Slot()
     def _actualizar_tipos_analisis_desde_signal(self):
         """Actualiza tipos de análisis cuando recibe señal global"""
@@ -576,10 +595,53 @@ class LaboratorioModel(QObject):
         """Maneja actualizaciones globales del laboratorio"""
         try:
             print(f"📡 LaboratorioModel: {mensaje}")
-            # Emitir señal para notificar a QML que hay cambio
             self.tiposAnalisisActualizados.emit()
         except Exception as e:
             print(f"❌ Error manejando actualización global: {e}")
+
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para LaboratorioModel"""
+        try:
+            print("🚨 LaboratorioModel: Iniciando desconexión de emergencia...")
+            
+            self._estadoActual = "shutdown"
+            
+            try:
+                if hasattr(self, 'global_signals'):
+                    self.global_signals.tiposAnalisisModificados.disconnect(self._actualizar_tipos_analisis_desde_signal)
+                    self.global_signals.laboratorioNecesitaActualizacion.disconnect(self._manejar_actualizacion_global)
+            except:
+                pass
+            
+            signals_to_disconnect = [
+                'examenCreado', 'examenActualizado', 'examenEliminado',
+                'pacienteEncontradoPorCedula', 'pacienteNoEncontrado',
+                'estadoCambiado', 'errorOcurrido', 'operacionExitosa',
+                'examenesActualizados', 'tiposAnalisisActualizados', 'trabajadoresActualizados'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            self._examenesData = []
+            self._tiposAnalisisData = []
+            self._trabajadoresData = []
+            self._currentPage = 0
+            self._totalPages = 0
+            self._totalRecords = 0
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            
+            self.repository = None
+            
+            print("✅ LaboratorioModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión LaboratorioModel: {e}")
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================
@@ -587,4 +649,4 @@ class LaboratorioModel(QObject):
 def register_laboratorio_model():
     """Registra el modelo para uso en QML"""
     qmlRegisterType(LaboratorioModel, "Clinica.Models", 1, 0, "LaboratorioModel")
-    print("✅ LaboratorioModel registrado para QML con paginación exitosa")
+    print("✅ LaboratorioModel registrado para QML con autenticación estandarizada")

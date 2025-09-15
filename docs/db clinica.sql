@@ -28,7 +28,7 @@ CREATE TABLE Usuario (
     Nombre VARCHAR(100) NOT NULL,
     Apellido_Paterno VARCHAR(100) NOT NULL,
     Apellido_Materno VARCHAR(100) NOT NULL,
-    correo VARCHAR(200) NOT NULL UNIQUE,
+    nombre_usuario VARCHAR(200) NOT NULL UNIQUE,
     contrasena VARCHAR(255) NOT NULL
 );
 

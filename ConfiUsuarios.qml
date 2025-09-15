@@ -374,7 +374,7 @@ Item {
                                                 }
                                                 
                                                 Label {
-                                                    text: model.correo || ""
+                                                    text: model.nombre_usuario || ""
                                                     color: textSecondaryColor
                                                     font.pixelSize: fontBase * 0.8
                                                     elide: Text.ElideRight
@@ -694,9 +694,9 @@ Item {
                         }
                         
                         TextField {
-                            id: correoField
+                            id: usuarioField
                             Layout.fillWidth: true
-                            placeholderText: "correo@clinica.com"
+                            placeholderText: "nombre.usuario"
                             font.pixelSize: fontBase * 0.9
                             
                             background: Rectangle {
@@ -835,7 +835,7 @@ Item {
                     enabled: nombreField.text.length > 0 &&
                             apellidoPaternoField.text.length > 0 &&
                             apellidoMaternoField.text.length > 0 &&
-                            correoField.text.length > 0 &&
+                            usuarioField.text.length > 0 &&
                             rolComboBox.currentIndex >= 0 &&
                             (isEditMode || (passwordField.text.length > 0 && passwordField.text === confirmPasswordField.text))
                     
@@ -942,9 +942,9 @@ Item {
             // Búsqueda por texto
             if (textoBusqueda.length > 0 && mostrar) {
                 var nombreCompleto = (usuario.Nombre + " " + usuario.Apellido_Paterno + " " + usuario.Apellido_Materno).toLowerCase()
-                var correo = (usuario.correo || "").toLowerCase()
+                var nombreUsuario = (usuario.nombre_usuario || "").toLowerCase()
                 
-                if (!nombreCompleto.includes(textoBusqueda) && !correo.includes(textoBusqueda)) {
+                if (!nombreCompleto.includes(textoBusqueda) && !nombreUsuario.includes(textoBusqueda)) {
                     mostrar = false
                 }
             }
@@ -968,7 +968,7 @@ Item {
         nombreField.text = usuario.Nombre || ""
         apellidoPaternoField.text = usuario.Apellido_Paterno || ""
         apellidoMaternoField.text = usuario.Apellido_Materno || ""
-        correoField.text = usuario.correo || ""
+        usuarioField.text = usuario.nombre_usuario || ""
         
         // Configurar rol
         var rolIndex = rolesDisponibles.indexOf(usuario.rol_nombre)
@@ -1000,7 +1000,7 @@ Item {
                 nombreField.text,
                 apellidoPaternoField.text,
                 apellidoMaternoField.text,
-                correoField.text,
+                usuarioField.text,
                 rolIndex + 1,
                 estado
             )
@@ -1010,7 +1010,7 @@ Item {
                 nombreField.text,
                 apellidoPaternoField.text,
                 apellidoMaternoField.text,
-                correoField.text,
+                usuarioField.text,
                 passwordField.text,
                 confirmPasswordField.text,
                 rolIndex + 1,
@@ -1023,7 +1023,7 @@ Item {
         nombreField.text = ""
         apellidoPaternoField.text = ""
         apellidoMaternoField.text = ""
-        correoField.text = ""
+        usuarioField.text = ""
         passwordField.text = ""
         confirmPasswordField.text = ""
         rolComboBox.currentIndex = -1

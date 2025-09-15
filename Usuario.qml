@@ -47,9 +47,8 @@ Item {
     // Distribución de columnas responsive (SIN ESTADO Y ACCIONES)
     readonly property real colId: 0.10
     readonly property real colNombre: 0.30
-    readonly property real colUsuario: 0.20
-    readonly property real colCorreo: 0.25
-    readonly property real colRol: 0.15
+    readonly property real colUsuario: 0.25
+    readonly property real colRol: 0.35
     
     // Inicialización cuando el model esté disponible
     Component.onCompleted: {
@@ -170,7 +169,7 @@ Item {
             return
         }
         
-        console.log("🔄 Cargando datos originales de usuarios...")
+        console.log("📄 Cargando datos originales de usuarios...")
         
         // Limpiar datos anteriores
         usuariosOriginales = []
@@ -187,7 +186,7 @@ Item {
         
         // Log adicional para debugging
         if (usuariosOriginales.length > 0) {
-            console.log("📊 Primer usuario cargado:", usuariosOriginales[0].Nombre, usuariosOriginales[0].correo)
+            console.log("📊 Primer usuario cargado:", usuariosOriginales[0].Nombre, usuariosOriginales[0].nombre_usuario)
         }
     }
 
@@ -394,7 +393,7 @@ Item {
                     }
                 }
                
-                // ===== TABLA MODERNA SIN ESTADO Y ACCIONES =====
+                // ===== TABLA MODERNA ACTUALIZADA =====
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -410,7 +409,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER SIN ESTADO Y ACCIONES
+                        // HEADER ACTUALIZADO
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 5
@@ -471,37 +470,14 @@ Item {
                                     }
                                 }
                                 
-                                // USUARIO COLUMN
+                                // USUARIO COLUMN (ACTUALIZADA)
                                 Item {
                                     Layout.preferredWidth: parent.width * colUsuario
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "USUARIO"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.85
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        color: textColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                    
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        width: 1
-                                        height: parent.height
-                                        color: lineColor
-                                    }
-                                }
-                                
-                                // CORREO COLUMN
-                                Item {
-                                    Layout.preferredWidth: parent.width * colCorreo
-                                    Layout.fillHeight: true
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CORREO ELECTRÓNICO"
+                                        text: "NOMBRE USUARIO"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -630,7 +606,7 @@ Item {
                                             }
                                         }
                                         
-                                        // USUARIO COLUMN
+                                        // USUARIO COLUMN (ACTUALIZADA)
                                         Item {
                                             Layout.preferredWidth: parent.width * colUsuario
                                             Layout.fillHeight: true
@@ -641,41 +617,12 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.correo ? model.correo.split('@')[0] : ""
+                                                text: model.nombre_usuario || ""
                                                 color: textColorLight
                                                 font.bold: true
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
                                                 elide: Text.ElideRight
-                                            }
-                                            
-                                            Rectangle {
-                                                anchors.right: parent.right
-                                                width: 1
-                                                height: parent.height
-                                                color: lineColor
-                                            }
-                                        }
-                                        
-                                        // CORREO COLUMN
-                                        Item {
-                                            Layout.preferredWidth: parent.width * colCorreo
-                                            Layout.fillHeight: true
-                                            
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                anchors.rightMargin: baseUnit
-                                                text: model.correo || ""
-                                                color: textColor
-                                                font.bold: false
-                                                font.pixelSize: fontBaseSize * 0.85
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 2
                                             }
                                             
                                             Rectangle {
@@ -709,9 +656,9 @@ Item {
                                         }
                                     }
                                     
-                                    // LÍNEAS VERTICALES (REDUCIDAS)
+                                    // LÍNEAS VERTICALES (REDUCIDAS A 3)
                                     Repeater {
-                                        model: 4 // Solo 4 líneas verticales
+                                        model: 3 // Solo 3 líneas verticales
                                         Rectangle {
                                             property real xPos: {
                                                 var w = parent.width - baseUnit * 3
@@ -719,7 +666,6 @@ Item {
                                                     case 0: return baseUnit * 1.5 + w * colId
                                                     case 1: return baseUnit * 1.5 + w * (colId + colNombre)
                                                     case 2: return baseUnit * 1.5 + w * (colId + colNombre + colUsuario)
-                                                    case 3: return baseUnit * 1.5 + w * (colId + colNombre + colUsuario + colCorreo)
                                                 }
                                             }
                                             x: xPos
@@ -898,15 +844,13 @@ Item {
                 }
             }
             
-            // Búsqueda por texto en nombre, apellidos o correo
+            // Búsqueda por texto en nombre, apellidos o nombre de usuario
             if (textoBusqueda.length > 0 && mostrar) {
                 var nombreCompleto = (usuario.Nombre + " " + usuario.Apellido_Paterno + " " + usuario.Apellido_Materno).toLowerCase()
-                var correo = (usuario.correo || "").toLowerCase()
-                var usuarioNombre = correo.split('@')[0] || ""
+                var nombreUsuario = (usuario.nombre_usuario || "").toLowerCase()
                 
                 if (!nombreCompleto.includes(textoBusqueda) &&
-                    !correo.includes(textoBusqueda) &&
-                    !usuarioNombre.includes(textoBusqueda)) {
+                    !nombreUsuario.includes(textoBusqueda)) {
                     mostrar = false
                 }
             }
