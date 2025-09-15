@@ -62,7 +62,7 @@ Dialog {
 
     // Datos del formulario - PRIMER LOTE
     property string inputExpirationDate: ""
-    property bool inputNoExpiry: true  // Por defecto activado
+    property bool inputNoExpiry: false  // Por defecto activado
     property int inputStockBox: 0
     property int inputStockUnit: 0
     property string inputSupplier: ""
@@ -71,16 +71,16 @@ Dialog {
     property bool isFormValid: {
         if (modoEdicion) {
             return inputProductName.length > 0 &&
-                   inputPurchasePrice > 0 &&
-                   inputSalePrice > 0 &&
-                   inputMarca.length > 0
+                inputPurchasePrice > 0 &&
+                inputSalePrice > 0 &&
+                inputMarca.length > 0
         } else {
             return inputProductName.length > 0 &&
-                   inputPurchasePrice > 0 &&
-                   inputSalePrice > 0 &&
-                   inputMarca.length > 0 &&
-                   (inputNoExpiry || inputExpirationDate.length > 0) &&
-                   (inputStockBox > 0 || inputStockUnit > 0)
+                inputPurchasePrice > 0 &&
+                inputSalePrice > 0 &&
+                inputMarca.length > 0 &&
+                (!inputNoExpiry || inputExpiryDate.length > 0) &&
+                (inputStockBox > 0 || inputStockUnit > 0)
         }
     }
 
@@ -107,50 +107,63 @@ Dialog {
         }
         marcasCargadas = true
     }
-    
-    function validarFechaVencimiento() {
-        if (inputNoExpiry) return true  // Si no tiene vencimiento, es válido
-        if (!inputExpirationDate) return false
+
+    function autoFormatDate(input) {
+        // Permitir solo números y guiones
+        var cleaned = input.replace(/[^\d\-]/g, '')
         
-        var regex = /^\d{2}\/\d{2}\/\d{4}$/
-        if (!regex.test(inputExpirationDate)) {
-            return false
+        // Si está vacío, permitirlo
+        if (cleaned.length === 0) {
+            return ""
         }
         
-        // Convertir DD/MM/YYYY a formato que JS entienda
-        var partes = inputExpirationDate.split('/')
-        var dia = parseInt(partes[0])
-        var mes = parseInt(partes[1]) - 1  // JS meses son 0-11
-        var año = parseInt(partes[2])
+        // Auto-agregar guiones para YYYY-MM-DD
+        if (cleaned.length === 4 && !cleaned.includes('-')) {
+            return cleaned + '-'
+        }
+        if (cleaned.length === 7 && cleaned.indexOf('-') === 4 && cleaned.lastIndexOf('-') === 4) {
+            return cleaned + '-'
+        }
         
-        // Crear fecha correctamente
-        var fechaIngresada = new Date(año, mes, dia)
-        var hoy = new Date()
-        hoy.setHours(0, 0, 0, 0)  // Resetear horas para comparar solo fechas
+        // Limitar a 10 caracteres máximo (YYYY-MM-DD)
+        if (result.length > 10) {
+            result = result.substring(0, 10)
+        }
         
-        // Validar que la fecha sea válida y futura
-        return fechaIngresada.getTime() > hoy.getTime() &&
-            fechaIngresada.getDate() === dia &&  // Verificar que la fecha es válida
-            fechaIngresada.getMonth() === mes &&
-            fechaIngresada.getFullYear() === año
+        return cleaned
     }
+    function validateExpiryDate(dateStr) {
+        // Permitir vacío (productos sin vencimiento)
+        if (dateStr === "" || dateStr === "Sin vencimiento") return true;
+        
+        // Validar formato DD/MM/YYYY
+        var regex = /^\d{2}\/\d{2}\/\d{4}$/;
+        if (!regex.test(dateStr)) return false;
+        
+        var parts = dateStr.split('/');
+        var day = parseInt(parts[0], 10);
+        var month = parseInt(parts[1], 10);
+        var year = parseInt(parts[2], 10);
+        
+        if (month < 1 || month > 12) return false;
+        if (day < 1 || day > 31) return false;
+        if (year < 2020 || year > 2050) return false;
+        
+        // Validar días por mes
+        var daysInMonth = new Date(year, month, 0).getDate();
+        if (day > daysInMonth) return false;
+        
+        return true;
+    }
+    
     
     function formatearFechaParaBD() {
-        if (inputNoExpiry) return "2099-12-31"  // Fecha muy lejana para productos sin vencimiento
-        if (!inputExpirationDate) return ""
+        if (!inputNoExpiry) return null  // NULL para productos sin vencimiento
+        if (!inputExpiryDate) return ""
         
-        if (/^\d{4}-\d{2}-\d{2}$/.test(inputExpirationDate)) {
-            return inputExpirationDate
-        }
-        
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(inputExpirationDate)) {
-            var partes = inputExpirationDate.split('/')
-            return partes[2] + '-' + partes[1] + '-' + partes[0]
-        }
-        
-        return inputExpirationDate
+        return inputExpiryDate  // Ya está en formato YYYY-MM-DD
     }
-    
+
     function generarCodigoAutomatico() {
         return "PROD" + String(Date.now()).slice(-6)
     }
@@ -167,8 +180,8 @@ Dialog {
             return false
         }
         
-        if (!modoEdicion && !inputNoExpiry && !validarFechaVencimiento()) {
-            showNotification("Fecha de vencimiento inválida o en el pasado")
+        if (!modoEdicion && !inputNoExpiry && !validateExpiryDate(inputExpiryDate)) {
+            showNotification("Fecha de vencimiento inválida (YYYY-MM-DD)")
             return false
         }
         
@@ -214,7 +227,7 @@ Dialog {
         inputMarca = ""
         
         inputExpirationDate = ""
-        inputNoExpiry = true  // Volver al estado por defecto
+        inputNoExpiry = false  // Volver al estado por defecto
         inputStockBox = 0
         inputStockUnit = 0
         inputSupplier = ""
@@ -700,30 +713,20 @@ Dialog {
                                         color: grayDark
                                         inputMethodHints: Qt.ImhDigitsOnly
                                         maximumLength: 10
-                                        enabled: inputNoExpiry
+                                        enabled: !inputNoExpiry 
                                         
                                         onTextChanged: {
-                                            if (!inputNoExpiry) return
-                                            
-                                            var cleanText = text.replace(/[^0-9]/g, '');
-                                            var formattedText = '';
-                                            for (var i = 0; i < cleanText.length && i < 8; i++) {
-                                                if (i === 2 || i === 4) {
-                                                    formattedText += '/';
+                                            if (!inputNoExpiry) {
+                                                var formatted = autoFormatDate(text)
+                                                if (formatted !== text) {
+                                                    text = formatted
                                                 }
-                                                formattedText += cleanText[i];
+                                                inputExpiryDate = formatted
                                             }
-                                            
-                                            if (formattedText !== text) {
-                                                text = formattedText;
-                                                return;
-                                            }
-                                            
-                                            inputExpirationDate = text;
                                         }
                                         
                                         Text {
-                                            text: "DD/MM/YYYY"
+                                            text:"YYYY-MM-DD"
                                             color: grayMedium
                                             visible: !parent.text
                                             font: parent.font
@@ -735,7 +738,7 @@ Dialog {
                                 CheckBox {
                                     Layout.preferredWidth: 20
                                     Layout.preferredHeight: inputHeight
-                                    checked: inputNoExpiry
+                                    checked: !inputNoExpiry
                                     
                                     indicator: Rectangle {
                                         width: 16
@@ -758,8 +761,8 @@ Dialog {
                                     contentItem: Item {}
                                     
                                     onCheckedChanged: {
-                                        inputNoExpiry = checked
-                                        if (!checked) {
+                                        inputNoExpiry = !checked
+                                        if (checked) {
                                             inputExpirationDate = ""
                                             fechaVencimientoField.text = ""
                                         }
@@ -767,7 +770,7 @@ Dialog {
                                 }
                                 
                                 Text {
-                                    text: "Sin venc."
+                                    text: "Sin vencimiento"
                                     font.pixelSize: 10
                                     color: grayMedium
                                     anchors.verticalCenter: parent.verticalCenter
