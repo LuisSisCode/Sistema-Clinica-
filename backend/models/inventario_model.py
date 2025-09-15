@@ -206,7 +206,58 @@ class InventarioModel(QObject):
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo lotes: {str(e)}")
             return []
-    
+    @Slot(int, result='QVariant')
+    def get_lotes_por_producto(self, producto_id: int):
+        """Obtiene lotes de un producto específico - ALIAS para QML"""
+        return self.get_lotes_producto(producto_id)
+
+    @Slot(int, result='QVariant') 
+    def get_lotes_por_vencer(self, dias_adelante: int = 60):
+        """Obtiene lotes que vencen en X días"""
+        if dias_adelante <= 0:
+            dias_adelante = 60
+            
+        try:
+            lotes = safe_execute(
+                self.producto_repo.get_lotes_por_vencer, 
+                dias_adelante
+            ) or []
+            print(f"📅 Lotes por vencer en {dias_adelante} días: {len(lotes)}")
+            return lotes
+        except Exception as e:
+            print(f"❌ Error obteniendo lotes por vencer: {e}")
+            self.operacionError.emit(f"Error obteniendo lotes por vencer: {str(e)}")
+            return []
+
+    @Slot(result='QVariant')
+    def get_lotes_vencidos(self):
+        """Obtiene lotes vencidos con stock"""
+        try:
+            lotes = safe_execute(self.producto_repo.get_lotes_vencidos) or []
+            print(f"⚠️ Lotes vencidos: {len(lotes)}")
+            return lotes
+        except Exception as e:
+            print(f"❌ Error obteniendo lotes vencidos: {e}")
+            self.operacionError.emit(f"Error obteniendo lotes vencidos: {str(e)}")
+            return []
+
+    @Slot(int, result='QVariant')
+    def get_productos_bajo_stock(self, stock_minimo: int = 10):
+        """Obtiene productos con stock bajo"""
+        if stock_minimo <= 0:
+            stock_minimo = 10
+            
+        try:
+            productos = safe_execute(
+                self.producto_repo.get_productos_bajo_stock, 
+                stock_minimo
+            ) or []
+            print(f"📊 Productos bajo stock (≤{stock_minimo}): {len(productos)}")
+            return productos
+        except Exception as e:
+            print(f"❌ Error obteniendo productos bajo stock: {e}")
+            self.operacionError.emit(f"Error obteniendo productos bajo stock: {str(e)}")
+            return []
     @Slot(int, int, result='QVariant')
     def verificar_disponibilidad(self, producto_id: int, cantidad: int):
         """Verifica disponibilidad FIFO para una cantidad"""

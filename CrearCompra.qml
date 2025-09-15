@@ -16,9 +16,9 @@ Item {
     signal compraCompletada()
     signal cancelarCompra()
     
-    // SISTEMA DE MÉTRICAS COHERENTE Y BIEN ESTRUCTURADO
+    // SISTEMA DE MÉTRICAS COMPACTO
     readonly property real scaleFactor: Math.min(width / 1400, height / 900)
-    readonly property real baseUnit: Math.max(8, height / 100)
+    readonly property real baseUnit: 4
     readonly property real fontBaseSize: Math.max(13, height / 65)
     
     // Tamaños de fuente consistentes
@@ -28,18 +28,18 @@ Item {
     readonly property real fontXLarge: fontBaseSize * 1.4
     readonly property real fontHeader: fontBaseSize * 1.6
     
-    // Espaciados uniformes
-    readonly property real spacing4: baseUnit * 0.5
-    readonly property real spacing8: baseUnit
-    readonly property real spacing12: baseUnit * 1.5
-    readonly property real spacing16: baseUnit * 2
-    readonly property real spacing20: baseUnit * 2.5
-    readonly property real spacing24: baseUnit * 3
+    // Espaciados compactos
+    readonly property real spacing4: baseUnit
+    readonly property real spacing8: baseUnit * 2
+    readonly property real spacing12: baseUnit * 3
+    readonly property real spacing16: baseUnit * 4
+    readonly property real spacing20: baseUnit * 5
+    readonly property real spacing24: baseUnit * 6
     
     // Alturas estándar
-    readonly property real inputHeight: Math.max(36, baseUnit * 4.5)
-    readonly property real buttonHeight: Math.max(40, baseUnit * 5)
-    readonly property real headerHeight: Math.max(80, baseUnit * 10)
+    readonly property real inputHeight: 32
+    readonly property real buttonHeight: 36
+    readonly property real headerHeight: 70
     
     // Radios uniformes
     readonly property real radiusSmall: 6
@@ -76,9 +76,10 @@ Item {
     property int inputBoxes: 0
     property int inputUnits: 0
     property int inputTotalStock: 0
-    property real inputPurchasePrice: 0.0
+    property real inputPurchasePrice: 0.0  // ESTE ES EL COSTO TOTAL DEL PRODUCTO (NO UNITARIO)
     property real inputSalePrice: 0.0
     property string inputExpiryDate: ""
+    property bool inputNoExpiry: true
     property bool isNewProduct: true
     
     // Lista temporal de productos para la nueva compra
@@ -118,7 +119,6 @@ Item {
     }
 
     // FUNCIONES DE NEGOCIO
-    // Función simplificada para actualizar proveedores desde el modelo central
     function updateProviderNames() {
         var names = ["Seleccionar proveedor..."]
         
@@ -139,7 +139,6 @@ Item {
         } else {
             console.log("❌ CompraModel o proveedores no disponibles")
             
-            // ✅ FALLBACK: Intentar force refresh si no hay datos
             if (compraModel) {
                 console.log("🔄 Intentando force refresh como fallback...")
                 compraModel.force_refresh_proveedores()
@@ -148,9 +147,10 @@ Item {
         
         providerNames = names
     }
+    
     Timer {
         id: autoRefreshTimer
-        interval: 30000  // 30 segundos
+        interval: 30000
         running: false
         repeat: true
         onTriggered: {
@@ -161,16 +161,18 @@ Item {
         }
     }
     
+    // FUNCIÓN CORREGIDA: Solo suma los precios SIN multiplicar por cantidad
     function updatePurchaseTotal() {
         var total = 0.0
         for (var i = 0; i < temporaryProductsModel.count; i++) {
             var item = temporaryProductsModel.get(i)
-            total += item.precioCompra
+            // CORRECCIÓN: Solo sumamos el precio ingresado (que ya es el costo total)
+            total += item.costoTotalProducto
         }
         newPurchaseTotal = total
+        console.log("💰 Total de compra actualizado:", total, "- Productos:", temporaryProductsModel.count)
     }
 
-    // FUNCIÓN: Buscar productos existentes usando datos centrales
     function buscarProductosExistentes(texto) {
         console.log("🔍 CrearCompra: Buscando productos existentes:", texto)
         productSearchResultsModel.clear()
@@ -182,10 +184,8 @@ Item {
         
         var textoBusqueda = texto.toLowerCase()
         
-        // Buscar con InventarioModel
         inventarioModel.buscar_productos(textoBusqueda)
         
-        // Esperar un poco para que se actualicen los resultados
         Qt.callLater(function() {
             var resultados = inventarioModel.search_results || []
             console.log("🔍 Resultados obtenidos:", resultados.length)
@@ -215,7 +215,6 @@ Item {
         })
     }
 
-    // FUNCIÓN NUEVA: Seleccionar producto existente
     function seleccionarProductoExistente(codigo, nombre) {
         console.log("✅ Seleccionando producto existente:", codigo, nombre)
         
@@ -225,10 +224,8 @@ Item {
         
         showProductDropdown = false
         
-        // Actualizar el TextField para mostrar el nombre
         productCodeField.text = nombre
         
-        // Enfocar el campo de cajas
         Qt.callLater(function() {
             if (boxesField) {
                 boxesField.focus = true
@@ -238,9 +235,8 @@ Item {
         showSuccess("📦 Producto seleccionado: " + nombre + " (stock se agregará al existente)")
     }
     
-    // Función: Agregar producto MEJORADA
+    // FUNCIÓN CORREGIDA: Sin multiplicación, precio es el costo total
     function addProductToPurchase() {
-        // Validar campos obligatorios
         if (inputProductCode.length === 0) {
             showSuccess("⚠ Error: Ingrese el código del producto")
             return false
@@ -257,17 +253,15 @@ Item {
         }
         
         if (inputPurchasePrice <= 0) {
-            showSuccess("⚠ Error: El precio de compra debe ser mayor a 0")
+            showSuccess("⚠ Error: El precio debe ser mayor a 0")
             return false
         }
         
-        // Validar fecha de vencimiento
-        if (inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) {
+        if (!inputNoExpiry && inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) {
             showSuccess("⚠ Error: Fecha de vencimiento inválida (DD/MM/YYYY)")
             return false
         }
         
-        // Verificar si el producto ya está en la lista temporal
         for (var i = 0; i < temporaryProductsModel.count; i++) {
             var item = temporaryProductsModel.get(i)
             if (item.codigo === inputProductCode) {
@@ -276,44 +270,36 @@ Item {
             }
         }
         
-        var subtotalCompra = inputPurchasePrice * inputTotalStock
-        // Agregar a la lista temporal con información de si es nuevo
+        // CORRECCIÓN: El precio ingresado ES el costo total, no se multiplica
         temporaryProductsModel.append({
             "codigo": inputProductCode,
             "nombre": inputProductName,
             "cajas": inputBoxes,
             "unidades": inputUnits,
             "stockTotal": inputTotalStock,
-            "precioCompra": inputPurchasePrice,
-            "fechaVencimiento": inputExpiryDate.length > 0 ? inputExpiryDate : "Sin fecha"
+            "costoTotalProducto": inputPurchasePrice,  // COSTO TOTAL DEL PRODUCTO (lo que realmente pagamos)
+            "fechaVencimiento": inputNoExpiry ? "Sin vencimiento" : (inputExpiryDate.length > 0 ? inputExpiryDate : "Sin fecha")
         })
         
-        // Actualizar total de la compra
         updatePurchaseTotal()
-        // Mostrar mensaje de éxito
         var tipoProducto = isNewProduct ? "🆕 Producto nuevo agregado" : "📦 Stock agregado a producto existente"
-        showSuccess(tipoProducto + ": " + inputProductName)
+        showSuccess(tipoProducto + ": " + inputProductName + " - Costo: Bs" + inputPurchasePrice.toFixed(2))
         
-        // Limpiar campos
         clearProductFields()
         
         return true
     }
 
-    // NUEVA FUNCIÓN: Calcular stock total automáticamente
     function calculateTotalStock() {
-        // Solo multiplicar si hay cajas, sino usar las unidades directamente
         if (inputBoxes > 0) {
             inputTotalStock = (inputBoxes * inputUnits)
         } else {
             inputTotalStock = inputUnits
         }
         
-        // Sincronizar el campo visual:
         if (totalStockField) totalStockField.text = inputTotalStock.toString()
     }
 
-    // Función: Limpiar campos del formulario MEJORADA
     function clearProductFields() {
         inputProductCode = ""
         inputProductName = ""
@@ -322,11 +308,11 @@ Item {
         inputTotalStock = 0
         inputPurchasePrice = 0.0
         inputExpiryDate = ""
+        inputNoExpiry = true
         isNewProduct = true
         showProductDropdown = false
         productSearchResultsModel.clear()
         
-        // Limpiar campos de interfaz
         if (productCodeField) productCodeField.text = ""
         if (boxesField) boxesField.text = ""
         if (unitsField) unitsField.text = ""
@@ -337,19 +323,15 @@ Item {
         calculateTotalStock()
     }
 
-    // Función: Autocompletar fecha con "/"
     function autoFormatDate(input) {
-        // Remover caracteres no numéricos excepto "/"
         var cleaned = input.replace(/[^\d\/]/g, '')
         
-        // Auto agregar "/" después de DD y MM
         if (cleaned.length === 2 && !cleaned.includes('/')) {
             cleaned += '/'
         } else if (cleaned.length === 5 && cleaned.split('/').length === 2) {
             cleaned += '/'
         }
         
-        // Limitar a formato DD/MM/YYYY
         if (cleaned.length > 10) {
             cleaned = cleaned.substring(0, 10)
         }
@@ -357,7 +339,6 @@ Item {
         return cleaned
     }
 
-    // Función: Validar fecha de vencimiento
     function validateExpiryDate(dateStr) {
         if (dateStr.length === 0) return true
         
@@ -376,7 +357,6 @@ Item {
         return true
     }
 
-    // FUNCIÓN: Completar compra usando sistema central
     function completarCompra() {
         console.log("🚚 Iniciando proceso de completar compra...")
         
@@ -395,7 +375,6 @@ Item {
             return false
         }
         
-        // Convertir productos a array
         var productosArray = []
         var totalCalculado = 0
         
@@ -407,24 +386,25 @@ Item {
                 "cajas": item.cajas,
                 "unidades": item.unidades,
                 "stockTotal": item.stockTotal,
-                "precioCompra": item.precioCompra,
-                "precioVenta": item.precioVenta || (item.precioCompra * 1.25),
-                "fechaVencimiento": item.fechaVencimiento
+                "costoTotal": item.costoTotalProducto,  // COSTO TOTAL (no unitario)
+                "fechaVencimiento": item.fechaVencimiento === "Sin vencimiento" ? "2099-12-31" : item.fechaVencimiento
             }
             productosArray.push(productoCompra)
-            totalCalculado += item.precioCompra
             
-            console.log("🚚 Producto a comprar:", item.codigo, "- Stock:", item.stockTotal, "- Precio:", item.precioCompra)
+            // CORRECCIÓN: Solo sumamos el costo total, sin multiplicar
+            totalCalculado += item.costoTotalProducto
+            
+            console.log("🚚 Producto a comprar:", item.codigo, 
+                       "- Stock:", item.stockTotal, 
+                       "- Costo total:", item.costoTotalProducto)
         }
         
         console.log("🚚 Total calculado:", totalCalculado)
         
-        // Llamar a la función central de farmacia
         var compraId = null
         try {
             console.log("🚚 Procesando compra con CompraModel...")
 
-            // Encontrar ID del proveedor
             var proveedorId = 0
             var proveedores = compraModel.proveedores || []
             for (var p = 0; p < proveedores.length; p++) {
@@ -441,18 +421,16 @@ Item {
                 return false
             }
 
-            // Establecer proveedor y limpiar items previos
             compraModel.set_proveedor_seleccionado(proveedorId)
             compraModel.limpiar_items_compra()
 
-            // Agregar items a CompraModel
             for (var j = 0; j < productosArray.length; j++) {
                 var prod = productosArray[j]
                 compraModel.agregar_item_compra(
                     prod.codigo,
                     prod.cajas || 0,
                     prod.stockTotal || prod.cantidad || 0,
-                    prod.precioCompra,
+                    prod.costoTotal,  // COSTO TOTAL, no unitario
                     prod.fechaVencimiento || "2025-12-31"
                 )
             }
@@ -462,27 +440,25 @@ Item {
             return false
         }
         
-        // Procesar la compra
         var exito = compraModel.procesar_compra_actual()
         compraId = exito ? "PROCESSED" : null
 
         if (compraId) {
             console.log("✅ Compra completada en sistema central:", compraId)
             
-            // Limpiar formulario
             clearPurchase()
             clearProductFields()
             
-            // Generar nuevo ID
             newPurchaseId = "C" + String((compraModel ? compraModel.total_compras_mes : 0) + 1).padStart(3, '0')
             
-            // Mostrar mensaje y volver a lista
             showSuccess("✅ Compra " + compraId + " completada exitosamente")
-            
-            // Regresar automáticamente
+            if (compraModel) {
+                actualizarPaginacionCompras()
+                
+            }
             Qt.callLater(function() {
                 console.log("🔙 Compra completada, regresando a lista...")
-                compraCompletada() // Emitir señal
+                compraCompletada()
             })
             
             return true
@@ -492,7 +468,6 @@ Item {
         }
     }
 
-    // Función para limpiar toda la compra
     function clearPurchase() {
         temporaryProductsModel.clear()
         newPurchaseTotal = 0.0
@@ -500,22 +475,36 @@ Item {
         newPurchaseDetails = ""
     }
 
-    // Función para mostrar mensajes de éxito
     function showSuccess(message) {
         successMessage = message
         showSuccessMessage = true
         successTimer.restart()
     }
 
+    function refreshProveedoresManual() {
+        console.log("🔄 Refrescando proveedores...")
+        if (compraModel) {
+            compraModel.force_refresh_proveedores()
+            compraModel.debug_proveedores_info()
+            
+            Qt.callLater(function() {
+                updateProviderNames()
+                console.log("📋 Proveedores después de refresh:", providerNames.length)
+            })
+        } else {
+            console.log("❌ CompraModel no disponible")
+        }
+    }
+
     // ============================================================================
-    // INTERFAZ DE USUARIO PRINCIPAL - SIN DIÁLOGO DE PROVEEDORES
+    // INTERFAZ CON CONTENEDORES SEPARADOS - LAYOUT COMPACTO
     // ============================================================================
     
     Rectangle {
         anchors.fill: parent
         color: "#f8f9fa"
         
-        // HEADER FIJO SIEMPRE VISIBLE
+        // HEADER FIJO
         Rectangle {
             id: fixedHeader
             anchors.top: parent.top
@@ -530,24 +519,23 @@ Item {
             
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: spacing16
-                spacing: spacing16
+                anchors.margins: spacing8
+                spacing: spacing8
                 
-                // Botón de regreso
                 Button {
-                    Layout.preferredWidth: 50
-                    Layout.preferredHeight: 50
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 40
                     
                     background: Rectangle {
                         color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                        radius: 25
+                        radius: 20
                     }
                     
                     contentItem: Label {
                         text: "←"
                         color: whiteColor
                         font.bold: true
-                        font.pixelSize: 20
+                        font.pixelSize: 16
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
@@ -555,55 +543,42 @@ Item {
                     onClicked: cancelarCompra()
                 }
                 
-                // Icono y título
                 RowLayout {
-                    spacing: spacing12
+                    spacing: spacing8
                     
                     Rectangle {
-                        width: 40
-                        height: 40
+                        width: 32
+                        height: 32
                         color: blueColor
                         radius: radiusMedium
                         
                         Label {
                             anchors.centerIn: parent
                             text: "🚚"
-                            font.pixelSize: 20
+                            font.pixelSize: 16
                         }
                     }
                     
                     ColumnLayout {
-                        spacing: spacing4
+                        spacing: 2
                         
                         Label {
                             text: "Nueva Compra"
-                            font.pixelSize: fontHeader
+                            font.pixelSize: fontLarge
                             font.bold: true
                             color: textColor
                         }
                         
-                        RowLayout {
-                            spacing: spacing16
-                            
-                            Label {
-                                text: "Usuario: Dr. Admin"
-                                color: textColor
-                                font.pixelSize: fontMedium
-                            }
-                            
-                            Label {
-                                text: {
-                                    var fechaActual = new Date()
-                                    var dia = fechaActual.getDate().toString().padStart(2, '0')
-                                    var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
-                                    var año = fechaActual.getFullYear()
-                                    var hora = fechaActual.getHours().toString().padStart(2, '0')
-                                    var minutos = fechaActual.getMinutes().toString().padStart(2, '0')
-                                    return "Fecha: " + dia + "/" + mes + "/" + año + " " + hora + ":" + minutos
-                                }
-                                color: textColor
-                                font.pixelSize: fontMedium
-                            }
+                        Label {
+                            text: (function() {
+                                var fechaActual = new Date()
+                                var dia = fechaActual.getDate().toString().padStart(2, '0')
+                                var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
+                                var año = fechaActual.getFullYear()
+                                return "Usuario: Dr. Admin - " + dia + "/" + mes + "/" + año
+                            })()
+                            color: darkGrayColor
+                            font.pixelSize: fontSmall
                         }
                     }
                 }
@@ -613,883 +588,887 @@ Item {
                 Label {
                     text: "No. Compra: " + newPurchaseId
                     color: blueColor
-                    font.pixelSize: fontLarge
+                    font.pixelSize: fontMedium
                     font.bold: true
                 }
             }
         }
         
-        // CONTENIDO PRINCIPAL CON SCROLLVIEW
-        ScrollView {
-            id: mainScrollView
+        // SECCIÓN 1: PROVEEDOR - Rectangle separado
+        Rectangle {
+            id: providerSection
             anchors.top: fixedHeader.bottom
-            anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.margins: spacing16
-            anchors.topMargin: spacing8
-            clip: true
+            anchors.margins: spacing8
+            anchors.topMargin: spacing4
+            height: 50
+            color: "#E3F2FD"
+            radius: radiusMedium
+            border.color: blueColor
+            border.width: 1
             
-            // Contenedor del contenido scrolleable
-            ColumnLayout {
-                width: mainScrollView.width
-                spacing: spacing20
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: spacing8
+                spacing: spacing8
                 
-                // SECCIÓN 1: INFORMACIÓN DE COMPRA Y BÚSQUEDA DE PRODUCTOS
+                Label {
+                    text: "🏢 Proveedor:"
+                    font.pixelSize: fontMedium
+                    font.bold: true
+                    color: textColor
+                }
+                
+                ComboBox {
+                    id: providerCombo
+                    Layout.preferredWidth: 250
+                    Layout.preferredHeight: inputHeight
+                    model: crearCompraRoot.providerNames
+                    font.pixelSize: fontSmall
+                    
+                    background: Rectangle {
+                        color: whiteColor
+                        border.color: darkGrayColor
+                        border.width: 1
+                        radius: radiusSmall
+                    }
+                    
+                    onCurrentTextChanged: {
+                        if (currentIndex > 0) {
+                            newPurchaseProvider = currentText
+                        } else {
+                            newPurchaseProvider = ""
+                        }
+                    }
+                    
+                    Connections {
+                        target: crearCompraRoot
+                        function onProviderNamesChanged() {
+                            providerCombo.model = crearCompraRoot.providerNames
+                        }
+                    }
+                }
+                
+                Button {
+                    Layout.preferredWidth: 30
+                    Layout.preferredHeight: inputHeight
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                        radius: radiusSmall
+                    }
+                    
+                    contentItem: Label {
+                        text: "🔄"
+                        color: whiteColor
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: refreshProveedoresManual()
+                }
+                
+                Label {
+                    text: "💡 Para gestionar proveedores, usa Farmacia → Proveedores"
+                    color: "#666"
+                    font.pixelSize: fontSmall
+                    font.italic: true
+                    Layout.fillWidth: true
+                }
+            }
+        }
+        
+        // SECCIÓN 2: BÚSQUEDA Y CAMPOS UNIFICADOS - Rectangle único con dos mitades
+        Rectangle {
+            id: unifiedInputSection
+            anchors.top: providerSection.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: spacing8
+            anchors.topMargin: spacing4
+            height: 80
+            color: "#FFFEF7"
+            radius: radiusMedium
+            border.color: "#F39C12"
+            border.width: 1
+            
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: spacing8
+                spacing: spacing12
+                
+                // MITAD IZQUIERDA: BÚSQUEDA
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 400
-                    color: "#E3F2FD"
-                    radius: radiusLarge
-                    border.color: blueColor
-                    border.width: 2
+                    Layout.fillHeight: true
+                    color: "transparent"
                     
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: spacing20
-                        spacing: spacing16
+                        spacing: spacing4
                         
-                        // Fila 1: Selección de proveedor - SIMPLIFICADO
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: spacing12
-                            
-                            Label {
-                                text: "🏢 Proveedor:"
-                                font.pixelSize: fontLarge
-                                font.bold: true
-                                color: textColor
-                            }
-                            
-                            ComboBox {
-                                id: providerCombo
-                                Layout.preferredWidth: 300
-                                Layout.preferredHeight: inputHeight
-                                model: crearCompraRoot.providerNames
-                                font.pixelSize: fontMedium
-                                
-                                background: Rectangle {
-                                    color: whiteColor
-                                    border.color: darkGrayColor
-                                    border.width: 1
-                                    radius: radiusMedium
-                                }
-                                
-                                onCurrentTextChanged: {
-                                    if (currentIndex > 0) {
-                                        newPurchaseProvider = currentText
-                                    } else {
-                                        newPurchaseProvider = ""
-                                    }
-                                }
-                                
-                                Connections {
-                                    target: crearCompraRoot
-                                    function onProviderNamesChanged() {
-                                        providerCombo.model = crearCompraRoot.providerNames
-                                    }
-                                }
-                            }
-                            Button {
-                                Layout.preferredWidth: 40
-                                Layout.preferredHeight: inputHeight
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                    radius: radiusMedium
-                                }
-                                
-                                contentItem: Label {
-                                    text: "🔄"
-                                    color: whiteColor
-                                    font.pixelSize: 16
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: refreshProveedoresManual()
-                                
-                                ToolTip.visible: hovered
-                                ToolTip.text: "Actualizar lista de proveedores"
-                            }
-                            
-                            Label {
-                                text: "💡 Para gestionar proveedores, usa Farmacia → Proveedores. Presiona 🔄 para actualizar."
-                                color: "#666"
-                                font.pixelSize: fontSmall
-                                font.italic: true
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                            }
+                        Label {
+                            text: "🔍 BUSCAR PRODUCTO EXISTENTE"
+                            color: textColor
+                            font.bold: true
+                            font.pixelSize: fontSmall
                         }
                         
-                        // Fila 2: Título de búsqueda
-                        RowLayout {
+                        Rectangle {
                             Layout.fillWidth: true
-                            spacing: spacing8
+                            Layout.preferredHeight: inputHeight
+                            color: whiteColor
+                            radius: radiusMedium
+                            border.color: productCodeField.activeFocus ? blueColor : darkGrayColor
+                            border.width: 1
                             
-                            Label {
-                                text: "🔍"
-                                font.pixelSize: 18
-                            }
-                            
-                            Label {
-                                text: "BUSCAR PRODUCTO EXISTENTE O CREAR NUEVO"
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: fontLarge
-                            }
-                        }
-                        
-                        // Fila 3: Campo de búsqueda
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: spacing8
-                            
-                            Label {
-                                text: "Buscar producto o ingresar código nuevo:"
-                                color: darkGrayColor
-                                font.pixelSize: fontMedium
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: whiteColor
-                                radius: radiusMedium
-                                border.color: productCodeField.activeFocus ? blueColor : darkGrayColor
-                                border.width: 1
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: spacing4
+                                spacing: spacing4
                                 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: spacing8
-                                    spacing: spacing8
-                                    
-                                    Label {
-                                        text: "🔍"
-                                        color: darkGrayColor
-                                        font.pixelSize: 16
-                                    }
-                                    
-                                    TextField {
-                                        id: productCodeField
-                                        Layout.fillWidth: true
-                                        placeholderText: "Código o nombre del producto..."
-                                        text: inputProductName.length > 0 ? inputProductName : inputProductCode
-                                        background: Rectangle { color: "transparent" }
-                                        font.pixelSize: fontMedium
-                                        
-                                        onTextChanged: {
-                                            // Si es un producto seleccionado, no buscar de nuevo
-                                            if (inputProductName.length > 0 && text === inputProductName) {
-                                                return
-                                            }
-                                            
-                                            // Limpiar selección anterior si se está editando
-                                            if (text !== inputProductName) {
-                                                inputProductCode = text
-                                                inputProductName = ""
-                                                isNewProduct = true
-                                            }
-                                            
-                                            if (text.length >= 2) {
-                                                buscarProductosExistentes(text)
-                                            } else {
-                                                showProductDropdown = false
-                                                isNewProduct = true
-                                            }
-                                        }
-                                    }
+                                Label {
+                                    text: "🔍"
+                                    color: darkGrayColor
+                                    font.pixelSize: 14
                                 }
-                            }
-                            
-                            // Dropdown de productos encontrados
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(120, productSearchResultsModel.count * 40)
-                                color: whiteColor
-                                border.color: blueColor
-                                border.width: 1
-                                radius: radiusMedium
-                                visible: showProductDropdown
-                                z: 100
                                 
-                                ListView {
-                                    anchors.fill: parent
-                                    anchors.margins: spacing4
-                                    model: productSearchResultsModel
-                                    clip: true
+                                TextField {
+                                    id: productCodeField
+                                    Layout.fillWidth: true
+                                    placeholderText: "Código o nombre del producto..."
+                                    text: inputProductName.length > 0 ? inputProductName : inputProductCode
+                                    background: Rectangle { color: "transparent" }
+                                    font.pixelSize: fontSmall
                                     
-                                    delegate: Rectangle {
-                                        width: ListView.view.width
-                                        height: 40
-                                        color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
-                                        radius: radiusSmall
-                                        
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: spacing8
-                                            spacing: spacing8
-                                            
-                                            Rectangle {
-                                                Layout.preferredWidth: 60
-                                                Layout.preferredHeight: 20
-                                                color: blueColor
-                                                radius: 10
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: model.codigo
-                                                    color: whiteColor
-                                                    font.bold: true
-                                                    font.pixelSize: fontSmall
-                                                }
-                                            }
-                                            
-                                            Label {
-                                                text: model.nombre
-                                                color: textColor
-                                                font.pixelSize: fontMedium
-                                                Layout.fillWidth: true
-                                                elide: Text.ElideRight
-                                            }
-                                            
-                                            Label {
-                                                text: "Bs" + model.precioVentaBase.toFixed(2)
-                                                color: successColor
-                                                font.bold: true
-                                                font.pixelSize: fontMedium
-                                            }
+                                    onTextChanged: {
+                                        if (inputProductName.length > 0 && text === inputProductName) {
+                                            return
                                         }
                                         
-                                        MouseArea {
-                                            id: mouseArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            onClicked: seleccionarProductoExistente(model.codigo, model.nombre)
+                                        if (text !== inputProductName) {
+                                            inputProductCode = text
+                                            inputProductName = ""
+                                            isNewProduct = true
+                                        }
+                                        
+                                        if (text.length >= 2) {
+                                            buscarProductosExistentes(text)
+                                        } else {
+                                            showProductDropdown = false
+                                            isNewProduct = true
                                         }
                                     }
                                 }
-                            }
-                        }
-                        
-                        // Fila 4: Campos de entrada de datos
-                        GridLayout {
-                            Layout.fillWidth: true
-                            columns: 6
-                            columnSpacing: spacing12
-                            rowSpacing: spacing8
-                            
-                            // Cajas
-                            ColumnLayout {
-                                spacing: spacing4
-                                
-                                Label {
-                                    text: "Cajas:"
-                                    color: darkGrayColor
-                                    font.pixelSize: fontMedium
-                                    font.bold: true
-                                }
-                                
-                                TextField {
-                                    id: boxesField
-                                    Layout.preferredWidth: 70
-                                    Layout.preferredHeight: inputHeight
-                                    placeholderText: "0"
-                                    text: inputBoxes > 0 ? inputBoxes.toString() : ""
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        radius: radiusMedium
-                                        border.color: parent.activeFocus ? successColor : darkGrayColor
-                                        border.width: 1
-                                    }
-                                    validator: IntValidator { bottom: 0; top: 9999 }
-                                    font.pixelSize: fontMedium
-                                    horizontalAlignment: Text.AlignHCenter
-                                    onTextChanged: {
-                                        var newValue = text.length > 0 ? (parseInt(text) || 0) : 0
-                                        if (inputBoxes !== newValue) {
-                                            inputBoxes = newValue
-                                            calculateTotalStock()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Unidades
-                            ColumnLayout {
-                                spacing: spacing4
-                                
-                                Label {
-                                    text: "Unidades:"
-                                    color: darkGrayColor
-                                    font.pixelSize: fontMedium
-                                    font.bold: true
-                                }
-                                
-                                TextField {
-                                    id: unitsField
-                                    Layout.preferredWidth: 70
-                                    Layout.preferredHeight: inputHeight
-                                    placeholderText: "0"
-                                    text: inputUnits > 0 ? inputUnits.toString() : ""
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        radius: radiusMedium
-                                        border.color: parent.activeFocus ? successColor : darkGrayColor
-                                        border.width: 1
-                                    }
-                                    validator: IntValidator { bottom: 0; top: 9999 }
-                                    font.pixelSize: fontMedium
-                                    horizontalAlignment: Text.AlignHCenter
-                                    onTextChanged: {
-                                        var newValue = text.length > 0 ? (parseInt(text) || 0) : 0
-                                        if (inputUnits !== newValue) {
-                                            inputUnits = newValue
-                                            calculateTotalStock()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Stock Total
-                            ColumnLayout {
-                                spacing: spacing4
-                                
-                                Label {
-                                    text: "Stock Total:"
-                                    color: darkGrayColor
-                                    font.pixelSize: fontMedium
-                                    font.bold: true
-                                }
-                                
-                                TextField {
-                                    id: totalStockField
-                                    Layout.preferredWidth: 80
-                                    Layout.preferredHeight: inputHeight
-                                    placeholderText: "0"
-                                    text: inputTotalStock > 0 ? inputTotalStock.toString() : ""
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        radius: radiusMedium
-                                        border.color: parent.activeFocus ? blueColor : darkGrayColor
-                                        border.width: 1
-                                    }
-                                    validator: IntValidator { bottom: 0; top: 99999 }
-                                    font.pixelSize: fontMedium
-                                    horizontalAlignment: Text.AlignHCenter
-                                    onTextChanged: {
-                                        inputTotalStock = text.length > 0 ? (parseInt(text) || 0) : 0
-                                    }
-                                }
-                            }
-                            
-                            // Precio Compra
-                            ColumnLayout {
-                                spacing: spacing4
-                                
-                                Label {
-                                    text: "Precio Compra:"
-                                    color: darkGrayColor
-                                    font.pixelSize: fontMedium
-                                    font.bold: true
-                                }
-                                
-                                TextField {
-                                    id: purchasePriceField
-                                    Layout.preferredWidth: 80
-                                    Layout.preferredHeight: inputHeight
-                                    placeholderText: "0.00"
-                                    text: inputPurchasePrice > 0 ? inputPurchasePrice.toString() : ""
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        radius: radiusMedium
-                                        border.color: parent.activeFocus ? successColor : darkGrayColor
-                                        border.width: 1
-                                    }
-                                    font.pixelSize: fontMedium
-                                    horizontalAlignment: Text.AlignHCenter
-                                    onEditingFinished: {
-                                        inputPurchasePrice = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
-                                    }
-                                }
-                            }
-                            
-                            // Fecha Vencimiento
-                            ColumnLayout {
-                                spacing: spacing4
-                                
-                                Label {
-                                    text: "F. Vencimiento:"
-                                    color: darkGrayColor
-                                    font.pixelSize: fontMedium
-                                    font.bold: true
-                                }
-                                
-                                TextField {
-                                    id: expiryField
-                                    Layout.preferredWidth: 100
-                                    Layout.preferredHeight: inputHeight
-                                    placeholderText: "DD/MM/YYYY"
-                                    text: inputExpiryDate
-                                    background: Rectangle {
-                                        color: whiteColor
-                                        radius: radiusMedium
-                                        border.color: parent.activeFocus ? "#9C27B0" : darkGrayColor
-                                        border.width: 1
-                                    }
-                                    font.pixelSize: fontMedium
-                                    onTextChanged: {
-                                        var formatted = autoFormatDate(text)
-                                        if (formatted !== text) {
-                                            text = formatted
-                                        }
-                                        inputExpiryDate = text
-                                    }
-                                }
-                            }
-                            
-                            // Botón Agregar
-                            Button {
-                                Layout.topMargin: spacing20
-                                Layout.preferredHeight: buttonHeight
-                                Layout.preferredWidth: 100
-                                text: "Agregar"
-                                enabled: inputProductCode.length > 0 && inputProductName.length > 0 && 
-                                        inputTotalStock > 0 && inputPurchasePrice > 0
-                                background: Rectangle {
-                                    color: enabled ? successColor : darkGrayColor
-                                    radius: radiusMedium
-                                }
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: fontMedium
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                onClicked: addProductToPurchase()
                             }
                         }
                     }
                 }
                 
-                // SECCIÓN 2: LISTA DE PRODUCTOS
+                // LÍNEA SEPARADORA
+                Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    color: "#D5DBDB"
+                    Layout.topMargin: spacing4
+                    Layout.bottomMargin: spacing4
+                }
+                
+                // MITAD DERECHA: CAMPOS DE ENTRADA
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 350
-                    color: "#F8F9FA"
-                    radius: radiusLarge
-                    border.color: lightGrayColor
+                    Layout.fillHeight: true
+                    color: "transparent"
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: spacing8
+                        
+                        // Cajas
+                        Column {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Cajas:"
+                                color: darkGrayColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                            }
+                            
+                            TextField {
+                                id: boxesField
+                                width: 50
+                                height: inputHeight
+                                placeholderText: "0"
+                                text: inputBoxes > 0 ? inputBoxes.toString() : ""
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    radius: radiusSmall
+                                    border.color: parent.activeFocus ? successColor : darkGrayColor
+                                    border.width: 1
+                                }
+                                
+                                validator: IntValidator { bottom: 0; top: 9999 }
+                                font.pixelSize: fontSmall
+                                horizontalAlignment: Text.AlignHCenter
+                                
+                                onTextChanged: {
+                                    var newValue = text.length > 0 ? (parseInt(text) || 0) : 0
+                                    if (inputBoxes !== newValue) {
+                                        inputBoxes = newValue
+                                        calculateTotalStock()
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Unidades
+                        Column {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Unid:"
+                                color: darkGrayColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                            }
+                            
+                            TextField {
+                                id: unitsField
+                                width: 50
+                                height: inputHeight
+                                placeholderText: "0"
+                                text: inputUnits > 0 ? inputUnits.toString() : ""
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    radius: radiusSmall
+                                    border.color: parent.activeFocus ? successColor : darkGrayColor
+                                    border.width: 1
+                                }
+                                
+                                validator: IntValidator { bottom: 0; top: 9999 }
+                                font.pixelSize: fontSmall
+                                horizontalAlignment: Text.AlignHCenter
+                                
+                                onTextChanged: {
+                                    var newValue = text.length > 0 ? (parseInt(text) || 0) : 0
+                                    if (inputUnits !== newValue) {
+                                        inputUnits = newValue
+                                        calculateTotalStock()
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Stock Total
+                        Column {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Stock:"
+                                color: darkGrayColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                            }
+                            
+                            TextField {
+                                id: totalStockField
+                                width: 60
+                                height: inputHeight
+                                placeholderText: "0"
+                                text: inputTotalStock > 0 ? inputTotalStock.toString() : ""
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    radius: radiusSmall
+                                    border.color: parent.activeFocus ? blueColor : darkGrayColor
+                                    border.width: 1
+                                }
+                                
+                                validator: IntValidator { bottom: 0; top: 99999 }
+                                font.pixelSize: fontSmall
+                                horizontalAlignment: Text.AlignHCenter
+                                
+                                onTextChanged: {
+                                    inputTotalStock = text.length > 0 ? (parseInt(text) || 0) : 0
+                                }
+                            }
+                        }
+                        
+                        // COSTO TOTAL (CORREGIDO)
+                        Column {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Costo Total:"  // ETIQUETA CORREGIDA
+                                color: darkGrayColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                            }
+                            
+                            TextField {
+                                id: purchasePriceField
+                                width: 70
+                                height: inputHeight
+                                placeholderText: "0.00"
+                                text: inputPurchasePrice > 0 ? inputPurchasePrice.toString() : ""
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    radius: radiusSmall
+                                    border.color: parent.activeFocus ? successColor : darkGrayColor
+                                    border.width: 1
+                                }
+                                
+                                validator: RegularExpressionValidator {
+                                    regularExpression: /^\d*\.?\d{0,2}$/
+                                }
+                                
+                                font.pixelSize: fontSmall
+                                horizontalAlignment: Text.AlignHCenter
+                                
+                                onEditingFinished: {
+                                    inputPurchasePrice = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
+                                }
+                            }
+                        }
+                        
+                        // Fecha Vencimiento
+                        Column {
+                            spacing: 2
+                            
+                            Label {
+                                text: "Venc:"
+                                color: darkGrayColor
+                                font.pixelSize: fontSmall
+                                font.bold: true
+                            }
+                            
+                            RowLayout {
+                                spacing: 4
+                                
+                                TextField {
+                                    id: expiryField
+                                    Layout.preferredWidth: 75
+                                    Layout.preferredHeight: inputHeight
+                                    placeholderText: "DD/MM/YYYY"
+                                    text: inputExpiryDate
+                                    enabled: inputNoExpiry
+                                    
+                                    background: Rectangle {
+                                        color: enabled ? whiteColor : "#F5F5F5"
+                                        radius: radiusSmall
+                                        border.color: {
+                                            if (!enabled) return "#E0E0E0"
+                                            if (parent.activeFocus) return "#9C27B0"
+                                            if (inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) return dangerColor
+                                            return darkGrayColor
+                                        }
+                                        border.width: 1
+                                    }
+                                    
+                                    font.pixelSize: fontSmall
+                                    
+                                    onTextChanged: {
+                                        if (inputNoExpiry) {
+                                            var formatted = autoFormatDate(text)
+                                            if (formatted !== text) {
+                                                text = formatted
+                                            }
+                                            inputExpiryDate = text
+                                        }
+                                    }
+                                    
+                                    validator: RegularExpressionValidator {
+                                        regularExpression: /^[0-9\/]*$/
+                                    }
+                                }
+                                
+                                CheckBox {
+                                    id: noExpiryCheckbox
+                                    Layout.preferredWidth: 15
+                                    Layout.preferredHeight: inputHeight
+                                    checked: inputNoExpiry
+                                    
+                                    indicator: Rectangle {
+                                        width: 14
+                                        height: 14
+                                        anchors.centerIn: parent
+                                        radius: 2
+                                        border.color: darkGrayColor
+                                        border.width: 1
+                                        color: parent.checked ? successColor : whiteColor
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "✓"
+                                            color: whiteColor
+                                            font.pixelSize: 8
+                                            visible: parent.parent.checked
+                                        }
+                                    }
+                                    
+                                    contentItem: Item {} // Sin texto
+                                    
+                                    onCheckedChanged: {
+                                        inputNoExpiry = checked
+                                        if (checked) {
+                                            inputExpiryDate = ""
+                                            expiryField.text = ""
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Botón Agregar
+                        Button {
+                            width: 70
+                            height: buttonHeight
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Agregar"
+                            enabled: inputProductCode.length > 0 && inputProductName.length > 0 && 
+                                    inputTotalStock > 0 && inputPurchasePrice > 0
+                                    
+                            background: Rectangle {
+                                color: enabled ? successColor : darkGrayColor
+                                radius: radiusSmall
+                            }
+                            
+                            contentItem: Label {
+                                text: parent.text
+                                color: whiteColor
+                                font.bold: true
+                                font.pixelSize: fontSmall
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            
+                            onClicked: addProductToPurchase()
+                        }
+                    }
+                }
+            }
+        }
+        
+        // SECCIÓN 3: LISTA DE PRODUCTOS (CORREGIDA)
+        Rectangle {
+            id: productListSection
+            anchors.top: unifiedInputSection.bottom
+            anchors.bottom: actionsSection.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: spacing8
+            anchors.topMargin: spacing4
+            anchors.bottomMargin: spacing4
+            color: "#F8F9FA"
+            radius: radiusLarge
+            border.color: lightGrayColor
+            border.width: 1
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: spacing8
+                spacing: spacing8
+                
+                RowLayout {
+                    Layout.fillWidth: true
+                    
+                    Label {
+                        text: "📦"
+                        font.pixelSize: 16
+                    }
+                    
+                    Label {
+                        text: "Productos en la compra: " + temporaryProductsModel.count
+                        color: textColor
+                        font.bold: true
+                        font.pixelSize: fontMedium
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    color: whiteColor
+                    border.color: "#D5DBDB"
                     border.width: 1
+                    radius: radiusMedium
                     
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: spacing16
-                        spacing: spacing12
+                        spacing: 0
                         
-                        // Header de la lista
-                        RowLayout {
-                            Layout.fillWidth: true
-                            
-                            Label {
-                                text: "📦"
-                                font.pixelSize: 18
-                            }
-                            
-                            Label {
-                                text: "Productos en la compra: " + temporaryProductsModel.count
-                                color: textColor
-                                font.bold: true
-                                font.pixelSize: fontLarge
-                            }
-                        }
-
-                        // Tabla de productos
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            color: whiteColor
-                            border.color: "#D5DBDB"
-                            border.width: 1
-                            radius: radiusMedium
+                            Layout.preferredHeight: 35
+                            color: "#F8F9FA"
                             
-                            ColumnLayout {
+                            RowLayout {
                                 anchors.fill: parent
                                 spacing: 0
                                 
-                                // Header de la tabla
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
+                                    color: "#F8F9FA"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "CÓDIGO"
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                        color: textColor
+                                    }
+                                }
+                                
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 45
+                                    Layout.minimumWidth: 150
+                                    Layout.fillHeight: true
                                     color: "#F8F9FA"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: spacing4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "NOMBRE"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 60
+                                    Layout.fillHeight: true
+                                    color: "#F8F9FA"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "CAJAS"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
+                                    color: "#F8F9FA"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "STOCK"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 100
+                                    Layout.fillHeight: true
+                                    color: "#F8F9FA"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "COSTO TOTAL"  // ENCABEZADO CORREGIDO
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                    }
+                                }
+                            }
+                        }
+                        
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            
+                            ListView {
+                                anchors.fill: parent
+                                model: temporaryProductsModel
+                                
+                                delegate: Item {
+                                    width: ListView.view.width
+                                    height: 40
                                     
                                     RowLayout {
                                         anchors.fill: parent
                                         spacing: 0
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: 80
                                             Layout.fillHeight: true
-                                            color: "#F8F9FA"
+                                            color: "transparent"
                                             border.color: "#D5DBDB"
                                             border.width: 1
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: "CÓDIGO"
-                                                font.bold: true
-                                                font.pixelSize: fontMedium
+                                                text: model.codigo
                                                 color: textColor
+                                                font.bold: true
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.minimumWidth: 200
+                                            Layout.minimumWidth: 150
                                             Layout.fillHeight: true
-                                            color: "#F8F9FA"
+                                            color: "transparent"
                                             border.color: "#D5DBDB"
                                             border.width: 1
                                             
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.leftMargin: spacing8
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: "NOMBRE"
-                                                color: textColor
-                                                font.bold: true
-                                                font.pixelSize: fontMedium
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: spacing4
+                                                spacing: spacing4
+                                                
+                                                Label {
+                                                    text: model.nombre
+                                                    color: textColor
+                                                    font.bold: true
+                                                    font.pixelSize: fontSmall
+                                                    elide: Text.ElideRight
+                                                    Layout.fillWidth: true
+                                                }
+                                                
+                                                Button {
+                                                    width: 20
+                                                    height: 20
+                                                    text: "🗑️"
+                                                    background: Rectangle {
+                                                        color: dangerColor
+                                                        radius: 10
+                                                    }
+                                                    contentItem: Label {
+                                                        text: parent.text
+                                                        color: whiteColor
+                                                        font.pixelSize: 8
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        verticalAlignment: Text.AlignVCenter
+                                                    }
+                                                    onClicked: {
+                                                        temporaryProductsModel.remove(index)
+                                                        updatePurchaseTotal()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 60
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
+                                            
+                                            Rectangle {
+                                                anchors.centerIn: parent
+                                                width: 30
+                                                height: 16
+                                                color: warningColor
+                                                radius: 8
+                                                
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: model.cajas
+                                                    color: whiteColor
+                                                    font.bold: true
+                                                    font.pixelSize: 8
+                                                }
                                             }
                                         }
                                         
                                         Rectangle {
                                             Layout.preferredWidth: 80
                                             Layout.fillHeight: true
-                                            color: "#F8F9FA"
+                                            color: "transparent"
                                             border.color: "#D5DBDB"
                                             border.width: 1
                                             
-                                            Label {
+                                            Rectangle {
                                                 anchors.centerIn: parent
-                                                text: "CAJAS"
-                                                color: textColor
-                                                font.bold: true
-                                                font.pixelSize: fontMedium
+                                                width: 40
+                                                height: 16
+                                                color: "#9B59B6"
+                                                radius: 8
+                                                
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: model.stockTotal
+                                                    color: whiteColor
+                                                    font.bold: true
+                                                    font.pixelSize: 8
+                                                }
                                             }
                                         }
                                         
                                         Rectangle {
                                             Layout.preferredWidth: 100
                                             Layout.fillHeight: true
-                                            color: "#F8F9FA"
+                                            color: "transparent"
                                             border.color: "#D5DBDB"
                                             border.width: 1
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: "STOCK TOTAL"
-                                                color: textColor
+                                                text: "Bs" + model.costoTotalProducto.toFixed(2)  // VALOR CORREGIDO
+                                                color: successColor
                                                 font.bold: true
-                                                font.pixelSize: fontMedium
+                                                font.pixelSize: fontSmall
                                             }
                                         }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 120
-                                            Layout.fillHeight: true
-                                            color: "#F8F9FA"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "PRECIO COMPRA"
-                                                color: textColor
-                                                font.bold: true
-                                                font.pixelSize: fontMedium
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // Contenido de la tabla
-                                ScrollView {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    clip: true
-                                    
-                                    ListView {
-                                        anchors.fill: parent
-                                        model: temporaryProductsModel
-                                        
-                                        delegate: Item {
-                                            width: ListView.view.width
-                                            height: 50
-                                            
-                                            RowLayout {
-                                                anchors.fill: parent
-                                                spacing: 0
-                                                
-                                                // CÓDIGO
-                                                Rectangle {
-                                                    Layout.preferredWidth: 100
-                                                    Layout.fillHeight: true
-                                                    color: "transparent"
-                                                    border.color: "#D5DBDB"
-                                                    border.width: 1
-                                                    
-                                                    Label {
-                                                        anchors.centerIn: parent
-                                                        text: model.codigo
-                                                        color: textColor
-                                                        font.bold: true
-                                                        font.pixelSize: fontMedium
-                                                    }
-                                                }
-                                                
-                                                // NOMBRE + BOTÓN ELIMINAR
-                                                Rectangle {
-                                                    Layout.fillWidth: true
-                                                    Layout.minimumWidth: 200
-                                                    Layout.fillHeight: true
-                                                    color: "transparent"
-                                                    border.color: "#D5DBDB"
-                                                    border.width: 1
-                                                    
-                                                    RowLayout {
-                                                        anchors.fill: parent
-                                                        anchors.margins: spacing8
-                                                        spacing: spacing8
-                                                        
-                                                        Label {
-                                                            text: model.nombre
-                                                            color: textColor
-                                                            font.bold: true
-                                                            font.pixelSize: fontMedium
-                                                            elide: Text.ElideRight
-                                                            Layout.fillWidth: true
-                                                        }
-                                                        
-                                                        Button {
-                                                            width: 25
-                                                            height: 25
-                                                            text: "🗑️"
-                                                            background: Rectangle {
-                                                                color: dangerColor
-                                                                radius: 12
-                                                            }
-                                                            contentItem: Label {
-                                                                text: parent.text
-                                                                color: whiteColor
-                                                                font.pixelSize: fontSmall
-                                                                horizontalAlignment: Text.AlignHCenter
-                                                                verticalAlignment: Text.AlignVCenter
-                                                            }
-                                                            onClicked: {
-                                                                temporaryProductsModel.remove(index)
-                                                                updatePurchaseTotal()
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // CAJAS
-                                                Rectangle {
-                                                    Layout.preferredWidth: 80
-                                                    Layout.fillHeight: true
-                                                    color: "transparent"
-                                                    border.color: "#D5DBDB"
-                                                    border.width: 1
-                                                    
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: 40
-                                                        height: 20
-                                                        color: warningColor
-                                                        radius: 10
-                                                        
-                                                        Label {
-                                                            anchors.centerIn: parent
-                                                            text: model.cajas
-                                                            color: whiteColor
-                                                            font.bold: true
-                                                            font.pixelSize: fontSmall
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // STOCK TOTAL
-                                                Rectangle {
-                                                    Layout.preferredWidth: 100
-                                                    Layout.fillHeight: true
-                                                    color: "transparent"
-                                                    border.color: "#D5DBDB"
-                                                    border.width: 1
-                                                    
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: 50
-                                                        height: 20
-                                                        color: "#9B59B6"
-                                                        radius: 10
-                                                        
-                                                        Label {
-                                                            anchors.centerIn: parent
-                                                            text: model.stockTotal
-                                                            color: whiteColor
-                                                            font.bold: true
-                                                            font.pixelSize: fontSmall
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // PRECIO COMPRA
-                                                Rectangle {
-                                                    Layout.preferredWidth: 120
-                                                    Layout.fillHeight: true
-                                                    color: "transparent"
-                                                    border.color: "#D5DBDB"
-                                                    border.width: 1
-                                                    
-                                                    Label {
-                                                        anchors.centerIn: parent
-                                                        text: "Bs" + model.precioCompra.toFixed(2)
-                                                        color: successColor
-                                                        font.bold: true
-                                                        font.pixelSize: fontMedium
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // Estado vacío
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    visible: temporaryProductsModel.count === 0
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "No hay productos agregados aún"
-                                        color: darkGrayColor
-                                        font.italic: true
-                                        font.pixelSize: fontLarge
-                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                             }
                         }
-                    }
-                }
-                
-                // SECCIÓN 3: TOTAL Y ACCIONES
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: spacing16
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    // Total de la compra
-                    Rectangle {
-                        Layout.preferredWidth: 200
-                        Layout.preferredHeight: 50
-                        color: newPurchaseTotal > 0 ? successColor : darkGrayColor
-                        radius: radiusMedium
                         
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: spacing8
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            visible: temporaryProductsModel.count === 0
                             
                             Label {
-                                text: "💰"
-                                color: whiteColor
-                                font.pixelSize: 18
-                            }
-                            
-                            Label {
-                                text: "TOTAL: Bs" + newPurchaseTotal.toFixed(2)
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: fontLarge
+                                anchors.centerIn: parent
+                                text: "No hay productos agregados aún"
+                                color: darkGrayColor
+                                font.italic: true
+                                font.pixelSize: fontMedium
+                                horizontalAlignment: Text.AlignHCenter
                             }
                         }
                     }
-                    
-                    // Botón cancelar
-                    Button {
-                        text: "✖ Cancelar"
-                        Layout.preferredHeight: buttonHeight
-                        background: Rectangle {
-                            color: dangerColor
-                            radius: radiusMedium
-                        }
-                        contentItem: Label {
-                            text: parent.text
-                            color: whiteColor
-                            font.bold: true
-                            font.pixelSize: fontMedium
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        onClicked: {
-                            clearPurchase()
-                            clearProductFields()
-                            if (providerCombo) providerCombo.currentIndex = 0
-                            cancelarCompra()
-                        }
-                    }
-                    
-                    // Botón completar compra
-                    Button {
-                        id: completarCompraButton
-                        text: "💾 Completar Compra"
-                        Layout.preferredHeight: buttonHeight
-                        enabled: (providerCombo ? providerCombo.currentIndex > 0 : false) && temporaryProductsModel.count > 0
-                        background: Rectangle {
-                            color: enabled ? successColor : darkGrayColor
-                            radius: radiusMedium
-                        }
-                        contentItem: Label {
-                            text: parent.text
-                            color: whiteColor
-                            font.bold: true
-                            font.pixelSize: fontMedium
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        onClicked: {
-                            if (completarCompra()) {
-                                completarCompraButton.text = "✅ ¡Completado!"
-                                Qt.callLater(function() {
-                                    completarCompraButton.text = "💾 Completar Compra"
-                                })
-                            }
-                        }
-                    }
-                }
-                
-                // Espacio adicional al final para scroll completo
-                Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: spacing24
                 }
             }
         }
         
-        // NOTIFICACIÓN DE ÉXITO (FIJA)
+        // SECCIÓN 4: ACCIONES - Rectangle separado
+        Rectangle {
+            id: actionsSection
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: spacing8
+            height: 50
+            color: whiteColor
+            radius: radiusMedium
+            border.color: lightGrayColor
+            border.width: 1
+            
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: spacing8
+                spacing: spacing8
+                
+                Item { Layout.fillWidth: true }
+                
+                Rectangle {
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 35
+                    color: newPurchaseTotal > 0 ? successColor : darkGrayColor
+                    radius: radiusSmall
+                    
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: spacing4
+                        
+                        Label {
+                            text: "💰"
+                            color: whiteColor
+                            font.pixelSize: 14
+                        }
+                        
+                        Label {
+                            text: "TOTAL: Bs" + newPurchaseTotal.toFixed(2)
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: fontSmall
+                        }
+                    }
+                }
+                
+                Button {
+                    text: "✖ Cancelar"
+                    Layout.preferredHeight: buttonHeight
+                    background: Rectangle {
+                        color: dangerColor
+                        radius: radiusSmall
+                    }
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.bold: true
+                        font.pixelSize: fontSmall
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        clearPurchase()
+                        clearProductFields()
+                        if (providerCombo) providerCombo.currentIndex = 0
+                        cancelarCompra()
+                    }
+                }
+                
+                Button {
+                    id: completarCompraButton
+                    text: "💾 Completar Compra"
+                    Layout.preferredHeight: buttonHeight
+                    enabled: (providerCombo ? providerCombo.currentIndex > 0 : false) && temporaryProductsModel.count > 0
+                    background: Rectangle {
+                        color: enabled ? successColor : darkGrayColor
+                        radius: radiusSmall
+                    }
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.bold: true
+                        font.pixelSize: fontSmall
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        if (completarCompra()) {
+                            completarCompraButton.text = "✅ ¡Completado!"
+                            Qt.callLater(function() {
+                                completarCompraButton.text = "💾 Completar Compra"
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        
+        // NOTIFICACIÓN DE ÉXITO
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.margins: spacing16
-            height: 50
+            anchors.margins: spacing8
+            height: 40
             color: successColor
-            radius: radiusMedium
+            radius: radiusSmall
             visible: showSuccessMessage
             opacity: showSuccessMessage ? 1.0 : 0.0
             z: 20
@@ -1500,19 +1479,19 @@ Item {
             
             RowLayout {
                 anchors.centerIn: parent
-                spacing: spacing12
+                spacing: spacing8
                 
                 Rectangle {
-                    width: 30
-                    height: 30
+                    width: 24
+                    height: 24
                     color: whiteColor
-                    radius: 15
+                    radius: 12
                     
                     Label {
                         anchors.centerIn: parent
                         text: "✅"
                         color: successColor
-                        font.pixelSize: 16
+                        font.pixelSize: 12
                     }
                 }
                 
@@ -1520,41 +1499,92 @@ Item {
                     text: successMessage
                     color: whiteColor
                     font.bold: true
-                    font.pixelSize: fontMedium
+                    font.pixelSize: fontSmall
+                }
+            }
+        }
+
+        // DROPDOWN FLOTANTE
+        Rectangle {
+            id: floatingDropdown
+            anchors.top: unifiedInputSection.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: spacing8
+            anchors.topMargin: spacing4
+            height: Math.min(100, productSearchResultsModel.count * 30)
+            color: whiteColor
+            border.color: blueColor
+            border.width: 1
+            radius: radiusSmall
+            visible: showProductDropdown
+            z: 1000
+            
+            ListView {
+                anchors.fill: parent
+                anchors.margins: spacing4
+                model: productSearchResultsModel
+                clip: true
+                
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    height: 30
+                    color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
+                    radius: radiusSmall
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: spacing4
+                        spacing: spacing4
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 50
+                            Layout.preferredHeight: 16
+                            color: blueColor
+                            radius: 8
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: model.codigo
+                                color: whiteColor
+                                font.bold: true
+                                font.pixelSize: 8
+                            }
+                        }
+                        
+                        Label {
+                            text: model.nombre
+                            color: textColor
+                            font.pixelSize: fontSmall
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        
+                        Label {
+                            text: "Bs" + model.precioVentaBase.toFixed(2)
+                            color: successColor
+                            font.bold: true
+                            font.pixelSize: fontSmall
+                        }
+                    }
+                    
+                    MouseArea {
+                        id: mouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: seleccionarProductoExistente(model.codigo, model.nombre)
+                    }
                 }
             }
         }
     }
-    function refreshProveedoresManual() {
-        console.log("🔄 Refrescando proveedores...")
-        if (compraModel) {
-            // 1. Force refresh con nuevo método
-            compraModel.force_refresh_proveedores()
-            
-            // 2. Debug info
-            compraModel.debug_proveedores_info()
-            
-            // 3. Actualizar lista después de un momento
-            Qt.callLater(function() {
-                updateProviderNames()
-                
-                // 4. Log final
-                console.log("📋 Proveedores después de refresh:", providerNames.length)
-            })
-        } else {
-            console.log("❌ CompraModel no disponible")
-        }
-    }
 
-    // INICIALIZACIÓN
     Component.onCompleted: {
-        console.log("✅ CrearCompra.qml inicializado (sin gestión de proveedores)")
+        console.log("✅ CrearCompra.qml inicializado con layout compacto - SIN MULTIPLICACIÓN DE PRECIOS")
         
-        // Verificar models disponibles
         if (!compraModel || !inventarioModel) {
             console.log("⚠️ Models no disponibles aún")
             
-            // Retry después de un momento
             Qt.callLater(function() {
                 if (compraModel) {
                     console.log("✅ CompraModel disponible en retry")
@@ -1564,19 +1594,14 @@ Item {
         } else {
             console.log("✅ Models conectados correctamente")
             
-            // Refresh inicial
             compraModel.force_refresh_proveedores()
             Qt.callLater(updateProviderNames)
         }
         
-        // Focus en campo de producto
         Qt.callLater(function() {
             if (productCodeField) {
                 productCodeField.focus = true
             }
         })
-        
-        // Iniciar auto-refresh (opcional)
-        // autoRefreshTimer.start()
     }
 }

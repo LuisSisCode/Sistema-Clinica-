@@ -2,7 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-// Componente principal del módulo de Productos de Farmacia - CORREGIDO
+// Componente principal del módulo de Productos de Farmacia - OPTIMIZADO
 Item {
     id: productosRoot
     
@@ -29,8 +29,9 @@ Item {
     property int totalPages: 0
     property var allFilteredProducts: []
 
-    property bool mostrandoDetalleProducto: false
-    property var productoParaDetalle: null
+    // NUEVO: Modal de lotes
+    property bool mostrandoLotesProducto: false
+    property var productoParaLotes: null
     
     // MARCAS
     property var marcasModel: []
@@ -55,13 +56,12 @@ Item {
     readonly property color whiteColor: "#FFFFFF"
     readonly property color blueColor: "#3498db"
 
-    // ===== CONEXIONES CORREGIDAS =====
+    // ===== CONEXIONES =====
     
     Connections {
         target: inventarioModel
         function onProductosChanged() {
             console.log("📦 Productos actualizados desde InventarioModel")
-            // CORREGIDO: Forzar recarga completa de datos
             Qt.callLater(function() {
                 cargarDatosParaFiltros()
                 actualizarDesdeDataCentral()
@@ -108,10 +108,10 @@ Item {
         if (mostrandoCrearProducto) {
             console.log("Cerrando CrearProducto con Escape")
             volverAListaProductos()
-        } else if (mostrandoDetalleProducto) {
-            console.log("Cerrando detalle de producto con Escape")
-            mostrandoDetalleProducto = false
-            productoParaDetalle = null
+        } else if (mostrandoLotesProducto) {
+            console.log("Cerrando lotes de producto con Escape")
+            mostrandoLotesProducto = false
+            productoParaLotes = null
         } else if (editarPrecioDialogOpen) {
             console.log("Cerrando diálogo de precio con Escape")
             editarPrecioDialogOpen = false
@@ -123,7 +123,7 @@ Item {
         id: productosPaginadosModel
     }
 
-    // FUNCIÓN PARA CARGAR DATOS DE LOTES - CORREGIDA
+    // FUNCIÓN PARA CARGAR DATOS DE LOTES
     function cargarDatosParaFiltros() {
         if (!inventarioModel) {
             console.log("❌ InventarioModel no disponible para filtros")
@@ -131,10 +131,10 @@ Item {
             return
         }
         
-        console.log("🔄 Cargando datos para filtros...")
+        console.log("🔄 Cargando datos para filtros desde InventarioModel...")
         
         try {
-            // CORREGIDO: Verificar que los métodos existan
+            // Cargar lotes próximos a vencer
             if (typeof inventarioModel.get_lotes_por_vencer === 'function') {
                 var proximosVencer = inventarioModel.get_lotes_por_vencer(60)
                 lotesProximosVencer = proximosVencer || []
@@ -144,6 +144,7 @@ Item {
                 lotesProximosVencer = []
             }
             
+            // Cargar lotes vencidos
             if (typeof inventarioModel.get_lotes_vencidos === 'function') {
                 var vencidos = inventarioModel.get_lotes_vencidos()
                 lotesVencidos = vencidos || []
@@ -153,6 +154,7 @@ Item {
                 lotesVencidos = []
             }
             
+            // Cargar productos bajo stock
             if (typeof inventarioModel.get_productos_bajo_stock === 'function') {
                 var bajoStock = inventarioModel.get_productos_bajo_stock(10)
                 productosConLotesBajoStock = bajoStock || []
@@ -238,7 +240,6 @@ Item {
         modoEdicionProducto = false
         productoParaEditar = null
         
-        // CORREGIDO: Forzar recarga completa
         Qt.callLater(function() {
             cargarDatosParaFiltros()
             actualizarDesdeDataCentral()
@@ -286,24 +287,15 @@ Item {
     function actualizarDesdeDataCentral() {
         console.log("🔄 Productos: Actualizando desde centro de datos...")
         
-        // Conservar estado del detalle si está abierto
-        var productoDetalleAnterior = null
-        if (mostrandoDetalleProducto && productoParaDetalle && productoParaDetalle.codigo) {
-            productoDetalleAnterior = {
-                id: productoParaDetalle.id,
-                codigo: productoParaDetalle.codigo,
-                nombre: productoParaDetalle.nombre,
-                detalles: productoParaDetalle.detalles,
-                precioCompra: productoParaDetalle.precioCompra,
-                precioVenta: productoParaDetalle.precioVenta,
-                stockCaja: productoParaDetalle.stockCaja,
-                stockUnitario: productoParaDetalle.stockUnitario,
-                idMarca: productoParaDetalle.idMarca,
-                unidadMedida: productoParaDetalle.unidadMedida
+        var productoLotesAnterior = null
+        if (mostrandoLotesProducto && productoParaLotes && productoParaLotes.codigo) {
+            productoLotesAnterior = {
+                id: productoParaLotes.id,
+                codigo: productoParaLotes.codigo,
+                nombre: productoParaLotes.nombre
             }
         }
         
-        // Obtener productos actualizados
         var productos = farmaciaData ? farmaciaData.obtenerProductosParaInventario() : []
         
         productosOriginales = []
@@ -311,32 +303,24 @@ Item {
             productosOriginales.push(productos[i])
         }
         
-        // Restaurar detalle si estaba abierto
-        if (productoDetalleAnterior && mostrandoDetalleProducto) {
+        if (productoLotesAnterior && mostrandoLotesProducto) {
             var productoActualizado = null
             
             for (var j = 0; j < productos.length; j++) {
-                if (productos[j].codigo === productoDetalleAnterior.codigo) {
+                if (productos[j].codigo === productoLotesAnterior.codigo) {
                     productoActualizado = productos[j]
                     break
                 }
             }
             
             if (productoActualizado) {
-                productoParaDetalle = {
+                productoParaLotes = {
                     id: productoActualizado.id,
                     codigo: productoActualizado.codigo || "",
-                    nombre: productoActualizado.nombre || "",
-                    detalles: productoActualizado.detalles || "",
-                    precioCompra: productoActualizado.precioCompra || 0,
-                    precioVenta: productoActualizado.precioVenta || 0,
-                    stockCaja: productoActualizado.stockCaja || 0,
-                    stockUnitario: productoActualizado.stockUnitario || 0,
-                    idMarca: productoActualizado.idMarca || "",
-                    unidadMedida: productoActualizado.unidadMedida || "mg"
+                    nombre: productoActualizado.nombre || ""
                 }
             } else {
-                productoParaDetalle = productoDetalleAnterior
+                productoParaLotes = productoLotesAnterior
             }
         }
         
@@ -350,1025 +334,46 @@ Item {
         id: productosFilteredModel
     }
 
-    // VISTA PRINCIPAL
-    StackLayout {
+    // VISTA PRINCIPAL - SIEMPRE MUESTRA LA LISTA DE PRODUCTOS
+    Item {
         anchors.fill: parent
-        currentIndex: mostrandoCrearProducto ? 1 : 0
         
-        // VISTA 0: LISTA DE PRODUCTOS
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            
-            // Diálogo modal para detalle de producto - CORREGIDO
+        // NUEVO: Modal para mostrar lotes del producto
+        Rectangle {
+            id: lotesOverlay
+            anchors.fill: parent
+            color: "#80000000"
+            visible: mostrandoLotesProducto
+            z: 1000
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    mostrandoLotesProducto = false
+                    productoParaLotes = null
+                }
+            }
+
             Rectangle {
-                id: detalleOverlay
-                anchors.fill: parent
-                color: "#80000000"
-                visible: mostrandoDetalleProducto
-                z: 1000
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        mostrandoDetalleProducto = false
-                        productoParaDetalle = null
-                    }
-                }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.min(700, parent.width * 0.9)
-                    height: Math.min(550, parent.height * 0.9)
-                    radius: 8
-                    color: "#ffffff"
-
-                    DetalleProducto {
-                        id: detalleProductoComponent
-                        anchors.fill: parent
-                        productoData: productoParaDetalle
-                        mostrarStock: true
-                        mostrarAcciones: true
-                        // CORREGIDO: Asegurar que el inventarioModel esté disponible
-                        inventarioModel: productosRoot.inventarioModel
-
-                        onEditarSolicitado: function(producto) {
-                            mostrandoDetalleProducto = false
-                            abrirEditarProducto(producto)
-                        }
-
-                        onEliminarSolicitado: function(producto) {
-                            eliminarProducto(producto)
-                            mostrandoDetalleProducto = false
-                        }
-
-                        onAjustarStockSolicitado: function(producto) {
-                            console.log("Ajustar stock de:", producto.codigo)
-                        }
-
-                        onCerrarSolicitado: {
-                            mostrandoDetalleProducto = false
-                            productoParaDetalle = null
-                        }
-                    }
-                }
-            }
-            
-            // INTERFAZ PRINCIPAL
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 24
-                spacing: 24
-                
-                // Header del módulo
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 16
-                    
-                    RowLayout {
-                        spacing: 12
-                        
-                        Image {
-                            source: "Resources/iconos/productos.png"
-                            Layout.preferredWidth: 60
-                            Layout.preferredHeight: 60
-                            fillMode: Image.PreserveAspectFit
-                            smooth: true
-                            
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onEntered: parent.opacity = 0.8
-                                onExited: parent.opacity = 1.0
-                            }
-                            
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-                        }
-                        
-                        ColumnLayout {
-                            spacing: 4
-                            
-                            Label {
-                                text: "Módulo de Farmacia"
-                                font.pixelSize: 24
-                                font.bold: true
-                                color: textColor
-                            }
-                            
-                            Label {
-                                text: "Inventario de Productos"
-                                font.pixelSize: 16
-                                color: darkGrayColor
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                    
-                    Button {
-                        Layout.preferredWidth: 230
-                        Layout.preferredHeight: 75
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                            radius: 8
-                            
-                            Behavior on color {
-                                ColorAnimation { duration: 150 }
-                            }
-                            
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.topMargin: 2
-                                color: "#00000020"
-                                radius: 8
-                                z: -1
-                            }
-                        }
-                        
-                        contentItem: RowLayout {
-                            spacing: 8
-                            anchors.centerIn: parent
-                            
-                            Image {
-                                source: "Resources/iconos/añadirProducto.png"
-                                Layout.preferredWidth: 30
-                                Layout.preferredHeight: 30
-                                fillMode: Image.PreserveAspectFit
-                                smooth: true
-                            }
-                            
-                            Label {
-                                text: "Añadir Producto"
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 18
-                            }
-                        }
-                        
-                        onClicked: {
-                            abrirCrearProducto()
-                        }
-                        
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onEntered: parent.scale = 1.02
-                            onExited: parent.scale = 1.0
-                            onClicked: parent.clicked()
-                        }
-                        
-                        Behavior on scale {
-                            NumberAnimation { duration: 100 }
-                        }
-                    }
-                    
-                    Rectangle {
-                        Layout.preferredWidth: 150
-                        Layout.preferredHeight: 60
-                        color: "#E3F2FD"
-                        radius: 8
-                        border.color: blueColor
-                        border.width: 1
-                        
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: 4
-                            
-                            Label {
-                                text: "Total Productos:"
-                                font.pixelSize: 12
-                                color: darkGrayColor
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            
-                            Label {
-                                text: getTotalCount().toString()
-                                font.pixelSize: 20
-                                font.bold: true
-                                color: blueColor
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                        }
-                    }
-                }
-                
-                // Sección de filtros y búsqueda - CORREGIDA
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 16
-                    
-                    RowLayout {
-                        spacing: 8
-                        
-                        FilterButton {
-                            text: "Todos"
-                            count: getTotalCount()
-                            active: currentFilter === 0
-                            backgroundColor: blueColor
-                            onClicked: {
-                                console.log("🔍 Filtro: Todos")
-                                currentFilter = 0
-                                updateFilteredModel()
-                            }
-                        }
-                        FilterButton {
-                            text: "Próx. Vencer"
-                            count: getProximosVencerCount()
-                            active: currentFilter === 1
-                            backgroundColor: warningColor
-                            onClicked: {
-                                console.log("🔍 Filtro: Próximos a vencer")
-                                currentFilter = 1
-                                updateFilteredModel()
-                            }
-                        }
-                        
-                        FilterButton {
-                            text: "Vencidos"
-                            count: getVencidosCount()
-                            active: currentFilter === 2
-                            backgroundColor: dangerColor
-                            onClicked: {
-                                console.log("🔍 Filtro: Vencidos")
-                                currentFilter = 2
-                                updateFilteredModel()
-                            }
-                        }
-                        
-                        FilterButton {
-                            text: "Bajo Stock"
-                            count: getBajoStockCount()
-                            active: currentFilter === 3
-                            backgroundColor: "#8e44ad"
-                            onClicked: {
-                                console.log("🔍 Filtro: Bajo stock")
-                                currentFilter = 3
-                                updateFilteredModel()
-                            }
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    RowLayout {
-                        spacing: 12
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 300
-                            Layout.preferredHeight: 40
-                            color: whiteColor
-                            border.color: lightGrayColor
-                            border.width: 2
-                            radius: 8
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
-                                
-                                Label {
-                                    text: "🔍"
-                                    font.pixelSize: 16
-                                    color: darkGrayColor
-                                }
-                                
-                                TextField {
-                                    id: searchField
-                                    Layout.fillWidth: true
-                                    placeholderText: "Buscar por nombre o código..."
-                                    font.pixelSize: 14
-                                    color: textColor
-                                    
-                                    background: Rectangle {
-                                        color: "transparent"
-                                    }
-                                    
-                                    onTextChanged: {
-                                        searchText = text
-                                        console.log("🔍 Búsqueda:", searchText)
-                                        updateFilteredModel()
-                                    }
-                                }
-                                
-                                Button {
-                                    visible: searchField.text.length > 0
-                                    text: "✕"
-                                    
-                                    background: Rectangle {
-                                        color: parent.pressed ? Qt.darker(lightGrayColor, 1.2) : lightGrayColor
-                                        radius: 4
-                                        width: 24
-                                        height: 24
-                                    }
-                                    
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: darkGrayColor
-                                        font.pixelSize: 12
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    
-                                    onClicked: {
-                                        searchField.text = ""
-                                        searchText = ""
-                                        updateFilteredModel()
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Button {
-                            text: "🔄 Actualizar"
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                radius: 8
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 14
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                console.log("🔄 Actualizando manualmente...")
-                                cargarDatosParaFiltros()
-                                updateFilteredModel()
-                            }
-                        }
-                    }
-                }
-                
-                // Tabla principal de productos (mantener estructura original)
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: "#FFFFFF"
-                    border.color: "#D5DBDB"
-                    border.width: 1
-                    radius: 8
-                    
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 0
-                        spacing: 0
-                        
-                        // Header de la tabla
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 50
-                            color: "#F8F9FA"
-                            border.color: "#D5DBDB"
-                            border.width: 1
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                spacing: 0
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 60
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "ID"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 90
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CÓDIGO"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 250
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 10
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "NOMBRE"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 250
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 10
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "DESCRIPCIÓN"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 110
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "PRECIO COMPRA"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 110
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "PRECIO VENTA"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 90
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "STOCK CAJA"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 100
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "STOCK UNITARIO"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 100
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "UNIDAD"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 90
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "MARCA"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-
-                                Rectangle {
-                                    Layout.preferredWidth: 120
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "ACCIÓN"
-                                        color: "#2C3E50"
-                                        font.bold: true
-                                        font.pixelSize: 12
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Contenido de la tabla
-                        ListView {
-                            id: productosTable
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            model: productosPaginadosModel
-                            clip: true
-                            
-                            delegate: Rectangle {
-                                width: productosTable.width
-                                height: 60
-                                color: productosTable.currentIndex === index ? "#E3F2FD" : "#FFFFFF"
-                                border.color: "#D5DBDB"
-                                border.width: 1
-                                
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 0
-                                    spacing: 0
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 60
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: model.id ? model.id.toString() : ""
-                                            color: "#2C3E50"
-                                            font.pixelSize: 11
-                                            font.bold: true
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 90
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: model.codigo || ""
-                                            color: "#3498DB"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredWidth: 250
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.left: parent.left
-                                            anchors.leftMargin: 10
-                                            anchors.right: parent.right
-                                            anchors.rightMargin: 10
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: model.nombre || ""
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredWidth: 250
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.left: parent.left
-                                            anchors.leftMargin: 10
-                                            anchors.right: parent.right
-                                            anchors.rightMargin: 10
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: model.detalles || ""
-                                            color: "#7f8c8d"
-                                            font.pixelSize: 12
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 110
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
-                                            color: "#27AE60"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 110
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
-                                            color: "#F39C12"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 90
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: 40
-                                            height: 20
-                                            color: getStockColor(model.stockUnitario || 0)
-                                            radius: 10
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: (model.stockCaja || 0).toString()
-                                                color: "#FFFFFF"
-                                                font.bold: true
-                                                font.pixelSize: 12
-                                            }
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 100
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: (model.stockUnitario || 0).toString()
-                                            color: "#2C3E50"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 100
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: 60
-                                            height: 18
-                                            color: "#9b59b6"
-                                            radius: 9
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: model.unidadMedida || "mg"
-                                                color: "#FFFFFF"
-                                                font.bold: true
-                                                font.pixelSize: 8
-                                            }
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 90
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: model.idMarca || "N/A"
-                                            color: "#34495e"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        Layout.preferredWidth: 120
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Button {
-                                            anchors.centerIn: parent
-                                            width: 100
-                                            height: 32
-                                            text: "Ver Detalles"
-                                            
-                                            property bool procesando: false
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                                radius: 6
-                                                Behavior on color { ColorAnimation { duration: 150 } }
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 12
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                if (procesando) return
-                                                
-                                                procesando = true
-                                                console.log("📘 Click en Ver Detalles para:", model.codigo)
-                                                
-                                                productoSeleccionado = model
-                                                mostrarDetalleProducto(model)
-                                                
-                                                resetTimer.restart()
-                                            }
-                                            
-                                            Timer {
-                                                id: resetTimer
-                                                interval: 500
-                                                running: false
-                                                repeat: false
-                                                onTriggered: parent.procesando = false
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    z: -1
-                                    
-                                    onClicked: {
-                                        productosTable.currentIndex = index
-                                    }
-                                    
-                                    onPressed: {
-                                        if (mouse.button === Qt.RightButton) {
-                                            productosTable.currentIndex = index
-                                            contextMenu.popup()
-                                        }
-                                    }
-                                }
-                                
-                                Menu {
-                                    id: contextMenu
-                                    
-                                    MenuItem {
-                                        text: "✏️ Editar Precio venta"
-                                        onTriggered: {
-                                            productoSeleccionado = model
-                                            editarPrecioDialogOpen = true
-                                        }
-                                    }
-                                    
-                                    MenuItem {
-                                        text: "✏️ Editar Producto"
-                                        onTriggered: {
-                                            console.log("🔧 Intentando editar producto:", model.codigo)
-                                            abrirEditarProducto(model)
-                                        }
-                                    }
-                                    
-                                    MenuItem {
-                                        text: "🗑️ Eliminar Producto"
-                                        enabled: (model.stockUnitario || 0) === 0
-                                        onTriggered: {
-                                            eliminarProducto(model)
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Estado vacío
-                            Item {
-                                anchors.centerIn: parent
-                                visible: productosFilteredModel.count === 0
-                                width: 300
-                                height: 200
-                                
-                                ColumnLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 16
-                                    
-                                    Label {
-                                        text: searchText.length > 0 ? "🔍" : "📦"
-                                        font.pixelSize: 48
-                                        color: lightGrayColor
-                                        Layout.alignment: Qt.AlignHCenter
-                                    }
-                                    
-                                    Label {
-                                        text: searchText.length > 0 ? "No se encontraron productos" : "No hay productos en esta categoría"
-                                        color: darkGrayColor
-                                        font.pixelSize: 16
-                                        font.bold: true
-                                        Layout.alignment: Qt.AlignHCenter
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Control de Paginación
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 60
-                            color: "#F8F9FA"
-                            border.color: "#D5DBDB"
-                            border.width: 1
-                            
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 20
-                                
-                                Button {
-                                    Layout.preferredWidth: 100
-                                    Layout.preferredHeight: 36
-                                    text: "← Anterior"
-                                    enabled: currentPage > 0
-                                    
-                                    background: Rectangle {
-                                        color: parent.enabled ? 
-                                            (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") :   
-                                            "#E5E7EB"
-                                        radius: 18
-                                        Behavior on color { ColorAnimation { duration: 150 } }
-                                    }
-                                    
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
-                                        font.bold: true
-                                        font.pixelSize: 14
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    
-                                    onClicked: {
-                                        if (currentPage > 0) {
-                                            currentPage--
-                                            updatePaginatedModel()
-                                        }
-                                    }
-                                }
-                                
-                                Label {
-                                    text: "Página " + (currentPage + 1) + " de " + Math.max(1, totalPages)
-                                    color: "#374151"
-                                    font.pixelSize: 14
-                                    font.weight: Font.Medium
-                                }
-                                                            
-                                Button {
-                                    Layout.preferredWidth: 110
-                                    Layout.preferredHeight: 36
-                                    text: "Siguiente →"
-                                    enabled: currentPage < totalPages - 1
-                                    
-                                    background: Rectangle {
-                                        color: parent.enabled ? 
-                                            (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
-                                            "#E5E7EB"
-                                        radius: 18
-                                        Behavior on color { ColorAnimation { duration: 150 } }
-                                    }
-                                    
-                                    contentItem: Label {
-                                        text: parent.text
-                                        color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
-                                        font.bold: true
-                                        font.pixelSize: 14
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    
-                                    onClicked: {
-                                        if (currentPage < totalPages - 1) {
-                                            currentPage++
-                                            updatePaginatedModel()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Diálogo para Editar Precio de Venta (mantener igual)
-            Dialog {
-                id: editarPrecioDialog
                 anchors.centerIn: parent
-                width: Math.min(500, parent.width * 0.8)
-                height: Math.min(400, parent.height * 0.6)
-                modal: true
-                visible: editarPrecioDialogOpen
-                
-                background: Rectangle {
-                    color: whiteColor
-                    radius: 16
-                    border.color: lightGrayColor
-                    border.width: 1
-                }
-                
-                onVisibleChanged: {
-                    if (!visible) {
-                        editarPrecioDialogOpen = false
-                    } else if (visible && productoSeleccionado) {
-                        precioVentaEditField.text = productoSeleccionado.precioVenta.toFixed(2)
-                        precioVentaEditField.selectAll()
-                        precioVentaEditField.focus = true
-                    }
-                }
-                
+                width: Math.min(800, parent.width * 0.9)
+                height: Math.min(600, parent.height * 0.9)
+                radius: 8
+                color: "#ffffff"
+
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 24
-                    spacing: 20
-                    
+                    anchors.margins: 16
+                    spacing: 16
+
+                    // Header
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 16
                         
                         Label {
-                            text: "💰"
-                            font.pixelSize: 24
-                            color: successColor
-                        }
-                        
-                        Label {
-                            text: "Editar Precio de Venta"
-                            font.pixelSize: 20
+                            text: "Lotes de " + (productoParaLotes ? productoParaLotes.nombre : "")
+                            font.pixelSize: 18
                             font.bold: true
                             color: textColor
                         }
@@ -1377,233 +382,1582 @@ Item {
                         
                         Button {
                             text: "✕"
+                            width: 32
+                            height: 32
                             
                             background: Rectangle {
                                 color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                radius: 20
-                                width: 40
-                                height: 40
+                                radius: 16
                             }
                             
                             contentItem: Label {
                                 text: parent.text
                                 color: whiteColor
                                 font.bold: true
-                                font.pixelSize: 16
+                                font.pixelSize: 14
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
                             onClicked: {
-                                editarPrecioDialogOpen = false
+                                mostrandoLotesProducto = false
+                                productoParaLotes = null
                             }
                         }
                     }
-                    
+
+                    // Tabla de lotes
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 80
-                        color: "#F8F9FA"
-                        radius: 8
-                        border.color: lightGrayColor
+                        Layout.fillHeight: true
+                        color: "#FFFFFF"
+                        border.color: "#D5DBDB"
                         border.width: 1
+                        radius: 8
                         
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 16
-                            spacing: 8
+                            anchors.margins: 0
+                            spacing: 0
                             
-                            Label {
-                                text: "Producto: " + (productoSeleccionado ? productoSeleccionado.nombre : "")
-                                font.bold: true
-                                font.pixelSize: 14
-                                color: textColor
-                            }
-                            
-                            Label {
-                                text: "Código: " + (productoSeleccionado ? productoSeleccionado.codigo : "")
-                                font.pixelSize: 12
-                                color: darkGrayColor
-                            }
-                            
-                            Label {
-                                text: "Precio Compra: Bs " + (productoSeleccionado ? productoSeleccionado.precioCompra.toFixed(2) : "0.00")
-                                font.pixelSize: 12
-                                color: successColor
-                            }
-                        }
-                    }
-                    
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        
-                        Label {
-                            text: "Nuevo Precio de Venta:"
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 50
-                            color: whiteColor
-                            border.color: warningColor
-                            border.width: 2
-                            radius: 8
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 8
+                            // Header
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+                                color: "#F8F9FA"
+                                border.color: "#D5DBDB"
+                                border.width: 1
                                 
-                                Label {
-                                    text: "Bs"
-                                    font.bold: true
-                                    font.pixelSize: 18
-                                    color: textColor
-                                }
-                                
-                                TextField {
-                                    id: precioVentaEditField
-                                    Layout.fillWidth: true
-                                    font.pixelSize: 16
-                                    font.bold: true
-                                    color: textColor
-                                    placeholderText: "0.00"
-                                    validator: DoubleValidator {
-                                        bottom: 0.01
-                                        decimals: 2
-                                    }
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 0
                                     
-                                    background: Rectangle {
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredWidth: 200
+                                        Layout.fillHeight: true
                                         color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        Label {
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "PRODUCTO"
+                                            color: "#2C3E50"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
                                     }
                                     
-                                    Keys.onReturnPressed: {
-                                        guardarPrecioVenta()
+                                    Rectangle {
+                                        Layout.preferredWidth: 120
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "CANTIDAD CAJA"
+                                            color: "#2C3E50"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 120
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "CANTIDAD U"
+                                            color: "#2C3E50"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 150
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "FECHA VENCIMIENTO"
+                                            color: "#2C3E50"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 100
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "ACCIONES"
+                                            color: "#2C3E50"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Lista de lotes
+                            ListView {
+                                id: lotesListView
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                model: lotesDelProductoModel
+                                clip: true
+                                
+                                delegate: Rectangle {
+                                    width: lotesListView.width
+                                    height: 50
+                                    color: {
+                                        if (model.fecha_vencimiento) {
+                                            var fechaVencimiento = new Date(model.fecha_vencimiento)
+                                            var hoy = new Date()
+                                            return fechaVencimiento < hoy ? "#ffcdd2" : "#FFFFFF"
+                                        }
+                                        return "#FFFFFF"
+                                    }
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 0
+                                        spacing: 0
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: 200
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: 8
+                                                anchors.right: parent.right
+                                                anchors.rightMargin: 8
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: model.producto_nombre || ""
+                                                color: "#2C3E50"
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 120
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: (model.cantidad_caja || 0).toString()
+                                                color: "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 120
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: (model.cantidad_unitario || 0).toString()
+                                                color: "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 150
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: model.fecha_vencimiento || ""
+                                                color: "#2C3E50"
+                                                font.pixelSize: 11
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 100
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
+                                            
+                                            Button {
+                                                anchors.centerIn: parent
+                                                width: 70
+                                                height: 24
+                                                text: "Eliminar"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                                                    radius: 4
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: whiteColor
+                                                    font.bold: true
+                                                    font.pixelSize: 9
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: {
+                                                    confirmacionEliminarLote.loteId = model.id
+                                                    confirmacionEliminarLote.open()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Estado vacío
+                                Item {
+                                    anchors.centerIn: parent
+                                    visible: lotesDelProductoModel.count === 0
+                                    width: 200
+                                    height: 100
+                                    
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 12
+                                        
+                                        Label {
+                                            text: "📦"
+                                            font.pixelSize: 32
+                                            color: lightGrayColor
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        
+                                        Label {
+                                            text: "No hay lotes disponibles"
+                                            color: darkGrayColor
+                                            font.pixelSize: 14
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    
-                    Item { Layout.fillHeight: true }
-                    
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        Button {
-                            text: "Cancelar"
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
-                                radius: 8
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                editarPrecioDialogOpen = false
-                            }
-                        }
-                        
-                        Button {
-                            text: "Guardar"
-                            enabled: precioVentaEditField.text.length > 0 && parseFloat(precioVentaEditField.text) > 0
-                            
-                            background: Rectangle {
-                                color: parent.enabled ? (parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor) : lightGrayColor
-                                radius: 8
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: parent.parent.enabled ? whiteColor : darkGrayColor
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                guardarPrecioVenta()
-                            }
-                        }
-                    }
-                }
-                onOpened: {
-                    precioVentaEditField.forceActiveFocus()
-                    precioVentaEditField.selectAll()
-                }
-
-                onClosed: {
-                    forceActiveFocus()
                 }
             }
         }
         
-        // VISTA 1: CREAR/EDITAR PRODUCTO
-        Loader {
-            id: crearProductoComponent
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            source: mostrandoCrearProducto ? "CrearProducto.qml" : ""
+        // INTERFAZ PRINCIPAL
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 16
             
-            onLoaded: {
-                if (item) {
-                    console.log("🚀 CrearProducto.qml cargado como pantalla completa")
+            // Header del módulo
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 16
+                
+                RowLayout {
+                    spacing: 12
                     
-                    item.inventarioModel = productosRoot.inventarioModel
-                    item.farmaciaData = productosRoot.farmaciaData
-                    
-                    if (marcasYaCargadas && marcasModel.length > 0) {
-                        item.marcasModel = productosRoot.marcasModel
-                        item.marcasCargadas = true
-                    }
-                    
-                    // Conectar señales
-                    item.productoCreado.connect(function(producto) {
-                        console.log("✅ Producto creado:", producto.codigo)
+                    Image {
+                        source: "Resources/iconos/productos.png"
+                        Layout.preferredWidth: 50
+                        Layout.preferredHeight: 50
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
                         
-                        if (farmaciaData) {
-                            farmaciaData.crearProductoUnico(JSON.stringify(producto))
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: parent.opacity = 0.8
+                            onExited: parent.opacity = 1.0
                         }
                         
-                        volverAListaProductos()
-                    })
+                        Behavior on opacity {
+                            NumberAnimation { duration: 150 }
+                        }
+                    }
                     
-                    item.productoActualizado.connect(function(producto) {
-                        console.log("✅ Producto actualizado:", producto.codigo)
-                        volverAListaProductos()
-                    })
+                    ColumnLayout {
+                        spacing: 4
+                        
+                        Label {
+                            text: "Módulo de Farmacia"
+                            font.pixelSize: 20
+                            font.bold: true
+                            color: textColor
+                        }
+                        
+                        Label {
+                            text: "Inventario de Productos"
+                            font.pixelSize: 14
+                            color: darkGrayColor
+                        }
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+                
+                Button {
+                    Layout.preferredWidth: 200
+                    Layout.preferredHeight: 60
                     
-                    item.cancelarCreacion.connect(function() {
-                        console.log("❌ Creación cancelada")
-                        volverAListaProductos()
-                    })
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                        radius: 8
+                        
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.topMargin: 2
+                            color: "#00000020"
+                            radius: 8
+                            z: -1
+                        }
+                    }
                     
-                    item.volverALista.connect(function() {
-                        console.log("🔙 Volver a lista solicitado")
-                        volverAListaProductos()
-                    })
+                    contentItem: RowLayout {
+                        spacing: 8
+                        anchors.centerIn: parent
+                        
+                        Image {
+                            source: "Resources/iconos/añadirProducto.png"
+                            Layout.preferredWidth: 24
+                            Layout.preferredHeight: 24
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                        }
+                        
+                        Label {
+                            text: "Añadir Producto"
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 16
+                        }
+                    }
                     
-                    console.log("✅ Señales conectadas correctamente")
+                    onClicked: {
+                        abrirCrearProducto()
+                    }
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: parent.scale = 1.02
+                        onExited: parent.scale = 1.0
+                        onClicked: parent.clicked()
+                    }
+                    
+                    Behavior on scale {
+                        NumberAnimation { duration: 100 }
+                    }
+                }
+                
+                Rectangle {
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 50
+                    color: "#E3F2FD"
+                    radius: 8
+                    border.color: blueColor
+                    border.width: 1
+                    
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        
+                        Label {
+                            text: "Total Productos:"
+                            font.pixelSize: 10
+                            color: darkGrayColor
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        
+                        Label {
+                            text: getTotalCount().toString()
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: blueColor
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                    }
                 }
             }
             
-            onStatusChanged: {
-                if (status === Loader.Error) {
-                    console.error("❌ Error cargando CrearProducto.qml")
-                    mostrandoCrearProducto = false
+            // Sección de filtros y búsqueda
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 16
+                
+                RowLayout {
+                    spacing: 8
+                    
+                    FilterButton {
+                        text: "Todos"
+                        count: getTotalCount()
+                        active: currentFilter === 0
+                        backgroundColor: blueColor
+                        onClicked: {
+                            console.log("🔍 Filtro: Todos")
+                            currentFilter = 0
+                            updateFilteredModel()
+                        }
+                    }
+                    FilterButton {
+                        text: "Próx. Vencer"
+                        count: getProximosVencerCount()
+                        active: currentFilter === 1
+                        backgroundColor: warningColor
+                        onClicked: {
+                            console.log("🔍 Filtro: Próximos a vencer")
+                            currentFilter = 1
+                            updateFilteredModel()
+                        }
+                    }
+                    
+                    FilterButton {
+                        text: "Vencidos"
+                        count: getVencidosCount()
+                        active: currentFilter === 2
+                        backgroundColor: dangerColor
+                        onClicked: {
+                            console.log("🔍 Filtro: Vencidos")
+                            currentFilter = 2
+                            updateFilteredModel()
+                        }
+                    }
+                    
+                    FilterButton {
+                        text: "Bajo Stock"
+                        count: getBajoStockCount()
+                        active: currentFilter === 3
+                        backgroundColor: "#8e44ad"
+                        onClicked: {
+                            console.log("🔍 Filtro: Bajo stock")
+                            currentFilter = 3
+                            updateFilteredModel()
+                        }
+                    }
+                }
+                
+                Item { Layout.fillWidth: true }
+                
+                RowLayout {
+                    spacing: 12
+                    
+                    Rectangle {
+                        Layout.preferredWidth: 280
+                        Layout.preferredHeight: 36
+                        color: whiteColor
+                        border.color: lightGrayColor
+                        border.width: 2
+                        radius: 8
+                        
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 8
+                            
+                            Label {
+                                text: "🔍"
+                                font.pixelSize: 14
+                                color: darkGrayColor
+                            }
+                            
+                            TextField {
+                                id: searchField
+                                Layout.fillWidth: true
+                                placeholderText: "Buscar por nombre o código..."
+                                font.pixelSize: 12
+                                color: textColor
+                                
+                                background: Rectangle {
+                                    color: "transparent"
+                                }
+                                
+                                onTextChanged: {
+                                    searchText = text
+                                    console.log("🔍 Búsqueda:", searchText)
+                                    updateFilteredModel()
+                                }
+                            }
+                            
+                            Button {
+                                visible: searchField.text.length > 0
+                                text: "✕"
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(lightGrayColor, 1.2) : lightGrayColor
+                                    radius: 4
+                                    width: 20
+                                    height: 20
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: darkGrayColor
+                                    font.pixelSize: 10
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    searchField.text = ""
+                                    searchText = ""
+                                    updateFilteredModel()
+                                }
+                            }
+                        }
+                    }
+                    
+                    Button {
+                        text: "🔄 Actualizar"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                            radius: 8
+                            
+                            Behavior on color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            console.log("🔄 Actualizando manualmente...")
+                            cargarDatosParaFiltros()
+                            updateFilteredModel()
+                        }
+                    }
+                }
+            }
+            
+            // Tabla principal de productos
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "#FFFFFF"
+                border.color: "#D5DBDB"
+                border.width: 1
+                radius: 8
+                
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 0
+                    spacing: 0
+                    
+                    // Header de la tabla
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 40
+                        color: "#F8F9FA"
+                        border.color: "#D5DBDB"
+                        border.width: 1
+                        
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 0
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 50
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "ID"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "CÓDIGO"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 200
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "NOMBRE"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 200
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "DESCRIPCIÓN"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 100
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "PRECIO COMPRA"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 9
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 100
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "PRECIO VENTA"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 9
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "STOCK CAJA"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 9
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 90
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "STOCK UNITARIO"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 9
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "UNIDAD"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            Rectangle {
+                                Layout.preferredWidth: 70
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "MARCA"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                border.color: "#D5DBDB"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "LOTES"
+                                    color: "#2C3E50"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Contenido de la tabla
+                    ListView {
+                        id: productosTable
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: productosPaginadosModel
+                        clip: true
+                        
+                        delegate: Rectangle {
+                            width: productosTable.width
+                            height: 50
+                            color: productosTable.currentIndex === index ? "#E3F2FD" : "#FFFFFF"
+                            border.color: "#D5DBDB"
+                            border.width: 1
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 0
+                                spacing: 0
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 50
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: model.id ? model.id.toString() : ""
+                                        color: "#2C3E50"
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: model.codigo || ""
+                                        color: "#3498DB"
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 200
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    Label {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 8
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 8
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: model.nombre || ""
+                                        color: "#2C3E50"
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 200
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    Label {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 8
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 8
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: model.detalles || ""
+                                        color: "#7f8c8d"
+                                        font.pixelSize: 10
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 100
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
+                                        color: "#27AE60"
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 100
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
+                                        color: "#F39C12"
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 35
+                                        height: 16
+                                        color: getStockColor(model.stockUnitario || 0)
+                                        radius: 8
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: (model.stockCaja || 0).toString()
+                                            color: "#FFFFFF"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 90
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: (model.stockUnitario || 0).toString()
+                                        color: "#2C3E50"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 50
+                                        height: 14
+                                        color: "#9b59b6"
+                                        radius: 7
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: model.unidadMedida || "mg"
+                                            color: "#FFFFFF"
+                                            font.bold: true
+                                            font.pixelSize: 7
+                                        }
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 70
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: model.idMarca || "N/A"
+                                        color: "#34495e"
+                                        font.bold: true
+                                        font.pixelSize: 9
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
+                                    color: "transparent"
+                                    border.color: "#D5DBDB"
+                                    border.width: 1
+                                    
+                                    Button {
+                                        anchors.centerIn: parent
+                                        width: 80
+                                        height: 28
+                                        text: "Ver"
+                                        
+                                        property bool procesando: false
+                                        
+                                        background: Rectangle {
+                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                            radius: 4
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                        }
+                                        
+                                        contentItem: Label {
+                                            text: parent.text
+                                            color: whiteColor
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        
+                                        onClicked: {
+                                            if (procesando) return
+                                            
+                                            procesando = true
+                                            console.log("📘 Click en Ver Lotes para:", model.codigo)
+                                            
+                                            productoSeleccionado = model
+                                            mostrarLotesProducto(model)
+                                            
+                                            resetTimer.restart()
+                                        }
+                                        
+                                        Timer {
+                                            id: resetTimer
+                                            interval: 500
+                                            running: false
+                                            repeat: false
+                                            onTriggered: parent.procesando = false
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                z: -1
+                                
+                                onClicked: {
+                                    productosTable.currentIndex = index
+                                }
+                                
+                                onPressed: {
+                                    if (mouse.button === Qt.RightButton) {
+                                        productosTable.currentIndex = index
+                                        contextMenu.popup()
+                                    }
+                                }
+                            }
+                            
+                            Menu {
+                                id: contextMenu
+                                
+                                MenuItem {
+                                    text: "✏️ Editar Precio venta"
+                                    onTriggered: {
+                                        productoSeleccionado = model
+                                        editarPrecioDialogOpen = true
+                                    }
+                                }
+                                
+                                MenuItem {
+                                    text: "✏️ Editar Producto"
+                                    onTriggered: {
+                                        console.log("🔧 Intentando editar producto:", model.codigo)
+                                        abrirEditarProducto(model)
+                                    }
+                                }
+                                
+                                MenuItem {
+                                    text: "🗑️ Eliminar Producto"
+                                    enabled: (model.stockUnitario || 0) === 0
+                                    onTriggered: {
+                                        eliminarProducto(model)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Estado vacío
+                        Item {
+                            anchors.centerIn: parent
+                            visible: productosFilteredModel.count === 0
+                            width: 300
+                            height: 200
+                            
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 16
+                                
+                                Label {
+                                    text: searchText.length > 0 ? "🔍" : "📦"
+                                    font.pixelSize: 48
+                                    color: lightGrayColor
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                                
+                                Label {
+                                    text: searchText.length > 0 ? "No se encontraron productos" : "No hay productos en esta categoría"
+                                    color: darkGrayColor
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Control de Paginación
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 50
+                        color: "#F8F9FA"
+                        border.color: "#D5DBDB"
+                        border.width: 1
+                        
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 20
+                            
+                            Button {
+                                Layout.preferredWidth: 80
+                                Layout.preferredHeight: 30
+                                text: "← Anterior"
+                                enabled: currentPage > 0
+                                
+                                background: Rectangle {
+                                    color: parent.enabled ? 
+                                        (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") :   
+                                        "#E5E7EB"
+                                    radius: 15
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    if (currentPage > 0) {
+                                        currentPage--
+                                        updatePaginatedModel()
+                                    }
+                                }
+                            }
+                            
+                            Label {
+                                text: "Página " + (currentPage + 1) + " de " + Math.max(1, totalPages)
+                                color: "#374151"
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                            }
+                                                        
+                            Button {
+                                Layout.preferredWidth: 80
+                                Layout.preferredHeight: 30
+                                text: "Siguiente →"
+                                enabled: currentPage < totalPages - 1
+                                
+                                background: Rectangle {
+                                    color: parent.enabled ? 
+                                        (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
+                                        "#E5E7EB"
+                                    radius: 15
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    if (currentPage < totalPages - 1) {
+                                        currentPage++
+                                        updatePaginatedModel()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Diálogo para Editar Precio de Venta
+        Dialog {
+            id: editarPrecioDialog
+            anchors.centerIn: parent
+            width: Math.min(450, parent.width * 0.8)
+            height: Math.min(350, parent.height * 0.6)
+            modal: true
+            visible: editarPrecioDialogOpen
+            
+            background: Rectangle {
+                color: whiteColor
+                radius: 16
+                border.color: lightGrayColor
+                border.width: 1
+            }
+            
+            onVisibleChanged: {
+                if (!visible) {
+                    editarPrecioDialogOpen = false
+                } else if (visible && productoSeleccionado) {
+                    precioVentaEditField.text = productoSeleccionado.precioVenta.toFixed(2)
+                    precioVentaEditField.selectAll()
+                    precioVentaEditField.focus = true
+                }
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 16
+                
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+                    
+                    Label {
+                        text: "💰"
+                        font.pixelSize: 20
+                        color: successColor
+                    }
+                    
+                    Label {
+                        text: "Editar Precio de Venta"
+                        font.pixelSize: 18
+                        font.bold: true
+                        color: textColor
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        text: "✕"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                            radius: 16
+                            width: 32
+                            height: 32
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 14
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            editarPrecioDialogOpen = false
+                        }
+                    }
+                }
+                
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 70
+                    color: "#F8F9FA"
+                    radius: 8
+                    border.color: lightGrayColor
+                    border.width: 1
+                    
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 6
+                        
+                        Label {
+                            text: "Producto: " + (productoSeleccionado ? productoSeleccionado.nombre : "")
+                            font.bold: true
+                            font.pixelSize: 12
+                            color: textColor
+                        }
+                        
+                        Label {
+                            text: "Código: " + (productoSeleccionado ? productoSeleccionado.codigo : "")
+                            font.pixelSize: 10
+                            color: darkGrayColor
+                        }
+                        
+                        Label {
+                            text: "Precio Compra: Bs " + (productoSeleccionado ? productoSeleccionado.precioCompra.toFixed(2) : "0.00")
+                            font.pixelSize: 10
+                            color: successColor
+                        }
+                    }
+                }
+                
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    
+                    Label {
+                        text: "Nuevo Precio de Venta:"
+                        font.bold: true
+                        color: textColor
+                        font.pixelSize: 12
+                    }
+                    
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 40
+                        color: whiteColor
+                        border.color: warningColor
+                        border.width: 2
+                        radius: 8
+                        
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 8
+                            
+                            Label {
+                                text: "Bs"
+                                font.bold: true
+                                font.pixelSize: 16
+                                color: textColor
+                            }
+                            
+                            TextField {
+                                id: precioVentaEditField
+                                Layout.fillWidth: true
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: textColor
+                                placeholderText: "0.00"
+                                validator: DoubleValidator {
+                                    bottom: 0.01
+                                    decimals: 2
+                                }
+                                
+                                background: Rectangle {
+                                    color: "transparent"
+                                }
+                                
+                                Keys.onReturnPressed: {
+                                    guardarPrecioVenta()
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Item { Layout.fillHeight: true }
+                
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        text: "Cancelar"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
+                            radius: 8
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            editarPrecioDialogOpen = false
+                        }
+                    }
+                    
+                    Button {
+                        text: "Guardar"
+                        enabled: precioVentaEditField.text.length > 0 && parseFloat(precioVentaEditField.text) > 0
+                        
+                        background: Rectangle {
+                            color: parent.enabled ? (parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor) : lightGrayColor
+                            radius: 8
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: parent.parent.enabled ? whiteColor : darkGrayColor
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            guardarPrecioVenta()
+                        }
+                    }
+                }
+            }
+            onOpened: {
+                precioVentaEditField.forceActiveFocus()
+                precioVentaEditField.selectAll()
+            }
+
+            onClosed: {
+                forceActiveFocus()
+            }
+        }
+    }
+
+    // DIÁLOGO MODAL CREAR/EDITAR PRODUCTO - FUERA DEL STACKLAYOUT
+    Loader {
+        id: crearProductoComponent
+        anchors.fill: parent
+        z: 1000
+        source: mostrandoCrearProducto ? "CrearProducto.qml" : undefined
+        
+        onLoaded: {
+            if (item) {
+                console.log("🚀 CrearProductoOptimizado.qml cargado como pantalla completa")
+                
+                item.inventarioModel = productosRoot.inventarioModel
+                item.farmaciaData = productosRoot.farmaciaData
+                
+                if (marcasYaCargadas && marcasModel.length > 0) {
+                    item.marcasModel = productosRoot.marcasModel
+                    item.marcasCargadas = true
+                }
+                
+                // Conectar señales
+                item.productoCreado.connect(function(producto) {
+                    console.log("✅ Producto creado:", producto.codigo)
+                    
+                    if (farmaciaData) {
+                        farmaciaData.crearProductoUnico(JSON.stringify(producto))
+                    }
+                    
+                    volverAListaProductos()
+                })
+                
+                item.productoActualizado.connect(function(producto) {
+                    console.log("✅ Producto actualizado:", producto.codigo)
+                    volverAListaProductos()
+                })
+                
+                item.cancelarCreacion.connect(function() {
+                    console.log("❌ Creación cancelada")
+                    volverAListaProductos()
+                })
+                
+                item.volverALista.connect(function() {
+                    console.log("🔙 Volver a lista solicitado")
+                    volverAListaProductos()
+                })
+                
+                console.log("✅ Señales conectadas correctamente")
+            }
+        }
+        
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.error("❌ Error cargando CrearProductoOptimizado.qml")
+                mostrandoCrearProducto = false
+            }
+        }
+    }
+    
+    // MODELO PARA LOTES DEL PRODUCTO
+    ListModel {
+        id: lotesDelProductoModel
+    }
+    
+    // MODAL DE CONFIRMACIÓN PARA ELIMINAR LOTE
+    Dialog {
+        id: confirmacionEliminarLote
+        anchors.centerIn: parent
+        width: 350
+        height: 200
+        modal: true
+        
+        property int loteId: 0
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: 12
+            border.color: lightGrayColor
+            border.width: 1
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 16
+            
+            Label {
+                text: "¿Está seguro de eliminar este lote?"
+                font.pixelSize: 16
+                font.bold: true
+                color: textColor
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            Label {
+                text: "Esta acción no se puede deshacer."
+                font.pixelSize: 12
+                color: darkGrayColor
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            Item { Layout.fillHeight: true }
+            
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                
+                Item { Layout.fillWidth: true }
+                
+                Button {
+                    text: "Cancelar"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
+                        radius: 6
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        confirmacionEliminarLote.close()
+                    }
+                }
+                
+                Button {
+                    text: "Eliminar"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                        radius: 6
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        eliminarLote(confirmacionEliminarLote.loteId)
+                        confirmacionEliminarLote.close()
+                    }
                 }
             }
         }
@@ -1617,38 +1971,38 @@ Item {
         property color backgroundColor: blueColor
         signal clicked()
         
-        Layout.preferredHeight: 36
-        Layout.preferredWidth: implicitWidth + 20
+        Layout.preferredHeight: 32
+        Layout.preferredWidth: implicitWidth + 16
         
-        property int implicitWidth: textLabel.implicitWidth + countLabel.implicitWidth + 40
+        property int implicitWidth: textLabel.implicitWidth + countLabel.implicitWidth + 32
         
         color: active ? backgroundColor : "transparent"
         border.color: backgroundColor
         border.width: 2
-        radius: 18
+        radius: 16
         
         Behavior on color { ColorAnimation { duration: 200 } }
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 8
-            spacing: 8
+            anchors.margins: 6
+            spacing: 6
             
             Label {
                 id: textLabel
                 text: parent.parent.text
                 color: active ? whiteColor : backgroundColor
                 font.bold: true
-                font.pixelSize: 13
+                font.pixelSize: 11
                 Behavior on color { ColorAnimation { duration: 200 } }
             }
             
             Rectangle {
                 id: countLabel
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 20
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 16
                 color: active ? whiteColor : backgroundColor
-                radius: 10
+                radius: 8
                 Behavior on color { ColorAnimation { duration: 200 } }
                 
                 Label {
@@ -1656,7 +2010,7 @@ Item {
                     text: parent.parent.parent.count.toString()
                     color: active ? backgroundColor : whiteColor
                     font.bold: true
-                    font.pixelSize: 11
+                    font.pixelSize: 9
                     Behavior on color { ColorAnimation { duration: 200 } }
                 }
             }
@@ -1668,7 +2022,7 @@ Item {
         }
     }
     
-    // ===== FUNCIONES CORREGIDAS =====
+    // ===== FUNCIONES =====
 
     function getTotalCount() {
         if (productosOriginales.length === 0) {
@@ -1712,7 +2066,6 @@ Item {
         return productosConLotesBajoStock.length
     }
 
-    // FUNCIÓN DE FILTRADO CORREGIDA
     function updateFilteredModel() {
         console.log("🔍 Actualizando modelo filtrado, filtro:", currentFilter, "búsqueda:", searchText)
         console.log("  - Datos de lotes cargados:", datosLotesCargados)
@@ -1783,13 +2136,13 @@ Item {
         updatePaginatedModel()
     }
 
-    // FUNCIONES DE EVALUACIÓN CORREGIDAS
     function esProximoVencer(producto) {
         if (!producto || !producto.codigo || !datosLotesCargados) return false
         
         for (var i = 0; i < lotesProximosVencer.length; i++) {
             var lote = lotesProximosVencer[i]
-            if (lote.Codigo === producto.codigo && (lote.Stock_Lote || 0) > 0) {
+            var stockLote = (lote.Cantidad_Caja || 0) + (lote.Cantidad_Unitario || 0)
+            if (lote.Codigo === producto.codigo && stockLote > 0) {
                 return true
             }
         }     
@@ -1801,15 +2154,16 @@ Item {
         
         for (var i = 0; i < lotesVencidos.length; i++) {
             var lote = lotesVencidos[i]
-            if (lote.Codigo === producto.codigo && (lote.Stock_Lote || 0) > 0) {
+            var stockLote = (lote.Cantidad_Caja || 0) + (lote.Cantidad_Unitario || 0)
+            if (lote.Codigo === producto.codigo && stockLote > 0) {
                 return true
             }
         }     
         return false
     }
-    
+
     function esBajoStock(producto) {
-        if (!producto || !producto.codigo || !datosLotesCargados) return false
+        if (!producto || !producto.codigo || !productosConLotesBajoStock) return false
         
         for (var i = 0; i < productosConLotesBajoStock.length; i++) {
             var productoBajoStock = productosConLotesBajoStock[i]
@@ -1898,54 +2252,90 @@ Item {
         }
     }
     
-    // FUNCIÓN MOSTRAR DETALLE CORREGIDA
-    function mostrarDetalleProducto(producto) {
+    function mostrarLotesProducto(producto) {
         if (!producto) {
-            console.log("❌ No se puede mostrar detalle: producto nulo")
+            console.log("❌ No se puede mostrar lotes: producto nulo")
             return
         }
         
-        console.log("🔍 Mostrando detalle de producto:", producto.codigo)
+        console.log("🔍 Mostrando lotes de producto:", producto.codigo)
         
-        productoParaDetalle = {
+        productoParaLotes = {
             id: producto.id || 0,
             codigo: producto.codigo || "",
-            nombre: producto.nombre || "",
-            detalles: producto.detalles || "",
-            precioCompra: producto.precioCompra || producto.precio_compra || 0,
-            precioVenta: producto.precioVenta || producto.precio_venta || 0,
-            stockCaja: producto.stockCaja || producto.stock_caja || 0,
-            stockUnitario: producto.stockUnitario || producto.stock_unitario || 0,
-            idMarca: producto.idMarca || producto.marca_nombre || producto.Marca_Nombre || "",
-            unidadMedida: producto.unidadMedida || producto.Unidad_Medida || "mg"
+            nombre: producto.nombre || ""
         }
         
-        mostrandoDetalleProducto = true
+        // Cargar lotes del producto
+        cargarLotesDelProducto(producto.id)
         
-        // CORREGIDO: Forzar recarga de lotes
-        Qt.callLater(function() {
-            if (detalleProductoComponent && detalleProductoComponent.inventarioModel) {
-                // Forzar recarga de lotes
-                detalleProductoComponent.recargarLotes()
+        mostrandoLotesProducto = true
+    }
+    
+    function cargarLotesDelProducto(productoId) {
+        lotesDelProductoModel.clear()
+        
+        if (!inventarioModel || typeof inventarioModel.get_lotes_por_producto !== 'function') {
+            console.log("❌ Función get_lotes_por_producto no disponible")
+            return
+        }
+        
+        try {
+            console.log("📦 Cargando lotes para producto ID:", productoId)
+            var lotes = inventarioModel.get_lotes_por_producto(productoId)
+            
+            if (!lotes) {
+                console.log("⚠️ No se obtuvieron lotes o lotes es null")
+                return
             }
-        })
+            
+            console.log("📦 Lotes obtenidos:", lotes.length)
+            
+            for (var i = 0; i < lotes.length; i++) {
+                var lote = lotes[i]
+                lotesDelProductoModel.append({
+                    id: lote.id || 0,
+                    producto_nombre: productoParaLotes.nombre,
+                    cantidad_caja: lote.Cantidad_Caja || 0,
+                    cantidad_unitario: lote.Cantidad_Unitario || 0,
+                    fecha_vencimiento: lote.Fecha_Vencimiento || "",
+                    stock_lote: (lote.Cantidad_Caja || 0) + (lote.Cantidad_Unitario || 0)
+                })
+            }
+            
+            console.log("✅ Modelo de lotes actualizado con", lotesDelProductoModel.count, "lotes")
+            
+        } catch (error) {
+            console.log("❌ Error cargando lotes:", error)
+        }
+    }
+    
+    function eliminarLote(loteId) {
+        console.log("🗑️ Eliminando lote ID:", loteId)
+        
+        // Por ahora mostrar mensaje de que la funcionalidad no está disponible
+        console.log("⚠️ Función eliminar_lote no implementada aún")
+        
+        // Simular eliminación cerrando el modal
+        mostrandoLotesProducto = false
+        productoParaLotes = null
+        
+        // Actualizar datos cuando la función esté disponible
+        cargarDatosParaFiltros()
+        actualizarDesdeDataCentral()
     }
 
     Component.onCompleted: {
-        console.log("📦 Módulo Productos iniciado (FILTROS Y LOTES CORREGIDOS)")
+        console.log("📦 Módulo Productos iniciado (OPTIMIZADO)")
         console.log("🔗 InventarioModel disponible:", !!inventarioModel)
         console.log("🔗 FarmaciaData disponible:", !!farmaciaData)
         
         if (inventarioModel) {
             console.log("📊 Productos en InventarioModel:", inventarioModel.total_productos)
             
-            // PASO 1: Cargar marcas
             cargarMarcasDesdeModel()
-            
-            // PASO 2: Cargar datos para filtros
             cargarDatosParaFiltros()
             
-            // PASO 3: Cargar productos
             if (farmaciaData) {
                 actualizarDesdeDataCentral()
                 updatePaginatedModel()
