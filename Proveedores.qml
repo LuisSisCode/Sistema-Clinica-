@@ -86,17 +86,36 @@ Item {
             Layout.fillWidth: true
             spacing: 16
             
-            // Información del módulo
+            // Información del módulo - SECCIÓN ACTUALIZADA CON NUEVO ICONO
             RowLayout {
                 spacing: 12
                 
-                Image {
-                    source: "Resources/iconos/Trabajadores.png"
-                    Layout.preferredWidth: 60
-                    Layout.preferredHeight: 60
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
+                // ✅ CONTENEDOR DEL ICONO - USANDO MEDIDAS DE ENFERMERÍA
+                Rectangle {
+                    Layout.preferredWidth: baseUnit * 10 || 60  // Fallback para compatibilidad
+                    Layout.preferredHeight: baseUnit * 10 || 60
+                    color: "transparent"
                     
+                    Image {
+                        anchors.centerIn: parent
+                        width: Math.min(baseUnit * 8 || 48, parent.width * 0.8)
+                        height: Math.min(baseUnit * 8 || 48, parent.height * 0.8)
+                        source: "Resources/iconos/proveedor.png"  // ✅ ICONO ACTUALIZADO
+                        fillMode: Image.PreserveAspectFit
+                        antialiasing: true  // ✅ MEJORA VISUAL
+                        smooth: true
+                        
+                        // ✅ DEBUGGING - VERIFICAR CARGA DEL ICONO
+                        onStatusChanged: {
+                            if (status === Image.Error) {
+                                console.log("❌ Error cargando icono de proveedor:", source)
+                            } else if (status === Image.Ready) {
+                                console.log("✅ Icono de proveedor cargado correctamente:", source)
+                            }
+                        }
+                    }
+                    
+                    // ✅ INTERACCIÓN VISUAL MEJORADA
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
@@ -119,10 +138,16 @@ Item {
                         font.bold: true
                     }
                     
-                    Label {
-                        text: "Gestión de Proveedores"
-                        color: darkGrayColor
-                        font.pixelSize: 14
+                    // ✅ GESTIÓN DE PROVEEDORES CON ICONO
+                    RowLayout {
+                        spacing: 8  // Espacio entre icono y texto
+
+                        
+                        Label {
+                            text: "Gestión de Proveedores"
+                            color: darkGrayColor
+                            font.pixelSize: 14
+                        }
                     }
                 }
             }
