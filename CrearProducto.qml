@@ -68,19 +68,23 @@ Dialog {
     property string inputSupplier: ""
     
     // Validación - CORREGIDA
+    
     property bool isFormValid: {
+        // Validaciones básicas requeridas para todos los casos
+        var basicValidation = inputProductName.length > 0 &&
+                            inputPurchasePrice > 0 &&
+                            inputSalePrice > 0 &&
+                            inputMarca.length > 0
+        
         if (modoEdicion) {
-            return inputProductName.length > 0 &&
-                inputPurchasePrice > 0 &&
-                inputSalePrice > 0 &&
-                inputMarca.length > 0
+            // En modo edición solo requerimos los campos básicos
+            return basicValidation
         } else {
-            return inputProductName.length > 0 &&
-                inputPurchasePrice > 0 &&
-                inputSalePrice > 0 &&
-                inputMarca.length > 0 &&
-                (inputNoExpiry || inputExpirationDate.length > 0) &&  // CORREGIDO
-                (inputStockBox > 0 || inputStockUnit > 0)
+            var stockValidation = (inputStockBox > 0 || inputStockUnit > 0)
+            var fechaValidation = inputNoExpiry || 
+                                (inputExpirationDate.length > 0 && validateExpiryDate(inputExpirationDate))
+            
+            return basicValidation && stockValidation && fechaValidation
         }
     }
 
@@ -158,13 +162,12 @@ Dialog {
     
     function formatearFechaParaBD() {
         if (inputNoExpiry) {
-            return null  // NULL para productos sin vencimiento
+            return null  // Explícitamente null para sin vencimiento
         }
         if (!inputExpirationDate || inputExpirationDate.length === 0) {
-            return null  // NULL si no hay fecha especificada
+            return null  // También null si no hay fecha
         }
-        
-        return inputExpirationDate  // Retorna la fecha tal como está
+        return inputExpirationDate
     }
 
     function generarCodigoAutomatico() {
@@ -179,13 +182,13 @@ Dialog {
         }
         
         if (!isFormValid) {
-            showNotification("Complete todos los campos obligatorios")
+            showSuccess("Complete todos los campos obligatorios")
             return false
         }
         
         // CORREGIDO: Validación de fecha
         if (!modoEdicion && !inputNoExpiry && !validateExpiryDate(inputExpirationDate)) {
-            showNotification("Fecha de vencimiento inválida (YYYY-MM-DD)")
+            showshowSuccess("Fecha de vencimiento inválida (YYYY-MM-DD)")
             return false
         }
         
@@ -207,11 +210,11 @@ Dialog {
         if (modoEdicion) {
             producto.id = productoData.id
             productoActualizado(producto)
-            showNotification("Producto actualizado correctamente")
+            showSuccess("Producto actualizado correctamente")
         } else {
             productoCreado(producto)
             var tipoVencimiento = inputNoExpiry ? " (sin vencimiento)" : ""
-            showNotification("Producto y primer lote creados correctamente" + tipoVencimiento)
+            showSuccess("Producto y primer lote creados correctamente" + tipoVencimiento)
         }
         
         Qt.callLater(function() {
@@ -250,7 +253,7 @@ Dialog {
         if (unidadCombo) unidadCombo.currentIndex = 0
     }
     
-    function showNotification(message) {
+    function showSuccess(message) {
         successMessage = message
         showSuccessMessage = true
         successTimer.restart()

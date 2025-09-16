@@ -257,14 +257,16 @@ Item {
             return false
         }
         
-        if (inputNoExpiry && inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) {
-            showSuccess("⚠ Error: Fecha de vencimiento inválida (YYYY-MM-DD)")
-            return false
-        }
-
-        if (inputNoExpiry && inputExpiryDate.length === 0) {
-            showSuccess("⚠ Error: Ingrese fecha de vencimiento o marque 'Sin vencimiento'")
-            return false
+        if (!inputNoExpiry) {
+            // Si NO es sin vencimiento, entonces SÍ requiere fecha válida
+            if (inputExpiryDate.length === 0) {
+                showSuccess("⚠ Error: Ingrese fecha de vencimiento o marque 'Sin vencimiento'")
+                return false
+            }
+            if (!validateExpiryDate(inputExpiryDate)) {
+                showSuccess("⚠ Error: Fecha de vencimiento inválida (YYYY-MM-DD)")
+                return false
+            }
         }
         
         for (var i = 0; i < temporaryProductsModel.count; i++) {
@@ -283,7 +285,7 @@ Item {
             "unidades": inputUnits,
             "stockTotal": inputTotalStock,
             "costoTotalProducto": inputPurchasePrice,  // COSTO TOTAL DEL PRODUCTO (lo que realmente pagamos)
-            'fechaVencimiento': inputNoExpiry ? "Sin vencimiento" : inputExpiryDate
+            'fechaVencimiento': inputNoExpiry ? "" : inputExpiryDate
         })
         
         updatePurchaseTotal()
@@ -425,7 +427,7 @@ Item {
                 "unidades": item.unidades,
                 "stockTotal": item.stockTotal,
                 "costoTotal": item.costoTotalProducto,  // COSTO TOTAL (no unitario)
-               'fechaVencimiento': item.fechaVencimiento
+               'fechaVencimiento': item.fechaVencimiento || ""  
             }
             productosArray.push(productoCompra)
             
@@ -469,7 +471,7 @@ Item {
                     prod.cajas || 0,
                     prod.stockTotal || prod.cantidad || 0,
                     prod.costoTotal,
-                    prod.fechaVencimiento
+                    prod.fechaVencimiento === null ? "" : prod.fechaVencimiento
                 )
             }
         } catch (e) {
@@ -995,7 +997,7 @@ Item {
                                     Layout.preferredHeight: inputHeight
                                     placeholderText: "YYYY-MM-DD"
                                     text: inputExpiryDate
-                                   enabled: !inputNoExpiry
+                                    enabled: !inputNoExpiry  // ✅ CORRECTO: Habilitado cuando NO es sin vencimiento
                                     
                                     background: Rectangle {
                                         color: enabled ? whiteColor : "#F5F5F5"
@@ -1012,7 +1014,7 @@ Item {
                                     font.pixelSize: fontSmall
                                     
                                     onTextChanged: {
-                                        if (!inputNoExpiry) {  // Cuando SÍ tiene vencimiento
+                                        if (!inputNoExpiry) {
                                             var formatted = autoFormatDate(text)
                                             if (formatted !== text) {
                                                 text = formatted
@@ -1030,7 +1032,7 @@ Item {
                                     id: noExpiryCheckbox
                                     Layout.preferredWidth: 15
                                     Layout.preferredHeight: inputHeight
-                                    checked: !inputNoExpiry
+                                    checked: !inputNoExpiry  // ✅ CORRECTO: Checked cuando SÍ tiene vencimiento
                                     
                                     indicator: Rectangle {
                                         width: 14
@@ -1050,16 +1052,24 @@ Item {
                                         }
                                     }
                                     
-                                    contentItem: Item {} // Sin texto
+                                    contentItem: Item {}
                                     
                                     onCheckedChanged: {
-                                        inputNoExpiry = !checked  // Invertir la lógica
-                                        if (!checked) {  // Si se desmarca = sin vencimiento
+                                        inputNoExpiry = !checked  // ✅ CORRECTO: Sin vencimiento cuando NO está checked
+                                        if (!checked) {
+                                            // Si no está checked = sin vencimiento, limpiar fecha
                                             inputExpiryDate = ""
                                             expiryField.text = ""
                                         }
                                     }
                                 }  
+                                
+                                Text {
+                                    text: "Con vencimiento"
+                                    font.pixelSize: 10
+                                    color: darkGrayColor
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
                             }
                         }
                         
@@ -1069,9 +1079,13 @@ Item {
                             height: buttonHeight
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Agregar"
-                            enabled: inputProductCode.length > 0 && inputProductName.length > 0 && 
-                                inputTotalStock > 0 && inputPurchasePrice > 0 &&
-                                (!inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
+                            enabled: inputProductCode.length > 0 && 
+                                    inputProductName.length > 0 && 
+                                    inputTotalStock > 0 && 
+                                    inputPurchasePrice > 0 &&
+                                    // CORRECCIÓN: Lógica corregida para fecha de vencimiento
+                                    (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
+                                    //    ↑ CORRECTO: Si es sin vencimiento O tiene fecha válida
                                     
                             background: Rectangle {
                                 color: enabled ? successColor : darkGrayColor

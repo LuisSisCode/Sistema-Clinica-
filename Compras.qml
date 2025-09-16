@@ -1521,7 +1521,7 @@ Item {
                             console.log("🗑️ Eliminando compra:", compraToDelete.id)
                             var exito = compraModel.eliminar_compra(compraToDelete.id)
                             if (exito) {
-                                showNotification("Compra eliminada exitosamente", "success")
+                                showSuccess("Compra eliminada exitosamente", "success")
                                 actualizarPaginacionCompras()
                             }
                         }

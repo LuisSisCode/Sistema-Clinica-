@@ -435,13 +435,25 @@ class CompraRepository(BaseRepository):
             print(f"❌ Error restaurando stock producto {producto_id}: {str(e)}")
 
     def _validar_y_preparar_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Valida y prepara un item para la compra - CORREGIDO FECHAS"""
+        """
+        Valida y prepara un item para la compra - FECHAS CORREGIDAS
+        
+        Args:
+            item: Diccionario con datos del item desde QML
+            
+        Returns:
+            Diccionario con item validado y preparado
+            
+        Raises:
+            ValidationError: Si hay errores de validación
+            ProductoNotFoundError: Si el producto no existe
+        """
         # Validaciones básicas
-        codigo = item.get('codigo', '').strip()
+        codigo = item.get('codigo', '').strip() if item.get('codigo') else ''
         cantidad_caja = item.get('cantidad_caja', 0)
         cantidad_unitario = item.get('cantidad_unitario', 0)
         precio_unitario = item.get('precio_unitario', 0)
-        fecha_vencimiento = item.get('fecha_vencimiento', '').strip()
+        fecha_vencimiento = item.get('fecha_vencimiento')  # Puede ser None, "", o string
         
         validate_required(codigo, "codigo")
         validate_positive_number(precio_unitario, "precio_unitario")
@@ -450,59 +462,115 @@ class CompraRepository(BaseRepository):
             raise ValidationError("cantidad", f"{cantidad_caja}/{cantidad_unitario}", 
                                 "Debe especificar cantidad de cajas o unitarios")
         
-        # VALIDACIÓN DE FECHA CORREGIDA
+        # VALIDACIÓN DE FECHA CORREGIDA - MANEJO SEGURO DE None Y STRINGS
         fecha_vencimiento_bd = None
-        if fecha_vencimiento and fecha_vencimiento.lower() not in ["sin vencimiento", ""]:
-            # Validar formato YYYY-MM-DD
-            try:
-                datetime.strptime(fecha_vencimiento, '%Y-%m-%d')
-                fecha_vencimiento_bd = fecha_vencimiento
-            except ValueError:
-                raise ValidationError("fecha_vencimiento", fecha_vencimiento, 
-                                    "Formato debe ser YYYY-MM-DD")
+        
+        print(f"🔍 Validando fecha vencimiento para {codigo}: '{fecha_vencimiento}' (tipo: {type(fecha_vencimiento)})")
+        
+        # Manejo defensivo de fechas de vencimiento
+        if fecha_vencimiento is not None and isinstance(fecha_vencimiento, str):
+            fecha_clean = fecha_vencimiento.strip()
+            print(f"🔍 Fecha después de strip: '{fecha_clean}'")
+            
+            if fecha_clean and fecha_clean.lower() not in ["sin vencimiento", "", "none", "null"]:
+                # Validar formato YYYY-MM-DD
+                try:
+                    datetime.strptime(fecha_clean, '%Y-%m-%d')
+                    fecha_vencimiento_bd = fecha_clean
+                    print(f"✅ Fecha válida establecida: {fecha_vencimiento_bd}")
+                except ValueError:
+                    raise ValidationError("fecha_vencimiento", fecha_clean, 
+                                        "Formato debe ser YYYY-MM-DD")
+            else:
+                print(f"📅 Producto sin vencimiento (fecha vacía o especial)")
+        else:
+            print(f"📅 Producto sin vencimiento (fecha None o no string)")
         
         # Obtener producto
-        producto = self.producto_repo.get_by_codigo(codigo)
-        if not producto:
+        try:
+            producto = self.producto_repo.get_by_codigo(codigo)
+            if not producto:
+                raise ProductoNotFoundError(codigo=codigo)
+            
+            print(f"✅ Producto encontrado: {codigo} - {producto.get('Nombre', 'N/A')}")
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo producto {codigo}: {str(e)}")
             raise ProductoNotFoundError(codigo=codigo)
         
         # Calcular totales
-        cantidad_total = cantidad_caja * cantidad_unitario
+        cantidad_total = cantidad_caja + cantidad_unitario  # CORREGIDO: suma no multiplicación
         
-        return {
+        # Preparar item validado
+        item_preparado = {
             'codigo': codigo,
             'producto_id': producto['id'],
             'producto_nombre': producto['Nombre'],
             'cantidad_caja': cantidad_caja,
             'cantidad_unitario': cantidad_unitario,
             'cantidad_total': cantidad_total,
-            'precio_unitario': precio_unitario,
-            'fecha_vencimiento': fecha_vencimiento_bd,  # NULL si está vacío
-            'producto': producto
+            'precio_unitario': precio_unitario,  # COSTO TOTAL del producto
+            'fecha_vencimiento': fecha_vencimiento_bd,  # None o fecha válida
+            'producto': producto,
+            'sin_vencimiento': fecha_vencimiento_bd is None
         }
+        
+        print(f"✅ Item preparado - {codigo}: stock={cantidad_total}, precio=${precio_unitario}, vencimiento={fecha_vencimiento_bd or 'Sin vencimiento'}")
+        
+        return item_preparado
     
     def _procesar_item_con_lote(self, compra_id: int, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesa un item creando lote y detalle de compra - FECHAS CORREGIDAS"""
+        """
+        Procesa un item creando lote y detalle de compra - FECHAS CORREGIDAS
+        
+        Args:
+            compra_id: ID de la compra
+            item: Diccionario con datos del item preparado
+            
+        Returns:
+            Diccionario con información del item procesado
+            
+        Raises:
+            CompraError: Si hay errores en el procesamiento
+        """
         print(f"🔄 Procesando item: {item['codigo']} - Cajas: {item['cantidad_caja']}, Unitarios: {item['cantidad_unitario']}")
         
         # 1. Validar compra_id
         if not compra_id or compra_id <= 0:
             raise CompraError(f"ID de compra inválido: {compra_id}")
         
-        # 2. Crear nuevo lote - FECHA CORREGIDA
+        # 2. Manejar fecha de vencimiento de forma segura
+        fecha_venc_final = None
+        fecha_venc_item = item.get('fecha_vencimiento')
+        
+        # Manejo defensivo de fechas de vencimiento
+        if fecha_venc_item is not None and isinstance(fecha_venc_item, str):
+            fecha_clean = fecha_venc_item.strip()
+            if fecha_clean and fecha_clean.lower() not in ["sin vencimiento", "", "none", "null"]:
+                fecha_venc_final = fecha_clean
+                print(f"📅 Fecha vencimiento establecida: {fecha_venc_final}")
+            else:
+                print(f"📅 Producto sin vencimiento (fecha vacía o especial)")
+        else:
+            print(f"📅 Producto sin vencimiento (fecha None o no string)")
+        
+        # 3. Crear nuevo lote
+        lote_id = None
         try:
             precio_por_unidad = item['precio_unitario'] / item['cantidad_total'] if item['cantidad_total'] > 0 else 0
+            
+            print(f"💰 Creando lote - Precio unitario calculado: {precio_por_unidad}")
             
             lote_id = self.producto_repo.aumentar_stock_compra(
                 producto_id=item['producto_id'],
                 cantidad_caja=item['cantidad_caja'],
                 cantidad_unitario=item['cantidad_unitario'],
-                fecha_vencimiento=item['fecha_vencimiento'],  # Puede ser None
+                fecha_vencimiento=fecha_venc_final,  # None para sin vencimiento, string para con vencimiento
                 precio_compra=precio_por_unidad
             )
             
             if not lote_id or lote_id <= 0:
-                raise CompraError(f"❌ FALLO CRÍTICO: No se pudo crear lote para producto {item['codigo']}")
+                raise CompraError(f"FALLO CRÍTICO: No se pudo crear lote para producto {item['codigo']}")
             
             print(f"✅ Lote creado exitosamente - ID: {lote_id} para producto {item['codigo']}")
             
@@ -510,7 +578,8 @@ class CompraRepository(BaseRepository):
             print(f"❌ ERROR creando lote para {item['codigo']}: {str(e)}")
             raise CompraError(f"Error creando lote para producto {item['codigo']}: {str(e)}")
         
-        # 3. Crear detalle de compra - El precio_unitario aquí es el COSTO TOTAL
+        # 4. Crear detalle de compra
+        detalle_id = None
         try:
             detalle_data = {
                 'Id_Compra': compra_id,
@@ -520,7 +589,7 @@ class CompraRepository(BaseRepository):
                 'Precio_Unitario': item['precio_unitario']  # COSTO TOTAL del producto
             }
             
-            # Usar método insert del BaseRepository para consistencia
+            # Usar query directo para consistencia
             detalle_query = """
             INSERT INTO DetalleCompra (Id_Compra, Id_Lote, Cantidad_Caja, Cantidad_Unitario, Precio_Unitario)
             OUTPUT INSERTED.id
@@ -537,26 +606,30 @@ class CompraRepository(BaseRepository):
             # VALIDACIÓN DEL RESULTADO
             if not detalle_result or not isinstance(detalle_result, dict) or 'id' not in detalle_result:
                 # ROLLBACK: Si falló el detalle, eliminar el lote creado
-                print(f"❌ ERROR: Fallo creando DetalleCompra, eliminando lote {lote_id}")
+                print(f"❌ ERROR: Fallo creando DetalleCompra, ejecutando rollback para lote {lote_id}")
                 self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
                 raise CompraError(f"Error creando detalle de compra para {item['codigo']}")
             
             detalle_id = detalle_result['id']
             print(f"✅ Detalle creado - ID: {detalle_id}, Lote: {lote_id}, Producto: {item['codigo']}")
             
+            # 5. Retornar información del item procesado
             return {
                 'detalle_id': detalle_id,
                 'lote_id': lote_id,
                 'producto_codigo': item['codigo'],
                 'cantidad_total': item['cantidad_total'],
                 'precio_unitario': item['precio_unitario'],  # COSTO TOTAL
-                'costo_total': item['precio_unitario']  # COSTO TOTAL
+                'costo_total': item['precio_unitario'],  # COSTO TOTAL
+                'fecha_vencimiento': fecha_venc_final,  # None o fecha válida
+                'sin_vencimiento': fecha_venc_final is None
             }
             
         except Exception as e:
             # ROLLBACK: Si algo falló, eliminar el lote creado
             print(f"❌ ERROR en detalle de compra para {item['codigo']}: {str(e)}")
-            self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
+            if lote_id:
+                self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
             raise CompraError(f"Error procesando item {item['codigo']}: {str(e)}")
     
     def _rollback_lote_created(self, lote_id: int, producto_id: int, cantidad_caja: int, cantidad_unitario: int):

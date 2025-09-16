@@ -557,8 +557,8 @@ class InventarioModel(QObject):
             
             # NUEVA VALIDACIÓN: verificar fecha de vencimiento
             fecha_vencimiento = datos.get('fecha_vencimiento', '')
-            if not fecha_vencimiento:
-                raise ValueError("Fecha de vencimiento requerida")
+            if fecha_vencimiento is not None and not self._validate_date_format(fecha_vencimiento):
+                raise ValueError("Formato de fecha de vencimiento inválido")
             
             # Verificar que el código no exista
             producto_existente = safe_execute(self.producto_repo.get_by_codigo, datos['codigo'])
@@ -1091,6 +1091,21 @@ class InventarioModel(QObject):
             raise ValueError("Precio de venta debe ser mayor al precio de compra")
         
         return True
+    def _validate_date_format(self, fecha_str: str) -> bool:
+        """Valida formato de fecha YYYY-MM-DD"""
+        if not fecha_str or not isinstance(fecha_str, str):
+            return True  # Fechas vacías son válidas (sin vencimiento)
+        
+        fecha_clean = fecha_str.strip()
+        if not fecha_clean or fecha_clean.lower() in ["sin vencimiento", ""]:
+            return True
+        
+        # Validar formato YYYY-MM-DD
+        try:
+            datetime.strptime(fecha_clean, '%Y-%m-%d')
+            return True
+        except ValueError:
+            return False
     
     # NUEVA FUNCIÓN: Normalizar productos para consistencia en QML
     def _normalizar_producto(self, producto_raw: dict) -> dict:
