@@ -14,7 +14,7 @@ from ..core.excepciones import (
 
 class VentaModel(QObject):
     """
-    Model QObject para gestión de ventas con integración FIFO y filtros avanzados
+    Model QObject para gestión de ventas con autenticación estandarizada y control de roles
     Conecta directamente con QML mediante Signals/Slots/Properties
     """
     
@@ -28,7 +28,7 @@ class VentaModel(QObject):
     historialVentasChanged = Signal()
     estadisticasChanged = Signal()
     topProductosChanged = Signal()
-    ventasFiltradas = Signal()  # Nuevo signal para filtros
+    ventasFiltradas = Signal()
     
     # Signals de operaciones
     ventaCreada = Signal(int, float)  # venta_id, total
@@ -40,7 +40,7 @@ class VentaModel(QObject):
     loadingChanged = Signal()
     procesandoVentaChanged = Signal()
     carritoCambiado = Signal()
-    filtrosChanged = Signal()  # Nuevo signal para cambios en filtros
+    filtrosChanged = Signal()
     
     def __init__(self):
         super().__init__()
@@ -69,28 +69,153 @@ class VentaModel(QObject):
         }
         self._ventas_filtradas = []
         
-        # Configuración
-        self._usuario_actual = 0
+        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        self._usuario_rol = ""       # NUEVO: Control de roles
+        print("💰 VentaModel inicializado - Esperando autenticación")
         
         # Timer para actualización automática
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update_ventas_hoy)
         self.update_timer.start(60000)  # 1 minuto
         
-        # Cargar datos iniciales
-        self._cargar_ventas_hoy()
-        self._cargar_estadisticas()
-        
-        print("💰 VentaModel inicializado con filtros avanzados")
+        # Cargar datos iniciales (vacíos hasta autenticación)
+        print("💰 VentaModel inicializado con autenticación estandarizada y control de roles")
     
     # ===============================
-    # PROPERTIES PARA QML
+    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en VentaModel: {usuario_id}")
+                
+                # Cargar datos iniciales después de autenticación
+                self._cargar_ventas_hoy()
+                self._cargar_estadisticas()
+                
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de ventas")
+            else:
+                print(f"⚠️ ID de usuario inválido en VentaModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en VentaModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, rol: str):
+        """
+        MODIFICADO: Establece usuario + rol y emite signals de permisos
+        """
+        try:
+            if usuario_id > 0 and rol.strip():
+                self._usuario_actual_id = usuario_id
+                self._usuario_rol = rol.strip()
+                print(f"Usuario autenticado con rol en VentaModel: {usuario_id} - {rol}")
+                print(f"🔐 DEBUG: Usuario establecido: {usuario_id}, Rol: '{rol}' -------------------------------------")  # NUEVO
+                print(f"🔐 DEBUG: _usuario_rol almacenado: '{self._usuario_rol}'") 
+                # Cargar datos iniciales después de autenticación
+                self._cargar_ventas_hoy()
+                self._cargar_estadisticas()
+                
+                # NUEVO: Emitir signal para que QML actualice permisos
+                self.operacionExitosa.emit(f"Usuario {usuario_id} ({rol}) establecido en ventas")
+                
+            else:
+                self.operacionError.emit("Usuario o rol inválido")
+        except Exception as e:
+            print(f"Error estableciendo usuario con rol: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    @Property(str, notify=operacionExitosa)
+    def usuario_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_rol
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN Y PERMISOS
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    def _verificar_permisos(self, operacion: str) -> bool:
+        """
+        NUEVO: Verifica permisos específicos según el rol del usuario
+        
+        Args:
+            operacion: Nombre de la operación a verificar
+            
+        Returns:
+            bool: True si tiene permisos, False caso contrario
+        """
+        # Verificar autenticación primero
+        if not self._verificar_autenticacion():
+            return False
+        
+        # Admin tiene acceso completo
+        if self._usuario_rol == "Administrador":
+            return True
+        
+        # Operaciones restringidas solo para Admin
+        operaciones_admin = [
+            'ver_ventas_otros_usuarios', 
+            'reportes_financieros',
+            'estadisticas_completas'
+        ]
+        
+        if operacion in operaciones_admin:
+            if self._usuario_rol != "Administrador":
+                self.operacionError.emit("Operación requiere permisos de administrador")
+                return False
+        
+        # Médico puede hacer ventas básicas
+        if self._usuario_rol == "Médico":
+            operaciones_medico = [
+                'crear_venta',
+                'ver_propias_ventas',
+                'agregar_carrito',
+                'estadisticas_basicas'
+            ]
+            
+            if operacion not in operaciones_medico and operacion not in operaciones_admin:
+                return True  # Permitir operaciones no clasificadas
+        
+        return True
+    
+    # ===============================
+    # PROPERTIES PARA QML (MODIFICADAS CON FILTRADO)
     # ===============================
     
     @Property(list, notify=ventasHoyChanged)
     def ventas_hoy(self):
-        """Lista de ventas del día actual o filtradas"""
-        return self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
+        """Lista de ventas del día actual o filtradas (con restricciones por rol)"""
+        ventas_a_mostrar = self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
+        # ✅ FILTRAR POR ROL: Médico solo ve sus propias ventas
+        if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
+            ventas_filtradas_por_usuario = [
+                venta for venta in ventas_a_mostrar 
+                if venta.get('Id_Usuario') == self._usuario_actual_id
+            ]
+            return ventas_filtradas_por_usuario
+        
+        # Admin ve todas las ventas
+        return ventas_a_mostrar
     
     @Property('QVariant', notify=ventaActualChanged)
     def venta_actual(self):
@@ -99,13 +224,31 @@ class VentaModel(QObject):
     
     @Property(list, notify=historialVentasChanged)
     def historial_ventas(self):
-        """Historial de ventas"""
+        """Historial de ventas (filtrado por rol)"""
+        if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
+            return [
+                venta for venta in self._historial_ventas 
+                if venta.get('Id_Usuario') == self._usuario_actual_id
+            ]
         return self._historial_ventas
     
     @Property('QVariant', notify=estadisticasChanged)
     def estadisticas(self):
-        """Estadísticas de ventas del día"""
-        return self._estadisticas
+        """MODIFICADO: Estadísticas con información limitada para Médico"""
+        if self._usuario_rol == "Médico":
+            # Solo estadísticas básicas sin información financiera sensible
+            estadisticas_limitadas = {
+                'Total_Ventas': self._estadisticas.get('Total_Ventas', 0),
+                'Unidades_Vendidas': self._estadisticas.get('Unidades_Vendidas', 0),
+                'Productos_Diferentes': self._estadisticas.get('Productos_Diferentes', 0),
+                'mostrar_limitado': True  # NUEVO: Flag para UI
+            }
+            return estadisticas_limitadas
+        
+        # Admin ve todas las estadísticas
+        estadisticas_completas = self._estadisticas.copy()
+        estadisticas_completas['mostrar_limitado'] = False  # NUEVO: Flag para UI
+        return estadisticas_completas
     
     @Property(list, notify=topProductosChanged)
     def top_productos(self):
@@ -129,13 +272,15 @@ class VentaModel(QObject):
     
     @Property(int, notify=ventasHoyChanged)
     def total_ventas_hoy(self):
-        """Total de ventas mostradas (con filtros aplicados)"""
-        ventas_a_mostrar = self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
+        """Total de ventas mostradas (con filtros y restricciones aplicadas)"""
+        ventas_a_mostrar = self.ventas_hoy  # Usa la property que ya filtra por rol
         return len(ventas_a_mostrar)
     
     @Property(float, notify=estadisticasChanged)
     def ingresos_hoy(self):
-        """Ingresos totales del día"""
+        """MODIFICADO: Ingresos con restricción para Médico"""
+        if self._usuario_rol == "Médico":
+            return 0.0  # Médico no ve información financiera
         return float(self._estadisticas.get('Ingresos_Total', 0))
     
     @Property(float, notify=carritoCambiado)
@@ -148,146 +293,93 @@ class VentaModel(QObject):
         """Cantidad de items en carrito"""
         return len(self._carrito_items)
     
-    # Nuevas properties para filtros
     @Property('QVariant', notify=filtrosChanged)
     def filtros_activos(self):
         """Estado actual de los filtros"""
         return self._filtros_activos
     
     # ===============================
-    # SLOTS PARA QML - FILTROS (NUEVO)
+    # NUEVAS PROPERTIES DE PERMISOS PARA QML
     # ===============================
     
-    @Slot(str, str, str, str, str)
-    def aplicar_filtros(self, filtro_temporal: str, filtro_estado: str, busqueda_id: str, fecha_desde: str = "", fecha_hasta: str = ""):
-        """Aplica filtros a las ventas"""
-        print(f"🔍 Aplicando filtros: temporal={filtro_temporal}, estado={filtro_estado}, id={busqueda_id}")
-        
-        # Actualizar estado de filtros
-        self._filtros_activos = {
-            'temporal': filtro_temporal,
-            'estado': filtro_estado,
-            'busqueda_id': busqueda_id.strip(),
-            'fecha_desde': fecha_desde.strip(),
-            'fecha_hasta': fecha_hasta.strip()
-        }
-        
-        self._set_loading(True)
-        
-        try:
-            # Obtener ventas filtradas del repository
-            ventas_filtradas = safe_execute(
-                self.venta_repo.get_ventas_filtradas,
-                filtro_temporal, filtro_estado, busqueda_id.strip(), fecha_desde.strip(), fecha_hasta.strip()
-            )
-            
-            # Formatear para QML
-            self._ventas_filtradas = []
-            if ventas_filtradas:
-                for venta in ventas_filtradas:
-                    try:
-                        venta_formateada = {
-                            'id': int(venta['id']),
-                            'idVenta': str(venta['id']),
-                            'usuario': str(venta.get('Vendedor', 'Usuario desconocido')),
-                            'tipoUsuario': 'Vendedor',
-                            'total': float(venta['Total']),
-                            'fecha': venta['Fecha'].strftime('%Y-%m-%d') if hasattr(venta['Fecha'], 'strftime') else str(venta['Fecha']),
-                            'hora': venta['Fecha'].strftime('%H:%M') if hasattr(venta['Fecha'], 'strftime') else '00:00',
-                            'fechaCompleta': venta['Fecha'].isoformat() if hasattr(venta['Fecha'], 'isoformat') else str(venta['Fecha']),
-                            'estado': venta.get('Estado', 'Activa')  # Para futuro uso con ventas anuladas
-                        }
-                        self._ventas_filtradas.append(venta_formateada)
-                    except Exception as e:
-                        print(f"⚠️ Error formateando venta filtrada: {e}")
-                        continue
-            
-            self.filtrosChanged.emit()
-            self.ventasHoyChanged.emit()  # Trigger update en la UI
-            self.operacionExitosa.emit(f"Filtros aplicados: {len(self._ventas_filtradas)} resultados")
-            
-            print(f"✅ Filtros aplicados: {len(self._ventas_filtradas)} ventas encontradas")
-            
-        except Exception as e:
-            print(f"❌ Error aplicando filtros: {e}")
-            self.operacionError.emit(f"Error aplicando filtros: {str(e)}")
-            self._ventas_filtradas = []
-            self.ventasHoyChanged.emit()
-        finally:
-            self._set_loading(False)
+    @Property(bool, notify=operacionExitosa)
+    def puede_crear_ventas(self):
+        """Indica si puede crear ventas - Admin y Médico pueden"""
+        return self._usuario_rol in ["Administrador", "Médico"]
     
-    @Slot()
-    def limpiar_filtros(self):
-        """Limpia todos los filtros y vuelve a mostrar ventas del día"""
-        print("🧹 Limpiando filtros")
-        
-        self._filtros_activos = {
-            'temporal': 'Hoy',
-            'estado': 'Todas',
-            'busqueda_id': '',
-            'fecha_desde': '',
-            'fecha_hasta': ''
-        }
-        
-        self._ventas_filtradas = []
-        self.filtrosChanged.emit()
-        self.ventasHoyChanged.emit()
-        self.operacionExitosa.emit("Filtros limpiados")
+    @Property(bool, notify=operacionExitosa)
+    def puede_ver_todas_ventas(self):
+        """Indica si puede ver ventas de otros usuarios - Solo Admin"""
+        return self._usuario_rol == "Administrador"
     
-    @Slot(str, result='QVariant')
-    def buscar_venta_por_id(self, venta_id: str):
-        """Busca una venta específica por ID"""
-        if not venta_id.strip():
-            return {}
-        
-        try:
-            venta_id_int = int(venta_id.strip())
-            venta = safe_execute(self.venta_repo.get_venta_completa, venta_id_int)
-            return venta if venta else {}
-        except ValueError:
-            self.operacionError.emit("ID de venta debe ser un número")
-            return {}
-        except Exception as e:
-            self.operacionError.emit(f"Error buscando venta: {str(e)}")
-            return {}
+    @Property(bool, notify=operacionExitosa)
+    def puede_ver_reportes_financieros(self):
+        """Indica si puede ver información financiera completa - Solo Admin"""
+        return self._usuario_rol == "Administrador"
+    
+    @Property(bool, notify=operacionExitosa)
+    def puede_modificar_precios(self):
+        """Indica si puede modificar precios en carrito - Solo Admin"""
+        return self._usuario_rol == "Administrador"
+    
+    @Property(bool, notify=operacionExitosa)
+    def puede_exportar_datos(self):
+        """Indica si puede exportar reportes - Solo Admin"""
+        return self._usuario_rol == "Administrador"
+    
+    @Property(bool, notify=operacionExitosa)
+    def mostrar_informacion_limitada(self):
+        """Indica si mostrar información limitada - Para Médicos"""
+        return self._usuario_rol == "Médico"
+    
+    # ===============================
+    # NUEVAS PROPERTIES CALCULADAS PARA FILTROS
+    # ===============================
+    
+    @Property(bool, notify=operacionExitosa)
+    def debe_filtrar_por_usuario(self):
+        """Indica si debe filtrar automáticamente por usuario actual"""
+        return self._usuario_rol == "Médico"
+    
+    @Property(str, notify=operacionExitosa)
+    def texto_usuario_limitado(self):
+        """Texto descriptivo para usuario con permisos limitados"""
+        if self._usuario_rol == "Médico":
+            return "Mostrando solo sus ventas"
+        return ""
     
     # ===============================
     # SLOTS PARA QML - CONFIGURACIÓN
     # ===============================
     
-    @Slot(int)
-    def set_usuario_actual(self, usuario_id: int):
-        """Establece el usuario actual para las ventas"""
-        if usuario_id > 0:
-            self._usuario_actual = usuario_id
-            print(f"👤 Usuario establecido para ventas: {usuario_id}")
-    
     @Slot()
     def refresh_ventas_hoy(self):
         """Refresca las ventas del día"""
+        # ✅ VERIFICAR AUTENTICACIÓN ANTES DE REFRESCO
+        if not self._verificar_autenticacion():
+            return 
         self._cargar_ventas_hoy()
-        # Si hay filtros activos, reaplicarlos
-        if any(value for key, value in self._filtros_activos.items() if key != 'temporal' or value != 'Hoy'):
-            self.aplicar_filtros(
-                self._filtros_activos['temporal'],
-                self._filtros_activos['estado'], 
-                self._filtros_activos['busqueda_id'],
-                self._filtros_activos['fecha_desde'],
-                self._filtros_activos['fecha_hasta']
-            )
     
     @Slot()
     def refresh_estadisticas(self):
         """Refresca las estadísticas"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return
+        
         self._cargar_estadisticas()
     
     # ===============================
-    # SLOTS PARA QML - CARRITO (sin cambios)
+    # SLOTS PARA QML - CARRITO (CON VERIFICACIÓN)
     # ===============================
     
     @Slot(str, int, float)
     def agregar_item_carrito(self, codigo: str, cantidad: int, precio_custom: float = 0):
-        """Agrega item al carrito de venta"""
+        """Agrega item al carrito de venta - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN Y PERMISOS
+        if not self._verificar_permisos('agregar_carrito'):
+            return
+        
         if not codigo or cantidad <= 0:
             self.operacionError.emit("Código o cantidad inválidos")
             return
@@ -419,22 +511,22 @@ class VentaModel(QObject):
         self.operacionExitosa.emit("Carrito limpiado")
     
     # ===============================
-    # SLOTS PARA QML - VENTAS (sin cambios)
+    # SLOTS PARA QML - VENTAS (CON VERIFICACIÓN)
     # ===============================
     
     @Slot(result=bool)
     def procesar_venta_carrito(self):
-        """Procesa la venta con los items del carrito"""
+        """Procesa la venta con los items del carrito - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         print(f"🛠 DEBUG VentaModel: Iniciando procesar_venta_carrito")
         print(f"🛠 DEBUG VentaModel: Items en carrito: {len(self._carrito_items)}")
-        print(f"🛠 DEBUG VentaModel: Usuario actual: {self._usuario_actual}")
+        print(f"🛠 DEBUG VentaModel: Usuario actual: {self._usuario_actual_id} ({self._usuario_rol})")
+        
+        # ✅ VERIFICAR AUTENTICACIÓN Y PERMISOS
+        if not self._verificar_permisos('crear_venta'):
+            return False
         
         if not self._carrito_items:
             self.operacionError.emit("Carrito vacío")
-            return False
-        
-        if self._usuario_actual <= 0:
-            self.operacionError.emit("Usuario no establecido")
             return False
         
         self._set_procesando_venta(True)
@@ -478,7 +570,8 @@ class VentaModel(QObject):
             print(f"🛠 DEBUG VentaModel: Items preparados para repository: {items_venta}")
         
             try:
-                venta = self.venta_repo.crear_venta(self._usuario_actual, items_venta)
+                # ✅ USAR USUARIO AUTENTICADO
+                venta = self.venta_repo.crear_venta(self._usuario_actual_id, items_venta)
                 print(f"✅ Venta creada exitosamente: {venta}")
                 
                 if venta and isinstance(venta, dict) and 'id' in venta:
@@ -505,9 +598,12 @@ class VentaModel(QObject):
                     
                     # Emitir signals
                     self.ventaCreada.emit(int(venta['id']), float(venta['Total']))
-                    self.operacionExitosa.emit(f"Venta procesada: ${venta['Total']:.2f}")
+                    mensaje_exito = f"Venta procesada: ${venta['Total']:.2f}"
+                    if self._usuario_rol == "Médico":
+                        mensaje_exito += f" (Usuario: {self._usuario_actual_id})"
                     
-                    print(f"✅ Venta exitosa - ID: {venta['id']}, Total: ${venta['Total']}")
+                    self.operacionExitosa.emit(mensaje_exito)
+                    print(f"✅ Venta exitosa - ID: {venta['id']}, Total: ${venta['Total']}, Usuario: {self._usuario_actual_id}")
                     return True
                 else:
                     raise VentaError("Respuesta inválida del repository")
@@ -532,21 +628,19 @@ class VentaModel(QObject):
         finally:
             self._set_procesando_venta(False)
     
-    # ===============================
-    # RESTO DE MÉTODOS SIN CAMBIOS
-    # ===============================
-    
     @Slot(str, int, int, result=bool)
     def venta_rapida(self, codigo: str, cantidad: int, usuario_id: int = 0):
-        """Venta rápida de un producto sin usar carrito"""
+        """Venta rápida de un producto sin usar carrito - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN Y PERMISOS
+        if not self._verificar_permisos('crear_venta'):
+            return False
+        
         if not codigo or cantidad <= 0:
             self.operacionError.emit("Parámetros inválidos")
             return False
         
-        usuario = usuario_id if usuario_id > 0 else self._usuario_actual
-        if usuario <= 0:
-            self.operacionError.emit("Usuario no establecido")
-            return False
+        # Usar usuario autenticado, ignorar parámetro usuario_id
+        usuario = self._usuario_actual_id
         
         self._set_procesando_venta(True)
         
@@ -571,7 +665,12 @@ class VentaModel(QObject):
                 self._cargar_estadisticas()
                 
                 self.ventaCreada.emit(venta['id'], float(venta['Total']))
-                self.operacionExitosa.emit(f"Venta rápida: ${venta['Total']:.2f}")
+                mensaje_exito = f"Venta rápida: ${venta['Total']:.2f}"
+                if self._usuario_rol == "Médico":
+                    mensaje_exito += f" (Usuario: {self._usuario_actual_id})"
+                
+                self.operacionExitosa.emit(mensaje_exito)
+                print(f"🚀 Venta rápida exitosa - Usuario: {self._usuario_actual_id} ({self._usuario_rol})")
                 
                 return True
             else:
@@ -583,58 +682,48 @@ class VentaModel(QObject):
         finally:
             self._set_procesando_venta(False)
     
-    @Slot(int, result=bool)
-    def anular_venta(self, venta_id: int):
-        """Anula una venta existente"""
-        if venta_id <= 0:
-            self.operacionError.emit("ID de venta inválido")
+    # ===============================
+    # NUEVOS SLOTS PARA VERIFICACIÓN DE PERMISOS DESDE QML
+    # ===============================
+    
+    @Slot(str, result=bool)
+    def tiene_permiso(self, accion: str):
+        """Verifica permisos específicos desde QML"""
+        if not self._verificar_autenticacion():
             return False
         
-        self._set_loading(True)
+        permisos = {
+            'crear_venta': self._usuario_rol in ["Administrador", "Médico"],
+            'ver_todas_ventas': self._usuario_rol == "Administrador", 
+            'modificar_precios': self._usuario_rol == "Administrador",
+            'exportar_datos': self._usuario_rol == "Administrador",
+            'ver_reportes_financieros': self._usuario_rol == "Administrador"
+        }
         
-        try:
-            success = safe_execute(
-                self.venta_repo.anular_venta, 
-                venta_id, 
-                "Anulación desde interfaz"
-            )
-            
-            if success:
-                self._cargar_ventas_hoy()
-                self._cargar_estadisticas()
-                
-                # Reaplicar filtros si están activos
-                if any(value for key, value in self._filtros_activos.items() if key != 'temporal' or value != 'Hoy'):
-                    self.aplicar_filtros(
-                        self._filtros_activos['temporal'],
-                        self._filtros_activos['estado'], 
-                        self._filtros_activos['busqueda_id'],
-                        self._filtros_activos['fecha_desde'],
-                        self._filtros_activos['fecha_hasta']
-                    )
-                
-                self.ventaAnulada.emit(venta_id, "Anulación exitosa")
-                self.operacionExitosa.emit(f"Venta {venta_id} anulada")
-                
-                return True
-            else:
-                raise VentaError("Error anulando venta")
-                
-        except Exception as e:
-            self.operacionError.emit(f"Error anulando venta: {str(e)}")
-            return False
-        finally:
-            self._set_loading(False)
+        return permisos.get(accion, False)
+    
+    @Slot(result=str)
+    def get_rol_display(self):
+        """Obtiene el rol formateado para mostrar en UI"""
+        roles_display = {
+            "Administrador": "Admin",
+            "Médico": "Médico"
+        }
+        return roles_display.get(self._usuario_rol, self._usuario_rol)
     
     # ===============================
-    # MÉTODOS DE CONSULTA (sin cambios mayores)
+    # MÉTODOS DE CONSULTA (CON RESTRICCIONES)
     # ===============================
     
     @Slot(int, result='QVariantMap')
     def obtener_detalle_venta(self, venta_id: int):
-        """Obtiene el detalle completo de una venta específica"""
+        """Obtiene el detalle completo de una venta específica (con restricciones por rol)"""
         try:
             print(f"🔍 VentaModel: Obteniendo detalle de venta {venta_id}")
+            
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return {}
             
             if not isinstance(venta_id, int) or venta_id <= 0:
                 print(f"❌ VentaModel: ID de venta inválido: {venta_id}")
@@ -647,6 +736,12 @@ class VentaModel(QObject):
                 if not detalle:
                     print(f"❌ VentaModel: No se encontró venta con ID {venta_id}")
                     return {}
+                
+                # ✅ VERIFICAR PERMISOS: Médico solo puede ver sus propias ventas
+                if self._usuario_rol == "Médico":
+                    if detalle.get('Id_Usuario') != self._usuario_actual_id:
+                        self.operacionError.emit("No tiene permisos para ver esta venta")
+                        return {}
                 
                 if not isinstance(detalle, dict):
                     print(f"❌ VentaModel: Detalle no es diccionario: {type(detalle)}")
@@ -711,7 +806,8 @@ class VentaModel(QObject):
                     'vendedor': vendedor,
                     'total': total,
                     'detalles': detalles_formateados,
-                    'total_items': len(detalles_formateados)
+                    'total_items': len(detalles_formateados),
+                    'es_propia': detalle.get('Id_Usuario') == self._usuario_actual_id  # Para UI
                 }
                 
                 print(f"📋 VentaModel: Detalle formateado exitosamente: {len(detalles_formateados)} items")
@@ -734,11 +830,11 @@ class VentaModel(QObject):
             return {}
     
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÉTODOS PRIVADOS (CON FILTRADO POR ROL)
     # ===============================
     
     def _cargar_ventas_hoy(self):
-        """Carga ventas del día actual"""
+        """Carga ventas del día actual (se filtra por rol en las properties)"""
         print("🛠 DEBUG VentaModel: _cargar_ventas_hoy() iniciado")
         try:
             ventas = safe_execute(self.venta_repo.get_active)
@@ -757,7 +853,8 @@ class VentaModel(QObject):
                             'total': float(venta['Total']),
                             'fecha': venta['Fecha'].strftime('%Y-%m-%d') if hasattr(venta['Fecha'], 'strftime') else str(venta['Fecha']),
                             'hora': venta['Fecha'].strftime('%H:%M') if hasattr(venta['Fecha'], 'strftime') else '00:00',
-                            'fechaCompleta': venta['Fecha'].isoformat() if hasattr(venta['Fecha'], 'isoformat') else str(venta['Fecha'])
+                            'fechaCompleta': venta['Fecha'].isoformat() if hasattr(venta['Fecha'], 'isoformat') else str(venta['Fecha']),
+                            'Id_Usuario': venta.get('Id_Usuario')  # Para filtrado por rol
                         }
                         ventas_formateadas.append(venta_formateada)
                     except Exception as e:
@@ -775,10 +872,20 @@ class VentaModel(QObject):
             self.ventasHoyChanged.emit()
     
     def _cargar_estadisticas(self):
-        """Carga estadísticas del día"""
+        """Carga estadísticas del día (se filtran por rol en las properties)"""
         try:
             fecha_hoy = datetime.now().strftime('%Y-%m-%d')
-            estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy)
+            
+            # ✅ CARGAR ESTADÍSTICAS SEGÚN EL ROL
+            if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
+                # Para médico: solo estadísticas de sus propias ventas
+                estadisticas = safe_execute(
+                    self.venta_repo.get_ventas_del_dia_por_usuario, 
+                    fecha_hoy, self._usuario_actual_id
+                )
+            else:
+                # Para admin: estadísticas completas
+                estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy)
             
             if estadisticas and estadisticas.get('resumen'):
                 self._estadisticas = estadisticas['resumen']
@@ -798,7 +905,7 @@ class VentaModel(QObject):
     
     def _auto_update_ventas_hoy(self):
         """Actualización automática de ventas del día"""
-        if not self._loading and not self._procesando_venta:
+        if not self._loading and not self._procesando_venta and self._usuario_actual_id > 0:
             try:
                 self._cargar_ventas_hoy()
                 self._cargar_estadisticas()
@@ -817,9 +924,56 @@ class VentaModel(QObject):
             self._procesando_venta = procesando
             self.procesandoVentaChanged.emit()
 
-# Resto de métodos sin cambios...
-# [Incluir aquí el resto de métodos que no se modificaron del archivo original]
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para VentaModel"""
+        try:
+            print("🚨 VentaModel: Iniciando desconexión de emergencia...")
+            
+            # Detener timer
+            if hasattr(self, 'update_timer') and self.update_timer.isActive():
+                self.update_timer.stop()
+                print("   ⏹️ Update timer detenido")
+            
+            # Establecer estado shutdown
+            self._loading = False
+            self._procesando_venta = False
+            
+            # Desconectar todas las señales
+            signals_to_disconnect = [
+                'ventasHoyChanged', 'ventaActualChanged', 'historialVentasChanged',
+                'estadisticasChanged', 'topProductosChanged', 'ventasFiltradas',
+                'ventaCreada', 'ventaAnulada', 'operacionExitosa', 'operacionError',
+                'loadingChanged', 'procesandoVentaChanged', 'carritoCambiado', 'filtrosChanged'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar datos
+            self._ventas_hoy = []
+            self._venta_actual = {}
+            self._historial_ventas = []
+            self._estadisticas = {}
+            self._top_productos = []
+            self._carrito_items = []
+            self._ventas_filtradas = []
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            self._usuario_rol = ""       # ✅ RESETEAR ROL
+            
+            # Anular repositories
+            self.venta_repo = None
+            self.producto_repo = None
+            
+            print("✅ VentaModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión VentaModel: {e}")
 
 # Registrar el tipo para QML
 def register_venta_model():
     qmlRegisterType(VentaModel, "ClinicaModels", 1, 0, "VentaModel")
+    print("✅ VentaModel registrado para QML con autenticación estandarizada y control de roles")

@@ -340,7 +340,8 @@ Item {
                 // ===== FORMULARIO =====
                 GroupBox {
                     Layout.fillWidth: true
-                    title: isEditMode ? "Editar Tipo de Gasto" : "Agregar Nuevo Tipo de Gasto"
+                    Layout.minimumHeight: baseUnit * 25  // AGREGAR ALTURA
+                    title: ""  // QUITAR EL TÍTULO
                     enabled: configuracionModel && !configuracionModel.loading
                     
                     background: Rectangle {
@@ -350,17 +351,20 @@ Item {
                         radius: radiusMedium
                     }
                     
-                    label: Label {
-                        text: parent.title
-                        font.pixelSize: fontMedium
-                        font.bold: true
-                        color: textColor
-                        font.family: "Segoe UI"
-                    }
-                    
                     ColumnLayout {
                         anchors.fill: parent
+                        anchors.margins: marginMedium  // AGREGAR MÁRGENES
                         spacing: marginMedium
+                        
+                        // TÍTULO PERSONALIZADO
+                        Label {
+                            text: isEditMode ? "✏️ Editar Tipo de Gasto" : "➕ Agregar Nuevo Tipo de Gasto"
+                            font.pixelSize: fontLarge
+                            font.bold: true
+                            color: primaryColor
+                            font.family: "Segoe UI"
+                            Layout.fillWidth: true
+                        }
                         
                         // ===== PRIMERA FILA: NOMBRE Y DESCRIPCIÓN =====
                         RowLayout {

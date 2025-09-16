@@ -428,7 +428,8 @@ Item {
                 // ===== FORMULARIO =====
                 GroupBox {
                     Layout.fillWidth: true
-                    title: isEditMode ? "Editar Especialidad" : "Agregar Nueva Especialidad"
+                    Layout.minimumHeight: baseUnit * 35 // AGREGAR ALTURA
+                    title: ""  // QUITAR EL TÍTULO
                     enabled: confiConsultaModel && !confiConsultaModel.loading
                     
                     background: Rectangle {
@@ -438,17 +439,20 @@ Item {
                         radius: radiusMedium
                     }
                     
-                    label: Label {
-                        text: parent.title
-                        font.pixelSize: fontMedium
-                        font.bold: true
-                        color: textColor
-                        font.family: "Segoe UI"
-                    }
-                    
                     ColumnLayout {
                         anchors.fill: parent
+                        anchors.margins: marginMedium  // AGREGAR MÁRGENES
                         spacing: marginMedium
+                        
+                        // TÍTULO PERSONALIZADO
+                        Label {
+                            text: isEditMode ? "✏️ Editar Especialidad" : "➕ Agregar Nueva Especialidad"
+                            font.pixelSize: fontLarge
+                            font.bold: true
+                            color: primaryColor
+                            font.family: "Segoe UI"
+                            Layout.fillWidth: true
+                        }
                         
                         // ===== PRIMERA FILA: NOMBRE Y DOCTOR =====
                         RowLayout {
@@ -461,7 +465,7 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Nombre de la Especialidad: *"
+                                    text: "Nombre de la Especialidad: *"  // ESTE VA DESPUÉS DEL TÍTULO
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase
@@ -529,21 +533,19 @@ Item {
                             spacing: marginLarge
                             
                             ColumnLayout {
-                                Layout.minimumWidth: 120
-                                Layout.maximumWidth: 150
+                                Layout.preferredWidth: 120
                                 spacing: marginSmall
                                 
                                 Label {
                                     text: "Precio Normal: *"
                                     font.bold: true
                                     color: textColor
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontSmall
                                     font.family: "Segoe UI"
                                 }
                                 TextField {
                                     id: precioNormalField
-                                    Layout.minimumWidth: 120
-                                    Layout.maximumWidth: 150
+                                    Layout.preferredWidth: 120
                                     Layout.preferredHeight: baseUnit * 4.5
                                     placeholderText: "150.00"
                                     validator: DoubleValidator { bottom: 0.0; decimals: 2 }
@@ -560,21 +562,19 @@ Item {
                             }
                             
                             ColumnLayout {
-                                Layout.minimumWidth: 120
-                                Layout.maximumWidth: 150
+                                Layout.preferredWidth: 120
                                 spacing: marginSmall
                                 
                                 Label {
                                     text: "Precio Emergencia: *"
                                     font.bold: true
                                     color: textColor
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontSmall
                                     font.family: "Segoe UI"
                                 }
                                 TextField {
                                     id: precioEmergenciaField
-                                    Layout.minimumWidth: 120
-                                    Layout.maximumWidth: 150
+                                    Layout.preferredWidth: 120
                                     Layout.preferredHeight: baseUnit * 4.5
                                     placeholderText: "250.00"
                                     validator: DoubleValidator { bottom: 0.0; decimals: 2 }
@@ -598,7 +598,7 @@ Item {
                                     text: "Descripción:"
                                     font.bold: true
                                     color: textColor
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontSmall
                                     font.family: "Segoe UI"
                                 }
                                 TextField {

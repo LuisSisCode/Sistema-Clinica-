@@ -197,7 +197,9 @@ class AuthRepository(BaseRepository):
         LEFT JOIN Roles r ON u.Id_Rol = r.id
         WHERE u.nombre_usuario = ?
         """
-        return self._execute_query(query, (username.strip().lower(),), fetch_one=True)
+        result = self._execute_query(query, (username.strip().lower(),), fetch_one=True)
+        print(f"🔍 DEBUG get_user_by_username: {result} -----------------------------------------------------------")  # AGREGAR ESTO
+        return result
     
     def get_user_by_id_with_role(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene usuario por ID con información de rol"""

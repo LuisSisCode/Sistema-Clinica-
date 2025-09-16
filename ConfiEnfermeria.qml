@@ -274,7 +274,8 @@ Item {
                 // ===== FORMULARIO =====
                 GroupBox {
                     Layout.fillWidth: true
-                    title: isEditMode ? "Editar Procedimiento" : "Agregar Nuevo Procedimiento"
+                    Layout.minimumHeight: baseUnit * 30  // AGREGAR ALTURA
+                    title: ""  // QUITAR EL TÍTULO
                     
                     background: Rectangle {
                         color: backgroundColor
@@ -283,17 +284,20 @@ Item {
                         radius: radiusMedium
                     }
                     
-                    label: Label {
-                        text: parent.title
-                        font.pixelSize: fontMedium
-                        font.bold: true
-                        color: textColor
-                        font.family: "Segoe UI"
-                    }
-                    
                     ColumnLayout {
                         anchors.fill: parent
+                        anchors.margins: marginMedium  // AGREGAR MÁRGENES
                         spacing: marginMedium
+                        
+                        // TÍTULO PERSONALIZADO
+                        Label {
+                            text: isEditMode ? "✏️ Editar Procedimiento" : "➕ Agregar Nuevo Procedimiento"
+                            font.pixelSize: fontLarge
+                            font.bold: true
+                            color: primaryColor
+                            font.family: "Segoe UI"
+                            Layout.fillWidth: true
+                        }
                         
                         // CAMPOS PRINCIPALES
                         GridLayout {
@@ -307,7 +311,7 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Nombre del Procedimiento:"
+                                    text: "Nombre del Procedimiento:"  // ESTE VA DESPUÉS DEL TÍTULO
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase

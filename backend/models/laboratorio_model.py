@@ -63,8 +63,9 @@ class LaboratorioModel(QObject):
         self._trabajadoresData = []
         self._estadoActual = "listo"
         
-        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
-        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        # ✅ AUTENTICACIÓN CON ROL
+        self._usuario_actual_id = 0
+        self._usuario_actual_rol = ""  # ✅ NUEVO: Almacenar rol del usuario
         print("🧪 LaboratorioModel inicializado - Esperando autenticación")
         
         # Propiedades de paginación
@@ -80,16 +81,17 @@ class LaboratorioModel(QObject):
     # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
     # ===============================
     
-    @Slot(int)
-    def set_usuario_actual(self, usuario_id: int):
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
         """
-        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        Establece el usuario actual CON ROL para verificaciones de permisos
         """
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario autenticado establecido en LaboratorioModel: {usuario_id}")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de laboratorio")
+                self._usuario_actual_rol = usuario_rol.strip()
+                print(f"👤 Usuario establecido en LaboratorioModel: ID {usuario_id}, Rol: {usuario_rol}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido en módulo de laboratorio")
             else:
                 print(f"⚠️ ID de usuario inválido en LaboratorioModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
@@ -102,17 +104,64 @@ class LaboratorioModel(QObject):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
     
+    @Property(str, notify=operacionExitosa)
+    def usuario_actual_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_actual_rol
+    
     # ===============================
-    # PROPIEDADES DE AUTENTICACIÓN
+    # ✅ MÉTODOS DE VERIFICACIÓN DE PERMISOS
     # ===============================
     
     def _verificar_autenticacion(self) -> bool:
-        """Verifica si el usuario está autenticado"""
+        """Verifica autenticación básica"""
         if self._usuario_actual_id <= 0:
             self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
             return False
         return True
     
+    def _verificar_permisos_admin(self) -> bool:
+        """Verifica permisos de administrador"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if self._usuario_actual_rol != "Administrador":
+            self.operacionError.emit("Solo administradores pueden realizar esta operación")
+            print(f"🚫 Acceso denegado: Usuario {self._usuario_actual_id} (Rol: {self._usuario_actual_rol})")
+            return False
+        
+        return True
+    
+    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 5) -> bool:
+        """Valida que el registro no sea muy antiguo para editar - LABORATORIO: 5 días"""
+        try:
+            if not fecha_registro:
+                return True  # Si no hay fecha, permitir edición
+            
+            # Convertir a datetime si es necesario
+            if isinstance(fecha_registro, str):
+                try:
+                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
+                except:
+                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
+            elif isinstance(fecha_registro, datetime):
+                fecha_obj = fecha_registro
+            else:
+                return True  # Si no se puede determinar la fecha, permitir
+            
+            # Calcular diferencia
+            dias_transcurridos = (datetime.now() - fecha_obj).days
+            
+            if dias_transcurridos > dias_limite:
+                self.operacionError.emit(f"No se pueden editar exámenes de más de {dias_limite} días")
+                print(f"📅 Edición bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error validando fecha: {e}")
+            return True  # En caso de error, permitir la operación
     # ===============================
     # CONEXIONES Y PROPIEDADES (SIN CAMBIOS)
     # ===============================
@@ -347,7 +396,7 @@ class LaboratorioModel(QObject):
                 self.operacionError.emit("Apellido paterno es obligatorio")
                 return -1
             
-            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"🔄 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) gestionando paciente: {nombre} {apellido_paterno}")
             
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
@@ -392,8 +441,8 @@ class LaboratorioModel(QObject):
             if not tipo_servicio or tipo_servicio not in ['Normal', 'Emergencia']:
                 tipo_servicio = 'Normal'
             
-            # ✅ USAR usuario_actual_id EN LUGAR DE HARDCODED
-            print(f"🧪 Creando examen - Paciente: {paciente_id}, Tipo: {tipo_analisis_id}, Usuario: {self._usuario_actual_id}")
+            print(f"🧪 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando examen")
+            print(f"   - Paciente: {paciente_id}, Tipo: {tipo_analisis_id}")
             
             examen_id = self.repository.create_lab_exam(
                 paciente_id=paciente_id,
@@ -428,7 +477,7 @@ class LaboratorioModel(QObject):
     @Slot(int, int, str, int, str, result=str)
     def actualizarExamen(self, examen_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                         trabajador_id: int = 0, detalles: str = "") -> str:
-        """Actualiza examen de laboratorio existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Actualiza examen de laboratorio existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN
             if not self._verificar_autenticacion():
@@ -443,14 +492,12 @@ class LaboratorioModel(QObject):
             if not tipo_servicio or tipo_servicio not in ['Normal', 'Emergencia']:
                 tipo_servicio = 'Normal'
             
-            print(f"🔄 Actualizando examen ID: {examen_id} por usuario: {self._usuario_actual_id}")
-            
+            # ✅ VALIDAR FECHA DE EDICIÓN (5 días para laboratorio)
             examen_actual = self.repository.get_by_id(examen_id)
-            if not examen_actual:
-                error_msg = f"Examen con ID {examen_id} no encontrado"
-                self.operacionError.emit(error_msg)
-                self._set_estado_actual("error")
-                return json.dumps({"exito": False, "error": error_msg})
+            if examen_actual and not self._validar_fecha_edicion(examen_actual.get('Fecha'), dias_limite=5):
+                return json.dumps({'exito': False, 'error': 'Examen muy antiguo para editar'})
+            
+            print(f"📝 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando examen ID: {examen_id}")
             
             exito = self.repository.update_lab_exam(
                 lab_id=examen_id,
@@ -486,18 +533,17 @@ class LaboratorioModel(QObject):
             self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({"exito": False, "error": error_msg})
-
     @Slot(int, result=bool)
     def eliminarExamen(self, examen_id: int) -> bool:
-        """Elimina examen de laboratorio - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Elimina examen de laboratorio - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_autenticacion():
+            # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
+            if not self._verificar_permisos_admin():
                 return False
             
             self._set_estado_actual("cargando")
             
-            print(f"🗑️ Eliminando examen ID: {examen_id} por usuario: {self._usuario_actual_id}")
+            print(f"🗑️ Admin {self._usuario_actual_id} eliminando examen ID: {examen_id}")
             
             exito = self.repository.delete(examen_id)
             

@@ -338,7 +338,8 @@ Item {
                 // ===== FORMULARIO =====
                 GroupBox {
                     Layout.fillWidth: true
-                    title: isEditMode ? "Editar Tipo de Análisis" : "Agregar Nuevo Tipo de Análisis"
+                    Layout.minimumHeight: baseUnit * 30
+                    title: "" // QUITAR EL TÍTULO DEL GROUPBOX
                     enabled: confiLaboratorioModel && !confiLaboratorioModel.loading
                     
                     background: Rectangle {
@@ -348,17 +349,20 @@ Item {
                         radius: radiusMedium
                     }
                     
-                    label: Label {
-                        text: parent.title
-                        font.pixelSize: fontMedium
-                        font.bold: true
-                        color: textColor
-                        font.family: "Segoe UI"
-                    }
-                    
                     ColumnLayout {
                         anchors.fill: parent
+                        anchors.margins: marginMedium  
                         spacing: marginMedium
+                        
+                        // TÍTULO PERSONALIZADO
+                        Label {
+                            text: isEditMode ? "✏️ Editar Tipo de Análisis" : "➕ Agregar Nuevo Tipo de Análisis"
+                            font.pixelSize: fontLarge
+                            font.bold: true
+                            color: primaryColor
+                            font.family: "Segoe UI"
+                            Layout.fillWidth: true
+                        }
                         
                         // ===== PRIMERA FILA: NOMBRE Y DESCRIPCIÓN =====
                         RowLayout {
@@ -377,6 +381,7 @@ Item {
                                     font.pixelSize: fontBase
                                     font.family: "Segoe UI"
                                 }
+
                                 TextField {
                                     id: nuevoAnalisisNombre
                                     Layout.fillWidth: true
@@ -494,7 +499,7 @@ Item {
                             
                             // BOTONES
                             ColumnLayout {
-                                Layout.preferredWidth: baseUnit * 22
+                                Layout.preferredWidth: baseUnit * 20
                                 spacing: marginSmall
                                 
                                 Label {
@@ -507,7 +512,7 @@ Item {
                                     
                                     Button {
                                         text: "Cancelar"
-                                        Layout.preferredWidth: baseUnit * 10
+                                        Layout.preferredWidth: baseUnit * 8
                                         Layout.preferredHeight: baseUnit * 4.5
                                         
                                         background: Rectangle {
@@ -535,7 +540,7 @@ Item {
                                         enabled: nuevoAnalisisNombre.text.trim() !== "" && 
                                                 nuevoAnalisisPrecioNormal.text.trim() !== "" && 
                                                 nuevoAnalisisPrecioEmergencia.text.trim() !== ""
-                                        Layout.preferredWidth: baseUnit * 12
+                                        Layout.preferredWidth: baseUnit * 10
                                         Layout.preferredHeight: baseUnit * 4.5
                                         
                                         background: Rectangle {

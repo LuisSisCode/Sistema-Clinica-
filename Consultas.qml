@@ -1225,17 +1225,41 @@ Item {
                 buscarPacientePorCedula(cedulaPaciente.text)
             }
             
-            // Buscar y seleccionar especialidad
-            if (consultaModel && consultaModel.especialidades) {
+            // ✅ CORREGIR: Buscar especialidad por coincidencia flexible
+            if (consultaModel && consultaModel.especialidades && consulta.especialidadDoctor) {
+                var especialidadBuscada = consulta.especialidadDoctor.trim()
+                console.log("🔍 Buscando especialidad:", especialidadBuscada)
+                
+                var encontrada = false
                 for (var i = 0; i < consultaModel.especialidades.length; i++) {
                     var esp = consultaModel.especialidades[i]
-                    var espTexto = esp.text + " - " + esp.doctor_nombre
                     
-                    if (espTexto === consulta.especialidadDoctor) {
+                    // ✅ MÉTODO 1: Comparación exacta con formato ComboBox
+                    var espTextoCombo = esp.text + " - " + esp.doctor_nombre
+                    
+                    // ✅ MÉTODO 2: Comparación solo por especialidad si no coincide exacto
+                    var soloEspecialidad = especialidadBuscada.split(" - ")[0]
+                    
+                    console.log(`Comparando [${i}]: "${espTextoCombo}" vs "${especialidadBuscada}"`)
+                    
+                    if (espTextoCombo === especialidadBuscada || 
+                        esp.text === soloEspecialidad ||
+                        especialidadBuscada.includes(esp.text)) {
+                        
                         especialidadCombo.currentIndex = i + 1
                         consultationFormDialog.selectedEspecialidadIndex = i
+                        encontrada = true
+                        
+                        console.log("✅ Especialidad encontrada en índice:", i + 1)
                         break
                     }
+                }
+                
+                if (!encontrada) {
+                    console.log("⚠️ Especialidad no encontrada:", especialidadBuscada)
+                    console.log("📋 Especialidades disponibles:", consultaModel.especialidades.map(function(e) { 
+                        return e.text + " - " + e.doctor_nombre 
+                    }))
                 }
             }
             
@@ -1251,6 +1275,9 @@ Item {
             // Cargar demás campos
             consultationFormDialog.calculatedPrice = consulta.precio || 0
             detallesConsulta.text = consulta.detalles || ""
+            
+            // ✅ FORZAR ACTUALIZACIÓN DE PRECIOS
+            consultationFormDialog.updatePrices()
             
             console.log("Datos de edición cargados correctamente")
         }
@@ -2366,7 +2393,7 @@ Item {
         try {
             console.log("🩺 Iniciando guardado consulta - Modo:", isEditMode ? "EDITAR" : "CREAR")
             
-            if (isEditMode && consultationForm.consultaParaEditar) {
+            if (isEditMode && consultationFormDialog.consultaParaEditar) {
                 actualizarConsulta()
             } else {
                 crearNuevaConsulta()
@@ -2570,7 +2597,7 @@ Item {
         selectedRowIndex = -1
         isEditMode = false
         editingIndex = -1
-        consultationForm.consultaParaEditar = null
+        consultationFormDialog.consultaParaEditar = null
         console.log("🧹 Formulario de consulta limpiado y diálogo cerrado")
     }
 
