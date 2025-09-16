@@ -253,7 +253,7 @@ Item {
         property string icon: ""
         property string headerColor: primaryColor
         
-        Layout.preferredHeight: Math.max(120, baseUnit * 15)
+        Layout.preferredHeight: Math.max(80, baseUnit * 10)
         gradient: Gradient {
             GradientStop { position: 0.0; color: headerColor }
             GradientStop { position: 1.0; color: Qt.darker(headerColor, 1.1) }
@@ -272,43 +272,35 @@ Item {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: marginLarge
-            spacing: marginMedium
+            anchors.margins: marginTiny
+            spacing: marginTiny
+            Layout.alignment: Qt.AlignVCenter
             
             Rectangle {
-                Layout.preferredWidth: baseUnit * 10
-                Layout.preferredHeight: baseUnit * 10
+                Layout.preferredWidth: baseUnit * 5
+                Layout.preferredHeight: baseUnit * 5
                 color: backgroundColor
-                radius: baseUnit * 5
-                
-                // Sombra interna
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 2
-                    radius: parent.radius - 2
-                    color: "transparent"
-                    border.color: Qt.lighter(color, 1.1)
-                    border.width: 1
-                }
+                radius: baseUnit * 2.5
                 
                 Image {
                     anchors.centerIn: parent
                     source: icon
-                    width: fontTitle * 2
-                    height: fontTitle * 2
+                    width: fontLarge * 1.5
+                    height: fontLarge * 1.5
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                 }
             }
             
+            // AQUÍ VA EL TÍTULO DENTRO DEL HEADER AZUL
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: marginSmall
+                spacing: 2
                 
                 Label {
-                    text: title
+                    text: title  // ✅ USAR LA PROPIEDAD TITLE
                     color: backgroundColor
-                    font.pixelSize: fontTitle
+                    font.pixelSize: fontLarge
                     font.bold: true
                     font.family: "Segoe UI"
                 }
@@ -316,7 +308,7 @@ Item {
                 Label {
                     text: subtitle
                     color: backgroundColor
-                    font.pixelSize: fontBase
+                    font.pixelSize: fontSmall
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                     opacity: 0.95
@@ -359,7 +351,7 @@ Item {
     }
     
     component GeneralConfigSection: ColumnLayout {
-        spacing: marginMedium
+        spacing: marginSmall
         
         SectionHeader {
             Layout.fillWidth: true
@@ -392,7 +384,7 @@ Item {
         property string subtitle: ""
         property string barColor: primaryColor
         
-        spacing: marginSmall
+        spacing: marginTiny
         
         Rectangle {
             Layout.preferredWidth: baseUnit * 0.6
@@ -455,7 +447,7 @@ Item {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: marginMedium
+            anchors.margins: marginSmall
             spacing: marginMedium
             
             Rectangle {
@@ -921,7 +913,7 @@ Item {
             
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: marginLarge
+                anchors.margins: marginMedium
                 spacing: marginMedium
                 
                 Label {

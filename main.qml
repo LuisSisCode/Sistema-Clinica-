@@ -510,7 +510,7 @@ ApplicationWindow {
                                     { text: "Ventas", icon: "Resources/iconos/ventas.png", subsection: 0 },
                                     { text: "Productos", icon: "Resources/iconos/productos.png", subsection: 1 },
                                     { text: "Compras", icon: "Resources/iconos/compras.png", subsection: 2 },
-                                    { text: "Proveedores", icon: "Resources/iconos/Trabajadores.png", subsection: 3 }
+                                    { text: "Proveedores", icon: "Resources/iconos/proveedor.png" , subsection: 3 }
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {

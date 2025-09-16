@@ -1830,7 +1830,7 @@ Item {
                 }
                 
                 // Conectar señales
-                if (item.productoCreado) {
+                if (item && item.productoCreado) {
                         item.productoCreado.connect(function(producto) {
                             console.log("✅ Producto creado:", producto.codigo)
                         

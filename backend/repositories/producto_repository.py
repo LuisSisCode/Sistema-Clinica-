@@ -298,91 +298,144 @@ class ProductoRepository(BaseRepository):
         
         return lotes_afectados
     
-    #@ExceptionHandler.handle_exception
+    @ExceptionHandler.handle_exception
     def aumentar_stock_compra(self, producto_id: int, cantidad_caja: int, cantidad_unitario: int, 
-                        fecha_vencimiento: str, precio_compra: float = None) -> int:
+                         fecha_vencimiento: str = None, precio_compra: float = None) -> int:
         """
-        Aumenta stock creando nuevo lote por compra - CORREGIDO CON FORMATO DE FECHA
+        Aumenta stock de producto creando nuevo lote - CORREGIDO SIN Precio_Compra en Lote
         """
         validate_required(producto_id, "producto_id")
         
-        # Validar que el producto existe
-        producto = self.get_by_id(producto_id)
-        if not producto:
-            print(f"❌ ERROR: Producto {producto_id} no encontrado")
-            return None
+        if cantidad_caja <= 0 and cantidad_unitario <= 0:
+            raise ValueError("Debe especificar cantidad de cajas o unitarios")
         
-        # CORRECCIÓN: Parsear fecha de vencimiento correctamente
-        fecha_venc_formateada = self._parse_fecha_vencimiento(fecha_vencimiento)
-        print(f"📅 Fecha original: '{fecha_vencimiento}' -> Formateada: '{fecha_venc_formateada}'")
+        print(f"📈 Aumentando stock - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
         
-        # Calcular nuevos stocks
-        # No calcular stocks de tabla Productos - Los lotes manejan todo
-        print(f"📦 Creando lote - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
+        # 1. Manejar fecha de vencimiento de forma segura
+        fecha_venc_final = None
         
-        print(f"📦 Creando lote - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
+        if fecha_vencimiento is not None and isinstance(fecha_vencimiento, str):
+            fecha_clean = fecha_vencimiento.strip()
+            if fecha_clean and fecha_clean.lower() not in ["sin vencimiento", "", "none", "null"]:
+                try:
+                    datetime.strptime(fecha_clean, '%Y-%m-%d')
+                    fecha_venc_final = fecha_clean
+                    print(f"📅 Lote con vencimiento: {fecha_venc_final}")
+                except ValueError:
+                    raise ValueError(f"Formato de fecha inválido: {fecha_clean}. Use YYYY-MM-DD")
+            else:
+                print(f"📅 Lote sin vencimiento (fecha vacía o especial)")
+        else:
+            print(f"📅 Lote sin vencimiento (fecha None)")
         
-        # OPERACIONES EN TRANSACCIÓN ATÓMICA
-        with self._lock:
-            conn = None
-            try:
-                conn = self._get_connection()
-                cursor = conn.cursor()
-                
-                # 1. Crear lote con fecha formateada
-                lote_query = """
+        # 2. Verificar que el producto existe
+        try:
+            producto = self.get_by_id(producto_id)
+            if not producto:
+                raise Exception(f"Producto {producto_id} no encontrado")
+            
+            print(f"✅ Producto encontrado: {producto.get('Codigo', 'N/A')} - {producto.get('Nombre', 'N/A')}")
+            
+        except Exception as e:
+            raise Exception(f"Error verificando producto: {str(e)}")
+        
+        # 3. Crear nuevo lote SIN Precio_Compra (CORREGIDO)
+        lote_id = None
+        try:
+            # Query simplificado sin Precio_Compra
+            if fecha_venc_final is not None:
+                # Con fecha de vencimiento
+                insert_query = """
                 INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
                 OUTPUT INSERTED.id
                 VALUES (?, ?, ?, ?)
                 """
-                
-                # USAR FECHA FORMATEADA
-                cursor.execute(lote_query, (producto_id, cantidad_caja, cantidad_unitario, fecha_venc_formateada))
-                lote_row = cursor.fetchone()
-                
-                if not lote_row:
-                    print(f"❌ ERROR: No se pudo crear lote para producto {producto_id}")
-                    conn.rollback()
-                    return None
-                
-                lote_id = lote_row[0]
-                print(f"✅ Lote creado - ID: {lote_id} con fecha: {fecha_venc_formateada}")
-                
-                # 2. Actualizar SOLO precio si se proporciona (NO stock)
-                if precio_compra:
-                    producto_query = """
-                    UPDATE Productos 
-                    SET Precio_compra = ?
-                    WHERE id = ?
-                    """
-                    cursor.execute(producto_query, (precio_compra, producto_id))
-                    filas_afectadas = cursor.rowcount
-                    
-                    if filas_afectadas != 1:
-                        print(f"❌ ERROR: No se actualizó precio del producto {producto_id}")
-                        conn.rollback()
-                        return None
-                
-                # 3. COMMIT de toda la transacción
-                conn.commit()
-                
-                # 4. Invalidar caché
-                self._invalidate_cache_after_modification()
-                
-                print(f"✅ Stock aumentado exitosamente - Producto: {producto_id}, Lote: {lote_id}")
+                params = (producto_id, cantidad_caja, cantidad_unitario, fecha_venc_final)
+            else:
+                # Sin fecha de vencimiento (NULL)
+                insert_query = """
+                INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
+                OUTPUT INSERTED.id
+                VALUES (?, ?, ?, NULL)
+                """
+                params = (producto_id, cantidad_caja, cantidad_unitario)
+            
+            # Ejecutar inserción
+            result = self._execute_query(insert_query, params, fetch_one=True, use_cache=False)
+            
+            if not result or 'id' not in result:
+                raise Exception("No se pudo crear el lote - resultado inválido")
+            
+            lote_id = result['id']
+            print(f"✅ Lote creado - ID: {lote_id}")
+            
+        except Exception as e:
+            print(f"❌ Error creando lote: {str(e)}")
+            raise Exception(f"Error creando lote: {str(e)}")
         
-                
-                return lote_id
-                
-            except Exception as e:
-                if conn:
-                    conn.rollback()
-                print(f"❌ ERROR en aumentar_stock_compra: {str(e)}")
-                print(f"🔍 Producto: {producto_id}, Fecha original: '{fecha_vencimiento}', Fecha formateada: '{fecha_venc_formateada}'")
-                return None
-            finally:
-                if conn:
-                    conn.close()
+        # 4. Actualizar stock del producto
+        try:
+            # Obtener stock actual
+            stock_actual_caja = producto.get('Stock_Caja', 0)
+            stock_actual_unitario = producto.get('Stock_Unitario', 0)
+            
+            # Calcular nuevo stock
+            nuevo_stock_caja = stock_actual_caja + cantidad_caja
+            nuevo_stock_unitario = stock_actual_unitario + cantidad_unitario
+            
+            # Actualizar producto con stock y precio (si se proporciona)
+            if precio_compra and precio_compra > 0:
+                update_query = """
+                UPDATE Productos 
+                SET Stock_Caja = ?, Stock_Unitario = ?, Precio_compra = ?
+                WHERE id = ?
+                """
+                params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id)
+                print(f"💰 Actualizando stock y precio de compra: ${precio_compra}")
+            else:
+                update_query = """
+                UPDATE Productos 
+                SET Stock_Caja = ?, Stock_Unitario = ?
+                WHERE id = ?
+                """
+                params = (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
+            
+            filas_afectadas = self._execute_query(update_query, params, fetch_all=False, use_cache=False)
+            
+            if filas_afectadas <= 0:
+                # ROLLBACK: Eliminar lote si falla actualización de stock
+                print(f"❌ Fallo actualizando stock, eliminando lote {lote_id}")
+                self._rollback_lote(lote_id)
+                raise Exception("No se pudo actualizar el stock del producto")
+            
+            print(f"✅ Stock actualizado - Caja: {stock_actual_caja} → {nuevo_stock_caja}, Unitario: {stock_actual_unitario} → {nuevo_stock_unitario}")
+            
+        except Exception as e:
+            # ROLLBACK: Eliminar lote si hay error
+            if lote_id:
+                print(f"❌ Error actualizando stock, eliminando lote {lote_id}")
+                self._rollback_lote(lote_id)
+            raise Exception(f"Error actualizando stock: {str(e)}")
+        
+        # 5. Limpiar cache
+        try:
+            if hasattr(self, '_clear_cache'):
+                self._clear_cache()
+        except:
+            pass  # No es crítico si falla
+        
+        print(f"🎉 Stock aumentado exitosamente - Lote: {lote_id}, Total agregado: {cantidad_caja + cantidad_unitario}")
+        
+        return lote_id
+
+    def _rollback_lote(self, lote_id: int):
+        """Método auxiliar para eliminar lote en caso de rollback"""
+        try:
+            delete_query = "DELETE FROM Lote WHERE id = ?"
+            self._execute_query(delete_query, (lote_id,), fetch_all=False, use_cache=False)
+            print(f"🔄 Rollback completado - Lote {lote_id} eliminado")
+        except Exception as rollback_error:
+            print(f"❌ ERROR EN ROLLBACK: No se pudo eliminar lote {lote_id}: {str(rollback_error)}")
     
     # ===============================
     # REPORTES Y ESTADÍSTICAS
@@ -445,11 +498,12 @@ class ProductoRepository(BaseRepository):
         Convierte fecha a formato SQL Server compatible
         
         Acepta formatos: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
-        Retorna: YYYY-MM-DD
+        Retorna: YYYY-MM-DD o None para productos sin vencimiento
         """
-        if not fecha_str:
-            # Fecha por defecto: 1 año desde hoy
-            return (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+        # CORRECCIÓN PRINCIPAL: Manejar explícitamente productos sin vencimiento
+        if not fecha_str or fecha_str.strip() == "" or fecha_str.strip().lower() == "sin vencimiento":
+            print("📅 Producto sin fecha de vencimiento - retornando None para BD")
+            return None  # Esto se convertirá en NULL en la base de datos
         
         fecha_str = fecha_str.strip()
         
@@ -463,10 +517,12 @@ class ProductoRepository(BaseRepository):
         for formato in formatos:
             try:
                 fecha_obj = datetime.strptime(fecha_str, formato)
-                return fecha_obj.strftime('%Y-%m-%d')
+                fecha_formateada = fecha_obj.strftime('%Y-%m-%d')
+                print(f"📅 Fecha parseada exitosamente: '{fecha_str}' -> '{fecha_formateada}'")
+                return fecha_formateada
             except ValueError:
                 continue
         
-        # Si no se pudo parsear, usar fecha por defecto
-        print(f"⚠️ No se pudo parsear fecha '{fecha_str}', usando fecha por defecto")
-        return (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+        # Si no se pudo parsear, mostrar error y retornar None
+        print(f"⚠️ ADVERTENCIA: No se pudo parsear fecha '{fecha_str}', tratando como sin vencimiento")
+        return None  # En lugar de fecha por defecto, tratarlo como sin vencimiento
