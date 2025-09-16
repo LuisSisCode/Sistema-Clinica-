@@ -1,8 +1,9 @@
-// login.qml - Interfaz de login corregida
+// login.qml - Interfaz de login mejorada con credenciales persistentes
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import Qt.labs.settings 1.1
 
 ApplicationWindow {
     id: mainWindow
@@ -14,6 +15,18 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
 
+    // ===== CONFIGURACIÓN PERSISTENTE =====
+    Settings {
+        id: loginSettings
+        property string savedUsername: ""
+        property string savedPassword: ""
+        property bool rememberCredentials: false
+        property bool autoLogin: false
+        property bool closeAppOnExit: true
+        property int loginAttempts: 0
+        property string lastLoginDate: ""
+    }
+
     // Propiedades de diseño
     property color colorFondo: "#f8f9fa"
     property color colorTitulo: "#203436"
@@ -23,16 +36,115 @@ ApplicationWindow {
     property color colorHover: "#74b9ff"
     property color colorSombra: "#80000000"
     property color colorHeaderBar: "#203436"
+    property color colorSuccess: "#00b894"
+    property color colorError: "#e17055"
+    property color colorWarning: "#fdcb6e"
     
-    // Estados de la aplicación
+    // Estados de la aplicación mejorados
     property bool isLoading: false
     property bool isClosing: false
+    property bool isAutoLogin: false
     property string statusMessage: "Sistema listo para autenticar"
     property bool connectionOk: true
     property var currentUser: null
-    property bool closeApplicationOnExit: true
+    property bool closeApplicationOnExit: loginSettings.closeAppOnExit
+    property int maxLoginAttempts: 5
+    property bool isBlocked: loginSettings.loginAttempts >= maxLoginAttempts
+    property bool showPassword: false
 
-    // Conexiones con AuthModel
+    // ===== FUNCIONES DE CREDENCIALES =====
+    function encodeCredentials(text) {
+        // Codificación básica (NO es segura para producción)
+        return Qt.btoa(text)
+    }
+    
+    function decodeCredentials(encoded) {
+        try {
+            return Qt.atob(encoded)
+        } catch (e) {
+            return ""
+        }
+    }
+    
+    function saveCredentials() {
+        if (rememberPassword.checked && usernameField.text && passwordField.text) {
+            loginSettings.savedUsername = usernameField.text
+            loginSettings.savedPassword = encodeCredentials(passwordField.text)
+            loginSettings.rememberCredentials = true
+            console.log("✅ Credenciales guardadas")
+        }
+    }
+    
+    function loadCredentials() {
+        if (loginSettings.rememberCredentials && loginSettings.savedUsername) {
+            usernameField.text = loginSettings.savedUsername
+            passwordField.text = decodeCredentials(loginSettings.savedPassword)
+            rememberPassword.checked = true
+            
+            // Auto-login si está habilitado
+            if (autoLoginCheckbox.checked && !isBlocked) {
+                statusMessage = "Ingreso automático..."
+                autoLoginTimer.start()
+            }
+        }
+    }
+    
+    function clearCredentials() {
+        loginSettings.savedUsername = ""
+        loginSettings.savedPassword = ""
+        loginSettings.rememberCredentials = false
+        usernameField.text = ""
+        passwordField.text = ""
+        rememberPassword.checked = false
+    }
+    
+    function performLogin() {
+        if (!connectionOk) {
+            statusMessage = "Error: No hay conexión con la base de datos"
+            showError()
+            return
+        }
+        
+        if (isBlocked) {
+            statusMessage = `Demasiados intentos fallidos. Intente más tarde.`
+            showError()
+            return
+        }
+        
+        if (!usernameField.text.trim() || !passwordField.text) {
+            statusMessage = "Complete todos los campos"
+            showWarning()
+            return
+        }
+        
+        isLoading = true
+        statusMessage = "Verificando credenciales..."
+        
+        // Guardar credenciales si está marcado
+        if (rememberPassword.checked) {
+            saveCredentials()
+        }
+        
+        // Usar AuthModel para login
+        authModel.login(usernameField.text.trim(), passwordField.text)
+    }
+    
+    function showError() {
+        errorShake.start()
+        statusColor.color = colorError
+        errorTimer.start()
+    }
+    
+    function showWarning() {
+        statusColor.color = colorWarning
+        errorTimer.start()
+    }
+    
+    function showSuccess() {
+        statusColor.color = colorSuccess
+    }
+
+    // ===== CONEXIONES CON AUTHMODEL =====
     Connections {
         target: authModel
         
@@ -40,23 +152,66 @@ ApplicationWindow {
             isLoading = false
             currentUser = userData
             statusMessage = "Acceso concedido - Iniciando aplicación..."
+            showSuccess()
+            
+            // Resetear intentos
+            loginSettings.loginAttempts = 0
+            loginSettings.lastLoginDate = new Date().toISOString()
+            
             successAnimation.start()
         }
         
         function onLoginFailed(message) {
             isLoading = false
             statusMessage = message
-            showErrorAnimation()
+            
+            // Incrementar intentos fallidos
+            loginSettings.loginAttempts += 1
+            
+            if (loginSettings.loginAttempts >= maxLoginAttempts) {
+                statusMessage = `Cuenta bloqueada por ${maxLoginAttempts} intentos fallidos`
+                isBlocked = true
+                blockTimer.start()
+            }
+            
+            showError()
             passwordField.clear()
             passwordField.forceActiveFocus()
         }
     }
 
-    function showErrorAnimation() {
-        errorShake.start()
-        errorTimer.start()
+    // ===== TIMERS =====
+    Timer {
+        id: autoLoginTimer
+        interval: 1500
+        onTriggered: {
+            isAutoLogin = true
+            performLogin()
+        }
     }
     
+    Timer {
+        id: errorTimer
+        interval: 5000
+        onTriggered: {
+            if (!isLoading) {
+                statusMessage = connectionOk ? "Sistema listo para autenticar" : "Error de conexión"
+                statusColor.color = connectionOk ? colorTexto : colorError
+            }
+        }
+    }
+    
+    Timer {
+        id: blockTimer
+        interval: 300000 // 5 minutos
+        onTriggered: {
+            loginSettings.loginAttempts = 0
+            isBlocked = false
+            statusMessage = "Puede intentar nuevamente"
+            statusColor.color = colorTexto
+        }
+    }
+
     function launchMainApp() {
         console.log("🚀 Lanzando aplicación principal...")
         mainWindow.visible = false
@@ -109,15 +264,39 @@ ApplicationWindow {
         border.width: 1
         clip: true
         
-        // Animación de error
-        NumberAnimation {
+        // Animación de error mejorada
+        SequentialAnimation {
             id: errorShake
-            target: mainRect
-            property: "x"
-            from: 0; to: 10; duration: 50
-            loops: 6
-            easing.type: Easing.InOutQuad
-            onFinished: mainRect.x = 0
+            NumberAnimation {
+                target: mainRect
+                property: "x"
+                from: 0; to: -8; duration: 50
+                easing.type: Easing.InOutQuad
+            }
+            NumberAnimation {
+                target: mainRect
+                property: "x"
+                from: -8; to: 8; duration: 100
+                easing.type: Easing.InOutQuad
+            }
+            NumberAnimation {
+                target: mainRect
+                property: "x"
+                from: 8; to: -4; duration: 80
+                easing.type: Easing.InOutQuad
+            }
+            NumberAnimation {
+                target: mainRect
+                property: "x"
+                from: -4; to: 4; duration: 60
+                easing.type: Easing.InOutQuad
+            }
+            NumberAnimation {
+                target: mainRect
+                property: "x"
+                from: 4; to: 0; duration: 40
+                easing.type: Easing.InOutQuad
+            }
         }
 
         // Barra superior con botones de control
@@ -173,7 +352,7 @@ ApplicationWindow {
                     
                     Text {
                         anchors.centerIn: parent
-                        text: "✕"
+                        text: "×"
                         color: "#000"
                         font.pixelSize: 10
                         font.bold: true
@@ -189,7 +368,7 @@ ApplicationWindow {
                 }
             }
             
-            // Título e indicador de conexión
+            // Título e indicador de conexión mejorado
             RowLayout {
                 anchors.left: parent.left
                 anchors.leftMargin: 15
@@ -208,6 +387,23 @@ ApplicationWindow {
                     height: 8
                     radius: 4
                     color: connectionOk ? "#00d63f" : "#ff3838"
+                    
+                    // Animación de pulso para conexión
+                    SequentialAnimation on opacity {
+                        running: true
+                        loops: Animation.Infinite
+                        NumberAnimation { from: 1; to: 0.3; duration: 1000 }
+                        NumberAnimation { from: 0.3; to: 1; duration: 1000 }
+                    }
+                }
+                
+                // Contador de intentos
+                Text {
+                    text: isBlocked ? "BLOQUEADO" : `${loginSettings.loginAttempts}/${maxLoginAttempts}`
+                    font.pixelSize: 10
+                    color: isBlocked ? "#ff3838" : "white"
+                    opacity: 0.8
+                    visible: loginSettings.loginAttempts > 0
                 }
             }
         }
@@ -261,13 +457,20 @@ ApplicationWindow {
                             height: width
                             color: "transparent"
                             
-                            // Icono alternativo si no encuentra la imagen
+                            // Icono alternativo animado
                             Text {
                                 anchors.centerIn: parent
                                 text: "🏥"
                                 font.pixelSize: 120
                                 color: "white"
                                 opacity: 0.6
+                                
+                                SequentialAnimation on scale {
+                                    running: isLoading
+                                    loops: Animation.Infinite
+                                    NumberAnimation { from: 1; to: 1.1; duration: 800 }
+                                    NumberAnimation { from: 1.1; to: 1; duration: 800 }
+                                }
                             }
                         }
                         
@@ -292,7 +495,7 @@ ApplicationWindow {
                         }
                     }
                     
-                    // Columna derecha (formulario)
+                    // Columna derecha (formulario mejorado)
                     Rectangle {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
@@ -313,7 +516,7 @@ ApplicationWindow {
                             
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: "Introduzca sus credenciales"
+                                text: isAutoLogin ? "Ingreso automático..." : "Introduzca sus credenciales"
                                 font.pixelSize: 14
                                 color: colorTexto
                                 opacity: 0.7
@@ -321,13 +524,19 @@ ApplicationWindow {
                             
                             Item { Layout.preferredHeight: 20 }
 
-                            // Campo de usuario
+                            // Campo de usuario mejorado
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 50
                                 radius: 5
-                                border.color: usernameField.activeFocus ? colorBoton : colorBordes
-                                border.width: 1
+                                border.color: {
+                                    if (usernameField.activeFocus) return colorBoton
+                                    if (usernameField.text.length > 0) return colorSuccess
+                                    return colorBordes
+                                }
+                                border.width: usernameField.activeFocus ? 2 : 1
+                                
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
                                 
                                 RowLayout {
                                     anchors.fill: parent
@@ -343,7 +552,9 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             text: "👤"
                                             font.pixelSize: 18
-                                            opacity: 0.6
+                                            opacity: usernameField.text.length > 0 ? 1.0 : 0.6
+                                            
+                                            Behavior on opacity { NumberAnimation { duration: 200 } }
                                         }
                                     }
                                     
@@ -355,20 +566,48 @@ ApplicationWindow {
                                         font.pixelSize: 14
                                         selectByMouse: true
                                         background: null
-                                        enabled: !isLoading
+                                        enabled: !isLoading && !isBlocked
+                                        
+                                        Keys.onReturnPressed: {
+                                            if (text.length > 0) {
+                                                passwordField.forceActiveFocus()
+                                            }
+                                        }
                                         
                                         Keys.onTabPressed: passwordField.forceActiveFocus()
+                                        
+                                        onTextChanged: {
+                                            // Validación en tiempo real
+                                            if (text.length > 0 && passwordField.text.length > 0) {
+                                                loginButton.highlighted = true
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Indicador de validación
+                                    Text {
+                                        text: usernameField.text.length > 2 ? "✓" : ""
+                                        color: colorSuccess
+                                        font.pixelSize: 16
+                                        opacity: usernameField.text.length > 2 ? 1 : 0
+                                        Behavior on opacity { NumberAnimation { duration: 200 } }
                                     }
                                 }
                             }
 
-                            // Campo de contraseña
+                            // Campo de contraseña mejorado
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 50
                                 radius: 5
-                                border.color: passwordField.activeFocus ? colorBoton : colorBordes
-                                border.width: 1
+                                border.color: {
+                                    if (passwordField.activeFocus) return colorBoton
+                                    if (passwordField.text.length > 0) return colorSuccess
+                                    return colorBordes
+                                }
+                                border.width: passwordField.activeFocus ? 2 : 1
+                                
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
                                 
                                 RowLayout {
                                     anchors.fill: parent
@@ -384,7 +623,9 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             text: "🔒"
                                             font.pixelSize: 16
-                                            opacity: 0.6
+                                            opacity: passwordField.text.length > 0 ? 1.0 : 0.6
+                                            
+                                            Behavior on opacity { NumberAnimation { duration: 200 } }
                                         }
                                     }
                                     
@@ -394,54 +635,93 @@ ApplicationWindow {
                                         Layout.fillHeight: true
                                         placeholderText: "Contraseña"
                                         font.pixelSize: 14
-                                        echoMode: TextField.Password
+                                        echoMode: showPassword ? TextField.Normal : TextField.Password
                                         selectByMouse: true
                                         background: null
-                                        enabled: !isLoading
+                                        enabled: !isLoading && !isBlocked
                                         
                                         Keys.onReturnPressed: {
                                             if (!isLoading && loginButton.enabled) {
-                                                loginButton.clicked()
+                                                performLogin()
+                                            }
+                                        }
+                                        
+                                        onTextChanged: {
+                                            // Validación en tiempo real
+                                            if (text.length > 0 && usernameField.text.length > 0) {
+                                                loginButton.highlighted = true
                                             }
                                         }
                                     }
                                     
+                                    // Botón mostrar/ocultar contraseña
                                     Rectangle {
                                         Layout.preferredWidth: 22
                                         Layout.preferredHeight: 22
-                                        color: "transparent"
+                                        color: showPasswordMouseArea.containsMouse ? "#f0f0f0" : "transparent"
+                                        radius: 11
                                         
                                         Text {
                                             anchors.centerIn: parent
-                                            text: passwordField.echoMode === TextField.Password ? "👁️" : "🙈"
+                                            text: showPassword ? "🙈" : "👁️"
                                             font.pixelSize: 16
                                             opacity: 0.6
                                         }
                                         
                                         MouseArea {
+                                            id: showPasswordMouseArea
                                             anchors.fill: parent
-                                            onClicked: {
-                                                passwordField.echoMode = passwordField.echoMode === TextField.Password 
-                                                    ? TextField.Normal : TextField.Password
-                                            }
+                                            hoverEnabled: true
+                                            onClicked: showPassword = !showPassword
                                         }
+                                    }
+                                    
+                                    // Indicador de fortaleza
+                                    Text {
+                                        text: passwordField.text.length >= 6 ? "✓" : ""
+                                        color: colorSuccess
+                                        font.pixelSize: 16
+                                        opacity: passwordField.text.length >= 6 ? 1 : 0
+                                        Behavior on opacity { NumberAnimation { duration: 200 } }
                                     }
                                 }
                             }
                             
-                            // Opciones
+                            // Opciones mejoradas
                             RowLayout {
                                 Layout.fillWidth: true
+                                spacing: 10
                                 
                                 CheckBox {
                                     id: rememberPassword
                                     text: "Recordar credenciales"
-                                    font.pixelSize: 12
-                                    checked: false
-                                    enabled: !isLoading
+                                    font.pixelSize: 11
+                                    checked: loginSettings.rememberCredentials
+                                    enabled: !isLoading && !isBlocked
+                                    
+                                    onCheckedChanged: {
+                                        if (!checked) {
+                                            clearCredentials()
+                                        }
+                                    }
                                 }
                                 
                                 Item { Layout.fillWidth: true }
+                                
+                                CheckBox {
+                                    id: autoLoginCheckbox
+                                    text: "Auto login"
+                                    font.pixelSize: 11
+                                    checked: loginSettings.autoLogin
+                                    enabled: !isLoading && !isBlocked && rememberPassword.checked
+                                    
+                                    onCheckedChanged: loginSettings.autoLogin = checked
+                                }
+                            }
+                            
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
                                 
                                 CheckBox {
                                     id: closeAppCheckbox
@@ -449,32 +729,63 @@ ApplicationWindow {
                                     font.pixelSize: 10
                                     checked: closeApplicationOnExit
                                     enabled: !isLoading
-                                    onCheckedChanged: closeApplicationOnExit = checked
+                                    onCheckedChanged: {
+                                        closeApplicationOnExit = checked
+                                        loginSettings.closeAppOnExit = checked
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                // Botón limpiar credenciales
+                                Button {
+                                    text: "Limpiar"
+                                    font.pixelSize: 10
+                                    enabled: !isLoading && loginSettings.rememberCredentials
+                                    flat: true
+                                    
+                                    onClicked: {
+                                        clearCredentials()
+                                        autoLoginCheckbox.checked = false
+                                        statusMessage = "Credenciales eliminadas"
+                                        showSuccess()
+                                    }
                                 }
                             }
 
-                            // Botón de login personalizado
+                            // Botón de login mejorado
                             Rectangle {
                                 id: loginButton
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 50
                                 radius: 5
-                                enabled: !isLoading && connectionOk && 
+                                
+                                property bool highlighted: false
+                                
+                                enabled: !isLoading && connectionOk && !isBlocked &&
                                         usernameField.text.length > 0 && 
                                         passwordField.text.length > 0
 
                                 // Color del botón basado en estado
                                 color: {
                                     if (!enabled) return "#cccccc"
+                                    if (isBlocked) return colorError
                                     if (mouseArea.pressed) return Qt.darker(colorBoton, 1.2)
-                                    if (mouseArea.containsMouse) return colorHover
+                                    if (mouseArea.containsMouse || highlighted) return colorHover
                                     return colorBoton
                                 }
+                                
+                                Behavior on color { ColorAnimation { duration: 200 } }
 
                                 // Texto del botón
                                 Text {
                                     anchors.centerIn: parent
-                                    text: isLoading ? "VERIFICANDO..." : "INGRESAR"
+                                    text: {
+                                        if (isBlocked) return "BLOQUEADO"
+                                        if (isLoading) return "VERIFICANDO..."
+                                        if (isAutoLogin) return "INGRESO AUTOMÁTICO..."
+                                        return "INGRESAR"
+                                    }
                                     font.pixelSize: 16
                                     font.bold: true
                                     color: "white"
@@ -486,22 +797,25 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     enabled: loginButton.enabled
-                                    onClicked: {
-                                        if (!connectionOk) {
-                                            statusMessage = "Error: No hay conexión con la base de datos"
-                                            return
-                                        }
-                                        
-                                        isLoading = true
-                                        statusMessage = "Verificando credenciales..."
-                                        
-                                        // Usar AuthModel para login
-                                        authModel.login(usernameField.text.trim(), passwordField.text)
-                                    }
+                                    onClicked: performLogin()
+                                }
+                                
+                                // Animación de carga en el botón
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: isLoading ? parent.width : 0
+                                    height: parent.height
+                                    color: Qt.lighter(colorBoton, 1.2)
+                                    radius: parent.radius
+                                    opacity: 0.3
+                                    visible: isLoading
+                                    
+                                    Behavior on width { NumberAnimation { duration: 2000 } }
                                 }
                             }
                             
-                            // Indicador de carga
+                            // Indicador de carga mejorado
                             BusyIndicator {
                                 Layout.alignment: Qt.AlignHCenter
                                 running: isLoading
@@ -510,15 +824,38 @@ ApplicationWindow {
                                 Layout.preferredWidth: 32
                             }
                             
-                            // Estado del sistema
-                            Text {
+                            // Estado del sistema con color dinámico
+                            Rectangle {
                                 Layout.fillWidth: true
-                                text: statusMessage
-                                horizontalAlignment: Text.AlignHCenter
-                                color: connectionOk ? colorTexto : "#ff3838"
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
-                                opacity: 0.8
+                                Layout.preferredHeight: statusText.contentHeight + 8
+                                color: "transparent"
+                                border.color: statusColor.color
+                                border.width: statusMessage !== "Sistema listo para autenticar" ? 1 : 0
+                                radius: 5
+                                opacity: statusMessage !== "Sistema listo para autenticar" ? 0.1 : 0
+                                
+                                Behavior on opacity { NumberAnimation { duration: 200 } }
+                                
+                                Rectangle {
+                                    id: statusColor
+                                    anchors.fill: parent
+                                    color: connectionOk ? colorTexto : colorError
+                                    radius: parent.radius
+                                    opacity: 0.1
+                                    
+                                    Behavior on color { ColorAnimation { duration: 300 } }
+                                }
+                                
+                                Text {
+                                    id: statusText
+                                    anchors.centerIn: parent
+                                    text: statusMessage
+                                    horizontalAlignment: Text.AlignHCenter
+                                    color: statusColor.color
+                                    font.pixelSize: 12
+                                    wrapMode: Text.WordWrap
+                                    font.bold: statusMessage.includes("Error") || isBlocked
+                                }
                             }
                         }
                     }
@@ -527,27 +864,25 @@ ApplicationWindow {
         }
     }
     
-    // Timer para limpiar mensajes de error
-    Timer {
-        id: errorTimer
-        interval: 5000
-        onTriggered: {
-            if (!isLoading) {
-                statusMessage = connectionOk ? "Sistema listo para autenticar" : "Error de conexión"
-            }
-        }
-    }
-    
-    // Animación de éxito
+    // Animación de éxito mejorada
     SequentialAnimation {
         id: successAnimation
         
-        NumberAnimation {
-            target: contenedor
-            property: "scale"
-            from: 1; to: 1.05
-            duration: 200
-            easing.type: Easing.OutQuad
+        ParallelAnimation {
+            NumberAnimation {
+                target: contenedor
+                property: "scale"
+                from: 1; to: 1.05
+                duration: 200
+                easing.type: Easing.OutQuad
+            }
+            
+            ColorAnimation {
+                target: contenedor
+                property: "border.color"
+                from: colorBordes; to: colorSuccess
+                duration: 200
+            }
         }
         
         PauseAnimation { duration: 300 }
@@ -573,11 +908,27 @@ ApplicationWindow {
         onFinished: launchMainApp()
     }
     
-    // Animación de entrada
+    // Animación de entrada mejorada
     Component.onCompleted: {
         mainWindow.opacity = 0
         startupAnimation.start()
-        usernameField.forceActiveFocus()
+        
+        // Cargar credenciales guardadas
+        loadCredentials()
+        
+        // Focus inicial inteligente
+        if (usernameField.text.length > 0) {
+            passwordField.forceActiveFocus()
+        } else {
+            usernameField.forceActiveFocus()
+        }
+        
+        // Verificar si está bloqueado
+        if (isBlocked) {
+            statusMessage = "Cuenta bloqueada por múltiples intentos fallidos"
+            showError()
+            blockTimer.start()
+        }
     }
     
     PropertyAnimation {
@@ -589,19 +940,31 @@ ApplicationWindow {
         easing.type: Easing.OutQuad
     }
     
-    // Manejo de teclas
+    // Manejo de teclas mejorado
     Item {
         focus: true
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape) {
-                handleWindowClose()
-                event.accepted = true
+                if (isLoading) {
+                    // Cancelar operación si es posible
+                    event.accepted = true
+                } else {
+                    handleWindowClose()
+                    event.accepted = true
+                }
             } else if (event.key === Qt.Key_F11) {
                 if (mainWindow.visibility === Window.FullScreen) {
                     mainWindow.showNormal()
                 } else {
                     mainWindow.showFullScreen()
                 }
+                event.accepted = true
+            } else if (event.key === Qt.Key_F1) {
+                statusMessage = "F11: Pantalla completa | ESC: Salir | Enter: Login"
+                showSuccess()
+                event.accepted = true
+            } else if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_L) {
+                clearCredentials()
                 event.accepted = true
             }
         }
