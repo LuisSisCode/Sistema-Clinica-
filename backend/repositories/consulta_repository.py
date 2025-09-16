@@ -270,24 +270,24 @@ class ConsultaRepository(BaseRepository):
         """Obtiene consulta específica con información completa - CORREGIDO"""
         query = """
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
-               -- Paciente (CON CÉDULA)
-               p.id as paciente_id,
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
-               p.Nombre as paciente_nombre, p.Apellido_Paterno as paciente_apellido_p,
-               p.Apellido_Materno as paciente_apellido_m,
-               p.Cedula as paciente_cedula,
-               -- Especialidad/Servicio
-               e.id as especialidad_id, e.Nombre as especialidad_nombre, 
-               e.Detalles as especialidad_detalles,
-               e.Precio_Normal, e.Precio_Emergencia,
-               -- Doctor
-               d.id as doctor_id,
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
-               d.Especialidad as doctor_especialidad, d.Matricula as doctor_matricula,
-               -- Usuario que registró
-               u.id as usuario_id,
-               CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
-               u.correo as usuario_email
+            -- Paciente (CON CÉDULA)
+            p.id as paciente_id,
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
+            p.Nombre as paciente_nombre, p.Apellido_Paterno as paciente_apellido_p,
+            p.Apellido_Materno as paciente_apellido_m,
+            p.Cedula as paciente_cedula,
+            -- Especialidad/Servicio
+            e.id as especialidad_id, e.Nombre as especialidad_nombre, 
+            e.Detalles as especialidad_detalles,
+            e.Precio_Normal, e.Precio_Emergencia,
+            -- Doctor
+            d.id as doctor_id,
+            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
+            d.Especialidad as doctor_especialidad, d.Matricula as doctor_matricula,
+            -- Usuario que registró
+            u.id as usuario_id,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
+            u.nombre_usuario as usuario_username
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
@@ -770,20 +770,21 @@ class ConsultaRepository(BaseRepository):
     # ===============================
     
     def get_consultations_for_report(self, start_date: datetime = None, end_date: datetime = None,
-                                   doctor_id: int = None, specialty_id: int = None) -> List[Dict[str, Any]]:
+                               doctor_id: int = None, specialty_id: int = None) -> List[Dict[str, Any]]:
         """Obtiene consultas formateadas para reportes - CORREGIDO"""
         base_query = """
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
-               -- Paciente (CON CÉDULA)
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
-               p.Cedula as paciente_cedula,
-               -- Especialidad/Servicio
-               e.Nombre as especialidad_nombre, e.Precio_Normal, e.Precio_Emergencia,
-               -- Doctor
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
-               d.Especialidad as doctor_especialidad, d.Matricula as doctor_matricula,
-               -- Usuario
-               CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro
+            -- Paciente (CON CÉDULA)
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
+            p.Cedula as paciente_cedula,
+            -- Especialidad/Servicio
+            e.Nombre as especialidad_nombre, e.Precio_Normal, e.Precio_Emergencia,
+            -- Doctor
+            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
+            d.Especialidad as doctor_especialidad, d.Matricula as doctor_matricula,
+            -- Usuario
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
+            u.nombre_usuario as usuario_username
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id

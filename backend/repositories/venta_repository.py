@@ -177,11 +177,11 @@ class VentaRepository(BaseRepository):
         
         # Obtener datos principales de la venta
         venta_query = """
-        SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
-               u.correo as Vendedor_Email
-        FROM Ventas v
-        INNER JOIN Usuario u ON v.Id_Usuario = u.id
-        WHERE v.id = ?
+            SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
+            u.nombre_usuario as Vendedor_Email
+            FROM Ventas v
+            INNER JOIN Usuario u ON v.Id_Usuario = u.id
+            WHERE v.id = ?
         """
         print(f"🛠 DEBUG: Ejecutando query con parámetro: {venta_id}")
         venta = self._execute_query(venta_query, (venta_id,), fetch_one=True)
@@ -660,3 +660,273 @@ class VentaRepository(BaseRepository):
             'total_db': venta['Total'],
             'total_calculado': total_calculado
         }
+    def get_ventas_filtradas_por_usuario(self, filtro_temporal: str, filtro_estado: str, busqueda_id: str = "", fecha_desde: str = "", fecha_hasta: str = "", usuario_filtro: int = None) -> List[Dict[str, Any]]:
+        """
+        Obtiene ventas aplicando filtros dinámicos con opción de filtrado por usuario específico
+        
+        Args:
+            filtro_temporal: Filtro temporal (Hoy, Ayer, 7 días, etc.)
+            filtro_estado: Estado de las ventas (Activas, Anuladas, Todas)
+            busqueda_id: ID específico de venta a buscar
+            fecha_desde: Fecha de inicio para filtro personalizado
+            fecha_hasta: Fecha de fin para filtro personalizado
+            usuario_filtro: ID de usuario específico (para médicos que solo ven sus ventas)
+        """
+        print(f"🔍 VentaRepository: Aplicando filtros con usuario_filtro: {usuario_filtro}")
+        
+        # Construir WHERE clause dinámicamente
+        where_conditions = []
+        params = []
+        
+        # 1. FILTRO TEMPORAL
+        if filtro_temporal == "Hoy":
+            where_conditions.append("CAST(v.Fecha AS DATE) = CAST(GETDATE() AS DATE)")
+        elif filtro_temporal == "Ayer":
+            where_conditions.append("CAST(v.Fecha AS DATE) = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)")
+        elif filtro_temporal == "7 días":
+            where_conditions.append("v.Fecha >= DATEADD(DAY, -7, GETDATE())")
+        elif filtro_temporal == "30 días":
+            where_conditions.append("v.Fecha >= DATEADD(DAY, -30, GETDATE())")
+        elif filtro_temporal == "Personalizado":
+            if fecha_desde and fecha_hasta:
+                where_conditions.append("CAST(v.Fecha AS DATE) BETWEEN ? AND ?")
+                params.extend([fecha_desde, fecha_hasta])
+            elif fecha_desde:
+                where_conditions.append("CAST(v.Fecha AS DATE) >= ?")
+                params.append(fecha_desde)
+            elif fecha_hasta:
+                where_conditions.append("CAST(v.Fecha AS DATE) <= ?")
+                params.append(fecha_hasta)
+        
+        # 2. FILTRO POR ESTADO
+        if filtro_estado == "Activas":
+            pass  # No agregar condición adicional por ahora
+        elif filtro_estado == "Anuladas":
+            where_conditions.append("1 = 0")  # Para futuras funcionalidades
+        
+        # 3. BÚSQUEDA POR ID
+        if busqueda_id.strip():
+            try:
+                venta_id = int(busqueda_id.strip())
+                where_conditions.append("v.id = ?")
+                params.append(venta_id)
+            except ValueError:
+                where_conditions.append("1 = 0")
+        
+        # 4. ✅ NUEVO: FILTRO POR USUARIO (para médicos)
+        if usuario_filtro is not None and usuario_filtro > 0:
+            where_conditions.append("v.Id_Usuario = ?")
+            params.append(usuario_filtro)
+            print(f"🔒 Filtrando ventas solo del usuario: {usuario_filtro}")
+        
+        # Construir query final
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+        
+        query = f"""
+        SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
+        FROM Ventas v
+        INNER JOIN Usuario u ON v.Id_Usuario = u.id
+        {where_clause}
+        ORDER BY v.Fecha DESC
+        """
+        
+        try:
+            resultado = self._execute_query(query, tuple(params), use_cache=False)
+            print(f"🔍 Filtros aplicados: {len(resultado) if resultado else 0} ventas encontradas")
+            return resultado or []
+        except Exception as e:
+            print(f"❌ Error en filtros con usuario: {e}")
+            return []
+        
+    def get_ventas_del_dia_por_usuario(self, fecha: str = None, usuario_id: int = None) -> Dict[str, Any]:
+        """
+        Obtiene resumen de ventas del día para un usuario específico (para médicos)
+        
+        Args:
+            fecha: Fecha específica (YYYY-MM-DD)
+            usuario_id: ID del usuario para filtrar
+        """
+        if not fecha:
+            fecha = datetime.now().strftime('%Y-%m-%d')
+        
+        # Base query con filtro de usuario
+        base_where = "WHERE CAST(v.Fecha AS DATE) = ?"
+        params = [fecha]
+        
+        if usuario_id is not None and usuario_id > 0:
+            base_where += " AND v.Id_Usuario = ?"
+            params.append(usuario_id)
+            print(f"📊 Estadísticas del día para usuario: {usuario_id}")
+        
+        query = f"""
+        SELECT 
+            COUNT(v.id) as Total_Ventas,
+            ISNULL(SUM(v.Total), 0) as Ingresos_Total,
+            ISNULL(AVG(v.Total), 0) as Ticket_Promedio,
+            SUM(dv.Cantidad_Unitario) as Unidades_Vendidas,
+            COUNT(DISTINCT p.id) as Productos_Diferentes
+        FROM Ventas v
+        LEFT JOIN DetallesVentas dv ON v.id = dv.Id_Venta
+        LEFT JOIN Lote l ON dv.Id_Lote = l.id
+        LEFT JOIN Productos p ON l.Id_Producto = p.id
+        {base_where}
+        """
+        
+        resumen = self._execute_query(query, tuple(params), fetch_one=True)
+        
+        # Obtener ventas detalladas del usuario para el día
+        ventas_query = f"""
+        SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
+        FROM Ventas v
+        INNER JOIN Usuario u ON v.Id_Usuario = u.id
+        {base_where}
+        ORDER BY v.Fecha DESC
+        """
+        
+        ventas = self._execute_query(ventas_query, tuple(params))
+        
+        return {
+            'fecha': fecha,
+            'usuario_id': usuario_id,
+            'resumen': resumen,
+            'ventas': ventas
+        }
+
+    def get_ventas_por_vendedor_periodo(self, fecha_desde: str = None, fecha_hasta: str = None, usuario_id: int = None) -> List[Dict[str, Any]]:
+        """
+        Estadísticas de ventas por vendedor con filtro opcional por usuario específico
+        
+        Args:
+            fecha_desde: Fecha de inicio
+            fecha_hasta: Fecha de fin  
+            usuario_id: ID de usuario específico (para filtrar solo un vendedor)
+        """
+        where_conditions = []
+        params = []
+        
+        # Filtro de fechas
+        if fecha_desde and fecha_hasta:
+            where_conditions.append("v.Fecha BETWEEN ? AND ?")
+            params.extend([fecha_desde, fecha_hasta])
+        elif fecha_desde:
+            where_conditions.append("v.Fecha >= ?")
+            params.append(fecha_desde)
+        elif fecha_hasta:
+            where_conditions.append("v.Fecha <= ?")
+            params.append(fecha_hasta)
+        
+        # Filtro por usuario específico
+        if usuario_id is not None and usuario_id > 0:
+            where_conditions.append("u.id = ?")
+            params.append(usuario_id)
+        
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+        
+        query = f"""
+        SELECT 
+            u.id as Usuario_ID,
+            u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
+            COUNT(v.id) as Total_Ventas,
+            SUM(v.Total) as Ingresos_Total,
+            AVG(v.Total) as Ticket_Promedio,
+            MAX(v.Total) as Venta_Mayor,
+            MIN(v.Total) as Venta_Menor
+        FROM Usuario u
+        LEFT JOIN Ventas v ON u.id = v.Id_Usuario
+        {where_clause}
+        GROUP BY u.id, u.Nombre, u.Apellido_Paterno
+        HAVING COUNT(v.id) > 0
+        ORDER BY Ingresos_Total DESC
+        """
+        return self._execute_query(query, tuple(params))
+
+    def verificar_permisos_venta(self, venta_id: int, usuario_id: int) -> bool:
+        """
+        Verifica si un usuario tiene permisos para acceder a una venta específica
+        
+        Args:
+            venta_id: ID de la venta
+            usuario_id: ID del usuario que solicita acceso
+            
+        Returns:
+            bool: True si puede acceder, False caso contrario
+        """
+        try:
+            query = "SELECT Id_Usuario FROM Ventas WHERE id = ?"
+            venta = self._execute_query(query, (venta_id,), fetch_one=True)
+            
+            if not venta:
+                return False
+            
+            # El usuario puede ver su propia venta
+            return venta['Id_Usuario'] == usuario_id
+            
+        except Exception as e:
+            print(f"❌ Error verificando permisos de venta: {e}")
+            return False
+
+    def get_estadisticas_usuario(self, usuario_id: int, dias: int = 30) -> Dict[str, Any]:
+        """
+        Obtiene estadísticas específicas de un usuario en un período
+        
+        Args:
+            usuario_id: ID del usuario
+            dias: Número de días hacia atrás
+        """
+        try:
+            # Estadísticas básicas del usuario
+            stats_query = """
+            SELECT 
+                COUNT(v.id) as Total_Ventas,
+                SUM(v.Total) as Ingresos_Total,
+                AVG(v.Total) as Ticket_Promedio,
+                SUM(dv.Cantidad_Unitario) as Unidades_Vendidas,
+                COUNT(DISTINCT p.id) as Productos_Diferentes,
+                MIN(v.Fecha) as Primera_Venta,
+                MAX(v.Fecha) as Ultima_Venta
+            FROM Ventas v
+            LEFT JOIN DetallesVentas dv ON v.id = dv.Id_Venta
+            LEFT JOIN Lote l ON dv.Id_Lote = l.id
+            LEFT JOIN Productos p ON l.Id_Producto = p.id
+            WHERE v.Id_Usuario = ? AND v.Fecha >= DATEADD(DAY, -?, GETDATE())
+            """
+            
+            estadisticas = self._execute_query(stats_query, (usuario_id, dias), fetch_one=True)
+            
+            # Top productos vendidos por el usuario
+            top_productos_query = """
+            SELECT TOP 5
+                p.Codigo,
+                p.Nombre as Producto_Nombre,
+                SUM(dv.Cantidad_Unitario) as Cantidad_Vendida,
+                COUNT(DISTINCT v.id) as Num_Ventas
+            FROM Ventas v
+            INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
+            INNER JOIN Lote l ON dv.Id_Lote = l.id
+            INNER JOIN Productos p ON l.Id_Producto = p.id
+            WHERE v.Id_Usuario = ? AND v.Fecha >= DATEADD(DAY, -?, GETDATE())
+            GROUP BY p.id, p.Codigo, p.Nombre
+            ORDER BY Cantidad_Vendida DESC
+            """
+            
+            top_productos = self._execute_query(top_productos_query, (usuario_id, dias))
+            
+            return {
+                'usuario_id': usuario_id,
+                'periodo_dias': dias,
+                'estadisticas': estadisticas,
+                'top_productos': top_productos
+            }
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo estadísticas de usuario {usuario_id}: {e}")
+            return {
+                'usuario_id': usuario_id,
+                'periodo_dias': dias,
+                'estadisticas': {},
+                'top_productos': []
+            }

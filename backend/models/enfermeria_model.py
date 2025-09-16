@@ -1,6 +1,6 @@
 """
-Modelo QObject para Enfermería COMPLETO - ACTUALIZADO con autenticación estandarizada
-Migrado del patrón hardcoded al patrón de autenticación dinámico
+Modelo QObject para Enfermería - CON RESTRICCIONES DE SEGURIDAD
+Migrado del patrón hardcoded al patrón de autenticación dinámica con verificación de permisos
 """
 
 import logging
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class EnfermeriaModel(QObject):
     """
-    Modelo QObject COMPLETO para Enfermería con autenticación estandarizada
+    Modelo QObject COMPLETO para Enfermería CON RESTRICCIONES DE SEGURIDAD
     """
     
     # ===============================
@@ -43,7 +43,7 @@ class EnfermeriaModel(QObject):
     estadoCambiado = Signal(str, arguments=['nuevoEstado'])
     errorOcurrido = Signal(str, str, arguments=['mensaje', 'codigo'])
     operacionExitosa = Signal(str, arguments=['mensaje'])
-    operacionError = Signal(str, arguments=['mensaje'])  # Para compatibilidad
+    operacionError = Signal(str, arguments=['mensaje'])
     
     # Datos actualizados
     procedimientosRecientesChanged = Signal()
@@ -79,14 +79,15 @@ class EnfermeriaModel(QObject):
             self._estadisticasData = {}
             self._estadoActual = "inicializando"
             
-            # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL Y LABORATORIOMODEL
-            self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+            # ✅ AUTENTICACIÓN CON ROL
+            self._usuario_actual_id = 0
+            self._usuario_actual_rol = ""  # ✅ NUEVO: Almacenar rol del usuario
             print("🩹 EnfermeriaModel inicializado - Esperando autenticación")
             
             # Propiedades de paginación
             self._currentPage = 0
             self._totalPages = 0
-            self._itemsPerPage = 6  # Default consistente
+            self._itemsPerPage = 6
             self._totalRecords = 0
             
             # Filtros estandarizados
@@ -99,13 +100,13 @@ class EnfermeriaModel(QObject):
             }
             
             # Configuración de auto-refresh optimizado
-            self._autoRefreshInterval = 30000  # 30 segundos
+            self._autoRefreshInterval = 30000
             self._setupAutoRefresh()
             
             # Inicialización inmediata
             self._inicializar_datos()
             
-            logger.info("✅ EnfermeriaModel con autenticación inicializado correctamente")
+            logger.info("✅ EnfermeriaModel con restricciones de seguridad inicializado correctamente")
             
         except Exception as e:
             logger.error(f"❌ Error inicializando EnfermeriaModel: {e}")
@@ -113,19 +114,20 @@ class EnfermeriaModel(QObject):
             self._estadoActual = "error"
     
     # ===============================
-    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
+    # ✅ MÉTODOS DE AUTENTICACIÓN ACTUALIZADOS
     # ===============================
     
-    @Slot(int)
-    def set_usuario_actual(self, usuario_id: int):
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
         """
-        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        Establece el usuario actual CON ROL para verificaciones de permisos
         """
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario autenticado establecido en EnfermeriaModel: {usuario_id}")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de enfermería")
+                self._usuario_actual_rol = usuario_rol.strip()
+                print(f"👤 Usuario establecido en EnfermeriaModel: ID {usuario_id}, Rol: {usuario_rol}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido en módulo de enfermería")
             else:
                 print(f"⚠️ ID de usuario inválido en EnfermeriaModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
@@ -138,19 +140,67 @@ class EnfermeriaModel(QObject):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
     
+    @Property(str, notify=operacionExitosa)
+    def usuario_actual_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_actual_rol
+    
     # ===============================
-    # PROPIEDADES DE AUTENTICACIÓN
+    # ✅ MÉTODOS DE VERIFICACIÓN DE PERMISOS
     # ===============================
     
     def _verificar_autenticacion(self) -> bool:
-        """Verifica si el usuario está autenticado"""
+        """Verifica autenticación básica"""
         if self._usuario_actual_id <= 0:
             self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
             return False
         return True
     
+    def _verificar_permisos_admin(self) -> bool:
+        """Verifica permisos de administrador"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if self._usuario_actual_rol != "Administrador":
+            self.operacionError.emit("Solo administradores pueden realizar esta operación")
+            print(f"🚫 Acceso denegado: Usuario {self._usuario_actual_id} (Rol: {self._usuario_actual_rol})")
+            return False
+        
+        return True
+    
+    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 3) -> bool:
+        """Valida que el registro no sea muy antiguo para editar - ENFERMERÍA: 3 días"""
+        try:
+            if not fecha_registro:
+                return True  # Si no hay fecha, permitir edición
+            
+            # Convertir a datetime si es necesario
+            if isinstance(fecha_registro, str):
+                try:
+                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
+                except:
+                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
+            elif isinstance(fecha_registro, datetime):
+                fecha_obj = fecha_registro
+            else:
+                return True  # Si no se puede determinar la fecha, permitir
+            
+            # Calcular diferencia
+            dias_transcurridos = (datetime.now() - fecha_obj).days
+            
+            if dias_transcurridos > dias_limite:
+                self.operacionError.emit(f"No se pueden editar procedimientos de más de {dias_limite} días")
+                print(f"📅 Edición bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error validando fecha: {e}")
+            return True  # En caso de error, permitir la operación
+    
     # ===============================
-    # CONEXIONES Y PROPIEDADES (SIN CAMBIOS)
+    # CONEXIONES Y PROPIEDADES (SIN CAMBIOS ESTRUCTURALES)
     # ===============================
     
     def _conectar_senales_globales(self):
@@ -456,7 +506,7 @@ class EnfermeriaModel(QObject):
                 self.operacionError.emit("Apellido paterno es obligatorio")
                 return -1
             
-            print(f"🔄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"🔄 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) gestionando paciente: {nombre} {apellido_paterno}")
             
             # Buscar paciente existente primero
             paciente_existente = self.repository.buscar_paciente_por_cedula_exacta(cedula.strip())
@@ -516,7 +566,7 @@ class EnfermeriaModel(QObject):
             return []
     
     # ===============================
-    # ✅ OPERACIONES CRUD CON VERIFICACIÓN DE AUTENTICACIÓN
+    # ✅ OPERACIONES CRUD CON RESTRICCIONES DE SEGURIDAD
     # ===============================
     
     @Slot('QVariant', result=str)
@@ -558,7 +608,7 @@ class EnfermeriaModel(QObject):
                 'fecha': datetime.now()
             }
             
-            print(f"💾 Creando procedimiento con usuario {self._usuario_actual_id}: {datos_repo}")
+            print(f"💾 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando procedimiento")
             
             # Crear procedimiento
             procedimiento_id = self.repository.crear_procedimiento_enfermeria(datos_repo)
@@ -588,7 +638,7 @@ class EnfermeriaModel(QObject):
     
     @Slot('QVariant', int, result=str)
     def actualizar_procedimiento(self, datos_procedimiento, procedimiento_id: int):
-        """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN
             if not self._verificar_autenticacion():
@@ -599,6 +649,11 @@ class EnfermeriaModel(QObject):
             if procedimiento_id <= 0:
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "ID de procedimiento inválido")
+            
+            # ✅ VALIDAR FECHA DE EDICIÓN (3 días para enfermería)
+            proc_actual = self.repository.get_procedimiento_by_id(procedimiento_id)
+            if proc_actual and not self._validar_fecha_edicion(proc_actual.get('Fecha'), dias_limite=3):
+                return self._crear_respuesta_json(False, "Procedimiento muy antiguo para editar")
             
             # Convertir datos
             if hasattr(datos_procedimiento, 'toVariant'):
@@ -627,7 +682,7 @@ class EnfermeriaModel(QObject):
                 'idTrabajador': int(datos.get('idTrabajador', 0))
             }
             
-            print(f"🔄 Actualizando procedimiento ID: {procedimiento_id} por usuario: {self._usuario_actual_id}")
+            print(f"📝 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando procedimiento ID: {procedimiento_id}")
             
             # Actualizar procedimiento
             exito = self.repository.actualizar_procedimiento_enfermeria(procedimiento_id, datos_repo)
@@ -660,15 +715,15 @@ class EnfermeriaModel(QObject):
 
     @Slot(int, result=bool)
     def eliminar_procedimiento(self, procedimiento_id: int) -> bool:
-        """Elimina procedimiento - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Elimina procedimiento - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_autenticacion():
+            # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
+            if not self._verificar_permisos_admin():
                 return False
             
             self._set_estado_actual("cargando")
             
-            print(f"🗑️ Eliminando procedimiento ID: {procedimiento_id} por usuario: {self._usuario_actual_id}")
+            print(f"🗑️ Admin {self._usuario_actual_id} eliminando procedimiento ID: {procedimiento_id}")
             
             exito = self.repository.eliminar_procedimiento_enfermeria(procedimiento_id)
             
@@ -693,7 +748,7 @@ class EnfermeriaModel(QObject):
             self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return False
-    
+              
     # ===============================
     # GESTIÓN DE DATOS (SIN CAMBIOS - LECTURA)
     # ===============================
@@ -708,6 +763,145 @@ class EnfermeriaModel(QObject):
         except Exception as e:
             self.errorOcurrido.emit(f"Error cargando procedimientos: {str(e)}", 'LOAD_ERROR')
             self._set_estado_actual("error")
+    
+    # ===============================
+    # APLICAR FILTROS Y PAGINACIÓN (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
+    
+    @Slot(str, str, str, str, str)
+    def aplicar_filtros_y_recargar(self, search_term: str = "", tipo_procedimiento: str = "", 
+                                tipo: str = "", fecha_desde: str = "", fecha_hasta: str = ""):
+        """Aplica filtros estandarizados - SIN VERIFICACIÓN (solo lectura)"""
+        try:
+            self._set_estado_actual("cargando")
+            
+            print("🔍 FILTROS RECIBIDOS EN MODELO:")
+            print(f"   - search_term: '{search_term}'")
+            print(f"   - tipo_procedimiento: '{tipo_procedimiento}'") 
+            print(f"   - tipo: '{tipo}' ← CRÍTICO")
+            print(f"   - fecha_desde: '{fecha_desde}'")
+            print(f"   - fecha_hasta: '{fecha_hasta}'")
+            
+            # Resetear a página 0 siempre que cambien filtros
+            self._currentPage = 0
+            
+            # Limpiar y estandarizar parámetros
+            filtros_limpios = {
+                'busqueda': search_term.strip() if search_term else "",
+                'tipo_procedimiento': tipo_procedimiento.strip() if tipo_procedimiento else "",
+                'tipo': tipo.strip() if tipo else "",
+                'fecha_desde': fecha_desde.strip() if fecha_desde else "",
+                'fecha_hasta': fecha_hasta.strip() if fecha_hasta else ""
+            }
+            
+            # Validación específica para tipo
+            tipo_limpio = filtros_limpios['tipo']
+            if tipo_limpio and tipo_limpio not in ["", "Todos"]:
+                if tipo_limpio not in ["Normal", "Emergencia"]:
+                    print(f"⚠️ TIPO INVÁLIDO RECIBIDO: '{tipo_limpio}' - Ignorando")
+                    filtros_limpios['tipo'] = ""
+                else:
+                    print(f"✅ TIPO VÁLIDO: '{tipo_limpio}'")
+            
+            # Filtrar valores vacíos y "Todos"
+            filtros_aplicables = {}
+            for key, value in filtros_limpios.items():
+                if value and value not in ["", "Todos", "Seleccionar procedimiento..."]:
+                    filtros_aplicables[key] = value
+            
+            print(f"📋 FILTROS FINALES PARA REPOSITORIO: {filtros_aplicables}")
+            
+            # Actualizar filtros internos
+            self._filtrosActuales = filtros_aplicables
+            
+            # Obtener datos paginados con filtros
+            self.obtener_procedimientos_paginados(0, self._itemsPerPage, filtros_aplicables)
+            
+            # Emitir señal de filtros aplicados
+            import json
+            self.filtrosAplicados.emit(json.dumps(filtros_aplicables, ensure_ascii=False))
+            
+        except Exception as e:
+            error_msg = f"Error aplicando filtros: {str(e)}"
+            print(f"❌ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'FILTER_ERROR')
+            self._set_estado_actual("error")
+    
+    @Slot(int, int, 'QVariant', result='QVariant')
+    def obtener_procedimientos_paginados(self, page: int, limit: int = 6, filters=None):
+        """Obtiene página específica - SIN VERIFICACIÓN (solo lectura)"""
+        try:
+            if page < 0:
+                page = 0
+                
+            limit_real = self._itemsPerPage
+            
+            if filters:
+                if hasattr(filters, 'toVariant'):
+                    filtros_dict = filters.toVariant()
+                else:
+                    filtros_dict = filters
+            else:
+                filtros_dict = self._filtrosActuales
+            
+            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
+            print(f"🔍 Filtros aplicados: {filtros_dict}")
+            
+            procedimientos = self.repository.obtener_procedimientos_paginados(
+                page * limit_real, limit_real, filtros_dict
+            )
+            
+            total_records = self.repository.contar_procedimientos_filtrados(filtros_dict)
+            
+            # Actualizar propiedades internas
+            old_page = self._currentPage
+            old_total_pages = self._totalPages
+            old_total_records = self._totalRecords
+
+            self._currentPage = page
+            self._totalRecords = total_records
+            self._totalPages = max(1, (self._totalRecords + limit_real - 1) // limit_real) if total_records > 0 else 1
+            
+            # Actualizar datos procedimientos
+            self._procedimientosData = procedimientos
+            
+            # Emitir señales solo si cambiaron las propiedades
+            if old_page != self._currentPage:
+                self.currentPageChanged.emit()
+            if old_total_pages != self._totalPages:
+                self.totalPagesChanged.emit()
+            if old_total_records != self._totalRecords:
+                self.totalRecordsChanged.emit()
+                
+            # Emitir señal de datos actualizados
+            self.procedimientosRecientesChanged.emit()
+            
+            print(f"✅ Página {page + 1} cargada: {len(self._procedimientosData)} registros de {self._totalRecords}")
+            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
+            
+            self._set_estado_actual("listo")
+            
+            return {
+                'procedimientos': self._procedimientosData,
+                'page': page,
+                'limit': limit_real,
+                'total_records': self._totalRecords,
+                'total_pages': self._totalPages,
+                'success': True
+            }
+            
+        except Exception as e:
+            error_msg = f"Error obteniendo procedimientos paginados: {str(e)}"
+            print(f"❌ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'PAGINATION_EXCEPTION')
+            self._set_estado_actual("error")
+            return {'procedimientos': [], 'total': 0, 'page': 0, 'total_pages': 0, 'success': False}
+    
+    # ===============================
+    # GESTIÓN DE DATOS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
     
     @Slot()
     def actualizar_tipos_procedimientos(self):
@@ -789,7 +983,7 @@ class EnfermeriaModel(QObject):
             logger.error(error_msg)
             self.errorOcurrido.emit(error_msg, 'REFRESH_ERROR')
             self._set_estado_actual("error")
-    
+
     @Slot()
     def limpiar_cache_procedimientos(self):
         """Limpia cache para forzar recarga"""
@@ -825,7 +1019,7 @@ class EnfermeriaModel(QObject):
             return json.dumps({'error': error_msg})
     
     # ===============================
-    # MÉTODOS INTERNOS (SIN CAMBIOS)
+    # MÉTODOS INTERNOS (SIN CAMBIOS IMPORTANTES)
     # ===============================
     
     def _inicializar_datos(self):
@@ -849,7 +1043,6 @@ class EnfermeriaModel(QObject):
         """Carga procedimientos usando filtros actuales"""
         try:
             print(f"🔄 Recargando procedimientos con {self._itemsPerPage} elementos por página")
-            # Usar paginación con filtros actuales
             self.obtener_procedimientos_paginados(self._currentPage, self._itemsPerPage, self._filtrosActuales)
         except Exception as e:
             print(f"❌ Error recargando procedimientos: {e}")
@@ -940,30 +1133,16 @@ class EnfermeriaModel(QObject):
         """Auto-refresh optimizado"""
         self._autoRefreshTimer = QTimer(self)
         self._autoRefreshTimer.timeout.connect(self._auto_refresh_ligero)
-        # Deshabilitado por defecto - se puede activar desde QML si es necesario
+        # Deshabilitado por defecto
     
     def _auto_refresh_ligero(self):
         """Auto-refresh ligero que no interfiere con la interfaz"""
         try:
             if self._estadoActual == "listo":
-                # Solo refrescar si no hay operaciones en curso
                 self.actualizar_tipos_procedimientos()
                 self.actualizar_trabajadores_enfermeria()
         except Exception as e:
             logger.error(f"Error en auto-refresh: {e}")
-    
-    @Slot(int)
-    def setAutoRefreshInterval(self, intervalMs: int):
-        """Configura intervalo de actualización automática"""
-        if intervalMs > 0:
-            self._autoRefreshInterval = intervalMs
-            if hasattr(self, '_autoRefreshTimer'):
-                self._autoRefreshTimer.start(intervalMs)
-                print(f"⏰ Auto-refresh activado: {intervalMs}ms")
-        else:
-            if hasattr(self, '_autoRefreshTimer'):
-                self._autoRefreshTimer.stop()
-                print("⏰ Auto-refresh desactivado")
     
     @Slot()
     def _actualizar_tipos_procedimientos_desde_signal(self):
@@ -980,27 +1159,20 @@ class EnfermeriaModel(QObject):
         """Maneja actualizaciones globales de enfermería"""
         try:
             print(f"📡 EnfermeriaModel: {mensaje}")
-            # Emitir señal para notificar a QML que hay cambios
             self.tiposProcedimientosActualizados.emit()
         except Exception as e:
             print(f"❌ Error manejando actualización global: {e}")
 
     def cleanup(self):
-        """
-        Método genérico de limpieza para cualquier modelo QObject
-        Detiene timers, desconecta señales y libera recursos
-        """
+        """Método genérico de limpieza para cualquier modelo QObject"""
         try:
             model_name = self.__class__.__name__
             print(f"🧹 Iniciando limpieza de {model_name}...")
             
-            # 1. DETENER TODOS LOS TIMERS
+            # Detener timers
             timer_count = 0
             for attr_name in dir(self):
-                if (attr_name.endswith('Timer') or attr_name.endswith('_timer') or 
-                    (hasattr(getattr(self, attr_name), 'isActive') and 
-                    callable(getattr(getattr(self, attr_name), 'isActive')))):
-                    
+                if (attr_name.endswith('Timer') or attr_name.endswith('_timer')):
                     timer = getattr(self, attr_name)
                     if timer and hasattr(timer, 'isActive') and timer.isActive():
                         try:
@@ -1012,10 +1184,11 @@ class EnfermeriaModel(QObject):
             if timer_count > 0:
                 print(f"⏹️ {timer_count} timers detenidos")
             
-            # 2. RESETEAR USUARIO AUTENTICADO
+            # ✅ RESETEAR USUARIO Y ROL
             self._usuario_actual_id = 0
+            self._usuario_actual_rol = ""
             
-            # 3. LIMPIAR DATOS EN MEMORIA
+            # Limpiar datos en memoria
             self._procedimientosData = []
             self._tiposProcedimientosData = []
             self._trabajadoresData = []
@@ -1033,10 +1206,10 @@ class EnfermeriaModel(QObject):
 # ===============================
 
 def register_enfermeria_model():
-    """Registra el EnfermeriaModel con autenticación para uso en QML"""
+    """Registra el EnfermeriaModel con restricciones de seguridad para uso en QML"""
     try:
         qmlRegisterType(EnfermeriaModel, "Clinica.Models", 1, 0, "EnfermeriaModel")
-        print("✅ EnfermeriaModel con autenticación registrado para QML")
+        print("✅ EnfermeriaModel con restricciones de seguridad registrado para QML")
     except Exception as e:
         print(f"❌ Error registrando EnfermeriaModel: {e}")
         raise

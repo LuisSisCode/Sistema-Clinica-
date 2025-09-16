@@ -67,9 +67,9 @@ class ConsultaModel(QObject):
         self._dashboardData = {}
         self._estadisticasData = {}
         self._estadoActual = "listo"  # listo, cargando, error
-        
-        # ✅ AGREGAR: Usuario actual para compatibilidad con AppController
-        self._usuario_actual_id = 0  # Cambio de 10 a 0
+        # ✅ AUTENTICACIÓN CON ROL
+        self._usuario_actual_id = 0
+        self._usuario_actual_rol = ""  # ✅ NUEVO: Almacenar rol del usuario
         print("🩺 ConsultaModel inicializado - Esperando autenticación")
         
         # Configuración
@@ -93,14 +93,34 @@ class ConsultaModel(QObject):
             print(f"❌ Error conectando señales globales en ConsultaModel: {e}")
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
+        """Método simple para establecer usuario (sin rol) - Para compatibilidad"""
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario establecido en ConsultaModel (simple): ID {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de consultas")
+            else:
+                print(f"⚠️ ID de usuario inválido en ConsultaModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en ConsultaModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
         """
-        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        ✅ MÉTODO PRINCIPAL - Establece el usuario actual CON ROL para verificaciones de permisos
         """
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario autenticado establecido en ConsultaModel: {usuario_id}")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de consultas")
+                self._usuario_actual_rol = usuario_rol.strip()
+                print(f"👤 Usuario establecido en ConsultaModel: ID {usuario_id}, Rol: {usuario_rol}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido en módulo de consultas")
+                
+                # ✅ CARGAR DATOS INICIALES DESPUÉS DE AUTENTICACIÓN
+                self.refrescar_datos()
+                
             else:
                 print(f"⚠️ ID de usuario inválido en ConsultaModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
@@ -112,7 +132,72 @@ class ConsultaModel(QObject):
     def usuario_actual_id(self):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
+    @Property(str, notify=operacionExitosa)
+    def usuario_actual_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_actual_rol
+    # ===============================
+    # ✅ MÉTODOS DE VERIFICACIÓN DE PERMISOS
+    # ===============================
     
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica autenticación básica"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    def _verificar_permisos_admin(self) -> bool:
+        """Verifica permisos de administrador"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if self._usuario_actual_rol != "Administrador":
+            self.operacionError.emit("Solo administradores pueden realizar esta operación")
+            print(f"🚫 Acceso denegado: Usuario {self._usuario_actual_id} (Rol: {self._usuario_actual_rol})")
+            return False
+        
+        return True
+    def _verificar_permisos_medico_o_admin(self) -> bool:
+        """Verifica permisos de médico o administrador"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if self._usuario_actual_rol not in ["Administrador", "Médico"]:
+            self.operacionError.emit("Solo médicos y administradores pueden realizar esta operación")
+            print(f"🚫 Acceso denegado: Usuario {self._usuario_actual_id} (Rol: {self._usuario_actual_rol})")
+            return False
+        
+        return True
+    
+    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 7) -> bool:
+        """Valida que el registro no sea muy antiguo para editar"""
+        try:
+            if not fecha_registro:
+                return True  # Si no hay fecha, permitir edición
+            
+            # Convertir a datetime si es necesario
+            if isinstance(fecha_registro, str):
+                try:
+                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
+                except:
+                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
+            elif isinstance(fecha_registro, datetime):
+                fecha_obj = fecha_registro
+            else:
+                return True  # Si no se puede determinar la fecha, permitir
+            
+            # Calcular diferencia - las consultas NO tienen límite de tiempo
+            # Comentado para consultas: días_transcurridos = (datetime.now() - fecha_obj).days
+            # if dias_transcurridos > dias_limite:
+            #     self.operacionError.emit(f"No se pueden editar consultas de más de {dias_limite} días")
+            #     return False
+            
+            return True  # ✅ Consultas editables sin límite de tiempo
+            
+        except Exception as e:
+            print(f"❌ Error validando fecha: {e}")
+            return True  # En caso de error, permitir la operación
     # ===============================
     # PROPERTIES PARA QML
     # ===============================
@@ -245,19 +330,12 @@ class ConsultaModel(QObject):
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
                                           apellido_materno: str = "", cedula: str = "") -> int:
-        """
-        Busca paciente por cédula o crea uno nuevo si no existe
-        
-        Args:
-            nombre (str): Nombre del paciente
-            apellido_paterno (str): Apellido paterno
-            apellido_materno (str): Apellido materno (opcional)
-            cedula (str): Cédula de identidad
-            
-        Returns:
-            int: ID del paciente (existente o nuevo creado)
-        """
+        """Busca paciente por cédula o crea uno nuevo - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
+            if not self._verificar_autenticacion():
+                return -1
+            
             if not cedula or len(cedula.strip()) < 5:
                 self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
                 return -1
@@ -270,7 +348,7 @@ class ConsultaModel(QObject):
                 self.operacionError.emit("Apellido paterno es obligatorio")
                 return -1
             
-            print(f"📄 Gestionando paciente: {nombre} {apellido_paterno} - Cédula: {cedula}")
+            print(f"🔄 Usuario {self._usuario_actual_id} gestionando paciente: {nombre} {apellido_paterno}")
             
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
@@ -293,16 +371,15 @@ class ConsultaModel(QObject):
             return -1
     
     # ===============================
-    # SLOTS PARA OPERACIONES CRUD - CORREGIDOS CON USUARIO
+    # SLOTS PARA OPERACIONES CRUD
     # ===============================
     
     @Slot('QVariant', result=str)
     def crear_consulta(self, datos_consulta):
-        """Crea nueva consulta médica - CORREGIDO con verificación de autenticación"""
+        """Crea nueva consulta médica - ✅ MÉDICOS Y ADMINISTRADORES PUEDEN CREAR"""
         try:
-            # ✅ VERIFICACIÓN DE AUTENTICACIÓN PRIMERO
-            if self._usuario_actual_id <= 0:
-                self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            # ✅ VERIFICACIÓN DE AUTENTICACIÓN PRIMERO - MÉDICOS PUEDEN CREAR
+            if not self._verificar_autenticacion():
                 return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
             
             self._set_estado_actual("cargando")
@@ -328,9 +405,11 @@ class ConsultaModel(QObject):
             if len(detalles) < 10:
                 raise ValueError("Detalles muy cortos (mínimo 10 caracteres)")
             
+            print(f"🩺 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando consulta")
+            
             # ✅ USAR usuario actual autenticado
             consulta_id = self.repository.create_consultation(
-                usuario_id=self._usuario_actual_id,  # Usar usuario autenticado
+                usuario_id=self._usuario_actual_id,
                 paciente_id=paciente_id,
                 especialidad_id=especialidad_id,
                 detalles=detalles,
@@ -365,20 +444,26 @@ class ConsultaModel(QObject):
     
     @Slot(int, 'QVariant', result=str)
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
-        """Actualiza consulta existente - CORREGIDO con verificación de autenticación"""
+        """Actualiza consulta existente - ✅ SOLO ADMINISTRADORES PUEDEN EDITAR"""
         try:
-            # ✅ VERIFICACIÓN DE AUTENTICACIÓN
-            if self._usuario_actual_id <= 0:
-                self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
-                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            # ✅ CAMBIO CRÍTICO: VERIFICAR PERMISOS DE ADMIN PARA EDICIÓN
+            if not self._verificar_permisos_admin():
+                return json.dumps({'exito': False, 'error': 'Solo administradores pueden editar consultas'})
             
             self._set_estado_actual("cargando")
+            
+            # ✅ VALIDAR FECHA DE EDICIÓN (sin límite para consultas)
+            consulta_actual = self.repository.get_consultation_by_id_complete(consulta_id)
+            if consulta_actual and not self._validar_fecha_edicion(consulta_actual.get('Fecha')):
+                return json.dumps({'exito': False, 'error': 'Consulta muy antigua para editar'})
             
             # Convertir QJSValue a diccionario
             if hasattr(nuevos_datos, 'toVariant'):
                 datos = nuevos_datos.toVariant()
             else:
                 datos = nuevos_datos
+            
+            print(f"✏️ Admin {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando consulta {consulta_id}")
             
             success = self.repository.update_consultation(
                 consulta_id=consulta_id,
@@ -415,14 +500,15 @@ class ConsultaModel(QObject):
     
     @Slot(int, result=bool)
     def eliminar_consulta(self, consulta_id: int) -> bool:
-        """Elimina consulta médica - CORREGIDO con verificación de autenticación"""
+        """Elimina consulta médica - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICACIÓN DE AUTENTICACIÓN
-            if self._usuario_actual_id <= 0:
-                self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
+            if not self._verificar_permisos_admin():
                 return False
             
             self._set_estado_actual("cargando")
+            
+            print(f"🗑️ Admin {self._usuario_actual_id} eliminando consulta {consulta_id}")
             
             exito = self.repository.delete(consulta_id)
             
@@ -446,7 +532,7 @@ class ConsultaModel(QObject):
             self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return False
-    
+        
     # ===============================
     # SLOTS PARA BÚSQUEDAS Y FILTROS - CORREGIDOS
     # ===============================
@@ -815,14 +901,12 @@ class ConsultaModel(QObject):
             return "Sin fecha"
         
     def _cargar_consultas_recientes(self):
-        """Actualiza lista interna de consultas - FECHA FORMATEADA EN PYTHON"""
+        """Actualiza lista interna de consultas"""
         try:
             consultas_raw = self.repository.get_all_with_details()
             
-            # Procesar datos para QML
             self._consultasData = []
             for consulta in consultas_raw:
-                # ✅ FORMATEAR FECHA EN PYTHON SIEMPRE
                 fecha_raw = consulta.get('Fecha') or consulta.get('fecha_original')
                 fecha_formateada = self._formatear_fecha_python(fecha_raw)
                 
@@ -834,7 +918,7 @@ class ConsultaModel(QObject):
                     'especialidad_doctor': consulta.get('especialidad_doctor') or 'Sin especialidad/doctor',
                     'tipo_consulta': consulta.get('tipo_consulta') or 'Normal',
                     'precio': float(consulta.get('precio') or 0),
-                    'fecha': fecha_formateada  # ✅ USAR FECHA FORMATEADA EN PYTHON
+                    'fecha': fecha_formateada
                 }
                 
                 self._consultasData.append(consulta_procesada)
@@ -928,117 +1012,47 @@ class ConsultaModel(QObject):
             print(f"❌ Error manejando actualización global: {e}")
 
     def cleanup(self):
-        """
-        Limpia completamente todos los recursos del ConsultaModel
-        Detiene timers, desconecta señales y libera memoria
-        """
+        """Limpieza completa de ConsultaModel"""
         try:
             print("🧹 Iniciando limpieza completa de ConsultaModel...")
             
-            # 1. DETENER TODOS LOS TIMERS ACTIVOS
             if hasattr(self, '_autoRefreshTimer'):
                 try:
                     if self._autoRefreshTimer.isActive():
                         self._autoRefreshTimer.stop()
-                        print("⏹️ Timer de auto-refresh detenido")
                     self._autoRefreshTimer.deleteLater()
                 except Exception as e:
                     print(f"⚠️ Error deteniendo auto-refresh timer: {e}")
             
-            # 2. DESCONECTAR SEÑALES GLOBALES
-            try:
-                if hasattr(self, 'global_signals'):
-                    # Desconectar todas las señales globales
-                    try:
-                        self.global_signals.especialidadesModificadas.disconnect(self._actualizar_especialidades_desde_signal)
-                    except:
-                        pass
-                    
-                    try:
-                        self.global_signals.consultasNecesitaActualizacion.disconnect(self._manejar_actualizacion_global)
-                    except:
-                        pass
-                    
-                    print("🔌 Señales globales desconectadas")
-            except Exception as e:
-                print(f"⚠️ Error desconectando señales globales: {e}")
+            # Limpiar datos
+            self._consultasData = []
+            self._especialidadesData = []
+            self._doctoresData = []
+            self._dashboardData = {}
+            self._estadisticasData = {}
             
-            # 3. LIMPIAR REPOSITORIOS Y DATOS
-            try:
-                # Invalidar caches de repositorios
-                if hasattr(self, 'repository') and hasattr(self.repository, 'invalidate_consultation_caches'):
-                    self.repository.invalidate_consultation_caches()
-                    print("🗑️ Cache de consultas invalidado")
-                
-                if hasattr(self, 'doctor_repo') and hasattr(self.doctor_repo, 'invalidate_cache'):
-                    self.doctor_repo.invalidate_cache()
-                    print("🗑️ Cache de doctores invalidado")
-                
-                # Limpiar datos en memoria
-                self._consultasData = []
-                self._especialidadesData = []
-                self._doctoresData = []
-                self._dashboardData = {}
-                self._estadisticasData = {}
-                
-                print("📊 Datos en memoria liberados")
-            except Exception as e:
-                print(f"⚠️ Error limpiando datos: {e}")
-            
-            # 4. DESCONECTAR SEÑALES PROPIAS (opcional, para liberación completa)
-            try:
-                # Desconectar todas las señales propias
-                self.consultaCreada.disconnect()
-                self.consultaActualizada.disconnect()
-                self.consultaEliminada.disconnect()
-                self.pacienteEncontradoPorCedula.disconnect()
-                self.pacienteNoEncontrado.disconnect()
-                self.resultadosBusqueda.disconnect()
-                self.filtrosAplicados.disconnect()
-                self.dashboardActualizado.disconnect()
-                self.estadisticasCalculadas.disconnect()
-                self.estadoCambiado.disconnect()
-                self.operacionError.disconnect()
-                self.operacionExitosa.disconnect()
-                self.consultasRecientesChanged.disconnect()
-                self.especialidadesChanged.disconnect()
-                self.doctoresDisponiblesChanged.disconnect()
-                
-                print("🔌 Señales propias desconectadas")
-            except Exception as e:
-                print(f"⚠️ Error desconectando señales propias: {e}")
-            
-            # 5. RESETEAR ESTADOS
-            self._estadoActual = "inactivo"
+            # ✅ RESETEAR USUARIO Y ROL
             self._usuario_actual_id = 0
-            self._is_initializing = False
+            self._usuario_actual_rol = ""
             
             print("✅ Limpieza completa de ConsultaModel finalizada")
             
         except Exception as e:
             print(f"❌ Error crítico durante cleanup de ConsultaModel: {e}")
-            # Asegurarse de que al menos los timers se detengan
-            try:
-                if hasattr(self, '_autoRefreshTimer') and self._autoRefreshTimer.isActive():
-                    self._autoRefreshTimer.stop()
-            except:
-                pass
 
     def emergency_disconnect(self):
         """Desconexión de emergencia para ConsultaModel"""
         try:
             print("🚨 ConsultaModel: Iniciando desconexión de emergencia...")
             
-            # Detener timer
             if hasattr(self, '_autoRefreshTimer') and self._autoRefreshTimer.isActive():
                 self._autoRefreshTimer.stop()
-                print("   ⏹️ Auto-refresh timer detenido")
             
-            # Forzar estado shutdown
             self._estadoActual = "shutdown"
             self._is_initializing = False
+            self._usuario_actual_id = 0
+            self._usuario_actual_rol = ""  # ✅ RESETEAR ROL
             
-            # Usar el cleanup existente que es bastante completo
             self.cleanup()
             
             print("✅ ConsultaModel: Desconexión de emergencia completada")
