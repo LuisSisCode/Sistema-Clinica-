@@ -235,7 +235,7 @@ Item {
         property string icon: ""
         property string headerColor: primaryColor
         
-        Layout.preferredHeight: Math.max(120, baseUnit * 15)
+        Layout.preferredHeight: Math.max(80, baseUnit * 10)
         gradient: Gradient {
             GradientStop { position: 0.0; color: headerColor }
             GradientStop { position: 1.0; color: Qt.darker(headerColor, 1.1) }
@@ -258,15 +258,17 @@ Item {
             spacing: marginMedium
             
             Rectangle {
-                Layout.preferredWidth: baseUnit * 10
-                Layout.preferredHeight: baseUnit * 10
+                Layout.preferredWidth: baseUnit * 7
+                Layout.preferredHeight: baseUnit * 7
                 color: backgroundColor
-                radius: baseUnit * 5
+                radius: baseUnit * 3.5
+
+
                 
                 // Sombra interna
                 Rectangle {
                     anchors.fill: parent
-                    anchors.margins: 2
+                    anchors.margins: 1
                     radius: parent.radius - 2
                     color: "transparent"
                     border.color: Qt.lighter(color, 1.1)
@@ -276,8 +278,8 @@ Item {
                 Image {
                     anchors.centerIn: parent
                     source: icon
-                    width: fontTitle * 2
-                    height: fontTitle * 2
+                   width: fontTitle * 1.5
+                    height: fontTitle * 1.5
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                 }
@@ -290,7 +292,7 @@ Item {
                 Label {
                     text: title
                     color: backgroundColor
-                    font.pixelSize: fontTitle
+                    font.pixelSize: fontTitle * 0.8
                     font.bold: true
                     font.family: "Segoe UI"
                 }
@@ -298,7 +300,7 @@ Item {
                 Label {
                     text: subtitle
                     color: backgroundColor
-                    font.pixelSize: fontBase
+                    font.pixelSize: fontBase * 0.9
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                     opacity: 0.95
@@ -341,7 +343,7 @@ Item {
     }
     
     component GeneralConfigSection: ColumnLayout {
-        spacing: marginMedium
+        spacing: marginSmall
         
         SectionHeader {
             Layout.fillWidth: true
@@ -374,7 +376,7 @@ Item {
         property string subtitle: ""
         property string barColor: primaryColor
         
-        spacing: marginSmall
+        spacing: marginTiny
         
         Rectangle {
             Layout.preferredWidth: baseUnit * 0.6
@@ -437,7 +439,7 @@ Item {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: marginMedium
+            anchors.margins: marginSmall
             spacing: marginMedium
             
             Rectangle {
@@ -891,7 +893,7 @@ Item {
             
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: marginLarge
+                anchors.margins: marginMedium
                 spacing: marginMedium
                 
                 Label {
