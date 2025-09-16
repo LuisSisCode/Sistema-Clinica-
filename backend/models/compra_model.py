@@ -301,7 +301,17 @@ class CompraModel(QObject):
     # ===============================
     # SLOTS PARA QML - ITEMS DE COMPRA (SIN VERIFICACIÓN - PREPARACIÓN)
     # ===============================
-    
+    def _validar_fecha_formato(self, fecha_str: str) -> bool:
+        """Valida formato YYYY-MM-DD"""
+        if not fecha_str:
+            return True  # Vacío es válido
+        
+        try:
+            datetime.strptime(fecha_str, '%Y-%m-%d')
+            return True
+        except ValueError:
+            return False
+        
     @Slot(str, int, int, float, str)
     def agregar_item_compra(self, codigo: str, cantidad_caja: int, cantidad_unitario: int, 
                            precio_unitario: float, fecha_vencimiento: str):
@@ -314,8 +324,9 @@ class CompraModel(QObject):
             self.operacionError.emit("Precio unitario debe ser mayor a 0")
             return
         
-        if not fecha_vencimiento:
-            self.operacionError.emit("Fecha de vencimiento requerida")
+        fecha_procesada = fecha_vencimiento.strip() if fecha_vencimiento else ""
+        if fecha_procesada and not self._validar_fecha_formato(fecha_procesada):
+            self.operacionError.emit("Fecha debe ser formato YYYY-MM-DD o vacía")
             return
         
         try:
@@ -352,7 +363,7 @@ class CompraModel(QObject):
                     'cantidad_unitario': cantidad_unitario,
                     'cantidad_total': cantidad_total,
                     'precio_unitario': precio_unitario,
-                    'fecha_vencimiento': fecha_vencimiento,
+                    'fecha_vencimiento': fecha_procesada if fecha_procesada else None,
                     'subtotal': subtotal
                 }
                 self._items_compra.append(nuevo_item)

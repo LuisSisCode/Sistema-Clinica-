@@ -79,7 +79,7 @@ Item {
     property real inputPurchasePrice: 0.0  // ESTE ES EL COSTO TOTAL DEL PRODUCTO (NO UNITARIO)
     property real inputSalePrice: 0.0
     property string inputExpiryDate: ""
-    property bool inputNoExpiry: true
+    property bool inputNoExpiry: false
     property bool isNewProduct: true
     
     // Lista temporal de productos para la nueva compra
@@ -257,8 +257,13 @@ Item {
             return false
         }
         
-        if (!inputNoExpiry && inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) {
-            showSuccess("⚠ Error: Fecha de vencimiento inválida (DD/MM/YYYY)")
+        if (inputNoExpiry && inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) {
+            showSuccess("⚠ Error: Fecha de vencimiento inválida (YYYY-MM-DD)")
+            return false
+        }
+
+        if (inputNoExpiry && inputExpiryDate.length === 0) {
+            showSuccess("⚠ Error: Ingrese fecha de vencimiento o marque 'Sin vencimiento'")
             return false
         }
         
@@ -278,7 +283,7 @@ Item {
             "unidades": inputUnits,
             "stockTotal": inputTotalStock,
             "costoTotalProducto": inputPurchasePrice,  // COSTO TOTAL DEL PRODUCTO (lo que realmente pagamos)
-            "fechaVencimiento": inputNoExpiry ? "Sin vencimiento" : (inputExpiryDate.length > 0 ? inputExpiryDate : "Sin fecha")
+            'fechaVencimiento': inputNoExpiry ? "Sin vencimiento" : inputExpiryDate
         })
         
         updatePurchaseTotal()
@@ -308,7 +313,7 @@ Item {
         inputTotalStock = 0
         inputPurchasePrice = 0.0
         inputExpiryDate = ""
-        inputNoExpiry = true
+        inputNoExpiry = false
         isNewProduct = true
         showProductDropdown = false
         productSearchResultsModel.clear()
@@ -324,37 +329,70 @@ Item {
     }
 
     function autoFormatDate(input) {
-        var cleaned = input.replace(/[^\d\/]/g, '')
+        // Permitir solo números y guiones
+        var cleaned = input.replace(/[^\d\-]/g, '')
         
-        if (cleaned.length === 2 && !cleaned.includes('/')) {
-            cleaned += '/'
-        } else if (cleaned.length === 5 && cleaned.split('/').length === 2) {
-            cleaned += '/'
+        // Si está vacío, permitirlo
+        if (cleaned.length === 0) {
+            return ""
         }
         
-        if (cleaned.length > 10) {
-            cleaned = cleaned.substring(0, 10)
+        // Auto-agregar guiones para YYYY-MM-DD
+        if (cleaned.length === 4 && !cleaned.includes('-')) {
+            return cleaned + '-'
+        }
+        if (cleaned.length === 7 && cleaned.indexOf('-') === 4 && cleaned.lastIndexOf('-') === 4) {
+            return cleaned + '-'
         }
         
-        return cleaned
+        // Si ya tiene formato YYYY-MM-DD válido, mantenerlo
+        if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+            return cleaned
+        }
+        
+        // Permitir entrada progresiva con auto-guiones
+        var result = cleaned
+        
+        // Agregar primer guión después de año (4 dígitos)
+        if (result.length > 4 && result.charAt(4) !== '-') {
+            result = result.substring(0, 4) + '-' + result.substring(4)
+        }
+        
+        // Agregar segundo guión después de mes (7 caracteres = YYYY-MM)
+        if (result.length > 7 && result.charAt(7) !== '-') {
+            result = result.substring(0, 7) + '-' + result.substring(7)
+        }
+        
+        // Limitar a 10 caracteres máximo (YYYY-MM-DD)
+        if (result.length > 10) {
+            result = result.substring(0, 10)
+        }
+        
+        return result
     }
 
     function validateExpiryDate(dateStr) {
-        if (dateStr.length === 0) return true
+        // Permitir vacío (productos sin vencimiento)
+        if (dateStr === "" || dateStr === "Sin vencimiento") return true;
         
-        var regex = /^\d{2}\/\d{2}\/\d{4}$/
-        if (!regex.test(dateStr)) return false
+        // Validar formato YYYY-MM-DD
+        var regex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!regex.test(dateStr)) return false;
         
-        var parts = dateStr.split('/')
-        var day = parseInt(parts[0])
-        var month = parseInt(parts[1])
-        var year = parseInt(parts[2])
+        var parts = dateStr.split('-');
+        var year = parseInt(parts[0], 10);
+        var month = parseInt(parts[1], 10);
+        var day = parseInt(parts[2], 10);
         
-        if (month < 1 || month > 12) return false
-        if (day < 1 || day > 31) return false
-        if (year < 2025 || year > 2030) return false
+        if (month < 1 || month > 12) return false;
+        if (day < 1 || day > 31) return false;
+        if (year < 2020 || year > 2050) return false; // Rango razonable
         
-        return true
+        // Validar días por mes
+        var daysInMonth = new Date(year, month, 0).getDate();
+        if (day > daysInMonth) return false;
+        
+        return true;
     }
 
     function completarCompra() {
@@ -387,7 +425,7 @@ Item {
                 "unidades": item.unidades,
                 "stockTotal": item.stockTotal,
                 "costoTotal": item.costoTotalProducto,  // COSTO TOTAL (no unitario)
-                "fechaVencimiento": item.fechaVencimiento === "Sin vencimiento" ? "2099-12-31" : item.fechaVencimiento
+               'fechaVencimiento': item.fechaVencimiento
             }
             productosArray.push(productoCompra)
             
@@ -430,8 +468,8 @@ Item {
                     prod.codigo,
                     prod.cajas || 0,
                     prod.stockTotal || prod.cantidad || 0,
-                    prod.costoTotal,  // COSTO TOTAL, no unitario
-                    prod.fechaVencimiento || "2025-12-31"
+                    prod.costoTotal,
+                    prod.fechaVencimiento
                 )
             }
         } catch (e) {
@@ -953,11 +991,11 @@ Item {
                                 
                                 TextField {
                                     id: expiryField
-                                    Layout.preferredWidth: 75
+                                    Layout.preferredWidth: 90
                                     Layout.preferredHeight: inputHeight
-                                    placeholderText: "DD/MM/YYYY"
+                                    placeholderText: "YYYY-MM-DD"
                                     text: inputExpiryDate
-                                    enabled: inputNoExpiry
+                                   enabled: !inputNoExpiry
                                     
                                     background: Rectangle {
                                         color: enabled ? whiteColor : "#F5F5F5"
@@ -974,25 +1012,25 @@ Item {
                                     font.pixelSize: fontSmall
                                     
                                     onTextChanged: {
-                                        if (inputNoExpiry) {
+                                        if (!inputNoExpiry) {  // Cuando SÍ tiene vencimiento
                                             var formatted = autoFormatDate(text)
                                             if (formatted !== text) {
                                                 text = formatted
                                             }
-                                            inputExpiryDate = text
+                                            inputExpiryDate = formatted
                                         }
                                     }
                                     
                                     validator: RegularExpressionValidator {
-                                        regularExpression: /^[0-9\/]*$/
+                                        regularExpression: /^[0-9\-]*$/
                                     }
                                 }
-                                
+
                                 CheckBox {
                                     id: noExpiryCheckbox
                                     Layout.preferredWidth: 15
                                     Layout.preferredHeight: inputHeight
-                                    checked: inputNoExpiry
+                                    checked: !inputNoExpiry
                                     
                                     indicator: Rectangle {
                                         width: 14
@@ -1015,13 +1053,13 @@ Item {
                                     contentItem: Item {} // Sin texto
                                     
                                     onCheckedChanged: {
-                                        inputNoExpiry = checked
-                                        if (checked) {
+                                        inputNoExpiry = !checked  // Invertir la lógica
+                                        if (!checked) {  // Si se desmarca = sin vencimiento
                                             inputExpiryDate = ""
                                             expiryField.text = ""
                                         }
                                     }
-                                }
+                                }  
                             }
                         }
                         
@@ -1032,7 +1070,8 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Agregar"
                             enabled: inputProductCode.length > 0 && inputProductName.length > 0 && 
-                                    inputTotalStock > 0 && inputPurchasePrice > 0
+                                inputTotalStock > 0 && inputPurchasePrice > 0 &&
+                                (!inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
                                     
                             background: Rectangle {
                                 color: enabled ? successColor : darkGrayColor

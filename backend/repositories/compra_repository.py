@@ -435,28 +435,38 @@ class CompraRepository(BaseRepository):
             print(f"❌ Error restaurando stock producto {producto_id}: {str(e)}")
 
     def _validar_y_preparar_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Valida y prepara un item para la compra - CORREGIDO"""
+        """Valida y prepara un item para la compra - CORREGIDO FECHAS"""
         # Validaciones básicas
         codigo = item.get('codigo', '').strip()
         cantidad_caja = item.get('cantidad_caja', 0)
         cantidad_unitario = item.get('cantidad_unitario', 0)
-        precio_unitario = item.get('precio_unitario', 0)  # ESTE ES EL COSTO TOTAL
-        fecha_vencimiento = item.get('fecha_vencimiento', '')
+        precio_unitario = item.get('precio_unitario', 0)
+        fecha_vencimiento = item.get('fecha_vencimiento', '').strip()
         
         validate_required(codigo, "codigo")
-        validate_required(fecha_vencimiento, "fecha_vencimiento")
         validate_positive_number(precio_unitario, "precio_unitario")
         
         if cantidad_caja <= 0 and cantidad_unitario <= 0:
             raise ValidationError("cantidad", f"{cantidad_caja}/{cantidad_unitario}", 
                                 "Debe especificar cantidad de cajas o unitarios")
         
+        # VALIDACIÓN DE FECHA CORREGIDA
+        fecha_vencimiento_bd = None
+        if fecha_vencimiento and fecha_vencimiento.lower() not in ["sin vencimiento", ""]:
+            # Validar formato YYYY-MM-DD
+            try:
+                datetime.strptime(fecha_vencimiento, '%Y-%m-%d')
+                fecha_vencimiento_bd = fecha_vencimiento
+            except ValueError:
+                raise ValidationError("fecha_vencimiento", fecha_vencimiento, 
+                                    "Formato debe ser YYYY-MM-DD")
+        
         # Obtener producto
         producto = self.producto_repo.get_by_codigo(codigo)
         if not producto:
             raise ProductoNotFoundError(codigo=codigo)
         
-        # Calcular totales - CORREGIDO: precio_unitario YA es el costo total
+        # Calcular totales
         cantidad_total = cantidad_caja * cantidad_unitario
         
         return {
@@ -466,36 +476,31 @@ class CompraRepository(BaseRepository):
             'cantidad_caja': cantidad_caja,
             'cantidad_unitario': cantidad_unitario,
             'cantidad_total': cantidad_total,
-            'precio_unitario': precio_unitario,  # COSTO TOTAL del producto
-            'fecha_vencimiento': fecha_vencimiento,
+            'precio_unitario': precio_unitario,
+            'fecha_vencimiento': fecha_vencimiento_bd,  # NULL si está vacío
             'producto': producto
         }
     
     def _procesar_item_con_lote(self, compra_id: int, item: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Procesa un item creando lote y detalle de compra - CORREGIDO
-        """
+        """Procesa un item creando lote y detalle de compra - FECHAS CORREGIDAS"""
         print(f"🔄 Procesando item: {item['codigo']} - Cajas: {item['cantidad_caja']}, Unitarios: {item['cantidad_unitario']}")
         
         # 1. Validar compra_id
         if not compra_id or compra_id <= 0:
             raise CompraError(f"ID de compra inválido: {compra_id}")
         
-        # 2. Crear nuevo lote - CON VALIDACIÓN ROBUSTA
+        # 2. Crear nuevo lote - FECHA CORREGIDA
         try:
-            # IMPORTANTE: El precio que pasamos al lote debe ser por unidad para el cálculo de stock
-            # Pero en la BD se guarda como costo total en DetalleCompra
             precio_por_unidad = item['precio_unitario'] / item['cantidad_total'] if item['cantidad_total'] > 0 else 0
             
             lote_id = self.producto_repo.aumentar_stock_compra(
                 producto_id=item['producto_id'],
                 cantidad_caja=item['cantidad_caja'],
                 cantidad_unitario=item['cantidad_unitario'],
-                fecha_vencimiento=item['fecha_vencimiento'],
-                precio_compra=precio_por_unidad  # Precio por unidad para el producto
+                fecha_vencimiento=item['fecha_vencimiento'],  # Puede ser None
+                precio_compra=precio_por_unidad
             )
             
-            # VALIDACIÓN CRÍTICA: Verificar que el lote se creó
             if not lote_id or lote_id <= 0:
                 raise CompraError(f"❌ FALLO CRÍTICO: No se pudo crear lote para producto {item['codigo']}")
             

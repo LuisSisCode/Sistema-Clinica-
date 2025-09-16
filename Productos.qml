@@ -1,7 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-
+import QtQuick.Controls.Material 2.15
 // Componente principal del módulo de Productos de Farmacia - OPTIMIZADO
 Item {
     id: productosRoot
@@ -1815,7 +1815,7 @@ Item {
         id: crearProductoComponent
         anchors.fill: parent
         z: 1000
-        source: mostrandoCrearProducto ? "CrearProducto.qml" : undefined
+        source: mostrandoCrearProducto ? "CrearProducto.qml" : ""
         
         onLoaded: {
             if (item) {
@@ -1830,16 +1830,18 @@ Item {
                 }
                 
                 // Conectar señales
-                item.productoCreado.connect(function(producto) {
-                    console.log("✅ Producto creado:", producto.codigo)
-                    
-                    if (farmaciaData) {
-                        farmaciaData.crearProductoUnico(JSON.stringify(producto))
-                    }
-                    
-                    volverAListaProductos()
-                })
-                
+                if (item.productoCreado) {
+                        item.productoCreado.connect(function(producto) {
+                            console.log("✅ Producto creado:", producto.codigo)
+                        
+                        if (farmaciaData) {
+                            farmaciaData.crearProductoUnico(JSON.stringify(producto))
+                        }
+                        
+                        volverAListaProductos()
+                        
+                    })
+                }
                 item.productoActualizado.connect(function(producto) {
                     console.log("✅ Producto actualizado:", producto.codigo)
                     volverAListaProductos()
