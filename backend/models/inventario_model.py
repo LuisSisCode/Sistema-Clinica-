@@ -665,7 +665,7 @@ class InventarioModel(QObject):
             hoy = datetime.now()
             
             for lote in lotes:
-                stock_lote = (lote.get('Cantidad_Caja', 0) + lote.get('Cantidad_Unitario', 0))
+                stock_lote = (lote.get('Cantidad_Caja', 0) * lote.get('Cantidad_Unitario', 0))
                 stock_total += stock_lote
                 
                 if stock_lote > 0:  # Solo contar lotes con stock
@@ -958,10 +958,10 @@ class InventarioModel(QObject):
         try:
             query = """
             SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre,
-                (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote
+                (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote
             FROM Lote l
             INNER JOIN Productos p ON l.Id_Producto = p.id
-            WHERE (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+            WHERE (l.Cantidad_Caja * l.Cantidad_Unitario) > 0
             ORDER BY l.Fecha_Vencimiento ASC
             """
             self._lotes_activos = self.producto_repo._execute_query(query) or []

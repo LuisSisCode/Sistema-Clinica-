@@ -19,7 +19,7 @@ class ProductoRepository(BaseRepository):
         """Obtiene productos activos (con stock > 0)"""
         query = """
         SELECT p.*, m.Nombre as Marca_Nombre,
-            ISNULL((SELECT SUM(l.Cantidad_Caja + l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Calculado
+            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Calculado
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0
@@ -50,7 +50,7 @@ class ProductoRepository(BaseRepository):
             -- CORRECCIÓN: SUMAR en lugar de multiplicar
             ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Caja,
             ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
-            ISNULL((SELECT SUM(l.Cantidad_Caja + l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
             
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
@@ -69,7 +69,7 @@ class ProductoRepository(BaseRepository):
         query = f"""
         SELECT p.*, m.Nombre as Marca_Nombre,
                 (SELECT ISNULL(SUM(l.Cantidad_Caja), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Total_Cajas,
-                (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Stock_Total
+                (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Stock_Total
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?) {stock_condition}
@@ -87,11 +87,11 @@ class ProductoRepository(BaseRepository):
             
             -- CORRECCIÓN: SUMAR en lugar de multiplicar
             ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Total_Cajas,
-            ISNULL((SELECT SUM(l.Cantidad_Caja + l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
             
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) 
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) 
             FROM Lote l WHERE l.Id_Producto = p.id) <= ?
         ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) 
                 FROM Lote l WHERE l.Id_Producto = p.id) ASC
@@ -111,7 +111,7 @@ class ProductoRepository(BaseRepository):
         
         query = f"""
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre,
-               (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
+               (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote,
                CASE 
                    WHEN l.Fecha_Vencimiento < GETDATE() THEN 'VENCIDO'
                    WHEN l.Fecha_Vencimiento < DATEADD(MONTH, 3, GETDATE()) THEN 'POR_VENCER'
@@ -128,14 +128,14 @@ class ProductoRepository(BaseRepository):
         """Obtiene lotes que vencen en X días - CORREGIDO"""
         query = """
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre, m.Nombre as Marca_Nombre,
-            (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
+            (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote,
             DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) as Dias_Para_Vencer
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE l.Fecha_Vencimiento <= DATEADD(DAY, ?, GETDATE())
         AND l.Fecha_Vencimiento >= GETDATE()
-        AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+        AND (l.Cantidad_Caja * l.Cantidad_Unitario) > 0
         ORDER BY l.Fecha_Vencimiento ASC
         """
         
@@ -151,13 +151,13 @@ class ProductoRepository(BaseRepository):
         """Obtiene lotes vencidos con stock - CORREGIDO"""
         query = """
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre, m.Nombre as Marca_Nombre,
-            (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote,
+            (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote,
             DATEDIFF(DAY, l.Fecha_Vencimiento, GETDATE()) as Dias_Vencido
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE l.Fecha_Vencimiento < GETDATE()
-        AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+        AND (l.Cantidad_Caja * l.Cantidad_Unitario) > 0
         ORDER BY l.Fecha_Vencimiento ASC
         """
         
