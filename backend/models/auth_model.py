@@ -48,8 +48,6 @@ class AuthModel(QObject):
         """Autenticación usando la BD existente"""
         try:
             print(f"🔐 Login: {username} | Pass: {password}")
-            from ..repositories.usuario_repository import UsuarioRepository
-            repo = UsuarioRepository()
             
             # Validaciones básicas
             if not username.strip():
@@ -60,31 +58,43 @@ class AuthModel(QObject):
                 self.loginFailed.emit("Contraseña requerida")
                 return
             
-            # Usar el repository existente
-            from ..repositories.usuario_repository import UsuarioRepository
-            repo = UsuarioRepository()
+            # Usar AuthRepository para obtener usuario con rol
+            from ..repositories.auth_repository import AuthRepository
+            auth_repo = AuthRepository()
             
-            # Autenticar usuario
-            usuario = repo.authenticate(username.strip(), password)
-            usuarios = repo.get_all()
-            print(f"📋 Usuarios en BD: {[u.get('nombre_usuario') for u in usuarios]}")
-            usuario = repo.authenticate(username.strip(), password)
+            # Obtener usuario por username (incluye rol)
+            user_data = auth_repo.get_user_by_username(username.strip())
+            print(f"📋 Usuario encontrado: {user_data.get('nombre_usuario') if user_data else 'None'}")
             
-            if usuario and usuario.get('Estado'):
-                # Login exitoso
-                self._current_user = usuario
-                self._is_authenticated = True
-                self.currentUserChanged.emit()
-                
-                message = f"Bienvenido, {usuario.get('Nombre', '')} {usuario.get('Apellido_Paterno', '')}"
-                print(f"✅ Login exitoso: {username}")
-                self.loginSuccessful.emit(True, message, usuario)
-                
-            else:
-                # Login fallido
-                print(f"❌ Login fallido: {username}")
-                self.loginFailed.emit("Credenciales incorrectas o usuario inactivo")
-                
+            # Verificar credenciales y estado
+            if not user_data:
+                print(f"❌ Usuario no encontrado: {username}")
+                self.loginFailed.emit("Credenciales incorrectas")
+                return
+            
+            if not user_data.get('Estado'):
+                print(f"❌ Usuario inactivo: {username}")
+                self.loginFailed.emit("Usuario inactivo")
+                return
+            
+            # Verificar contraseña (simplificado - en producción usar hash)
+            stored_password = user_data.get('contrasena', '')
+            if password != stored_password:  # Comparación directa temporal
+                print(f"❌ Contraseña incorrecta: {username}")
+                self.loginFailed.emit("Credenciales incorrectas")
+                return
+            
+            # Login exitoso
+            self._current_user = user_data
+            self._is_authenticated = True
+            self.currentUserChanged.emit()
+            
+            full_name = f"{user_data.get('Nombre', '')} {user_data.get('Apellido_Paterno', '')}"
+            message = f"Bienvenido, {full_name}"
+            print(f"✅ Login exitoso: {username} - Rol: {user_data.get('rol_nombre', 'Sin rol')}")
+            
+            self.loginSuccessful.emit(True, message, user_data)
+            
         except Exception as e:
             error_msg = f"Error de autenticación: {str(e)}"
             print(f"❌ {error_msg}")
@@ -135,7 +145,9 @@ class AuthModel(QObject):
         """Obtiene los datos del usuario autenticado"""
         if not self._current_user:
             return {}
-        return self._current_user.copy()
+        result = self._current_user.copy()
+        print(f"🔍 DEBUG get_user_data: {result} ----------*****************")  # AGREGAR ESTO
+        return result
     
     @Slot(result=int)
     def get_user_id(self) -> int:

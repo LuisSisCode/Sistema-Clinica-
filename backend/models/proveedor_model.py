@@ -11,7 +11,7 @@ from ..core.excepciones import (
 
 class ProveedorModel(QObject):
     """
-    Model QObject para gestión de proveedores - SOLO 3 CAMPOS
+    Model QObject para gestión de proveedores con autenticación estandarizada y control de roles
     Conecta directamente con QML mediante Signals/Slots/Properties
     """
     
@@ -59,6 +59,11 @@ class ProveedorModel(QObject):
         self._total_proveedores = 0
         self._termino_busqueda = ""
         
+        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL Y VENTAMODEL
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        self._usuario_rol = ""       # NUEVO: Control de roles
+        print("🏢 ProveedorModel inicializado - Esperando autenticación")
+        
         # Timer para búsqueda con delay
         self.search_timer = QTimer()
         self.search_timer.setSingleShot(True)
@@ -68,17 +73,128 @@ class ProveedorModel(QObject):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update_proveedores)
         self.update_timer.start(300000)  # 5 minutos
+        
         # Reference a CompraModel para sync
         self._compra_model_ref = None
         
-        # Cargar datos iniciales
-        self._cargar_proveedores()
-        self._cargar_resumen()
-        
-        print("🏢 ProveedorModel inicializado - SIMPLIFICADO")
+        print("🏢 ProveedorModel inicializado con autenticación estandarizada")
     
     # ===============================
-    # PROPERTIES PARA QML
+    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en ProveedorModel: {usuario_id}")
+                
+                # Cargar datos iniciales después de autenticación
+                self._cargar_proveedores()
+                self._cargar_resumen()
+                
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de proveedores")
+            else:
+                print(f"⚠️ ID de usuario inválido en ProveedorModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en ProveedorModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, rol: str):
+        """
+        NUEVO: Establece usuario + rol para control de permisos completo
+        """
+        try:
+            if usuario_id > 0 and rol:
+                self._usuario_actual_id = usuario_id
+                self._usuario_rol = rol.strip()
+                print(f"👤 Usuario autenticado con rol en ProveedorModel: {usuario_id} - {rol}")
+                
+                # Cargar datos iniciales después de autenticación
+                self._cargar_proveedores()
+                self._cargar_resumen()
+                
+                self.operacionExitosa.emit(f"Usuario {usuario_id} ({rol}) establecido en proveedores")
+            else:
+                self.operacionError.emit("Usuario o rol inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario con rol: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    @Property(str, notify=operacionExitosa)
+    def usuario_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_rol
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN Y PERMISOS
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    def _verificar_permisos(self, operacion: str) -> bool:
+        """
+        NUEVO: Verifica permisos específicos según el rol del usuario
+        
+        PERMISOS PARA PROVEEDORES:
+        - Admin: Puede crear, editar, eliminar proveedores
+        - Médico: Puede crear y editar proveedores, pero NO eliminar
+        
+        Args:
+            operacion: Nombre de la operación a verificar
+            
+        Returns:
+            bool: True si tiene permisos, False caso contrario
+        """
+        # Verificar autenticación primero
+        if not self._verificar_autenticacion():
+            return False
+        
+        # Admin tiene acceso completo
+        if self._usuario_rol == "Administrador":
+            return True
+        
+        # Operaciones restringidas solo para Admin
+        operaciones_solo_admin = [
+            'eliminar_proveedor'
+        ]
+        
+        if operacion in operaciones_solo_admin:
+            if self._usuario_rol != "Administrador":
+                self.operacionError.emit("Solo administradores pueden eliminar proveedores")
+                return False
+        
+        # Médico puede crear y editar proveedores
+        if self._usuario_rol == "Médico":
+            operaciones_medico = [
+                'crear_proveedor',
+                'actualizar_proveedor',
+                'consultar_proveedores'
+            ]
+            
+            if operacion in operaciones_medico or operacion not in operaciones_solo_admin:
+                return True
+        
+        return True
+    
+    # ===============================
+    # PROPERTIES PARA QML (SIN CAMBIOS)
     # ===============================
     
     @Property(list, notify=proveedoresChanged)
@@ -137,12 +253,16 @@ class ProveedorModel(QObject):
         return self._por_pagina
     
     # ===============================
-    # SLOTS PARA QML - PAGINACIÓN Y BÚSQUEDA
+    # SLOTS PARA QML - PAGINACIÓN Y BÚSQUEDA (CON VERIFICACIÓN)
     # ===============================
     
     @Slot(int)
     def cambiar_pagina(self, nueva_pagina: int):
         """Cambia a una página específica"""
+        # ✅ VERIFICAR AUTENTICACIÓN PARA NAVEGACIÓN
+        if not self._verificar_autenticacion():
+            return
+        
         if nueva_pagina < 1 or nueva_pagina > self._total_paginas:
             return
         
@@ -164,6 +284,10 @@ class ProveedorModel(QObject):
     @Slot(str)
     def buscar_proveedores(self, termino: str):
         """Busca proveedores con delay para evitar consultas excesivas"""
+        # ✅ VERIFICAR AUTENTICACIÓN PARA BÚSQUEDA
+        if not self._verificar_autenticacion():
+            return
+        
         self._termino_busqueda = termino.strip()
         self._pagina_actual = 1  # Resetear a primera página
         
@@ -187,7 +311,11 @@ class ProveedorModel(QObject):
     
     @Slot()
     def refresh_proveedores(self):
-        """Refresca la lista de proveedores - MEJORADO CON FORCE REFRESH"""
+        """Refresca la lista de proveedores - CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return
+        
         print("🔄 REFRESH MANUAL de proveedores iniciado...")
         
         try:
@@ -207,12 +335,16 @@ class ProveedorModel(QObject):
             self.operacionError.emit(error_msg)
     
     # ===============================
-    # SLOTS PARA QML - CRUD PROVEEDORES - SIMPLIFICADO
+    # SLOTS PARA QML - CRUD PROVEEDORES CON CONTROL DE ROLES
     # ===============================
     
     @Slot(str, str, result=bool)
     def crear_proveedor(self, nombre: str, direccion: str) -> bool:
-        """Crea nuevo proveedor - SOLO 2 CAMPOS REQUERIDOS"""
+        """Crea nuevo proveedor - ✅ AMBOS ROLES PUEDEN CREAR"""
+        # ✅ VERIFICAR PERMISOS (Admin y Médico pueden crear)
+        if not self._verificar_permisos('crear_proveedor'):
+            return False
+        
         if not nombre or not nombre.strip():
             self.operacionError.emit("Nombre de proveedor requerido")
             return False
@@ -224,6 +356,8 @@ class ProveedorModel(QObject):
         self._set_loading(True)
         
         try:
+            print(f"🏭 Creando proveedor - Usuario: {self._usuario_actual_id} ({self._usuario_rol})")
+            
             proveedor_id = safe_execute(
                 self.proveedor_repo.crear_proveedor,
                 nombre.strip(),
@@ -237,9 +371,13 @@ class ProveedorModel(QObject):
                 
                 # Emitir signals
                 self.proveedorCreado.emit(proveedor_id, nombre.strip())
-                self.operacionExitosa.emit(f"Proveedor '{nombre.strip()}' creado exitosamente")
                 
-                print(f"✅ Proveedor creado - ID: {proveedor_id}, Nombre: {nombre}")
+                mensaje_exito = f"Proveedor '{nombre.strip()}' creado exitosamente"
+                if self._usuario_rol == "Médico":
+                    mensaje_exito += f" (Usuario: {self._usuario_actual_id})"
+                
+                self.operacionExitosa.emit(mensaje_exito)
+                print(f"✅ Proveedor creado - ID: {proveedor_id}, Nombre: {nombre}, Usuario: {self._usuario_actual_id}")
                 return True
             else:
                 raise ValidationError("proveedor", nombre, "Error creando proveedor")
@@ -252,7 +390,11 @@ class ProveedorModel(QObject):
     
     @Slot(int, str, str, result=bool)
     def actualizar_proveedor(self, proveedor_id: int, nombre: str, direccion: str) -> bool:
-        """Actualiza proveedor existente - SOLO 3 CAMPOS"""
+        """Actualiza proveedor existente - ✅ AMBOS ROLES PUEDEN EDITAR"""
+        # ✅ VERIFICAR PERMISOS (Admin y Médico pueden actualizar)
+        if not self._verificar_permisos('actualizar_proveedor'):
+            return False
+        
         if proveedor_id <= 0:
             self.operacionError.emit("ID de proveedor inválido")
             return False
@@ -268,6 +410,8 @@ class ProveedorModel(QObject):
         self._set_loading(True)
         
         try:
+            print(f"✏️ Actualizando proveedor {proveedor_id} - Usuario: {self._usuario_actual_id} ({self._usuario_rol})")
+            
             datos = {
                 'Nombre': nombre.strip(),
                 'Direccion': direccion.strip()
@@ -290,8 +434,13 @@ class ProveedorModel(QObject):
                 
                 # Emitir signals
                 self.proveedorActualizado.emit(proveedor_id, nombre.strip())
-                self.operacionExitosa.emit(f"Proveedor '{nombre.strip()}' actualizado exitosamente")
                 
+                mensaje_exito = f"Proveedor '{nombre.strip()}' actualizado exitosamente"
+                if self._usuario_rol == "Médico":
+                    mensaje_exito += f" (Usuario: {self._usuario_actual_id})"
+                
+                self.operacionExitosa.emit(mensaje_exito)
+                print(f"✅ Proveedor actualizado - ID: {proveedor_id}, Usuario: {self._usuario_actual_id}")
                 return True
             else:
                 raise ValidationError("proveedor", proveedor_id, "Error actualizando proveedor")
@@ -304,7 +453,11 @@ class ProveedorModel(QObject):
     
     @Slot(int, result=bool)
     def eliminar_proveedor(self, proveedor_id: int) -> bool:
-        """Elimina proveedor si no tiene compras"""
+        """Elimina proveedor si no tiene compras - ✅ SOLO ADMINISTRADOR"""
+        # ✅ VERIFICAR PERMISOS (Solo Administrador puede eliminar)
+        if not self._verificar_permisos('eliminar_proveedor'):
+            return False
+        
         if proveedor_id <= 0:
             self.operacionError.emit("ID de proveedor inválido")
             return False
@@ -312,6 +465,8 @@ class ProveedorModel(QObject):
         self._set_loading(True)
         
         try:
+            print(f"🗑️ Eliminando proveedor {proveedor_id} - Admin: {self._usuario_actual_id}")
+            
             # Obtener nombre antes de eliminar
             proveedor = safe_execute(self.proveedor_repo.get_by_id, proveedor_id)
             nombre_proveedor = proveedor['Nombre'] if proveedor else f"ID {proveedor_id}"
@@ -334,8 +489,9 @@ class ProveedorModel(QObject):
                 
                 # Emitir signals
                 self.proveedorEliminado.emit(proveedor_id, nombre_proveedor)
-                self.operacionExitosa.emit(f"Proveedor '{nombre_proveedor}' eliminado exitosamente")
+                self.operacionExitosa.emit(f"Proveedor '{nombre_proveedor}' eliminado por administrador")
                 
+                print(f"✅ Proveedor eliminado - ID: {proveedor_id}, Admin: {self._usuario_actual_id}")
                 return True
             else:
                 raise ValidationError("proveedor", proveedor_id, "Error eliminando proveedor")
@@ -347,12 +503,16 @@ class ProveedorModel(QObject):
             self._set_loading(False)
     
     # ===============================
-    # SLOTS PARA QML - CONSULTAS
+    # SLOTS PARA QML - CONSULTAS (CON VERIFICACIÓN)
     # ===============================
     
     @Slot(int)
     def seleccionar_proveedor(self, proveedor_id: int):
         """Selecciona un proveedor y carga sus datos detallados"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return
+        
         if proveedor_id <= 0:
             return
         
@@ -390,6 +550,10 @@ class ProveedorModel(QObject):
     @Slot(int, result='QVariant')
     def get_proveedor_detalle(self, proveedor_id: int):
         """Obtiene detalles de un proveedor específico"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return {}
+        
         try:
             proveedor = safe_execute(self.proveedor_repo.get_by_id, proveedor_id)
             return proveedor if proveedor else {}
@@ -408,6 +572,10 @@ class ProveedorModel(QObject):
     @Slot(result='QVariant')
     def obtener_todos_nombres(self):
         """Obtiene lista de nombres de todos los proveedores para autocompletado"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return []
+        
         try:
             proveedores = safe_execute(self.proveedor_repo.get_all)
             return [p['Nombre'] for p in proveedores] if proveedores else []
@@ -418,15 +586,23 @@ class ProveedorModel(QObject):
     @Slot(result='QVariant')
     def get_estadisticas_globales(self):
         """Obtiene estadísticas globales de proveedores"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return {}
+        
         try:
             return safe_execute(self.proveedor_repo.get_resumen_todos_proveedores)
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo estadísticas: {str(e)}")
             return {}
     
+    # ===============================
+    # MÉTODOS DE SINCRONIZACIÓN CON COMPRAS (SIN CAMBIOS)
+    # ===============================
+    
     @Slot(int, float)
     def _on_proveedor_compra_completada(self, proveedor_id: int, monto_compra: float):
-        """Slot que se ejecuta cuando se completa una compra con un proveedor - MEJORADO"""
+        """Slot que se ejecuta cuando se completa una compra con un proveedor"""
         print(f"📢 RECIBIDO: Compra completada con proveedor {proveedor_id} por Bs{monto_compra}")
         
         try:
@@ -469,7 +645,7 @@ class ProveedorModel(QObject):
 
     @Slot()
     def force_complete_refresh(self):
-        """Force refresh completo con log detallado - MEJORADO"""
+        """Force refresh completo con log detallado"""
         print("🔄 FORCE COMPLETE REFRESH - Iniciado por usuario")
         
         try:
@@ -504,6 +680,7 @@ class ProveedorModel(QObject):
             error_msg = f"Error en actualización completa: {str(e)}"
             print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
+    
     @Slot(int, float)
     def _on_compra_created(self, compra_id: int, monto_compra: float):
         """Slot que se ejecuta cuando se crea cualquier compra"""
@@ -513,7 +690,7 @@ class ProveedorModel(QObject):
         Qt.callLater(lambda: self._force_refresh_complete_immediate())
 
     def set_compra_model_reference(self, compra_model):
-        """Establece referencia bidireccional con CompraModel - MEJORADO"""
+        """Establece referencia bidireccional con CompraModel"""
         self._compra_model_ref = compra_model
         
         if compra_model:
@@ -542,14 +719,18 @@ class ProveedorModel(QObject):
                 print(f"❌ Error conectando signals: {str(e)}")
         else:
             print("❌ CompraModel es None, no se pueden establecer conexiones")
-
     
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÉTODOS PRIVADOS (CON VERIFICACIÓN)
     # ===============================
     
     def _cargar_proveedores(self, force_refresh=False):
-        """Carga proveedores con paginación - MEJORADO CON FORCE REFRESH"""
+        """Carga proveedores con paginación - SOLO SI ESTÁ AUTENTICADO"""
+        # Solo cargar si está autenticado
+        if self._usuario_actual_id <= 0:
+            print("⚠️ Usuario no autenticado, no se cargan proveedores")
+            return
+        
         try:
             print(f"📋 Cargando proveedores - Página: {self._pagina_actual}, Búsqueda: '{self._termino_busqueda}', Force: {force_refresh}")
             
@@ -596,7 +777,11 @@ class ProveedorModel(QObject):
             self.proveedoresChanged.emit()
     
     def _cargar_resumen(self):
-        """Carga resumen estadístico"""
+        """Carga resumen estadístico - SOLO SI ESTÁ AUTENTICADO"""
+        # Solo cargar si está autenticado
+        if self._usuario_actual_id <= 0:
+            return
+        
         try:
             resumen = safe_execute(self.proveedor_repo.get_resumen_todos_proveedores)
             self._resumen = resumen or {}
@@ -607,7 +792,7 @@ class ProveedorModel(QObject):
     
     def _auto_update_proveedores(self):
         """Actualización automática de proveedores"""
-        if not self._loading:
+        if not self._loading and self._usuario_actual_id > 0:
             try:
                 self._cargar_proveedores()
                 self._cargar_resumen()
@@ -632,6 +817,7 @@ class ProveedorModel(QObject):
             
         except Exception as e:
             print(f"❌ Error invalidando cache: {str(e)}")
+    
     def _force_refresh_after_purchase_with_delay(self, proveedor_id: int):
         """Force refresh con delay para dar tiempo a la BD"""
         print(f"🔄 FORCE REFRESH CON DELAY - Proveedor: {proveedor_id}")
@@ -661,6 +847,7 @@ class ProveedorModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en refresh delayed: {str(e)}")
+    
     def _force_refresh_complete_immediate(self):
         """Force refresh completo inmediato"""
         print("🔄 FORCE REFRESH INMEDIATO COMPLETO")
@@ -719,6 +906,8 @@ class ProveedorModel(QObject):
             self._estadisticas = {}
             self._resumen = {}
             self._search_results = []
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            self._usuario_rol = ""       # ✅ RESETEAR ROL
             
             # Anular repository
             self.proveedor_repo = None
@@ -731,3 +920,4 @@ class ProveedorModel(QObject):
 # Registrar el tipo para QML
 def register_proveedor_model():
     qmlRegisterType(ProveedorModel, "ClinicaModels", 1, 0, "ProveedorModel")
+    print("✅ ProveedorModel registrado para QML con autenticación estandarizada y control de roles")

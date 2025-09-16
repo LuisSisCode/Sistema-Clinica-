@@ -64,6 +64,22 @@ class UsuarioModel(QObject):
     # ===============================
     # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
     # ===============================
+
+    def _verificar_permisos_admin(self) -> bool:
+        """Verifica permisos de administrador para gestión de usuarios"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        # ✅ NECESITAMOS OBTENER EL ROL DEL USUARIO ACTUAL
+        try:
+            usuario_actual = self.repository.get_by_id_with_role(self._usuario_actual_id)
+            if not usuario_actual or usuario_actual.get('rol_nombre') != "Administrador":
+                self.operacionError.emit("Solo administradores pueden gestionar usuarios")
+                return False
+            return True
+        except Exception as e:
+            self.operacionError.emit(f"Error verificando permisos: {str(e)}")
+            return False
     
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
@@ -153,15 +169,14 @@ class UsuarioModel(QObject):
     def crearUsuario(self, nombre: str, apellido_paterno: str, apellido_materno: str,
                     nombre_usuario: str, contrasena: str, confirmar_contrasena: str, 
                     rol_id: int, estado: bool) -> bool:
-        """Crea nuevo usuario - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Crea nuevo usuario - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
-            if not self._verificar_autenticacion():
+            # ✅ VERIFICAR PERMISOS DE ADMIN
+            if not self._verificar_permisos_admin():
                 return False
             
             self._set_loading(True)
-            
-            print(f"👥 Creando usuario por usuario autenticado: {self._usuario_actual_id}")
+            print(f"👥 Admin {self._usuario_actual_id} creando usuario")
             
             # Validar contraseñas coinciden
             if contrasena != confirmar_contrasena:
@@ -263,10 +278,15 @@ class UsuarioModel(QObject):
     
     @Slot(int, result=bool)
     def eliminarUsuario(self, usuario_id: int) -> bool:
-        """Elimina usuario - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Elimina usuario - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_autenticacion():
+            # ✅ VERIFICAR PERMISOS DE ADMIN
+            if not self._verificar_permisos_admin():
+                return False
+            
+            # ✅ PREVENIR AUTO-ELIMINACIÓN
+            if usuario_id == self._usuario_actual_id:
+                self.operacionError.emit("No puedes eliminar tu propia cuenta")
                 return False
             
             self._set_loading(True)

@@ -75,6 +75,7 @@ class AppController(QObject):
         # Usuario autenticado
         self._usuario_autenticado_id = 0
         self._usuario_autenticado_nombre = ""
+        self._usuario_autenticado_rol = ""
 
     @Slot()
     def initialize_models(self):
@@ -350,6 +351,7 @@ class AppController(QObject):
             # ✅ RESETEAR USUARIO AUTENTICADO
             self._usuario_autenticado_id = 0
             self._usuario_autenticado_nombre = ""
+            self._usuario_autenticado_rol = ""
             
             print("✅ FASE 3 COMPLETA: Recursos limpiados")
             
@@ -487,29 +489,27 @@ class AppController(QObject):
         except Exception as e:
             print(f"Error conectando models: {e}")
 
-    # ✅ MÉTODO ACTUALIZADO CON LABORATORIO_MODEL Y OTROS MODELOS CRÍTICOS
     def _establecer_usuario_autenticado(self):
         """Establece el usuario autenticado en todos los modelos que lo necesiten"""
         if self._usuario_autenticado_id > 0:
             print(f"👤 Estableciendo usuario {self._usuario_autenticado_id} en modelos...")
             
-            # ✅ MODELOS CON VERIFICACIÓN DE AUTENTICACIÓN IMPLEMENTADA
+            # ✅ MODELOS CON VERIFICACIÓN DE AUTENTICACIÓN IMPLEMENTADA - CORREGIDO
             models_to_set = [
-                (self.venta_model, 'set_usuario_actual'),
+                (self.venta_model, 'set_usuario_actual_con_rol'),
                 (self.compra_model, 'set_usuario_actual'),
-                (self.consulta_model, 'set_usuario_actual'),
-                (self.enfermeria_model, 'set_usuario_actual'),
-                (self.laboratorio_model, 'set_usuario_actual'),  # ✅ AGREGADO
+                (self.consulta_model, 'set_usuario_actual_con_rol'),    # ✅ CORREGIDO
+                (self.enfermeria_model, 'set_usuario_actual_con_rol'),  # ✅ CORREGIDO  
+                (self.laboratorio_model, 'set_usuario_actual_con_rol'), # ✅ CORREGIDO
             ]
             
             # ✅ MODELOS QUE DEBERÍAN TENER AUTENTICACIÓN PERO AÚN NO LA TIENEN
-            # TODO: Implementar set_usuario_actual en estos modelos
             models_pending_auth = [
-                (self.gasto_model, 'set_usuario_actual'),           # Para creación de gastos
-                (self.paciente_model, 'set_usuario_actual'),        # Para gestión de pacientes
-                (self.usuario_model, 'set_usuario_actual'),         # Para gestión de usuarios
-                (self.trabajador_model, 'set_usuario_actual'),      # Para gestión de trabajadores
-                (self.proveedor_model, 'set_usuario_actual'),       # Para gestión de proveedores
+                (self.gasto_model, 'set_usuario_actual'),           
+                (self.paciente_model, 'set_usuario_actual'),        
+                (self.usuario_model, 'set_usuario_actual_con_rol'), # ✅ CORREGIDO
+                (self.trabajador_model, 'set_usuario_actual'),      
+                (self.proveedor_model, 'set_usuario_actual'),       
                 # Modelos de configuración (operaciones críticas)
                 (self.configuracion_model, 'set_usuario_actual'),
                 (self.confi_laboratorio_model, 'set_usuario_actual'),
@@ -522,16 +522,22 @@ class AppController(QObject):
             for model, method_name in models_to_set:
                 if model and hasattr(model, method_name):
                     try:
-                        getattr(model, method_name)(self._usuario_autenticado_id)
+                        if method_name == 'set_usuario_actual_con_rol':
+                            getattr(model, method_name)(self._usuario_autenticado_id, self._usuario_autenticado_rol)
+                        else:
+                            getattr(model, method_name)(self._usuario_autenticado_id)
                         print(f"  ✅ Usuario establecido en {type(model).__name__}")
                     except Exception as e:
                         print(f"  ❌ Error estableciendo usuario en {type(model).__name__}: {e}")
             
-            # Intentar establecer usuario en modelos pendientes (sin fallar si no existe el método)
+            # Intentar establecer usuario en modelos pendientes
             for model, method_name in models_pending_auth:
                 if model and hasattr(model, method_name):
                     try:
-                        getattr(model, method_name)(self._usuario_autenticado_id)
+                        if method_name == 'set_usuario_actual_con_rol':
+                            getattr(model, method_name)(self._usuario_autenticado_id, self._usuario_autenticado_rol)
+                        else:
+                            getattr(model, method_name)(self._usuario_autenticado_id)
                         print(f"  ✅ Usuario establecido en {type(model).__name__} (pendiente)")
                     except Exception as e:
                         print(f"  ⚠️ {type(model).__name__} no tiene autenticación implementada")
@@ -539,17 +545,31 @@ class AppController(QObject):
                     if model:
                         print(f"  ⏳ {type(model).__name__} pendiente de implementar autenticación")
 
-    @Slot(int, str)
-    def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str):
-        """Establece el usuario autenticado"""
+    @Slot(int, str, str)
+    def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
+        """Establece el usuario autenticado CON ROL"""
         self._usuario_autenticado_id = usuario_id
         self._usuario_autenticado_nombre = usuario_nombre
+        self._usuario_autenticado_rol = usuario_rol
         
-        print(f"👤 Usuario autenticado: {usuario_nombre} (ID: {usuario_id})")
+        print(f"👤 Usuario autenticado: {usuario_nombre} (ID: {usuario_id}, Rol: {usuario_rol})")
         
-        # Si los modelos ya están inicializados, establecer el usuario
-        if self.venta_model:
-            self._establecer_usuario_autenticado()
+        # ✅ LLAMAR AL MÉTODO CORREGIDO INMEDIATAMENTE
+        self._establecer_usuario_autenticado()
+        
+        # ✅ ESTABLECER USUARIO CON ROL EN MODELOS ADICIONALES (REDUNDANCIA PARA GARANTIZAR)
+        models_with_roles_extra = [
+            (self.reportes_model, 'set_usuario_actual_con_rol'),
+            (self.dashboard_model, 'set_usuario_actual_con_rol'),
+        ]
+        
+        for model, method_name in models_with_roles_extra:
+            if model and hasattr(model, method_name):
+                try:
+                    getattr(model, method_name)(usuario_id, usuario_rol)
+                    print(f"  ✅ Rol establecido en {type(model).__name__}")
+                except Exception as e:
+                    print(f"  ❌ Error estableciendo rol en {type(model).__name__}: {e}")
 
     # Handlers para eventos específicos de modelos
     @Slot(int, str)
@@ -1242,7 +1262,9 @@ class AuthAppController(QObject):
             
             # Establecer usuario autenticado en el controlador principal
             if self.main_controller:
-                self.main_controller.set_usuario_autenticado(user_id, user_name)
+                user_role = userData.get('rol_nombre', 'Usuario')
+                print(f"🔍 DEBUG rol obtenido: '{user_role}' **************************************************************")  # Obtener rol (minúsculas)
+                self.main_controller.set_usuario_autenticado(user_id, user_name, user_role)
             
             # Delay para mostrar animación
             QTimer.singleShot(1000, self.initializeMainApp)
@@ -1292,7 +1314,9 @@ class AuthAppController(QObject):
                 if user_data:
                     user_id = user_data.get('id', 0)
                     user_name = user_data.get('Nombre', '') + " " + user_data.get('Apellido_Paterno', '')
-                    self.main_controller.set_usuario_autenticado(user_id, user_name)
+                    user_role = user_data.get('rol_nombre', 'Usuario')
+                    print(f"🔍 DEBUG rol en initializeMainApp: '{user_role}' --------***********--------*////////////")   # Obtener rol
+                    self.main_controller.set_usuario_autenticado(user_id, user_name, user_role)
                 
                 # Crear nueva engine para main app
                 self.main_engine = QQmlApplicationEngine()

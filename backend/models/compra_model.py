@@ -1,3 +1,8 @@
+"""
+CompraModel - ACTUALIZADO con autenticación estandarizada
+Migrado del patrón sin autenticación al patrón de ConsultaModel
+"""
+
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, Qt
 from PySide6.QtQml import qmlRegisterType
 from typing import List, Dict, Any, Optional
@@ -14,7 +19,7 @@ from ..core.excepciones import (
 
 class CompraModel(QObject):
     """
-    Model QObject para gestión de compras con auto-creación de lotes
+    Model QObject para gestión de compras con auto-creación de lotes - ACTUALIZADO con autenticación
     Conecta directamente con QML mediante Signals/Slots/Properties
     """
     
@@ -64,8 +69,11 @@ class CompraModel(QObject):
         self._loading = False
         self._procesando_compra = False
         
+        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        print("📦 CompraModel inicializado - Esperando autenticación")
+        
         # Configuración
-        self._usuario_actual = 0
         self._proveedor_seleccionado = 0
         
         # Timer para actualización automática
@@ -78,10 +86,47 @@ class CompraModel(QObject):
         print(f"🔍 DEBUG: Compras cargadas en __init__: {len(self._compras_recientes)}")
         self._cargar_proveedores()
         self._cargar_estadisticas()
-        print("📦 CompraModel inicializado")
+        print("📦 CompraModel inicializado con autenticación estandarizada")
     
     # ===============================
-    # PROPERTIES PARA QML
+    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en CompraModel: {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de compras")
+            else:
+                print(f"⚠️ ID de usuario inválido en CompraModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en CompraModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    # ===============================
+    # PROPERTIES PARA QML (SIN CAMBIOS)
     # ===============================
     
     @Property(list, notify=comprasRecientesChanged)
@@ -132,7 +177,9 @@ class CompraModel(QObject):
     @Property(int, notify=comprasRecientesChanged)
     def total_compras_mes(self):
         """Total de compras del mes"""
-        return len(self._compras_recientes)
+        total = len(self._compras_recientes)
+        print(f"🔍 DEBUG Property: total_compras_mes = {total}")
+        return total
     
     @Property(float, notify=estadisticasChanged)
     def gastos_mes(self):
@@ -154,55 +201,45 @@ class CompraModel(QObject):
         """Total de proveedores activos"""
         return len(self._proveedores)
     
-    @Property(int, notify=comprasRecientesChanged)
-    def total_compras_mes(self):
-        """Total de compras del mes"""
-        total = len(self._compras_recientes)
-        print(f"🔍 DEBUG Property: total_compras_mes = {total}")
-        return total
-
     # ===============================
-    # SLOTS PARA QML - CONFIGURACIÓN
+    # SLOTS PARA QML - CONFIGURACIÓN (SIN VERIFICACIÓN - LECTURA)
     # ===============================
-    
-    @Slot(int)
-    def set_usuario_actual(self, usuario_id: int):
-        """Establece el usuario actual para las compras"""
-        if usuario_id > 0:
-            self._usuario_actual = usuario_id
-            print(f"👤 Usuario establecido para compras: {usuario_id}")
     
     @Slot(int)
     def set_proveedor_seleccionado(self, proveedor_id: int):
-        """Establece el proveedor para la compra actual"""
+        """Establece el proveedor para la compra actual - SIN VERIFICACIÓN (solo lectura)"""
         if proveedor_id > 0:
             self._proveedor_seleccionado = proveedor_id
             print(f"🏢 Proveedor seleccionado: {proveedor_id}")
     
     @Slot()
     def refresh_compras(self):
-        """Refresca las compras recientes"""
+        """Refresca las compras recientes - SIN VERIFICACIÓN (solo lectura)"""
         self._cargar_compras_recientes()
-    
-    
     
     @Slot()
     def refresh_estadisticas(self):
-        """Refresca las estadísticas"""
+        """Refresca las estadísticas - SIN VERIFICACIÓN (solo lectura)"""
         self._cargar_estadisticas()
     
     # ===============================
-    # SLOTS PARA QML - GESTIÓN PROVEEDORES
+    # SLOTS PARA QML - GESTIÓN PROVEEDORES - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
     @Slot(str, str, result=int)
     def crear_proveedor(self, nombre: str, direccion: str):
-        """Crea un nuevo proveedor"""
+        """Crea un nuevo proveedor - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        if not self._verificar_autenticacion():
+            return 0
+        
         if not nombre or not nombre.strip():
             self.operacionError.emit("Nombre de proveedor requerido")
             return 0
         
         try:
+            print(f"🏢 Creando proveedor - Usuario: {self._usuario_actual_id}")
+            
             proveedor_id = safe_execute(
                 self.compra_repo.crear_proveedor, 
                 nombre.strip(), 
@@ -216,7 +253,7 @@ class CompraModel(QObject):
                 self.proveedorCreado.emit(proveedor_id, nombre.strip())
                 self.operacionExitosa.emit(f"Proveedor creado: {nombre}")
                 
-                print(f"🏢 Proveedor creado - ID: {proveedor_id}, Nombre: {nombre}")
+                print(f"🏢 Proveedor creado - ID: {proveedor_id}, Nombre: {nombre}, Usuario: {self._usuario_actual_id}")
                 return proveedor_id
             else:
                 raise CompraError("Error creando proveedor")
@@ -225,9 +262,13 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error creando proveedor: {str(e)}")
             return 0
     
+    # ===============================
+    # SLOTS PARA CONSULTAS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
+    
     @Slot(str, result=list)
     def buscar_proveedores(self, termino: str):
-        """Busca proveedores por nombre o dirección"""
+        """Busca proveedores por nombre o dirección - SIN VERIFICACIÓN (solo lectura)"""
         if not termino or len(termino.strip()) < 2:
             return []
         
@@ -243,7 +284,7 @@ class CompraModel(QObject):
     
     @Slot(int, result='QVariant')
     def get_proveedor_detalle(self, proveedor_id: int):
-        """Obtiene detalles de un proveedor"""
+        """Obtiene detalles de un proveedor - SIN VERIFICACIÓN (solo lectura)"""
         if proveedor_id <= 0:
             return {}
         
@@ -258,7 +299,7 @@ class CompraModel(QObject):
             return {}
     
     # ===============================
-    # SLOTS PARA QML - ITEMS DE COMPRA
+    # SLOTS PARA QML - ITEMS DE COMPRA (SIN VERIFICACIÓN - PREPARACIÓN)
     # ===============================
     def _validar_fecha_formato(self, fecha_str: str) -> bool:
         """Valida formato YYYY-MM-DD"""
@@ -274,7 +315,7 @@ class CompraModel(QObject):
     @Slot(str, int, int, float, str)
     def agregar_item_compra(self, codigo: str, cantidad_caja: int, cantidad_unitario: int, 
                            precio_unitario: float, fecha_vencimiento: str):
-        """Agrega item a la compra actual"""
+        """Agrega item a la compra actual - SIN VERIFICACIÓN (solo preparación)"""
         if not codigo or (cantidad_caja <= 0 and cantidad_unitario <= 0):
             self.operacionError.emit("Código o cantidades inválidos")
             return
@@ -336,7 +377,7 @@ class CompraModel(QObject):
     
     @Slot(str)
     def remover_item_compra(self, codigo: str):
-        """Remueve item de la compra actual"""
+        """Remueve item de la compra actual - SIN VERIFICACIÓN (solo preparación)"""
         if not codigo:
             return
         
@@ -349,7 +390,7 @@ class CompraModel(QObject):
     
     @Slot(str, int, int)
     def actualizar_cantidades_item(self, codigo: str, nueva_cantidad_caja: int, nueva_cantidad_unitario: int):
-        """Actualiza cantidades de un item en compra"""
+        """Actualiza cantidades de un item en compra - SIN VERIFICACIÓN (solo preparación)"""
         if not codigo or (nueva_cantidad_caja < 0 or nueva_cantidad_unitario < 0):
             return
         
@@ -370,7 +411,7 @@ class CompraModel(QObject):
     
     @Slot(str, float)
     def actualizar_precio_item(self, codigo: str, nuevo_precio: float):
-        """Actualiza precio de un item en compra"""
+        """Actualiza precio de un item en compra - SIN VERIFICACIÓN (solo preparación)"""
         if not codigo or nuevo_precio <= 0:
             return
         
@@ -385,18 +426,22 @@ class CompraModel(QObject):
     
     @Slot()
     def limpiar_items_compra(self):
-        """Limpia todos los items de la compra actual"""
+        """Limpia todos los items de la compra actual - SIN VERIFICACIÓN (solo preparación)"""
         self._items_compra.clear()
         self.itemsCompraCambiado.emit()
         self.operacionExitosa.emit("Items de compra limpiados")
     
     # ===============================
-    # SLOTS PARA QML - PROCESAMIENTO COMPRAS
+    # SLOTS PARA QML - PROCESAMIENTO COMPRAS - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
     @Slot(result=bool)
     def procesar_compra_actual(self) -> bool:
-        """Procesa la compra con los items actuales - MEJORADO CON SYNC"""
+        """Procesa la compra con los items actuales - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        if not self._verificar_autenticacion():
+            return False
+        
         if not self._items_compra:
             self.operacionError.emit("No hay items para comprar")
             return False
@@ -405,13 +450,11 @@ class CompraModel(QObject):
             self.operacionError.emit("Proveedor no seleccionado")
             return False
         
-        if self._usuario_actual <= 0:
-            self.operacionError.emit("Usuario no establecido")
-            return False
-        
         self._set_procesando_compra(True)
         
         try:
+            print(f"💳 Procesando compra - Usuario: {self._usuario_actual_id}, Proveedor: {self._proveedor_seleccionado}")
+            
             # Preparar items para compra
             items_compra = []
             for item in self._items_compra:
@@ -427,7 +470,7 @@ class CompraModel(QObject):
             compra = safe_execute(
                 self.compra_repo.crear_compra,
                 self._proveedor_seleccionado,
-                self._usuario_actual,
+                self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
                 items_compra
             )
             
@@ -435,18 +478,18 @@ class CompraModel(QObject):
                 monto_compra = float(compra['Total'])
                 proveedor_id = self._proveedor_seleccionado
                 
-                print(f"✅ Compra exitosa - Proveedor: {proveedor_id}, Monto: {monto_compra}")
+                print(f"✅ Compra exitosa - Proveedor: {proveedor_id}, Monto: {monto_compra}, Usuario: {self._usuario_actual_id}")
                 
-                # ✅ INVALIDAR CACHE CRÍTICO PRIMERO
+                # Invalidar cache crítico primero
                 self._invalidate_all_provider_cache()
                 
                 # Limpiar items
                 self.limpiar_items_compra()
                 
-                # ✅ ACTUALIZAR DATOS LOCALES CON DELAY PARA BD
+                # Actualizar datos locales con delay para BD
                 QTimer.singleShot(0, self._update_all_data_after_purchase)
                 
-                # ✅ NOTIFICAR INMEDIATAMENTE A PROVEEDOR MODEL
+                # Notificar inmediatamente a proveedor model
                 self._notify_proveedor_updated_immediate(proveedor_id, monto_compra)
                 
                 # Establecer compra actual
@@ -467,45 +510,22 @@ class CompraModel(QObject):
         finally:
             self._set_procesando_compra(False)
     
-    @Slot()
-    def force_refresh_after_purchase(self):
-        """Force refresh completo después de una compra"""
-        print("🔄 FORCE REFRESH DESPUÉS DE COMPRA...")
-        
-        try:
-            # Invalidar cache completo
-            if hasattr(self.compra_repo, '_cache_manager'):
-                self.compra_repo._cache_manager.invalidate_pattern('compras*')
-                self.compra_repo._cache_manager.invalidate_pattern('proveedores*')
-                print("🗑️ Cache completo invalidado")
-            
-            # Recargar todos los datos
-            self._cargar_compras_recientes()
-            self._cargar_proveedores()
-            self._cargar_estadisticas()
-            
-            # Notificar cambios generales
-            self.proveedorDatosActualizados.emit()
-            
-            print("✅ Force refresh después de compra completado")
-            
-        except Exception as e:
-            print(f"❌ Error en force refresh: {str(e)}")
-
     @Slot(int, str, result=bool)
     def compra_rapida_json(self, proveedor_id: int, items_json: str):
-        """Procesa compra rápida desde JSON"""
-        if proveedor_id <= 0 or not items_json:
-            self.operacionError.emit("Datos de compra inválidos")
+        """Procesa compra rápida desde JSON - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        if not self._verificar_autenticacion():
             return False
         
-        if self._usuario_actual <= 0:
-            self.operacionError.emit("Usuario no establecido")
+        if proveedor_id <= 0 or not items_json:
+            self.operacionError.emit("Datos de compra inválidos")
             return False
         
         self._set_procesando_compra(True)
         
         try:
+            print(f"🚀 Compra rápida JSON - Usuario: {self._usuario_actual_id}, Proveedor: {proveedor_id}")
+            
             # Parsear items JSON
             items = json.loads(items_json)
             if not items:
@@ -515,7 +535,7 @@ class CompraModel(QObject):
             compra = safe_execute(
                 self.compra_repo.crear_compra,
                 proveedor_id,
-                self._usuario_actual,
+                self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
                 items
             )
             
@@ -539,13 +559,47 @@ class CompraModel(QObject):
         
         return False
     
+    @Slot(int, result=bool)
+    def eliminar_compra(self, compra_id: int) -> bool:
+        """Elimina compra completa con reversión de stock - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return False
+        
+        if compra_id <= 0:
+            self.operacionError.emit("ID de compra inválido")
+            return False
+        
+        self._set_loading(True)
+        try:
+            print(f"🗑️ Eliminando compra ID: {compra_id} por usuario: {self._usuario_actual_id}")
+            
+            exito = safe_execute(self.compra_repo.eliminar_compra_completa, compra_id)
+            
+            if exito:
+                # Actualizar datos
+                self._cargar_compras_recientes()
+                self._cargar_estadisticas()
+                
+                self.operacionExitosa.emit(f"Compra #{compra_id} eliminada correctamente")
+                print(f"🗑️ Compra eliminada - ID: {compra_id}, Usuario: {self._usuario_actual_id}")
+                return True
+            else:
+                raise CompraError("No se pudo eliminar la compra")
+                
+        except Exception as e:
+            self.operacionError.emit(f"Error eliminando compra: {str(e)}")
+            return False
+        finally:
+            self._set_loading(False)
+    
     # ===============================
-    # SLOTS PARA QML - CONSULTAS
+    # SLOTS PARA QML - CONSULTAS (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
     @Slot(int, result='QVariant')
     def get_compra_detalle(self, compra_id: int):
-        """Obtiene detalle completo de una compra CON INFORMACIÓN DE PRODUCTOS"""
+        """Obtiene detalle completo de una compra CON INFORMACIÓN DE PRODUCTOS - SIN VERIFICACIÓN (solo lectura)"""
         if compra_id <= 0:
             return {}
         
@@ -591,11 +645,9 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error obteniendo detalle compra: {str(e)}")
             return {}
     
-    
-    
     @Slot(int)
     def cargar_top_productos_comprados(self, dias: int = 30):
-        """Carga top productos más comprados"""
+        """Carga top productos más comprados - SIN VERIFICACIÓN (solo lectura)"""
         try:
             productos = safe_execute(
                 self.compra_repo.get_productos_mas_comprados,
@@ -609,7 +661,7 @@ class CompraModel(QObject):
     
     @Slot(int, result='QVariant')
     def get_compras_por_proveedor(self, proveedor_id: int = 0):
-        """Obtiene compras por proveedor"""
+        """Obtiene compras por proveedor - SIN VERIFICACIÓN (solo lectura)"""
         try:
             if proveedor_id > 0:
                 compras = safe_execute(
@@ -626,7 +678,7 @@ class CompraModel(QObject):
     
     @Slot(result='QVariant')
     def get_reporte_gastos(self):
-        """Obtiene reporte de gastos en compras"""
+        """Obtiene reporte de gastos en compras - SIN VERIFICACIÓN (solo lectura)"""
         try:
             reporte = safe_execute(self.compra_repo.get_reporte_gastos_compras, 30)
             return reporte if reporte else {}
@@ -634,16 +686,9 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error en reporte gastos: {str(e)}")
             return {}
     
-    @Slot()
-    def force_refresh_compras(self):
-        """Fuerza refresh de compras desde QML"""
-        print("🔄 Force refresh compras desde QML")
-        self._cargar_compras_recientes()
-        self._cargar_estadisticas()
-
     @Slot(int, result='QVariant') 
     def get_productos_resumen_compra(self, compra_id: int):
-        """Obtiene resumen de productos de una compra para mostrar en lista principal"""
+        """Obtiene resumen de productos de una compra para mostrar en lista principal - SIN VERIFICACIÓN (solo lectura)"""
         if compra_id <= 0:
             return {}
         
@@ -675,44 +720,82 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error obteniendo productos compra: {str(e)}")
             return {'productos_texto': 'Error', 'total_productos': 0}
     
-    @Slot(int, result=bool)
-    def eliminar_compra(self, compra_id: int) -> bool:
-        """Elimina compra completa con reversión de stock"""
-        if compra_id <= 0:
-            self.operacionError.emit("ID de compra inválido")
-            return False
-        
-        self._set_loading(True)
+    @Slot(result='QVariant')
+    def obtener_proveedores_para_filtro(self):
+        """Obtiene lista de proveedores para el ComboBox - SIN VERIFICACIÓN (solo lectura)"""
         try:
-            exito = safe_execute(self.compra_repo.eliminar_compra_completa, compra_id)
+            proveedores = safe_execute(self.compra_repo.get_proveedores_for_combo)
             
-            if exito:
-                # Actualizar datos
-                self._cargar_compras_recientes()
-                self._cargar_estadisticas()
-                
-                self.operacionExitosa.emit(f"Compra #{compra_id} eliminada correctamente")
-                print(f"🗑️ Compra eliminada - ID: {compra_id}")
-                return True
-            else:
-                raise CompraError("No se pudo eliminar la compra")
-                
+            # Formato para QML ComboBox
+            proveedores_qml = [{"text": "Todos los proveedores", "value": "all"}]
+            
+            for proveedor in proveedores or []:
+                proveedores_qml.append({
+                    "text": proveedor.get('Nombre', 'Sin nombre'),
+                    "value": str(proveedor.get('id', 0))
+                })
+            
+            print(f"📋 Proveedores para filtro: {len(proveedores_qml)} opciones")
+            return proveedores_qml
+            
         except Exception as e:
-            self.operacionError.emit(f"Error eliminando compra: {str(e)}")
-            return False
-        finally:
-            self._set_loading(False)
+            self.operacionError.emit(f"Error obteniendo proveedores: {str(e)}")
+            return [{"text": "Todos los proveedores", "value": "all"}]
+    
+    @Slot(result=list)
+    def get_marcas_disponibles(self):
+        """Obtiene marcas para el ComboBox - SIN VERIFICACIÓN (solo lectura)"""
+        try:
+            return safe_execute(self.producto_repo.get_marcas_activas) or []
+        except Exception as e:
+            return []
+    
+    # ===============================
+    # SLOTS PARA UTILIDADES Y DEBUG (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
+    
+    @Slot()
+    def force_refresh_after_purchase(self):
+        """Force refresh completo después de una compra - SIN VERIFICACIÓN (solo lectura)"""
+        print("🔄 FORCE REFRESH DESPUÉS DE COMPRA...")
+        
+        try:
+            # Invalidar cache completo
+            if hasattr(self.compra_repo, '_cache_manager'):
+                self.compra_repo._cache_manager.invalidate_pattern('compras*')
+                self.compra_repo._cache_manager.invalidate_pattern('proveedores*')
+                print("🗑️ Cache completo invalidado")
+            
+            # Recargar todos los datos
+            self._cargar_compras_recientes()
+            self._cargar_proveedores()
+            self._cargar_estadisticas()
+            
+            # Notificar cambios generales
+            self.proveedorDatosActualizados.emit()
+            
+            print("✅ Force refresh después de compra completado")
+            
+        except Exception as e:
+            print(f"❌ Error en force refresh: {str(e)}")
+    
+    @Slot()
+    def force_refresh_compras(self):
+        """Fuerza refresh de compras desde QML - SIN VERIFICACIÓN (solo lectura)"""
+        print("🔄 Force refresh compras desde QML")
+        self._cargar_compras_recientes()
+        self._cargar_estadisticas()
 
     @Slot()
     def refresh_proveedores(self):
-        """Refresca la lista de proveedores - CORREGIDO CACHE"""
+        """Refresca la lista de proveedores - SIN VERIFICACIÓN (solo lectura)"""
         try:
-            # ✅ INVALIDAR CACHE ESPECÍFICO DE PROVEEDORES
+            # Invalidar cache específico de proveedores
             if hasattr(self.compra_repo, '_cache_manager'):
                 self.compra_repo._cache_manager.invalidate_pattern('proveedores*')
                 print("🗑️ Cache de proveedores invalidado")
             
-            # ✅ FORZAR RECARGA DESDE BD
+            # Forzar recarga desde BD
             self._cargar_proveedores()
             print(f"✅ Proveedores refrescados: {len(self._proveedores)}")
             
@@ -722,7 +805,7 @@ class CompraModel(QObject):
 
     @Slot()
     def force_refresh_proveedores(self):
-        """Fuerza refresh completo de proveedores desde QML"""
+        """Fuerza refresh completo de proveedores desde QML - SIN VERIFICACIÓN (solo lectura)"""
         print("🔄 FORCE REFRESH PROVEEDORES - Iniciando...")
         
         try:
@@ -747,10 +830,9 @@ class CompraModel(QObject):
             print(f"❌ ERROR EN FORCE REFRESH: {str(e)}")
             self.operacionError.emit(f"Error actualizando proveedores: {str(e)}")
 
-    # ✅ NUEVO: Método para debug desde QML
     @Slot()
     def debug_proveedores_info(self):
-        """Debug info de proveedores para QML"""
+        """Debug info de proveedores para QML - SIN VERIFICACIÓN (solo lectura)"""
         print(f"🔍 DEBUG PROVEEDORES:")
         print(f"  - Total en memoria: {len(self._proveedores)}")
         print(f"  - CompraRepo disponible: {self.compra_repo is not None}")
@@ -767,38 +849,9 @@ class CompraModel(QObject):
             print(f"  - Consulta directa BD: {len(proveedores_direct) if proveedores_direct else 0} proveedores")
         except Exception as e:
             print(f"  - Error consulta directa: {str(e)}")
-
-
-    def aplicar_filtro_proveedor(self, proveedor_filtro: str):
-        """Aplica filtro por proveedor"""
-        self._filtro_proveedor = proveedor_filtro
-        print(f"🏢 Filtro proveedor aplicado: {proveedor_filtro}")
-        self._aplicar_filtros_compras()
-
-    @Slot(result='QVariant')
-    def obtener_proveedores_para_filtro(self):
-        """Obtiene lista de proveedores para el ComboBox"""
-        try:
-            proveedores = safe_execute(self.compra_repo.get_proveedores_for_combo)
-            
-            # Formato para QML ComboBox
-            proveedores_qml = [{"text": "Todos los proveedores", "value": "all"}]
-            
-            for proveedor in proveedores or []:
-                proveedores_qml.append({
-                    "text": proveedor.get('Nombre', 'Sin nombre'),
-                    "value": str(proveedor.get('id', 0))
-                })
-            
-            print(f"📋 Proveedores para filtro: {len(proveedores_qml)} opciones")
-            return proveedores_qml
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo proveedores: {str(e)}")
-            return [{"text": "Todos los proveedores", "value": "all"}]
-
+    
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÉTODOS PRIVADOS (SIN CAMBIOS MAYORES)
     # ===============================
     
     def _cargar_compras_recientes(self):
@@ -817,7 +870,7 @@ class CompraModel(QObject):
             # ASIGNAR Y EMITIR SIGNAL
             self._compras_recientes = compras_transformadas
             
-            # ✅ FORZAR EMISIÓN DE SIGNAL MÚLTIPLE
+            # Forzar emisión de signal múltiple
             self.comprasRecientesChanged.emit()
             print(f"📡 Signal emitido: comprasRecientesChanged - {len(compras_transformadas)} compras")
             
@@ -834,22 +887,22 @@ class CompraModel(QObject):
     def _cargar_proveedores(self):
         """Carga lista de proveedores - MEJORADO"""
         try:
-            # ✅ FORZAR CONSULTA SIN CACHE
+            # Forzar consulta sin cache
             proveedores = self.compra_repo.get_proveedores_activos()
             
-            # ✅ VALIDAR QUE LA CONSULTA RETORNÓ DATOS
+            # Validar que la consulta retornó datos
             if proveedores:
                 self._proveedores = proveedores
                 print(f"📋 Proveedores cargados: {len(proveedores)}")
                 
-                # ✅ LOG DETALLADO DE PROVEEDORES
+                # Log detallado de proveedores
                 for proveedor in proveedores:
                     print(f"  - {proveedor.get('Nombre', 'Sin nombre')} (ID: {proveedor.get('id', 'N/A')})")
             else:
                 print("⚠️ No se obtuvieron proveedores desde BD")
                 self._proveedores = []
             
-            # ✅ SIEMPRE EMITIR SIGNAL
+            # Siempre emitir signal
             self.proveedoresChanged.emit()
             
         except Exception as e:
@@ -903,7 +956,7 @@ class CompraModel(QObject):
         if self._procesando_compra != procesando:
             self._procesando_compra = procesando
             self.procesandoCompraChanged.emit()
-    # Funcione para formatear compra a QML
+    
     def _format_compra_for_qml(self, compra_raw: Dict[str, Any]) -> Dict[str, Any]:
         """Transforma datos de Repository a formato QML CON PRODUCTOS"""
         # Procesar fecha
@@ -916,7 +969,7 @@ class CompraModel(QObject):
         elif not isinstance(fecha_completa, datetime):
             fecha_completa = datetime.now()
         
-        # Obtener resumen de productos para esta compra - CORREGIDO
+        # Obtener resumen de productos para esta compra
         try:
             productos_raw = safe_execute(self.compra_repo.get_productos_resumen_compra, compra_raw.get('id', 0))
             
@@ -959,7 +1012,7 @@ class CompraModel(QObject):
             'hora': fecha_completa.strftime('%H:%M'),
             'total': float(compra_raw.get('Total', 0)),
             
-            # PRODUCTOS - CORREGIDO
+            # PRODUCTOS
             'productos_texto': productos_texto,
             'total_productos': total_productos,
             
@@ -971,19 +1024,7 @@ class CompraModel(QObject):
             'Id_Proveedor': compra_raw.get('Id_Proveedor', 0),
             'Id_Usuario': compra_raw.get('Id_Usuario', 0)
         }
-    def _notify_proveedor_updated(self, proveedor_id: int, monto_compra: float):
-        """Notifica que un proveedor tuvo una nueva compra"""
-        print(f"📢 NOTIFICANDO: Proveedor {proveedor_id} tuvo compra de Bs{monto_compra}")
-        
-        # Emitir signals específicos
-        self.proveedorCompraCompletada.emit(proveedor_id, monto_compra)
-        self.proveedorDatosActualizados.emit()
-        
-        # Invalidar cache de proveedores en CompraRepository
-        if hasattr(self.compra_repo, '_cache_manager'):
-            self.compra_repo._cache_manager.invalidate_pattern('proveedores*')
-            print("🗑️ Cache de proveedores invalidado por nueva compra")
-
+    
     def _invalidate_all_provider_cache(self):
         """Invalida TODO el cache relacionado con proveedores"""
         try:
@@ -1003,6 +1044,7 @@ class CompraModel(QObject):
                     
         except Exception as e:
             print(f"❌ Error invalidando cache: {str(e)}")
+    
     def _update_all_data_after_purchase(self):
         """Actualiza todos los datos después de una compra con delay para BD"""
         try:
@@ -1069,16 +1111,7 @@ class CompraModel(QObject):
         except Exception as e:
             self.operacionError.emit(f"Error: {str(e)}")
             return False
-
-    @Slot(result=list)
-    def get_marcas_disponibles(self):
-        """Obtiene marcas para el ComboBox"""
-        try:
-            return safe_execute(self.producto_repo.get_marcas_activas) or []
-        except Exception as e:
-            return []
         
-    # En CompraModel.py
     def _validar_fecha_vencimiento(self, fecha_str):
         """Convierte DD/MM/YYYY a YYYY-MM-DD"""
         if '/' in fecha_str:
@@ -1086,6 +1119,63 @@ class CompraModel(QObject):
             return f"{parts[2]}-{parts[1]}-{parts[0]}"
         return fecha_str
 
+    def aplicar_filtro_proveedor(self, proveedor_filtro: str):
+        """Aplica filtro por proveedor"""
+        self._filtro_proveedor = proveedor_filtro
+        print(f"🏢 Filtro proveedor aplicado: {proveedor_filtro}")
+        self._aplicar_filtros_compras()
+
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para CompraModel"""
+        try:
+            print("🚨 CompraModel: Iniciando desconexión de emergencia...")
+            
+            # Detener timer
+            if hasattr(self, 'update_timer') and self.update_timer.isActive():
+                self.update_timer.stop()
+                print("   ⏹️ Update timer detenido")
+            
+            # Establecer estado shutdown
+            self._loading = False
+            self._procesando_compra = False
+            
+            # Desconectar todas las señales
+            signals_to_disconnect = [
+                'comprasRecientesChanged', 'compraActualChanged', 'proveedoresChanged',
+                'historialComprasChanged', 'estadisticasChanged', 'topProductosCompradosChanged',
+                'compraCreada', 'proveedorCreado', 'operacionExitosa', 'operacionError',
+                'loadingChanged', 'procesandoCompraChanged', 'itemsCompraCambiado',
+                'proveedorCompraCompletada', 'proveedorDatosActualizados', 'filtrosChanged'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar datos
+            self._compras_recientes = []
+            self._compra_actual = {}
+            self._proveedores = []
+            self._historial_compras = []
+            self._estadisticas = {}
+            self._top_productos_comprados = []
+            self._items_compra = []
+            self._proveedor_seleccionado = 0
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            
+            # Anular repositories
+            self.compra_repo = None
+            self.producto_repo = None
+            
+            print("✅ CompraModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión CompraModel: {e}")
+
 # Registrar el tipo para QML
 def register_compra_model():
     qmlRegisterType(CompraModel, "ClinicaModels", 1, 0, "CompraModel")
+    print("🔗 CompraModel registrado para QML con autenticación estandarizada")

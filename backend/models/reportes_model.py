@@ -8,8 +8,8 @@ from ..core.excepciones import ExceptionHandler, ValidationError, DatabaseQueryE
 
 class ReportesModel(QObject):
     """
-    Model QObject para generación de reportes en QML
-    Conecta la interfaz QML con el ReportesRepository
+    Model QObject para generación de reportes con autenticación estandarizada y control ultra-estricto
+    Información financiera detallada solo para Administradores
     """
     
     # ===============================
@@ -24,6 +24,8 @@ class ReportesModel(QObject):
     # Señales para operaciones
     reporteGenerado = Signal(bool, str, int)  # success, message, total_registros
     reporteError = Signal(str, str)  # title, message
+    operacionExitosa = Signal(str)
+    operacionError = Signal(str)
     
     # Señales para UI
     loadingChanged = Signal()
@@ -47,34 +49,168 @@ class ReportesModel(QObject):
         self._fecha_desde_actual: str = ""
         self._fecha_hasta_actual: str = ""
         
-        # ✅ NUEVA: Referencia al AppController (se establecerá desde main.py)
+        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO OTROS MODELS
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        self._usuario_rol = ""       # NUEVO: Control de roles
+        print("📊 ReportesModel inicializado - Esperando autenticación")
+        
+        # Referencia al AppController (se establecerá desde main.py)
         self._app_controller = None
         
-        print("📊 ReportesModel inicializado")
+        print("📊 ReportesModel inicializado con autenticación estandarizada y control ultra-estricto")
     
-    # ✅ NUEVO: Método para establecer la referencia al AppController
+    # ===============================
+    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en ReportesModel: {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de reportes")
+            else:
+                print(f"⚠️ ID de usuario inválido en ReportesModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en ReportesModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, rol: str):
+        """
+        NUEVO: Establece usuario + rol para control de permisos completo
+        """
+        try:
+            if usuario_id > 0 and rol:
+                self._usuario_actual_id = usuario_id
+                self._usuario_rol = rol.strip()
+                print(f"👤 Usuario autenticado con rol en ReportesModel: {usuario_id} - {rol}")
+                
+                mensaje = f"Usuario {usuario_id} ({rol}) establecido en reportes"
+                if rol == "Médico":
+                    mensaje += " - Solo reportes médicos básicos"
+                self.operacionExitosa.emit(mensaje)
+            else:
+                self.operacionError.emit("Usuario o rol inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario con rol: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    @Property(str, notify=operacionExitosa)
+    def usuario_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_rol
+    
+    # NUEVO: Método para establecer AppController
     def set_app_controller(self, app_controller):
         """Establece la referencia al AppController para acceso al PDF generator"""
         self._app_controller = app_controller
         print("🔗 AppController conectado al ReportesModel")
     
     # ===============================
-    # PROPERTIES - Datos para QML
+    # PROPIEDADES DE AUTENTICACIÓN Y PERMISOS
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    def _verificar_permisos(self, operacion: str) -> bool:
+        """
+        NUEVO: Verifica permisos específicos según el rol del usuario
+        
+        PERMISOS ULTRA-ESTRICTOS PARA REPORTES:
+        - Admin: Acceso completo a todos los reportes financieros y médicos
+        - Médico: Solo reportes médicos básicos SIN información financiera
+        
+        Args:
+            operacion: Nombre de la operación a verificar
+            
+        Returns:
+            bool: True si tiene permisos, False caso contrario
+        """
+        # Verificar autenticación primero
+        if not self._verificar_autenticacion():
+            return False
+        
+        # Admin tiene acceso completo
+        if self._usuario_rol == "Administrador":
+            return True
+        
+        # Reportes financieros - SOLO ADMIN
+        reportes_financieros = [
+            'reporte_ventas',           # Tipo 1
+            'reporte_compras',          # Tipo 3  
+            'reporte_gastos',           # Tipo 7
+            'reporte_consolidado',      # Tipo 8
+            'exportar_pdf_financiero'
+        ]
+        
+        # Reportes con información de costos - SOLO ADMIN
+        reportes_con_costos = [
+            'reporte_inventario'        # Tipo 2 (incluye precios de compra)
+        ]
+        
+        if operacion in reportes_financieros or operacion in reportes_con_costos:
+            if self._usuario_rol != "Administrador":
+                self.operacionError.emit("Reportes financieros solo disponibles para administradores")
+                return False
+        
+        # Médico puede ver reportes médicos básicos (sin precios)
+        if self._usuario_rol == "Médico":
+            reportes_medicos_basicos = [
+                'reporte_consultas_basico',    # Tipo 4 (sin precios)
+                'reporte_laboratorio_basico',  # Tipo 5 (sin precios)  
+                'reporte_enfermeria_basico'    # Tipo 6 (sin precios)
+            ]
+            
+            if operacion in reportes_medicos_basicos:
+                return True
+        
+        return True
+    
+    def _es_reporte_financiero(self, tipo_reporte: int) -> bool:
+        """Determina si un tipo de reporte contiene información financiera"""
+        reportes_financieros = [1, 2, 3, 7, 8]  # Ventas, Inventario, Compras, Gastos, Consolidado
+        return tipo_reporte in reportes_financieros
+    
+    # ===============================
+    # PROPERTIES - Datos para QML CON RESTRICCIONES
     # ===============================
     
     @Property(list, notify=datosReporteChanged)
     def datosReporte(self) -> List[Dict[str, Any]]:
-        """Datos del reporte actual para mostrar en QML"""
+        """Datos del reporte actual - FILTRADOS POR ROL"""
+        if self._usuario_rol == "Médico":
+            # Para médicos, filtrar información financiera de los datos
+            return self._filtrar_datos_financieros(self._datos_reporte)
         return self._datos_reporte
     
     @Property('QVariantMap', notify=resumenChanged)
     def resumenReporte(self) -> Dict[str, Any]:
-        """Resumen del reporte actual"""
+        """Resumen del reporte - SIN INFORMACIÓN FINANCIERA PARA MÉDICO"""
+        if self._usuario_rol == "Médico":
+            return self._filtrar_resumen_financiero(self._resumen_reporte)
         return self._resumen_reporte
     
     @Property('QVariantMap', notify=estadisticasChanged)
     def estadisticas(self) -> Dict[str, Any]:
-        """Estadísticas generales del sistema"""
+        """Estadísticas generales - BÁSICAS PARA MÉDICO"""
+        if self._usuario_rol == "Médico":
+            return self._filtrar_estadisticas_financieras(self._estadisticas)
         return self._estadisticas
     
     @Property(bool, notify=loadingChanged)
@@ -90,11 +226,13 @@ class ReportesModel(QObject):
     @Property(int, notify=datosReporteChanged)
     def totalRegistros(self) -> int:
         """Total de registros en el reporte actual"""
-        return len(self._datos_reporte)
+        return len(self.datosReporte)  # Usa la property que filtra por rol
     
     @Property(float, notify=resumenChanged)
     def totalValor(self) -> float:
-        """Valor total del reporte actual"""
+        """Valor total del reporte - SOLO ADMIN VE VALORES"""
+        if self._usuario_rol == "Médico":
+            return 0.0  # Médico no ve valores monetarios
         return float(self._resumen_reporte.get('totalValor', 0.0))
     
     @Property(str)
@@ -113,31 +251,49 @@ class ReportesModel(QObject):
         return tipos.get(self._tipo_reporte_actual, "Sin seleccionar")
     
     # ===============================
-    # SLOTS - Métodos llamables desde QML
+    # NUEVA PROPERTY PARA DETECTAR RESTRICCIONES EN UI
     # ===============================
     
-    # --- GENERACIÓN DE REPORTES ---
+    @Property(bool, notify=operacionExitosa)
+    def esVistaLimitada(self):
+        """Indica si el usuario tiene vista limitada (para ocultar elementos en UI)"""
+        return self._usuario_rol == "Médico"
+    
+    # ===============================
+    # SLOTS - Métodos con CONTROL ESTRICTO DE PERMISOS
+    # ===============================
     
     @Slot(int, str, str, result=bool)
     def generarReporte(self, tipo_reporte: int, fecha_desde: str, fecha_hasta: str) -> bool:
         """
-        Genera reporte según tipo y fechas especificadas
-        
-        Args:
-            tipo_reporte: Tipo de reporte (1-8)
-            fecha_desde: Fecha inicio en formato DD/MM/YYYY
-            fecha_hasta: Fecha fin en formato DD/MM/YYYY
-            
-        Returns:
-            True si se generó exitosamente
+        Genera reporte con VERIFICACIÓN ESTRICTA DE PERMISOS
         """
         try:
             self._set_loading(True)
             self._set_progress(10)
             
+            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+            if not self._verificar_autenticacion():
+                return False
+            
+            # ✅ VERIFICAR PERMISOS SEGÚN TIPO DE REPORTE
+            if self._es_reporte_financiero(tipo_reporte):
+                if not self._verificar_permisos('reporte_ventas'):  # Usar cualquier permiso financiero
+                    return False
+            
+            print(f"📊 Generando reporte tipo {tipo_reporte} - Usuario: {self._usuario_actual_id} ({self._usuario_rol})")
+            
             # Validar parámetros
             if tipo_reporte < 1 or tipo_reporte > 8:
                 raise ValidationError("tipo_reporte", tipo_reporte, "Tipo de reporte inválido")
+            
+            # ✅ RESTRICCIÓN ADICIONAL: Médico solo puede generar reportes 4, 5, 6
+            if self._usuario_rol == "Médico":
+                reportes_permitidos_medico = [4, 5, 6]  # Consultas, Lab, Enfermería
+                if tipo_reporte not in reportes_permitidos_medico:
+                    self.operacionError.emit("Solo puede generar reportes médicos básicos")
+                    return False
+                print(f"👨‍⚕️ Médico generando reporte médico básico tipo {tipo_reporte}")
             
             if not fecha_desde or not fecha_hasta:
                 raise ValidationError("fechas", "", "Fechas requeridas")
@@ -172,10 +328,13 @@ class ReportesModel(QObject):
                 self._resumen_reporte = self._calcular_resumen(datos)
                 self._emit_data_changed()
                 
-                mensaje = f"Reporte generado: {len(datos)} registros"
-                self.reporteGenerado.emit(True, mensaje, len(datos))
+                mensaje_resultado = f"Reporte generado: {len(datos)} registros"
+                if self._usuario_rol == "Médico":
+                    mensaje_resultado += " (vista básica sin información financiera)"
                 
-                print(f"✅ Reporte generado - Tipo: {tipo_reporte}, Registros: {len(datos)}")
+                self.reporteGenerado.emit(True, mensaje_resultado, len(datos))
+                
+                print(f"✅ Reporte generado - Tipo: {tipo_reporte}, Registros: {len(datos)}, Usuario: {self._usuario_actual_id}")
                 return True
             else:
                 self._datos_reporte = []
@@ -226,7 +385,7 @@ class ReportesModel(QObject):
             raise DatabaseQueryError(f"Error consultando datos: {str(e)}")
     
     def _calcular_resumen(self, datos: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calcula resumen estadístico de los datos"""
+        """Calcula resumen estadístico - FILTRA INFORMACIÓN FINANCIERA PARA MÉDICO"""
         try:
             if not datos:
                 return {}
@@ -235,70 +394,160 @@ class ReportesModel(QObject):
             total_valor = 0.0
             total_cantidad = 0
             
-            for registro in datos:
-                # Obtener valor (puede estar en diferentes campos)
-                valor = 0.0
-                if 'valor' in registro and registro['valor'] is not None:
-                    valor = float(registro['valor'])
-                
-                total_valor += valor
-                
-                # Obtener cantidad
-                cantidad = 0
-                if 'cantidad' in registro and registro['cantidad'] is not None:
-                    cantidad = int(float(registro['cantidad']))
-                
-                total_cantidad += cantidad
+            # ✅ SOLO CALCULAR VALORES FINANCIEROS SI ES ADMIN
+            if self._usuario_rol == "Administrador":
+                for registro in datos:
+                    # Obtener valor (puede estar en diferentes campos)
+                    valor = 0.0
+                    if 'valor' in registro and registro['valor'] is not None:
+                        valor = float(registro['valor'])
+                    
+                    total_valor += valor
+                    
+                    # Obtener cantidad
+                    cantidad = 0
+                    if 'cantidad' in registro and registro['cantidad'] is not None:
+                        cantidad = int(float(registro['cantidad']))
+                    
+                    total_cantidad += cantidad
             
             promedio_valor = total_valor / total_registros if total_registros > 0 else 0.0
             
-            return {
-                'totalRegistros': total_registros,
-                'totalValor': total_valor,
-                'totalCantidad': total_cantidad,
-                'promedioValor': promedio_valor,
-                'fechaGeneracion': self._fecha_desde_actual,
-                'fechaHasta': self._fecha_hasta_actual,
-                'tipoReporte': self._tipo_reporte_actual
-            }
+            # ✅ RESUMEN DIFERENTE SEGÚN ROL
+            if self._usuario_rol == "Médico":
+                # Médico solo ve contadores básicos
+                return {
+                    'totalRegistros': total_registros,
+                    'totalCantidad': total_cantidad,
+                    'fechaGeneracion': self._fecha_desde_actual,
+                    'fechaHasta': self._fecha_hasta_actual,
+                    'tipoReporte': self._tipo_reporte_actual,
+                    'vistaLimitada': True
+                }
+            else:
+                # Admin ve información financiera completa
+                return {
+                    'totalRegistros': total_registros,
+                    'totalValor': total_valor,
+                    'totalCantidad': total_cantidad,
+                    'promedioValor': promedio_valor,
+                    'fechaGeneracion': self._fecha_desde_actual,
+                    'fechaHasta': self._fecha_hasta_actual,
+                    'tipoReporte': self._tipo_reporte_actual
+                }
             
         except Exception as e:
             print(f"⚠️ Error calculando resumen: {e}")
             return {}
     
-    # --- EXPORTACIÓN A PDF (CORREGIDO) ---
+    # ===============================
+    # MÉTODOS DE FILTRADO PARA MÉDICOS
+    # ===============================
+    
+    def _filtrar_datos_financieros(self, datos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filtra información financiera de los datos para médicos"""
+        try:
+            datos_filtrados = []
+            for registro in datos:
+                registro_filtrado = {}
+                for clave, valor in registro.items():
+                    # Excluir campos financieros
+                    campos_financieros = [
+                        'precio', 'costo', 'valor', 'total', 'subtotal',
+                        'precio_compra', 'precio_venta', 'monto', 'importe'
+                    ]
+                    
+                    if not any(campo in clave.lower() for campo in campos_financieros):
+                        registro_filtrado[clave] = valor
+                    else:
+                        # Ocultar información financiera
+                        registro_filtrado[clave] = "***"
+                
+                datos_filtrados.append(registro_filtrado)
+            
+            return datos_filtrados
+            
+        except Exception as e:
+            print(f"❌ Error filtrando datos financieros: {e}")
+            return datos
+    
+    def _filtrar_resumen_financiero(self, resumen: Dict[str, Any]) -> Dict[str, Any]:
+        """Filtra información financiera del resumen para médicos"""
+        try:
+            if not resumen:
+                return {}
+            
+            resumen_filtrado = {}
+            for clave, valor in resumen.items():
+                if 'valor' not in clave.lower() and 'precio' not in clave.lower():
+                    resumen_filtrado[clave] = valor
+            
+            # Agregar indicador de vista limitada
+            resumen_filtrado['vistaLimitada'] = True
+            return resumen_filtrado
+            
+        except Exception as e:
+            print(f"❌ Error filtrando resumen: {e}")
+            return resumen
+    
+    def _filtrar_estadisticas_financieras(self, estadisticas: Dict[str, Any]) -> Dict[str, Any]:
+        """Filtra estadísticas financieras para médicos"""
+        try:
+            if not estadisticas:
+                return {}
+            
+            estadisticas_basicas = {}
+            for clave, valor in estadisticas.items():
+                if not any(financiero in clave.lower() for financiero in ['valor', 'precio', 'costo', 'monto']):
+                    estadisticas_basicas[clave] = valor
+            
+            return estadisticas_basicas
+            
+        except Exception as e:
+            print(f"❌ Error filtrando estadísticas: {e}")
+            return estadisticas
+    
+    # ===============================
+    # EXPORTACIÓN A PDF CON RESTRICCIONES
+    # ===============================
     
     @Slot(result=str)
     def exportarPDF(self) -> str:
-        """
-        Exporta el reporte actual a PDF
-        
-        Returns:
-            Ruta del archivo PDF generado o vacío si hay error
-        """
+        """Exporta el reporte actual a PDF - CON VERIFICACIÓN DE PERMISOS"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return ""
+            
             if not self._datos_reporte:
                 self.reporteError.emit("Sin Datos", "No hay datos para exportar")
                 return ""
             
-            # ✅ VERIFICAR que tenemos AppController disponible
+            # ✅ VERIFICAR PERMISOS PARA EXPORTACIÓN
+            if self._es_reporte_financiero(self._tipo_reporte_actual):
+                if not self._verificar_permisos('exportar_pdf_financiero'):
+                    return ""
+            
+            # Verificar que tenemos AppController disponible
             if not self._app_controller:
                 self.reporteError.emit("Error PDF", "AppController no disponible")
                 print("❌ AppController no está disponible para exportar PDF")
                 return ""
             
-            # ✅ VERIFICAR que el AppController tiene el generador de PDF
+            # Verificar que el AppController tiene el generador de PDF
             if not hasattr(self._app_controller, 'generarReportePDF'):
                 self.reporteError.emit("Error PDF", "Generador de PDF no disponible")
                 print("❌ Método generarReportePDF no encontrado en AppController")
                 return ""
             
-            # Convertir datos a JSON para el generador de PDF
-            datos_json = json.dumps(self._datos_reporte, default=str)
+            print(f"📄 Iniciando exportación PDF - Usuario: {self._usuario_actual_id} ({self._usuario_rol})")
+            print(f"📄 Tipo: {self._tipo_reporte_actual}, Registros: {len(self._datos_reporte)}")
             
-            print(f"📄 Iniciando exportación PDF - Tipo: {self._tipo_reporte_actual}, Registros: {len(self._datos_reporte)}")
+            # ✅ USAR DATOS FILTRADOS SEGÚN ROL
+            datos_para_pdf = self.datosReporte  # Usa la property que filtra por rol
+            datos_json = json.dumps(datos_para_pdf, default=str)
             
-            # ✅ USAR AppController directamente (sin importar desde main)
+            # Usar AppController para generar PDF
             ruta_pdf = self._app_controller.generarReportePDF(
                 datos_json,
                 str(self._tipo_reporte_actual),
@@ -307,7 +556,12 @@ class ReportesModel(QObject):
             )
             
             if ruta_pdf:
-                print(f"📄 PDF exportado exitosamente: {ruta_pdf}")
+                mensaje_exito = f"PDF exportado exitosamente: {ruta_pdf}"
+                if self._usuario_rol == "Médico":
+                    mensaje_exito += " (información financiera oculta)"
+                
+                self.operacionExitosa.emit("PDF generado correctamente")
+                print(f"📄 {mensaje_exito}")
                 return ruta_pdf
             else:
                 self.reporteError.emit("Error PDF", "No se pudo generar el PDF")
@@ -322,19 +576,31 @@ class ReportesModel(QObject):
             traceback.print_exc()
             return ""
     
-    # --- CONSULTAS ESPECIALES ---
+    # ===============================
+    # CONSULTAS ESPECIALES CON RESTRICCIONES
+    # ===============================
     
     @Slot(result='QVariantMap')
     def obtenerResumenPeriodo(self) -> Dict[str, Any]:
-        """Obtiene resumen financiero del período actual"""
+        """Obtiene resumen financiero - SOLO ADMIN"""
         try:
+            # ✅ VERIFICAR PERMISOS FINANCIEROS
+            if not self._verificar_permisos('reporte_consolidado'):
+                return {}
+            
             if not self._fecha_desde_actual or not self._fecha_hasta_actual:
                 return {}
             
-            return self.repository.get_resumen_periodo(
+            resumen = self.repository.get_resumen_periodo(
                 self._fecha_desde_actual, 
                 self._fecha_hasta_actual
             )
+            
+            # Filtrar según rol
+            if self._usuario_rol == "Médico":
+                return self._filtrar_resumen_financiero(resumen)
+            
+            return resumen
             
         except Exception as e:
             print(f"❌ Error obteniendo resumen del período: {e}")
@@ -344,6 +610,10 @@ class ReportesModel(QObject):
     def verificarDatosDisponibles(self, tipo_reporte: int, fecha_desde: str, fecha_hasta: str) -> bool:
         """Verifica si hay datos disponibles para el reporte"""
         try:
+            # ✅ VERIFICAR AUTENTICACIÓN
+            if not self._verificar_autenticacion():
+                return False
+            
             return self.repository.verificar_datos_disponibles(tipo_reporte, fecha_desde, fecha_hasta)
         except Exception as e:
             print(f"❌ Error verificando datos: {e}")
@@ -351,14 +621,40 @@ class ReportesModel(QObject):
     
     @Slot(result=str)
     def obtenerDatosJSON(self) -> str:
-        """Obtiene los datos del reporte actual en formato JSON"""
+        """Obtiene los datos del reporte actual en formato JSON - FILTRADOS POR ROL"""
         try:
-            return json.dumps(self._datos_reporte, default=str, ensure_ascii=False)
+            # ✅ USAR DATOS FILTRADOS
+            datos_filtrados = self.datosReporte  # Property que filtra por rol
+            return json.dumps(datos_filtrados, default=str, ensure_ascii=False)
         except Exception as e:
             print(f"❌ Error convirtiendo a JSON: {e}")
             return "[]"
     
-    # --- UTILIDADES ---
+    @Slot(result=list)
+    def obtenerTiposReportes(self) -> List[Dict[str, Any]]:
+        """Obtiene lista de tipos de reportes - FILTRADA POR ROL"""
+        todos_reportes = [
+            {"id": 1, "nombre": "Ventas de Farmacia", "requiere_fechas": True, "financiero": True},
+            {"id": 2, "nombre": "Inventario de Productos", "requiere_fechas": False, "financiero": True},
+            {"id": 3, "nombre": "Compras de Farmacia", "requiere_fechas": True, "financiero": True},
+            {"id": 4, "nombre": "Consultas Médicas", "requiere_fechas": True, "financiero": False},
+            {"id": 5, "nombre": "Análisis de Laboratorio", "requiere_fechas": True, "financiero": False},
+            {"id": 6, "nombre": "Procedimientos de Enfermería", "requiere_fechas": True, "financiero": False},
+            {"id": 7, "nombre": "Gastos Operativos", "requiere_fechas": True, "financiero": True},
+            {"id": 8, "nombre": "Reporte Financiero Consolidado", "requiere_fechas": True, "financiero": True}
+        ]
+        
+        # ✅ FILTRAR SEGÚN ROL
+        if self._usuario_rol == "Médico":
+            # Solo reportes médicos básicos
+            reportes_medico = [reporte for reporte in todos_reportes if not reporte["financiero"]]
+            return reportes_medico
+        
+        return todos_reportes
+    
+    # ===============================
+    # UTILIDADES CON VERIFICACIÓN
+    # ===============================
     
     @Slot()
     def limpiarReporte(self):
@@ -373,12 +669,19 @@ class ReportesModel(QObject):
     
     @Slot()
     def refrescarCache(self):
-        """Refresca el caché del sistema"""
+        """Refresca el caché del sistema - SOLO ADMIN"""
         try:
+            # ✅ SOLO ADMIN PUEDE REFRESCAR CACHE
+            if self._usuario_rol != "Administrador":
+                self.operacionError.emit("Solo administradores pueden refrescar el caché")
+                return
+            
             self.repository.refresh_cache()
+            self.operacionExitosa.emit("Caché refrescado por administrador")
             print("🔄 Caché de reportes refrescado")
         except Exception as e:
             print(f"❌ Error refrescando caché: {e}")
+            self.operacionError.emit(f"Error refrescando caché: {str(e)}")
     
     @Slot(str, result=bool)
     def validarFecha(self, fecha: str) -> bool:
@@ -417,20 +720,6 @@ class ReportesModel(QObject):
         except:
             return False
     
-    @Slot(result=list)
-    def obtenerTiposReportes(self) -> List[Dict[str, Any]]:
-        """Obtiene lista de tipos de reportes disponibles"""
-        return [
-            {"id": 1, "nombre": "Ventas de Farmacia", "requiere_fechas": True},
-            {"id": 2, "nombre": "Inventario de Productos", "requiere_fechas": False},
-            {"id": 3, "nombre": "Compras de Farmacia", "requiere_fechas": True},
-            {"id": 4, "nombre": "Consultas Médicas", "requiere_fechas": True},
-            {"id": 5, "nombre": "Análisis de Laboratorio", "requiere_fechas": True},
-            {"id": 6, "nombre": "Procedimientos de Enfermería", "requiere_fechas": True},
-            {"id": 7, "nombre": "Gastos Operativos", "requiere_fechas": True},
-            {"id": 8, "nombre": "Reporte Financiero Consolidado", "requiere_fechas": True}
-        ]
-    
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
@@ -452,54 +741,6 @@ class ReportesModel(QObject):
         self.datosReporteChanged.emit()
         self.resumenChanged.emit()
 
-    def generic_emergency_disconnect(self, model_name: str):
-        """Desconexión genérica para modelos sin timers complejos"""
-        try:
-            print(f"🚨 {model_name}: Iniciando desconexión de emergencia...")
-            
-            # Buscar y detener cualquier timer
-            for attr_name in dir(self):
-                if 'timer' in attr_name.lower() and not attr_name.startswith('__'):
-                    try:
-                        timer = getattr(self, attr_name)
-                        if hasattr(timer, 'isActive') and hasattr(timer, 'stop') and timer.isActive():
-                            timer.stop()
-                            print(f"   ⏹️ {attr_name} detenido")
-                    except:
-                        pass
-            
-            # Establecer estado shutdown si existe
-            if hasattr(self, '_loading'):
-                self._loading = False
-            if hasattr(self, '_estadoActual'):
-                self._estadoActual = "shutdown"
-            
-            # Desconectar todas las señales posibles
-            for attr_name in dir(self):
-                if (not attr_name.startswith('__') and 
-                    hasattr(getattr(self, attr_name), 'disconnect')):
-                    try:
-                        getattr(self, attr_name).disconnect()
-                    except:
-                        pass
-            
-            # Limpiar listas y diccionarios de datos
-            for attr_name in dir(self):
-                if not attr_name.startswith('__'):
-                    try:
-                        attr_value = getattr(self, attr_name)
-                        if isinstance(attr_value, list) and attr_name.startswith('_'):
-                            setattr(self, attr_name, [])
-                        elif isinstance(attr_value, dict) and attr_name.startswith('_'):
-                            setattr(self, attr_name, {})
-                    except:
-                        pass
-            
-            print(f"✅ {model_name}: Desconexión de emergencia completada")
-        
-        except Exception as e:
-            print(f"❌ Error en desconexión {model_name}: {e}")
-
     def emergency_disconnect(self):
         """Desconexión de emergencia para ReportesModel"""
         try:
@@ -508,8 +749,37 @@ class ReportesModel(QObject):
             # Limpiar referencia al AppController
             self._app_controller = None
             
-            # Usar desconexión genérica
-            generic_emergency_disconnect(self, "ReportesModel")
+            # Establecer estado shutdown
+            self._loading = False
+            
+            # Desconectar señales
+            signals_to_disconnect = [
+                'datosReporteChanged', 'resumenChanged', 'estadisticasChanged',
+                'reporteGenerado', 'reporteError', 'operacionExitosa', 'operacionError',
+                'loadingChanged', 'progressChanged'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar datos
+            self._datos_reporte = []
+            self._resumen_reporte = {}
+            self._estadisticas = {}
+            self._tipo_reporte_actual = 0
+            self._fecha_desde_actual = ""
+            self._fecha_hasta_actual = ""
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            self._usuario_rol = ""       # ✅ RESETEAR ROL
+            
+            # Anular repository
+            self.repository = None
+            
+            print("✅ ReportesModel: Desconexión de emergencia completada")
             
         except Exception as e:
             print(f"❌ Error en desconexión ReportesModel: {e}")
@@ -521,7 +791,7 @@ class ReportesModel(QObject):
 def register_reportes_model():
     """Registra el ReportesModel para uso en QML"""
     qmlRegisterType(ReportesModel, "ClinicaModels", 1, 0, "ReportesModel")
-    print("🔗 ReportesModel registrado para QML")
+    print("📊 ReportesModel registrado para QML con autenticación estandarizada y control ultra-estricto")
 
 # Para facilitar la importación
 __all__ = ['ReportesModel', 'register_reportes_model']

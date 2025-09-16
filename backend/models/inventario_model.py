@@ -1,3 +1,8 @@
+"""
+InventarioModel - ACTUALIZADO con autenticación estandarizada
+Migrado del patrón sin autenticación al patrón de ConsultaModel
+"""
+
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 from PySide6.QtQml import qmlRegisterType
 from typing import List, Dict, Any, Optional
@@ -14,10 +19,8 @@ from ..core.excepciones import (
 
 class InventarioModel(QObject):
     """
-    Model QObject para inventario de farmacia con FIFO automático
+    Model QObject para inventario de farmacia con FIFO automático - ACTUALIZADO con autenticación
     Conecta directamente con QML mediante Signals/Slots/Properties
-    
-    CORREGIDO: Manejo consistente de nomenclatura de campos y conversión de datos
     """
     
     # ===============================
@@ -64,6 +67,10 @@ class InventarioModel(QObject):
         self._alertas = []
         self._loading = False
         
+        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
+        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        print("🏪 InventarioModel inicializado - Esperando autenticación")
+        
         # Timer para actualización automática
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update)
@@ -72,10 +79,47 @@ class InventarioModel(QObject):
         # Cargar datos iniciales
         self._cargar_datos_iniciales()
         
-        print("🏪 InventarioModel inicializado con auto-refresh")
+        print("🏪 InventarioModel inicializado con autenticación estandarizada")
     
     # ===============================
-    # PROPERTIES PARA QML
+    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
+    # ===============================
+    
+    @Slot(int)
+    def set_usuario_actual(self, usuario_id: int):
+        """
+        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
+        """
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                print(f"👤 Usuario autenticado establecido en InventarioModel: {usuario_id}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de inventario")
+            else:
+                print(f"⚠️ ID de usuario inválido en InventarioModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en InventarioModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Property(int, notify=operacionExitosa)
+    def usuario_actual_id(self):
+        """Property para obtener el usuario actual"""
+        return self._usuario_actual_id
+    
+    # ===============================
+    # PROPIEDADES DE AUTENTICACIÓN
+    # ===============================
+    
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica si el usuario está autenticado"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+    
+    # ===============================
+    # PROPERTIES PARA QML (SIN CAMBIOS)
     # ===============================
     
     @Property(list, notify=productosChanged)
@@ -124,17 +168,17 @@ class InventarioModel(QObject):
         return len(self._alertas)
     
     # ===============================
-    # SLOTS PARA QML - CONSULTAS
+    # SLOTS PARA QML - CONSULTAS (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
     @Slot()
     def refresh_productos(self):
-        """Refresca la lista de productos"""
+        """Refresca la lista de productos - SIN VERIFICACIÓN (solo lectura)"""
         self._set_loading(True)
         try:
             productos_raw = safe_execute(self.producto_repo.get_productos_con_marca) or []
             
-            # CORREGIDO: Normalizar productos con nomenclatura consistente
+            # Normalizar productos con nomenclatura consistente
             self._productos = []
             for producto in productos_raw:
                 producto_normalizado = self._normalizar_producto(producto)
@@ -152,7 +196,7 @@ class InventarioModel(QObject):
     
     @Slot(str)
     def buscar_productos(self, termino: str):
-        """Busca productos por nombre o código"""
+        """Busca productos por nombre o código - SIN VERIFICACIÓN (solo lectura)"""
         if not termino or len(termino.strip()) < 2:
             self._search_results = []
             self.searchResultsChanged.emit()
@@ -165,7 +209,7 @@ class InventarioModel(QObject):
                 True  # incluir_sin_stock
             ) or []
             
-            # CORREGIDO: Normalizar resultados de búsqueda
+            # Normalizar resultados de búsqueda
             self._search_results = []
             for resultado in resultados_raw:
                 resultado_normalizado = self._normalizar_producto(resultado)
@@ -179,7 +223,7 @@ class InventarioModel(QObject):
     
     @Slot(str, result='QVariant')
     def get_producto_by_codigo(self, codigo: str):
-        """Obtiene producto específico por código"""
+        """Obtiene producto específico por código - SIN VERIFICACIÓN (solo lectura)"""
         if not codigo:
             return {}
         
@@ -195,25 +239,25 @@ class InventarioModel(QObject):
     
     @Slot(int, result='QVariant')
     def get_lotes_producto(self, producto_id: int):
-        """Obtiene lotes de un producto específico"""
+        """Obtiene lotes de un producto específico - SIN VERIFICACIÓN (solo lectura)"""
         if producto_id <= 0:
             return []
         
         try:
             lotes = safe_execute(self.producto_repo.get_lotes_producto, producto_id, True) or []
-            # CORREGIDO: Normalizar lotes si es necesario
             return lotes
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo lotes: {str(e)}")
             return []
+    
     @Slot(int, result='QVariant')
     def get_lotes_por_producto(self, producto_id: int):
-        """Obtiene lotes de un producto específico - ALIAS para QML"""
+        """Obtiene lotes de un producto específico - ALIAS para QML - SIN VERIFICACIÓN (solo lectura)"""
         return self.get_lotes_producto(producto_id)
 
     @Slot(int, result='QVariant') 
     def get_lotes_por_vencer(self, dias_adelante: int = 60):
-        """Obtiene lotes que vencen en X días"""
+        """Obtiene lotes que vencen en X días - SIN VERIFICACIÓN (solo lectura)"""
         if dias_adelante <= 0:
             dias_adelante = 60
             
@@ -231,7 +275,7 @@ class InventarioModel(QObject):
 
     @Slot(result='QVariant')
     def get_lotes_vencidos(self):
-        """Obtiene lotes vencidos con stock"""
+        """Obtiene lotes vencidos con stock - SIN VERIFICACIÓN (solo lectura)"""
         try:
             lotes = safe_execute(self.producto_repo.get_lotes_vencidos) or []
             print(f"⚠️ Lotes vencidos: {len(lotes)}")
@@ -243,7 +287,7 @@ class InventarioModel(QObject):
 
     @Slot(int, result='QVariant')
     def get_productos_bajo_stock(self, stock_minimo: int = 10):
-        """Obtiene productos con stock bajo"""
+        """Obtiene productos con stock bajo - SIN VERIFICACIÓN (solo lectura)"""
         if stock_minimo <= 0:
             stock_minimo = 10
             
@@ -258,9 +302,10 @@ class InventarioModel(QObject):
             print(f"❌ Error obteniendo productos bajo stock: {e}")
             self.operacionError.emit(f"Error obteniendo productos bajo stock: {str(e)}")
             return []
+    
     @Slot(int, int, result='QVariant')
     def verificar_disponibilidad(self, producto_id: int, cantidad: int):
-        """Verifica disponibilidad FIFO para una cantidad"""
+        """Verifica disponibilidad FIFO para una cantidad - SIN VERIFICACIÓN (solo lectura)"""
         if producto_id <= 0 or cantidad <= 0:
             return {'disponible': False, 'error': 'Parámetros inválidos'}
         
@@ -275,24 +320,35 @@ class InventarioModel(QObject):
             return {'disponible': False, 'error': str(e)}
     
     # ===============================
-    # SLOTS PARA QML - VENTAS
+    # SLOTS PARA QML - VENTAS - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
     @Slot(int, str, result=bool)
     def procesar_venta_rapida(self, usuario_id: int, items_json: str):
         """
-        Procesa venta rápida desde QML
+        Procesa venta rápida desde QML - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
         
         Args:
-            usuario_id: ID del usuario vendedor
+            usuario_id: ID del usuario vendedor (debe coincidir con autenticado)
             items_json: JSON string con items [{'codigo': str, 'cantidad': int, 'precio': float}]
         """
+        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        if not self._verificar_autenticacion():
+            return False
+        
+        # ✅ VERIFICAR QUE EL USUARIO COINCIDA
+        if usuario_id != self._usuario_actual_id:
+            self.operacionError.emit("ID de usuario no coincide con el autenticado")
+            return False
+        
         if usuario_id <= 0 or not items_json:
             self.operacionError.emit("Datos de venta inválidos")
             return False
         
         self._set_loading(True)
         try:
+            print(f"💰 Procesando venta - Usuario: {self._usuario_actual_id}")
+            
             # Parsear items JSON
             items = json.loads(items_json)
             if not items:
@@ -307,7 +363,7 @@ class InventarioModel(QObject):
                 self._actualizar_alertas()
                 
                 self.operacionExitosa.emit(f"Venta procesada: ID {venta['id']}, Total: ${venta['Total']:.2f}")
-                print(f"💰 Venta exitosa - ID: {venta['id']}, Items: {len(items)}")
+                print(f"💰 Venta exitosa - ID: {venta['id']}, Items: {len(items)}, Usuario: {self._usuario_actual_id}")
                 return True
             else:
                 raise VentaError("Error procesando venta")
@@ -323,12 +379,23 @@ class InventarioModel(QObject):
     
     @Slot(str, int, int, result=bool)
     def venta_producto_simple(self, codigo: str, cantidad: int, usuario_id: int):
-        """Venta simple de un producto"""
+        """Venta simple de un producto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return False
+        
+        # ✅ VERIFICAR QUE EL USUARIO COINCIDA
+        if usuario_id != self._usuario_actual_id:
+            self.operacionError.emit("ID de usuario no coincide con el autenticado")
+            return False
+        
         if not codigo or cantidad <= 0 or usuario_id <= 0:
             self.operacionError.emit("Parámetros de venta inválidos")
             return False
         
         try:
+            print(f"🛒 Venta simple - Producto: {codigo}, Usuario: {self._usuario_actual_id}")
+            
             # Obtener producto y precio
             producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
             if not producto:
@@ -349,26 +416,37 @@ class InventarioModel(QObject):
             return False
     
     # ===============================
-    # SLOTS PARA QML - COMPRAS
+    # SLOTS PARA QML - COMPRAS - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
     @Slot(int, int, str, result=bool)
     def procesar_compra(self, proveedor_id: int, usuario_id: int, items_json: str):
         """
-        Procesa compra desde QML
+        Procesa compra desde QML - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
         
         Args:
             proveedor_id: ID del proveedor
-            usuario_id: ID del usuario comprador
+            usuario_id: ID del usuario comprador (debe coincidir con autenticado)
             items_json: JSON con items [{'codigo': str, 'cantidad_caja': int, 'cantidad_unitario': int, 
                                         'precio_unitario': float, 'fecha_vencimiento': str}]
         """
+        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        if not self._verificar_autenticacion():
+            return False
+        
+        # ✅ VERIFICAR QUE EL USUARIO COINCIDA
+        if usuario_id != self._usuario_actual_id:
+            self.operacionError.emit("ID de usuario no coincide con el autenticado")
+            return False
+        
         if proveedor_id <= 0 or usuario_id <= 0 or not items_json:
             self.operacionError.emit("Datos de compra inválidos")
             return False
         
         self._set_loading(True)
         try:
+            print(f"📦 Procesando compra - Proveedor: {proveedor_id}, Usuario: {self._usuario_actual_id}")
+            
             # Parsear items JSON
             items = json.loads(items_json)
             if not items:
@@ -383,7 +461,7 @@ class InventarioModel(QObject):
                 self._cargar_lotes_activos()
                 
                 self.operacionExitosa.emit(f"Compra procesada: ID {compra['id']}, Total: ${compra['Total']:.2f}")
-                print(f"📦 Compra exitosa - ID: {compra['id']}, Items: {len(items)}")
+                print(f"📦 Compra exitosa - ID: {compra['id']}, Items: {len(items)}, Usuario: {self._usuario_actual_id}")
                 return True
             else:
                 raise CompraError("Error procesando compra")
@@ -399,12 +477,18 @@ class InventarioModel(QObject):
     
     @Slot(str, str, result=int)
     def crear_proveedor_rapido(self, nombre: str, direccion: str = ""):
-        """Crea proveedor rápidamente"""
+        """Crea proveedor rápidamente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return 0
+        
         if not nombre:
             self.operacionError.emit("Nombre de proveedor requerido")
             return 0
         
         try:
+            print(f"🏢 Creando proveedor - Usuario: {self._usuario_actual_id}")
+            
             proveedor_id = safe_execute(
                 self.compra_repo.crear_proveedor, 
                 nombre.strip(), 
@@ -424,17 +508,17 @@ class InventarioModel(QObject):
             return 0
     
     # ===============================
-    # SLOTS PARA QML - ALERTAS
+    # SLOTS PARA QML - ALERTAS (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
     @Slot()
     def actualizar_alertas(self):
-        """Actualiza alertas de stock y vencimientos"""
+        """Actualiza alertas de stock y vencimientos - SIN VERIFICACIÓN (solo lectura)"""
         self._actualizar_alertas()
     
     @Slot(int)
     def configurar_stock_minimo(self, stock_minimo: int):
-        """Configura el stock mínimo para alertas"""
+        """Configura el stock mínimo para alertas - SIN VERIFICACIÓN (solo lectura)"""
         if stock_minimo < 0:
             stock_minimo = 10
         
@@ -458,7 +542,7 @@ class InventarioModel(QObject):
     
     @Slot(int)
     def verificar_vencimientos(self, dias_adelante: int = 90):
-        """Verifica productos por vencer"""
+        """Verifica productos por vencer - SIN VERIFICACIÓN (solo lectura)"""
         try:
             lotes_por_vencer = safe_execute(
                 self.producto_repo.get_lotes_por_vencer, 
@@ -478,12 +562,12 @@ class InventarioModel(QObject):
             self.operacionError.emit(f"Error verificando vencimientos: {str(e)}")
     
     # ===============================
-    # SLOTS PARA QML - REPORTES
+    # SLOTS PARA QML - REPORTES (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
     @Slot(result='QVariant')
     def get_reporte_vencimientos(self):
-        """Obtiene reporte completo de vencimientos"""
+        """Obtiene reporte completo de vencimientos - SIN VERIFICACIÓN (solo lectura)"""
         try:
             reporte = safe_execute(self.producto_repo.get_reporte_vencimientos, 180) or {}
             return reporte
@@ -493,7 +577,7 @@ class InventarioModel(QObject):
     
     @Slot(result='QVariant')
     def get_valor_inventario(self):
-        """Obtiene valor total del inventario"""
+        """Obtiene valor total del inventario - SIN VERIFICACIÓN (solo lectura)"""
         try:
             valor = safe_execute(self.producto_repo.get_valor_inventario) or {}
             return valor
@@ -503,7 +587,7 @@ class InventarioModel(QObject):
     
     @Slot(int, result='QVariant')
     def get_productos_mas_vendidos(self, dias: int = 30):
-        """Obtiene productos más vendidos"""
+        """Obtiene productos más vendidos - SIN VERIFICACIÓN (solo lectura)"""
         try:
             productos = safe_execute(self.producto_repo.get_productos_mas_vendidos, dias) or []
             return productos
@@ -511,14 +595,40 @@ class InventarioModel(QObject):
             self.operacionError.emit(f"Error obteniendo más vendidos: {str(e)}")
             return []
     
+    @Slot(result='QVariant')
+    def get_estadisticas_inventario(self):
+        """Obtiene estadísticas completas del inventario - SIN VERIFICACIÓN (solo lectura)"""
+        try:
+            # Valor total del inventario
+            valor_inventario = safe_execute(self.producto_repo.get_valor_inventario) or {}
+                
+            # Productos con stock bajo
+            productos_bajo_stock = safe_execute(self.producto_repo.get_productos_bajo_stock, 10) or []
+                
+            # Reporte de vencimientos
+            reporte_vencimientos = safe_execute(self.producto_repo.get_reporte_vencimientos, 90) or {}
+                
+            return {
+                'valor_inventario': valor_inventario,
+                'productos_bajo_stock': len(productos_bajo_stock),
+                'productos_vencidos': len(reporte_vencimientos.get('vencidos', [])),
+                'productos_por_vencer': len(reporte_vencimientos.get('por_vencer', [])),
+                'total_productos': len(self._productos),
+                'alertas_activas': len(self._alertas)
+            }
+                
+        except Exception as e:
+            self.operacionError.emit(f"Error obteniendo estadísticas: {str(e)}")
+            return {}
+    
     # ===============================
-    # SLOTS PARA QML - CRUD PRODUCTOS
+    # SLOTS PARA QML - CRUD PRODUCTOS - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
         
     @Slot(str, result=bool)
     def crear_producto(self, producto_json: str):
         """
-        Crea un nuevo producto desde QML CON PRIMER LOTE
+        Crea un nuevo producto desde QML CON PRIMER LOTE - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
         
         Args:
             producto_json: JSON string con datos del producto + primer lote
@@ -530,19 +640,25 @@ class InventarioModel(QObject):
                 'precio_venta': float,
                 'unidad_medida': str,
                 'id_marca': int,
-                # NUEVOS CAMPOS PARA PRIMER LOTE:
+                # CAMPOS PARA PRIMER LOTE:
                 'stock_caja': int,
                 'stock_unitario': int,
                 'fecha_vencimiento': str,
                 'proveedor': str (opcional)
             }
         """
+        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        if not self._verificar_autenticacion():
+            return False
+        
         if not producto_json:
             self.operacionError.emit("Datos de producto requeridos")
             return False
 
         self._set_loading(True)
         try:
+            print(f"📦 Creando producto - Usuario: {self._usuario_actual_id}")
+            
             # Parsear datos JSON
             datos = json.loads(producto_json)
             
@@ -550,12 +666,12 @@ class InventarioModel(QObject):
             if not self._validar_datos_producto(datos):
                 return False
             
-            # NUEVA VALIDACIÓN: verificar que tenga stock inicial
+            # Validar stock inicial
             stock_inicial = int(datos.get('stock_caja', 0)) + int(datos.get('stock_unitario', 0))
             if stock_inicial <= 0:
                 raise ValueError("Debe especificar stock inicial (cajas o unitarios)")
             
-            # NUEVA VALIDACIÓN: verificar fecha de vencimiento
+            # Validar fecha de vencimiento
             fecha_vencimiento = datos.get('fecha_vencimiento', '')
             if not fecha_vencimiento:
                 raise ValueError("Fecha de vencimiento requerida")
@@ -565,7 +681,7 @@ class InventarioModel(QObject):
             if producto_existente:
                 raise ValueError(f"El código {datos['codigo']} ya existe")
             
-            # CORREGIDO: Preparar datos con nomenclatura de BD
+            # Preparar datos con nomenclatura de BD
             nuevo_producto = {
                 'Codigo': datos['codigo'],
                 'Nombre': datos['nombre'],
@@ -576,7 +692,7 @@ class InventarioModel(QObject):
                 'Stock_Unitario': int(datos.get('stock_unitario', 0)),
                 'Unidad_Medida': datos.get('unidad_medida', 'Tabletas'),
                 'ID_Marca': int(datos.get('id_marca', 1)),
-                'Fecha_Venc': fecha_vencimiento  # Usar fecha del primer lote
+                'Fecha_Venc': fecha_vencimiento
             }
             
             # PASO 1: Insertar producto
@@ -585,7 +701,7 @@ class InventarioModel(QObject):
             if not producto_id:
                 raise Exception("Error creando producto en base de datos")
             
-            print(f"✅ Producto creado - ID: {producto_id}, Código: {datos['codigo']}")
+            print(f"✅ Producto creado - ID: {producto_id}, Código: {datos['codigo']}, Usuario: {self._usuario_actual_id}")
             
             # PASO 2: Crear primer lote OBLIGATORIO
             lote_id = safe_execute(
@@ -594,7 +710,7 @@ class InventarioModel(QObject):
                 int(datos.get('stock_caja', 0)),
                 int(datos.get('stock_unitario', 0)),
                 fecha_vencimiento,
-                float(datos['precio_compra'])  # Precio de compra del primer lote
+                float(datos['precio_compra'])
             )
             
             if not lote_id:
@@ -625,10 +741,149 @@ class InventarioModel(QObject):
 
         return False
     
+    @Slot(str, float, result=bool)
+    def actualizar_precio_venta(self, codigo: str, nuevo_precio: float):
+        """
+        Actualiza el precio de venta de un producto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
+        
+        Args:
+            codigo: Código del producto
+            nuevo_precio: Nuevo precio de venta
+        """
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return False
+        
+        if not codigo or nuevo_precio <= 0:
+            self.operacionError.emit("Código y precio válido requeridos")
+            return False
+        
+        self._set_loading(True)
+        try:
+            print(f"💰 Actualizando precio - Producto: {codigo}, Usuario: {self._usuario_actual_id}")
+            
+            # Obtener producto
+            producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
+            if not producto:
+                raise ProductoNotFoundError(codigo=codigo)
+            
+            # Actualizar precio
+            datos_actualizacion = {'Precio_venta': nuevo_precio}
+            exito = safe_execute(self.producto_repo.update, producto['id'], datos_actualizacion)
+            
+            if exito:
+                # Refrescar datos
+                self.refresh_productos()
+                
+                self.operacionExitosa.emit(f"Precio actualizado: {codigo} - Bs{nuevo_precio:.2f}")
+                self.precioActualizado.emit(codigo, nuevo_precio)
+                print(f"💰 Precio actualizado - {codigo}: Bs{nuevo_precio:.2f}, Usuario: {self._usuario_actual_id}")
+                return True
+            else:
+                raise Exception("Error actualizando precio en base de datos")
+                
+        except ProductoNotFoundError:
+            self.operacionError.emit(f"Producto no encontrado: {codigo}")
+        except Exception as e:
+            self.operacionError.emit(f"Error actualizando precio: {str(e)}")
+        finally:
+            self._set_loading(False)
+        
+        return False
+    
+    @Slot(str, int, int, str, float, result=bool)
+    def agregar_stock_producto(self, codigo: str, cantidad_caja: int, cantidad_unitario: int, 
+                            fecha_vencimiento: str, precio_compra: float = 0):
+        """
+        Agrega stock a un producto creando un nuevo lote - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
+        
+        Args:
+            codigo: Código del producto
+            cantidad_caja: Cantidad en cajas
+            cantidad_unitario: Cantidad unitaria
+            fecha_vencimiento: Fecha de vencimiento (YYYY-MM-DD)
+            precio_compra: Precio de compra (opcional)
+        """
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return False
+        
+        if not codigo or (cantidad_caja <= 0 and cantidad_unitario <= 0):
+            self.operacionError.emit("Código y cantidad válida requeridos")
+            return False
+        
+        self._set_loading(True)
+        try:
+            print(f"📈 Agregando stock - Producto: {codigo}, Usuario: {self._usuario_actual_id}")
+            
+            # Obtener producto
+            producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
+            if not producto:
+                raise ProductoNotFoundError(codigo=codigo)
+            
+            # Validar fecha de vencimiento
+            if not fecha_vencimiento:
+                fecha_vencimiento = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+            
+            # Crear nuevo lote y aumentar stock
+            lote_id = safe_execute(
+                self.producto_repo.aumentar_stock_compra,
+                producto['id'],
+                cantidad_caja,
+                cantidad_unitario,
+                fecha_vencimiento,
+                precio_compra if precio_compra > 0 else None
+            )
+            
+            if lote_id:
+                # Refrescar datos
+                self.refresh_productos()
+                self._cargar_lotes_activos()
+                
+                total_agregado = cantidad_caja + cantidad_unitario
+                self.operacionExitosa.emit(f"Stock agregado: {codigo} (+{total_agregado} unidades)")
+                self.stockActualizado.emit(codigo, self.obtener_stock_total_producto(codigo))
+                print(f"📈 Stock agregado - {codigo}: +{total_agregado} unidades, Lote: {lote_id}, Usuario: {self._usuario_actual_id}")
+                return True
+            else:
+                raise Exception("Error creando lote de stock")
+                
+        except ProductoNotFoundError:
+            self.operacionError.emit(f"Producto no encontrado: {codigo}")
+        except Exception as e:
+            self.operacionError.emit(f"Error agregando stock: {str(e)}")
+        finally:
+            self._set_loading(False)
+        
+        return False
+    
+    # ===============================
+    # SLOTS PARA CONSULTAS ESPECÍFICAS (SIN VERIFICACIÓN - LECTURA)
+    # ===============================
+    
+    @Slot(result='QVariant')
+    def get_marcas_disponibles(self):
+        """Obtiene lista de marcas disponibles para productos - SIN VERIFICACIÓN (solo lectura)"""
+        try:
+            # Asegurar que las marcas estén actualizadas
+            marcas = self._cargar_marcas() or []
+            
+            # Actualizar marcas internas si es necesario
+            if marcas:
+                self._marcas = marcas
+                self.marcasChanged.emit()
+            
+            print(f"🏷️ Marcas disponibles: {len(marcas)}")
+            return marcas
+        except Exception as e:
+            print(f"❌ Error obteniendo marcas: {e}")
+            self.operacionError.emit(f"Error obteniendo marcas: {str(e)}")
+            return []
+
     @Slot(str, result='QVariant')
     def get_producto_detalle_completo(self, codigo: str):
         """
-        Obtiene detalles completos de un producto incluyendo TODOS sus lotes
+        Obtiene detalles completos de un producto incluyendo TODOS sus lotes - SIN VERIFICACIÓN (solo lectura)
         
         Returns:
             {
@@ -665,7 +920,7 @@ class InventarioModel(QObject):
             hoy = datetime.now()
             
             for lote in lotes:
-                stock_lote = (lote.get('Cantidad_Caja', 0) + lote.get('Cantidad_Unitario', 0))
+                stock_lote = (lote.get('Cantidad_Caja', 0) * lote.get('Cantidad_Unitario', 0))
                 stock_total += stock_lote
                 
                 if stock_lote > 0:  # Solo contar lotes con stock
@@ -702,208 +957,15 @@ class InventarioModel(QObject):
             self.operacionError.emit(f"Error obteniendo detalles: {str(e)}")
             return {}
     
-    @Slot(str, float, result=bool)
-    def actualizar_precio_venta(self, codigo: str, nuevo_precio: float):
-        """
-        Actualiza el precio de venta de un producto
-        
-        Args:
-            codigo: Código del producto
-            nuevo_precio: Nuevo precio de venta
-        """
-        if not codigo or nuevo_precio <= 0:
-            self.operacionError.emit("Código y precio válido requeridos")
-            return False
-        
-        self._set_loading(True)
-        try:
-            # Obtener producto
-            producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
-            if not producto:
-                raise ProductoNotFoundError(codigo=codigo)
-            
-            # Actualizar precio
-            datos_actualizacion = {'Precio_venta': nuevo_precio}
-            exito = safe_execute(self.producto_repo.update, producto['id'], datos_actualizacion)
-            
-            if exito:
-                # Refrescar datos
-                self.refresh_productos()
-                
-                self.operacionExitosa.emit(f"Precio actualizado: {codigo} - Bs{nuevo_precio:.2f}")
-                self.precioActualizado.emit(codigo, nuevo_precio)
-                print(f"💰 Precio actualizado - {codigo}: Bs{nuevo_precio:.2f}")
-                return True
-            else:
-                raise Exception("Error actualizando precio en base de datos")
-                
-        except ProductoNotFoundError:
-            self.operacionError.emit(f"Producto no encontrado: {codigo}")
-        except Exception as e:
-            self.operacionError.emit(f"Error actualizando precio: {str(e)}")
-        finally:
-            self._set_loading(False)
-        
-        return False
-    
-    @Slot(str, int, int, str, float, result=bool)
-    def agregar_stock_producto(self, codigo: str, cantidad_caja: int, cantidad_unitario: int, 
-                            fecha_vencimiento: str, precio_compra: float = 0):
-        """
-        Agrega stock a un producto creando un nuevo lote
-        
-        Args:
-            codigo: Código del producto
-            cantidad_caja: Cantidad en cajas
-            cantidad_unitario: Cantidad unitaria
-            fecha_vencimiento: Fecha de vencimiento (YYYY-MM-DD)
-            precio_compra: Precio de compra (opcional)
-        """
-        if not codigo or (cantidad_caja <= 0 and cantidad_unitario <= 0):
-            self.operacionError.emit("Código y cantidad válida requeridos")
-            return False
-        
-        self._set_loading(True)
-        try:
-            # Obtener producto
-            producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
-            if not producto:
-                raise ProductoNotFoundError(codigo=codigo)
-            
-            # Validar fecha de vencimiento
-            if not fecha_vencimiento:
-                fecha_vencimiento = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
-            
-            # Crear nuevo lote y aumentar stock
-            lote_id = safe_execute(
-                self.producto_repo.aumentar_stock_compra,
-                producto['id'],
-                cantidad_caja,
-                cantidad_unitario,
-                fecha_vencimiento,
-                precio_compra if precio_compra > 0 else None
-            )
-            
-            if lote_id:
-                # Refrescar datos
-                self.refresh_productos()
-                self._cargar_lotes_activos()
-                
-                total_agregado = cantidad_caja + cantidad_unitario
-                self.operacionExitosa.emit(f"Stock agregado: {codigo} (+{total_agregado} unidades)")
-                self.stockActualizado.emit(codigo, self.obtener_stock_total_producto(codigo))
-                print(f"📈 Stock agregado - {codigo}: +{total_agregado} unidades, Lote: {lote_id}")
-                return True
-            else:
-                raise Exception("Error creando lote de stock")
-                
-        except ProductoNotFoundError:
-            self.operacionError.emit(f"Producto no encontrado: {codigo}")
-        except Exception as e:
-            self.operacionError.emit(f"Error agregando stock: {str(e)}")
-        finally:
-            self._set_loading(False)
-        
-        return False
-    
-    @Slot(result='QVariant')
-    def get_marcas_disponibles(self):
-        """Obtiene lista de marcas disponibles para productos - CORREGIDO"""
-        try:
-            # CORREGIDO: Asegurar que las marcas estén actualizadas
-            marcas = self._cargar_marcas() or []
-            
-            # Actualizar marcas internas si es necesario
-            if marcas:
-                self._marcas = marcas
-                self.marcasChanged.emit()
-            
-            print(f"🏷️ Marcas disponibles: {len(marcas)}")
-            return marcas
-        except Exception as e:
-            print(f"❌ Error obteniendo marcas: {e}")
-            self.operacionError.emit(f"Error obteniendo marcas: {str(e)}")
-            return []
-
-    @Slot(str, result='QVariant')
-    def get_producto_detalle_completo(self, codigo: str):
-        """
-        Obtiene detalles completos de un producto incluyendo lotes
-        
-        Returns:
-            {
-                'producto': {...},
-                'lotes': [...],
-                'stock_total': int,
-                'valor_inventario': float
-            }
-        """
-        if not codigo:
-            return {}
-        
-        try:
-            # Obtener producto
-            producto_raw = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
-            if not producto_raw:
-                return {}
-            
-            # CORREGIDO: Normalizar producto
-            producto = self._normalizar_producto(producto_raw)
-            
-            # Obtener lotes
-            lotes = safe_execute(self.producto_repo.get_lotes_producto, producto['id'], True) or []
-            
-            # Calcular totales
-            stock_total = (producto.get('stockCaja', 0) + producto.get('stockUnitario', 0))
-            valor_inventario = stock_total * producto.get('precioCompra', 0)
-            
-            return {
-                'producto': producto,
-                'lotes': lotes,
-                'stock_total': stock_total,
-                'valor_inventario': valor_inventario,
-                'lotes_count': len(lotes)
-            }
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo detalles: {str(e)}")
-            return {}
-        
-    @Slot(result='QVariant')
-    def get_estadisticas_inventario(self):
-        """Obtiene estadísticas completas del inventario"""
-        try:
-            # Valor total del inventario
-            valor_inventario = safe_execute(self.producto_repo.get_valor_inventario) or {}
-                
-            # Productos con stock bajo
-            productos_bajo_stock = safe_execute(self.producto_repo.get_productos_bajo_stock, 10) or []
-                
-            # Reporte de vencimientos
-            reporte_vencimientos = safe_execute(self.producto_repo.get_reporte_vencimientos, 90) or {}
-                
-            return {
-                'valor_inventario': valor_inventario,
-                'productos_bajo_stock': len(productos_bajo_stock),
-                'productos_vencidos': len(reporte_vencimientos.get('vencidos', [])),
-                'productos_por_vencer': len(reporte_vencimientos.get('por_vencer', [])),
-                'total_productos': len(self._productos),
-                'alertas_activas': len(self._alertas)
-            }
-                
-        except Exception as e:
-            self.operacionError.emit(f"Error obteniendo estadísticas: {str(e)}")
-            return {}
-    
     # ===============================
-    # MÉTODOS PRIVADOS - CORREGIDOS
+    # MÉTODOS PRIVADOS (SIN CAMBIOS MAYORES)
     # ===============================
     
     def _cargar_datos_iniciales(self):
         """Carga datos iniciales al crear el model"""
         self._set_loading(True)
         try:
-            # CORREGIDO: Cargar y normalizar productos
+            # Cargar y normalizar productos
             productos_raw = safe_execute(self.producto_repo.get_productos_con_marca) or []
             self._productos = []
             for producto in productos_raw:
@@ -934,7 +996,7 @@ class InventarioModel(QObject):
             query = "SELECT * FROM Marca ORDER BY Nombre"
             marcas_raw = self.producto_repo._execute_query(query) or []
             
-            # CORREGIDO: Normalizar marcas para QML
+            # Normalizar marcas para QML
             marcas_normalizadas = []
             for marca in marcas_raw:
                 marca_normalizada = {
@@ -958,10 +1020,10 @@ class InventarioModel(QObject):
         try:
             query = """
             SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre,
-                (l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Lote
+                (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote
             FROM Lote l
             INNER JOIN Productos p ON l.Id_Producto = p.id
-            WHERE (l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+            WHERE (l.Cantidad_Caja * l.Cantidad_Unitario) > 0
             ORDER BY l.Fecha_Vencimiento ASC
             """
             self._lotes_activos = self.producto_repo._execute_query(query) or []
@@ -1029,49 +1091,6 @@ class InventarioModel(QObject):
             self._loading = loading
             self.loadingChanged.emit()
 
-    def _crear_lote_inicial(self, producto_id: int, datos_producto: dict):
-        """Crea lote inicial para producto nuevo con stock"""
-        try:
-            fecha_vencimiento = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
-            
-            lote_data = {
-                'Id_Producto': producto_id,
-                'Cantidad_Caja': datos_producto.get('Stock_Caja', 0),
-                'Cantidad_Unitario': datos_producto.get('Stock_Unitario', 0),
-                'Fecha_Vencimiento': fecha_vencimiento
-            }
-            
-            lote_id = self._insert_lote(lote_data)
-            print(f"📦 Lote inicial creado - ID: {lote_id}")
-            
-        except Exception as e:
-            print(f"⚠️ Error creando lote inicial: {e}")
-
-    def _insert_lote(self, lote_data: dict) -> int:
-        """Método auxiliar para crear lotes"""
-        try:
-            query = """
-            INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
-            OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?)
-            """
-            
-            result = self.producto_repo._execute_query(
-                query, 
-                (
-                    lote_data['Id_Producto'],
-                    lote_data['Cantidad_Caja'],
-                    lote_data['Cantidad_Unitario'],
-                    lote_data['Fecha_Vencimiento']
-                ),
-                fetch_one=True
-            )
-            
-            return result['id'] if result and 'id' in result else None
-        except Exception as e:
-            print(f"❌ Error insertando lote: {e}")
-            return None
-    
     def _validar_datos_producto(self, datos: dict) -> bool:
         """Valida datos de producto antes de guardar"""
         # Validaciones básicas
@@ -1092,7 +1111,6 @@ class InventarioModel(QObject):
         
         return True
     
-    # NUEVA FUNCIÓN: Normalizar productos para consistencia en QML
     def _normalizar_producto(self, producto_raw: dict) -> dict:
         """
         Normaliza un producto de BD para uso consistente en QML
@@ -1145,11 +1163,6 @@ class InventarioModel(QObject):
                     producto_raw.get('Producto_Detalles') or 
                     producto_raw.get('detalles', '')
                 ),
-                'Producto_Detalles': safe_str(
-                    producto_raw.get('Producto_Detalles') or 
-                    producto_raw.get('Detalles') or 
-                    producto_raw.get('detalles', '')
-                ),
                 
                 # Precios - múltiples nomenclaturas
                 'precioCompra': safe_float(
@@ -1161,10 +1174,6 @@ class InventarioModel(QObject):
                     producto_raw.get('Precio_compra') or 
                     producto_raw.get('precio_compra', 0)
                 ),
-                'precio_compra': safe_float(
-                    producto_raw.get('precio_compra') or 
-                    producto_raw.get('Precio_compra', 0)
-                ),
                 
                 'precioVenta': safe_float(
                     producto_raw.get('Precio_venta') or 
@@ -1174,10 +1183,6 @@ class InventarioModel(QObject):
                 'Precio_venta': safe_float(
                     producto_raw.get('Precio_venta') or 
                     producto_raw.get('precio_venta', 0)
-                ),
-                'precio_venta': safe_float(
-                    producto_raw.get('precio_venta') or 
-                    producto_raw.get('Precio_venta', 0)
                 ),
                 
                 # Stock - múltiples nomenclaturas
@@ -1190,10 +1195,6 @@ class InventarioModel(QObject):
                     producto_raw.get('Stock_Caja') or 
                     producto_raw.get('stock_caja', 0)
                 ),
-                'stock_caja': safe_int(
-                    producto_raw.get('stock_caja') or 
-                    producto_raw.get('Stock_Caja', 0)
-                ),
                 
                 'stockUnitario': safe_int(
                     producto_raw.get('Stock_Unitario') or 
@@ -1203,10 +1204,6 @@ class InventarioModel(QObject):
                 'Stock_Unitario': safe_int(
                     producto_raw.get('Stock_Unitario') or 
                     producto_raw.get('stock_unitario', 0)
-                ),
-                'stock_unitario': safe_int(
-                    producto_raw.get('stock_unitario') or 
-                    producto_raw.get('Stock_Unitario', 0)
                 ),
                 
                 # Stock Total calculado
@@ -1245,11 +1242,6 @@ class InventarioModel(QObject):
                     producto_raw.get('marca_nombre') or 
                     'GENÉRICO'
                 ),
-                'marca_nombre': safe_str(
-                    producto_raw.get('marca_nombre') or 
-                    producto_raw.get('Marca_Nombre') or 
-                    'GENÉRICO'
-                ),
                 
                 # Fecha de vencimiento
                 'Fecha_Venc': safe_str(
@@ -1266,7 +1258,6 @@ class InventarioModel(QObject):
             
         except Exception as e:
             print(f"❌ Error normalizando producto: {e}")
-            print(f"📦 Producto raw: {producto_raw}")
             # Retornar producto con valores por defecto en caso de error
             return {
                 'id': 0,
@@ -1295,6 +1286,54 @@ class InventarioModel(QObject):
         except Exception:
             return 0
 
+    def emergency_disconnect(self):
+        """Desconexión de emergencia para InventarioModel"""
+        try:
+            print("🚨 InventarioModel: Iniciando desconexión de emergencia...")
+            
+            # Detener timer
+            if hasattr(self, 'update_timer') and self.update_timer.isActive():
+                self.update_timer.stop()
+                print("   ⏹️ Update timer detenido")
+            
+            # Establecer estado shutdown
+            self._loading = False
+            
+            # Desconectar todas las señales
+            signals_to_disconnect = [
+                'productosChanged', 'lotesChanged', 'marcasChanged', 'proveedoresChanged',
+                'stockBajoAlert', 'productoVencidoAlert', 'operacionExitosa', 'operacionError',
+                'stockActualizado', 'productoCreado', 'productoEliminado', 'precioActualizado',
+                'loadingChanged', 'searchResultsChanged', 'alertasChanged'
+            ]
+            
+            for signal_name in signals_to_disconnect:
+                if hasattr(self, signal_name):
+                    try:
+                        getattr(self, signal_name).disconnect()
+                    except:
+                        pass
+            
+            # Limpiar datos
+            self._productos = []
+            self._lotes_activos = []
+            self._marcas = []
+            self._proveedores = []
+            self._search_results = []
+            self._alertas = []
+            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            
+            # Anular repositories
+            self.producto_repo = None
+            self.venta_repo = None
+            self.compra_repo = None
+            
+            print("✅ InventarioModel: Desconexión de emergencia completada")
+            
+        except Exception as e:
+            print(f"❌ Error en desconexión InventarioModel: {e}")
+
 # Registrar el tipo para QML
 def register_inventario_model():
     qmlRegisterType(InventarioModel, "ClinicaModels", 1, 0, "InventarioModel")
+    print("🔗 InventarioModel registrado para QML con autenticación estandarizada")

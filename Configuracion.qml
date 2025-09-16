@@ -64,11 +64,29 @@ Item {
     property string currentView: "main"
     property bool showChangePasswordDialog: false
     
-    // ===== DATOS DEL USUARIO ACTUALIZADOS =====
-    property string currentUser: "Dr. María González"
-    property string currentUserInitials: "MG"
-    property string currentUserRole: "Médico General"
-    property string currentUsername: "dr.maria"
+    // ===== PROPIEDADES DINÁMICAS DEL USUARIO (DESDE AUTHMODEL) =====
+    readonly property string currentUser: authModel ? authModel.userName : ""
+    readonly property string currentUserInitials: generateInitials(currentUser)
+    readonly property string currentUserRole: authModel ? authModel.userRole : ""
+    readonly property string currentUsername: authModel ? authModel.userUsername : ""
+    
+    // ===== FUNCIÓN PARA GENERAR INICIALES DINÁMICAMENTE =====
+    function generateInitials(fullName) {
+        if (!fullName || fullName.trim() === "") return "NN"
+        
+        var parts = fullName.trim().split(" ")
+        if (parts.length >= 2) {
+            return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+        } else if (parts.length === 1) {
+            var name = parts[0]
+            if (name.length >= 2) {
+                return (name.charAt(0) + name.charAt(1)).toUpperCase()
+            } else {
+                return (name.charAt(0) + name.charAt(0)).toUpperCase()
+            }
+        }
+        return "NN"
+    }
     
     // ===== FUNCIONES =====
     function showNotification(title, message, type) {
@@ -206,7 +224,7 @@ Item {
         }
     }
     
-    // ===== DIÁLOGO DE CAMBIO DE CONTRASEÑA =====
+    // ===== DIÁLOGO DE CAMBIO DE CONTRASEÑA CONECTADO A USUARIO_MODEL =====
     PasswordChangeDialog {
         id: passwordDialog
         visible: showChangePasswordDialog
@@ -617,7 +635,7 @@ Item {
         }
     }
     
-    // NUEVA TARJETA PARA PERFIL DE USUARIO
+    // NUEVA TARJETA PARA PERFIL DE USUARIO - DATOS DINÁMICOS
     component ProfileCard: Rectangle {
         color: backgroundColor
         radius: radiusMedium
@@ -678,7 +696,7 @@ Item {
                 }
             }
             
-            // Avatar y datos básicos compactos
+            // Avatar y datos básicos compactos - DINÁMICOS
             RowLayout {
                 Layout.fillWidth: true
                 spacing: marginMedium
@@ -707,7 +725,7 @@ Item {
                     spacing: marginTiny
                     
                     Label {
-                        text: currentUser
+                        text: currentUser || "Usuario no autenticado"
                         color: textColor
                         font.pixelSize: fontMedium
                         font.bold: true
@@ -715,7 +733,7 @@ Item {
                     }
                     
                     Label {
-                        text: currentUserRole
+                        text: currentUserRole || "Sin rol asignado"
                         color: textSecondaryColor
                         font.pixelSize: fontSmall
                         font.family: "Segoe UI"
@@ -723,7 +741,7 @@ Item {
                 }
             }
             
-            // Información detallada compacta
+            // Información detallada compacta - DINÁMICA
             GridLayout {
                 Layout.fillWidth: true
                 columns: 1
@@ -731,19 +749,22 @@ Item {
                 
                 ProfileField { 
                     label: "Usuario"
-                    value: currentUsername
+                    value: currentUsername || "No disponible"
                     icon: "👤"
                 }
             }
             
-            // Botón de cambio de contraseña compacto
+            // Botón de cambio de contraseña compacto - CONECTADO AL USUARIO_MODEL
             Button {
                 Layout.fillWidth: true
                 Layout.preferredHeight: baseUnit * 4.5
                 text: "Cambiar Contraseña"
+                enabled: authModel ? authModel.isAuthenticated : false
                 
                 background: Rectangle {
-                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                    color: parent.enabled ? 
+                           (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                           Qt.lighter(successColor, 1.5)
                     radius: radiusSmall
                     
                     Rectangle {
@@ -751,7 +772,9 @@ Item {
                         anchors.margins: 1
                         radius: parent.radius - 1
                         color: "transparent"
-                        border.color: Qt.lighter(successColor, 1.2)
+                        border.color: parent.parent.enabled ? 
+                                      Qt.lighter(successColor, 1.2) : 
+                                      Qt.lighter(successColor, 1.8)
                         border.width: 1
                     }
                 }
@@ -776,7 +799,13 @@ Item {
                     }
                 }
                 
-                onClicked: showChangePasswordDialog = true
+                onClicked: {
+                    if (authModel && authModel.isAuthenticated) {
+                        showChangePasswordDialog = true
+                    } else {
+                        showNotification("Error", "Usuario no autenticado", "error")
+                    }
+                }
             }
         }
     }
@@ -853,6 +882,7 @@ Item {
         }
     }
     
+    // ===== DIÁLOGO DE CAMBIO DE CONTRASEÑA CONECTADO =====
     component PasswordChangeDialog: Rectangle {
         signal closed()
         signal passwordChanged()
@@ -928,7 +958,7 @@ Item {
                     PasswordField { 
                         id: newPasswordField
                         label: "Nueva Contraseña"
-                        placeholder: "Mínimo 8 caracteres"
+                        placeholder: "Mínimo 6 caracteres"
                     }
                     
                     PasswordField { 
@@ -1000,10 +1030,24 @@ Item {
                         }
                         
                         onClicked: {
-                            currentPasswordField.clear()
-                            newPasswordField.clear()
-                            confirmPasswordField.clear()
-                            passwordChanged()
+                            // ✅ USAR USUARIO_MODEL PARA CAMBIAR CONTRASEÑA
+                            if (authModel && authModel.isAuthenticated && appController && appController.usuario_model_instance) {
+                                var userId = authModel.get_user_id()
+                                var success = appController.usuario_model_instance.cambiarContrasena(
+                                    userId,
+                                    currentPasswordField.text,
+                                    newPasswordField.text
+                                )
+                                
+                                if (success) {
+                                    currentPasswordField.clear()
+                                    newPasswordField.clear()
+                                    confirmPasswordField.clear()
+                                    passwordChanged()
+                                }
+                            } else {
+                                showNotification("Error", "No se puede cambiar la contraseña. Usuario no autenticado.", "error")
+                            }
                         }
                     }
                 }
@@ -1015,7 +1059,7 @@ Item {
         property string label: ""
         property string placeholder: ""
         property alias text: textField.text
-        property bool isValid: text.length >= (label.includes("Nueva") ? 8 : 1)
+        property bool isValid: text.length >= (label.includes("Nueva") ? 6 : 1)
         
         function clear() { textField.text = "" }
         
