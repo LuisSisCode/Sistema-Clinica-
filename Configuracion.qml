@@ -272,45 +272,35 @@ Item {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: marginLarge
-            spacing: marginMedium
+            anchors.margins: marginTiny
+            spacing: marginTiny
+            Layout.alignment: Qt.AlignVCenter
             
             Rectangle {
-                Layout.preferredWidth: baseUnit * 7
-                Layout.preferredHeight: baseUnit * 7
+                Layout.preferredWidth: baseUnit * 5
+                Layout.preferredHeight: baseUnit * 5
                 color: backgroundColor
-                radius: baseUnit * 3.5
-
-
-                
-                // Sombra interna
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 1
-                    radius: parent.radius - 2
-                    color: "transparent"
-                    border.color: Qt.lighter(color, 1.1)
-                    border.width: 1
-                }
+                radius: baseUnit * 2.5
                 
                 Image {
                     anchors.centerIn: parent
                     source: icon
-                   width: fontTitle * 1.5
-                    height: fontTitle * 1.5
+                    width: fontLarge * 1.5
+                    height: fontLarge * 1.5
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                 }
             }
             
+            // AQUÍ VA EL TÍTULO DENTRO DEL HEADER AZUL
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: marginSmall
+                spacing: 2
                 
                 Label {
-                    text: title
+                    text: title  // ✅ USAR LA PROPIEDAD TITLE
                     color: backgroundColor
-                    font.pixelSize: fontTitle * 0.8
+                    font.pixelSize: fontLarge
                     font.bold: true
                     font.family: "Segoe UI"
                 }
@@ -318,7 +308,7 @@ Item {
                 Label {
                     text: subtitle
                     color: backgroundColor
-                    font.pixelSize: fontBase * 0.9
+                    font.pixelSize: fontSmall
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                     opacity: 0.95
