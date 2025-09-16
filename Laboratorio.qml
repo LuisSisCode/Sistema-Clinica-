@@ -72,6 +72,16 @@ Item {
     readonly property int itemsPerPageLaboratorio: laboratorioModel ? (laboratorioModel.itemsPerPageProperty || 6) : 6
     readonly property int totalItemsLaboratorio: laboratorioModel ? (laboratorioModel.totalRecordsProperty || 0) : 0
     
+    // Agregar al inicio del laboratorioRoot, después de las propiedades existentes
+    readonly property string usuarioActualRol: {
+        if (typeof authModel !== 'undefined' && authModel) {
+            return authModel.userRole || ""
+        }
+        return ""
+    }
+    readonly property bool esAdministrador: usuarioActualRol === "Administrador"
+    readonly property bool esMedico: usuarioActualRol === "Médico" || usuarioActualRol === "MÃ©dico"
+
     ListModel {
         id: analisisPaginadosModel // Modelo para la página actual
     }
@@ -245,7 +255,9 @@ Item {
                             Layout.preferredHeight: baseUnit * 5
                             Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
                             Layout.alignment: Qt.AlignVCenter
-                            
+                            enabled: laboratorioRoot.esAdministrador || laboratorioRoot.esMedico
+                            visible: laboratorioRoot.esAdministrador || laboratorioRoot.esMedico
+
                             background: Rectangle {
                                 color: newAnalysisBtn.pressed ? primaryColorPressed : 
                                     newAnalysisBtn.hovered ? primaryColorHover : primaryColor
@@ -305,9 +317,20 @@ Item {
                             }
                             
                             onClicked: {
+                                if (!laboratorioRoot.esAdministrador && !laboratorioRoot.esMedico) {
+                                    mostrarNotificacion("Error", "No tiene permisos para crear análisis")
+                                    return
+                                }
+                                
                                 isEditMode = false
                                 editingIndex = -1
                                 showNewAnalysisDialog = true
+                            }
+                            ToolTip {
+                                visible: parent.hovered
+                                text: laboratorioRoot.esAdministrador ? 
+                                    "Crear nuevo análisis de laboratorio" : 
+                                    "Crear análisis (médicos: edición limitada a 5 días)"
                             }
                             
                             HoverHandler {
@@ -1020,6 +1043,18 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
+                                            visible: laboratorioRoot.esAdministrador || laboratorioRoot.esMedico
+                                            enabled: {
+                                                if (laboratorioRoot.esAdministrador) return true
+                                                if (laboratorioRoot.esMedico) {
+                                                    // Verificar fecha para médicos
+                                                    var fechaAnalisis = new Date(model.fecha || "")
+                                                    var fechaActual = new Date()
+                                                    var diasDiferencia = Math.floor((fechaActual - fechaAnalisis) / (1000 * 60 * 60 * 24))
+                                                    return diasDiferencia <= 5
+                                                }
+                                                return false
+                                            }
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1032,6 +1067,7 @@ Item {
                                                 height: baseUnit * 2.5
                                                 source: "Resources/iconos/editar.svg"
                                                 fillMode: Image.PreserveAspectFit
+                                                opacity: parent.enabled ? (parent.hovered ? 0.7 : 1.0) : 0.3
                                             }
                                             
                                             onClicked: {
@@ -1039,8 +1075,21 @@ Item {
                                                 editarAnalisis(index, analisisId)
                                             }
                                             
-                                            onHoveredChanged: {
-                                                editIcon.opacity = hovered ? 0.7 : 1.0
+                                            ToolTip {
+                                                visible: editButton.hovered
+                                                text: {
+                                                    if (laboratorioRoot.esAdministrador) return "Editar análisis"
+                                                    if (laboratorioRoot.esMedico) {
+                                                        var fechaAnalisis = new Date(model.fecha || "")
+                                                        var fechaActual = new Date()
+                                                        var diasDiferencia = Math.floor((fechaActual - fechaAnalisis) / (1000 * 60 * 60 * 24))
+                                                        if (diasDiferencia > 5) {
+                                                            return "No se puede editar: análisis de más de 5 días"
+                                                        }
+                                                        return "Editar análisis (máximo 5 días)"
+                                                    }
+                                                    return "Sin permisos"
+                                                }
                                             }
                                         }
 
@@ -1048,6 +1097,7 @@ Item {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
+                                            visible: laboratorioRoot.esAdministrador
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1060,6 +1110,7 @@ Item {
                                                 height: baseUnit * 2.5
                                                 source: "Resources/iconos/eliminar.svg"
                                                 fillMode: Image.PreserveAspectFit
+                                                opacity: parent.hovered ? 0.7 : 1.0
                                             }
                                             
                                             onClicked: {
@@ -1070,8 +1121,9 @@ Item {
                                                 }
                                             }
                                             
-                                            onHoveredChanged: {
-                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
+                                            ToolTip {
+                                                visible: deleteButton.hovered
+                                                text: "Eliminar análisis (solo administradores)"
                                             }
                                         }
                                     }
@@ -1286,11 +1338,17 @@ Item {
             var analisis = analysisFormDialog.analisisParaEditar
             console.log("Cargando datos para edición:", JSON.stringify(analisis))
             
+            // Cargar datos del paciente
             cedulaPaciente.text = analisis.pacienteCedula || ""
-            if (cedulaPaciente.text.length >= 5) {
-                buscarPacientePorCedula(cedulaPaciente.text)
-            }
+            nombrePaciente.text = analisis.pacienteNombre || ""
+            apellidoPaterno.text = analisis.pacienteApellidoP || ""
+            apellidoMaterno.text = analisis.pacienteApellidoM || ""
             
+            // Marcar como autocompletado para evitar búsquedas
+            cedulaPaciente.pacienteAutocompletado = true
+            cedulaPaciente.pacienteNoEncontrado = false
+            
+            // Cargar tipo de análisis
             if (analisis.tipoAnalisis) {
                 try {
                     var tiposData = JSON.parse(tiposAnalisis)
@@ -1307,7 +1365,8 @@ Item {
                 }
             }
             
-            if (analisis.trabajadorAsignado) {
+            // Cargar trabajador
+            if (analisis.trabajadorAsignado && analisis.trabajadorAsignado !== "Sin asignar") {
                 try {
                     var trabajadoresData = JSON.parse(trabajadoresDisponibles)
                     for (var j = 0; j < trabajadoresData.length; j++) {
@@ -1323,17 +1382,21 @@ Item {
                 }
             }
             
-            if (analisis.tipo === "Normal") {
+            // Cargar tipo de servicio
+            if (analisis.tipo === "Emergencia") {
+                emergenciaRadio.checked = true
+                normalRadio.checked = false
+                analysisFormDialog.analysisType = "Emergencia"
+            } else {
                 normalRadio.checked = true
                 emergenciaRadio.checked = false
                 analysisFormDialog.analysisType = "Normal"
-            } else {
-                normalRadio.checked = false
-                emergenciaRadio.checked = true
-                analysisFormDialog.analysisType = "Emergencia"
             }
             
+            // Cargar detalles
             detallesAnalisis.text = analisis.detallesExamen || ""
+            
+            // Actualizar precio
             analysisFormDialog.updatePrice()
             
             console.log("Datos de edición cargados correctamente")
@@ -2428,23 +2491,79 @@ Item {
     }
 
     function editarAnalisis(viewIndex, analisisId) {
-        // Buscar por ID en el modelo actual de la página
-        var idToFind = parseInt(analisisId)
-        var realIndex = -1
-        
-        for (var i = 0; i < analisisPaginadosModel.count; i++) {
-            if (parseInt(analisisPaginadosModel.get(i).analisisId) === idToFind) {
-                realIndex = i
-                break
+        try {
+            console.log("📝 Iniciando edición de análisis ID:", analisisId, "Índice:", viewIndex)
+            
+            // ✅ VERIFICAR PERMISOS (Admin puede editar todo, Médico solo recientes)
+            if (!laboratorioRoot.esAdministrador && !laboratorioRoot.esMedico) {
+                mostrarNotificacion("Error", "No tiene permisos para editar análisis")
+                return
             }
-        }
-        
-        if (realIndex >= 0) {
+            
+            // Buscar análisis en el modelo actual
+            var analisisData = null
+            for (var i = 0; i < analisisPaginadosModel.count; i++) {
+                if (parseInt(analisisPaginadosModel.get(i).analisisId) === parseInt(analisisId)) {
+                    analisisData = analisisPaginadosModel.get(i)
+                    break
+                }
+            }
+            
+            if (!analisisData) {
+                console.error("❌ Análisis no encontrado:", analisisId)
+                mostrarNotificacion("Error", "Análisis no encontrado")
+                return
+            }
+            
+            // ✅ VERIFICAR FECHA PARA MÉDICOS (5 días límite)
+            if (laboratorioRoot.esMedico && !laboratorioRoot.esAdministrador) {
+                if (!validarFechaEdicion(analisisData.fecha)) {
+                    mostrarNotificacion("Error", "Solo se pueden editar análisis de máximo 5 días de antigüedad")
+                    return
+                }
+            }
+            
+            // Configurar modo edición
             isEditMode = true
-            editingIndex = realIndex
+            editingIndex = viewIndex
+            
+            // ✅ CARGAR DATOS AL DIÁLOGO CORRECTAMENTE
+            analysisFormDialog.analisisParaEditar = {
+                analisisId: analisisData.analisisId,
+                pacienteCedula: analisisData.pacienteCedula,
+                pacienteNombre: analisisData.pacienteNombre,
+                pacienteApellidoP: analisisData.pacienteApellidoP, 
+                pacienteApellidoM: analisisData.pacienteApellidoM,
+                tipoAnalisis: analisisData.tipoAnalisis,
+                tipo: analisisData.tipo,
+                trabajadorAsignado: analisisData.trabajadorAsignado,
+                detallesExamen: analisisData.detallesExamen,
+                fecha: analisisData.fecha
+            }
+            
+            // Mostrar diálogo
             showNewAnalysisDialog = true
-        } else {
-            console.error("Análisis no encontrado:", idToFind)
+            
+            console.log("✅ Modo edición configurado correctamente")
+            
+        } catch (error) {
+            console.error("❌ Error editando análisis:", error.message)
+            mostrarNotificacion("Error", "Error cargando datos para edición")
+        }
+    }
+
+    function validarFechaEdicion(fechaString) {
+        try {
+            if (!fechaString) return false
+            
+            var fechaAnalisis = new Date(fechaString)
+            var fechaActual = new Date()
+            var diasDiferencia = Math.floor((fechaActual - fechaAnalisis) / (1000 * 60 * 60 * 24))
+            
+            return diasDiferencia <= 5
+        } catch (error) {
+            console.log("Error validando fecha:", error)
+            return false
         }
     }
 
@@ -3159,5 +3278,40 @@ Item {
         }
         
         return filtros
+    }
+
+    function eliminarAnalisis(analisisId) {
+        try {
+            console.log("🗑️ Iniciando eliminación de análisis ID:", analisisId)
+            
+            // ✅ VERIFICAR PERMISOS DE ADMINISTRADOR
+            if (!laboratorioRoot.esAdministrador) {
+                mostrarNotificacion("Error", "Solo administradores pueden eliminar análisis")
+                return false
+            }
+            
+            if (!laboratorioModel) {
+                console.log("❌ LaboratorioModel no disponible")
+                mostrarNotificacion("Error", "Sistema no disponible")
+                return false
+            }
+            
+            var resultado = laboratorioModel.eliminarExamen(parseInt(analisisId))
+            
+            if (resultado) {
+                console.log("✅ Análisis eliminado exitosamente")
+                // El modelo se actualizará automáticamente via signals
+                return true
+            } else {
+                console.log("❌ Error eliminando análisis")
+                mostrarNotificacion("Error", "No se pudo eliminar el análisis")
+                return false
+            }
+            
+        } catch (error) {
+            console.log("❌ Error en eliminación:", error.message)
+            mostrarNotificacion("Error", "Error eliminando análisis: " + error.message)
+            return false
+        }
     }
 }

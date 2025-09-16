@@ -2,7 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
-
 import QtQml 2.15
 
 Item {
@@ -16,11 +15,9 @@ Item {
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
     readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
     
-    // PROPIEDADES DE TAMAÑO
+    // PROPIEDADES DE TAMAÑO Y COLOR
     readonly property real iconSize: Math.max(baseUnit * 3, 24)
     readonly property real buttonIconSize: Math.max(baseUnit * 2, 18)
-
-    // PROPIEDADES DE COLOR 
     readonly property color primaryColor: "#901fd2"
     readonly property color primaryColorHover: "#2980B9"
     readonly property color primaryColorPressed: "#21618C"
@@ -37,6 +34,12 @@ Item {
     readonly property color borderColor: "#E5E7EB"
     readonly property color accentColor: "#10B981"
     readonly property color lineColor: "#D1D5DB"
+
+    readonly property bool esAdministrador: usuarioActualRol === "Administrador"
+    readonly property bool esMedico: usuarioActualRol === "Médico" || usuarioActualRol === "MÃ©dico"
+    readonly property bool puedeCrearConsultas: esAdministrador || esMedico
+    readonly property bool puedeEliminarConsultas: esAdministrador
+
     // Distribución de columnas responsive
     readonly property real colId: 0.05
     readonly property real colPaciente: 0.16
@@ -45,24 +48,18 @@ Item {
     readonly property real colTipo: 0.09
     readonly property real colPrecio: 0.10
     readonly property real colFecha: 0.10
-    // Propiedades para los diálogos de especialidades
+
+    // Propiedades para los diálogos
     property bool showNewConsultationDialog: false
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
-
-    // PROPIEDADES PARA DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
     property string consultaIdToDelete: ""
     property bool showConfirmDeleteDialog: false
-
-    // PAGINACIÓN ADAPTATIVA
-    property int itemsPerPageConsultas: 8 // Valor inicial, se ajustará dinámicamente
+    property int itemsPerPageConsultas: 8
     property int currentPageConsultas: 0
     property int totalPagesConsultas: 0
-    // MODELO DE PACIENTES PARA BÚSQUEDA
     property var pacienteModel: appController ? appController.paciente_model_instance : null
-    
-    // PROPIEDADES DE FILTRO
     property bool hayFiltrosActivos: {
         return (filtroFecha && filtroFecha.currentIndex > 0) ||
             (filtroEspecialidad && filtroEspecialidad.currentIndex > 0) ||
@@ -70,8 +67,9 @@ Item {
             (campoBusqueda && campoBusqueda.text.length > 0)
     }
     property var especialidadMap: []
-
     property var consultasOriginales: []
+    property bool debugPermisos: true
+    property var permisosConsultaActual: ({})
 
     ListModel {
         id: consultasPaginadasModel
@@ -81,7 +79,7 @@ Item {
         id: consultasListModel
     }
 
-    // CONEXIONES CORREGIDAS
+    // ✅ CONEXIONES SIMPLIFICADAS
     Connections {
         target: consultaModel
         
@@ -99,7 +97,6 @@ Item {
             console.log("⏳ Estado:", nuevoEstado)
         }
         
-        // ✅ CORREGIDO: Signal name correcto
         function onOperacionError(mensaje) {
             console.log("⚠️ Error:", mensaje)
             showNotification("Error", mensaje)
@@ -246,6 +243,10 @@ Item {
                             Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
                             Layout.alignment: Qt.AlignVCenter
                             
+                            // ✅ USAR DIRECTAMENTE LAS PROPIEDADES DE PERMISOS
+                            enabled: consultasRoot.puedeCrearConsultas && consultasRoot.usuarioActualId > 0
+                            visible: consultasRoot.puedeCrearConsultas
+                            
                             background: Rectangle {
                                 color: newConsultationBtn.pressed ? Qt.darker(primaryColor, 1.1) : 
                                     newConsultationBtn.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor
@@ -279,8 +280,6 @@ Item {
                                                 console.log("Error cargando PNG del botón:", source)
                                                 visible = false
                                                 fallbackText.visible = true
-                                            } else if (status === Image.Ready) {
-                                                console.log("PNG del botón cargado correctamente:", source)
                                             }
                                         }
                                     }
@@ -307,9 +306,35 @@ Item {
                             }
                             
                             onClicked: {
+                                console.log("🖱️ Clic en Nueva Consulta")
+                                console.log("   - Puede crear:", puedeCrearConsultas)
+                                console.log("   - Usuario ID:", usuarioActualId)
+                                console.log("   - Es Admin:", esAdministrador)
+                                console.log("   - Es Médico:", esMedico)
+                                
+                                if (!puedeCrearConsultas) {
+                                    showNotification("Sin permisos", "Solo médicos y administradores pueden crear consultas")
+                                    return
+                                }
+                                
+                                if (usuarioActualId <= 0) {
+                                    showNotification("Error", "Usuario no autenticado correctamente")
+                                    return
+                                }
+                                
                                 isEditMode = false
                                 editingIndex = -1
                                 showNewConsultationDialog = true
+                            }
+
+                            ToolTip {
+                                visible: parent.hovered
+                                text: {
+                                    if (esAdministrador) return "Crear nueva consulta (Administrador)"
+                                    if (esMedico) return "Crear nueva consulta (Médico)"
+                                    return "Crear nueva consulta"
+                                }
+                                delay: 500
                             }
                             
                             HoverHandler {
@@ -945,8 +970,19 @@ Item {
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
                                             
+                                            // ✅ VISIBILIDAD Y HABILITACIÓN BASADA EN PERMISOS
+                                            visible: consultasRoot.esAdministrador || consultasRoot.esMedico
+                                            enabled: {
+                                                if (!model.id) return false
+                                                if (consultasRoot.usuarioActualId <= 0) return false
+                                                return true // Simplificado para debug
+                                            }
+                                            
                                             background: Rectangle {
-                                                color: "transparent"
+                                                color: parent.enabled ? "transparent" : "#F5F5F5"
+                                                border.color: parent.enabled ? "transparent" : "#DDD"
+                                                border.width: parent.enabled ? 0 : 1
+                                                radius: baseUnit * 0.3
                                             }
                                             
                                             Image {
@@ -956,29 +992,27 @@ Item {
                                                 height: baseUnit * 2.5
                                                 source: "Resources/iconos/editar.svg"
                                                 fillMode: Image.PreserveAspectFit
+                                                opacity: parent.enabled ? 1.0 : 0.3
                                             }
                                             
                                             onClicked: {
-                                                consultationFormDialog.consultaParaEditar = {
-                                                    consultaId: model.id,
-                                                    paciente: model.paciente_completo,
-                                                    pacienteCedula: model.paciente_cedula,
-                                                    especialidadDoctor: model.especialidad_doctor,
-                                                    tipo: model.tipo_consulta,
-                                                    precio: model.precio,
-                                                    detalles: model.Detalles,
-                                                    fecha: model.fecha
-                                                }
-                                                
-                                                isEditMode = true
-                                                editingIndex = -1
-                                                showNewConsultationDialog = true
-                                                
-                                                console.log("Editando consulta ID:", model.id)
+                                                console.log("🖱️ Clic en Editar consulta ID:", model.id)
+                                                editarConsulta(index) // Comentado para debug
+                                                showNotification("Debug", "Botón editar funcionando")
                                             }
-                                            
+                                            ToolTip {
+                                                visible: editButton.hovered
+                                                text: {
+                                                    if (esAdministrador) return "Editar consulta (Administrador)"
+                                                    if (esMedico) return "Editar consulta (Médico)"
+                                                    return "Editar consulta"
+                                                }
+                                                delay: 500
+                                            }
                                             onHoveredChanged: {
-                                                editIcon.opacity = hovered ? 0.7 : 1.0
+                                                if (enabled) {
+                                                    editIcon.opacity = hovered ? 0.7 : 1.0
+                                                }
                                             }
                                         }
 
@@ -986,6 +1020,10 @@ Item {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
+                                            
+                                            // ✅ SOLO ADMINISTRADORES PUEDEN VER Y USAR
+                                            visible: consultasRoot.esAdministrador
+                                            enabled: visible && model.id
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1001,17 +1039,21 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                var consultaId = model.id
-                                                if (consultaId && consultaId !== "N/A") {
-                                                    consultaIdToDelete = consultaId
-                                                    showConfirmDeleteDialog = true
-                                                }
+                                                console.log("🖱️ Clic en Eliminar consulta ID:", model.id)
+                                                eliminarConsulta(index) // Comentado para debug
+                                                showNotification("Debug", "Botón eliminar funcionando")
                                             }
-                                            
+                                            ToolTip {
+                                                visible: deleteButton.hovered
+                                                text: "Eliminar consulta (Solo Administradores)"
+                                                delay: 500
+                                            }
                                             onHoveredChanged: {
                                                 deleteIcon.opacity = hovered ? 0.7 : 1.0
                                             }
+                                            
                                         }
+                                        
                                     }
                                 }
                             }
@@ -2231,17 +2273,21 @@ Item {
     }
     
     Component.onCompleted: {
-        console.log("🩺 Módulo Consultas iniciado")
-        console.log("🔧 Sistema de edición de consultas inicializado")
+        console.log("🩺 Módulo Consultas iniciado con permisos")
         
         function conectarModelos() {
             if (typeof appController !== 'undefined') {
                 consultaModel = appController.consulta_model_instance
-                pacienteModel = appController.paciente_model_instance
                 
                 if (consultaModel) {
+                    // Verificar métodos disponibles
+                    console.log("🔍 Verificando métodos:")
+                    console.log("   - verificar_permisos_consulta:", typeof consultaModel.verificar_permisos_consulta === 'function' ? "✅" : "❌")
+                    console.log("   - actualizar_consulta:", typeof consultaModel.actualizar_consulta === 'function' ? "✅" : "❌")
+                    console.log("   - eliminar_consulta:", typeof consultaModel.eliminar_consulta === 'function' ? "✅" : "❌")
+                    
                     consultaModel.consultasRecientesChanged.connect(function() {
-                        console.log("🔄 Consultas actualizadas - forzando refresh")
+                        console.log("🔄 Consultas recientes cambiadas")
                         updatePaginatedModel()
                     })
                     
@@ -2854,4 +2900,167 @@ Item {
             throw error
         }
     }
+
+    function verificarPermisosConsulta(consultaId) {
+        /**
+        * Verifica permisos para una consulta específica
+        */
+        try {
+            if (!consultaModel || !consultaId) {
+                return {
+                    puede_editar: false,
+                    puede_eliminar: false,
+                    razon_editar: "Datos insuficientes"
+                }
+            }
+            
+            var permisos = consultaModel.verificar_permisos_consulta(parseInt(consultaId))
+            
+            if (debugPermisos) {
+                console.log("🔐 Permisos verificados para consulta", consultaId, ":", JSON.stringify(permisos))
+            }
+            
+            return permisos
+            
+        } catch (error) {
+            console.log("❌ Error verificando permisos:", error.message)
+            return {
+                puede_editar: false,
+                puede_eliminar: false,
+                razon_editar: "Error verificando permisos"
+            }
+        }
+    }
+    function puedeEditarConsulta(consultaId) {
+        /**
+        * Verifica si puede editar una consulta específica
+        */
+        if (!consultaId) return false
+        
+        var permisos = verificarPermisosConsulta(consultaId)
+        return permisos.puede_editar
+    }
+
+    function puedeEliminarConsulta(consultaId) {
+        /**
+        * Verifica si puede eliminar una consulta específica
+        */
+        if (!consultaId) return false
+        
+        var permisos = verificarPermisosConsulta(consultaId)
+        return permisos.puede_eliminar
+    }
+
+    function obtenerMensajePermiso(consultaId) {
+        /**
+        * Obtiene mensaje explicativo de permisos
+        */
+        var permisos = verificarPermisosConsulta(consultaId)
+        
+        if (permisos.es_administrador) {
+            return "Administrador: Acceso completo"
+        }
+        
+        if (permisos.es_medico) {
+            if (!permisos.es_propietario) {
+                return "Solo puede editar sus propias consultas"
+            }
+            
+            if (permisos.dias_antiguedad > permisos.limite_dias) {
+                return `Solo puede editar consultas de máximo ${permisos.limite_dias} días (esta tiene ${permisos.dias_antiguedad} días)`
+            }
+            
+            if (permisos.puede_editar) {
+                return "Puede editar (consulta propia y reciente)"
+            }
+            
+            return permisos.razon_editar
+        }
+        
+        return "Sin permisos para esta operación"
+    }
+    function editarConsulta(consultaIndex) {
+        /**
+        * Editar consulta con verificación de permisos mejorada
+        */
+        try {
+            if (consultaIndex < 0 || consultaIndex >= consultasPaginadasModel.count) {
+                showNotification("Error", "Consulta no encontrada")
+                return
+            }
+            
+            var consulta = consultasPaginadasModel.get(consultaIndex)
+            var consultaId = consulta.id
+            
+            // Verificar autenticación
+            if (usuarioActualId <= 0) {
+                showNotification("Error", "Usuario no autenticado")
+                return
+            }
+            
+            // Verificar permisos específicos
+            var permisos = verificarPermisosConsulta(consultaId)
+            if (!permisos.puede_editar) {
+                showNotification("Sin permisos", permisos.razon_editar)
+                return
+            }
+            
+            // Configurar datos para edición
+            consultationFormDialog.consultaParaEditar = {
+                consultaId: consulta.id,
+                paciente: consulta.paciente_completo,
+                pacienteCedula: consulta.paciente_cedula,
+                especialidadDoctor: consulta.especialidad_doctor,
+                tipo: consulta.tipo_consulta,
+                precio: consulta.precio,
+                detalles: consulta.Detalles,
+                fecha: consulta.fecha
+            }
+            
+            isEditMode = true
+            editingIndex = consultaIndex
+            showNewConsultationDialog = true
+            
+            console.log("✅ Consulta habilitada para edición:", consultaId)
+            
+        } catch (error) {
+            console.log("❌ Error en editarConsulta:", error.message)
+            showNotification("Error", "Error iniciando edición: " + error.message)
+        }
+    }
+
+    function eliminarConsulta(consultaIndex) {
+        /**
+        * FUNCIÓN FALTANTE: Eliminar consulta con verificación de permisos
+        */
+        try {
+            if (consultaIndex < 0 || consultaIndex >= consultasPaginadasModel.count) {
+                showNotification("Error", "Consulta no encontrada")
+                return
+            }
+            
+            var consulta = consultasPaginadasModel.get(consultaIndex)
+            var consultaId = consulta.id
+            
+            console.log("🗑️ Intentando eliminar consulta:", consultaId)
+            
+            // Verificar permisos específicos
+            if (!puedeEliminarConsulta(consultaId)) {
+                var mensaje = obtenerMensajePermiso(consultaId)
+                showNotification("Acceso Denegado", mensaje)
+                return
+            }
+            
+            // Confirmar eliminación
+            consultaIdToDelete = consultaId
+            showConfirmDeleteDialog = true
+            
+            console.log("✅ Consulta marcada para eliminación:", consultaId)
+            
+        } catch (error) {
+            console.log("❌ Error en eliminarConsulta:", error.message)
+            showNotification("Error", "Error iniciando eliminación: " + error.message)
+        }
+    }
+    
 }

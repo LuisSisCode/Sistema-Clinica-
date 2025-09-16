@@ -84,6 +84,16 @@ Item {
     // ✅ DATOS DEL MODELO CON PARSING SEGURO
     property var trabajadoresDisponibles: []
     property var tiposProcedimientos: []
+
+    // Agregar propiedades de rol al inicio, después de enfermeriaRoot
+    readonly property string usuarioActualRol: {
+        if (typeof authModel !== 'undefined' && authModel) {
+            return authModel.userRole || ""
+        }
+        return ""
+    }
+    readonly property bool esAdministrador: usuarioActualRol === "Administrador"
+    readonly property bool esMedico: usuarioActualRol === "Médico" || usuarioActualRol === "MÃ©dico"
     
     // ✅ FUNCIÓN PARA PARSING SEGURO DE JSON
     function parseJsonSafe(jsonString, defaultValue) {
@@ -224,7 +234,7 @@ Item {
             }
         }
         
-        function onErrorOccurred(mensaje) {
+        function onErrorOcurrido(mensaje, codigo) {
             console.log("❌ Error enfermería:", mensaje)
             showNotification("Error", mensaje)
             formEnabled = true
@@ -326,7 +336,8 @@ Item {
                             Layout.preferredHeight: baseUnit * 5
                             Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
                             Layout.alignment: Qt.AlignVCenter
-                            
+                            enabled: enfermeriaRoot.esAdministrador || enfermeriaRoot.esMedico
+                            visible: enfermeriaRoot.esAdministrador || enfermeriaRoot.esMedico
                             background: Rectangle {
                                 color: newProcedureBtn.pressed ? primaryColorPressed : 
                                     newProcedureBtn.hovered ? primaryColorHover : primaryColor
@@ -386,6 +397,11 @@ Item {
                             }
                             
                             onClicked: {
+                                if (!enfermeriaRoot.esAdministrador && !enfermeriaRoot.esMedico) {
+                                    mostrarNotificacion("Error", "No tiene permisos para crear procedimientos")
+                                    return
+                                }
+                                
                                 isEditMode = false
                                 editingIndex = -1
                                 showNewProcedureDialog = true
@@ -393,6 +409,10 @@ Item {
                             
                             HoverHandler {
                                 cursorShape: Qt.PointingHandCursor
+                            }
+                            ToolTip {
+                                visible: parent.hovered
+                                text: "Crear nuevo procedimiento de enfermería"
                             }
                         }
                     }
@@ -1131,7 +1151,16 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            
+                                            visible: enfermeriaRoot.esAdministrador || enfermeriaRoot.esMedico
+                                            enabled: {
+                                                if (!enfermeriaModel || !modeloConectado) return false
+                                                
+                                                var procId = parseInt(model.procedimientoId)
+                                                if (procId > 0) {
+                                                    return enfermeriaModel.puede_editar_procedimiento(procId)
+                                                }
+                                                return false
+                                            }
                                             background: Rectangle {
                                                 color: "transparent"
                                             }
@@ -1150,12 +1179,24 @@ Item {
                                             onHoveredChanged: {
                                                 editIcon.opacity = hovered ? 0.7 : 1.0
                                             }
+                                            ToolTip {
+                                                visible: editButton.hovered
+                                                text: {
+                                                    if (!parent.enabled) {
+                                                        return "No se puede editar este procedimiento"
+                                                    }
+                                                    return enfermeriaRoot.esAdministrador ? 
+                                                        "Editar procedimiento" : 
+                                                        "Editar procedimiento (máximo 7 días)"
+                                                }
+                                            }
                                         }
 
                                         Button {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
+                                            visible: enfermeriaRoot.esAdministrador
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1180,6 +1221,10 @@ Item {
                                             
                                             onHoveredChanged: {
                                                 deleteIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
+                                            ToolTip {
+                                                visible: deleteButton.hovered
+                                                text: "Eliminar procedimiento (solo administradores)"
                                             }
                                         }
                                     }
@@ -2577,10 +2622,10 @@ Item {
                                 console.log("🗑️ Confirmando eliminación de procedimiento...")
                                 
                                 var procedimientoId = parseInt(procedimientoIdToDelete)
-                                eliminarProcedimiento(procedimientoId)
                                 
                                 showConfirmDeleteDialog = false
                                 procedimientoIdToDelete = ""
+                                var exitoso = eliminarProcedimiento(procedimientoId)
                             }
                             
                             HoverHandler {
@@ -3096,13 +3141,33 @@ Item {
             var intId = parseInt(procedimientoId)
             if (intId > 0 && enfermeriaModel && modeloConectado) {
                 console.log("🗑️ Eliminando procedimiento ID:", intId)
-                enfermeriaModel.eliminar_procedimiento(intId)
-                selectedRowIndex = -1
-                showNotification("Éxito", "Procedimiento eliminado correctamente")
+                
+                // ✅ VERIFICAR PERMISOS ANTES DE ELIMINAR
+                if (!enfermeriaRoot.esAdministrador) {
+                    showNotification("Error", "Solo administradores pueden eliminar procedimientos")
+                    return false
+                }
+                
+                var resultado = enfermeriaModel.eliminar_procedimiento(intId)
+                
+                if (resultado) {
+                    selectedRowIndex = -1
+                    showNotification("Éxito", "Procedimiento eliminado correctamente")
+                    
+                    // ✅ CERRAR DIÁLOGO AUTOMÁTICAMENTE
+                    showConfirmDeleteDialog = false
+                    procedimientoIdToDelete = ""
+                    
+                    return true
+                } else {
+                    showNotification("Error", "Error eliminando procedimiento")
+                    return false
+                }
             }
         } catch (error) {
             console.log("❌ Error eliminando procedimiento:", error)
             showNotification("Error", "Error eliminando procedimiento")
+            return false
         }
     }
     
@@ -3141,10 +3206,18 @@ Item {
         console.log("🧹 Limpiando todos los campos del formulario...")
         
         try {
-            // Limpiar datos del paciente
-            if (typeof limpiarDatosPaciente === 'function') {
-                limpiarDatosPaciente()
+            // ✅ CORREGIR: Limpiar cédula también
+            if (cedulaPaciente) {
+                cedulaPaciente.text = ""
+                cedulaPaciente.pacienteAutocompletado = false
+                cedulaPaciente.pacienteNoEncontrado = false
+                cedulaPaciente.buscandoPaciente = false
             }
+            
+            // Limpiar datos del paciente
+            if (nombrePaciente) nombrePaciente.text = ""
+            if (apellidoPaterno) apellidoPaterno.text = ""
+            if (apellidoMaterno) apellidoMaterno.text = ""
             
             // Resetear combos
             if (procedimientoCombo) procedimientoCombo.currentIndex = 0
@@ -3155,17 +3228,18 @@ Item {
             if (emergenciaRadio) emergenciaRadio.checked = false
             
             // Resetear cantidad
-            if (cantidadTextField) cantidadTextField.text = ""  // ← CORREGIDO
+            if (cantidadTextField) cantidadTextField.text = ""
             
             // Resetear propiedades del formulario
-            if (procedureFormDialog) {  // ← CORREGIDO
-                procedureFormDialog.selectedProcedureIndex = -1  // ← CORREGIDO
-                procedureFormDialog.calculatedUnitPrice = 0.0  // ← CORREGIDO
-                procedureFormDialog.calculatedTotalPrice = 0.0  // ← CORREGIDO
-                procedureFormDialog.procedureType = "Normal"  // ← CORREGIDO
+            if (procedureFormDialog) {
+                procedureFormDialog.selectedProcedureIndex = -1
+                procedureFormDialog.calculatedUnitPrice = 0.0
+                procedureFormDialog.calculatedTotalPrice = 0.0
+                procedureFormDialog.procedureType = "Normal"
+                procedureFormDialog.procedimientoParaEditar = null
             }
             
-            console.log("✅ Campos limpiados correctamente")
+            console.log("✅ Campos limpiados correctamente (incluyendo cédula)")
         } catch (error) {
             console.log("⚠️ Error limpiando campos:", error)
         }

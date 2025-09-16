@@ -171,7 +171,7 @@ class ConsultaModel(QObject):
         return True
     
     def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 7) -> bool:
-        """Valida que el registro no sea muy antiguo para editar"""
+        """Valida que el registro no sea muy antiguo para editar - ACTIVADO PARA CONSULTAS"""
         try:
             if not fecha_registro:
                 return True  # Si no hay fecha, permitir edición
@@ -187,17 +187,18 @@ class ConsultaModel(QObject):
             else:
                 return True  # Si no se puede determinar la fecha, permitir
             
-            # Calcular diferencia - las consultas NO tienen límite de tiempo
-            # Comentado para consultas: días_transcurridos = (datetime.now() - fecha_obj).days
-            # if dias_transcurridos > dias_limite:
-            #     self.operacionError.emit(f"No se pueden editar consultas de más de {dias_limite} días")
-            #     return False
+            # ✅ CALCULAR DIFERENCIA - LÍMITE DE 7 DÍAS PARA MÉDICOS
+            dias_transcurridos = (datetime.now() - fecha_obj).days
+            if dias_transcurridos > dias_limite:
+                self.operacionError.emit(f"No se pueden editar consultas de más de {dias_limite} días")
+                return False
             
-            return True  # ✅ Consultas editables sin límite de tiempo
+            return True
             
         except Exception as e:
-            print(f"❌ Error validando fecha: {e}")
+            print(f"⚠️ Error validando fecha: {e}")
             return True  # En caso de error, permitir la operación
+
     # ===============================
     # PROPERTIES PARA QML
     # ===============================
@@ -378,9 +379,9 @@ class ConsultaModel(QObject):
     def crear_consulta(self, datos_consulta):
         """Crea nueva consulta médica - ✅ MÉDICOS Y ADMINISTRADORES PUEDEN CREAR"""
         try:
-            # ✅ VERIFICACIÓN DE AUTENTICACIÓN PRIMERO - MÉDICOS PUEDEN CREAR
-            if not self._verificar_autenticacion():
-                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            # ✅ VERIFICACIÓN: MÉDICOS Y ADMIN PUEDEN CREAR
+            if not self._verificar_permisos_medico_o_admin():
+                return json.dumps({'exito': False, 'error': 'Solo médicos y administradores pueden crear consultas'})
             
             self._set_estado_actual("cargando")
             
@@ -444,18 +445,14 @@ class ConsultaModel(QObject):
     
     @Slot(int, 'QVariant', result=str)
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
-        """Actualiza consulta existente - ✅ SOLO ADMINISTRADORES PUEDEN EDITAR"""
+        """Actualiza consulta existente - ✅ CON SISTEMA DE PERMISOS COMPLETO"""
         try:
-            # ✅ CAMBIO CRÍTICO: VERIFICAR PERMISOS DE ADMIN PARA EDICIÓN
-            if not self._verificar_permisos_admin():
-                return json.dumps({'exito': False, 'error': 'Solo administradores pueden editar consultas'})
+            # ✅ VERIFICACIÓN COMPLETA DE PERMISOS
+            puede_editar, razon = self._verificar_permisos_edicion(consulta_id)
+            if not puede_editar:
+                return json.dumps({'exito': False, 'error': razon})
             
             self._set_estado_actual("cargando")
-            
-            # ✅ VALIDAR FECHA DE EDICIÓN (sin límite para consultas)
-            consulta_actual = self.repository.get_consultation_by_id_complete(consulta_id)
-            if consulta_actual and not self._validar_fecha_edicion(consulta_actual.get('Fecha')):
-                return json.dumps({'exito': False, 'error': 'Consulta muy antigua para editar'})
             
             # Convertir QJSValue a diccionario
             if hasattr(nuevos_datos, 'toVariant'):
@@ -463,7 +460,7 @@ class ConsultaModel(QObject):
             else:
                 datos = nuevos_datos
             
-            print(f"✏️ Admin {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando consulta {consulta_id}")
+            print(f"✏️ Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando consulta {consulta_id} - Motivo: {razon}")
             
             success = self.repository.update_consultation(
                 consulta_id=consulta_id,
@@ -532,6 +529,63 @@ class ConsultaModel(QObject):
             self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return False
+        
+    @Slot(int, result='QVariantMap')
+    def verificar_permisos_consulta(self, consulta_id: int):
+        """Verifica permisos del usuario actual para una consulta específica"""
+        try:
+            puede_editar, razon_editar = self._verificar_permisos_edicion(consulta_id)
+            puede_eliminar = self._verificar_permisos_admin()
+            es_admin = self._usuario_actual_rol == "Administrador"
+            es_medico = self._usuario_actual_rol == "Médico"
+            
+            # Obtener información adicional
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            es_propietario = False
+            dias_antiguedad = 0
+            
+            if consulta:
+                usuario_registro = consulta.get('usuario_id') or consulta.get('Id_Usuario')
+                es_propietario = usuario_registro == self._usuario_actual_id
+                
+                # Calcular antigüedad
+                fecha_consulta = consulta.get('Fecha')
+                if fecha_consulta:
+                    try:
+                        if isinstance(fecha_consulta, str):
+                            fecha_obj = datetime.fromisoformat(fecha_consulta.replace('Z', ''))
+                        elif isinstance(fecha_consulta, datetime):
+                            fecha_obj = fecha_consulta
+                        else:
+                            fecha_obj = datetime.now()
+                        
+                        dias_antiguedad = (datetime.now() - fecha_obj).days
+                    except:
+                        dias_antiguedad = 0
+            
+            return {
+                'puede_editar': puede_editar,
+                'puede_eliminar': puede_eliminar,
+                'razon_editar': razon_editar,
+                'es_administrador': es_admin,
+                'es_medico': es_medico,
+                'es_propietario': es_propietario,
+                'dias_antiguedad': dias_antiguedad,
+                'limite_dias': 7
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando permisos: {e}")
+            return {
+                'puede_editar': False,
+                'puede_eliminar': False,
+                'razon_editar': f"Error: {str(e)}",
+                'es_administrador': False,
+                'es_medico': False,
+                'es_propietario': False,
+                'dias_antiguedad': 999,
+                'limite_dias': 7
+            }
         
     # ===============================
     # SLOTS PARA BÚSQUEDAS Y FILTROS - CORREGIDOS
@@ -965,6 +1019,45 @@ class ConsultaModel(QObject):
         self._autoRefreshTimer.timeout.connect(self.refrescar_datos)
         # Comentado por defecto - se puede activar si es necesario
         # self._autoRefreshTimer.start(self._autoRefreshInterval)
+
+    def _verificar_permisos_edicion(self, consulta_id: int) -> tuple[bool, str]:
+        """
+        Verifica permisos completos para edición de consulta
+        Returns: (puede_editar, razon)
+        """
+        try:
+            # 1. Verificar autenticación básica
+            if not self._verificar_autenticacion():
+                return False, "Usuario no autenticado"
+            
+            # 2. Admin puede editar todo
+            if self._usuario_actual_rol == "Administrador":
+                return True, "Administrador"
+            
+            # 3. Solo médicos pueden continuar
+            if self._usuario_actual_rol != "Médico":
+                return False, "Solo médicos y administradores pueden editar consultas"
+            
+            # 4. Obtener datos de la consulta
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            if not consulta:
+                return False, "Consulta no encontrada"
+            
+            # 5. Verificar propietario - médico solo edita sus consultas
+            usuario_registro = consulta.get('usuario_id') or consulta.get('Id_Usuario')
+            if usuario_registro != self._usuario_actual_id:
+                return False, "Solo puede editar sus propias consultas"
+            
+            # 6. Verificar límite de tiempo (7 días)
+            fecha_consulta = consulta.get('Fecha')
+            if not self._validar_fecha_edicion(fecha_consulta, 7):
+                return False, "Solo puede editar consultas de máximo 7 días"
+            
+            return True, "Médico propietario"
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando permisos de edición: {e}")
+            return False, f"Error verificando permisos: {str(e)}"
     
     @Slot(int)
     def setAutoRefreshInterval(self, intervalMs: int):

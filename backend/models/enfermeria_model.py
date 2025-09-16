@@ -116,6 +116,100 @@ class EnfermeriaModel(QObject):
     # ===============================
     # ✅ MÉTODOS DE AUTENTICACIÓN ACTUALIZADOS
     # ===============================
+
+    def _verificar_autenticacion(self) -> bool:
+        """Verifica autenticación básica"""
+        if self._usuario_actual_id <= 0:
+            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            return False
+        return True
+
+    def _verificar_permisos_admin(self) -> bool:
+        """Verifica permisos de administrador"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if self._usuario_actual_rol != "Administrador":
+            self.operacionError.emit("Solo administradores pueden realizar esta operación")
+            print(f"🚫 Acceso denegado: Usuario {self._usuario_actual_id} (Rol: {self._usuario_actual_rol})")
+            return False
+        
+        return True
+    
+    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 7) -> bool:
+        """Valida que el registro no sea muy antiguo para editar - ENFERMERÍA: 7 días"""
+        try:
+            if not fecha_registro:
+                return True
+            
+            if isinstance(fecha_registro, str):
+                try:
+                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
+                except:
+                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
+            elif isinstance(fecha_registro, datetime):
+                fecha_obj = fecha_registro
+            else:
+                return True
+            
+            dias_transcurridos = (datetime.now() - fecha_obj).days
+            
+            if dias_transcurridos > dias_limite:
+                self.operacionError.emit(f"No se pueden editar procedimientos de más de {dias_limite} días")
+                print(f"📅 Edición bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error validando fecha: {e}")
+            return True
+
+    def _verificar_permisos_edicion(self, procedimiento_id: int) -> bool:
+        try:
+            print(f"🔍 DEBUG: Verificando permisos para procedimiento {procedimiento_id}")
+            print(f"🔍 DEBUG: Usuario actual: ID={self._usuario_actual_id}, Rol={self._usuario_actual_rol}")
+            
+            if not self._verificar_autenticacion():
+                return False
+            
+            if self._usuario_actual_rol == "Administrador":
+                print(f"✅ DEBUG: Admin puede editar todo")
+                return True
+            
+            if self._usuario_actual_rol != "Médico":
+                self.operacionError.emit("Solo médicos y administradores pueden editar procedimientos")
+                return False
+            
+            # 4. Obtener datos del procedimiento
+            proc_data = self.repository.get_procedimiento_by_id(procedimiento_id)
+            print(f"🔍 DEBUG: Datos del procedimiento: {proc_data}")
+            
+            if not proc_data:
+                self.operacionError.emit("Procedimiento no encontrado")
+                return False
+            
+            # 5. Verificar propietario
+            usuario_registro = proc_data.get('Id_RegistradoPor')
+            print(f"🔍 DEBUG: Registrado por: {usuario_registro}, Usuario actual: {self._usuario_actual_id}")
+            
+            if usuario_registro != self._usuario_actual_id:
+                self.operacionError.emit("Solo puede editar sus propios procedimientos")
+                return False
+            
+            # 6. Verificar fecha
+            fecha_proc = proc_data.get('Fecha')
+            print(f"🔍 DEBUG: Fecha procedimiento: {fecha_proc}")
+            
+            if not self._validar_fecha_edicion(fecha_proc, 7):
+                return False
+            
+            print(f"✅ DEBUG: Todos los permisos OK")
+            return True
+            
+        except Exception as e:
+            print(f"❌ DEBUG: Error verificando permisos: {e}")
+            return False
     
     @Slot(int, str)
     def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
@@ -167,37 +261,6 @@ class EnfermeriaModel(QObject):
             return False
         
         return True
-    
-    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 3) -> bool:
-        """Valida que el registro no sea muy antiguo para editar - ENFERMERÍA: 3 días"""
-        try:
-            if not fecha_registro:
-                return True  # Si no hay fecha, permitir edición
-            
-            # Convertir a datetime si es necesario
-            if isinstance(fecha_registro, str):
-                try:
-                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
-                except:
-                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
-            elif isinstance(fecha_registro, datetime):
-                fecha_obj = fecha_registro
-            else:
-                return True  # Si no se puede determinar la fecha, permitir
-            
-            # Calcular diferencia
-            dias_transcurridos = (datetime.now() - fecha_obj).days
-            
-            if dias_transcurridos > dias_limite:
-                self.operacionError.emit(f"No se pueden editar procedimientos de más de {dias_limite} días")
-                print(f"📅 Edición bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
-                return False
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error validando fecha: {e}")
-            return True  # En caso de error, permitir la operación
     
     # ===============================
     # CONEXIONES Y PROPIEDADES (SIN CAMBIOS ESTRUCTURALES)
@@ -641,8 +704,8 @@ class EnfermeriaModel(QObject):
         """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_autenticacion():
-                return self._crear_respuesta_json(False, "Usuario no autenticado")
+            if not self._verificar_permisos_edicion(procedimiento_id):
+                return self._crear_respuesta_json(False, "Sin permisos para editar este procedimiento")
             
             self._set_estado_actual("cargando")
             
@@ -715,7 +778,6 @@ class EnfermeriaModel(QObject):
 
     @Slot(int, result=bool)
     def eliminar_procedimiento(self, procedimiento_id: int) -> bool:
-        """Elimina procedimiento - ✅ SOLO ADMINISTRADORES"""
         try:
             # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
             if not self._verificar_permisos_admin():
@@ -728,13 +790,10 @@ class EnfermeriaModel(QObject):
             exito = self.repository.eliminar_procedimiento_enfermeria(procedimiento_id)
             
             if exito:
-                # Recargar datos
                 self._cargar_procedimientos_actuales()
                 
-                # Emitir signals
                 self.procedimientoEliminado.emit(procedimiento_id)
                 self.operacionExitosa.emit(f"Procedimiento {procedimiento_id} eliminado correctamente")
-                
                 self._set_estado_actual("listo")
                 return True
             else:
@@ -1017,6 +1076,15 @@ class EnfermeriaModel(QObject):
             error_msg = f"Error en diagnóstico: {str(e)}"
             print(f"❌ {error_msg}")
             return json.dumps({'error': error_msg})
+        
+    @Slot(int, result=bool)
+    def puede_editar_procedimiento(self, procedimiento_id: int) -> bool:
+        """Verifica si el usuario actual puede editar un procedimiento específico"""
+        try:
+            return self._verificar_permisos_edicion(procedimiento_id)
+        except Exception as e:
+            print(f"Error verificando permisos: {e}")
+            return False
     
     # ===============================
     # MÉTODOS INTERNOS (SIN CAMBIOS IMPORTANTES)

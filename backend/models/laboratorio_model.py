@@ -480,8 +480,8 @@ class LaboratorioModel(QObject):
         """Actualiza examen de laboratorio existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_autenticacion():
-                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
+            if not self._verificar_permisos_edicion(examen_id):
+                return json.dumps({'exito': False, 'error': 'Sin permisos para editar'})
             
             self._set_estado_actual("cargando")
             
@@ -687,7 +687,44 @@ class LaboratorioModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión LaboratorioModel: {e}")
-
+    def _verificar_permisos_edicion(self, consulta_id: int) -> tuple[bool, str]:
+        """
+        Verifica permisos completos para edición de consulta
+        Returns: (puede_editar, razon)
+        """
+        try:
+            # 1. Verificar autenticación básica
+            if not self._verificar_autenticacion():
+                return False, "Usuario no autenticado"
+            
+            # 2. Admin puede editar todo
+            if self._usuario_actual_rol == "Administrador":
+                return True, "Administrador"
+            
+            # 3. Solo médicos pueden continuar
+            if self._usuario_actual_rol != "Médico":
+                return False, "Solo médicos y administradores pueden editar consultas"
+            
+            # 4. Obtener datos de la consulta
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            if not consulta:
+                return False, "Consulta no encontrada"
+            
+            # 5. Verificar propietario - médico solo edita sus consultas
+            usuario_registro = consulta.get('usuario_id') or consulta.get('Id_Usuario')
+            if usuario_registro != self._usuario_actual_id:
+                return False, "Solo puede editar sus propias consultas"
+            
+            # 6. Verificar límite de tiempo (7 días)
+            fecha_consulta = consulta.get('Fecha')
+            if not self._validar_fecha_edicion(fecha_consulta, 7):
+                return False, "Solo puede editar consultas de máximo 7 días"
+            
+            return True, "Médico propietario"
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando permisos de edición: {e}")
+            return False, f"Error verificando permisos: {str(e)}"
 # ===============================
 # REGISTRO PARA QML
 # ===============================
