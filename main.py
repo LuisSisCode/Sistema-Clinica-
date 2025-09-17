@@ -77,6 +77,17 @@ class AppController(QObject):
         self._usuario_autenticado_nombre = ""
         self._usuario_autenticado_rol = ""
 
+    # Propiedades para usuario autenticado
+    usuarioChanged = Signal()
+
+    @Property(int, notify=usuarioChanged)
+    def usuario_actual_id(self):
+        return self._usuario_autenticado_id
+
+    @Property(str, notify=usuarioChanged) 
+    def usuario_actual_rol(self):
+        return self._usuario_autenticado_rol
+
     @Slot()
     def initialize_models(self):
         """Inicializa todos los models QObject"""
@@ -1303,7 +1314,7 @@ class AuthAppController(QObject):
             print(f"❌ Error durante logout: {e}")
             # Asegurarse de emitir la señal incluso si hay error
             self.authenticationRequired.emit()
-    
+
     def initializeMainApp(self):
         try:
             if not self.main_controller:

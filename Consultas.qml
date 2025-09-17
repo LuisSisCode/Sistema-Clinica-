@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import QtQml 2.15
 
+
 Item {
     id: consultasRoot
     objectName: "consultasRoot"
@@ -60,6 +61,8 @@ Item {
     property int currentPageConsultas: 0
     property int totalPagesConsultas: 0
     property var pacienteModel: appController ? appController.paciente_model_instance : null
+    // AGREGAR después de: property var pacienteModel: appController ? appController.paciente_model_instance : null
+    property int usuarioActualId: appController ? appController.usuario_actual_id : 0
     property bool hayFiltrosActivos: {
         return (filtroFecha && filtroFecha.currentIndex > 0) ||
             (filtroEspecialidad && filtroEspecialidad.currentIndex > 0) ||
@@ -70,6 +73,13 @@ Item {
     property var consultasOriginales: []
     property bool debugPermisos: true
     property var permisosConsultaActual: ({})
+
+    readonly property string usuarioActualRol: {
+        if (typeof authModel !== 'undefined' && authModel) {
+            return authModel.userRole || ""
+        }
+        return ""
+    }
 
     ListModel {
         id: consultasPaginadasModel
@@ -110,6 +120,14 @@ Item {
                 limpiarYCerrarDialogoConsulta()
             }
             updatePaginatedModel()
+        }
+    }
+    Connections {
+        target: appController
+        function onUsuarioChanged() {
+            if (consultaModel && usuarioActualId > 0) {
+                consultaModel.set_usuario_actual_con_rol(usuarioActualId, usuarioActualRol)
+            }
         }
     }
 
@@ -156,7 +174,6 @@ Item {
             console.log(`${tipo}: ${mensaje}`)
         }
     }
-
     // LAYOUT PRINCIPAL ADAPTATIVO
     ColumnLayout {
         anchors.fill: parent
@@ -975,7 +992,7 @@ Item {
                                             enabled: {
                                                 if (!model.id) return false
                                                 if (consultasRoot.usuarioActualId <= 0) return false
-                                                return true // Simplificado para debug
+                                                return consultasRoot.esAdministrador || consultasRoot.esMedico
                                             }
                                             
                                             background: Rectangle {
@@ -997,17 +1014,37 @@ Item {
                                             
                                             onClicked: {
                                                 console.log("🖱️ Clic en Editar consulta ID:", model.id)
-                                                editarConsulta(index) // Comentado para debug
-                                                showNotification("Debug", "Botón editar funcionando")
+                                                console.log("   - Es Admin:", consultasRoot.esAdministrador)
+                                                console.log("   - Es Médico:", consultasRoot.esMedico)
+                                                console.log("   - Usuario ID:", consultasRoot.usuarioActualId)
+                                                
+                                                // ✅ LÓGICA CORREGIDA - PERMITIR A ADMINISTRADORES
+                                                if (consultasRoot.esAdministrador) {
+                                                    console.log("   - ✅ Administrador puede editar sin restricciones")
+                                                    editarConsulta(index)
+                                                    return
+                                                }
+                                                
+                                                if (consultasRoot.esMedico) {
+                                                    console.log("   - ✅ Médico puede editar (sin restricciones adicionales por ahora)")
+                                                    editarConsulta(index)
+                                                    return
+                                                }
+                                                
+                                                // Solo bloquear si no es admin ni médico
+                                                console.log("   - ❌ Usuario sin permisos")
                                             }
                                             ToolTip {
                                                 visible: editButton.hovered
                                                 text: {
-                                                    if (esAdministrador) return "Editar consulta (Administrador)"
-                                                    if (esMedico) return "Editar consulta (Médico)"
-                                                    return "Editar consulta"
+                                                    if (consultasRoot.esAdministrador) {
+                                                        return "Editar consulta (Administrador)"
+                                                    } else if (consultasRoot.esMedico) {
+                                                        return "⚠️ Solo administradores pueden editar consultas"
+                                                    }
+                                                    return "Sin permisos para editar"
                                                 }
-                                                delay: 500
+                                                delay: 300
                                             }
                                             onHoveredChanged: {
                                                 if (enabled) {
@@ -1022,8 +1059,8 @@ Item {
                                             height: baseUnit * 3.5
                                             
                                             // ✅ SOLO ADMINISTRADORES PUEDEN VER Y USAR
-                                            visible: consultasRoot.esAdministrador
-                                            enabled: visible && model.id
+                                            visible: consultasRoot.esAdministrador === true
+                                            enabled: (consultasRoot.esAdministrador === true) && (model.id !== undefined)
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1313,6 +1350,7 @@ Item {
                 emergenciaRadio.checked = true
                 consultationFormDialog.consultationType = "Emergencia"
             }
+            
             
             // Cargar demás campos
             consultationFormDialog.calculatedPrice = consulta.precio || 0
@@ -1765,6 +1803,11 @@ Item {
                                 Layout.fillWidth: true
                                 font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                // ✅ DESHABILITAR EN MODO EDICIÓN
+                                enabled: !isEditMode
+                                opacity: isEditMode ? 0.6 : 1.0
+                                
                                 model: {
                                     var list = ["Seleccionar especialidad..."]
                                     if (consultaModel && consultaModel.especialidades) {
@@ -1775,13 +1818,17 @@ Item {
                                     }
                                     return list
                                 }
+                                
                                 onCurrentIndexChanged: {
-                                    if (currentIndex > 0 && consultaModel && consultaModel.especialidades) {
-                                        consultationFormDialog.selectedEspecialidadIndex = currentIndex - 1
-                                        consultationFormDialog.updatePrices()
-                                    } else {
-                                        consultationFormDialog.selectedEspecialidadIndex = -1
-                                        consultationFormDialog.calculatedPrice = 0.0
+                                    // Solo procesar si NO estamos en modo edición
+                                    if (!isEditMode) {
+                                        if (currentIndex > 0 && consultaModel && consultaModel.especialidades) {
+                                            consultationFormDialog.selectedEspecialidadIndex = currentIndex - 1
+                                            consultationFormDialog.updatePrices()
+                                        } else {
+                                            consultationFormDialog.selectedEspecialidadIndex = -1
+                                            consultationFormDialog.calculatedPrice = 0.0
+                                        }
                                     }
                                 }
                                 
@@ -1789,20 +1836,51 @@ Item {
                                     text: especialidadCombo.displayText
                                     font.pixelSize: fontBaseSize
                                     font.family: "Segoe UI, Arial, sans-serif"
-                                    color: textColor
+                                    color: isEditMode ? textColorLight : textColor
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: baseUnit
                                     elide: Text.ElideRight
                                 }
                                 
                                 background: Rectangle {
-                                    color: whiteColor
-                                    border.color: "#ddd"
+                                    color: isEditMode ? "#F5F5F5" : whiteColor
+                                    border.color: isEditMode ? "#E5E7EB" : "#ddd"
                                     border.width: 1
                                     radius: baseUnit * 0.5
                                 }
                             }
+                            
                         }
+                        // Nota informativa para modo edición
+Rectangle {
+    Layout.fillWidth: true
+    Layout.preferredHeight: baseUnit * 2.5
+    visible: isEditMode
+    color: "#FEF3C7"
+    border.color: "#F59E0B"
+    border.width: 1
+    radius: baseUnit * 0.5
+    
+    RowLayout {
+        anchors.fill: parent
+        anchors.margins: baseUnit * 0.8
+        spacing: baseUnit * 0.5
+        
+        Text {
+            text: "ℹ️"
+            font.pixelSize: fontBaseSize
+        }
+        
+        Label {
+            Layout.fillWidth: true
+            text: "La especialidad no puede modificarse una vez creada la consulta por razones de integridad de datos"
+            color: "#92400E"
+            font.pixelSize: fontBaseSize * 0.8
+            font.family: "Segoe UI, Arial, sans-serif"
+            wrapMode: Text.WordWrap
+        }
+    }
+}
                         
                         RowLayout {
                             Layout.fillWidth: true
@@ -2280,6 +2358,9 @@ Item {
                 consultaModel = appController.consulta_model_instance
                 
                 if (consultaModel) {
+                    if (usuarioActualId > 0 && usuarioActualRol.length > 0) {
+                        consultaModel.set_usuario_actual_con_rol(usuarioActualId, usuarioActualRol)
+                    }
                     // Verificar métodos disponibles
                     console.log("🔍 Verificando métodos:")
                     console.log("   - verificar_permisos_consulta:", typeof consultaModel.verificar_permisos_consulta === 'function' ? "✅" : "❌")
@@ -2502,9 +2583,6 @@ Item {
     }
 
     function actualizarConsulta() {
-        /**
-        * RESPONSABILIDAD ÚNICA: Actualizar una consulta existente
-        */
         try {
             console.log("📝 === INICIANDO ACTUALIZACIÓN DE CONSULTA ===")
             
@@ -2531,13 +2609,15 @@ Item {
             var datosConsulta = obtenerDatosFormularioConsulta()
             
             console.log("📝 Actualizando consulta ID:", consultaId)
+            console.log("   - Especialidad ID:", datosConsulta.especialidad_id) // ✅ AGREGAR
             console.log("   - Tipo consulta:", datosConsulta.tipoConsulta)
             console.log("   - Detalles:", datosConsulta.detalles)
             
-            // 3. Actualizar en el backend
+            // 3. ✅ USAR TODOS LOS DATOS, NO CREAR OBJETO NUEVO:
             var datosActualizados = {
                 "detalles": datosConsulta.detalles,
-                "tipo_consulta": datosConsulta.tipoConsulta
+                "tipo_consulta": datosConsulta.tipoConsulta,
+                "especialidad_id": datosConsulta.especialidad_id  // ✅ AGREGAR ESTA LÍNEA
             }
             
             var resultado = consultaModel.actualizar_consulta(parseInt(consultaId), datosActualizados)
@@ -2802,7 +2882,6 @@ Item {
                 throw new Error("No hay especialidades disponibles")
             }
 
-            // CORREGIDO: Cambiar consultationForm por consultationFormDialog
             if (consultationFormDialog.selectedEspecialidadIndex >= consultaModel.especialidades.length) {
                 throw new Error("Índice de especialidad fuera de rango")
             }
@@ -2820,7 +2899,8 @@ Item {
             return {
                 especialidadId: especialidadId,
                 tipoConsulta: tipoConsulta,
-                detalles: detallesConsulta.text.trim()
+                detalles: detallesConsulta.text.trim(),
+                especialidad_id: especialidadId  // ✅ DESCOMENTA ESTA LÍNEA
             }
             
         } catch (error) {

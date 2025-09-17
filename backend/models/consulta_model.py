@@ -375,125 +375,101 @@ class ConsultaModel(QObject):
     # SLOTS PARA OPERACIONES CRUD
     # ===============================
     
-    @Slot('QVariant', result=str)
-    def crear_consulta(self, datos_consulta):
-        """Crea nueva consulta médica - ✅ MÉDICOS Y ADMINISTRADORES PUEDEN CREAR"""
-        try:
-            # ✅ VERIFICACIÓN: MÉDICOS Y ADMIN PUEDEN CREAR
-            if not self._verificar_permisos_medico_o_admin():
-                return json.dumps({'exito': False, 'error': 'Solo médicos y administradores pueden crear consultas'})
-            
-            self._set_estado_actual("cargando")
-            
-            # Convertir QJSValue to diccionario de Python
-            if hasattr(datos_consulta, 'toVariant'):
-                datos = datos_consulta.toVariant()
-            else:
-                datos = datos_consulta
-            
-            # Validaciones básicas
-            paciente_id = int(datos.get('paciente_id', 0))
-            especialidad_id = int(datos.get('especialidad_id', 0))
-            detalles = str(datos.get('detalles', '')).strip()
-            tipo_consulta = str(datos.get('tipo_consulta', 'normal')).lower()
-            
-            if paciente_id <= 0:
-                raise ValueError("Paciente requerido")
-            
-            if especialidad_id <= 0:
-                raise ValueError("Especialidad requerida")
-            
-            if len(detalles) < 10:
-                raise ValueError("Detalles muy cortos (mínimo 10 caracteres)")
-            
-            print(f"🩺 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando consulta")
-            
-            # ✅ USAR usuario actual autenticado
-            consulta_id = self.repository.create_consultation(
-                usuario_id=self._usuario_actual_id,
-                paciente_id=paciente_id,
-                especialidad_id=especialidad_id,
-                detalles=detalles,
-                tipo_consulta=tipo_consulta
-            )
-            
-            if consulta_id:
-                # Forzar refresh inmediato
-                self._cargar_consultas_recientes()
-                self._cargar_estadisticas_dashboard()
-                
-                # Invalidar cache manualmente
-                self.repository.invalidate_consultation_caches()
-                print("🔄 Cache forzosamente invalidado desde modelo")
-                
-                # Obtener datos de la consulta creada
-                consulta_creada = self.repository.get_consultation_by_id_complete(consulta_id)
-                
-                self.consultaCreada.emit(json.dumps(consulta_creada, default=str))
-                self.operacionExitosa.emit(f"Consulta creada exitosamente: ID {consulta_id}")
-                
-                self._set_estado_actual("listo")
-                return json.dumps({'exito': True, 'consulta_id': consulta_id})
-            else:
-                raise ValueError("Error creando consulta")
-                
-        except Exception as e:
-            error_msg = f"Error creando consulta: {str(e)}"
-            self.operacionError.emit(error_msg)
-            self._set_estado_actual("error")
-            return json.dumps({'exito': False, 'error': error_msg})
-    
     @Slot(int, 'QVariant', result=str)
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
-        """Actualiza consulta existente - ✅ CON SISTEMA DE PERMISOS COMPLETO"""
+        """Actualiza consulta existente - VERSIÓN LIMPIA SIN VALIDACIONES PROBLEMÁTICAS"""
         try:
-            # ✅ VERIFICACIÓN COMPLETA DE PERMISOS
+            # Verificación de permisos
             puede_editar, razon = self._verificar_permisos_edicion(consulta_id)
             if not puede_editar:
                 return json.dumps({'exito': False, 'error': razon})
             
             self._set_estado_actual("cargando")
             
-            # Convertir QJSValue a diccionario
+            # Convertir datos
             if hasattr(nuevos_datos, 'toVariant'):
                 datos = nuevos_datos.toVariant()
             else:
                 datos = nuevos_datos
             
+            print(f"🔧 DEBUG - Datos recibidos del frontend: {datos}")
             print(f"✏️ Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando consulta {consulta_id} - Motivo: {razon}")
             
+            # Construir datos de actualización
+            update_data = {}
+            
+            # Detalles
+            if 'detalles' in datos and datos['detalles'] is not None:
+                detalles_text = str(datos['detalles']).strip()
+                if len(detalles_text) >= 5:
+                    update_data['Detalles'] = detalles_text
+                    print(f"📝 Detalles procesados: {detalles_text[:50]}...")
+            
+            # Tipo de consulta
+            if 'tipo_consulta' in datos and datos['tipo_consulta']:
+                tipo = str(datos['tipo_consulta']).lower().strip()
+                if tipo in ['normal', 'emergencia']:
+                    update_data['Tipo_Consulta'] = tipo.capitalize()
+                    print(f"🏷️ Tipo consulta procesado: {tipo}")
+            
+            # Especialidad - SIN VALIDACIONES EXTRA
+            if 'especialidad_id' in datos and datos['especialidad_id'] is not None:
+                try:
+                    especialidad_id = int(datos['especialidad_id'])
+                    if especialidad_id > 0:
+                        update_data['Id_Especialidad'] = especialidad_id
+                        print(f"🏥 Especialidad procesada correctamente: ID {especialidad_id}")
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ Error convirtiendo especialidad_id: {e}")
+            
+            print(f"📝 Datos finales a actualizar: {update_data}")
+            
+            # Verificar que hay datos para actualizar
+            if not update_data:
+                return json.dumps({'exito': False, 'error': 'No hay datos válidos para actualizar'})
+            
+            # Actualizar en base de datos
             success = self.repository.update_consultation(
                 consulta_id=consulta_id,
-                detalles=datos.get('detalles'),
-                tipo_consulta=datos.get('tipo_consulta'),
-                especialidad_id=datos.get('especialidad_id'),
-                fecha=datos.get('fecha')
+                detalles=update_data.get('Detalles'),
+                tipo_consulta=update_data.get('Tipo_Consulta'),
+                especialidad_id=update_data.get('Id_Especialidad'),
+                fecha=update_data.get('Fecha')
             )
             
             if success:
                 # Obtener consulta actualizada
                 consulta_actualizada = self.repository.get_consultation_by_id_complete(consulta_id)
                 
-                # Emitir signals
-                self.consultaActualizada.emit(json.dumps(consulta_actualizada, default=str))
-                self.operacionExitosa.emit(f"Consulta {consulta_id} actualizada correctamente")
-                
-                # Actualizar datos
-                self._cargar_consultas_recientes()
-                
-                self._set_estado_actual("listo")
-                return json.dumps({'exito': True, 'datos': consulta_actualizada}, default=str)
+                if consulta_actualizada:
+                    # Emitir signals
+                    self.consultaActualizada.emit(json.dumps(consulta_actualizada, default=str))
+                    self.operacionExitosa.emit(f"Consulta {consulta_id} actualizada correctamente")
+                    
+                    # Refrescar datos
+                    self._cargar_consultas_recientes()
+                    
+                    self._set_estado_actual("listo")
+                    
+                    return json.dumps({'exito': True, 'datos': consulta_actualizada}, default=str)
+                else:
+                    error_msg = "Consulta actualizada pero no se pudo recuperar información"
+                    self.operacionError.emit(error_msg)
+                    self._set_estado_actual("error")
+                    return json.dumps({'exito': False, 'error': error_msg})
             else:
-                error_msg = "Error actualizando consulta"
+                error_msg = "Error actualizando consulta en base de datos"
                 self.operacionError.emit(error_msg)
                 self._set_estado_actual("error")
                 return json.dumps({'exito': False, 'error': error_msg})
                 
         except Exception as e:
-            error_msg = f"Error actualizando consulta: {str(e)}"
+            error_msg = f"Error crítico actualizando consulta: {str(e)}"
+            print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
+    
     
     @Slot(int, result=bool)
     def eliminar_consulta(self, consulta_id: int) -> bool:
