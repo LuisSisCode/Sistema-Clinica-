@@ -178,14 +178,15 @@ class GastoRepository(BaseRepository):
         """Obtiene gasto específico con información completa"""
         query = """
         SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.Proveedor,
-               -- Tipo de gasto
-               tg.id as tipo_id, tg.Nombre as tipo_nombre, tg.fecha as tipo_fecha_creacion,
-               -- Usuario responsable
-               u.id as usuario_id,
-               CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo,
-               u.Nombre as usuario_nombre, u.Apellido_Paterno as usuario_apellido_p,
-               u.Apellido_Materno as usuario_apellido_m, u.correo as usuario_email,
-               u.Nombre as registrado_por_nombre
+            g.Id_RegistradoPor,
+            -- Tipo de gasto
+            tg.id as tipo_id, tg.Nombre as tipo_nombre,
+            -- Usuario responsable
+            u.id as usuario_id,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as usuario_completo,
+            u.Nombre as usuario_nombre, u.Apellido_Paterno as usuario_apellido_p,
+            u.Apellido_Materno as usuario_apellido_m, u.nombre_usuario as usuario_email,
+            u.Nombre as registrado_por_nombre
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
         INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
@@ -415,6 +416,24 @@ class GastoRepository(BaseRepository):
         query = "SELECT COUNT(*) as count FROM Tipo_Gastos WHERE Nombre = ?"
         result = self._execute_query(query, (nombre.strip(),), fetch_one=True)
         return result['count'] > 0 if result else False
+    
+    def delete_expense(self, gasto_id: int) -> bool:
+        """Elimina un gasto por ID"""
+        try:
+            query = "DELETE FROM Gastos WHERE id = ?"
+            result = self._execute_query(query, (gasto_id,), fetch_one=False)
+            
+            if result is not None:
+                # Invalidar cache
+                if hasattr(self, '_cache_manager'):
+                    self._cache_manager.clear()
+                print(f"✅ Gasto {gasto_id} eliminado exitosamente")
+                return True
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error eliminando gasto {gasto_id}: {e}")
+            return False
     
     # ===============================
     # BÚSQUEDAS AVANZADAS

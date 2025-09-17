@@ -507,19 +507,22 @@ class AppController(QObject):
             
             # ✅ MODELOS CON VERIFICACIÓN DE AUTENTICACIÓN IMPLEMENTADA - CORREGIDO
             models_to_set = [
+                (self.usuario_model, 'set_usuario_actual_con_rol'),
                 (self.venta_model, 'set_usuario_actual_con_rol'),
                 (self.compra_model, 'set_usuario_actual'),
                 (self.consulta_model, 'set_usuario_actual_con_rol'),    # ✅ CORREGIDO
                 (self.enfermeria_model, 'set_usuario_actual_con_rol'),  # ✅ CORREGIDO  
                 (self.laboratorio_model, 'set_usuario_actual_con_rol'), # ✅ CORREGIDO
+                (self.gasto_model, 'set_usuario_actual_con_rol'),       # ✅ CORREGIDO
+                (self.trabajador_model, 'set_usuario_actual_con_rol'),          # ✅ CORREGIDO
             ]
             
             # ✅ MODELOS QUE DEBERÍAN TENER AUTENTICACIÓN PERO AÚN NO LA TIENEN
             models_pending_auth = [
                 (self.gasto_model, 'set_usuario_actual'),           
                 (self.paciente_model, 'set_usuario_actual'),        
-                (self.usuario_model, 'set_usuario_actual_con_rol'), # ✅ CORREGIDO
-                (self.trabajador_model, 'set_usuario_actual'),      
+                #(self.usuario_model, 'set_usuario_actual'), # ✅ CORREGIDO
+                #(self.trabajador_model, 'set_usuario_actual'),      
                 (self.proveedor_model, 'set_usuario_actual'),       
                 # Modelos de configuración (operaciones críticas)
                 (self.configuracion_model, 'set_usuario_actual'),
@@ -565,6 +568,7 @@ class AppController(QObject):
         
         print(f"👤 Usuario autenticado: {usuario_nombre} (ID: {usuario_id}, Rol: {usuario_rol})")
         
+        
         # ✅ LLAMAR AL MÉTODO CORREGIDO INMEDIATAMENTE
         self._establecer_usuario_autenticado()
         
@@ -573,7 +577,13 @@ class AppController(QObject):
             (self.reportes_model, 'set_usuario_actual_con_rol'),
             (self.dashboard_model, 'set_usuario_actual_con_rol'),
         ]
-        
+
+        # Establecer referencia al authModel en gastoModel para verificación de roles
+        if self.gasto_model and hasattr(self, 'auth_model'):
+            if hasattr(self.gasto_model, 'set_auth_model_ref'):
+                self.gasto_model.set_auth_model_ref(self.auth_model)
+            else:
+                self.gasto_model._auth_model_ref = self.auth_model
         for model, method_name in models_with_roles_extra:
             if model and hasattr(model, method_name):
                 try:

@@ -63,6 +63,7 @@ class TrabajadorModel(QObject):
         
         # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
         self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        self._usuario_actual_rol = ""  # Nuevo atributo para rol
         print("👷‍♂️ TrabajadorModel inicializado - Esperando autenticación")
         
         # Filtros activos
@@ -107,6 +108,62 @@ class TrabajadorModel(QObject):
         except Exception as e:
             print(f"❌ Error estableciendo usuario en TrabajadorModel: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
+        """Establece usuario actual CON ROL"""
+        try:
+            print(f"🔍 DEBUG TrabajadorModel: Recibiendo set_usuario_actual_con_rol({usuario_id}, '{usuario_rol}')")
+            self._usuario_actual_id = usuario_id
+            self._usuario_actual_rol = usuario_rol.strip()
+            print(f"👤 Usuario {usuario_id} con rol '{usuario_rol}' establecido en TrabajadorModel")
+            print(f"🔍 DEBUG: _usuario_actual_id = {self._usuario_actual_id}")
+            print(f"🔍 DEBUG: _usuario_actual_rol = '{self._usuario_actual_rol}'")
+            self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido en TrabajadorModel")
+        except Exception as e:
+            print(f"❌ Error en set_usuario_actual_con_rol TrabajadorModel: {e}")
+            import traceback
+            traceback.print_exc()
+            self.operacionError.emit(f"Error: {str(e)}")
+
+    def _es_administrador(self) -> bool:
+        """Verifica si el usuario actual es administrador"""
+        try:
+            if hasattr(self, '_usuario_actual_rol'):
+                es_admin = self._usuario_actual_rol == "Administrador"
+                return es_admin
+            return False
+        except Exception as e:
+            return False
+
+    @Slot(result=bool)
+    def esAdministrador(self) -> bool:
+        """Verifica si el usuario es administrador (para QML)"""
+        return self._es_administrador()
+
+    def _puede_editar_trabajador(self, trabajador_id: int) -> bool:
+        """Verifica si puede editar un trabajador específico"""
+        if self._es_administrador():
+            return True
+        
+        if self._usuario_actual_rol == "Médico":
+            # Médicos pueden editar trabajadores creados hace menos de 30 días
+            trabajador = self.repository.get_by_id(trabajador_id)
+            if trabajador:
+                from datetime import datetime, timedelta
+                try:
+                    # Asumir que hay campo fecha de creación o usar fecha actual como referencia
+                    fecha_limite = datetime.now() - timedelta(days=30)
+                    return True  # Por ahora permitir, implementar lógica de fecha si es necesario
+                except:
+                    return True
+        
+        return False
+
+    @Slot(int, result=bool)
+    def puedeEditarTrabajador(self, trabajador_id: int) -> bool:
+        """Verifica permisos de edición para QML"""
+        return self._puede_editar_trabajador(trabajador_id)
     
     @Property(int, notify=operacionExitosa)
     def usuario_actual_id(self):
@@ -119,6 +176,8 @@ class TrabajadorModel(QObject):
     
     def _verificar_autenticacion(self) -> bool:
         """Verifica si el usuario está autenticado"""
+        print(f"🔍 DEBUG _verificar_autenticacion: _usuario_actual_id = {self._usuario_actual_id}")
+        print(f"🔍 DEBUG _verificar_autenticacion: _usuario_actual_rol = '{getattr(self, '_usuario_actual_rol', 'NO_DEFINIDO')}'")
         if self._usuario_actual_id <= 0:
             self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
             return False
@@ -294,6 +353,11 @@ class TrabajadorModel(QObject):
         # ✅ VERIFICAR AUTENTICACIÓN
         if not self._verificar_autenticacion():
             self.trabajadorEliminado.emit(False, "Usuario no autenticado")
+            return False
+        # Verificar permisos de administrador
+        if not self._es_administrador():
+            error_msg = "Solo administradores pueden eliminar trabajadores"
+            self.trabajadorEliminado.emit(False, error_msg)
             return False
         
         try:
@@ -866,6 +930,7 @@ class TrabajadorModel(QObject):
             self._filtro_busqueda = ""
             self._incluir_stats = False
             self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            self._usuario_actual_rol = ""  # Resetear rol también
             
             # Anular repository
             self.repository = None

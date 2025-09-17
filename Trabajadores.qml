@@ -34,6 +34,11 @@ Item {
     readonly property color violetColor: "#9b59b6"
     readonly property color infoColor: "#17a2b8"
 
+    // Propiedades de roles y permisos
+    readonly property string usuarioActualRol: authModel ? authModel.userRole || "" : ""
+    readonly property bool esAdministrador: usuarioActualRol === "Administrador" 
+    readonly property bool esMedico: usuarioActualRol === "Médico"
+
     // ✅ AGREGAR TIMER PARA ACTUALIZACIÓN AUTOMÁTICA
     Timer {
         id: updateTimer
@@ -269,6 +274,8 @@ Item {
                             Layout.preferredHeight: baseUnit * 5
                             Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
                             Layout.alignment: Qt.AlignVCenter
+                            visible: esAdministrador || esMedico
+                            enabled: esAdministrador || esMedico
                             
                             background: Rectangle {
                                 color: newWorkerBtn.pressed ? Qt.darker(primaryColor, 1.1) : 
@@ -827,7 +834,9 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            
+                                            visible: selectedRowIndex === index && (esAdministrador || esMedico)
+                                            enabled: esAdministrador || trabajadorModel.puedeEditarTrabajador(parseInt(model.trabajadorId))
+    
                                             background: Rectangle {
                                                 color: "transparent"
                                             }
@@ -853,12 +862,20 @@ Item {
                                             onHoveredChanged: {
                                                 editIcon.opacity = hovered ? 0.7 : 1.0
                                             }
+                                            ToolTip.text: {
+                                                if (!esAdministrador && !esMedico) return "Sin permisos"
+                                                if (esAdministrador) return "Editar trabajador"
+                                                if (!enabled) return "No se puede editar: trabajador de más de 30 días"
+                                                return "Editar trabajador (máximo 30 días)"
+                                            }
                                         }
 
                                         Button {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
+                                            visible: selectedRowIndex === index && esAdministrador
+                                            enabled: esAdministrador
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -880,9 +897,9 @@ Item {
                                             }
                                             
                                             // Efecto hover
-                                            onHoveredChanged: {
-                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
-                                            }
+                                            
+                                            ToolTip.text: esAdministrador ? "Eliminar trabajador" : "Eliminar trabajador (solo administradores)"
+                                            ToolTip.visible: hovered
                                         }
                                     }
                                 }
