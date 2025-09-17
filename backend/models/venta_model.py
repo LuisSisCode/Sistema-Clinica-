@@ -184,18 +184,6 @@ class VentaModel(QObject):
                 self.operacionError.emit("Operación requiere permisos de administrador")
                 return False
         
-        # Médico puede hacer ventas básicas
-        if self._usuario_rol == "Médico":
-            operaciones_medico = [
-                'crear_venta',
-                'ver_propias_ventas',
-                'agregar_carrito',
-                'estadisticas_basicas'
-            ]
-            
-            if operacion not in operaciones_medico and operacion not in operaciones_admin:
-                return True  # Permitir operaciones no clasificadas
-        
         return True
     
     # ===============================
@@ -204,18 +192,8 @@ class VentaModel(QObject):
     
     @Property(list, notify=ventasHoyChanged)
     def ventas_hoy(self):
-        """Lista de ventas del día actual o filtradas (con restricciones por rol)"""
-        ventas_a_mostrar = self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
-        # ✅ FILTRAR POR ROL: Médico solo ve sus propias ventas
-        if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
-            ventas_filtradas_por_usuario = [
-                venta for venta in ventas_a_mostrar 
-                if venta.get('Id_Usuario') == self._usuario_actual_id
-            ]
-            return ventas_filtradas_por_usuario
-        
-        # Admin ve todas las ventas
-        return ventas_a_mostrar
+        """Lista de ventas del día actual o filtradas"""
+        return self._ventas_filtradas if self._ventas_filtradas else self._ventas_hoy
     
     @Property('QVariant', notify=ventaActualChanged)
     def venta_actual(self):
@@ -224,27 +202,12 @@ class VentaModel(QObject):
     
     @Property(list, notify=historialVentasChanged)
     def historial_ventas(self):
-        """Historial de ventas (filtrado por rol)"""
-        if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
-            return [
-                venta for venta in self._historial_ventas 
-                if venta.get('Id_Usuario') == self._usuario_actual_id
-            ]
+        """Historial de ventas"""
         return self._historial_ventas
     
     @Property('QVariant', notify=estadisticasChanged)
     def estadisticas(self):
         """MODIFICADO: Estadísticas con información limitada para Médico"""
-        if self._usuario_rol == "Médico":
-            # Solo estadísticas básicas sin información financiera sensible
-            estadisticas_limitadas = {
-                'Total_Ventas': self._estadisticas.get('Total_Ventas', 0),
-                'Unidades_Vendidas': self._estadisticas.get('Unidades_Vendidas', 0),
-                'Productos_Diferentes': self._estadisticas.get('Productos_Diferentes', 0),
-                'mostrar_limitado': True  # NUEVO: Flag para UI
-            }
-            return estadisticas_limitadas
-        
         # Admin ve todas las estadísticas
         estadisticas_completas = self._estadisticas.copy()
         estadisticas_completas['mostrar_limitado'] = False  # NUEVO: Flag para UI
@@ -279,8 +242,6 @@ class VentaModel(QObject):
     @Property(float, notify=estadisticasChanged)
     def ingresos_hoy(self):
         """MODIFICADO: Ingresos con restricción para Médico"""
-        if self._usuario_rol == "Médico":
-            return 0.0  # Médico no ve información financiera
         return float(self._estadisticas.get('Ingresos_Total', 0))
     
     @Property(float, notify=carritoCambiado)
@@ -309,8 +270,8 @@ class VentaModel(QObject):
     
     @Property(bool, notify=operacionExitosa)
     def puede_ver_todas_ventas(self):
-        """Indica si puede ver ventas de otros usuarios - Solo Admin"""
-        return self._usuario_rol == "Administrador"
+        """Indica si puede ver ventas de otros usuarios - Todos los usuarios"""
+        return True
     
     @Property(bool, notify=operacionExitosa)
     def puede_ver_reportes_financieros(self):
@@ -344,8 +305,6 @@ class VentaModel(QObject):
     @Property(str, notify=operacionExitosa)
     def texto_usuario_limitado(self):
         """Texto descriptivo para usuario con permisos limitados"""
-        if self._usuario_rol == "Médico":
-            return "Mostrando solo sus ventas"
         return ""
     
     # ===============================
@@ -737,12 +696,6 @@ class VentaModel(QObject):
                     print(f"❌ VentaModel: No se encontró venta con ID {venta_id}")
                     return {}
                 
-                # ✅ VERIFICAR PERMISOS: Médico solo puede ver sus propias ventas
-                if self._usuario_rol == "Médico":
-                    if detalle.get('Id_Usuario') != self._usuario_actual_id:
-                        self.operacionError.emit("No tiene permisos para ver esta venta")
-                        return {}
-                
                 if not isinstance(detalle, dict):
                     print(f"❌ VentaModel: Detalle no es diccionario: {type(detalle)}")
                     return {}
@@ -876,16 +829,8 @@ class VentaModel(QObject):
         try:
             fecha_hoy = datetime.now().strftime('%Y-%m-%d')
             
-            # ✅ CARGAR ESTADÍSTICAS SEGÚN EL ROL
-            if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
-                # Para médico: solo estadísticas de sus propias ventas
-                estadisticas = safe_execute(
-                    self.venta_repo.get_ventas_del_dia_por_usuario, 
-                    fecha_hoy, self._usuario_actual_id
-                )
-            else:
-                # Para admin: estadísticas completas
-                estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy)
+            # Cargar todas las estadísticas
+            estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy)
             
             if estadisticas and estadisticas.get('resumen'):
                 self._estadisticas = estadisticas['resumen']
