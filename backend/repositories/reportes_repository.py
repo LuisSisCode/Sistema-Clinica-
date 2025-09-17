@@ -37,8 +37,8 @@ class ReportesRepository(BaseRepository):
             fecha_hasta: Fecha fin en formato DD/MM/YYYY
         """
         # Convertir fechas del formato DD/MM/YYYY a YYYY-MM-DD
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
@@ -97,8 +97,9 @@ class ReportesRepository(BaseRepository):
     @cached_query('reporte_compras', ttl=300)
     def get_reporte_compras(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """Genera reporte de compras de farmacia"""
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
@@ -126,29 +127,30 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_consultas', ttl=300)
     def get_reporte_consultas(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte de consultas médicas"""
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+        """Genera reporte de consultas médicas - CORREGIDO para mostrar detalles completos"""
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
             e.Nombre as especialidad,
-            d.Nombre + ' ' + d.Apellido_Paterno + ' ' + d.Apellido_Materno as descripcion,
+            c.Detalles as descripcion,
             p.Nombre + ' ' + p.Apellido_Paterno as paciente,
-            CASE WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia 
-                 ELSE e.Precio_Normal END as valor,
+            d.Nombre + ' ' + d.Apellido_Paterno + ' ' + ISNULL(d.Apellido_Materno, '') as doctor_nombre,
             c.Tipo_Consulta as tipo,
-            1 as cantidad,
-            c.Detalles as observaciones
+            CASE 
+                WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
+                ELSE ISNULL(e.Precio_Normal, 0) 
+            END as valor,  -- Asegúrate de que este alias sea 'valor'
+            1 as cantidad
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         INNER JOIN Doctores d ON e.Id_Doctor = d.id
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         WHERE c.Fecha >= ? AND c.Fecha <= ?
         ORDER BY c.Fecha DESC, c.id DESC
-        """
-        
+        """    
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
     
     # ===============================
@@ -158,8 +160,9 @@ class ReportesRepository(BaseRepository):
     @cached_query('reporte_laboratorio', ttl=300)
     def get_reporte_laboratorio(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """Genera reporte de análisis de laboratorio"""
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
@@ -192,8 +195,9 @@ class ReportesRepository(BaseRepository):
     @cached_query('reporte_enfermeria', ttl=300)
     def get_reporte_enfermeria(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """Genera reporte de procedimientos de enfermería"""
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
@@ -224,8 +228,9 @@ class ReportesRepository(BaseRepository):
     @cached_query('reporte_gastos', ttl=300)
     def get_reporte_gastos(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """Genera reporte de gastos operativos"""
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
@@ -252,8 +257,9 @@ class ReportesRepository(BaseRepository):
     @cached_query('reporte_consolidado', ttl=600)
     def get_reporte_consolidado(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """Genera reporte financiero consolidado"""
-        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+
+        fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         # Consulta UNION para consolidar todos los ingresos y egresos
         query = """
@@ -343,15 +349,16 @@ class ReportesRepository(BaseRepository):
     # MÉTODOS DE UTILIDAD
     # ===============================
     
-    def _convertir_fecha_sql(self, fecha_str: str) -> str:
+    def _convertir_fecha_sql(self, fecha_str: str, es_fecha_final: bool = False) -> str:
         """
         Convierte fecha de DD/MM/YYYY a YYYY-MM-DD para SQL Server
         
         Args:
             fecha_str: Fecha en formato DD/MM/YYYY
+            es_fecha_final: Si True, agrega 23:59:59 para incluir todo el día
             
         Returns:
-            Fecha en formato YYYY-MM-DD
+            Fecha en formato YYYY-MM-DD [HH:MM:SS]
         """
         try:
             if not fecha_str or fecha_str.strip() == "":
@@ -372,13 +379,19 @@ class ReportesRepository(BaseRepository):
             if anio < 2020 or anio > 2030:
                 raise ValueError("Año inválido")
             
-            # Convertir a YYYY-MM-DD
-            return f"{anio:04d}-{mes:02d}-{dia:02d}"
+            # ✅ CORRECCIÓN: Agregar hora según si es fecha final
+            if es_fecha_final:
+                return f"{anio:04d}-{mes:02d}-{dia:02d} 23:59:59"
+            else:
+                return f"{anio:04d}-{mes:02d}-{dia:02d} 00:00:00"
             
         except Exception as e:
             print(f"⚠️ Error convirtiendo fecha '{fecha_str}': {e}")
             # Fallback: fecha actual
-            return datetime.now().strftime("%Y-%m-%d")
+            if es_fecha_final:
+                return datetime.now().strftime("%Y-%m-%d 23:59:59")
+            else:
+                return datetime.now().strftime("%Y-%m-%d 00:00:00")
     
     def get_resumen_periodo(self, fecha_desde: str, fecha_hasta: str) -> Dict[str, Any]:
         """Obtiene resumen general del período"""

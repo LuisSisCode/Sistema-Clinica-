@@ -843,12 +843,15 @@ Item {
                                                             Layout.preferredWidth: modelData.width
                                                             text: obtenerValorColumna(parent.parent.rowIndex, modelData.campo)
                                                             font.pixelSize: 10
-                                                            font.family: "Segoe UI"
+                                                            font.family: "Segoe UI, Arial, sans-serif"
                                                             color: textColor
                                                             horizontalAlignment: modelData.align || Text.AlignLeft
                                                             verticalAlignment: Text.AlignVCenter
-                                                            elide: Text.ElideRight
+                                                            // ✅ CORRECCIÓN: Para descripción, usar WordWrap en lugar de ElideRight
+                                                            wrapMode: modelData.campo === "descripcion" ? Text.WordWrap : Text.NoWrap
+                                                            elide: modelData.campo === "descripcion" ? Text.ElideNone : Text.ElideRight
                                                             font.bold: modelData.campo === "valor"
+                                                            maximumLineCount: modelData.campo === "descripcion" ? 3 : 1 // ✅ Permitir hasta 3 líneas
                                                         }
                                                     }
                                                 }
@@ -1080,6 +1083,18 @@ Item {
                     {titulo: "P.U.", campo: "precioUnitario", width: 80, align: Text.AlignRight},
                     {titulo: "VALOR (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
+
+            case 4: // ✅ Consultas - CORREGIDO para mostrar detalles completos
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 100},
+                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 150},
+                    {titulo: "DESCRIPCIÓN COMPLETA", campo: "descripcion", width: 400}, // ✅ Ancho aumentado
+                    {titulo: "PACIENTE", campo: "paciente", width: 200},
+                    {titulo: "DOCTOR", campo: "doctor_nombre", width: 200}, // ✅ Campo separado
+                    {titulo: "TIPO", campo: "tipo", width: 100},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                ]            
+
             default:
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
@@ -1099,7 +1114,12 @@ Item {
             case "fecha":
                 return registro.fecha || "---"
             case "descripcion":
-                return registro.descripcion || "---"
+                // ✅ CORRECCIÓN: Mostrar texto completo sin truncar
+                return registro.descripcion || "Sin detalles"
+            case "doctor_nombre":
+                return registro.doctor_nombre || "Sin doctor asignado"
+            case "especialidad":
+                return registro.especialidad || "Sin especialidad"
             case "cantidad":
                 return (registro.cantidad || 0).toString()
             case "valor":
