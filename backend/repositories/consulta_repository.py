@@ -196,8 +196,8 @@ class ConsultaRepository(BaseRepository):
         return consultation_id
     
     def update_consultation(self, consulta_id: int, detalles: str = None, 
-                       tipo_consulta: str = None, especialidad_id: int = None,
-                       fecha: datetime = None) -> bool:
+                   tipo_consulta: str = None, especialidad_id: int = None,
+                   fecha: datetime = None) -> bool:
         """Actualiza consulta existente"""
         # Verificar existencia
         if not self.get_by_id(consulta_id):
@@ -211,7 +211,23 @@ class ConsultaRepository(BaseRepository):
         
         if tipo_consulta is not None:
             if tipo_consulta.lower() in ['normal', 'emergencia']:
-                update_data['Tipo_Consulta'] = tipo_consulta.capitalize()  # CORREGIDO
+                update_data['Tipo_Consulta'] = tipo_consulta.capitalize()
+        
+        # ✅ AGREGAR ESTE BLOQUE:
+        if especialidad_id is not None:
+            try:
+                especialidad_id_int = int(especialidad_id)
+                if especialidad_id_int > 0:
+                    # Verificar que la especialidad existe
+                    if self._specialty_exists(especialidad_id_int):
+                        update_data['Id_Especialidad'] = especialidad_id_int
+                        print(f"🏥 Repository: Especialidad actualizada a ID {especialidad_id_int}")
+                    else:
+                        print(f"❌ Repository: Especialidad {especialidad_id_int} no existe")
+                else:
+                    print(f"❌ Repository: ID de especialidad inválido: {especialidad_id_int}")
+            except (ValueError, TypeError) as e:
+                print(f"❌ Repository: Error procesando especialidad_id: {e}")
         
         if fecha is not None:
             update_data['Fecha'] = fecha
@@ -221,11 +237,9 @@ class ConsultaRepository(BaseRepository):
         
         success = self.update(consulta_id, update_data)
         if success:
-            # AGREGAR: Invalidar cache después de actualizar
+            # Invalidar cache después de actualizar
             self.invalidate_consultation_caches()
             print(f"🔄 Cache invalidado después de actualizar consulta {consulta_id}")
-            print(f"🩺 Consulta actualizada: ID {consulta_id}")
-        if success:
             print(f"🩺 Consulta actualizada: ID {consulta_id}")
         
         return success

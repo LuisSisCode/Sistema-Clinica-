@@ -697,31 +697,9 @@ class LaboratorioModel(QObject):
             if not self._verificar_autenticacion():
                 return False, "Usuario no autenticado"
             
-            # 2. Admin puede editar todo
-            if self._usuario_actual_rol == "Administrador":
-                return True, "Administrador"
-            
-            # 3. Solo médicos pueden continuar
-            if self._usuario_actual_rol != "Médico":
-                return False, "Solo médicos y administradores pueden editar consultas"
-            
-            # 4. Obtener datos de la consulta
-            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
-            if not consulta:
-                return False, "Consulta no encontrada"
-            
-            # 5. Verificar propietario - médico solo edita sus consultas
-            usuario_registro = consulta.get('usuario_id') or consulta.get('Id_Usuario')
-            if usuario_registro != self._usuario_actual_id:
-                return False, "Solo puede editar sus propias consultas"
-            
-            # 6. Verificar límite de tiempo (7 días)
-            fecha_consulta = consulta.get('Fecha')
-            if not self._validar_fecha_edicion(fecha_consulta, 7):
-                return False, "Solo puede editar consultas de máximo 7 días"
-            
-            return True, "Médico propietario"
-            
+            # ✅ SIEMPRE PERMITIR EDICIÓN
+            return True, "Edición libre para todos"
+                
         except Exception as e:
             print(f"⚠️ Error verificando permisos de edición: {e}")
             return False, f"Error verificando permisos: {str(e)}"
