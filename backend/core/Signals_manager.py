@@ -4,6 +4,9 @@ from typing import Optional
 class GlobalSignalsManager(QObject):
     """Gestor global de señales para comunicación entre módulos desacoplados"""
     
+    # ===== AUTENTICACIÓN =====
+    usuarioAutenticadoCambiado = Signal(int, str)  # usuario_id, usuario_rol
+    
     # ===== LABORATORIO =====
     tipoAnalisisCreado = Signal(int, str, float, float)  # id, nombre, precio_normal, precio_emergencia
     tipoAnalisisActualizado = Signal(int, str)  # id, nombre

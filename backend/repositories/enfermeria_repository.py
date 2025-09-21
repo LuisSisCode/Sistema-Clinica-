@@ -290,6 +290,41 @@ class EnfermeriaRepository:
         except Exception as e:
             logger.error(f"❌ Error contando procedimientos filtrados: {e}")
             return 0
+        
+    def get_procedimiento_by_id(self, procedimiento_id: int) -> Optional[Dict[str, Any]]:
+        """Obtiene procedimiento por ID con información completa"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT 
+                        e.*,
+                        CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_nombre
+                    FROM Enfermeria e
+                    INNER JOIN Pacientes p ON e.Id_Paciente = p.id
+                    WHERE e.id = ?
+                """, (procedimiento_id,))
+                
+                resultado = cursor.fetchone()
+                
+                if resultado:
+                    return {
+                        'id': resultado.id,
+                        'Id_Paciente': resultado.Id_Paciente,
+                        'Id_Procedimiento': resultado.Id_Procedimiento,
+                        'Cantidad': resultado.Cantidad,
+                        'Tipo': resultado.Tipo,
+                        'Fecha': resultado.Fecha,
+                        'Id_Trabajador': resultado.Id_Trabajador,
+                        'Id_RegistradoPor': resultado.Id_RegistradoPor,
+                        'paciente_nombre': resultado.paciente_nombre
+                    }
+                
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error obteniendo procedimiento por ID: {e}")
+            return None
     
     # ===============================
     # OPERACIONES DE TIPOS DE PROCEDIMIENTOS (sin cambios)

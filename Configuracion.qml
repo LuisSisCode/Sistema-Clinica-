@@ -21,6 +21,9 @@ Item {
     // ===== PASO 2b: NUEVA PROPIEDAD PARA TIPOS DE TRABAJADORES DESDE MAIN.QML =====
     property var tiposTrabajadoresModel: []
     
+    // ===== NUEVA PROPIEDAD PARA VERIFICAR SI ES MÉDICO =====
+    readonly property bool isMedico: currentUserRole.toLowerCase().includes("médico") || currentUserRole.toLowerCase().includes("medico")
+    
     // ===== SISTEMA DE ESCALADO RESPONSIVO =====
     readonly property real baseUnit: Math.min(width, height) / 100
     readonly property real fontTiny: baseUnit * 1.2
@@ -161,23 +164,24 @@ Item {
             width: configuracionRoot.width
             spacing: marginMedium
 
-            // Header Principal
+            // Header Principal - Título condicional
             HeaderSection {
                 Layout.fillWidth: true
-                title: "Centro de Configuraciones"
-                subtitle: "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
+                title: isMedico ? "Configuración" : "Centro de Configuraciones"
+                subtitle: isMedico ? "Ajustes del sistema disponibles" : "Administra las configuraciones del sistema y personaliza cada módulo según tus necesidades"
                 icon: "Resources/iconos/configuraciones.png"
                 headerColor: primaryColor
+                visible: !isMedico // Ocultar completamente el header para médicos
             }
             
-
-            // Sección de Módulos
+            // Sección de Módulos - Ocultar para médicos
             ModulesSection {
                 Layout.fillWidth: true
                 Layout.margins: marginMedium
+                visible: !isMedico // Ocultar sección de módulos para médicos
             }
             
-            // Divisor elegante
+            // Divisor elegante - Ocultar para médicos
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 2
@@ -189,9 +193,10 @@ Item {
                     GradientStop { position: 0.5; color: borderColor }
                     GradientStop { position: 1.0; color: "transparent" }
                 }
+                visible: !isMedico // Ocultar divisor para médicos
             }
             
-            // Configuraciones Generales - DIVIDIDO EN DOS COLUMNAS
+            // Configuraciones Generales - Siempre visible
             GeneralConfigSection {
                 Layout.fillWidth: true
                 Layout.margins: marginMedium

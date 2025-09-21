@@ -93,37 +93,61 @@ class ConsultaRepository(BaseRepository):
             return []
     
     def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
-                                      apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente por cédula o crea uno nuevo si no existe"""
+                              apellido_materno: str = "", cedula: str = "") -> int:
+        """
+        ✅ MÉTODO CORREGIDO - Busca paciente de forma inteligente antes de crear uno nuevo
+        
+        Estrategia de búsqueda:
+        1. Si hay cédula → buscar por cédula exacta
+        2. Si no encuentra por cédula o no hay cédula → buscar por nombre completo
+        3. Solo si no encuentra por ningún método → crear nuevo paciente
+        """
         try:
             nombre = nombre.strip()
             apellido_paterno = apellido_paterno.strip()
             apellido_materno = apellido_materno.strip()
-            cedula_clean = cedula.strip() if cedula else ""
+            cedula_clean = cedula.strip() if cedula else None
             
-            # Validaciones básicas
+            # Validaciones básicas (sin cédula obligatoria)
             if not nombre or len(nombre) < 2:
-                raise ValidationError("nombre", nombre, "Nombre es obligatorio (mínimo 2 caracteres)")
+                raise ValidationError("nombre", nombre, "Nombre es obligatorio")
             if not apellido_paterno or len(apellido_paterno) < 2:
                 raise ValidationError("apellido_paterno", apellido_paterno, "Apellido paterno es obligatorio")
-            if not cedula_clean or len(cedula_clean) < 5:
-                raise ValidationError("cedula", cedula_clean, "Cédula es obligatoria (mínimo 5 dígitos)")
             
-            # 1. Buscar por cédula exacta primero
-            existing_patient = self.search_patient_by_cedula_exact(cedula_clean)
-            if existing_patient:
-                print(f"👤 Paciente existente encontrado: {existing_patient['nombre_completo']}")
-                return existing_patient['id']
+            print(f"🔍 Buscando paciente: {nombre} {apellido_paterno} {apellido_materno} - Cédula: {cedula_clean or 'N/A'}")
             
-            # 2. Crear nuevo paciente
-            patient_data = {
-                'Nombre': nombre,
-                'Apellido_Paterno': apellido_paterno,
-                'Apellido_Materno': apellido_materno,
-                'Cedula': cedula_clean
-            }
+            # ✅ ESTRATEGIA 1: Buscar por cédula si existe y es válida
+            if cedula_clean and len(cedula_clean) >= 5:
+                print(f"📋 Buscando por cédula: {cedula_clean}")
+                existing_patient = self.search_patient_by_cedula_exact(cedula_clean)
+                if existing_patient:
+                    print(f"✅ Paciente encontrado por cédula: {existing_patient['nombre_completo']} (ID: {existing_patient['id']})")
+                    return existing_patient['id']
+                else:
+                    print(f"❌ No se encontró paciente con cédula: {cedula_clean}")
             
-            # Insertar en tabla Pacientes
+            # ✅ ESTRATEGIA 2: Buscar por nombre completo (NUEVA LÓGICA)
+            nombre_completo_busqueda = f"{nombre} {apellido_paterno} {apellido_materno}".strip()
+            print(f"👤 Buscando por nombre completo: '{nombre_completo_busqueda}'")
+            
+            # Usar el método existente de búsqueda por nombre
+            pacientes_por_nombre = self.search_patient_by_full_name(nombre_completo_busqueda, limite=10)
+            
+            if pacientes_por_nombre:
+                # ✅ BUSCAR COINCIDENCIA EXACTA O MUY SIMILAR
+                paciente_encontrado = self._encontrar_mejor_coincidencia_nombre(
+                    nombre, apellido_paterno, apellido_materno, pacientes_por_nombre
+                )
+                
+                if paciente_encontrado:
+                    print(f"✅ Paciente encontrado por nombre: {paciente_encontrado['nombre_completo']} (ID: {paciente_encontrado['id']})")
+                    return paciente_encontrado['id']
+            
+            print(f"❌ No se encontró paciente existente")
+            
+            # ✅ ESTRATEGIA 3: Crear nuevo paciente solo si no se encontró por ningún método
+            print(f"➕ Creando nuevo paciente: {nombre} {apellido_paterno} {apellido_materno}")
+            
             query = """
             INSERT INTO Pacientes (Nombre, Apellido_Paterno, Apellido_Materno, Cedula)
             OUTPUT INSERTED.id
@@ -134,13 +158,13 @@ class ConsultaRepository(BaseRepository):
             patient_id = result['id'] if result else None
             
             if patient_id:
-                print(f"👤 Nuevo paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
+                print(f"✅ Nuevo paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
                 return patient_id
             else:
-                raise ValidationError("paciente", None, "Error creando paciente")
+                raise ValidationError("paciente", None, "Error creando paciente en base de datos")
             
         except Exception as e:
-            print(f"⚠️ Error gestionando paciente: {e}")
+            print(f"❌ Error gestionando paciente: {e}")
             raise ValidationError("paciente", str(e), "Error creando/buscando paciente")
     
     # ===============================
@@ -196,8 +220,8 @@ class ConsultaRepository(BaseRepository):
         return consultation_id
     
     def update_consultation(self, consulta_id: int, detalles: str = None, 
-                       tipo_consulta: str = None, especialidad_id: int = None,
-                       fecha: datetime = None) -> bool:
+                   tipo_consulta: str = None, especialidad_id: int = None,
+                   fecha: datetime = None) -> bool:
         """Actualiza consulta existente"""
         # Verificar existencia
         if not self.get_by_id(consulta_id):
@@ -211,7 +235,23 @@ class ConsultaRepository(BaseRepository):
         
         if tipo_consulta is not None:
             if tipo_consulta.lower() in ['normal', 'emergencia']:
-                update_data['Tipo_Consulta'] = tipo_consulta.capitalize()  # CORREGIDO
+                update_data['Tipo_Consulta'] = tipo_consulta.capitalize()
+        
+        # ✅ AGREGAR ESTE BLOQUE:
+        if especialidad_id is not None:
+            try:
+                especialidad_id_int = int(especialidad_id)
+                if especialidad_id_int > 0:
+                    # Verificar que la especialidad existe
+                    if self._specialty_exists(especialidad_id_int):
+                        update_data['Id_Especialidad'] = especialidad_id_int
+                        print(f"🏥 Repository: Especialidad actualizada a ID {especialidad_id_int}")
+                    else:
+                        print(f"❌ Repository: Especialidad {especialidad_id_int} no existe")
+                else:
+                    print(f"❌ Repository: ID de especialidad inválido: {especialidad_id_int}")
+            except (ValueError, TypeError) as e:
+                print(f"❌ Repository: Error procesando especialidad_id: {e}")
         
         if fecha is not None:
             update_data['Fecha'] = fecha
@@ -221,11 +261,9 @@ class ConsultaRepository(BaseRepository):
         
         success = self.update(consulta_id, update_data)
         if success:
-            # AGREGAR: Invalidar cache después de actualizar
+            # Invalidar cache después de actualizar
             self.invalidate_consultation_caches()
             print(f"🔄 Cache invalidado después de actualizar consulta {consulta_id}")
-            print(f"🩺 Consulta actualizada: ID {consulta_id}")
-        if success:
             print(f"🩺 Consulta actualizada: ID {consulta_id}")
         
         return success
@@ -584,6 +622,88 @@ class ConsultaRepository(BaseRepository):
         
         return self._execute_query(base_query, tuple(params))
     
+    def search_patient_by_full_name(self, nombre_completo: str, limite: int = 10) -> List[Dict[str, Any]]:
+        """
+        ✅ MÉTODO MEJORADO - Búsqueda más robusta por nombre completo
+        
+        Mejoras:
+        - Búsqueda con múltiples estrategias
+        - Manejo de apellidos opcionales
+        - Ordenamiento por relevancia
+        """
+        try:
+            if not nombre_completo or len(nombre_completo.strip()) < 3:
+                return []
+            
+            nombre_limpio = nombre_completo.strip()
+            print(f"🔍 Búsqueda mejorada por nombre: '{nombre_limpio}'")
+            
+            # ✅ ESTRATEGIA 1: Búsqueda exacta
+            query_exacta = """
+            SELECT TOP (?)
+                id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo,
+                1 as relevancia
+            FROM Pacientes
+            WHERE CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) = ?
+            """
+            
+            resultados_exactos = self._execute_query(query_exacta, (limite, nombre_limpio))
+            
+            if resultados_exactos:
+                print(f"✅ Encontradas {len(resultados_exactos)} coincidencias exactas")
+                return resultados_exactos
+            
+            # ✅ ESTRATEGIA 2: Búsqueda con LIKE (contiene)
+            query_like = """
+            SELECT TOP (?)
+                id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo,
+                2 as relevancia
+            FROM Pacientes
+            WHERE CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) LIKE ?
+            """
+            
+            pattern_like = f"%{nombre_limpio}%"
+            resultados_like = self._execute_query(query_like, (limite, pattern_like))
+            
+            if resultados_like:
+                print(f"✅ Encontradas {len(resultados_like)} coincidencias parciales")
+                return resultados_like
+            
+            # ✅ ESTRATEGIA 3: Búsqueda por palabras individuales
+            palabras = nombre_limpio.split()
+            if len(palabras) >= 2:
+                query_palabras = """
+                SELECT TOP (?)
+                    id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+                    CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo,
+                    3 as relevancia
+                FROM Pacientes
+                WHERE Nombre LIKE ? OR Apellido_Paterno LIKE ?
+                ORDER BY 
+                    CASE WHEN Nombre LIKE ? THEN 1 ELSE 2 END,
+                    Nombre, Apellido_Paterno
+                """
+                
+                palabra1_pattern = f"%{palabras[0]}%"
+                palabra2_pattern = f"%{palabras[1]}%" if len(palabras) > 1 else palabra1_pattern
+                
+                resultados_palabras = self._execute_query(query_palabras, (
+                    limite, palabra1_pattern, palabra2_pattern, palabra1_pattern
+                ))
+                
+                if resultados_palabras:
+                    print(f"✅ Encontradas {len(resultados_palabras)} coincidencias por palabras")
+                    return resultados_palabras
+            
+            print(f"❌ No se encontraron pacientes con nombre: '{nombre_limpio}'")
+            return []
+            
+        except Exception as e:
+            print(f"❌ Error en búsqueda mejorada por nombre: {e}")
+            return []
+    
     # ===============================
     # ESTADÍSTICAS - CORREGIDAS
     # ===============================
@@ -764,7 +884,102 @@ class ConsultaRepository(BaseRepository):
     def validate_consultation_exists(self, consulta_id: int) -> bool:
         """Valida que la consulta existe"""
         return self.exists('id', consulta_id)
-    
+    def _encontrar_mejor_coincidencia_nombre(self, nombre: str, apellido_paterno: str, 
+                                      apellido_materno: str, candidatos: List[Dict]) -> Optional[Dict]:
+        """
+        ✅ NUEVO MÉTODO - Encuentra la mejor coincidencia por nombre entre los candidatos
+        
+        Prioridades de coincidencia:
+        1. Coincidencia exacta completa
+        2. Coincidencia de nombre + apellido paterno
+        3. Coincidencia similar con tolerancia a errores menores
+        """
+        if not candidatos:
+            return None
+        
+        nombre_target = nombre.lower().strip()
+        apellido_p_target = apellido_paterno.lower().strip()
+        apellido_m_target = apellido_materno.lower().strip() if apellido_materno else ""
+        
+        print(f"🎯 Buscando mejor coincidencia para: '{nombre_target} {apellido_p_target} {apellido_m_target}'")
+        
+        mejor_candidato = None
+        mejor_score = 0
+        
+        for candidato in candidatos:
+            nombre_db = candidato.get('Nombre', '').lower().strip()
+            apellido_p_db = candidato.get('Apellido_Paterno', '').lower().strip()
+            apellido_m_db = candidato.get('Apellido_Materno', '').lower().strip() if candidato.get('Apellido_Materno') else ""
+            
+            score = 0
+            
+            # ✅ COINCIDENCIA EXACTA COMPLETA (máxima prioridad)
+            if (nombre_db == nombre_target and 
+                apellido_p_db == apellido_p_target and 
+                apellido_m_db == apellido_m_target):
+                print(f"🎯 Coincidencia exacta completa: {candidato['nombre_completo']}")
+                return candidato
+            
+            # ✅ COINCIDENCIA NOMBRE + APELLIDO PATERNO (alta prioridad)
+            if nombre_db == nombre_target and apellido_p_db == apellido_p_target:
+                score = 90
+                print(f"🎯 Coincidencia nombre + apellido paterno: {candidato['nombre_completo']} (score: {score})")
+            
+            # ✅ COINCIDENCIA CON TOLERANCIA (prioridad media)
+            elif (self._nombres_similares(nombre_db, nombre_target) and 
+                self._nombres_similares(apellido_p_db, apellido_p_target)):
+                score = 70
+                print(f"🎯 Coincidencia similar: {candidato['nombre_completo']} (score: {score})")
+            
+            # ✅ COINCIDENCIA PARCIAL (baja prioridad)
+            elif (nombre_db == nombre_target or apellido_p_db == apellido_p_target):
+                score = 50
+                print(f"🎯 Coincidencia parcial: {candidato['nombre_completo']} (score: {score})")
+            
+            # Actualizar mejor candidato
+            if score > mejor_score:
+                mejor_score = score
+                mejor_candidato = candidato
+        
+        # ✅ RETORNAR SOLO SI LA COINCIDENCIA ES SUFICIENTEMENTE BUENA
+        if mejor_score >= 70:  # Umbral mínimo de confianza
+            print(f"✅ Mejor candidato seleccionado: {mejor_candidato['nombre_completo']} (score: {mejor_score})")
+            return mejor_candidato
+        else:
+            print(f"❌ Ningún candidato cumple el umbral mínimo (mejor score: {mejor_score})")
+            return None
+        
+    def _nombres_similares(self, nombre1: str, nombre2: str, tolerancia: float = 0.8) -> bool:
+        """
+        ✅ NUEVO MÉTODO - Compara similaridad entre nombres con tolerancia a errores menores
+        
+        Usa ratio de similaridad simple para detectar errores de tipeo
+        """
+        if not nombre1 or not nombre2:
+            return False
+        
+        if nombre1 == nombre2:
+            return True
+        
+        # Similaridad simple basada en caracteres comunes
+        len_max = max(len(nombre1), len(nombre2))
+        len_min = min(len(nombre1), len(nombre2))
+        
+        if len_max == 0:
+            return False
+        
+        # Si uno es significativamente más largo que el otro, no son similares
+        if len_min / len_max < 0.6:
+            return False
+        
+        # Contar caracteres comunes en posiciones similares
+        caracteres_comunes = 0
+        for i in range(min(len(nombre1), len(nombre2))):
+            if nombre1[i] == nombre2[i]:
+                caracteres_comunes += 1
+        
+        ratio = caracteres_comunes / len_max
+        return ratio >= tolerancia
     # ===============================
     # REPORTES - CORREGIDOS
     # ===============================

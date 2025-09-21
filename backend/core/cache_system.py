@@ -62,7 +62,7 @@ class CacheSystem:
                 entry = self._cache[cache_key]
                 if not self._is_expired(entry):
                     self._hits += 1
-                    print(f"🎯 Cache HIT: {cache_type} - {cache_key[:8]}")
+                    #print(f"🎯 Cache HIT: {cache_type} - {cache_key[:8]}")
                     return entry['data']
                 else:
                     # Entrada expirada
@@ -95,7 +95,7 @@ class CacheSystem:
                 'cache_type': cache_type,
                 'query_hash': cache_key[:8]
             }
-            print(f"💾 Cache SET: {cache_type} - TTL:{ttl}s - {cache_key[:8]}")
+            #print(f"💾 Cache SET: {cache_type} - TTL:{ttl}s - {cache_key[:8]}")
         
         # Limpieza ocasional
         if len(self._cache) % 50 == 0:

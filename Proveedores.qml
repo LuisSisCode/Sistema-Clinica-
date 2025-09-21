@@ -142,21 +142,6 @@ Item {
                     RowLayout {
                         spacing: 8  // Espacio entre icono y texto
                         
-                        Image {
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 18
-                            source: "Resources/iconos/proveedor.png"
-                            fillMode: Image.PreserveAspectFit
-                            antialiasing: true
-                            opacity: 0.7  // Ligeramente transparente para efecto sutil
-                            
-                            onStatusChanged: {
-                                if (status === Image.Error) {
-                                    console.log("❌ Error cargando icono pequeño de proveedor")
-                                    visible = false
-                                }
-                            }
-                        }
                         
                         Label {
                             text: "Gestión de Proveedores"

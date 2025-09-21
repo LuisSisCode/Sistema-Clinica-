@@ -16,6 +16,9 @@ Item {
     property string trabajadorIdToDelete: ""
     property bool showConfirmDeleteDialog: false
     
+    // ✅ USAR INSTANCIA AUTENTICADA DEL APPCONTROLLER
+    readonly property var trabajadorModel: appController.trabajador_model_instance
+    
     // ===== COLORES MODERNOS =====
     readonly property color primaryColor: "#3498DB"
     readonly property color successColor: "#10B981"
@@ -34,7 +37,12 @@ Item {
     readonly property color violetColor: "#9b59b6"
     readonly property color infoColor: "#17a2b8"
 
-    // ✅ AGREGAR TIMER PARA ACTUALIZACIÓN AUTOMÁTICA
+    // Propiedades de roles y permisos
+    readonly property string usuarioActualRol: authModel ? authModel.userRole || "" : ""
+    readonly property bool esAdministrador: usuarioActualRol === "Administrador" 
+    readonly property bool esMedico: usuarioActualRol === "Médico"
+
+    // ✅ TIMER PARA ACTUALIZACIÓN AUTOMÁTICA
     Timer {
         id: updateTimer
         interval: 500  // 500ms de delay
@@ -65,27 +73,25 @@ Item {
         updateTimer.start()
     }
     
-    // ===== MODELO DE DATOS REAL =====
-    TrabajadorModel {
-        id: trabajadorModel
+    // ✅ CONEXIONES MEJORADAS CON VERIFICACIÓN DE INSTANCIA
+    Connections {
+        target: trabajadorModel
+        enabled: trabajadorModel !== null
         
-        // ✅ CONEXIÓN MEJORADA - RECARGA INMEDIATA
-        onTrabajadoresChanged: {
-            console.log("✅ Trabajadores actualizados desde BD:", trabajadorModel.totalTrabajadores)
+        function onTrabajadoresChanged() {
+            console.log("✅ Trabajadores actualizados desde BD:", trabajadorModel ? trabajadorModel.totalTrabajadores : 0)
             // Aplicar filtros inmediatamente cuando cambien los datos
             Qt.callLater(aplicarFiltros)
         }
         
-        // ✅ CONEXIÓN MEJORADA - TIPOS ACTUALIZADOS
-        onTiposTrabajadorChanged: {
-            console.log("🏷️ Tipos de trabajador actualizados:", trabajadorModel.tiposTrabajador.length)
+        function onTiposTrabajadorChanged() {
+            console.log("🏷️ Tipos de trabajador actualizados:", trabajadorModel ? trabajadorModel.tiposTrabajador.length : 0)
             // Actualizar ComboBoxes
-            filtroTipo.model = getTiposTrabajadoresNombres()
-            tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
+            if (filtroTipo) filtroTipo.model = getTiposTrabajadoresNombres()
+            if (tipoTrabajadorCombo) tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
         }
         
-        // ✅ CONEXIÓN MEJORADA - TRABAJADOR CREADO
-        onTrabajadorCreado: function(success, message) {
+        function onTrabajadorCreado(success, message) {
             console.log("📋 Signal trabajadorCreado recibido:", success, message)
             
             if (success) {
@@ -102,13 +108,13 @@ Item {
                 }
                 
                 // ✅ REFRESCAR MODELO INMEDIATAMENTE
-                trabajadorModel.refrescarDatosInmediato()
+                if (trabajadorModel && trabajadorModel.refrescarDatosInmediato) {
+                    trabajadorModel.refrescarDatosInmediato()
+                }
             }
-            
-            console.log("Trabajador creado:", success, message)
         }
         
-        onTrabajadorActualizado: function(success, message) {
+        function onTrabajadorActualizado(success, message) {
             if (success) {
                 showNewWorkerDialog = false
                 selectedRowIndex = -1
@@ -123,7 +129,7 @@ Item {
             console.log("Trabajador actualizado:", success, message)
         }
         
-        onTrabajadorEliminado: function(success, message) {
+        function onTrabajadorEliminado(success, message) {
             if (success) {
                 selectedRowIndex = -1
                 
@@ -135,7 +141,7 @@ Item {
             console.log("Trabajador eliminado:", success, message)
         }
         
-        onErrorOccurred: function(title, message) {
+        function onErrorOccurred(title, message) {
             console.error("Error en TrabajadorModel:", title, message)
         }
     }
@@ -157,8 +163,13 @@ Item {
     readonly property real colMatricula: 0.15
     readonly property real colFecha: 0.10
 
-    // ===== FUNCIONES HELPER =====
+    // ===== FUNCIONES HELPER MEJORADAS =====
     function getTiposTrabajadoresNombres() {
+        if (!trabajadorModel || !trabajadorModel.tiposTrabajador) {
+            console.warn("⚠️ TrabajadorModel o tiposTrabajador no disponible")
+            return ["Todos los tipos"]
+        }
+        
         var nombres = ["Todos los tipos"]
         var tipos = trabajadorModel.tiposTrabajador
         for (var i = 0; i < tipos.length; i++) {
@@ -168,6 +179,11 @@ Item {
     }
 
     function getTiposTrabajadoresParaCombo() {
+        if (!trabajadorModel || !trabajadorModel.tiposTrabajador) {
+            console.warn("⚠️ TrabajadorModel o tiposTrabajador no disponible")
+            return ["Seleccionar tipo..."]
+        }
+        
         var nombres = ["Seleccionar tipo..."]
         var tipos = trabajadorModel.tiposTrabajador
         for (var i = 0; i < tipos.length; i++) {
@@ -269,6 +285,8 @@ Item {
                             Layout.preferredHeight: baseUnit * 5
                             Layout.preferredWidth: Math.max(baseUnit * 20, implicitWidth + baseUnit * 2)
                             Layout.alignment: Qt.AlignVCenter
+                            visible: esAdministrador || esMedico
+                            enabled: esAdministrador || esMedico
                             
                             background: Rectangle {
                                 color: newWorkerBtn.pressed ? Qt.darker(primaryColor, 1.1) : 
@@ -827,7 +845,9 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            
+                                            visible: selectedRowIndex === index && (esAdministrador || esMedico)
+                                            enabled: esAdministrador || (trabajadorModel && trabajadorModel.puedeEditarTrabajador ? trabajadorModel.puedeEditarTrabajador(parseInt(model.trabajadorId)) : false)
+    
                                             background: Rectangle {
                                                 color: "transparent"
                                             }
@@ -853,12 +873,20 @@ Item {
                                             onHoveredChanged: {
                                                 editIcon.opacity = hovered ? 0.7 : 1.0
                                             }
+                                            ToolTip.text: {
+                                                if (!esAdministrador && !esMedico) return "Sin permisos"
+                                                if (esAdministrador) return "Editar trabajador"
+                                                if (!enabled) return "No se puede editar: trabajador de más de 30 días"
+                                                return "Editar trabajador (máximo 30 días)"
+                                            }
                                         }
 
                                         Button {
                                             id: deleteButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
+                                            visible: selectedRowIndex === index && esAdministrador
+                                            enabled: esAdministrador
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -880,9 +908,9 @@ Item {
                                             }
                                             
                                             // Efecto hover
-                                            onHoveredChanged: {
-                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
-                                            }
+                                            
+                                            ToolTip.text: esAdministrador ? "Eliminar trabajador" : "Eliminar trabajador (solo administradores)"
+                                            ToolTip.visible: hovered
                                         }
                                     }
                                 }
@@ -894,18 +922,24 @@ Item {
         }
     }
 
-    // ✅ MEJORAR LA FUNCIÓN aplicarFiltros() - BUSCA ESTA FUNCIÓN Y REEMPLÁZALA:
+    // ✅ FUNCIÓN aplicarFiltros() MEJORADA CON VERIFICACIONES
     function aplicarFiltros() {
         console.log("🔍 Aplicando filtros...")
+        
+        // ✅ VERIFICAR QUE TRABAJADORMODEL ESTÉ DISPONIBLE
+        if (!trabajadorModel) {
+            console.warn("⚠️ TrabajadorModel no disponible")
+            return
+        }
         
         // Limpiar modelo actual
         trabajadoresListModel.clear()
         
-        var textoBusqueda = campoBusqueda.text.toLowerCase()
-        var tipoSeleccionado = filtroTipo.currentIndex
+        var textoBusqueda = campoBusqueda ? campoBusqueda.text.toLowerCase() : ""
+        var tipoSeleccionado = filtroTipo ? filtroTipo.currentIndex : 0
         
         // Obtener trabajadores desde el modelo
-        var trabajadores = trabajadorModel.trabajadores
+        var trabajadores = trabajadorModel.trabajadores || []
         
         console.log("📊 Total trabajadores disponibles:", trabajadores.length)
         
@@ -914,7 +948,7 @@ Item {
             var mostrar = true
             
             // Filtro por tipo
-            if (tipoSeleccionado > 0 && mostrar) {
+            if (tipoSeleccionado > 0 && mostrar && filtroTipo) {
                 var tipoNombre = filtroTipo.model[tipoSeleccionado]
                 if (trabajador.tipo_nombre !== tipoNombre) {
                     mostrar = false
@@ -994,7 +1028,7 @@ Item {
         
         // Función para cargar datos en modo edición
         function loadEditData() {
-            if (isEditMode && editingIndex >= 0) {
+            if (isEditMode && editingIndex >= 0 && trabajadorModel) {
                 var trabajadorData = trabajadoresListModel.get(editingIndex)
                 var trabajadorId = parseInt(trabajadorData.trabajadorId)
                 
@@ -1003,17 +1037,17 @@ Item {
                 
                 if (trabajadorCompleto && Object.keys(trabajadorCompleto).length > 0) {
                     // Cargar datos de forma segura
-                    nombreTrabajador.text = trabajadorCompleto.Nombre || ""
-                    apellidoPaterno.text = trabajadorCompleto.Apellido_Paterno || ""
-                    apellidoMaterno.text = trabajadorCompleto.Apellido_Materno || ""
-                    especialidadField.text = trabajadorCompleto.Especialidad || ""
-                    matriculaField.text = trabajadorCompleto.Matricula || ""
+                    if (nombreTrabajador) nombreTrabajador.text = trabajadorCompleto.Nombre || ""
+                    if (apellidoPaterno) apellidoPaterno.text = trabajadorCompleto.Apellido_Paterno || ""
+                    if (apellidoMaterno) apellidoMaterno.text = trabajadorCompleto.Apellido_Materno || ""
+                    if (especialidadField) especialidadField.text = trabajadorCompleto.Especialidad || ""
+                    if (matriculaField) matriculaField.text = trabajadorCompleto.Matricula || ""
                     
                     // Buscar el tipo de trabajador correspondiente
-                    var tipos = trabajadorModel.tiposTrabajador
+                    var tipos = trabajadorModel.tiposTrabajador || []
                     for (var i = 0; i < tipos.length; i++) {
                         if (tipos[i].id === trabajadorCompleto.Id_Tipo_Trabajador) {
-                            tipoTrabajadorCombo.currentIndex = i + 1
+                            if (tipoTrabajadorCombo) tipoTrabajadorCombo.currentIndex = i + 1
                             workerForm.selectedTipoTrabajadorIndex = i
                             break
                         }
@@ -1027,12 +1061,12 @@ Item {
                 loadEditData()
             } else if (visible && !isEditMode) {
                 // Limpiar formulario para nuevo trabajador
-                nombreTrabajador.text = ""
-                apellidoPaterno.text = ""
-                apellidoMaterno.text = ""
-                especialidadField.text = ""
-                matriculaField.text = ""
-                tipoTrabajadorCombo.currentIndex = 0
+                if (nombreTrabajador) nombreTrabajador.text = ""
+                if (apellidoPaterno) apellidoPaterno.text = ""
+                if (apellidoMaterno) apellidoMaterno.text = ""
+                if (especialidadField) especialidadField.text = ""
+                if (matriculaField) matriculaField.text = ""
+                if (tipoTrabajadorCombo) tipoTrabajadorCombo.currentIndex = 0
                 workerForm.selectedTipoTrabajadorIndex = -1
             }
         }
@@ -1408,7 +1442,7 @@ Item {
                         id: saveButton
                         text: isEditMode ? "Actualizar" : "Guardar"
                         enabled: workerForm.selectedTipoTrabajadorIndex >= 0 && 
-                                nombreTrabajador.text.length > 0
+                                (nombreTrabajador ? nombreTrabajador.text.length > 0 : false)
                         Layout.preferredWidth: baseUnit * 15
                         Layout.preferredHeight: baseUnit * 4.5
                         
@@ -1430,14 +1464,25 @@ Item {
                         }
                         
                         onClicked: {
-                            console.log("Botón Guardar presionado...")
+                            console.log("🔐 DEBUG AUTENTICACIÓN - Botón Guardar presionado...")
+                            
+                            // ✅ VERIFICAR TRABAJADORMODEL Y AUTENTICACIÓN
+                            if (!trabajadorModel) {
+                                console.error("❌ ERROR: TrabajadorModel no disponible")
+                                return
+                            }
+                            
+                            // ✅ DEBUG DE AUTENTICACIÓN
+                            console.log("🔍 Estado de autenticación:")
+                            console.log("   - trabajadorModel.usuario_actual_id:", trabajadorModel.usuario_actual_id || "undefined")
+                            console.log("   - trabajadorModel.esAdministrador():", trabajadorModel.esAdministrador ? trabajadorModel.esAdministrador() : "undefined")
                             
                             // Obtener valores de forma segura
-                            var nombre = nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
-                            var apellidoPat = apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
-                            var apellidoMat = apellidoMaterno.text ? apellidoMaterno.text.trim() : ""
-                            var especialidad = especialidadField.text ? especialidadField.text.trim() : ""
-                            var matricula = matriculaField.text ? matriculaField.text.trim() : ""
+                            var nombre = nombreTrabajador && nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
+                            var apellidoPat = apellidoPaterno && apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
+                            var apellidoMat = apellidoMaterno && apellidoMaterno.text ? apellidoMaterno.text.trim() : ""
+                            var especialidad = especialidadField && especialidadField.text ? especialidadField.text.trim() : ""
+                            var matricula = matriculaField && matriculaField.text ? matriculaField.text.trim() : ""
                             
                             // Validaciones
                             if (!nombre || nombre === "") {
@@ -1456,7 +1501,13 @@ Item {
                             }
                             
                             // Obtener ID del tipo de trabajador
-                            var tipoTrabajadorId = trabajadorModel.tiposTrabajador[workerForm.selectedTipoTrabajadorIndex].id
+                            var tipos = trabajadorModel.tiposTrabajador || []
+                            if (tipos.length === 0) {
+                                console.error("❌ No hay tipos de trabajador disponibles")
+                                return
+                            }
+                            
+                            var tipoTrabajadorId = tipos[workerForm.selectedTipoTrabajadorIndex].id
                             
                             console.log("Datos a guardar:", {
                                 nombre: nombre,
@@ -1743,6 +1794,11 @@ Item {
                             onClicked: {
                                 console.log("🗑️ Confirmando eliminación de trabajador...")
                                 
+                                if (!trabajadorModel) {
+                                    console.error("❌ TrabajadorModel no disponible para eliminación")
+                                    return
+                                }
+                                
                                 var trabajadorId = parseInt(trabajadorIdToDelete)
                                 var success = trabajadorModel.eliminarTrabajador(trabajadorId)
                                 
@@ -1767,21 +1823,33 @@ Item {
         }
     }
 
-    // ===== INICIALIZACIÓN =====
+    // ===== INICIALIZACIÓN MEJORADA =====
     Component.onCompleted: {
         console.log("💥 Módulo Trabajadores iniciado")
         console.log("🔗 Señal irAConfigPersonal configurada para navegación")
         
-        // ✅ CARGAR DATOS INICIALES
-        console.log("📊 Cargando datos iniciales de trabajadores...")
+        // ✅ VERIFICAR DISPONIBILIDAD DE APPCONTROLLER Y TRABAJADORMODEL
+        if (typeof appController === "undefined") {
+            console.error("❌ CRÍTICO: appController no está disponible")
+            return
+        }
+        
+        console.log("✅ AppController disponible")
         
         // Esperar a que el modelo esté listo
         Qt.callLater(function() {
             if (trabajadorModel) {
                 console.log("✅ TrabajadorModel disponible")
                 
+                // ✅ DEBUG DE AUTENTICACIÓN AL INICIO
+                console.log("🔐 Verificando autenticación inicial:")
+                console.log("   - trabajadorModel.usuario_actual_id:", trabajadorModel.usuario_actual_id || "undefined")
+                console.log("   - trabajadorModel.esAdministrador():", trabajadorModel.esAdministrador ? trabajadorModel.esAdministrador() : "undefined")
+                
                 // Recargar datos para asegurar que están actualizados
-                trabajadorModel.recargarDatos()
+                if (trabajadorModel.recargarDatos) {
+                    trabajadorModel.recargarDatos()
+                }
                 
                 // Configurar ComboBoxes
                 if (filtroTipo) {
@@ -1792,35 +1860,13 @@ Item {
                     tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
                 }
                 
-                // ✅ AGREGAR ESTA LÍNEA:
+                // ✅ APLICAR FILTROS INICIAL
                 aplicarFiltros()
                 
                 console.log("🎯 Inicialización completa")
             } else {
-                console.log("⚠️ TrabajadorModel no disponible")
+                console.error("❌ TrabajadorModel no disponible")
             }
         })
-    }
-
-    // ✅ AGREGAR CONNECTIONS PARA DEBUGGING
-    Connections {
-        target: trabajadorModel
-        
-        function onTrabajadoresChanged() {
-            console.log("🔄 Signal trabajadoresChanged detectado")
-            console.log("📊 Total trabajadores:", trabajadorModel.totalTrabajadores)
-            
-            // Actualizar automáticamente
-            aplicarFiltros()
-        }
-        
-        function onTiposTrabajadorChanged() {
-            console.log("🏷️ Signal tiposTrabajadorChanged detectado")
-            console.log("📊 Total tipos:", trabajadorModel.tiposTrabajador.length)
-            
-            // Actualizar ComboBoxes
-            filtroTipo.model = getTiposTrabajadoresNombres()
-            tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
-        }
     }
 }

@@ -25,9 +25,18 @@ ScrollView {
     readonly property color enfermeriaColor: "#9b59b6"
     readonly property color serviciosColor: "#34495e"
 
+        
+    // 1. AGREGAR PROPIEDADES PARA DATOS REALES 
+    property var productosProximosVencer: []
+    property var productosVencidos: []
+    property bool datosVencimientosCargados: false
+
     // CONEXIÓN CON MODELO REAL DE BD
     property var dashboardModel: appController ? appController.dashboard_model_instance : null
     
+    // Referencia al inventarioModel para obtener datos de vencimientos
+    property var inventarioModel: appController ? appController.inventario_model_instance : null
+
     // Sistema de filtrado jerárquico: Año -> Mes
     property string currentPeriodType: "mes" // "hoy", "semana", "mes", "año"
     property int selectedMonth: new Date().getMonth() + 1  // Mes actual por defecto
@@ -52,6 +61,29 @@ ScrollView {
         var months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                       "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
         return months[monthIndex]
+    }
+
+    // 3. FUNCIÓN PARA FORMATEAR FECHA (agregar en las funciones de utilidad)
+    function formatearFechaVencimiento(fechaStr) {
+        if (!fechaStr) return "Sin fecha"
+        
+        try {
+            var fecha = new Date(fechaStr)
+            var hoy = new Date()
+            var diferencia = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24))
+            
+            if (diferencia < 0) {
+                return "Vencido (" + Math.abs(diferencia) + " días)"
+            } else if (diferencia === 0) {
+                return "Vence hoy"
+            } else if (diferencia === 1) {
+                return "Vence mañana"
+            } else {
+                return "Vence en " + diferencia + " días"
+            }
+        } catch (e) {
+            return fechaStr
+        }
     }
     
     // MODIFICADO: Función para generar meses del año seleccionado
@@ -200,7 +232,111 @@ ScrollView {
                 return "PERÍODO"
         }
     }
+
+    // 2. FUNCIÓN PARA CARGAR PRODUCTOS POR VENCER (agregar en las funciones)
+    function cargarProductosVencimientos() {
+        if (!inventarioModel) {
+            console.log("⚠️ InventarioModel no disponible para vencimientos")
+            return
+        }
+        
+        try {
+            console.log("📅 Cargando productos próximos a vencer...")
+            
+            // Obtener lotes próximos a vencer (60 días)
+            if (typeof inventarioModel.get_lotes_por_vencer === 'function') {
+                var lotesProximos = inventarioModel.get_lotes_por_vencer(60) || []
+                
+                // Convertir lotes a productos únicos
+                var productosUnicos = {}
+                
+                for (var i = 0; i < lotesProximos.length; i++) {
+                    var lote = lotesProximos[i]
+                    var stockLote = (lote.Cantidad_Caja || 0) * (lote.Cantidad_Unitario || 0)
+                    
+                    if (stockLote > 0) {  // Solo lotes con stock
+                        var codigo = lote.Codigo
+                        
+                        if (!productosUnicos[codigo]) {
+                            productosUnicos[codigo] = {
+                                producto: lote.Producto_Nombre || lote.Nombre || codigo,
+                                codigo: codigo,
+                                cantidad: stockLote,
+                                fecha: lote.Fecha_Vencimiento,
+                                dias_para_vencer: lote.Dias_Para_Vencer || 0,
+                                urgencia: (lote.Dias_Para_Vencer <= 7) ? "urgent" : "normal"
+                            }
+                        } else {
+                            // Si ya existe, sumar stock y usar la fecha más próxima
+                            productosUnicos[codigo].cantidad += stockLote
+                            if (lote.Dias_Para_Vencer < productosUnicos[codigo].dias_para_vencer) {
+                                productosUnicos[codigo].fecha = lote.Fecha_Vencimiento
+                                productosUnicos[codigo].dias_para_vencer = lote.Dias_Para_Vencer
+                                productosUnicos[codigo].urgencia = (lote.Dias_Para_Vencer <= 7) ? "urgent" : "normal"
+                            }
+                        }
+                    }
+                }
+                
+                // Convertir objeto a array
+                productosProximosVencer = []
+                for (var codigo in productosUnicos) {
+                    productosProximosVencer.push(productosUnicos[codigo])
+                }
+                
+                console.log("✅ Productos próximos a vencer cargados:", productosProximosVencer.length)
+                
+            } else {
+                console.log("⚠️ Método get_lotes_por_vencer no disponible")
+            }
+            
+            // Obtener productos vencidos
+            if (typeof inventarioModel.get_lotes_vencidos === 'function') {
+                var lotesVencidos = inventarioModel.get_lotes_vencidos() || []
+                
+                var vencidosUnicos = {}
+                
+                for (var j = 0; j < lotesVencidos.length; j++) {
+                    var loteVencido = lotesVencidos[j]
+                    var stockVencido = (loteVencido.Cantidad_Caja || 0) * (loteVencido.Cantidad_Unitario || 0)
+                    
+                    if (stockVencido > 0) {
+                        var codigoVencido = loteVencido.Codigo
+                        
+                        if (!vencidosUnicos[codigoVencido]) {
+                            vencidosUnicos[codigoVencido] = {
+                                producto: loteVencido.Producto_Nombre || loteVencido.Nombre || codigoVencido,
+                                codigo: codigoVencido,
+                                cantidad: stockVencido,
+                                fecha: loteVencido.Fecha_Vencimiento,
+                                dias_vencido: loteVencido.Dias_Vencido || 0,
+                                urgencia: "expired"
+                            }
+                        } else {
+                            vencidosUnicos[codigoVencido].cantidad += stockVencido
+                        }
+                    }
+                }
+                
+                productosVencidos = []
+                for (var codigoV in vencidosUnicos) {
+                    productosVencidos.push(vencidosUnicos[codigoV])
+                }
+                
+                console.log("🚨 Productos vencidos cargados:", productosVencidos.length)
+            }
+            
+            datosVencimientosCargados = true
+            
+        } catch (error) {
+            console.log("❌ Error cargando vencimientos:", error)
+            productosProximosVencer = []
+            productosVencidos = []
+            datosVencimientosCargados = false
+        }
+    }
     
+
     // Signal para notificar cambios en el período
     signal periodChanged(string newPeriodType)
     
@@ -208,10 +344,17 @@ ScrollView {
         // Inicializar conexión con modelo
         if (dashboardModel) {
             console.log("📊 Dashboard conectado con modelo de BD")
-            // Establecer período inicial
             dashboardModel.cambiarPeriodo(currentPeriodType)
         } else {
             console.log("⚠️ Dashboard model no disponible")
+        }
+        
+        // NUEVO: Cargar datos de vencimientos
+        if (inventarioModel) {
+            console.log("📅 Cargando datos de vencimientos al inicializar...")
+            Qt.callLater(cargarProductosVencimientos)
+        } else {
+            console.log("⚠️ InventarioModel no disponible para vencimientos")
         }
     }
     
@@ -979,6 +1122,57 @@ ScrollView {
                                 font.pixelSize: 18
                                 font.bold: true
                             }
+                            
+                            Item { Layout.fillWidth: true }
+                            
+                            // Botón para actualizar vencimientos
+                            Button {
+                                Layout.preferredWidth: 40
+                                Layout.preferredHeight: 40
+                                text: "🔄"
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                    radius: 20
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    console.log("🔄 Actualizando vencimientos manualmente...")
+                                    cargarProductosVencimientos()
+                                }
+                                
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Actualizar vencimientos"
+                            }
+                            
+                            // Contador de alertas
+                            Rectangle {
+                                Layout.preferredWidth: 120
+                                Layout.preferredHeight: 32
+                                radius: 16
+                                color: dangerColor
+                                
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "Total: " + (productosProximosVencer.length + productosVencidos.length)
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: 11
+                                }
+                            }
                         }
                         
                         // Header de la tabla
@@ -994,7 +1188,7 @@ ScrollView {
                                 spacing: 16
                                 
                                 Label {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: 200
                                     text: "PRODUCTO"
                                     color: darkGrayColor
                                     font.bold: true
@@ -1011,7 +1205,7 @@ ScrollView {
                                 
                                 Label {
                                     Layout.fillWidth: true
-                                    text: "VENCIMIENTO"
+                                    text: "ESTADO VENCIMIENTO"
                                     color: darkGrayColor
                                     font.bold: true
                                     font.pixelSize: 11
@@ -1019,20 +1213,215 @@ ScrollView {
                             }
                         }
                         
-                        // Lista de alertas
+                        // Lista de alertas REAL desde BD
                         ListView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
-                            model: ListModel {
-                                ListElement {
-                                    producto: "Amoxicilina 500mg"
-                                    cantidad: "45 unid."
-                                    fecha: "20/07/2025"
-                                    urgencia: "urgent"
+                            
+                            // Modelo combinado: productos vencidos + próximos a vencer
+                            model: {
+                                var alertasCombinadas = []
+                                
+                                // Agregar productos vencidos (prioridad alta)
+                                for (var i = 0; i < productosVencidos.length; i++) {
+                                    alertasCombinadas.push({
+                                        producto: productosVencidos[i].producto,
+                                        codigo: productosVencidos[i].codigo,
+                                        cantidad: productosVencidos[i].cantidad + " unid.",
+                                        fecha: productosVencidos[i].fecha,
+                                        estado: "VENCIDO",
+                                        urgencia: "expired",
+                                        dias: productosVencidos[i].dias_vencido
+                                    })
+                                }
+                                
+                                // Agregar productos próximos a vencer
+                                for (var j = 0; j < productosProximosVencer.length; j++) {
+                                    alertasCombinadas.push({
+                                        producto: productosProximosVencer[j].producto,
+                                        codigo: productosProximosVencer[j].codigo,
+                                        cantidad: productosProximosVencer[j].cantidad + " unid.",
+                                        fecha: productosProximosVencer[j].fecha,
+                                        estado: formatearFechaVencimiento(productosProximosVencer[j].fecha),
+                                        urgencia: productosProximosVencer[j].urgencia,
+                                        dias: productosProximosVencer[j].dias_para_vencer
+                                    })
+                                }
+                                
+                                return alertasCombinadas
+                            }
+                            
+                            delegate: Rectangle {
+                                width: ListView.view.width
+                                height: 55
+                                color: {
+                                    switch(modelData.urgencia) {
+                                        case "expired": return Qt.rgba(239/255, 68/255, 68/255, 0.15)
+                                        case "urgent": return Qt.rgba(229/255, 115/255, 115/255, 0.1)
+                                        default: return Qt.rgba(255/255, 193/255, 7/255, 0.1)
+                                    }
+                                }
+                                radius: 8
+                                
+                                // Borde izquierdo coloreado según urgencia
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: 4
+                                    color: {
+                                        switch(modelData.urgencia) {
+                                            case "expired": return "#ef4444"
+                                            case "urgent": return "#E57373"
+                                            default: return "#ffc107"
+                                        }
+                                    }
+                                    radius: 2
+                                }
+                                
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 16
+                                    
+                                    ColumnLayout {
+                                        Layout.preferredWidth: 200
+                                        spacing: 4
+                                        
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.producto
+                                            color: textColor
+                                            font.bold: true
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
+                                        }
+                                        
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: "Código: " + modelData.codigo
+                                            color: darkGrayColor
+                                            font.pixelSize: 9
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        Layout.preferredWidth: 80
+                                        text: modelData.cantidad
+                                        color: textColor
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 28
+                                        radius: 14
+                                        color: {
+                                            switch(modelData.urgencia) {
+                                                case "expired": return "#fee2e2"
+                                                case "urgent": return "#fecaca"
+                                                default: return "#fef3c7"
+                                            }
+                                        }
+                                        
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            spacing: 8
+                                            
+                                            Label {
+                                                text: {
+                                                    switch(modelData.urgencia) {
+                                                        case "expired": return "💀"
+                                                        case "urgent": return "🚨"
+                                                        default: return "⚠️"
+                                                    }
+                                                }
+                                                font.pixelSize: 12
+                                            }
+                                            
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: modelData.estado
+                                                color: {
+                                                    switch(modelData.urgencia) {
+                                                        case "expired": return "#dc2626"
+                                                        case "urgent": return "#dc2626"
+                                                        default: return "#d97706"
+                                                    }
+                                                }
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Efecto hover
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: parent.color = Qt.darker(parent.color, 1.1)
+                                    onExited: parent.color = Qt.lighter(parent.color, 1.1)
                                 }
                             }
-                            delegate: alertDelegate
+                            
+                            // Estado cuando no hay datos
+                            Item {
+                                anchors.centerIn: parent
+                                visible: !datosVencimientosCargados || (productosProximosVencer.length === 0 && productosVencidos.length === 0)
+                                width: 250
+                                height: 120
+                                
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 12
+                                    
+                                    Label {
+                                        text: datosVencimientosCargados ? "✅" : "⏳"
+                                        font.pixelSize: 32
+                                        color: lightGrayColor
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    Label {
+                                        text: datosVencimientosCargados ? "No hay productos próximos a vencer" : "Cargando vencimientos..."
+                                        color: darkGrayColor
+                                        font.pixelSize: 14
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    // Botón de carga manual si no hay datos
+                                    Button {
+                                        visible: datosVencimientosCargados && productosProximosVencer.length === 0
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "🔄 Verificar Nuevamente"
+                                        
+                                        background: Rectangle {
+                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                            radius: 6
+                                        }
+                                        
+                                        contentItem: Label {
+                                            text: parent.text
+                                            color: whiteColor
+                                            font.bold: true
+                                            font.pixelSize: 11
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        
+                                        onClicked: {
+                                            cargarProductosVencimientos()
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1059,6 +1448,19 @@ ScrollView {
         }
         function onErrorOccurred(mensaje) {
             console.log("❌ Error en dashboard:", mensaje)
+        }
+    }
+
+    // 4. AGREGAR CONEXIONES (después de las conexiones existentes)
+    Connections {
+        target: inventarioModel
+        function onProductosChanged() {
+            console.log("📦 Productos actualizados - Recargando vencimientos")
+            Qt.callLater(cargarProductosVencimientos)
+        }
+        function onLotesChanged() {
+            console.log("📅 Lotes cambiaron - Actualizando vencimientos")
+            Qt.callLater(cargarProductosVencimientos)
         }
     }
     

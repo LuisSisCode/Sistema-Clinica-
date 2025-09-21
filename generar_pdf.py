@@ -16,6 +16,8 @@ from reportlab.platypus import PageTemplate, Frame, BaseDocTemplate
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
 
 # Colores profesionales mejorados
 COLOR_AZUL_PRINCIPAL = colors.Color(0.12, 0.31, 0.52)  # Azul institucional
@@ -414,7 +416,7 @@ class GeneradorReportesPDF:
             return [Paragraph("INFORMACIÓN DEL REPORTE", styles['Heading2'])]
     
     def _crear_tabla_profesional_mejorada(self, datos, tipo_reporte):
-        """Crea tabla principal con diseño profesional mejorado"""
+        """Crea tabla principal con diseño profesional mejorado - CORREGIDO"""
         # Obtener definición de columnas
         columnas_def = self._obtener_columnas_reporte(tipo_reporte)
         
@@ -430,6 +432,7 @@ class GeneradorReportesPDF:
         for i, registro in enumerate(datos):
             fila = []
             for col_titulo, ancho, alineacion in columnas_def:
+                # ✅ CORRECCIÓN: Solo obtener el valor, sin procesamiento duplicado
                 valor = self._obtener_valor_campo(registro, col_titulo, tipo_reporte)
                 fila.append(valor)
             tabla_datos.append(fila)
@@ -442,17 +445,16 @@ class GeneradorReportesPDF:
                     pass
         
         # Fila de total
-        fila_total = [""] * (len(columnas_def) - 2)
-        fila_total.append("TOTAL GENERAL:")
+        fila_total = [""] * (len(columnas_def) - 1)
         fila_total.append(f"Bs {total_valor:,.2f}")
         tabla_datos.append(fila_total)
         
         # Crear tabla
         tabla = Table(tabla_datos, colWidths=anchos_columnas, repeatRows=1)
         
-        # Estilos profesionales mejorados
+        # Estilos que permiten altura variable para las celdas
         estilos_tabla = [
-            # Encabezado principal (cambio de negro a azul)
+            # Encabezado principal
             ('BACKGROUND', (0, 0), (-1, 0), COLOR_AZUL_PRINCIPAL),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
@@ -464,21 +466,25 @@ class GeneradorReportesPDF:
             # Datos principales
             ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -2), 9),
-            ('TOPPADDING', (0, 1), (-1, -2), 5),
-            ('BOTTOMPADDING', (0, 1), (-1, -2), 5),
-            ('LEFTPADDING', (0, 1), (-1, -2), 6),
-            ('RIGHTPADDING', (0, 1), (-1, -2), 6),
+            ('TOPPADDING', (0, 1), (-1, -2), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -2), 4),
+            ('LEFTPADDING', (0, 1), (-1, -2), 4),
+            ('RIGHTPADDING', (0, 1), (-1, -2), 4),
+            ('VALIGN', (0, 1), (-1, -2), 'TOP'),  # Alineación vertical superior
             
-            # Fila de total (SIN LÍNEAS como solicitaste)
-            ('BACKGROUND', (0, -1), (-1, -1), COLOR_AZUL_PRINCIPAL),  # Cambio a azul
+            # Fila de total
+            ('BACKGROUND', (0, -1), (-1, -1), COLOR_AZUL_PRINCIPAL),
             ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, -1), (-1, -1), 10),
             ('TOPPADDING', (0, -1), (-1, -1), 6),
             ('BOTTOMPADDING', (0, -1), (-1, -1), 6),
-            ('ALIGN', (-2, -1), (-1, -1), 'RIGHT'),
+            ('ALIGN', (-1, -1), (-1, -1), 'RIGHT'),
+
+            # Permite mejor ajuste de texto
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             
-            # Bordes profesionales (solo para datos, no para total)
+            # Bordes profesionales
             ('GRID', (0, 0), (-1, -2), 1, COLOR_AZUL_PRINCIPAL),
             ('LINEBELOW', (0, 0), (-1, 0), 2, COLOR_AZUL_PRINCIPAL),
         ]
@@ -581,12 +587,13 @@ class GeneradorReportesPDF:
                 ("CANT.", 20, 'RIGHT'),
                 ("TOTAL (Bs)", 30, 'RIGHT')
             ],
-            4: [  # Consultas
-                ("FECHA", 25, 'LEFT'),
-                ("ESPECIALIDAD", 42, 'LEFT'),
-                ("MÉDICO", 60, 'LEFT'),
-                ("PACIENTE", 33, 'LEFT'),
-                ("VALOR (Bs)", 25, 'RIGHT')
+            4: [  # Consultas - CORREGIDO para coincidir con las imágenes
+                ("FECHA", 20, 'LEFT'),
+                ("ESPECIALIDAD", 35, 'LEFT'),
+                ("DESCRIPCIÓN COMPLETA", 65, 'LEFT'),  # Ancho mayor para descripción completa
+                ("PACIENTE", 30, 'LEFT'),
+                ("DOCTOR", 35, 'LEFT'),  # Campo separado para doctor
+                ("PRECIO (Bs)", 25, 'RIGHT')  # Precio
             ],
             5: [  # Laboratorio
                 ("FECHA", 25, 'LEFT'),
@@ -624,13 +631,15 @@ class GeneradorReportesPDF:
         ])
     
     def _obtener_valor_campo(self, registro, campo_titulo, tipo_reporte):
-        """Extrae el valor correcto del registro según el campo y tipo de reporte"""
+        """Extrae el valor correcto del registro según el campo y tipo de reporte - CORREGIDO"""
         # Mapear títulos de columnas a campos de datos
         mapeo_campos = {
             "FECHA": "fecha",
             "N° VENTA": "numeroVenta", 
             "N° COMPRA": "numeroCompra",
+            "DESCRIPCIÓN COMPLETA": "descripcion",
             "DESCRIPCIÓN": "descripcion",
+            "PRECIO (Bs)": "valor", 
             "PRODUCTO": "descripcion",
             "PROVEEDOR": "descripcion",
             "EXAMEN": "descripcion",
@@ -645,6 +654,7 @@ class GeneradorReportesPDF:
             "STOCK": "cantidad",
             "P.U.": "precioUnitario",
             "ESPECIALIDAD": "especialidad",
+            "DOCTOR": "doctor_nombre",
             "MÉDICO": "descripcion",
             "PACIENTE": "paciente",
             "ESTADO": "estado",
@@ -655,13 +665,41 @@ class GeneradorReportesPDF:
         
         campo_dato = mapeo_campos.get(campo_titulo, campo_titulo.lower())
         valor = registro.get(campo_dato, "")
-        
+
+        # Convertir a string si no lo es
+        valor = str(valor) if valor else ""
+
+        # ✅ CORRECCIÓN: Manejo especial SOLO para DESCRIPCIÓN COMPLETA
+        if campo_titulo == "DESCRIPCIÓN COMPLETA":
+            if len(valor) > 50:
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.platypus import Paragraph
+                
+                styles = getSampleStyleSheet()
+                cell_style = ParagraphStyle(
+                    'CellText',
+                    parent=styles['Normal'],
+                    fontSize=8,
+                    leading=9,
+                    leftIndent=2,
+                    rightIndent=2,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    wordWrap='LTR'
+                )
+                return Paragraph(valor, cell_style)
+            return valor if valor else "Sin detalles"
+
         # Formatear valores especiales
-        if "valor" in campo_dato.lower() or "monto" in campo_dato.lower() or "total" in campo_dato.lower():
+        if "valor" in campo_dato.lower() or "precio" in campo_dato.lower():
             try:
                 return f"Bs {float(valor):,.2f}"
             except:
                 return "Bs 0.00"
+            
+        elif campo_dato == "tipo":
+            return valor if valor else "Normal"
+        
         elif campo_dato == "cantidad" or campo_dato == "registros":
             try:
                 return f"{int(float(valor)):,}"
@@ -672,7 +710,7 @@ class GeneradorReportesPDF:
                 return f"Bs {float(valor):,.2f}"
             except:
                 return "Bs 0.00"
-        
+
         # Valores por defecto si no existen
         if not valor:
             defaults = {
@@ -688,11 +726,11 @@ class GeneradorReportesPDF:
             }
             valor = defaults.get(campo_dato, "")
         
-        # Truncar texto largo
-        if isinstance(valor, str) and len(valor) > 40:
-            return valor[:37] + "..."
+        # Para otros campos, permitir texto más largo pero con límite razonable
+        if isinstance(valor, str) and len(valor) > 50 and campo_titulo != "DESCRIPCIÓN COMPLETA":
+            return valor[:47] + "..."
         
-        return str(valor)
+        return str(valor) if valor else ""
 
 # Funciones de utilidad
 def crear_generador_pdf():

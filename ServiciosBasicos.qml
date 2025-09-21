@@ -53,6 +53,16 @@ Item {
 
     property var editingGastoData: null
     property var gastoModelInstance: null
+
+    // Agregar después de las propiedades de color existentes
+    readonly property string usuarioActualRol: {
+        if (typeof authModel !== 'undefined' && authModel) {
+            return authModel.userRole || ""
+        }
+        return ""
+    }
+    readonly property bool esAdministrador: usuarioActualRol === "Administrador"
+    readonly property bool esMedico: usuarioActualRol === "Médico" || usuarioActualRol === "MÃ©dico"
     
     // FUNCIÓN HELPER MOVIDA AL NIVEL PRINCIPAL
     function obtenerAñosDisponibles() {
@@ -502,7 +512,7 @@ Item {
         for (var i = 0; i < gastosPagina.length; i++) {
             var gasto = gastosPagina[i];
             gastosPaginadosModel.append({
-                gastoId: gasto.id,
+                gastoId: gasto.id || gasto.ID,
                 tipoGasto: gasto.tipo_nombre,
                 descripcion: gasto.Descripcion,
                 monto: parseFloat(gasto.Monto || 0).toFixed(2),
@@ -1196,7 +1206,18 @@ Item {
                                             id: editButton
                                             width: baseUnit * 2.2
                                             height: baseUnit * 2.2
-                                            
+                                            visible: serviciosBasicosRoot.esAdministrador || serviciosBasicosRoot.esMedico
+                                            enabled: {
+                                                if (serviciosBasicosRoot.esAdministrador) return true
+                                                if (serviciosBasicosRoot.esMedico) {
+                                                    // Verificar fecha para médicos (30 días límite)
+                                                    var fechaGasto = new Date(model.fechaGasto || "")
+                                                    var fechaActual = new Date()
+                                                    var diasDiferencia = Math.floor((fechaActual - fechaGasto) / (1000 * 60 * 60 * 24))
+                                                    return diasDiferencia <= 30
+                                                }
+                                                return false
+                                            }
                                             background: Rectangle {
                                                 color: "transparent"
                                             }
@@ -1226,13 +1247,27 @@ Item {
                                             onHoveredChanged: {
                                                 editIcon.opacity = hovered ? 0.7 : 1.0
                                             }
+                                            ToolTip.text: {
+                                                if (serviciosBasicosRoot.esAdministrador) return "Editar gasto"
+                                                if (serviciosBasicosRoot.esMedico) {
+                                                    var fechaGasto = new Date(model.fechaGasto || "")
+                                                    var fechaActual = new Date()
+                                                    var diasDiferencia = Math.floor((fechaActual - fechaGasto) / (1000 * 60 * 60 * 24))
+                                                    if (diasDiferencia > 30) {
+                                                        return "No se puede editar: gasto de más de 30 días"
+                                                    }
+                                                    return "Editar gasto (máximo 30 días)"
+                                                }
+                                                return "Sin permisos"
+                                            }
                                         }
                                         
                                         Button {
                                             id: deleteButton
                                             width: baseUnit * 2.2
                                             height: baseUnit * 2.2
-                                            
+                                            visible: serviciosBasicosRoot.esAdministrador
+
                                             background: Rectangle {
                                                 color: "transparent"
                                             }
@@ -1247,13 +1282,49 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                var gastoId = model.gastoId
-                                                confirmDeleteDialog.gastoIdToDelete = gastoId
-                                                confirmDeleteDialog.open()
+                                                console.log("🗑️ Botón eliminar presionado")
+                                                console.log("🎯 gastoId:", model.gastoId)
+                                                
+                                                if (model.gastoId && model.gastoId !== "N/A") {
+                                                    confirmDeleteDialog.gastoIdToDelete = String(model.gastoId)
+                                                    confirmDeleteDialog.open()
+                                                } else {
+                                                    console.log("❌ ID de gasto inválido")
+                                                }
                                             }
                                             
                                             onHoveredChanged: {
                                                 deleteIcon.opacity = hovered ? 0.7 : 1.0
+                                            }
+                                            
+                                            ToolTip.text: "Eliminar gasto (solo administradores)"
+                                        }
+                                        Button {
+                                            width: baseUnit * 2.2
+                                            height: baseUnit * 2.2
+                                            visible: selectedRowIndex === index && !editButton.visible
+                                            enabled: false
+                                            
+                                            background: Rectangle {
+                                                color: "transparent"
+                                            }
+                                            
+                                            Image {
+                                                anchors.centerIn: parent
+                                                width: baseUnit * 1.2
+                                                height: baseUnit * 1.2
+                                                source: "Resources/iconos/editar.svg"
+                                                fillMode: Image.PreserveAspectFit
+                                                opacity: 0.3
+                                            }
+                                            
+                                            //ToolTip.visible: parent.hovered
+                                            ToolTip.text: {
+                                                if (gastoModelInstance && gastoModelInstance.esAdministrador()) {
+                                                    return "Sin permisos de edición"
+                                                } else {
+                                                    return "Solo puedes editar tus gastos dentro de 30 días"
+                                                }
                                             }
                                         }
                                     }
@@ -2013,16 +2084,21 @@ Item {
                             }
                             
                             onClicked: {
-                                console.log("🗑️ Confirmando eliminación...")
+                                console.log("🗑️ Confirmando eliminación de gasto...")
+                                console.log("🎯 gastoIdToDelete:", confirmDeleteDialog.gastoIdToDelete)
                                 
-                                // ✅ USAR LA FUNCIÓN DIRECTA CORREGIDA
-                                var success = eliminarGastoDirecto(confirmDeleteDialog.gastoIdToDelete)
+                                var gastoId = parseInt(confirmDeleteDialog.gastoIdToDelete)
+                                console.log("🎯 gastoId parseado:", gastoId)
                                 
-                                if (!success) {
-                                    showErrorMessage("Error", "No se pudo eliminar el gasto.")
+                                if (eliminarGasto(gastoId)) {
+                                    selectedRowIndex = -1
+                                    console.log("✅ Gasto eliminado correctamente ID:", gastoId)
+                                    mostrarNotificacion("Éxito", "Gasto eliminado correctamente")
+                                } else {
+                                    console.log("❌ Error eliminando gasto ID:", gastoId)
+                                    mostrarNotificacion("Error", "No se pudo eliminar el gasto")
                                 }
                                 
-                                selectedRowIndex = -1
                                 confirmDeleteDialog.close()
                             }
                             
@@ -2158,6 +2234,44 @@ Item {
                 }
             }
         }
+    }
+    function eliminarGasto(gastoId) {
+        try {
+            console.log("🗑️ Iniciando eliminación de gasto ID:", gastoId)
+            
+            // Verificar permisos de administrador
+            if (!serviciosBasicosRoot.esAdministrador) {
+                mostrarNotificacion("Error", "Solo administradores pueden eliminar gastos")
+                return false
+            }
+            
+            if (!gastoModelInstance) {
+                console.log("❌ GastoModel no disponible")
+                mostrarNotificacion("Error", "Sistema no disponible")
+                return false
+            }
+            
+            var resultado = gastoModelInstance.eliminarGasto(parseInt(gastoId))
+            
+            if (resultado) {
+                console.log("✅ Gasto eliminado exitosamente")
+                // Recargar datos
+                aplicarFiltros()
+                return true
+            } else {
+                console.log("❌ Error eliminando gasto")
+                mostrarNotificacion("Error", "No se pudo eliminar el gasto")
+                return false
+            }
+            
+        } catch (error) {
+            console.log("❌ Error en eliminación:", error.message)
+            //mostrarNotificacion("Error", "Error eliminando gasto: " + error.message)
+            return false
+        }
+    }
+    function mostrarNotificacion(titulo, mensaje) {
+        console.log("📢 " + titulo + ": " + mensaje)
     }
     
     // INICIALIZACIÓN MEJORADA CON APPCONTROLLER

@@ -169,14 +169,12 @@ class ConsultaModel(QObject):
             return False
         
         return True
-    
-    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 7) -> bool:
-        """Valida que el registro no sea muy antiguo para editar"""
+    def _validar_fecha_eliminacion(self, fecha_registro, dias_limite: int = 30) -> bool:
+        """Valida que el registro no sea muy antiguo para eliminar - SOLO PARA MÉDICOS"""
         try:
             if not fecha_registro:
-                return True  # Si no hay fecha, permitir edición
+                return True
             
-            # Convertir a datetime si es necesario
             if isinstance(fecha_registro, str):
                 try:
                     fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
@@ -185,19 +183,17 @@ class ConsultaModel(QObject):
             elif isinstance(fecha_registro, datetime):
                 fecha_obj = fecha_registro
             else:
-                return True  # Si no se puede determinar la fecha, permitir
+                return True
             
-            # Calcular diferencia - las consultas NO tienen límite de tiempo
-            # Comentado para consultas: días_transcurridos = (datetime.now() - fecha_obj).days
-            # if dias_transcurridos > dias_limite:
-            #     self.operacionError.emit(f"No se pueden editar consultas de más de {dias_limite} días")
-            #     return False
+            dias_transcurridos = (datetime.now() - fecha_obj).days
+            if dias_transcurridos > dias_limite:
+                return False
             
-            return True  # ✅ Consultas editables sin límite de tiempo
+            return True
             
         except Exception as e:
-            print(f"❌ Error validando fecha: {e}")
-            return True  # En caso de error, permitir la operación
+            print(f"⚠️ Error validando fecha eliminación: {e}")
+            return True
     # ===============================
     # PROPERTIES PARA QML
     # ===============================
@@ -254,6 +250,125 @@ class ConsultaModel(QObject):
     # ===============================
     # SLOTS PARA BÚSQUEDA POR CÉDULA - CORREGIDOS
     # ===============================
+
+    @Slot(int, int, str, str, result=str)
+    def crear_consulta(self, paciente_id: int, especialidad_id: int, tipo_consulta: str, detalles: str) -> str:
+        """
+        Crea una nueva consulta médica
+        
+        Args:
+            paciente_id (int): ID del paciente
+            especialidad_id (int): ID de la especialidad
+            tipo_consulta (str): Tipo de consulta ('normal' o 'emergencia')
+            detalles (str): Detalles de la consulta
+            
+        Returns:
+            str: JSON con resultado de la operación
+        """
+        try:
+            # Verificar permisos (médicos y administradores pueden crear)
+            if not self._verificar_permisos_medico_o_admin():
+                return json.dumps({'exito': False, 'error': 'Sin permisos para crear consultas'})
+            
+            self._set_estado_actual("cargando")
+            
+            print(f"🔍 DEBUG - Parámetros recibidos:")
+            print(f"   - paciente_id: {paciente_id} (tipo: {type(paciente_id)})")
+            print(f"   - especialidad_id: {especialidad_id} (tipo: {type(especialidad_id)})")
+            print(f"   - tipo_consulta: '{tipo_consulta}' (tipo: {type(tipo_consulta)})")
+            print(f"   - detalles: '{detalles}' (tipo: {type(detalles)})")
+            print(f"   - usuario_actual_id: {self._usuario_actual_id}")
+            
+            # Validar datos de entrada
+            if not isinstance(paciente_id, int) or paciente_id <= 0:
+                error_msg = f"ID de paciente inválido: {paciente_id}"
+                print(f"❌ {error_msg}")
+                self.operacionError.emit(error_msg)
+                self._set_estado_actual("error")
+                return json.dumps({'exito': False, 'error': error_msg})
+            
+            if not isinstance(especialidad_id, int) or especialidad_id <= 0:
+                error_msg = f"Especialidad inválida: {especialidad_id}"
+                print(f"❌ {error_msg}")
+                self.operacionError.emit(error_msg)
+                self._set_estado_actual("error")
+                return json.dumps({'exito': False, 'error': error_msg})
+            
+            if not detalles or len(str(detalles).strip()) < 5:
+                error_msg = "Los detalles son obligatorios (mínimo 5 caracteres)"
+                print(f"❌ {error_msg}")
+                self.operacionError.emit(error_msg)
+                self._set_estado_actual("error")
+                return json.dumps({'exito': False, 'error': error_msg})
+            
+            # Validar tipo de consulta
+            tipo_consulta_clean = str(tipo_consulta).lower().strip()
+            if tipo_consulta_clean not in ['normal', 'emergencia']:
+                tipo_consulta_clean = 'normal'
+            
+            detalles_clean = str(detalles).strip()
+            
+            print(f"✅ Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando consulta:")
+            print(f"   - Paciente ID: {paciente_id}")
+            print(f"   - Especialidad ID: {especialidad_id}")
+            print(f"   - Tipo: {tipo_consulta_clean}")
+            print(f"   - Detalles: {detalles_clean[:50]}...")
+            
+            # LLAMADA CORREGIDA AL REPOSITORY - ORDEN Y PARÁMETROS EXACTOS
+            nueva_consulta_id = self.repository.create_consultation(
+                usuario_id=self._usuario_actual_id,           # 1er parámetro
+                paciente_id=paciente_id,                      # 2do parámetro  
+                especialidad_id=especialidad_id,              # 3er parámetro
+                detalles=detalles_clean,                      # 4to parámetro
+                tipo_consulta=tipo_consulta_clean.capitalize(), # 5to parámetro
+                fecha=None                                    # 6to parámetro (opcional, usa datetime actual)
+            )
+            
+            print(f"🔍 DEBUG - Repository devolvió: {nueva_consulta_id} (tipo: {type(nueva_consulta_id)})")
+            
+            if nueva_consulta_id and nueva_consulta_id > 0:
+                # Obtener la consulta creada con detalles completos
+                consulta_creada = self.repository.get_consultation_by_id_complete(nueva_consulta_id)
+                
+                if consulta_creada:
+                    print(f"✅ Consulta {nueva_consulta_id} creada exitosamente")
+                    
+                    # Emitir señales de éxito
+                    self.consultaCreada.emit(json.dumps(consulta_creada, default=str))
+                    self.operacionExitosa.emit(f"Consulta {nueva_consulta_id} creada correctamente")
+                    
+                    # Refrescar datos
+                    self._cargar_consultas_recientes()
+                    
+                    self._set_estado_actual("listo")
+                    
+                    return json.dumps({
+                        'exito': True, 
+                        'consulta_id': nueva_consulta_id,
+                        'mensaje': 'Consulta creada correctamente',
+                        'datos': consulta_creada
+                    }, default=str)
+                else:
+                    error_msg = "Consulta creada pero no se pudo recuperar información"
+                    print(f"⚠️ {error_msg}")
+                    self.operacionError.emit(error_msg)
+                    self._set_estado_actual("error")
+                    return json.dumps({'exito': False, 'error': error_msg})
+            else:
+                error_msg = f"Error creando consulta - Repository devolvió: {nueva_consulta_id}"
+                print(f"❌ {error_msg}")
+                self.operacionError.emit(error_msg)
+                self._set_estado_actual("error")
+                return json.dumps({'exito': False, 'error': error_msg})
+                
+        except Exception as e:
+            error_msg = f"Error crítico creando consulta: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            self.operacionError.emit(error_msg)
+            self._set_estado_actual("error")
+            return json.dumps({'exito': False, 'error': error_msg})
     
     @Slot(str, result='QVariantMap')
     def buscar_paciente_por_cedula(self, cedula: str):
@@ -329,16 +444,14 @@ class ConsultaModel(QObject):
     
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
-                                          apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente por cédula o crea uno nuevo - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+                                        apellido_materno: str = "", cedula: str = "") -> int:
+        """Busca paciente por cédula o crea uno nuevo - PERMITE CÉDULA VACÍA"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
             if not self._verificar_autenticacion():
                 return -1
             
-            if not cedula or len(cedula.strip()) < 5:
-                self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
-                return -1
+            # ✅ ELIMINAR: Validación de cédula obligatoria
+            # La cédula ahora es opcional
             
             if not nombre or len(nombre.strip()) < 2:
                 self.operacionError.emit("Nombre es obligatorio")
@@ -350,11 +463,12 @@ class ConsultaModel(QObject):
             
             print(f"🔄 Usuario {self._usuario_actual_id} gestionando paciente: {nombre} {apellido_paterno}")
             
+            # ✅ CORREGIR: Pasar cédula tal como viene (puede ser vacía)
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
                 apellido_paterno.strip(), 
                 apellido_materno.strip(), 
-                cedula.strip()
+                cedula.strip()  # Puede ser cadena vacía
             )
             
             if paciente_id > 0:
@@ -369,141 +483,109 @@ class ConsultaModel(QObject):
             print(f"⚠️ {error_msg}")
             self.operacionError.emit(error_msg)
             return -1
-    
     # ===============================
     # SLOTS PARA OPERACIONES CRUD
     # ===============================
     
-    @Slot('QVariant', result=str)
-    def crear_consulta(self, datos_consulta):
-        """Crea nueva consulta médica - ✅ MÉDICOS Y ADMINISTRADORES PUEDEN CREAR"""
-        try:
-            # ✅ VERIFICACIÓN DE AUTENTICACIÓN PRIMERO - MÉDICOS PUEDEN CREAR
-            if not self._verificar_autenticacion():
-                return json.dumps({'exito': False, 'error': 'Usuario no autenticado'})
-            
-            self._set_estado_actual("cargando")
-            
-            # Convertir QJSValue to diccionario de Python
-            if hasattr(datos_consulta, 'toVariant'):
-                datos = datos_consulta.toVariant()
-            else:
-                datos = datos_consulta
-            
-            # Validaciones básicas
-            paciente_id = int(datos.get('paciente_id', 0))
-            especialidad_id = int(datos.get('especialidad_id', 0))
-            detalles = str(datos.get('detalles', '')).strip()
-            tipo_consulta = str(datos.get('tipo_consulta', 'normal')).lower()
-            
-            if paciente_id <= 0:
-                raise ValueError("Paciente requerido")
-            
-            if especialidad_id <= 0:
-                raise ValueError("Especialidad requerida")
-            
-            if len(detalles) < 10:
-                raise ValueError("Detalles muy cortos (mínimo 10 caracteres)")
-            
-            print(f"🩺 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando consulta")
-            
-            # ✅ USAR usuario actual autenticado
-            consulta_id = self.repository.create_consultation(
-                usuario_id=self._usuario_actual_id,
-                paciente_id=paciente_id,
-                especialidad_id=especialidad_id,
-                detalles=detalles,
-                tipo_consulta=tipo_consulta
-            )
-            
-            if consulta_id:
-                # Forzar refresh inmediato
-                self._cargar_consultas_recientes()
-                self._cargar_estadisticas_dashboard()
-                
-                # Invalidar cache manualmente
-                self.repository.invalidate_consultation_caches()
-                print("🔄 Cache forzosamente invalidado desde modelo")
-                
-                # Obtener datos de la consulta creada
-                consulta_creada = self.repository.get_consultation_by_id_complete(consulta_id)
-                
-                self.consultaCreada.emit(json.dumps(consulta_creada, default=str))
-                self.operacionExitosa.emit(f"Consulta creada exitosamente: ID {consulta_id}")
-                
-                self._set_estado_actual("listo")
-                return json.dumps({'exito': True, 'consulta_id': consulta_id})
-            else:
-                raise ValueError("Error creando consulta")
-                
-        except Exception as e:
-            error_msg = f"Error creando consulta: {str(e)}"
-            self.operacionError.emit(error_msg)
-            self._set_estado_actual("error")
-            return json.dumps({'exito': False, 'error': error_msg})
-    
     @Slot(int, 'QVariant', result=str)
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
-        """Actualiza consulta existente - ✅ SOLO ADMINISTRADORES PUEDEN EDITAR"""
+        """Actualiza consulta existente - VERSIÓN LIMPIA SIN VALIDACIONES PROBLEMÁTICAS"""
         try:
-            # ✅ CAMBIO CRÍTICO: VERIFICAR PERMISOS DE ADMIN PARA EDICIÓN
-            if not self._verificar_permisos_admin():
-                return json.dumps({'exito': False, 'error': 'Solo administradores pueden editar consultas'})
-            
             self._set_estado_actual("cargando")
             
-            # ✅ VALIDAR FECHA DE EDICIÓN (sin límite para consultas)
-            consulta_actual = self.repository.get_consultation_by_id_complete(consulta_id)
-            if consulta_actual and not self._validar_fecha_edicion(consulta_actual.get('Fecha')):
-                return json.dumps({'exito': False, 'error': 'Consulta muy antigua para editar'})
-            
-            # Convertir QJSValue a diccionario
+            # Convertir datos
             if hasattr(nuevos_datos, 'toVariant'):
                 datos = nuevos_datos.toVariant()
             else:
                 datos = nuevos_datos
             
-            print(f"✏️ Admin {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando consulta {consulta_id}")
+            print(f"🔧 DEBUG - Datos recibidos del frontend: {datos}")
+            print(f"✏️ Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando consulta {consulta_id} - Motivo: {razon}")
             
+            # Construir datos de actualización
+            update_data = {}
+            
+            # Detalles
+            if 'detalles' in datos and datos['detalles'] is not None:
+                detalles_text = str(datos['detalles']).strip()
+                if len(detalles_text) >= 5:
+                    update_data['Detalles'] = detalles_text
+                    print(f"📝 Detalles procesados: {detalles_text[:50]}...")
+            
+            # Tipo de consulta
+            if 'tipo_consulta' in datos and datos['tipo_consulta']:
+                tipo = str(datos['tipo_consulta']).lower().strip()
+                if tipo in ['normal', 'emergencia']:
+                    update_data['Tipo_Consulta'] = tipo.capitalize()
+                    print(f"🏷️ Tipo consulta procesado: {tipo}")
+            
+            # Especialidad - SIN VALIDACIONES EXTRA
+            if 'especialidad_id' in datos and datos['especialidad_id'] is not None:
+                try:
+                    especialidad_id = int(datos['especialidad_id'])
+                    if especialidad_id > 0:
+                        update_data['Id_Especialidad'] = especialidad_id
+                        print(f"🏥 Especialidad procesada correctamente: ID {especialidad_id}")
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ Error convirtiendo especialidad_id: {e}")
+            
+            print(f"📝 Datos finales a actualizar: {update_data}")
+            
+            # Verificar que hay datos para actualizar
+            if not update_data:
+                return json.dumps({'exito': False, 'error': 'No hay datos válidos para actualizar'})
+            
+            # Actualizar en base de datos
             success = self.repository.update_consultation(
                 consulta_id=consulta_id,
-                detalles=datos.get('detalles'),
-                tipo_consulta=datos.get('tipo_consulta'),
-                especialidad_id=datos.get('especialidad_id'),
-                fecha=datos.get('fecha')
+                detalles=update_data.get('Detalles'),
+                tipo_consulta=update_data.get('Tipo_Consulta'),
+                especialidad_id=update_data.get('Id_Especialidad'),
+                fecha=update_data.get('Fecha')
             )
             
             if success:
                 # Obtener consulta actualizada
                 consulta_actualizada = self.repository.get_consultation_by_id_complete(consulta_id)
                 
-                # Emitir signals
-                self.consultaActualizada.emit(json.dumps(consulta_actualizada, default=str))
-                self.operacionExitosa.emit(f"Consulta {consulta_id} actualizada correctamente")
-                
-                # Actualizar datos
-                self._cargar_consultas_recientes()
-                
-                self._set_estado_actual("listo")
-                return json.dumps({'exito': True, 'datos': consulta_actualizada}, default=str)
+                if consulta_actualizada:
+                    # Emitir signals
+                    self.consultaActualizada.emit(json.dumps(consulta_actualizada, default=str))
+                    self.operacionExitosa.emit(f"Consulta {consulta_id} actualizada correctamente")
+                    
+                    # Refrescar datos
+                    self._cargar_consultas_recientes()
+                    
+                    self._set_estado_actual("listo")
+                    
+                    return json.dumps({'exito': True, 'datos': consulta_actualizada}, default=str)
+                else:
+                    error_msg = "Consulta actualizada pero no se pudo recuperar información"
+                    self.operacionError.emit(error_msg)
+                    self._set_estado_actual("error")
+                    return json.dumps({'exito': False, 'error': error_msg})
             else:
-                error_msg = "Error actualizando consulta"
+                error_msg = "Error actualizando consulta en base de datos"
                 self.operacionError.emit(error_msg)
                 self._set_estado_actual("error")
                 return json.dumps({'exito': False, 'error': error_msg})
                 
         except Exception as e:
-            error_msg = f"Error actualizando consulta: {str(e)}"
+            error_msg = f"Error crítico actualizando consulta: {str(e)}"
+            print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
             self._set_estado_actual("error")
             return json.dumps({'exito': False, 'error': error_msg})
+    
     
     @Slot(int, result=bool)
     def eliminar_consulta(self, consulta_id: int) -> bool:
         """Elimina consulta médica - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
-            if not self._verificar_permisos_admin():
+            # ✅ VERIFICAR PERMISOS DE ADMINISTRADOR
+            puede_eliminar, razon = self._verificar_permisos_eliminacion(consulta_id)
+            if not puede_eliminar:
+                self.operacionError.emit(razon)
                 return False
             
             self._set_estado_actual("cargando")
@@ -533,6 +615,58 @@ class ConsultaModel(QObject):
             self._set_estado_actual("error")
             return False
         
+    @Slot(int, result='QVariantMap')
+    def verificar_permisos_consulta(self, consulta_id: int):
+        """Verifica permisos del usuario actual para una consulta específica"""
+        try:
+            puede_editar = self._usuario_actual_rol in ["Administrador", "Médico"]
+            puede_eliminar, razon_eliminar = self._verificar_permisos_eliminacion(consulta_id)
+            es_admin = self._usuario_actual_rol == "Administrador"
+            es_medico = self._usuario_actual_rol == "Médico"
+            
+            # Obtener información adicional
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            dias_antiguedad = 0
+            
+            if consulta:
+
+                # Calcular antigüedad
+                fecha_consulta = consulta.get('Fecha')
+                if fecha_consulta:
+                    try:
+                        if isinstance(fecha_consulta, str):
+                            fecha_obj = datetime.fromisoformat(fecha_consulta.replace('Z', ''))
+                        elif isinstance(fecha_consulta, datetime):
+                            fecha_obj = fecha_consulta
+                        else:
+                            fecha_obj = datetime.now()
+                        
+                        dias_antiguedad = (datetime.now() - fecha_obj).days
+                    except:
+                        dias_antiguedad = 0
+            
+            return {
+                'puede_editar': puede_editar,
+                'puede_eliminar': puede_eliminar,
+                'razon_eliminar': razon_eliminar,
+                'es_administrador': es_admin,
+                'es_medico': es_medico,
+                'dias_antiguedad': dias_antiguedad,
+                'limite_dias': 30
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando permisos: {e}")
+            return {
+                'puede_eliminar': False,
+                'razon_eliminar': f"Error: {str(e)}",
+                'es_administrador': False,
+                'es_medico': False,
+                'es_propietario': False,
+                'dias_antiguedad': 999,
+                'limite_dias': 30
+            }
+        
     # ===============================
     # SLOTS PARA BÚSQUEDAS Y FILTROS - CORREGIDOS
     # ===============================
@@ -557,6 +691,28 @@ class ConsultaModel(QObject):
             self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
+        """Busca pacientes por nombre completo"""
+        try:
+            if len(nombre_completo.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
+            
+            resultados = self.repository.search_patient_by_full_name(
+                nombre_completo.strip(), limite
+            )
+            
+            print(f"📋 Encontrados {len(resultados)} pacientes por nombre")
+            return resultados
+            
+        except Exception as e:
+            error_msg = f"Error buscando por nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return []
+
     @Slot(int, result=str)
     def obtener_consultas_del_paciente(self, paciente_id: int) -> str:
         """Obtiene consultas de un paciente específico"""
@@ -966,6 +1122,27 @@ class ConsultaModel(QObject):
         # Comentado por defecto - se puede activar si es necesario
         # self._autoRefreshTimer.start(self._autoRefreshInterval)
     
+    def _verificar_permisos_eliminacion(self, consulta_id: int) -> tuple[bool, str]:
+        """Permisos de eliminación - ADMINS sin límite, MÉDICOS máximo 30 días"""
+        if not self._verificar_autenticacion():
+            return False, "Usuario no autenticado"
+        
+        if self._usuario_actual_rol == "Administrador":
+            return True, "Administrador: Sin restricciones"
+        
+        if self._usuario_actual_rol == "Médico":
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            if not consulta:
+                return False, "Consulta no encontrada"
+            
+            fecha_consulta = consulta.get('Fecha')
+            if not self._validar_fecha_eliminacion(fecha_consulta, dias_limite=30):
+                return False, "Solo puede eliminar consultas de máximo 30 días"
+            
+            return True, "Médico: Puede eliminar (consulta reciente)"
+        
+        return False, "Sin permisos para eliminar consultas"
+
     @Slot(int)
     def setAutoRefreshInterval(self, intervalMs: int):
         """Configura intervalo de actualización automática"""
@@ -1059,6 +1236,35 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión ConsultaModel: {e}")
+
+    def buscar_paciente_por_nombre_inteligente(self, nombre_completo: str):
+        """
+        ✅ MÉTODO AUXILIAR PARA CONSULTA_MODEL.PY
+        
+        Busca paciente por nombre con la nueva lógica mejorada
+        """
+        try:
+            if not nombre_completo or len(nombre_completo.strip()) < 3:
+                return None
+            
+            print(f"🔍 Búsqueda inteligente por nombre: '{nombre_completo}'")
+            
+            # Usar el método mejorado
+            pacientes = self.repository.search_patient_by_full_name(nombre_completo, limite=5)
+            
+            if pacientes:
+                # Ordenar por relevancia y seleccionar el mejor
+                pacientes_ordenados = sorted(pacientes, key=lambda x: x.get('relevancia', 999))
+                mejor_paciente = pacientes_ordenados[0]
+                
+                print(f"✅ Mejor paciente encontrado: {mejor_paciente['nombre_completo']} (ID: {mejor_paciente['id']})")
+                return mejor_paciente
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error en búsqueda inteligente: {e}")
+            return None
 
 # ===============================
 # REGISTRO PARA QML

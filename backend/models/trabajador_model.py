@@ -4,7 +4,7 @@ Migrado del patrón sin autenticación al patrón de ConsultaModel
 """
 
 from typing import List, Dict, Any, Optional
-from PySide6.QtCore import QObject, Signal, Slot, Property
+from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 from PySide6.QtQml import qmlRegisterType
 
 from ..repositories.trabajador_repository import TrabajadorRepository
@@ -49,21 +49,30 @@ class TrabajadorModel(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Repository en lugar de service
-        self.repository = TrabajadorRepository()
-        self.global_signals = get_global_signals()
-        self._conectar_senales_globales()
+        # ✅ IDENTIFICADOR ÚNICO DE INSTANCIA
+        import time
+        self._instance_id = f"TrabajadorModel_{int(time.time() * 1000)}"
         
-        # Estado interno
+        # ✅ VARIABLES PRIMERO - ANTES DE LLAMAR CUALQUIER MÉTODO
         self._trabajadores: List[Dict[str, Any]] = []
         self._trabajadores_filtrados: List[Dict[str, Any]] = []
         self._tipos_trabajador: List[Dict[str, Any]] = []
         self._estadisticas: Dict[str, Any] = {}
         self._loading: bool = False
         
-        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
-        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
-        print("👷‍♂️ TrabajadorModel inicializado - Esperando autenticación")
+        # ✅ VARIABLES DE AUTENTICACIÓN Y DEBUG
+        self._usuario_actual_id = 0
+        self._usuario_actual_rol = ""
+        self._debug_calls = []  # Log de llamadas
+        
+        print(f"🆔 NUEVA INSTANCIA TrabajadorModel: {self._instance_id}")
+        
+        # Repository en lugar de service
+        self.repository = TrabajadorRepository()
+        self.global_signals = get_global_signals()
+        self._conectar_senales_globales()
+        
+        print(f"🔍 TrabajadorModel.__init__: _usuario_actual_id={self._usuario_actual_id}, _usuario_actual_rol='{self._usuario_actual_rol}'")
         
         # Filtros activos
         self._filtro_tipo: int = 0
@@ -73,15 +82,42 @@ class TrabajadorModel(QObject):
         
         # Configuración inicial
         self._cargar_datos_iniciales()
-        
-        print("👷‍♂️ TrabajadorModel inicializado con autenticación estandarizada")
-    
+        print("👷‍♂️ TrabajadorModel inicializado con debug simple")
+
     # ===============================
-    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
+    # MÉTODOS DE DEBUG
+    # ===============================
+    
+    def _log_call(self, method_name: str, extra_info: str = ""):
+        """Registra llamadas a métodos críticos"""
+        import traceback
+        caller = traceback.format_stack()[-3].strip()  # Quien llamó este método
+        
+        entry = {
+            'method': method_name,
+            'auth_id': self._usuario_actual_id,
+            'auth_role': self._usuario_actual_rol,
+            'instance_id': self._instance_id,
+            'caller': caller,
+            'extra': extra_info
+        }
+        
+        self._debug_calls.append(entry)
+        
+        # Mantener solo últimas 10 llamadas
+        if len(self._debug_calls) > 10:
+            self._debug_calls.pop(0)
+        
+        print(f"📝 LOG [{self._instance_id}]: {method_name} - ID:{self._usuario_actual_id}, Rol:'{self._usuario_actual_rol}' - {extra_info}")
+
+    # ===============================
+    # MÉTODOS DE CONEXIÓN
     # ===============================
     
     def _conectar_senales_globales(self):
-        """Conecta con las señales globales para recibir actualizaciones"""
+        """Conecta con las señales globales - CON DEBUG"""
+        self._log_call("_conectar_senales_globales", "INICIO")
+        
         try:
             # Conectar señales de tipos de trabajadores
             self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_tipos_trabajadores_desde_signal)
@@ -89,13 +125,26 @@ class TrabajadorModel(QObject):
             
             print("🔗 Señales globales conectadas en TrabajadorModel")
         except Exception as e:
-            print(f"❌ Error conectando señales globales en TrabajadorModel: {e}")
+            print(f"❌ Error conectando señales globales: {e}")
+        
+        self._log_call("_conectar_senales_globales", "FIN")
+
+    @Slot(int, str)
+    def _on_usuario_autenticado_cambiado(self, usuario_id: int, usuario_rol: str):
+        """Maneja cambios en el usuario autenticado desde señales globales"""
+        try:
+            print(f"📡 TrabajadorModel: Recibido usuario autenticado - ID: {usuario_id}, Rol: {usuario_rol}")
+            self.set_usuario_actual_con_rol(usuario_id, usuario_rol)
+        except Exception as e:
+            print(f"❌ Error en _on_usuario_autenticado_cambiado: {e}")
+
+    # ===============================
+    # MÉTODOS DE AUTENTICACIÓN
+    # ===============================
     
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
-        """
-        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
-        """
+        """Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController"""
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
@@ -107,25 +156,171 @@ class TrabajadorModel(QObject):
         except Exception as e:
             print(f"❌ Error estableciendo usuario en TrabajadorModel: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
+        """Establece usuario - VERSIÓN DEBUG ULTRA-SIMPLE"""
+        self._log_call("set_usuario_actual_con_rol", f"ENTRADA: {usuario_id}, '{usuario_rol}'")
+        
+        try:
+            print(f"🔍 set_usuario_actual_con_rol INICIO: ({usuario_id}, '{usuario_rol}')")
+            print(f"🔍 ANTES: ID={self._usuario_actual_id}, Rol='{self._usuario_actual_rol}'")
+            
+            if usuario_id <= 0:
+                print("⚠️ ID inválido")
+                return
+                
+            if not usuario_rol or not usuario_rol.strip():
+                print("⚠️ Rol vacío")
+                return
+            
+            # ✅ ASIGNAR CON LOG INMEDIATO
+            print(f"🔄 ASIGNANDO ID: {self._usuario_actual_id} → {usuario_id}")
+            self._usuario_actual_id = usuario_id
+            print(f"✅ ID asignado: {self._usuario_actual_id}")
+            
+            print(f"🔄 ASIGNANDO ROL: '{self._usuario_actual_rol}' → '{usuario_rol.strip()}'")
+            self._usuario_actual_rol = usuario_rol.strip()
+            print(f"✅ ROL asignado: '{self._usuario_actual_rol}'")
+            
+            print(f"🔍 DESPUÉS: ID={self._usuario_actual_id}, Rol='{self._usuario_actual_rol}'")
+            
+            # Verificar inmediatamente
+            if self._usuario_actual_id != usuario_id:
+                print(f"❌ ERROR: ID no coincide! Esperado: {usuario_id}, Actual: {self._usuario_actual_id}")
+            
+            if self._usuario_actual_rol != usuario_rol.strip():
+                print(f"❌ ERROR: Rol no coincide! Esperado: '{usuario_rol.strip()}', Actual: '{self._usuario_actual_rol}'")
+            
+            self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido")
+            
+            # Verificación retardada
+            QTimer.singleShot(1000, lambda: self._verificar_despues_de_1_segundo(usuario_id, usuario_rol))
+            QTimer.singleShot(3000, lambda: self._verificar_despues_de_3_segundos(usuario_id, usuario_rol))
+            
+        except Exception as e:
+            print(f"❌ Error en set_usuario_actual_con_rol: {e}")
+            self.operacionError.emit(f"Error: {str(e)}")
+        
+        self._log_call("set_usuario_actual_con_rol", f"SALIDA: Final ID={self._usuario_actual_id}")
+
+    def _verificar_despues_de_1_segundo(self, expected_id: int, expected_rol: str):
+        """Verificación tras 1 segundo"""
+        print(f"🔍 VERIFICACIÓN 1s:")
+        print(f"  Esperado: ID={expected_id}, Rol='{expected_rol}'")
+        print(f"  Actual: ID={self._usuario_actual_id}, Rol='{self._usuario_actual_rol}'")
+        
+        if self._usuario_actual_id != expected_id or self._usuario_actual_rol != expected_rol:
+            print(f"❌ RESET DETECTADO TRAS 1 SEGUNDO!")
+            print(f"📝 Últimas llamadas:")
+            for call in self._debug_calls[-5:]:
+                print(f"   {call['method']}: ID={call['auth_id']}, Extra={call['extra']}")
+
+    def _verificar_despues_de_3_segundos(self, expected_id: int, expected_rol: str):
+        """Verificación tras 3 segundos"""
+        print(f"🔍 VERIFICACIÓN 3s:")
+        print(f"  Esperado: ID={expected_id}, Rol='{expected_rol}'")
+        print(f"  Actual: ID={self._usuario_actual_id}, Rol='{self._usuario_actual_rol}'")
+        
+        if self._usuario_actual_id != expected_id or self._usuario_actual_rol != expected_rol:
+            print(f"❌ RESET DETECTADO TRAS 3 SEGUNDOS!")
+            print(f"📝 Log completo de llamadas:")
+            for i, call in enumerate(self._debug_calls):
+                print(f"   {i+1}. {call['method']}: ID={call['auth_id']}, Rol='{call['auth_role'][:10]}', Extra={call['extra']}")
+
+    def _verificar_autenticacion(self) -> bool:
+        """Verificación de autenticación - DEBUG"""
+        self._log_call("_verificar_autenticacion", f"ID={self._usuario_actual_id}")
+        
+        print(f"🔍 _verificar_autenticacion [{self._instance_id}]:")
+        print(f"  _usuario_actual_id = {self._usuario_actual_id}")
+        print(f"  _usuario_actual_rol = '{self._usuario_actual_rol}'")
+        
+        if self._usuario_actual_id <= 0:
+            print(f"❌ Usuario no autenticado en instancia {self._instance_id}")
+            print(f"📝 Últimas 5 llamadas antes del fallo:")
+            for call in self._debug_calls[-5:]:
+                print(f"   {call['method']}: ID={call['auth_id']} (instancia: {call.get('instance_id', 'unknown')})")
+            
+            self.operacionError.emit("Usuario no autenticado")
+            return False
+        
+        print(f"✅ Usuario autenticado en instancia {self._instance_id}")
+        return True
+
+    def _es_administrador(self) -> bool:
+        """Verifica si el usuario actual es administrador"""
+        try:
+            if hasattr(self, '_usuario_actual_rol'):
+                es_admin = self._usuario_actual_rol == "Administrador"
+                return es_admin
+            return False
+        except Exception as e:
+            return False
+
+    @Slot(result=bool)
+    def esAdministrador(self) -> bool:
+        """Verifica si el usuario es administrador (para QML)"""
+        return self._es_administrador()
+
+    def _puede_editar_trabajador(self, trabajador_id: int) -> bool:
+        """Verifica si puede editar un trabajador específico"""
+        if self._es_administrador():
+            return True
+        
+        if self._usuario_actual_rol == "Médico":
+            # Médicos pueden editar trabajadores creados hace menos de 30 días
+            trabajador = self.repository.get_by_id(trabajador_id)
+            if trabajador:
+                from datetime import datetime, timedelta
+                try:
+                    # Asumir que hay campo fecha de creación o usar fecha actual como referencia
+                    fecha_limite = datetime.now() - timedelta(days=30)
+                    return True  # Por ahora permitir, implementar lógica de fecha si es necesario
+                except:
+                    return True
+        
+        return False
+
+    @Slot(int, result=bool)
+    def puedeEditarTrabajador(self, trabajador_id: int) -> bool:
+        """Verifica permisos de edición para QML"""
+        return self._puede_editar_trabajador(trabajador_id)
     
     @Property(int, notify=operacionExitosa)
     def usuario_actual_id(self):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
-    
+
     # ===============================
-    # PROPIEDADES DE AUTENTICACIÓN
+    # SLOTS PARA DEBUG DESDE QML
     # ===============================
     
-    def _verificar_autenticacion(self) -> bool:
-        """Verifica si el usuario está autenticado"""
-        if self._usuario_actual_id <= 0:
-            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
-            return False
-        return True
-    
+    @Slot(result=str)
+    def get_debug_info(self) -> str:
+        """Info de debug para QML"""
+        try:
+            info = {
+                'current_id': self._usuario_actual_id,
+                'current_role': self._usuario_actual_rol,
+                'call_count': len(self._debug_calls),
+                'last_calls': self._debug_calls[-3:] if self._debug_calls else []
+            }
+            import json
+            return json.dumps(info, indent=2)
+        except Exception as e:
+            return f"Error: {e}"
+
+    @Slot()
+    def force_debug_print(self):
+        """Fuerza impresión de debug desde QML"""
+        print(f"🔍 ESTADO ACTUAL FORZADO:")
+        print(f"   ID: {self._usuario_actual_id}")
+        print(f"   Rol: '{self._usuario_actual_rol}'")
+        print(f"   Llamadas registradas: {len(self._debug_calls)}")
+
     # ===============================
-    # PROPERTIES - Datos para QML (SIN CAMBIOS)
+    # PROPERTIES - Datos para QML
     # ===============================
    
     @Property(list, notify=trabajadoresChanged)
@@ -167,9 +362,9 @@ class TrabajadorModel(QObject):
     def filtroBusqueda(self) -> str:
         """Texto de búsqueda actual"""
         return self._filtro_busqueda
-    
+
     # ===============================
-    # SLOTS PARA OPERACIONES CRUD TRABAJADORES - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
+    # SLOTS PARA OPERACIONES CRUD TRABAJADORES
     # ===============================
     
     @Slot(str, str, str, int, str, str, result=bool)
@@ -191,16 +386,11 @@ class TrabajadorModel(QObject):
                 nombre=nombre.strip(),
                 apellido_paterno=apellido_paterno.strip(),
                 apellido_materno=apellido_materno.strip(),
-                tipo_trabajador_id=tipo_trabajador_id
+                tipo_trabajador_id=tipo_trabajador_id,
+                usuario_id=self._usuario_actual_id,  # Agregar este parámetro
+                especialidad=especialidad.strip() if especialidad.strip() else None,
+                matricula=matricula.strip() if matricula.strip() else None
             )
-
-            # Actualizar especialidad y matrícula después de crear
-            if trabajador_id and (especialidad.strip() or matricula.strip()):
-                self.repository.update_worker(
-                    trabajador_id,
-                    especialidad=especialidad.strip() if especialidad.strip() else None,
-                    matricula=matricula.strip() if matricula.strip() else None
-                )
             
             if trabajador_id:
                 # Carga inmediata y forzada de datos
@@ -246,7 +436,7 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            print(f"📝 Actualizando trabajador ID: {trabajador_id} por usuario: {self._usuario_actual_id}")
+            print(f"🔄 Actualizando trabajador ID: {trabajador_id} por usuario: {self._usuario_actual_id}")
             
             # Preparar argumentos solo con valores no vacíos
             kwargs = {}
@@ -295,6 +485,11 @@ class TrabajadorModel(QObject):
         if not self._verificar_autenticacion():
             self.trabajadorEliminado.emit(False, "Usuario no autenticado")
             return False
+        # Verificar permisos de administrador
+        if not self._es_administrador():
+            error_msg = "Solo administradores pueden eliminar trabajadores"
+            self.trabajadorEliminado.emit(False, error_msg)
+            return False
         
         try:
             self._set_loading(True)
@@ -332,9 +527,9 @@ class TrabajadorModel(QObject):
             return False
         finally:
             self._set_loading(False)
-    
+
     # ===============================
-    # SLOTS PARA OPERACIONES CRUD TIPOS - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
+    # SLOTS PARA OPERACIONES CRUD TIPOS
     # ===============================
     
     @Slot(str, result=bool)
@@ -386,7 +581,7 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            print(f"📝 Actualizando tipo trabajador ID: {tipo_id} por usuario: {self._usuario_actual_id}")
+            print(f"🔄 Actualizando tipo trabajador ID: {tipo_id} por usuario: {self._usuario_actual_id}")
             
             success = self.repository.update_worker_type(tipo_id, nombre.strip())
             
@@ -456,14 +651,14 @@ class TrabajadorModel(QObject):
             return False
         finally:
             self._set_loading(False)
-    
+
     # ===============================
-    # SLOTS PARA BÚSQUEDA Y FILTROS (SIN VERIFICACIÓN - LECTURA)
+    # SLOTS PARA BÚSQUEDA Y FILTROS
     # ===============================
     
     @Slot(int, str, bool, str)
     def aplicarFiltros(self, tipo_id: int, buscar: str, incluir_stats: bool, area: str):
-        """Aplica filtros a la lista de trabajadores - SIN VERIFICACIÓN (solo lectura)"""
+        """Aplica filtros a la lista de trabajadores"""
         try:
             self._filtro_tipo = tipo_id
             self._filtro_busqueda = buscar.strip()
@@ -511,7 +706,7 @@ class TrabajadorModel(QObject):
     
     @Slot(str, int, result=list)
     def buscarTrabajadores(self, termino: str, limite: int = 50) -> List[Dict[str, Any]]:
-        """Búsqueda rápida de trabajadores - SIN VERIFICACIÓN (solo lectura)"""
+        """Búsqueda rápida de trabajadores"""
         try:
             if not termino.strip():
                 return self._trabajadores
@@ -526,7 +721,7 @@ class TrabajadorModel(QObject):
     
     @Slot(str, result=list)
     def obtenerTrabajadoresPorArea(self, area: str) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores por área específica - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajadores por área específica"""
         try:
             if area == "Todos":
                 return self._trabajadores
@@ -541,7 +736,7 @@ class TrabajadorModel(QObject):
     
     @Slot()
     def limpiarFiltros(self):
-        """Limpia todos los filtros aplicados - SIN VERIFICACIÓN (solo lectura)"""
+        """Limpia todos los filtros aplicados"""
         self._filtro_tipo = 0
         self._filtro_area = "Todos"
         self._filtro_busqueda = ""
@@ -549,14 +744,14 @@ class TrabajadorModel(QObject):
         self._trabajadores_filtrados = self._trabajadores.copy()
         self.trabajadoresChanged.emit()
         print("🧹 Filtros limpiados")
-    
+
     # ===============================
-    # SLOTS PARA CONSULTAS ESPECÍFICAS (SIN VERIFICACIÓN - LECTURA)
+    # SLOTS PARA CONSULTAS ESPECÍFICAS
     # ===============================
     
     @Slot(int, result='QVariantMap')
     def obtenerTrabajadorPorId(self, trabajador_id: int) -> Dict[str, Any]:
-        """Obtiene trabajador específico por ID - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajador específico por ID"""
         try:
             trabajador = self.repository.get_worker_with_type(trabajador_id)
             return trabajador if trabajador else {}
@@ -566,27 +761,27 @@ class TrabajadorModel(QObject):
     
     @Slot(result=list)
     def obtenerTrabajadoresLaboratorio(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores del área de laboratorio - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajadores del área de laboratorio"""
         return self.repository.get_laboratory_workers()
     
     @Slot(result=list)
     def obtenerTrabajadoresFarmacia(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores del área de farmacia - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajadores del área de farmacia"""
         return self.repository.get_pharmacy_workers()
     
     @Slot(result=list)
     def obtenerTrabajadoresEnfermeria(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores del área de enfermería - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajadores del área de enfermería"""
         return self.repository.get_nursing_staff()
     
     @Slot(result=list)
     def obtenerTrabajadoresAdministrativos(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores administrativos - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajadores administrativos"""
         return self.repository.get_administrative_staff()
     
     @Slot(result=list)
     def obtenerTrabajadoresSinAsignaciones(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores sin asignaciones - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene trabajadores sin asignaciones"""
         try:
             return self.repository.get_workers_without_assignments()
         except Exception as e:
@@ -595,21 +790,21 @@ class TrabajadorModel(QObject):
     
     @Slot(int, result='QVariantMap')
     def obtenerCargaTrabajo(self, trabajador_id: int) -> Dict[str, Any]:
-        """Obtiene carga de trabajo de un trabajador - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene carga de trabajo de un trabajador"""
         try:
             trabajador = self.repository.get_worker_with_lab_stats(trabajador_id)
             return trabajador if trabajador else {}
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo carga de trabajo: {str(e)}")
             return {}
-    
+
     # ===============================
-    # SLOTS PARA RECARGA DE DATOS (SIN VERIFICACIÓN - LECTURA)
+    # SLOTS PARA RECARGA DE DATOS
     # ===============================
     
     @Slot()
     def refrescarDatosInmediato(self):
-        """Método para refrescar datos inmediatamente desde QML - SIN VERIFICACIÓN (solo lectura)"""
+        """Método para refrescar datos inmediatamente desde QML"""
         try:
             print("🔄 Refrescando datos inmediatamente...")
             self._cargar_trabajadores()
@@ -627,7 +822,7 @@ class TrabajadorModel(QObject):
     
     @Slot()
     def recargarDatos(self):
-        """Recarga todos los datos desde la base de datos - SIN VERIFICACIÓN (solo lectura)"""
+        """Recarga todos los datos desde la base de datos"""
         try:
             self._set_loading(True)
             self._cargar_datos_iniciales()
@@ -640,20 +835,20 @@ class TrabajadorModel(QObject):
     
     @Slot()
     def recargarTrabajadores(self):
-        """Recarga solo la lista de trabajadores - SIN VERIFICACIÓN (solo lectura)"""
+        """Recarga solo la lista de trabajadores"""
         try:
             self._cargar_trabajadores()
             print("🔄 Trabajadores recargados")
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error recargando trabajadores: {str(e)}")
-    
+
     # ===============================
-    # SLOTS PARA UTILIDADES (SIN VERIFICACIÓN - LECTURA)
+    # SLOTS PARA UTILIDADES
     # ===============================
     
     @Slot(result=list)
     def obtenerTiposParaComboBox(self) -> List[Dict[str, Any]]:
-        """Obtiene tipos de trabajador formateados para ComboBox - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene tipos de trabajador formateados para ComboBox"""
         try:
             tipos_formateados = []
             
@@ -680,7 +875,7 @@ class TrabajadorModel(QObject):
     
     @Slot(result=list)
     def obtenerAreasDisponibles(self) -> List[str]:
-        """Obtiene lista de áreas disponibles para filtros - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene lista de áreas disponibles para filtros"""
         return [
             "Todos",
             "Laboratorio", 
@@ -693,7 +888,7 @@ class TrabajadorModel(QObject):
     
     @Slot(str, str, str, result=str)
     def formatearNombreCompleto(self, nombre: str, apellido_paterno: str, apellido_materno: str = "") -> str:
-        """Formatea nombre completo del trabajador - SIN VERIFICACIÓN (solo lectura)"""
+        """Formatea nombre completo del trabajador"""
         partes = [nombre.strip(), apellido_paterno.strip()]
         
         if apellido_materno and apellido_materno.strip():
@@ -703,7 +898,7 @@ class TrabajadorModel(QObject):
     
     @Slot(int, result=str)
     def obtenerNombreTipo(self, tipo_id: int) -> str:
-        """Obtiene nombre del tipo por ID - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene nombre del tipo por ID"""
         try:
             for tipo in self._tipos_trabajador:
                 if tipo.get('id') == tipo_id:
@@ -714,7 +909,7 @@ class TrabajadorModel(QObject):
     
     @Slot(result='QVariantMap')
     def obtenerEstadisticasCompletas(self) -> Dict[str, Any]:
-        """Obtiene estadísticas completas del sistema - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene estadísticas completas del sistema"""
         try:
             return self.repository.get_worker_statistics()
         except Exception as e:
@@ -723,7 +918,7 @@ class TrabajadorModel(QObject):
     
     @Slot(result='QVariantMap')
     def obtenerDistribucionCarga(self) -> Dict[str, Any]:
-        """Obtiene distribución de carga de trabajo - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene distribución de carga de trabajo"""
         try:
             carga = self.repository.get_laboratory_workload()
             return {
@@ -734,21 +929,25 @@ class TrabajadorModel(QObject):
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo distribución: {str(e)}")
             return {}
-    
+
     # ===============================
-    # MÉTODOS PRIVADOS (SIN CAMBIOS)
+    # MÉTODOS PRIVADOS
     # ===============================
     
     def _cargar_datos_iniciales(self):
-        """Carga todos los datos necesarios al inicializar"""
+        """Carga todos los datos necesarios al inicializar - CON DEBUG"""
+        self._log_call("_cargar_datos_iniciales", "INICIO")
+        
         try:
             self._cargar_trabajadores()
             self._cargar_tipos_trabajador()
             self._cargar_estadisticas()
             print("📊 Datos iniciales de trabajadores cargados")
         except Exception as e:
-            print(f"❌ Error cargando datos iniciales de trabajadores: {e}")
+            print(f"❌ Error cargando datos iniciales: {e}")
             self.errorOccurred.emit("Error inicial", f"Error cargando datos: {str(e)}")
+        
+        self._log_call("_cargar_datos_iniciales", "FIN")
     
     def _cargar_trabajadores(self):
         """Carga lista de trabajadores desde el repository"""
@@ -803,50 +1002,39 @@ class TrabajadorModel(QObject):
     
     @Slot()
     def _actualizar_tipos_trabajadores_desde_signal(self):
-        """Actualiza tipos de trabajadores cuando recibe señal global"""
+        """Actualiza tipos desde señal - CON DEBUG"""
+        self._log_call("_actualizar_tipos_trabajadores_desde_signal", "SIGNAL")
+        
         try:
-            print("📡 TrabajadorModel: Recibida señal de actualización de tipos de trabajadores")
-            
-            # Invalidar cache si existe el método
+            print("📡 Actualizando tipos desde señal global")
             if hasattr(self.repository, 'invalidate_worker_caches'):
                 self.repository.invalidate_worker_caches()
-                print("🗑️ Cache de tipos invalidado en TrabajadorModel")
-            
             self._cargar_tipos_trabajador()
-            print("✅ Tipos de trabajadores actualizados desde señal global en TrabajadorModel")
         except Exception as e:
-            print(f"❌ Error actualizando tipos desde señal: {e}")
+            print(f"❌ Error actualizando tipos: {e}")
 
     @Slot(str)
     def _manejar_actualizacion_global(self, mensaje: str):
-        """Maneja actualizaciones globales de trabajadores"""
+        """Maneja actualizaciones globales - CON DEBUG"""
+        self._log_call("_manejar_actualizacion_global", f"MSG: {mensaje[:30]}")
+        
         try:
-            print(f"📡 TrabajadorModel: {mensaje}")
-            # Emitir señal para notificar a QML que hay cambios
+            print(f"📡 Manejo global: {mensaje}")
             self.tiposTrabajadorChanged.emit()
         except Exception as e:
-            print(f"❌ Error manejando actualización global: {e}")
+            print(f"❌ Error manejando actualización: {e}")
 
     def emergency_disconnect(self):
-        """Desconexión de emergencia para TrabajadorModel"""
+        """Desconexión de emergencia - SIN RESETEAR AUTENTICACIÓN"""
+        self._log_call("emergency_disconnect", "INICIO")
+        
         try:
-            print("🚨 TrabajadorModel: Iniciando desconexión de emergencia...")
+            print("🚨 Emergency disconnect iniciado")
             
-            # Desconectar señales globales
-            try:
-                if hasattr(self, 'global_signals'):
-                    self.global_signals.tiposTrabajadoresModificados.disconnect(self._actualizar_tipos_trabajadores_desde_signal)
-                    self.global_signals.trabajadoresNecesitaActualizacion.disconnect(self._manejar_actualizacion_global)
-            except:
-                pass
-            
-            # Desconectar señales propias
+            # Desconectar señales sin tocar autenticación
             signals_to_disconnect = [
                 'trabajadoresChanged', 'tiposTrabajadorChanged', 'estadisticasChanged',
-                'trabajadorCreado', 'trabajadorActualizado', 'trabajadorEliminado',
-                'tipoTrabajadorCreado', 'tipoTrabajadorActualizado', 'tipoTrabajadorEliminado',
-                'busquedaCompleta', 'loadingChanged', 'errorOccurred', 'successMessage',
-                'warningMessage', 'operacionError', 'operacionExitosa'
+                'trabajadorCreado', 'trabajadorActualizado', 'trabajadorEliminado'
             ]
             
             for signal_name in signals_to_disconnect:
@@ -856,24 +1044,21 @@ class TrabajadorModel(QObject):
                     except:
                         pass
             
-            # Limpiar datos
+            # Limpiar datos SIN tocar autenticación
             self._trabajadores = []
             self._trabajadores_filtrados = []
             self._tipos_trabajador = []
-            self._estadisticas = {}
-            self._filtro_tipo = 0
-            self._filtro_area = "Todos"
-            self._filtro_busqueda = ""
-            self._incluir_stats = False
-            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
             
-            # Anular repository
-            self.repository = None
+            # ✅ NO RESETEAR AUTENTICACIÓN EN EMERGENCY_DISCONNECT
+            # self._usuario_actual_id = 0  # ← COMENTADO
+            # self._usuario_actual_rol = ""  # ← COMENTADO
             
-            print("✅ TrabajadorModel: Desconexión de emergencia completada")
+            print("✅ Emergency disconnect completado SIN resetear auth")
             
         except Exception as e:
-            print(f"❌ Error en desconexión TrabajadorModel: {e}")
+            print(f"❌ Error en emergency disconnect: {e}")
+        
+        self._log_call("emergency_disconnect", "FIN")
 
 # ===============================
 # REGISTRO PARA QML

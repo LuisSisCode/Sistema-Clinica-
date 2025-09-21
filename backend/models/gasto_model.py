@@ -90,11 +90,40 @@ class GastoModel(QObject):
         except Exception as e:
             print(f"❌ Error estableciendo usuario en GastoModel: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
+        """Establece usuario actual CON ROL"""
+        try:
+            self._usuario_actual_id = usuario_id
+            self._usuario_actual_rol = usuario_rol.strip()  # ✅ Agregar esta línea
+            print(f"👤 Usuario {usuario_id} con rol '{usuario_rol}' establecido en GastoModel")
+            self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            self.operacionError.emit(f"Error: {str(e)}")
     
     @Property(int, notify=operacionExitosa)
     def usuario_actual_id(self):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
+
+    @Slot(int, result=bool)
+    def puedeEditarGasto(self, gasto_id: int) -> bool:
+        """Verifica si el usuario puede editar el gasto (para QML)"""
+        if not self._verificar_autenticacion():
+            return False
+        return self._puede_editar_gasto(gasto_id)
+
+    @Slot(result=bool)
+    def puedeEliminarGastos(self) -> bool:
+        """Verifica si el usuario puede eliminar gastos (para QML)"""
+        return self._es_administrador()
+    
+    @Slot(result=bool)
+    def esAdministrador(self) -> bool:
+        """Verifica si el usuario es administrador (para QML)"""
+        return self._es_administrador()
     
     # ===============================
     # PROPIEDADES DE AUTENTICACIÓN
@@ -107,6 +136,54 @@ class GastoModel(QObject):
             return False
         return True
     
+    def _es_administrador(self) -> bool:
+        """Verifica si el usuario actual es administrador"""
+        try:
+            # Usar rol almacenado directamente (como en laboratorio_model)
+            if hasattr(self, '_usuario_actual_rol'):
+                es_admin = self._usuario_actual_rol == "Administrador"
+                #print(f"🔐 Verificando rol: '{self._usuario_actual_rol}' -> Admin: {es_admin}")
+                return es_admin
+            
+            print("⚠️ No hay rol almacenado")
+            return False
+            
+        except Exception as e:
+            print(f"Error verificando rol: {e}")
+            return False
+
+    def _puede_editar_gasto(self, gasto_id: int) -> bool:
+        """Verifica si el usuario puede editar el gasto"""
+        if self._es_administrador():
+            return True
+        
+        # Query simplificado solo para verificación
+        try:
+            query = "SELECT Id_RegistradoPor, Fecha FROM Gastos WHERE id = ?"
+            result = self.repository._execute_query(query, (gasto_id,), fetch_one=True)
+            
+            if not result:
+                return False
+            
+            # Verificar que sea el creador
+            if result.get('Id_RegistradoPor') != self._usuario_actual_id:
+                return False
+            
+            # Verificar que sea < 30 días
+            from datetime import datetime
+            fecha_creacion = result.get('Fecha')
+            if isinstance(fecha_creacion, str):
+                fecha_creacion = datetime.strptime(fecha_creacion[:10], '%Y-%m-%d')
+            elif not isinstance(fecha_creacion, datetime):
+                return False
+            
+            dias_transcurridos = (datetime.now() - fecha_creacion).days
+            return dias_transcurridos <= 30
+            
+        except Exception as e:
+            print(f"Error verificando permisos: {e}")
+            return False
+        
     # ===============================
     # CONEXIONES Y FUNCIONES HELPER (SIN CAMBIOS)
     # ===============================
@@ -251,6 +328,13 @@ class GastoModel(QObject):
             if not self._verificar_autenticacion():
                 return False
             
+            if not self._puede_editar_gasto(gasto_id):
+                mensaje_error = "No tienes permisos para editar este gasto"
+                if not self._es_administrador():
+                    mensaje_error += " (solo puedes editar tus gastos dentro de 30 días)"
+                self.operacionError.emit(mensaje_error)
+                return False
+            
             self._set_loading(True)
             
             print(f"✏️ Actualizando gasto ID: {gasto_id} por usuario: {self._usuario_actual_id}")
@@ -298,40 +382,31 @@ class GastoModel(QObject):
     
     @Slot(int, result=bool)
     def eliminarGasto(self, gasto_id: int) -> bool:
-        """Elimina gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Elimina un gasto (solo administradores)"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_autenticacion():
+            print(f"🗑️ Eliminando gasto ID: {gasto_id}")
+            print(f"🔐 Verificando permisos de admin...")
+            
+            es_admin = self._es_administrador()
+            print(f"🔐 Es administrador: {es_admin}")
+            
+            if not es_admin:
+                print("❌ No es administrador")
                 return False
             
-            self._set_loading(True)
+            print(f"🗑️ Llamando repository.delete_expense({gasto_id})")    
+            resultado = self.repository.delete_expense(gasto_id)
+            print(f"🗑️ Resultado repository: {resultado}")
             
-            print(f"🗑️ Eliminando gasto ID: {gasto_id} por usuario: {self._usuario_actual_id}")
-            
-            success = self.repository.delete(gasto_id)
-            
-            if success:
-                self._cargar_gastos()
-                self._cargar_estadisticas()
-                
-                mensaje = "Gasto eliminado exitosamente"
-                self.gastoEliminado.emit(True, mensaje)
-                self.successMessage.emit(mensaje)
-                
-                print(f"✅ Gasto eliminado por usuario {self._usuario_actual_id}")
+            if resultado:
+                print("✅ Emitiendo señal gastosChanged")
+                self.gastosChanged.emit()  # ← Cambio aquí
                 return True
-            else:
-                error_msg = "Error eliminando gasto"
-                self.gastoEliminado.emit(False, error_msg)
-                return False
-                
-        except Exception as e:
-            error_msg = f"Error inesperado: {str(e)}"
-            self.gastoEliminado.emit(False, error_msg)
-            self.errorOccurred.emit("Error crítico", error_msg)
             return False
-        finally:
-            self._set_loading(False)
+            
+        except Exception as e:
+            print(f"❌ Error eliminando gasto: {e}")
+            return False
     
     # ===============================
     # ✅ OPERACIONES CRUD TIPOS GASTOS - CON VERIFICACIÓN DE AUTENTICACIÓN
@@ -609,6 +684,11 @@ class GastoModel(QObject):
             self.errorOccurred.emit("Error de reporte", error_msg)
         finally:
             self._set_loading(False)
+
+    def set_auth_model_ref(self, auth_model):
+        """Establece referencia al modelo de autenticación"""
+        self._auth_model_ref = auth_model
+        print("🔐 Referencia AuthModel establecida en GastoModel")
     
     # ===============================
     # CONSULTAS ESPECÍFICAS (SIN VERIFICACIÓN - LECTURA)
@@ -789,6 +869,30 @@ class GastoModel(QObject):
             self.errorOccurred.emit("Error", f"Error contando gastos: {str(e)}")
             return 0
     
+    @Slot(int, result=int)
+    def diasParaEditar(self, gasto_id: int) -> int:
+        """Obtiene días restantes para editar (solo para médicos)"""
+        if self._es_administrador():
+            return -1  # Sin límite
+        
+        try:
+            query = "SELECT Fecha FROM Gastos WHERE id = ? AND Id_RegistradoPor = ?"
+            result = self.repository._execute_query(query, (gasto_id, self._usuario_actual_id), fetch_one=True)
+            
+            if not result:
+                return 0
+            
+            from datetime import datetime
+            fecha_creacion = result.get('Fecha')
+            if isinstance(fecha_creacion, str):
+                fecha_creacion = datetime.strptime(fecha_creacion[:10], '%Y-%m-%d')
+            
+            dias_transcurridos = (datetime.now() - fecha_creacion).days
+            return max(0, 30 - dias_transcurridos)
+            
+        except:
+            return 0
+
     # ===============================
     # MÉTODOS PRIVADOS (SIN CAMBIOS)
     # ===============================
