@@ -3,6 +3,7 @@ LaboratorioModel - ACTUALIZADO con autenticación estandarizada
 Migrado del patrón hardcoded al patrón de ConsultaModel
 """
 
+import re
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer
 from PySide6.QtQml import qmlRegisterType
 from typing import List, Dict, Any, Optional
@@ -133,7 +134,7 @@ class LaboratorioModel(QObject):
         return True
     
     def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 5) -> bool:
-        """Valida que el registro no sea muy antiguo para editar - LABORATORIO: 5 días"""
+        """Valida que el registro no sea muy antiguo para eliminar - SOLO PARA MÉDICOS"""
         try:
             if not fecha_registro:
                 return True  # Si no hay fecha, permitir edición
@@ -153,8 +154,8 @@ class LaboratorioModel(QObject):
             dias_transcurridos = (datetime.now() - fecha_obj).days
             
             if dias_transcurridos > dias_limite:
-                self.operacionError.emit(f"No se pueden editar exámenes de más de {dias_limite} días")
-                print(f"📅 Edición bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
+                self.operacionError.emit(f"No se pueden eiminar exámenes de más de {dias_limite} días")
+                print(f"📅 Eliminacion bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
                 return False
             
             return True
@@ -378,14 +379,10 @@ class LaboratorioModel(QObject):
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
                                            apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente por cédula o crea uno nuevo - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Busca paciente por cédula o crea uno nuevo - PERMITE CÉDULA VACÍA"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
             if not self._verificar_autenticacion():
-                return -1
-            
-            if not cedula or len(cedula.strip()) < 5:
-                self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
                 return -1
             
             if not nombre or len(nombre.strip()) < 2:
@@ -402,7 +399,7 @@ class LaboratorioModel(QObject):
                 nombre.strip(), 
                 apellido_paterno.strip(), 
                 apellido_materno.strip(), 
-                cedula.strip()
+                cedula.strip()  # Puede ser cadena vacía
             )
             
             if paciente_id > 0:
@@ -417,6 +414,28 @@ class LaboratorioModel(QObject):
             print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
             return -1
+        
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
+        """Busca pacientes por nombre completo"""
+        try:
+            if len(nombre_completo.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
+            
+            resultados = self.repository.search_patient_by_full_name(
+                nombre_completo.strip(), limite
+            )
+            
+            print(f"📋 Encontrados {len(resultados)} pacientes por nombre")
+            return resultados
+            
+        except Exception as e:
+            error_msg = f"Error buscando por nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return []
     
     # ===============================
     # OPERACIONES CRUD - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
@@ -477,12 +496,8 @@ class LaboratorioModel(QObject):
     @Slot(int, int, str, int, str, result=str)
     def actualizarExamen(self, examen_id: int, tipo_analisis_id: int, tipo_servicio: str, 
                         trabajador_id: int = 0, detalles: str = "") -> str:
-        """Actualiza examen de laboratorio existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
+        """Actualiza examen de laboratorio existente """
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_permisos_edicion(examen_id):
-                return json.dumps({'exito': False, 'error': 'Sin permisos para editar'})
-            
             self._set_estado_actual("cargando")
             
             if examen_id <= 0:
@@ -538,7 +553,9 @@ class LaboratorioModel(QObject):
         """Elimina examen de laboratorio - ✅ SOLO ADMINISTRADORES"""
         try:
             # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
-            if not self._verificar_permisos_admin():
+            puede_eliminar, razon = self._verificar_permisos_eliminacion(examen_id)
+            if not puede_eliminar:
+                self.operacionError.emit(razon)
                 return False
             
             self._set_estado_actual("cargando")
@@ -565,6 +582,56 @@ class LaboratorioModel(QObject):
             self._set_estado_actual("error")
             return False
     
+    @Slot(int, result='QVariantMap')
+    def verificar_permisos_analisis(self, analisis_id: int):
+        """Verifica permisos del usuario actual para un análisis específico"""
+        try:
+            puede_editar = self._usuario_actual_rol in ["Administrador", "Médico"]
+            puede_eliminar, razon_eliminar = self._verificar_permisos_eliminacion(analisis_id)
+            es_admin = self._usuario_actual_rol == "Administrador"
+            es_medico = self._usuario_actual_rol == "Médico"
+            
+            # Obtener información del análisis
+            analisis = self.repository.get_by_id(analisis_id)
+            dias_antiguedad = 0
+            
+            if analisis:
+                fecha_analisis = analisis.get('Fecha')
+                if fecha_analisis:
+                    try:
+                        if isinstance(fecha_analisis, str):
+                            fecha_obj = datetime.fromisoformat(fecha_analisis.replace('Z', ''))
+                        elif isinstance(fecha_analisis, datetime):
+                            fecha_obj = fecha_analisis
+                        else:
+                            fecha_obj = datetime.now()
+                        
+                        dias_antiguedad = (datetime.now() - fecha_obj).days
+                    except:
+                        dias_antiguedad = 0
+            
+            # Para médicos, verificar límite de días para edición
+            return {
+                'puede_editar': puede_editar,
+                'puede_eliminar': puede_eliminar,
+                'razon_eliminar': razon_eliminar,
+                'es_administrador': es_admin,
+                'es_medico': es_medico,
+                'dias_antiguedad': dias_antiguedad,
+                'limite_dias': 30
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando permisos: {e}")
+            return {
+                'puede_editar': False,
+                'puede_eliminar': False,
+                'es_administrador': False,
+                'es_medico': False,
+                'dias_antiguedad': 999,
+                'limite_dias_edicion': 5
+            }
+
     # ===============================
     # GESTIÓN DE DATOS (SIN CAMBIOS - LECTURA)
     # ===============================
@@ -687,22 +754,83 @@ class LaboratorioModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión LaboratorioModel: {e}")
-    def _verificar_permisos_edicion(self, consulta_id: int) -> tuple[bool, str]:
+
+        
+    def _verificar_permisos_eliminacion(self, consulta_id: int) -> tuple[bool, str]:
+        """Permisos de eliminación - ADMINS sin límite, MÉDICOS máximo 30 días"""
+        if not self._verificar_autenticacion():
+            return False, "Usuario no autenticado"
+        
+        if self._usuario_actual_rol == "Administrador":
+            return True, "Administrador: Sin restricciones"
+        
+        if self._usuario_actual_rol == "Médico":
+            analisis = self.repository.get_lab_exam_by_id_complete(consulta_id)
+            if not analisis:
+                return False, "Analisis no encontrada"
+            
+            fecha_analisis = analisis.get('Fecha')
+            if not self._validar_fecha_eliminacion(fecha_analisis, dias_limite=30):
+                return False, "Solo puede eliminar consultas de máximo 30 días"
+            
+            return True, "Médico: Puede eliminar (consulta reciente)"
+        
+        return False, "Sin permisos para eliminar consultas"
+    
+    def _validar_fecha_eliminacion(self, fecha_registro, dias_limite: int = 30) -> bool:
+        """Valida que el registro no sea muy antiguo para eliminar - SOLO PARA MÉDICOS"""
+        try:
+            if not fecha_registro:
+                return True
+            
+            if isinstance(fecha_registro, str):
+                try:
+                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
+                except:
+                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
+            elif isinstance(fecha_registro, datetime):
+                fecha_obj = fecha_registro
+            else:
+                return True
+            
+            dias_transcurridos = (datetime.now() - fecha_obj).days
+            if dias_transcurridos > dias_limite:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"⚠️ Error validando fecha eliminación: {e}")
+            return True
+        
+    def buscar_paciente_por_nombre_inteligente(self, nombre_completo: str):
         """
-        Verifica permisos completos para edición de consulta
-        Returns: (puede_editar, razon)
+        ✅ MÉTODO AUXILIAR PARA CONSULTA_MODEL.PY
+        
+        Busca paciente por nombre con la nueva lógica mejorada
         """
         try:
-            # 1. Verificar autenticación básica
-            if not self._verificar_autenticacion():
-                return False, "Usuario no autenticado"
+            if not nombre_completo or len(nombre_completo.strip()) < 3:
+                return None
             
-            # ✅ SIEMPRE PERMITIR EDICIÓN
-            return True, "Edición libre para todos"
+            print(f"🔍 Búsqueda inteligente por nombre: '{nombre_completo}'")
+            
+            # Usar el método mejorado
+            pacientes = self.repository.search_patient_by_full_name(nombre_completo, limite=5)
+            
+            if pacientes:
+                # Ordenar por relevancia y seleccionar el mejor
+                pacientes_ordenados = sorted(pacientes, key=lambda x: x.get('relevancia', 999))
+                mejor_paciente = pacientes_ordenados[0]
                 
+                print(f"✅ Mejor paciente encontrado: {mejor_paciente['nombre_completo']} (ID: {mejor_paciente['id']})")
+                return mejor_paciente
+            
+            return None
+            
         except Exception as e:
-            print(f"⚠️ Error verificando permisos de edición: {e}")
-            return False, f"Error verificando permisos: {str(e)}"
+            print(f"❌ Error en búsqueda inteligente: {e}")
+            return None
 # ===============================
 # REGISTRO PARA QML
 # ===============================
