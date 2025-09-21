@@ -519,7 +519,8 @@ class AppController(QObject):
                 (self.enfermeria_model, 'set_usuario_actual_con_rol'),  # ✅ CORREGIDO  
                 (self.laboratorio_model, 'set_usuario_actual_con_rol'), # ✅ CORREGIDO
                 (self.gasto_model, 'set_usuario_actual_con_rol'),       # ✅ CORREGIDO
-                (self.trabajador_model, 'set_usuario_actual_con_rol'),          # ✅ CORREGIDO
+                (self.trabajador_model, 'set_usuario_actual_con_rol'),  
+                (self.reportes_model, 'set_usuario_actual'),                 # ✅ CORREGIDO
             ]
             
             # ✅ MODELOS QUE DEBERÍAN TENER AUTENTICACIÓN PERO AÚN NO LA TIENEN
@@ -588,6 +589,14 @@ class AppController(QObject):
             (self.reportes_model, 'set_usuario_actual_con_rol'),
             (self.dashboard_model, 'set_usuario_actual_con_rol'),
         ]
+
+        # ✅ VERIFICACIÓN ESPECÍFICA PARA REPORTES
+        if self.reportes_model:
+            try:
+                self.reportes_model.set_usuario_actual(usuario_id)
+                print(f"✅ Usuario {usuario_id} establecido específicamente en ReportesModel")
+            except Exception as e:
+                print(f"❌ Error estableciendo usuario en ReportesModel: {e}")
 
         # Establecer referencia al authModel en gastoModel para verificación de roles
         if self.gasto_model and hasattr(self, 'auth_model'):

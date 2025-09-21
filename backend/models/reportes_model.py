@@ -76,7 +76,7 @@ class ReportesModel(QObject):
                 print(f"⚠️ ID de usuario inválido en ReportesModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
         except Exception as e:
-            print(f"❌ Error estableciendo usuario en ReportesModel: {e}")
+            print(f"⌚ Error estableciendo usuario en ReportesModel: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
     
     @Property(int, notify=operacionExitosa)
@@ -96,9 +96,12 @@ class ReportesModel(QObject):
     
     def _verificar_autenticacion(self) -> bool:
         """Verifica si el usuario está autenticado"""
+        print(f"🔐 Verificando autenticación: usuario_id = {self._usuario_actual_id}")
         if self._usuario_actual_id <= 0:
+            print("❌ Autenticación fallida: usuario no establecido")
             self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
             return False
+        print(f"✅ Autenticación exitosa: usuario {self._usuario_actual_id}")
         return True
     
     # ===============================
@@ -165,11 +168,13 @@ class ReportesModel(QObject):
         Genera reporte - Solo verifica autenticación básica
         """
         try:
+            print(f"📊 INICIANDO generarReporte - Tipo: {tipo_reporte}, Usuario: {self._usuario_actual_id}")
             self._set_loading(True)
             self._set_progress(10)
             
             # ✅ VERIFICAR AUTENTICACIÓN BÁSICA
             if not self._verificar_autenticacion():
+                print("❌ Verificación de autenticación falló")
                 return False
             
             print(f"📊 Generando reporte tipo {tipo_reporte} - Usuario: {self._usuario_actual_id}")
