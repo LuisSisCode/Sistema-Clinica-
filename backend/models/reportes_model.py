@@ -270,34 +270,94 @@ class ReportesModel(QObject):
             raise DatabaseQueryError(f"Error consultando datos: {str(e)}")
     
     def _calcular_resumen(self, datos: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calcula resumen estadístico - SIN FILTROS"""
+        """Calcula resumen estadístico - CON VALIDACIÓN DE TIPOS"""
         try:
+            print(f"🔍 DEBUGGING _calcular_resumen - Datos recibidos: {len(datos) if datos else 0}")
+            
             if not datos:
+                print("⚠️ No hay datos para calcular resumen")
                 return {}
             
             total_registros = len(datos)
             total_valor = 0.0
             total_cantidad = 0
             
-            # Calcular todos los valores sin restricciones
-            for registro in datos:
-                # Obtener valor (puede estar en diferentes campos)
-                valor = 0.0
-                if 'valor' in registro and registro['valor'] is not None:
-                    valor = float(registro['valor'])
-                
-                total_valor += valor
-                
-                # Obtener cantidad
-                cantidad = 0
-                if 'cantidad' in registro and registro['cantidad'] is not None:
-                    cantidad = int(float(registro['cantidad']))
-                
-                total_cantidad += cantidad
+            print(f"📊 Procesando {total_registros} registros...")
+            
+            # Calcular todos los valores con validación de tipos
+            for i, registro in enumerate(datos):
+                try:
+                    print(f"🔍 Registro {i}: {type(registro)} = {registro}")
+                    
+                    # ✅ VALIDAR QUE registro SEA UN DICCIONARIO
+                    if not isinstance(registro, dict):
+                        print(f"⚠️ Registro {i} no es diccionario: {type(registro)}")
+                        continue
+                    
+                    # Obtener valor (puede estar en diferentes campos) - CON VALIDACIÓN
+                    valor = 0.0
+                    valor_raw = registro.get('valor', 0)
+                    
+                    print(f"🔍 valor_raw: {type(valor_raw)} = {valor_raw}")
+                    
+                    # ✅ VALIDAR TIPO DE VALOR ANTES DE PROCESAR
+                    if valor_raw is not None:
+                        try:
+                            # Convertir a string primero si es necesario, luego a float
+                            if isinstance(valor_raw, (int, float)):
+                                valor = float(valor_raw)
+                            elif isinstance(valor_raw, str):
+                                # ✅ AQUÍ PODRÍA ESTAR EL PROBLEMA - verificar len() en string
+                                valor_clean = str(valor_raw).strip()
+                                if len(valor_clean) > 0 and valor_clean.replace('.', '').replace('-', '').isdigit():
+                                    valor = float(valor_clean)
+                                else:
+                                    valor = 0.0
+                            else:
+                                print(f"⚠️ Tipo de valor no reconocido: {type(valor_raw)}")
+                                valor = 0.0
+                        except (ValueError, TypeError) as e:
+                            print(f"⚠️ Error convirtiendo valor: {e}")
+                            valor = 0.0
+                    
+                    total_valor += valor
+                    print(f"✅ Valor procesado: {valor}, Total acumulado: {total_valor}")
+                    
+                    # Obtener cantidad - CON VALIDACIÓN
+                    cantidad = 0
+                    cantidad_raw = registro.get('cantidad', 0)
+                    
+                    print(f"🔍 cantidad_raw: {type(cantidad_raw)} = {cantidad_raw}")
+                    
+                    # ✅ VALIDAR TIPO DE CANTIDAD
+                    if cantidad_raw is not None:
+                        try:
+                            if isinstance(cantidad_raw, (int, float)):
+                                cantidad = int(float(cantidad_raw))
+                            elif isinstance(cantidad_raw, str):
+                                # ✅ VALIDAR ANTES DE USAR len()
+                                cantidad_clean = str(cantidad_raw).strip()
+                                if len(cantidad_clean) > 0 and cantidad_clean.replace('.', '').isdigit():
+                                    cantidad = int(float(cantidad_clean))
+                                else:
+                                    cantidad = 0
+                            else:
+                                print(f"⚠️ Tipo de cantidad no reconocido: {type(cantidad_raw)}")
+                                cantidad = 0
+                        except (ValueError, TypeError) as e:
+                            print(f"⚠️ Error convirtiendo cantidad: {e}")
+                            cantidad = 0
+                    
+                    total_cantidad += cantidad
+                    print(f"✅ Cantidad procesada: {cantidad}, Total acumulado: {total_cantidad}")
+                    
+                except Exception as e:
+                    print(f"⚠️ Error procesando registro {i}: {e}")
+                    continue
             
             promedio_valor = total_valor / total_registros if total_registros > 0 else 0.0
             
-            return {
+            resumen_final = {
                 'totalRegistros': total_registros,
                 'totalValor': total_valor,
                 'totalCantidad': total_cantidad,
@@ -305,6 +365,32 @@ class ReportesModel(QObject):
                 'fechaGeneracion': self._fecha_desde_actual,
                 'fechaHasta': self._fecha_hasta_actual,
                 'tipoReporte': self._tipo_reporte_actual
+            }
+            
+            print(f"✅ Resumen calculado: {resumen_final}")
+            return resumen_final
+            
+        except Exception as e:
+            print(f"❌ Error crítico en _calcular_resumen: {e}")
+            print(f"🔍 Tipo de datos recibidos: {type(datos)}")
+            if datos:
+                print(f"🔍 Primer elemento: {type(datos[0]) if len(datos) > 0 else 'Sin elementos'}")
+                if len(datos) > 0:
+                    print(f"🔍 Contenido primer elemento: {datos[0]}")
+            
+            # Traceback completo para debugging
+            import traceback
+            traceback.print_exc()
+            
+            # Retornar resumen básico en caso de error
+            return {
+                'totalRegistros': len(datos) if datos else 0,
+                'totalValor': 0.0,
+                'totalCantidad': 0,
+                'promedioValor': 0.0,
+                'fechaGeneracion': self._fecha_desde_actual or "",
+                'fechaHasta': self._fecha_hasta_actual or "",
+                'tipoReporte': self._tipo_reporte_actual or 0
             }
             
         except Exception as e:
