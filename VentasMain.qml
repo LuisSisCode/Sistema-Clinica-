@@ -109,6 +109,12 @@ Item {
                                     console.log("📱 Señal recibida: Navegar a CrearVenta")
                                     ventasMainRoot.irACrearVenta()
                                 }
+                                
+                                // ✅ NUEVA CONEXIÓN PARA EDITAR VENTA
+                                onNavegarAEditarVenta: function(ventaId) {
+                                    console.log("📝 Señal recibida: Navegar a editar venta", ventaId)
+                                    ventasMainRoot.irAEditarVenta(ventaId)
+                                }
                             }
                         }
                     }
@@ -190,6 +196,71 @@ Item {
         }
     }
     
+    // ✅ NUEVA FUNCIÓN PARA NAVEGAR A EDITAR VENTA
+    function irAEditarVenta(ventaId) {
+        console.log("🚀 VentasMain: Navegando a editar venta", ventaId)
+        
+        var crearVentaComponent = Qt.createComponent("CrearVenta.qml")
+        
+        if (crearVentaComponent.status === Component.Ready) {
+            var crearVentaItem = crearVentaComponent.createObject(stackView, {
+               "inventarioModel": inventarioModel,
+                "ventaModel": ventaModel,
+                "compraModel": compraModel,
+                "modoEdicion": true,
+                "ventaIdAEditar": ventaId
+            })
+            
+            if (crearVentaItem) {
+                // Conectar señales del componente CrearVenta
+                crearVentaItem.ventaCompletada.connect(function() {
+                    console.log("✅ Venta editada, regresando a lista")
+                    regresarAVentas()
+                })
+                
+                crearVentaItem.cancelarVenta.connect(function() {
+                    console.log("❌ Edición cancelada, regresando a lista")
+                    regresarAVentas()
+                })
+                
+                stackView.push(crearVentaItem)
+                console.log("✅ CrearVenta (modo edición) agregado al stack")
+            } else {
+                console.log("❌ Error al crear instancia de CrearVenta para edición")
+            }
+        } else if (crearVentaComponent.status === Component.Error) {
+            console.log("❌ Error al cargar CrearVenta.qml para edición:", crearVentaComponent.errorString())
+            
+            // Fallback: usar componente inline para edición
+            var fallbackComponent = Qt.createComponent("CrearVenta.qml");
+            if (fallbackComponent.status === Component.Ready) {
+                var crearVentaItem = fallbackComponent.createObject(stackView, {
+                    "inventarioModel": ventasMainRoot.inventarioModel,
+                    "ventaModel": ventasMainRoot.ventaModel,
+                    "compraModel": ventasMainRoot.compraModel,
+                    "modoEdicion": true,
+                    "ventaIdAEditar": ventaId
+                });
+                if (crearVentaItem) {
+                    crearVentaItem.ventaCompletada.connect(function() {
+                        console.log("✅ Venta editada (fallback)");
+                        ventasMainRoot.regresarAVentas();
+                    });
+                    crearVentaItem.cancelarVenta.connect(function() {
+                        console.log("❌ Edición cancelada (fallback)");
+                        ventasMainRoot.regresarAVentas();
+                    });
+                    stackView.push(crearVentaItem);
+                    console.log("✅ CrearVenta edición cargado con fallback");
+                } else {
+                    console.log("❌ Error al crear instancia de fallback CrearVenta para edición");
+                }
+            } else {
+                console.log("❌ Error al cargar fallback CrearVenta.qml para edición:", fallbackComponent.errorString());
+            }
+        }
+    }
+    
     // Función para regresar a la lista de ventas
     function regresarAVentas() {
         console.log("🔙 VentasMain: Regresando a lista de ventas")
@@ -209,6 +280,7 @@ Item {
             })
         }
     }
+    
     function forceFocus() {
         focus = true
         forceActiveFocus()

@@ -13,16 +13,15 @@ class ProductoRepository(BaseRepository):
     
     def __init__(self):
         super().__init__('Productos', 'productos')
-        print("🏪 ProductoRepository inicializado con FIFO")
     
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene productos activos (con stock > 0)"""
         query = """
         SELECT p.*, m.Nombre as Marca_Nombre,
-            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Calculado
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Calculado
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0
         ORDER BY p.Nombre
         """
         return self._execute_query(query)
@@ -32,7 +31,8 @@ class ProductoRepository(BaseRepository):
         validate_required(codigo, "codigo")
         
         query = """
-        SELECT p.*, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles
+        SELECT p.*, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE p.Codigo = ?
@@ -40,78 +40,110 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (codigo,), fetch_one=True)
     
     def get_productos_con_marca(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los productos con información de marca - CORREGIDO"""
+        """Obtiene todos los productos con información de marca"""
         query = """
         SELECT 
             p.id, p.Codigo, p.Nombre, p.Detalles as Producto_Detalles,
-            p.Precio_compra, p.Precio_venta, p.Unidad_Medida, p.Fecha_Venc,
+            p.Precio_compra, p.Precio_venta, p.Unidad_Medida,
             m.id as Marca_ID, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
-            
-            -- CORRECCIÓN: SUMAR en lugar de multiplicar
-            ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Caja,
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
-            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
-            
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         ORDER BY p.Nombre
         """
-        result = self._execute_query(query)
-        return result
+        return self._execute_query(query)
     
     def buscar_productos(self, termino: str, incluir_sin_stock: bool = False) -> List[Dict[str, Any]]:
-        """Busca productos por nombre o código"""
+        """
+        ✅ CORREGIDO: Busca productos por nombre o código - STOCK CALCULADO DESDE LOTES
+        """
         if not termino:
             return []
         
-        stock_condition = "" if incluir_sin_stock else "AND (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0"
+        # Condición de stock basada en lotes (no en tabla Productos)
+        stock_condition = "" if incluir_sin_stock else """
+            AND (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id) > 0
+        """
         
         query = f"""
-        SELECT p.*, m.Nombre as Marca_Nombre,
-                (SELECT ISNULL(SUM(l.Cantidad_Caja), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Total_Cajas,
-                (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) as Stock_Total
+        SELECT 
+            p.id,
+            p.Codigo,
+            p.Nombre,
+            p.Detalles,
+            p.Precio_compra,
+            p.Precio_venta,
+            p.Unidad_Medida,
+            p.ID_Marca,
+            m.Nombre as Marca_Nombre,
+            m.Detalles as Marca_Detalles,
+            -- ✅ STOCK REAL CALCULADO DESDE LOTES (NO de tabla Productos)
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
+            -- ✅ INFORMACIÓN ADICIONAL DE LOTES
+            (SELECT COUNT(*) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
+            (SELECT MIN(l.Fecha_Vencimiento) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id 
+            AND l.Cantidad_Unitario > 0 
+            AND l.Fecha_Vencimiento IS NOT NULL) as Proxima_Vencimiento,
+            -- ✅ ESTADO DE STOCK
+            CASE 
+                WHEN (SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id) = 0 
+                THEN 'AGOTADO'
+                WHEN (SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id) <= 5 
+                THEN 'BAJO'
+                ELSE 'DISPONIBLE'
+            END as Estado_Stock
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?) {stock_condition}
-        ORDER BY p.Nombre
+        ORDER BY 
+            -- Priorizar productos con más stock
+            (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) DESC,
+            p.Nombre ASC
         """
         
         termino_like = f"%{termino}%"
-        return self._execute_query(query, (termino_like, termino_like))
+        resultados = self._execute_query(query, (termino_like, termino_like))
+        
+        print(f"🔍 Búsqueda '{termino}': {len(resultados)} productos encontrados (stock desde lotes)")
+        
+        return resultados or []
     
     def get_productos_bajo_stock(self, stock_minimo: int = 10) -> List[Dict[str, Any]]:
-        """Obtiene productos con stock bajo - CORREGIDO"""
+        """Obtiene productos con stock bajo"""
         query = """
         SELECT 
             p.*, m.Nombre as Marca_Nombre,
-            
-            -- CORRECCIÓN: SUMAR en lugar de multiplicar
-            ISNULL((SELECT SUM(l.Cantidad_Caja) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Total_Cajas,
-            ISNULL((SELECT SUM(l.Cantidad_Caja * l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
-            
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (SELECT ISNULL(SUM(l.Cantidad_Caja * l.Cantidad_Unitario), 0) 
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
             FROM Lote l WHERE l.Id_Producto = p.id) <= ?
-        ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Caja + l.Cantidad_Unitario), 0) 
+        ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
                 FROM Lote l WHERE l.Id_Producto = p.id) ASC
         """
-
         return self._execute_query(query, (stock_minimo,), use_cache=False)
-    
-    # ===============================
-    # GESTIÓN DE LOTES FIFO
-    # ===============================
     
     def get_lotes_producto(self, producto_id: int, solo_activos: bool = True) -> List[Dict[str, Any]]:
         """Obtiene lotes de un producto ordenados por FIFO"""
         validate_required(producto_id, "producto_id")
         
-        where_condition = "AND (l.Cantidad_Caja + l.Cantidad_Unitario) > 0" if solo_activos else ""
+        where_condition = "AND l.Cantidad_Unitario > 0" if solo_activos else ""
         
         query = f"""
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre,
-               (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote,
+               l.Cantidad_Unitario as Stock_Lote,
                CASE 
                    WHEN l.Fecha_Vencimiento < GETDATE() THEN 'VENCIDO'
                    WHEN l.Fecha_Vencimiento < DATEADD(MONTH, 3, GETDATE()) THEN 'POR_VENCER'
@@ -125,62 +157,46 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (producto_id,))
     
     def get_lotes_por_vencer(self, dias_adelante: int = 90) -> List[Dict[str, Any]]:
-        """Obtiene lotes que vencen en X días - CORREGIDO"""
+        """Obtiene lotes que vencen en X días"""
         query = """
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre, m.Nombre as Marca_Nombre,
-            (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote,
+            l.Cantidad_Unitario as Stock_Lote,
             DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) as Dias_Para_Vencer
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE l.Fecha_Vencimiento <= DATEADD(DAY, ?, GETDATE())
         AND l.Fecha_Vencimiento >= GETDATE()
-        AND (l.Cantidad_Caja * l.Cantidad_Unitario) > 0
+        AND l.Cantidad_Unitario > 0
         ORDER BY l.Fecha_Vencimiento ASC
         """
         
         try:
-            result = self._execute_query(query, (dias_adelante,), use_cache=False)
-            print(f"📅 Lotes por vencer en {dias_adelante} días: {len(result) if result else 0}")
-            return result or []
-        except Exception as e:
-            print(f"❌ Error en get_lotes_por_vencer: {e}")
+            return self._execute_query(query, (dias_adelante,), use_cache=False) or []
+        except Exception:
             return []
         
     def get_lotes_vencidos(self) -> List[Dict[str, Any]]:
-        """Obtiene lotes vencidos con stock - CORREGIDO"""
+        """Obtiene lotes vencidos con stock"""
         query = """
         SELECT l.*, p.Codigo, p.Nombre as Producto_Nombre, m.Nombre as Marca_Nombre,
-            (l.Cantidad_Caja * l.Cantidad_Unitario) as Stock_Lote,
+            l.Cantidad_Unitario as Stock_Lote,
             DATEDIFF(DAY, l.Fecha_Vencimiento, GETDATE()) as Dias_Vencido
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE l.Fecha_Vencimiento < GETDATE()
-        AND (l.Cantidad_Caja * l.Cantidad_Unitario) > 0
+        AND l.Cantidad_Unitario > 0
         ORDER BY l.Fecha_Vencimiento ASC
         """
         
         try:
-            result = self._execute_query(query, use_cache=False)
-            print(f"⚠️ Lotes vencidos con stock: {len(result) if result else 0}")
-            return result or []
-        except Exception as e:
-            print(f"❌ Error en get_lotes_vencidos: {e}")
+            return self._execute_query(query, use_cache=False) or []
+        except Exception:
             return []
     
     def verificar_disponibilidad_fifo(self, producto_id: int, cantidad_necesaria: int) -> Dict[str, Any]:
-        """
-        Verifica disponibilidad de stock usando FIFO
-        
-        Returns:
-            {
-                'disponible': bool,
-                'lotes_necesarios': [{'lote_id': int, 'cantidad': int}],
-                'cantidad_total_disponible': int,
-                'tiene_vencidos': bool
-            }
-        """
+        """Verifica disponibilidad de stock usando FIFO"""
         lotes = self.get_lotes_producto(producto_id, solo_activos=True)
         
         cantidad_restante = cantidad_necesaria
@@ -195,7 +211,6 @@ class ProductoRepository(BaseRepository):
             stock_lote = lote['Stock_Lote']
             cantidad_total += stock_lote
             
-            # Verificar si está vencido
             if lote['Estado_Vencimiento'] == 'VENCIDO':
                 tiene_vencidos = True
                 continue
@@ -218,228 +233,427 @@ class ProductoRepository(BaseRepository):
             'cantidad_faltante': max(0, cantidad_restante)
         }
     
-    # ===============================
-    # OPERACIONES DE STOCK
-    # ===============================
-    
     @ExceptionHandler.handle_exception
-    def reducir_stock_fifo(self, producto_id: int, cantidad: int, permitir_vencidos: bool = False) -> List[Dict[str, Any]]:
-        """
-        Reduce stock usando lógica FIFO
-        
-        Returns:
-            Lista de lotes afectados con las cantidades reducidas
-        """
+    def reducir_stock_fifo(self, producto_id: int, cantidad: int) -> List[Dict[str, Any]]:
+        """Reduce stock usando método FIFO"""
         validate_required(producto_id, "producto_id")
         validate_positive_number(cantidad, "cantidad")
         
-        # Verificar disponibilidad
         disponibilidad = self.verificar_disponibilidad_fifo(producto_id, cantidad)
-        
         if not disponibilidad['disponible']:
-            producto = self.get_by_id(producto_id)
-            codigo = producto['Codigo'] if producto else str(producto_id)
-            raise StockInsuficienteError(codigo, disponibilidad['cantidad_total_disponible'], cantidad)
+            raise StockInsuficienteError(
+                f"Producto ID {producto_id}", 
+                disponibilidad['cantidad_total_disponible'], 
+                cantidad
+            )
         
-        # Ejecutar reducción en transacción
-        operaciones = []
+        conn = None
         lotes_afectados = []
         
-        for lote_info in disponibilidad['lotes_necesarios']:
-            lote_id = lote_info['lote_id']
-            cantidad_reducir = lote_info['cantidad']
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
             
-            # Obtener lote actual
-            lote = self._execute_query("SELECT * FROM Lote WHERE id = ?", (lote_id,), fetch_one=True)
-            
-            if not lote:
-                continue
-            
-            # Calcular nuevas cantidades
-            nueva_cantidad_caja = lote['Cantidad_Caja']
-            nueva_cantidad_unitario = lote['Cantidad_Unitario']
-            
-            cantidad_restante = cantidad_reducir
-            
-            # Reducir primero de unitarios
-            if cantidad_restante > 0 and nueva_cantidad_unitario > 0:
-                reducir_unitario = min(cantidad_restante, nueva_cantidad_unitario)
-                nueva_cantidad_unitario -= reducir_unitario
-                cantidad_restante -= reducir_unitario
-            
-            # Luego reducir de cajas
-            if cantidad_restante > 0 and nueva_cantidad_caja > 0:
-                reducir_caja = min(cantidad_restante, nueva_cantidad_caja)
-                nueva_cantidad_caja -= reducir_caja
-                cantidad_restante -= reducir_caja
-            
-            # Preparar operación de actualización
-            update_query = """
-            UPDATE Lote 
-            SET Cantidad_Caja = ?, Cantidad_Unitario = ?
-            WHERE id = ?
+            query_lotes = """
+            SELECT l.id, l.Cantidad_Unitario, l.Fecha_Vencimiento
+            FROM Lote l
+            WHERE l.Id_Producto = ? AND l.Cantidad_Unitario > 0
+            ORDER BY l.Fecha_Vencimiento ASC, l.id ASC
             """
-            operaciones.append((update_query, (nueva_cantidad_caja, nueva_cantidad_unitario, lote_id)))
             
-            lotes_afectados.append({
-                'lote_id': lote_id,
-                'cantidad_reducida': cantidad_reducir,
-                'fecha_vencimiento': lote['Fecha_Vencimiento'],
-                'stock_anterior': lote['Cantidad_Caja'] + lote['Cantidad_Unitario'],
-                'stock_nuevo': nueva_cantidad_caja + nueva_cantidad_unitario
-            })
+            cursor.execute(query_lotes, (producto_id,))
+            lotes_disponibles = cursor.fetchall()
+            
+            if not lotes_disponibles:
+                raise StockInsuficienteError(f"Producto ID {producto_id}", 0, cantidad)
+            
+            cantidad_restante = cantidad
+            
+            for lote in lotes_disponibles:
+                if cantidad_restante <= 0:
+                    break
+                
+                lote_id = lote[0]
+                stock_lote = lote[1]
+                fecha_vencimiento = lote[2]
+                
+                cantidad_a_reducir = min(cantidad_restante, stock_lote)
+                nuevo_stock_lote = stock_lote - cantidad_a_reducir
+                
+                cursor.execute("UPDATE Lote SET Cantidad_Unitario = ? WHERE id = ?", 
+                             (nuevo_stock_lote, lote_id))
+                
+                lotes_afectados.append({
+                    'lote_id': lote_id,
+                    'cantidad_original': stock_lote,
+                    'cantidad_reducida': cantidad_a_reducir,
+                    'cantidad_final': nuevo_stock_lote,
+                    'fecha_vencimiento': fecha_vencimiento
+                })
+                
+                cantidad_restante -= cantidad_a_reducir
+            
+            if cantidad_restante > 0:
+                raise StockInsuficienteError(
+                    f"Producto ID {producto_id}", 
+                    cantidad - cantidad_restante, 
+                    cantidad
+                )
+            
+            # Actualizar Stock_Unitario en tabla Productos
+            cursor.execute("""
+                UPDATE Productos 
+                SET Stock_Unitario = (
+                    SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = ?
+                )
+                WHERE id = ?
+            """, (producto_id, producto_id))
+            
+            conn.commit()
+            self._invalidate_cache_after_modification()
+            
+            return lotes_afectados
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise StockInsuficienteError(
+                f"Producto ID {producto_id}", 
+                cantidad - cantidad_restante, 
+                cantidad
+            )
+        finally:
+            if conn:
+                conn.close()
+
+    @ExceptionHandler.handle_exception
+    def crear_producto_con_lote_inicial(self, datos_producto: dict, datos_lote: dict) -> int:
+        """Crea producto con su primer lote en una sola transacción"""
+        conn = None
+        producto_id = None
         
-        # Ejecutar todas las operaciones en transacción
-        success = self.execute_transaction(operaciones)
-        
-        if success:
-            print(f"📦 Stock reducido FIFO - Producto ID: {producto_id}, Cantidad: {cantidad}")
-            print(f"🔢 Lotes afectados: {len(lotes_afectados)}")
-        
-        return lotes_afectados
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Crear producto sin OUTPUT (evita conflictos con triggers)
+            insert_producto_query = """
+            INSERT INTO Productos (Codigo, Nombre, Detalles, Precio_compra, Precio_venta, 
+                                Stock_Unitario, Unidad_Medida, ID_Marca)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+
+            cursor.execute(insert_producto_query, (
+                datos_producto['Codigo'],
+                datos_producto['Nombre'],
+                datos_producto.get('Detalles', ''),
+                datos_producto['Precio_compra'],
+                datos_producto['Precio_venta'],
+                0,  # Stock inicial en 0
+                datos_producto.get('Unidad_Medida', 'Tabletas'),
+                datos_producto.get('ID_Marca', 1)
+            ))
+            
+            # Obtener ID del producto insertado
+            cursor.execute("SELECT @@IDENTITY as id")
+            resultado = cursor.fetchone()
+            if not resultado:
+                raise Exception("No se pudo crear el producto")
+            
+            producto_id = resultado[0]
+            
+            # Crear lote inicial
+            cantidad_inicial = datos_lote.get('cantidad_unitario', 0)
+            fecha_vencimiento = datos_lote.get('fecha_vencimiento')
+
+            if cantidad_inicial > 0:
+                cursor.execute("""
+                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento)
+                    VALUES (?, ?, ?)
+                """, (producto_id, cantidad_inicial, fecha_vencimiento))
+                
+                # Actualizar Stock_Unitario en Productos
+                cursor.execute("""
+                    UPDATE Productos 
+                    SET Stock_Unitario = ?
+                    WHERE id = ?
+                """, (cantidad_inicial, producto_id))
+
+            conn.commit()
+            self._invalidate_cache_after_modification()
+            
+            return producto_id
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise Exception(f"Error creando producto: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
     
     @ExceptionHandler.handle_exception
-    def aumentar_stock_compra(self, producto_id: int, cantidad_caja: int, cantidad_unitario: int, 
-                         fecha_vencimiento: str = None, precio_compra: float = None) -> int:
-        """
-        Aumenta stock de producto creando nuevo lote - CORREGIDO SIN Precio_Compra en Lote
-        """
+    def aumentar_stock_compra(self, producto_id: int, cantidad_unitario: int, 
+                        fecha_vencimiento: str = None, precio_compra: float = None) -> int:
+        """Aumenta stock de producto creando nuevo lote"""
         validate_required(producto_id, "producto_id")
         
-        if cantidad_caja <= 0 and cantidad_unitario <= 0:
-            raise ValueError("Debe especificar cantidad de cajas o unitarios")
+        if cantidad_unitario <= 0:
+            raise ValueError("Debe especificar cantidad unitaria mayor a 0")
         
-        print(f"📈 Aumentando stock - Producto: {producto_id}, Cajas: {cantidad_caja}, Unitarios: {cantidad_unitario}")
-        
-        # 1. Manejar fecha de vencimiento de forma segura
+        # Manejar fecha de vencimiento
         fecha_venc_final = None
-        
         if fecha_vencimiento is not None and isinstance(fecha_vencimiento, str):
             fecha_clean = fecha_vencimiento.strip()
             if fecha_clean and fecha_clean.lower() not in ["sin vencimiento", "", "none", "null"]:
                 try:
                     datetime.strptime(fecha_clean, '%Y-%m-%d')
                     fecha_venc_final = fecha_clean
-                    print(f"📅 Lote con vencimiento: {fecha_venc_final}")
                 except ValueError:
                     raise ValueError(f"Formato de fecha inválido: {fecha_clean}. Use YYYY-MM-DD")
-            else:
-                print(f"📅 Lote sin vencimiento (fecha vacía o especial)")
-        else:
-            print(f"📅 Lote sin vencimiento (fecha None)")
         
-        # 2. Verificar que el producto existe
-        try:
-            producto = self.get_by_id(producto_id)
-            if not producto:
-                raise Exception(f"Producto {producto_id} no encontrado")
-            
-            print(f"✅ Producto encontrado: {producto.get('Codigo', 'N/A')} - {producto.get('Nombre', 'N/A')}")
-            
-        except Exception as e:
-            raise Exception(f"Error verificando producto: {str(e)}")
+        # Verificar que el producto existe
+        producto = self.get_by_id(producto_id)
+        if not producto:
+            raise Exception(f"Producto {producto_id} no encontrado")
         
-        # 3. Crear nuevo lote SIN Precio_Compra (CORREGIDO)
+        # Usar una sola conexión para toda la transacción
+        conn = None
         lote_id = None
+        
         try:
-            # Query simplificado sin Precio_Compra
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Crear nuevo lote
             if fecha_venc_final is not None:
-                # Con fecha de vencimiento
-                insert_query = """
-                INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
-                OUTPUT INSERTED.id
-                VALUES (?, ?, ?, ?)
-                """
-                params = (producto_id, cantidad_caja, cantidad_unitario, fecha_venc_final)
+                cursor.execute("""
+                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento) 
+                    VALUES (?, ?, ?)
+                """, (producto_id, cantidad_unitario, fecha_venc_final))
             else:
-                # Sin fecha de vencimiento (NULL)
-                insert_query = """
-                INSERT INTO Lote (Id_Producto, Cantidad_Caja, Cantidad_Unitario, Fecha_Vencimiento)
-                OUTPUT INSERTED.id
-                VALUES (?, ?, ?, NULL)
-                """
-                params = (producto_id, cantidad_caja, cantidad_unitario)
+                cursor.execute("""
+                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento) 
+                    VALUES (?, ?, NULL)
+                """, (producto_id, cantidad_unitario))
+
+            # Obtener el ID del lote insertado
+            cursor.execute("SELECT @@IDENTITY as id")
+            result = cursor.fetchone()
+            if not result:
+                raise Exception("No se pudo obtener el ID del lote creado")
             
-            # Ejecutar inserción
-            result = self._execute_query(insert_query, params, fetch_one=True, use_cache=False)
+            lote_id = result[0]
             
-            if not result or 'id' not in result:
-                raise Exception("No se pudo crear el lote - resultado inválido")
+            # Actualizar Stock_Unitario en tabla Productos
+            cursor.execute("""
+                UPDATE Productos 
+                SET Stock_Unitario = (
+                    SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = ?
+                )
+                WHERE id = ?
+            """, (producto_id, producto_id))
             
-            lote_id = result['id']
-            print(f"✅ Lote creado - ID: {lote_id}")
-            
-        except Exception as e:
-            print(f"❌ Error creando lote: {str(e)}")
-            raise Exception(f"Error creando lote: {str(e)}")
-        
-        # 4. Actualizar stock del producto
-        try:
-            # Obtener stock actual
-            stock_actual_caja = producto.get('Stock_Caja', 0)
-            stock_actual_unitario = producto.get('Stock_Unitario', 0)
-            
-            # Calcular nuevo stock
-            nuevo_stock_caja = stock_actual_caja + cantidad_caja
-            nuevo_stock_unitario = stock_actual_unitario + cantidad_unitario
-            
-            # Actualizar producto con stock y precio (si se proporciona)
+            # Actualizar precio de compra si se proporciona
             if precio_compra and precio_compra > 0:
-                update_query = """
-                UPDATE Productos 
-                SET Stock_Caja = ?, Stock_Unitario = ?, Precio_compra = ?
-                WHERE id = ?
-                """
-                params = (nuevo_stock_caja, nuevo_stock_unitario, precio_compra, producto_id)
-                print(f"💰 Actualizando stock y precio de compra: ${precio_compra}")
-            else:
-                update_query = """
-                UPDATE Productos 
-                SET Stock_Caja = ?, Stock_Unitario = ?
-                WHERE id = ?
-                """
-                params = (nuevo_stock_caja, nuevo_stock_unitario, producto_id)
+                cursor.execute("UPDATE Productos SET Precio_compra = ? WHERE id = ?", 
+                            (precio_compra, producto_id))
             
-            filas_afectadas = self._execute_query(update_query, params, fetch_all=False, use_cache=False)
+            # Commit de toda la transacción
+            conn.commit()
             
-            if filas_afectadas <= 0:
-                # ROLLBACK: Eliminar lote si falla actualización de stock
-                print(f"❌ Fallo actualizando stock, eliminando lote {lote_id}")
-                self._rollback_lote(lote_id)
-                raise Exception("No se pudo actualizar el stock del producto")
+            # Limpiar cache
+            try:
+                if hasattr(self, '_clear_cache'):
+                    self._clear_cache()
+            except:
+                pass
             
-            print(f"✅ Stock actualizado - Caja: {stock_actual_caja} → {nuevo_stock_caja}, Unitario: {stock_actual_unitario} → {nuevo_stock_unitario}")
+            return lote_id
             
         except Exception as e:
-            # ROLLBACK: Eliminar lote si hay error
-            if lote_id:
-                print(f"❌ Error actualizando stock, eliminando lote {lote_id}")
-                self._rollback_lote(lote_id)
-            raise Exception(f"Error actualizando stock: {str(e)}")
-        
-        # 5. Limpiar cache
-        try:
-            if hasattr(self, '_clear_cache'):
-                self._clear_cache()
-        except:
-            pass  # No es crítico si falla
-        
-        print(f"🎉 Stock aumentado exitosamente - Lote: {lote_id}, Total agregado: {cantidad_caja + cantidad_unitario}")
-        
-        return lote_id
+            if conn:
+                conn.rollback()
+            raise Exception(f"Error creando lote: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
 
     def _rollback_lote(self, lote_id: int):
         """Método auxiliar para eliminar lote en caso de rollback"""
         try:
-            delete_query = "DELETE FROM Lote WHERE id = ?"
-            self._execute_query(delete_query, (lote_id,), fetch_all=False, use_cache=False)
-            print(f"🔄 Rollback completado - Lote {lote_id} eliminado")
-        except Exception as rollback_error:
-            print(f"❌ ERROR EN ROLLBACK: No se pudo eliminar lote {lote_id}: {str(rollback_error)}")
+            self._execute_query("DELETE FROM Lote WHERE id = ?", (lote_id,), fetch_all=False, use_cache=False)
+        except Exception:
+            pass
     
-    # ===============================
-    # REPORTES Y ESTADÍSTICAS
-    # ===============================
+    @ExceptionHandler.handle_exception
+    def actualizar_producto(self, producto_id: int, datos: dict) -> bool:
+        """Actualiza un producto existente"""
+        validate_required(producto_id, "producto_id")
+        
+        if not datos:
+            raise ValueError("No hay datos para actualizar")
+        
+        try:
+            campos_permitidos = ['Nombre', 'Detalles', 'Precio_compra', 'Precio_venta', 
+                               'Unidad_Medida', 'ID_Marca']
+            
+            campos_update = []
+            valores = []
+            
+            for campo in campos_permitidos:
+                if campo in datos:
+                    campos_update.append(f"{campo} = ?")
+                    valores.append(datos[campo])
+            
+            if not campos_update:
+                raise ValueError("No hay campos válidos para actualizar")
+            
+            valores.append(producto_id)
+            
+            query = f"UPDATE Productos SET {', '.join(campos_update)} WHERE id = ?"
+            filas_afectadas = self._execute_query(query, valores, fetch_all=False, use_cache=False)
+            
+            if filas_afectadas > 0:
+                self._invalidate_cache_after_modification()
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            raise Exception(f"Error actualizando producto: {str(e)}")
+    
+    @ExceptionHandler.handle_exception
+    def eliminar_producto(self, producto_id: int) -> bool:
+        """Elimina un producto y todos sus lotes (solo si no tiene stock)"""
+        validate_required(producto_id, "producto_id")
+        
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Verificar que no tenga stock
+            cursor.execute("SELECT SUM(Cantidad_Unitario) as Stock_Total FROM Lote WHERE Id_Producto = ?", (producto_id,))
+            resultado = cursor.fetchone()
+            stock_total = resultado[0] if resultado and resultado[0] else 0
+            
+            if stock_total > 0:
+                raise ValueError(f"No se puede eliminar: el producto tiene {stock_total} unidades en stock")
+            
+            # Eliminar lotes vacíos y producto
+            cursor.execute("DELETE FROM Lote WHERE Id_Producto = ?", (producto_id,))
+            cursor.execute("DELETE FROM Productos WHERE id = ?", (producto_id,))
+            productos_eliminados = cursor.rowcount
+            
+            if productos_eliminados > 0:
+                conn.commit()
+                self._invalidate_cache_after_modification()
+                return True
+            else:
+                raise Exception("Producto no encontrado")
+                
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise Exception(f"Error eliminando producto: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
+    
+    @ExceptionHandler.handle_exception
+    def eliminar_lote(self, lote_id: int) -> bool:
+        """Elimina un lote específico"""
+        validate_required(lote_id, "lote_id")
+        
+        try:
+            # Obtener producto_id antes de eliminar
+            lote_info = self._execute_query("SELECT Id_Producto FROM Lote WHERE id = ?", (lote_id,), fetch_one=True)
+            if not lote_info:
+                return False
+            
+            producto_id = lote_info['Id_Producto']
+            
+            # Eliminar lote
+            filas_afectadas = self._execute_query("DELETE FROM Lote WHERE id = ?", (lote_id,), fetch_all=False, use_cache=False)
+            
+            if filas_afectadas > 0:
+                # Actualizar Stock_Unitario en Productos
+                self._execute_query("""
+                    UPDATE Productos 
+                    SET Stock_Unitario = (
+                        SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+                        FROM Lote l 
+                        WHERE l.Id_Producto = ?
+                    )
+                    WHERE id = ?
+                """, (producto_id, producto_id), fetch_all=False, use_cache=False)
+                
+                self._invalidate_cache_after_modification()
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            raise Exception(f"Error eliminando lote: {str(e)}")
+    
+    @ExceptionHandler.handle_exception
+    def actualizar_lote(self, lote_id: int, datos: dict) -> bool:
+        """Actualiza un lote específico"""
+        validate_required(lote_id, "lote_id")
+        
+        if not datos:
+            raise ValueError("No hay datos para actualizar")
+        
+        try:
+            # Obtener producto_id antes de actualizar
+            lote_info = self._execute_query("SELECT Id_Producto FROM Lote WHERE id = ?", (lote_id,), fetch_one=True)
+            if not lote_info:
+                return False
+            
+            producto_id = lote_info['Id_Producto']
+            
+            campos_permitidos = ['Cantidad_Unitario', 'Fecha_Vencimiento']
+            campos_update = []
+            valores = []
+            
+            for campo in campos_permitidos:
+                if campo in datos:
+                    campos_update.append(f"{campo} = ?")
+                    valores.append(datos[campo])
+            
+            if not campos_update:
+                raise ValueError("No hay campos válidos para actualizar")
+            
+            valores.append(lote_id)
+            
+            query = f"UPDATE Lote SET {', '.join(campos_update)} WHERE id = ?"
+            filas_afectadas = self._execute_query(query, valores, fetch_all=False, use_cache=False)
+            
+            if filas_afectadas > 0:
+                # Actualizar Stock_Unitario en Productos si se cambió la cantidad
+                if 'Cantidad_Unitario' in datos:
+                    self._execute_query("""
+                        UPDATE Productos 
+                        SET Stock_Unitario = (
+                            SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+                            FROM Lote l 
+                            WHERE l.Id_Producto = ?
+                        )
+                        WHERE id = ?
+                    """, (producto_id, producto_id), fetch_all=False, use_cache=False)
+                
+                self._invalidate_cache_after_modification()
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            raise Exception(f"Error actualizando lote: {str(e)}")
     
     def get_reporte_vencimientos(self, dias_adelante: int = 180) -> Dict[str, Any]:
         """Reporte completo de vencimientos"""
@@ -462,14 +676,14 @@ class ProductoRepository(BaseRepository):
             SUM(dv.Cantidad_Unitario) as Total_Vendido,
             COUNT(dv.id) as Num_Ventas,
             AVG(dv.Precio_Unitario) as Precio_Promedio,
-            (SELECT ISNULL(SUM(l2.Cantidad_Caja + l2.Cantidad_Unitario), 0) FROM Lote l2 WHERE l2.Id_Producto = p.id) as Stock_Actual
+            (SELECT ISNULL(SUM(l2.Cantidad_Unitario), 0) FROM Lote l2 WHERE l2.Id_Producto = p.id) as Stock_Actual
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         INNER JOIN Lote l ON p.id = l.Id_Producto
         INNER JOIN DetallesVentas dv ON l.id = dv.Id_Lote
         INNER JOIN Ventas v ON dv.Id_Venta = v.id
         WHERE v.Fecha >= DATEADD(DAY, -?, GETDATE())
-        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre, p.Stock_Caja, p.Stock_Unitario
+        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre
         ORDER BY Total_Vendido DESC
         """
         return self._execute_query(query, (dias,))
@@ -485,44 +699,10 @@ class ProductoRepository(BaseRepository):
         FROM Productos p
         INNER JOIN (
             SELECT l.Id_Producto, 
-                SUM(l.Cantidad_Caja + l.Cantidad_Unitario) as Stock_Real
+                SUM(l.Cantidad_Unitario) as Stock_Real
             FROM Lote l
             GROUP BY l.Id_Producto
-            HAVING SUM(l.Cantidad_Caja + l.Cantidad_Unitario) > 0
+            HAVING SUM(l.Cantidad_Unitario) > 0
         ) stock_calculado ON p.id = stock_calculado.Id_Producto
         """
         return self._execute_query(query, fetch_one=True) or {}
-
-    def _parse_fecha_vencimiento(self, fecha_str: str) -> str:
-        """
-        Convierte fecha a formato SQL Server compatible
-        
-        Acepta formatos: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
-        Retorna: YYYY-MM-DD o None para productos sin vencimiento
-        """
-        # CORRECCIÓN PRINCIPAL: Manejar explícitamente productos sin vencimiento
-        if not fecha_str or fecha_str.strip() == "" or fecha_str.strip().lower() == "sin vencimiento":
-            print("📅 Producto sin fecha de vencimiento - retornando None para BD")
-            return None  # Esto se convertirá en NULL en la base de datos
-        
-        fecha_str = fecha_str.strip()
-        
-        # Si ya está en formato correcto
-        if len(fecha_str) == 10 and fecha_str[4] == '-' and fecha_str[7] == '-':
-            return fecha_str
-        
-        # Intentar parsear diferentes formatos
-        formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
-        
-        for formato in formatos:
-            try:
-                fecha_obj = datetime.strptime(fecha_str, formato)
-                fecha_formateada = fecha_obj.strftime('%Y-%m-%d')
-                print(f"📅 Fecha parseada exitosamente: '{fecha_str}' -> '{fecha_formateada}'")
-                return fecha_formateada
-            except ValueError:
-                continue
-        
-        # Si no se pudo parsear, mostrar error y retornar None
-        print(f"⚠️ ADVERTENCIA: No se pudo parsear fecha '{fecha_str}', tratando como sin vencimiento")
-        return None  # En lugar de fecha por defecto, tratarlo como sin vencimiento

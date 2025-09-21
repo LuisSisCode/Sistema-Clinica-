@@ -2,7 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
-// Componente principal del módulo de Productos de Farmacia - OPTIMIZADO
+// Componente principal del módulo de Productos de Farmacia - SIN CAJAS - SOLO STOCK UNITARIO
 Item {
     id: productosRoot
     
@@ -14,12 +14,14 @@ Item {
     property bool mostrandoCrearProducto: false
     property bool modoEdicionProducto: false
     property var productoParaEditar: null
-    
+    property var selectedProduct: null
     // Estados del diálogo y funcionalidades
     property bool editarPrecioDialogOpen: false
     property var productoSeleccionado: null
     property int currentFilter: 0
     property string searchText: ""
+    property bool mostrandoMenuContextual: false
+    property var productoMenuContextual: null
     property var productosOriginales: []
     property var fechaActual: new Date()
     
@@ -38,7 +40,7 @@ Item {
     property bool marcasCargando: false
     property bool marcasYaCargadas: false
 
-    // DATOS DE LOTES - CORREGIDO
+    // DATOS DE LOTES - SIN CAJAS
     property var lotesProximosVencer: []
     property var lotesVencidos: []
     property var productosConLotesBajoStock: []
@@ -123,7 +125,7 @@ Item {
         id: productosPaginadosModel
     }
 
-    // FUNCIÓN PARA CARGAR DATOS DE LOTES
+    // FUNCIÓN PARA CARGAR DATOS DE LOTES - SIN CAJAS
     function cargarDatosParaFiltros() {
         if (!inventarioModel) {
             console.log("❌ InventarioModel no disponible para filtros")
@@ -212,18 +214,20 @@ Item {
         
         modoEdicionProducto = true
         
+        // ✅ CORREGIR LA PREPARACIÓN DE DATOS
         productoParaEditar = {
             id: producto.id,
-            codigo: producto.codigo,
-            nombre: producto.nombre,
+            codigo: producto.codigo || "",
+            nombre: producto.nombre || "",
             detalles: producto.detalles || "",
-            precioCompra: producto.precioCompra || 0,
-            precioVenta: producto.precioVenta || 0,
-            stockCaja: producto.stockCaja || 0,
+            precio_compra: producto.precioCompra || 0, 
+            precio_venta: producto.precioVenta || 0,   
             stockUnitario: producto.stockUnitario || 0,
-            idMarca: producto.idMarca || "",
-            unidadMedida: producto.unidadMedida || "Tabletas"
+            marca: producto.idMarca || "",              
+            unidad_medida: producto.unidadMedida || "Tabletas"
         }
+        
+        console.log("📝 Datos preparados para edición:", JSON.stringify(productoParaEditar))
         
         mostrandoCrearProducto = true
         
@@ -338,7 +342,7 @@ Item {
     Item {
         anchors.fill: parent
         
-        // NUEVO: Modal para mostrar lotes del producto
+        // MODAL PARA MOSTRAR LOTES DEL PRODUCTO - SIN CAJAS
         Rectangle {
             id: lotesOverlay
             anchors.fill: parent
@@ -356,7 +360,7 @@ Item {
 
             Rectangle {
                 anchors.centerIn: parent
-                width: Math.min(800, parent.width * 0.9)
+                width: Math.min(700, parent.width * 0.9)
                 height: Math.min(600, parent.height * 0.9)
                 radius: 8
                 color: "#ffffff"
@@ -406,7 +410,7 @@ Item {
                         }
                     }
 
-                    // Tabla de lotes
+                    // Tabla de lotes - SIN COLUMNA DE CAJAS
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -420,7 +424,7 @@ Item {
                             anchors.margins: 0
                             spacing: 0
                             
-                            // Header
+                            // Header - SIN CANTIDAD CAJA
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 40
@@ -434,7 +438,7 @@ Item {
                                     
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredWidth: 200
+                                        Layout.preferredWidth: 250
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#D5DBDB"
@@ -451,37 +455,22 @@ Item {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 120
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "CANTIDAD CAJA"
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 10
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 120
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "CANTIDAD U"
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 10
-                                        }
-                                    }
-                                    
-                                    Rectangle {
                                         Layout.preferredWidth: 150
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "CANTIDAD"
+                                            color: "#2C3E50"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 200
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         border.color: "#D5DBDB"
@@ -512,7 +501,7 @@ Item {
                                 }
                             }
                             
-                            // Lista de lotes
+                            // Lista de lotes - SIN CAJAS
                             ListView {
                                 id: lotesListView
                                 Layout.fillWidth: true
@@ -541,7 +530,7 @@ Item {
                                         
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.preferredWidth: 200
+                                            Layout.preferredWidth: 250
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#D5DBDB"
@@ -560,44 +549,38 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 120
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: (model.cantidad_caja || 0).toString()
-                                                color: "#2C3E50"
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 120
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: (model.cantidad_unitario || 0).toString()
-                                                color: "#2C3E50"
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                            }
-                                        }
-                                        
-                                        Rectangle {
                                             Layout.preferredWidth: 150
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#D5DBDB"
                                             border.width: 1
+                                            
+                                            Rectangle {
+                                                anchors.centerIn: parent
+                                                width: 60
+                                                height: 20
+                                                color: getStockColor(model.cantidad_unitario || 0)
+                                                radius: 10
+                                                
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: (model.cantidad_unitario || 0).toString()
+                                                    color: "#FFFFFF"
+                                                    font.bold: true
+                                                    font.pixelSize: 11
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 200
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#D5DBDB"
+                                            border.width: 1
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: model.fecha_vencimiento || ""
+                                                text: model.fecha_vencimiento || "Sin vencimiento"
                                                 color: "#2C3E50"
                                                 font.pixelSize: 11
                                             }
@@ -666,6 +649,16 @@ Item {
                                     }
                                 }
                             }
+                            // MouseArea para detectar clics fuera del menú contextual
+                            MouseArea {
+                                anchors.fill: parent
+                                visible: mostrandoMenuContextual
+                                z: 5
+                                onClicked: {
+                                    mostrandoMenuContextual = false
+                                    productoMenuContextual = null
+                                }
+                            }
                         }
                     }
                 }
@@ -716,7 +709,7 @@ Item {
                         }
                         
                         Label {
-                            text: "Inventario de Productos"
+                            text: "Inventario de Productos (Solo Stock Unitario)"
                             font.pixelSize: 14
                             color: darkGrayColor
                         }
@@ -969,7 +962,7 @@ Item {
                 }
             }
             
-            // Tabla principal de productos
+            // Tabla principal de productos - SIN COLUMNA STOCK CAJA
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -983,7 +976,7 @@ Item {
                     anchors.margins: 0
                     spacing: 0
                     
-                    // Header de la tabla
+                    // Header de la tabla - SIN STOCK CAJA
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
@@ -1092,32 +1085,17 @@ Item {
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 80
+                                Layout.preferredWidth: 100
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "STOCK CAJA"
+                                    text: "STOCK"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 9
-                                }
-                            }
-                            
-                            Rectangle {
-                                Layout.preferredWidth: 90
-                                Layout.fillHeight: true
-                                color: "transparent"
-                                border.color: "#D5DBDB"
-                                border.width: 1
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "STOCK UNITARIO"
-                                    color: "#2C3E50"
-                                    font.bold: true
-                                    font.pixelSize: 9
+                                    font.pixelSize: 10
                                 }
                             }
                             
@@ -1168,7 +1146,7 @@ Item {
                         }
                     }
                     
-                    // Contenido de la tabla
+                    // Contenido de la tabla - SIN CAMPO STOCK CAJA
                     ListView {
                         id: productosTable
                         Layout.fillWidth: true
@@ -1290,7 +1268,7 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: 100
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1298,34 +1276,18 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 35
-                                        height: 16
+                                        width: 50
+                                        height: 20
                                         color: getStockColor(model.stockUnitario || 0)
-                                        radius: 8
+                                        radius: 10
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: (model.stockCaja || 0).toString()
+                                            text: (model.stockUnitario || 0).toString()
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 11
                                         }
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 90
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: (model.stockUnitario || 0).toString()
-                                        color: "#2C3E50"
-                                        font.pixelSize: 10
-                                        font.bold: true
                                     }
                                 }
                                 
@@ -1423,46 +1385,118 @@ Item {
                             }
                             
                             MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.right: parent.right
+                                anchors.rightMargin: 0
+                                
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton  // ✅ QUITAR Qt.RightButton
                                 z: -1
                                 
-                                onClicked: {
-                                    productosTable.currentIndex = index
-                                }
-                                
-                                onPressed: {
-                                    if (mouse.button === Qt.RightButton) {
+                                onClicked: function(mouse) {
+                                    if (mouse.button === Qt.LeftButton) {
+                                        // Clic izquierdo: seleccionar fila
                                         productosTable.currentIndex = index
-                                        contextMenu.popup()
+                                        selectedProduct = model
+                                        // Ocultar menú contextual si estaba visible
+                                        mostrandoMenuContextual = false
+                                        productoMenuContextual = null
+                                    } else if (mouse.button === Qt.RightButton) {
+                                        // Clic derecho: mostrar menú contextual solo si la fila está seleccionada
+                                        if (selectedProduct && selectedProduct.id === model.id) {
+                                            mostrandoMenuContextual = true
+                                            productoMenuContextual = model
+                                        }
                                     }
                                 }
                             }
-                            
-                            Menu {
-                                id: contextMenu
+                            // ✅ AGREGAR DESPUÉS DEL MOUSEAREA - BOTONES SUPERPUESTOS
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                visible: mostrandoMenuContextual && productoMenuContextual && productoMenuContextual.id === model.id
+                                z: 10
                                 
-                                MenuItem {
-                                    text: "✏️ Editar Precio venta"
-                                    onTriggered: {
-                                        productoSeleccionado = model
-                                        editarPrecioDialogOpen = true
+                                // Cuadro contenedor estilo menú contextual - altura reducida
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 120
+                                    height: 50  // Reducido de 70 a 50
+                                    color: "#F8F9FA"
+                                    border.width: 0
+                                    radius: 4
+                                    
+                                    // Sombra sutil
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.topMargin: 2
+                                        anchors.leftMargin: 2
+                                        color: "#00000015"
+                                        radius: 4
+                                        z: -1
                                     }
-                                }
-                                
-                                MenuItem {
-                                    text: "✏️ Editar Producto"
-                                    onTriggered: {
-                                        console.log("🔧 Intentando editar producto:", model.codigo)
-                                        abrirEditarProducto(model)
-                                    }
-                                }
-                                
-                                MenuItem {
-                                    text: "🗑️ Eliminar Producto"
-                                    enabled: (model.stockUnitario || 0) === 0
-                                    onTriggered: {
-                                        eliminarProducto(model)
+                                    
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 0
+                                        spacing: 0
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25  // Altura fija de 25px por botón
+                                            color: editarHover.containsMouse ? "#E3F2FD" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Editar"
+                                                color: editarHover.containsMouse ? "#1976D2" : "#2C3E50"
+                                                font.pixelSize: 11  // Texto ligeramente más pequeño
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: editarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Editando producto:", model.codigo)
+                                                    abrirEditarProducto(model)
+                                                    mostrandoMenuContextual = false
+                                                    productoMenuContextual = null
+                                                    selectedProduct = null
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25  // Altura fija de 25px por botón
+                                            color: eliminarHover.containsMouse ? "#FFEBEE" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Eliminar"
+                                                color: eliminarHover.containsMouse ? "#D32F2F" : "#2C3E50"
+                                                font.pixelSize: 11  // Texto ligeramente más pequeño
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: eliminarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Eliminando producto:", model.codigo)
+                                                    eliminarProducto(model)
+                                                    mostrandoMenuContextual = false
+                                                    productoMenuContextual = null
+                                                    selectedProduct = null
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1831,31 +1865,53 @@ Item {
                 
                 // Conectar señales
                 if (item && item.productoCreado) {
-                        item.productoCreado.connect(function(producto) {
-                            console.log("✅ Producto creado:", producto.codigo)
+                    item.productoCreado.connect(function(producto) {
+                        console.log("✅ Producto creado:", producto.codigo)
                         
                         if (farmaciaData) {
                             farmaciaData.crearProductoUnico(JSON.stringify(producto))
                         }
                         
                         volverAListaProductos()
-                        
                     })
                 }
-                item.productoActualizado.connect(function(producto) {
-                    console.log("✅ Producto actualizado:", producto.codigo)
-                    volverAListaProductos()
-                })
-                
-                item.cancelarCreacion.connect(function() {
-                    console.log("❌ Creación cancelada")
-                    volverAListaProductos()
-                })
-                
-                item.volverALista.connect(function() {
-                    console.log("🔙 Volver a lista solicitado")
-                    volverAListaProductos()
-                })
+
+                if (item && item.productoActualizado) {
+                    item.productoActualizado.connect(function(producto) {
+                        console.log("✅ Producto actualizado:", producto.codigo)
+                        
+                        // ✅ AGREGAR ACTUALIZACIÓN INMEDIATA
+                        if (farmaciaData && farmaciaData.actualizarProductoInventario) {
+                            var exito = farmaciaData.actualizarProductoInventario(producto.codigo, JSON.stringify(producto))
+                            if (exito) {
+                                console.log("📊 Datos actualizados en centro de datos")
+                            }
+                        }
+                        
+                        // ✅ FORZAR ACTUALIZACIÓN INMEDIATA DE LA VISTA
+                        Qt.callLater(function() {
+                            cargarDatosParaFiltros()
+                            actualizarDesdeDataCentral()
+                            updateFilteredModel()
+                        })
+                        
+                        volverAListaProductos()
+                    })
+                }
+
+                if (item && item.cancelarCreacion) {  // ← AGREGAR VERIFICACIÓN
+                    item.cancelarCreacion.connect(function() {
+                        console.log("❌ Creación cancelada")
+                        volverAListaProductos()
+                    })
+                }
+
+                if (item && item.volverALista) {  // ← AGREGAR VERIFICACIÓN
+                    item.volverALista.connect(function() {
+                        console.log("🔙 Volver a lista solicitado")
+                        volverAListaProductos()
+                    })
+                }
                 
                 console.log("✅ Señales conectadas correctamente")
             }
@@ -2024,7 +2080,7 @@ Item {
         }
     }
     
-    // ===== FUNCIONES =====
+    // ===== FUNCIONES ACTUALIZADAS SIN CAJAS =====
 
     function getTotalCount() {
         if (productosOriginales.length === 0) {
@@ -2040,7 +2096,8 @@ Item {
         
         for (var i = 0; i < lotesProximosVencer.length; i++) {
             var lote = lotesProximosVencer[i]
-            if ((lote.Stock_Lote || 0) > 0) {
+            // SIN CAJAS: solo verificar stock unitario
+            if ((lote.Cantidad_Unitario || lote.Stock_Lote || 0) > 0) {
                 productosUnicos.add(lote.Codigo)
             }
         }
@@ -2055,7 +2112,8 @@ Item {
         
         for (var i = 0; i < lotesVencidos.length; i++) {
             var lote = lotesVencidos[i]
-            if ((lote.Stock_Lote || 0) > 0) {
+            // SIN CAJAS: solo verificar stock unitario
+            if ((lote.Cantidad_Unitario || lote.Stock_Lote || 0) > 0) {
                 productosUnicos.add(lote.Codigo)
             }
         }
@@ -2082,7 +2140,6 @@ Item {
                     detalles: productosFilteredModel.get(i).detalles,
                     precioCompra: productosFilteredModel.get(i).precioCompra,
                     precioVenta: productosFilteredModel.get(i).precioVenta,
-                    stockCaja: productosFilteredModel.get(i).stockCaja,
                     stockUnitario: productosFilteredModel.get(i).stockUnitario,
                     unidadMedida: productosFilteredModel.get(i).unidadMedida,
                     idMarca: productosFilteredModel.get(i).idMarca
@@ -2143,7 +2200,8 @@ Item {
         
         for (var i = 0; i < lotesProximosVencer.length; i++) {
             var lote = lotesProximosVencer[i]
-            var stockLote = (lote.Cantidad_Caja || 0) + (lote.Cantidad_Unitario || 0)
+            // SIN CAJAS: solo cantidad unitaria
+            var stockLote = lote.Cantidad_Unitario || lote.Stock_Lote || 0
             if (lote.Codigo === producto.codigo && stockLote > 0) {
                 return true
             }
@@ -2156,7 +2214,8 @@ Item {
         
         for (var i = 0; i < lotesVencidos.length; i++) {
             var lote = lotesVencidos[i]
-            var stockLote = (lote.Cantidad_Caja || 0) + (lote.Cantidad_Unitario || 0)
+            // SIN CAJAS: solo cantidad unitaria
+            var stockLote = lote.Cantidad_Unitario || lote.Stock_Lote || 0
             if (lote.Codigo === producto.codigo && stockLote > 0) {
                 return true
             }
@@ -2232,8 +2291,15 @@ Item {
             var exito = farmaciaData.eliminarProductoInventario(producto.codigo)
             if (exito) {
                 console.log("✅ Producto eliminado exitosamente del centro de datos")
+                
+                // ✅ ACTUALIZACIÓN INMEDIATA DESPUÉS DE ELIMINAR
+                Qt.callLater(function() {
+                    cargarDatosParaFiltros()
+                    actualizarDesdeDataCentral()
+                    updateFilteredModel()
+                })
             } else {
-                console.log("❌ No se pudo eliminar el producto (probablemente tiene stock)")
+                console.log("❌ No se pudo eliminar el producto")
             }
         } else {
             console.log("❌ Función eliminarProductoInventario no disponible")
@@ -2295,13 +2361,13 @@ Item {
             
             for (var i = 0; i < lotes.length; i++) {
                 var lote = lotes[i]
+                // SIN CAJAS: solo cantidad unitaria
                 lotesDelProductoModel.append({
                     id: lote.id || 0,
                     producto_nombre: productoParaLotes.nombre,
-                    cantidad_caja: lote.Cantidad_Caja || 0,
                     cantidad_unitario: lote.Cantidad_Unitario || 0,
                     fecha_vencimiento: lote.Fecha_Vencimiento || "",
-                    stock_lote: (lote.Cantidad_Caja || 0) + (lote.Cantidad_Unitario || 0)
+                    stock_lote: lote.Cantidad_Unitario || 0
                 })
             }
             
@@ -2328,12 +2394,12 @@ Item {
     }
 
     Component.onCompleted: {
-        console.log("📦 Módulo Productos iniciado (OPTIMIZADO)")
+        console.log("📦 Módulo Productos iniciado (SIN CAJAS - SOLO STOCK UNITARIO)")
         console.log("🔗 InventarioModel disponible:", !!inventarioModel)
         console.log("🔗 FarmaciaData disponible:", !!farmaciaData)
         
         if (inventarioModel) {
-            console.log("📊 Productos en InventarioModel:", inventarioModel.total_productos)
+            inventarioModel.refresh_productos() 
             
             cargarMarcasDesdeModel()
             cargarDatosParaFiltros()

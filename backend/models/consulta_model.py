@@ -169,14 +169,12 @@ class ConsultaModel(QObject):
             return False
         
         return True
-    
-    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 7) -> bool:
-        """Valida que el registro no sea muy antiguo para editar - ACTIVADO PARA CONSULTAS"""
+    def _validar_fecha_eliminacion(self, fecha_registro, dias_limite: int = 30) -> bool:
+        """Valida que el registro no sea muy antiguo para eliminar - SOLO PARA MÉDICOS"""
         try:
             if not fecha_registro:
-                return True  # Si no hay fecha, permitir edición
+                return True
             
-            # Convertir a datetime si es necesario
             if isinstance(fecha_registro, str):
                 try:
                     fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
@@ -185,20 +183,17 @@ class ConsultaModel(QObject):
             elif isinstance(fecha_registro, datetime):
                 fecha_obj = fecha_registro
             else:
-                return True  # Si no se puede determinar la fecha, permitir
+                return True
             
-            # ✅ CALCULAR DIFERENCIA - LÍMITE DE 7 DÍAS PARA MÉDICOS
             dias_transcurridos = (datetime.now() - fecha_obj).days
             if dias_transcurridos > dias_limite:
-                self.operacionError.emit(f"No se pueden editar consultas de más de {dias_limite} días")
                 return False
             
             return True
             
         except Exception as e:
-            print(f"⚠️ Error validando fecha: {e}")
-            return True  # En caso de error, permitir la operación
-
+            print(f"⚠️ Error validando fecha eliminación: {e}")
+            return True
     # ===============================
     # PROPERTIES PARA QML
     # ===============================
@@ -449,16 +444,14 @@ class ConsultaModel(QObject):
     
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
-                                          apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente por cédula o crea uno nuevo - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+                                        apellido_materno: str = "", cedula: str = "") -> int:
+        """Busca paciente por cédula o crea uno nuevo - PERMITE CÉDULA VACÍA"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
             if not self._verificar_autenticacion():
                 return -1
             
-            if not cedula or len(cedula.strip()) < 5:
-                self.operacionError.emit("Cédula es obligatoria (mínimo 5 dígitos)")
-                return -1
+            # ✅ ELIMINAR: Validación de cédula obligatoria
+            # La cédula ahora es opcional
             
             if not nombre or len(nombre.strip()) < 2:
                 self.operacionError.emit("Nombre es obligatorio")
@@ -470,11 +463,12 @@ class ConsultaModel(QObject):
             
             print(f"🔄 Usuario {self._usuario_actual_id} gestionando paciente: {nombre} {apellido_paterno}")
             
+            # ✅ CORREGIR: Pasar cédula tal como viene (puede ser vacía)
             paciente_id = self.repository.buscar_o_crear_paciente_simple(
                 nombre.strip(), 
                 apellido_paterno.strip(), 
                 apellido_materno.strip(), 
-                cedula.strip()
+                cedula.strip()  # Puede ser cadena vacía
             )
             
             if paciente_id > 0:
@@ -489,7 +483,6 @@ class ConsultaModel(QObject):
             print(f"⚠️ {error_msg}")
             self.operacionError.emit(error_msg)
             return -1
-    
     # ===============================
     # SLOTS PARA OPERACIONES CRUD
     # ===============================
@@ -498,11 +491,6 @@ class ConsultaModel(QObject):
     def actualizar_consulta(self, consulta_id: int, nuevos_datos):
         """Actualiza consulta existente - VERSIÓN LIMPIA SIN VALIDACIONES PROBLEMÁTICAS"""
         try:
-            # Verificación de permisos
-            puede_editar, razon = self._verificar_permisos_edicion(consulta_id)
-            if not puede_editar:
-                return json.dumps({'exito': False, 'error': razon})
-            
             self._set_estado_actual("cargando")
             
             # Convertir datos
@@ -594,8 +582,10 @@ class ConsultaModel(QObject):
     def eliminar_consulta(self, consulta_id: int) -> bool:
         """Elimina consulta médica - ✅ SOLO ADMINISTRADORES"""
         try:
-            # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
-            if not self._verificar_permisos_admin():
+            # ✅ VERIFICAR PERMISOS DE ADMINISTRADOR
+            puede_eliminar, razon = self._verificar_permisos_eliminacion(consulta_id)
+            if not puede_eliminar:
+                self.operacionError.emit(razon)
                 return False
             
             self._set_estado_actual("cargando")
@@ -629,20 +619,17 @@ class ConsultaModel(QObject):
     def verificar_permisos_consulta(self, consulta_id: int):
         """Verifica permisos del usuario actual para una consulta específica"""
         try:
-            puede_editar, razon_editar = self._verificar_permisos_edicion(consulta_id)
-            puede_eliminar = self._verificar_permisos_admin()
+            puede_editar = self._usuario_actual_rol in ["Administrador", "Médico"]
+            puede_eliminar, razon_eliminar = self._verificar_permisos_eliminacion(consulta_id)
             es_admin = self._usuario_actual_rol == "Administrador"
             es_medico = self._usuario_actual_rol == "Médico"
             
             # Obtener información adicional
             consulta = self.repository.get_consultation_by_id_complete(consulta_id)
-            es_propietario = False
             dias_antiguedad = 0
             
             if consulta:
-                usuario_registro = consulta.get('usuario_id') or consulta.get('Id_Usuario')
-                es_propietario = usuario_registro == self._usuario_actual_id
-                
+
                 # Calcular antigüedad
                 fecha_consulta = consulta.get('Fecha')
                 if fecha_consulta:
@@ -661,25 +648,23 @@ class ConsultaModel(QObject):
             return {
                 'puede_editar': puede_editar,
                 'puede_eliminar': puede_eliminar,
-                'razon_editar': razon_editar,
+                'razon_eliminar': razon_eliminar,
                 'es_administrador': es_admin,
                 'es_medico': es_medico,
-                'es_propietario': es_propietario,
                 'dias_antiguedad': dias_antiguedad,
-                'limite_dias': 7
+                'limite_dias': 30
             }
             
         except Exception as e:
             print(f"⚠️ Error verificando permisos: {e}")
             return {
-                'puede_editar': False,
                 'puede_eliminar': False,
-                'razon_editar': f"Error: {str(e)}",
+                'razon_eliminar': f"Error: {str(e)}",
                 'es_administrador': False,
                 'es_medico': False,
                 'es_propietario': False,
                 'dias_antiguedad': 999,
-                'limite_dias': 7
+                'limite_dias': 30
             }
         
     # ===============================
@@ -706,6 +691,28 @@ class ConsultaModel(QObject):
             self.operacionError.emit(error_msg)
             return json.dumps({'exito': False, 'error': error_msg})
     
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
+        """Busca pacientes por nombre completo"""
+        try:
+            if len(nombre_completo.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
+            
+            resultados = self.repository.search_patient_by_full_name(
+                nombre_completo.strip(), limite
+            )
+            
+            print(f"📋 Encontrados {len(resultados)} pacientes por nombre")
+            return resultados
+            
+        except Exception as e:
+            error_msg = f"Error buscando por nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return []
+
     @Slot(int, result=str)
     def obtener_consultas_del_paciente(self, paciente_id: int) -> str:
         """Obtiene consultas de un paciente específico"""
@@ -1114,15 +1121,28 @@ class ConsultaModel(QObject):
         self._autoRefreshTimer.timeout.connect(self.refrescar_datos)
         # Comentado por defecto - se puede activar si es necesario
         # self._autoRefreshTimer.start(self._autoRefreshInterval)
-
-    def _verificar_permisos_edicion(self, consulta_id: int) -> tuple[bool, str]:
-        """Permisos de edición - TOTALMENTE PERMISIVO"""
+    
+    def _verificar_permisos_eliminacion(self, consulta_id: int) -> tuple[bool, str]:
+        """Permisos de eliminación - ADMINS sin límite, MÉDICOS máximo 30 días"""
         if not self._verificar_autenticacion():
             return False, "Usuario no autenticado"
         
-        # ✅ SIEMPRE PERMITIR EDICIÓN
-        return True, "Edición libre para todos"
-    
+        if self._usuario_actual_rol == "Administrador":
+            return True, "Administrador: Sin restricciones"
+        
+        if self._usuario_actual_rol == "Médico":
+            consulta = self.repository.get_consultation_by_id_complete(consulta_id)
+            if not consulta:
+                return False, "Consulta no encontrada"
+            
+            fecha_consulta = consulta.get('Fecha')
+            if not self._validar_fecha_eliminacion(fecha_consulta, dias_limite=30):
+                return False, "Solo puede eliminar consultas de máximo 30 días"
+            
+            return True, "Médico: Puede eliminar (consulta reciente)"
+        
+        return False, "Sin permisos para eliminar consultas"
+
     @Slot(int)
     def setAutoRefreshInterval(self, intervalMs: int):
         """Configura intervalo de actualización automática"""
@@ -1216,6 +1236,35 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión ConsultaModel: {e}")
+
+    def buscar_paciente_por_nombre_inteligente(self, nombre_completo: str):
+        """
+        ✅ MÉTODO AUXILIAR PARA CONSULTA_MODEL.PY
+        
+        Busca paciente por nombre con la nueva lógica mejorada
+        """
+        try:
+            if not nombre_completo or len(nombre_completo.strip()) < 3:
+                return None
+            
+            print(f"🔍 Búsqueda inteligente por nombre: '{nombre_completo}'")
+            
+            # Usar el método mejorado
+            pacientes = self.repository.search_patient_by_full_name(nombre_completo, limite=5)
+            
+            if pacientes:
+                # Ordenar por relevancia y seleccionar el mejor
+                pacientes_ordenados = sorted(pacientes, key=lambda x: x.get('relevancia', 999))
+                mejor_paciente = pacientes_ordenados[0]
+                
+                print(f"✅ Mejor paciente encontrado: {mejor_paciente['nombre_completo']} (ID: {mejor_paciente['id']})")
+                return mejor_paciente
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error en búsqueda inteligente: {e}")
+            return None
 
 # ===============================
 # REGISTRO PARA QML

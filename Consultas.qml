@@ -427,7 +427,6 @@ Item {
                                         for (var i = 0; i < consultaModel.especialidades.length; i++) {
                                             var esp = consultaModel.especialidades[i]
                                             if (esp && esp.text) {
-                                                // CORREGIDO: Solo nombre de especialidad, sin doctor
                                                 especialidades.push(esp.text)
                                             }
                                         }
@@ -435,7 +434,25 @@ Item {
                                     return especialidades
                                 }
                                 currentIndex: 0
-                                onCurrentIndexChanged: aplicarFiltros()
+                                onCurrentIndexChanged: {
+                                    console.log("🔍 FILTRO ESPECIALIDAD DEBUG:")
+                                    console.log("   - currentIndex:", currentIndex)
+                                    console.log("   - displayText:", displayText)
+                                    
+                                    if (currentIndex > 0) {
+                                        var selectedIndex = currentIndex - 1
+                                        if (consultaModel && consultaModel.especialidades && 
+                                            selectedIndex < consultaModel.especialidades.length) {
+                                            var esp = consultaModel.especialidades[selectedIndex]
+                                            console.log("   - Especialidad seleccionada:", esp.text)
+                                            console.log("   - ID:", esp.id)
+                                        }
+                                    } else {
+                                        console.log("   - Filtro limpiado (Todas)")
+                                    }
+                                    
+                                    aplicarFiltros()
+                                }
                                 
                                 contentItem: Label {
                                     text: filtroEspecialidad.displayText
@@ -1024,8 +1041,19 @@ Item {
                                             height: baseUnit * 3.5
                                             
                                             // ✅ SOLO ADMINISTRADORES PUEDEN VER Y USAR
-                                            visible: consultasRoot.esAdministrador === true
-                                            enabled: (consultasRoot.esAdministrador === true) && (model.id !== undefined)
+                                            visible: consultasRoot.esAdministrador || consultasRoot.esMedico
+                                            enabled: {
+                                                if (!model.id) return false
+                                                if (consultasRoot.esAdministrador) return true
+                                                
+                                                // Para médicos, verificar permisos dinámicamente
+                                                if (consultasRoot.esMedico) {
+                                                    var permisos = verificarPermisosConsulta(parseInt(model.id))
+                                                    return permisos.puede_eliminar
+                                                }
+                                                
+                                                return false
+                                            }
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1041,21 +1069,20 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                
                                                 eliminarConsulta(index) // Comentado para debug
-                                                showNotification("Debug", "Botón eliminar funcionando")
                                             }
                                             ToolTip {
                                                 visible: deleteButton.hovered
-                                                text: "Eliminar consulta (Solo Administradores)"
+                                                text: obtenerTooltipEliminacion(parseInt(model.id))
                                                 delay: 500
+                                                timeout: 5000
                                             }
                                             onHoveredChanged: {
-                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
-                                            }
-                                            
+                                                if (enabled) {
+                                                    deleteIcon.opacity = hovered ? 0.7 : 1.0
+                                                }
+                                            }   
                                         }
-                                        
                                     }
                                 }
                             }
@@ -1254,84 +1281,131 @@ Item {
             
         function loadEditData() {
             if (!isEditMode || !consultationFormDialog.consultaParaEditar) {
-                console.log("No hay datos para cargar en edición")
+                console.log("🚫 No hay datos para cargar en edición")
                 return
             }
             
             var consulta = consultationFormDialog.consultaParaEditar
-            console.log("Cargando datos para edición:", JSON.stringify(consulta))
+            console.log("📋 CARGANDO DATOS PARA EDICIÓN:")
+            console.log("   - Consulta ID:", consulta.consultaId)
+            console.log("   - Paciente:", consulta.paciente)
+            console.log("   - Especialidad:", consulta.especialidadDoctor)
             
-            // Cargar datos del paciente
-            cedulaPaciente.text = consulta.pacienteCedula || ""
-            nombrePaciente.text = consulta.paciente || ""
-            
-            if (cedulaPaciente.text.length >= 5) {
-                buscarPacientePorCedula(cedulaPaciente.text)
-            }
-            
-            // ✅ CORREGIR: Buscar especialidad por coincidencia flexible
-            if (consultaModel && consultaModel.especialidades && consulta.especialidadDoctor) {
-                var especialidadBuscada = consulta.especialidadDoctor.trim()
-                console.log("🔍 Buscando especialidad:", especialidadBuscada)
+            try {
+                // ✅ 1. CARGAR DATOS DEL PACIENTE DIRECTAMENTE
+                console.log("👤 Cargando datos del paciente...")
                 
-                var encontrada = false
-                for (var i = 0; i < consultaModel.especialidades.length; i++) {
-                    var esp = consultaModel.especialidades[i]
+                // Determinar método de búsqueda
+                var tieneCedula = consulta.pacienteCedula && 
+                                consulta.pacienteCedula !== "Sin cédula" && 
+                                consulta.pacienteCedula !== "NULL" &&
+                                consulta.pacienteCedula !== null
+                
+                if (tieneCedula) {
+                    // Configurar búsqueda por cédula
+                    buscarPorCedula.checked = true
+                    buscarPorNombre.checked = false
+                    campoBusquedaPaciente.text = consulta.pacienteCedula
+                } else {
+                    // Configurar búsqueda por nombre
+                    buscarPorCedula.checked = false
+                    buscarPorNombre.checked = true
+                    campoBusquedaPaciente.text = consulta.paciente
+                }
+                
+                // ✅ FORZAR AUTOCOMPLETADO INMEDIATAMENTE (SIN setTimeout)
+                campoBusquedaPaciente.pacienteAutocompletado = true
+                campoBusquedaPaciente.pacienteNoEncontrado = false
+                
+                // Cargar campos del paciente
+                if (consulta.pacienteNombre) {
+                    nombrePaciente.text = consulta.pacienteNombre
+                    apellidoPaterno.text = consulta.pacienteApellidoP || ""
+                    apellidoMaterno.text = consulta.pacienteApellidoM || ""
+                } else {
+                    // Dividir nombre completo
+                    var nombrePartes = consulta.paciente.split(' ')
+                    nombrePaciente.text = nombrePartes[0] || ""
+                    apellidoPaterno.text = nombrePartes[1] || ""
+                    apellidoMaterno.text = nombrePartes.slice(2).join(' ')
+                }
+                
+                cedulaPaciente.text = tieneCedula ? consulta.pacienteCedula : ""
+                
+                console.log("✅ Paciente autocompletado:", nombrePaciente.text, apellidoPaterno.text)
+                
+                // ✅ 2. CARGAR ESPECIALIDAD
+                console.log("🏥 Cargando especialidad...")
+                
+                if (consultaModel && consultaModel.especialidades && consulta.especialidadDoctor) {
+                    var especialidadBuscada = consulta.especialidadDoctor.trim()
+                    var encontrada = false
                     
-                    // ✅ MÉTODO 1: Comparación exacta con formato ComboBox
-                    var espTextoCombo = esp.text + " - " + esp.doctor_nombre
-                    
-                    // ✅ MÉTODO 2: Comparación solo por especialidad si no coincide exacto
-                    var soloEspecialidad = especialidadBuscada.split(" - ")[0]
-                    
-                    console.log(`Comparando [${i}]: "${espTextoCombo}" vs "${especialidadBuscada}"`)
-                    
-                    if (espTextoCombo === especialidadBuscada || 
-                        esp.text === soloEspecialidad ||
-                        especialidadBuscada.includes(esp.text)) {
+                    for (var i = 0; i < consultaModel.especialidades.length; i++) {
+                        var esp = consultaModel.especialidades[i]
+                        var espTextoCombo = esp.text + " - " + esp.doctor_nombre
                         
-                        especialidadCombo.currentIndex = i + 1
-                        consultationFormDialog.selectedEspecialidadIndex = i
-                        encontrada = true
-                        
-                        console.log("✅ Especialidad encontrada en índice:", i + 1)
-                        break
+                        // Múltiples métodos de coincidencia
+                        if (espTextoCombo === especialidadBuscada || 
+                            especialidadBuscada.includes(esp.text) ||
+                            (consulta.especialidadId && esp.id === consulta.especialidadId)) {
+                            
+                            especialidadCombo.currentIndex = i + 1
+                            consultationFormDialog.selectedEspecialidadIndex = i
+                            encontrada = true
+                            
+                            console.log("✅ Especialidad encontrada:", espTextoCombo)
+                            break
+                        }
+                    }
+                    
+                    if (!encontrada) {
+                        console.log("⚠️ Especialidad no encontrada:", especialidadBuscada)
+                        especialidadCombo.currentIndex = 0
+                        consultationFormDialog.selectedEspecialidadIndex = -1
                     }
                 }
                 
-                if (!encontrada) {
-                    console.log("⚠️ Especialidad no encontrada:", especialidadBuscada)
-                    console.log("📋 Especialidades disponibles:", consultaModel.especialidades.map(function(e) { 
-                        return e.text + " - " + e.doctor_nombre 
-                    }))
+                // ✅ 3. CONFIGURAR TIPO DE CONSULTA
+                console.log("🏷️ Configurando tipo:", consulta.tipo)
+                
+                if (consulta.tipo && consulta.tipo.toLowerCase() === "emergencia") {
+                    normalRadio.checked = false
+                    emergenciaRadio.checked = true
+                    consultationFormDialog.consultationType = "Emergencia"
+                } else {
+                    normalRadio.checked = true
+                    emergenciaRadio.checked = false
+                    consultationFormDialog.consultationType = "Normal"
                 }
+                
+                // ✅ 4. CARGAR DETALLES
+                detallesConsulta.text = consulta.detalles || ""
+                
+                // ✅ 5. ACTUALIZAR PRECIOS
+                consultationFormDialog.calculatedPrice = consulta.precio || 0
+                consultationFormDialog.updatePrices()
+                
+                console.log("✅ Datos de edición cargados completamente")
+                
+            } catch (error) {
+                console.log("❌ Error cargando datos de edición:", error.message)
+                showNotification("Error", "Error cargando datos: " + error.message)
             }
-            
-            // Configurar tipo de consulta
-            if (consulta.tipo === "Normal") {
-                normalRadio.checked = true
-                consultationFormDialog.consultationType = "Normal"
-            } else {
-                emergenciaRadio.checked = true
-                consultationFormDialog.consultationType = "Emergencia"
-            }
-            
-            
-            // Cargar demás campos
-            consultationFormDialog.calculatedPrice = consulta.precio || 0
-            detallesConsulta.text = consulta.detalles || ""
-            
-            // ✅ FORZAR ACTUALIZACIÓN DE PRECIOS
-            consultationFormDialog.updatePrices()
-            
-            console.log("Datos de edición cargados correctamente")
         }
         
         onVisibleChanged: {
             if (visible) {
+                console.log("📂 Dialog abierto - Modo:", isEditMode ? "EDICIÓN" : "NUEVO")
+                
                 if (isEditMode && consultationFormDialog.consultaParaEditar) {
+                    console.log("📋 Iniciando carga para edición...")
+                    // ✅ NO usar timer, cargar directamente
                     loadEditData()
                 } else if (!isEditMode) {
+                    console.log("✨ Iniciando modo nuevo registro...")
+                    
+                    // Limpiar formulario para nuevo registro
                     limpiarDatosPaciente()
                     especialidadCombo.currentIndex = 0
                     normalRadio.checked = true
@@ -1340,10 +1414,13 @@ Item {
                     consultationFormDialog.selectedEspecialidadIndex = -1
                     consultationFormDialog.calculatedPrice = 0.0
                     consultationFormDialog.consultaParaEditar = null
-                    cedulaPaciente.forceActiveFocus()
+                    
+                    // Dar foco al campo de búsqueda
+                    campoBusquedaPaciente.forceActiveFocus()
                 }
             }
         }
+        
         
         Rectangle {
             id: dialogHeader
@@ -1425,32 +1502,97 @@ Item {
                         width: parent.width
                         spacing: baseUnit * 1.5
                         
+                        // RadioButtons para seleccionar tipo de búsqueda
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: baseUnit * 2
+                            
+                            Label {
+                                text: "Buscar por:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            RadioButton {
+                                id: buscarPorCedula
+                                text: "Cédula"
+                                checked: true
+                                font.pixelSize: fontBaseSize * 0.9
+                                
+                                onCheckedChanged: {
+                                    if (checked && !isEditMode) {  // ✅ No limpiar en modo edición
+                                        limpiarDatosPaciente()
+                                        campoBusquedaPaciente.forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            RadioButton {
+                                id: buscarPorNombre
+                                text: "Nombre Completo"
+                                font.pixelSize: fontBaseSize * 0.9
+                                
+                                onCheckedChanged: {
+                                    if (checked && !isEditMode) {  // ✅ No limpiar en modo edición
+                                        limpiarDatosPaciente()
+                                        campoBusquedaPaciente.forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            //Item { Layout.fillWidth: true }
+                        }
+                        
+                        // Campo de búsqueda adaptativo
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: baseUnit
                             
                             TextField {
-                                id: cedulaPaciente
+                                id: campoBusquedaPaciente
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
-                                placeholderText: "Ingrese número de cédula para buscar paciente..."
-                                inputMethodHints: Qt.ImhDigitsOnly
-                                validator: RegularExpressionValidator { 
-                                    regularExpression: /^[0-9]{1,12}(\s*[A-Z]{0,3})?$/
-                                }
-                                maximumLength: 15
+                                
+                                placeholderText: buscarPorCedula.checked ? 
+                                    "Ingrese número de cédula..." : "Ingrese nombre completo del paciente..."
+                                
+                                inputMethodHints: buscarPorCedula.checked ? Qt.ImhDigitsOnly : Qt.ImhNone
+                                
+                                  
+                                maximumLength: buscarPorCedula.checked ? 15 : 50
                                 
                                 property bool pacienteAutocompletado: false
                                 property bool pacienteNoEncontrado: false
                                 
+                                RegularExpressionValidator {
+                                    id: cedulaValidator
+                                    regularExpression: /^[0-9]{1,12}(\s*[A-Z]{0,3})?$/
+                                }
+                                Component.onCompleted: {
+                                    if (buscarPorCedula.checked) {
+                                        validator = cedulaValidator
+                                    }
+                                }
+                                Connections {
+                                    target: buscarPorCedula
+                                    function onCheckedChanged() {
+                                        if (buscarPorCedula.checked) {
+                                            campoBusquedaPaciente.validator = cedulaValidator
+                                        } else {
+                                            campoBusquedaPaciente.validator = null
+                                        }
+                                    }
+                                }
+                                
                                 background: Rectangle {
                                     color: {
-                                        if (cedulaPaciente.pacienteAutocompletado) return "#F0F8FF"
-                                        if (cedulaPaciente.pacienteNoEncontrado) return "#FEF3C7"
-                                        return whiteColor
+                                        if (campoBusquedaPaciente.pacienteAutocompletado) return "#F0F8FF"  // Azul claro
+                                        if (campoBusquedaPaciente.pacienteNoEncontrado) return "#FEF3C7"   // Amarillo claro
+                                        return whiteColor  // Blanco normal
                                     }
-                                    border.color: cedulaPaciente.activeFocus ? primaryColor : borderColor
-                                    border.width: cedulaPaciente.activeFocus ? 2 : 1
+                                    border.color: campoBusquedaPaciente.activeFocus ? primaryColor : borderColor
+                                    border.width: campoBusquedaPaciente.activeFocus ? 2 : 1
                                     radius: baseUnit * 0.6
                                     
                                     Text {
@@ -1458,27 +1600,53 @@ Item {
                                         anchors.rightMargin: baseUnit
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: {
-                                            if (cedulaPaciente.pacienteAutocompletado) return "✅"
-                                            if (cedulaPaciente.pacienteNoEncontrado) return "⚠️"
-                                            return cedulaPaciente.text.length >= 5 ? "🔍" : "🔒"
+                                            if (campoBusquedaPaciente.pacienteAutocompletado) return "✅"    // Encontrado
+                                            if (campoBusquedaPaciente.pacienteNoEncontrado) return "⚠️"     // No encontrado
+                                            
+                                            // Estados de búsqueda
+                                            if (buscarPorCedula.checked) {
+                                                return campoBusquedaPaciente.text.length >= 5 ? "🔍" : "🔐"
+                                            } else {
+                                                return campoBusquedaPaciente.text.length >= 3 ? "🔍" : "👤"
+                                            }
                                         }
                                         font.pixelSize: fontBaseSize * 1.2
-                                        visible: cedulaPaciente.text.length > 0
+                                        visible: campoBusquedaPaciente.text.length > 0
                                     }
                                 }
                                 
                                 onTextChanged: {
-                                    if (text.length >= 5 && !pacienteAutocompletado) {
+                                    // ✅ NO resetear estados si estamos en modo edición y autocompletado
+                                    if (isEditMode && pacienteAutocompletado) {
+                                        return  // No hacer nada en modo edición
+                                    }
+                                    
+                                    // Resetear estados cuando el usuario empieza a escribir
+                                    if (!pacienteAutocompletado) {
                                         pacienteNoEncontrado = false
-                                        buscarTimer.restart()
-                                    } else if (text.length === 0) {
+                                    }
+                                        
+                                    if (buscarPorCedula.checked) {
+                                        if (text.length >= 5 && !pacienteAutocompletado) {
+                                            buscarTimer.restart()
+                                        }
+                                    } else {
+                                        if (text.length >= 3 && !pacienteAutocompletado) {
+                                            buscarPorNombreTimer.restart()
+                                        }
+                                    }
+                                        
+                                    // Si borra todo, resetear estados (solo si NO es modo edición)
+                                    if (text.length === 0 && !isEditMode) {
                                         limpiarDatosPaciente()
                                     }
                                 }
                                 
                                 Keys.onReturnPressed: {
-                                    if (cedulaPaciente.text.length >= 5) {
-                                        buscarPacientePorCedula(cedulaPaciente.text)
+                                    if (buscarPorCedula.checked && text.length >= 5) {
+                                        buscarPacientePorCedula(text)
+                                    } else if (buscarPorNombre.checked && text.length >= 3) {
+                                        buscarPacientePorNombreCompleto(text)
                                     }
                                 }
                             }
@@ -1486,9 +1654,11 @@ Item {
                             Button {
                                 id: nuevoPacienteBtn
                                 text: "Nuevo Paciente"
-                                visible: cedulaPaciente.pacienteNoEncontrado && 
-                                        cedulaPaciente.text.length >= 5 && 
-                                        !cedulaPaciente.pacienteAutocompletado
+                                visible: campoBusquedaPaciente.pacienteNoEncontrado && 
+                                    ((buscarPorCedula.checked && campoBusquedaPaciente.text.length >= 5) ||
+                                    (buscarPorNombre.checked && campoBusquedaPaciente.text.length >= 3)) &&
+                                    !campoBusquedaPaciente.pacienteAutocompletado
+    
                                 Layout.preferredHeight: baseUnit * 3
                                 
                                 background: Rectangle {
@@ -1521,7 +1691,13 @@ Item {
                                     }
                                 }
                                 
-                                onClicked: habilitarNuevoPaciente()
+                                onClicked: {
+                                    if (buscarPorCedula.checked) {
+                                        habilitarNuevoPaciente()
+                                    } else {
+                                        habilitarNuevoPacientePorNombre()
+                                    }
+                                }
                                 
                                 HoverHandler {
                                     cursorShape: Qt.PointingHandCursor
@@ -1529,7 +1705,9 @@ Item {
                                 
                                 ToolTip {
                                     visible: nuevoPacienteBtn.hovered
-                                    text: "Crear nuevo paciente con cédula " + cedulaPaciente.text
+                                    text: buscarPorCedula.checked ? 
+                                        "Crear nuevo paciente con cédula " + campoBusquedaPaciente.text :
+                                        "Crear nuevo paciente: " + campoBusquedaPaciente.text
                                     delay: 500
                                     timeout: 3000
                                 }
@@ -1537,9 +1715,10 @@ Item {
                             
                             Button {
                                 text: "Limpiar"
-                                visible: cedulaPaciente.pacienteAutocompletado || 
-                                        nombrePaciente.text.length > 0 ||
-                                        (cedulaPaciente.text.length > 0 && !cedulaPaciente.pacienteNoEncontrado)
+                                visible: campoBusquedaPaciente.pacienteAutocompletado || 
+                                    nombrePaciente.text.length > 0 ||
+                                    (campoBusquedaPaciente.text.length > 0)
+
                                 Layout.preferredHeight: baseUnit * 3
                                 
                                 background: Rectangle {
@@ -1565,24 +1744,63 @@ Item {
                             }
                         }
                         
+                        // Timers
                         Timer {
                             id: buscarTimer
                             interval: 800
                             running: false
                             repeat: false
                             onTriggered: {
-                                var cedula = cedulaPaciente.text.trim()
+                                var cedula = campoBusquedaPaciente.text.trim()
                                 if (cedula.length >= 5) {
                                     buscarPacientePorCedula(cedula)
                                 }
                             }
                         }
                         
+                        Timer {
+                            id: buscarPorNombreTimer
+                            interval: 800
+                            running: false
+                            repeat: false
+                            onTriggered: {
+                                var nombre = campoBusquedaPaciente.text.trim()
+                                if (nombre.length >= 3) {
+                                    buscarPacientePorNombreCompleto(nombre)
+                                }
+                            }
+                        }
+                        
+                        // Campos de información del paciente (sin cambios)
                         GridLayout {
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: baseUnit * 2
                             rowSpacing: baseUnit * 1.5
+                            
+                            Label {
+                                text: "Cédula:"
+                                font.bold: true
+                                color: textColor
+                                font.family: "Segoe UI, Arial, sans-serif"
+                            }
+                            
+                            TextField {
+                                id: cedulaPaciente
+                                Layout.fillWidth: true
+                                placeholderText: "Cédula del paciente (puede estar vacía)"
+                                readOnly: campoBusquedaPaciente.pacienteAutocompletado
+                                font.pixelSize: fontBaseSize
+                                font.family: "Segoe UI, Arial, sans-serif"
+                                
+                                background: Rectangle {
+                                    color: campoBusquedaPaciente.pacienteAutocompletado ? "#F8F9FA" : whiteColor
+                                    border.color: borderColor
+                                    border.width: 1
+                                    radius: baseUnit * 0.6
+                                }
+                                padding: baseUnit
+                            }
                             
                             Label {
                                 text: "Nombre:"
@@ -1594,16 +1812,18 @@ Item {
                             TextField {
                                 id: nombrePaciente
                                 Layout.fillWidth: true
-                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
-                                            "Nombre del paciente" : "Ingrese nombre del nuevo paciente"
-                                readOnly: cedulaPaciente.pacienteAutocompletado
+                                placeholderText: campoBusquedaPaciente.pacienteAutocompletado ? 
+                                            "Nombre del paciente" : "Ingrese nombre del paciente"
+                                readOnly: campoBusquedaPaciente.pacienteAutocompletado
                                 font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
-                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
-                                                            cedulaPaciente.pacienteNoEncontrado
+                                
+                                property bool esCampoNuevoPaciente: !campoBusquedaPaciente.pacienteAutocompletado && 
+                                                            campoBusquedaPaciente.pacienteNoEncontrado
+                                
                                 background: Rectangle {
                                     color: {
-                                        if (cedulaPaciente.pacienteAutocompletado) return "#F8F9FA"
+                                        if (campoBusquedaPaciente.pacienteAutocompletado) return "#F8F9FA"
                                         if (nombrePaciente.esCampoNuevoPaciente) return "#E8F5E8"
                                         return whiteColor
                                     }
@@ -1614,11 +1834,6 @@ Item {
                                     }
                                     border.width: nombrePaciente.esCampoNuevoPaciente ? 2 : 1
                                     radius: baseUnit * 0.6
-                                }
-                                onTextChanged: {
-                                    if (esCampoNuevoPaciente && text.length > 0) {
-                                        color = text.length >= 2 ? textColor : "#E74C3C"
-                                    }
                                 }
                                 padding: baseUnit
                             }
@@ -1633,19 +1848,18 @@ Item {
                             TextField {
                                 id: apellidoPaterno
                                 Layout.fillWidth: true
-                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                placeholderText: campoBusquedaPaciente.pacienteAutocompletado ? 
                                                 "Apellido paterno" : "Ingrese apellido paterno"
-                                readOnly: cedulaPaciente.pacienteAutocompletado
+                                readOnly: campoBusquedaPaciente.pacienteAutocompletado
                                 font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 
-                                property bool pacienteAutocompletado: cedulaPaciente.pacienteAutocompletado
-                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
-                                                                cedulaPaciente.pacienteNoEncontrado
+                                property bool esCampoNuevoPaciente: !campoBusquedaPaciente.pacienteAutocompletado && 
+                                                                campoBusquedaPaciente.pacienteNoEncontrado
                                 
                                 background: Rectangle {
                                     color: {
-                                        if (apellidoPaterno.pacienteAutocompletado) return "#F8F9FA"
+                                        if (campoBusquedaPaciente.pacienteAutocompletado) return "#F8F9FA"
                                         if (apellidoPaterno.esCampoNuevoPaciente) return "#E8F5E8"
                                         return whiteColor
                                     }
@@ -1656,11 +1870,6 @@ Item {
                                     }
                                     border.width: apellidoPaterno.esCampoNuevoPaciente ? 2 : 1
                                     radius: baseUnit * 0.6
-                                }
-                                onTextChanged: {
-                                    if (esCampoNuevoPaciente && text.length > 0) {
-                                        color = text.length >= 2 ? textColor : "#E74C3C"
-                                    }
                                 }
                                 padding: baseUnit
                             }
@@ -1675,19 +1884,18 @@ Item {
                             TextField {
                                 id: apellidoMaterno
                                 Layout.fillWidth: true
-                                placeholderText: cedulaPaciente.pacienteAutocompletado ? 
+                                placeholderText: campoBusquedaPaciente.pacienteAutocompletado ? 
                                                 "Apellido materno" : "Ingrese apellido materno (opcional)"
-                                readOnly: cedulaPaciente.pacienteAutocompletado
+                                readOnly: campoBusquedaPaciente.pacienteAutocompletado
                                 font.pixelSize: fontBaseSize
                                 font.family: "Segoe UI, Arial, sans-serif"
                                 
-                                property bool pacienteAutocompletado: cedulaPaciente.pacienteAutocompletado
-                                property bool esCampoNuevoPaciente: !cedulaPaciente.pacienteAutocompletado && 
-                                                                cedulaPaciente.pacienteNoEncontrado
+                                property bool esCampoNuevoPaciente: !campoBusquedaPaciente.pacienteAutocompletado && 
+                                                                campoBusquedaPaciente.pacienteNoEncontrado
                                 
                                 background: Rectangle {
                                     color: {
-                                        if (apellidoMaterno.pacienteAutocompletado) return "#F8F9FA"
+                                        if (campoBusquedaPaciente.pacienteAutocompletado) return "#F8F9FA"
                                         if (apellidoMaterno.esCampoNuevoPaciente) return "#E8F5E8"
                                         return whiteColor
                                     }
@@ -1708,7 +1916,9 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: baseUnit * 3
-                    visible: cedulaPaciente.pacienteNoEncontrado && !cedulaPaciente.pacienteAutocompletado
+                    // ✅ CONDICIÓN CORREGIDA: Solo visible cuando NO se encuentra Y NO está autocompletado
+                    visible: campoBusquedaPaciente.pacienteNoEncontrado && 
+                            !campoBusquedaPaciente.pacienteAutocompletado
                     color: "#D1FAE5"
                     border.color: "#10B981"
                     border.width: 1
@@ -1724,7 +1934,13 @@ Item {
                         }
                         
                         Label {
-                            text: "Modo: Crear nuevo paciente con cédula " + cedulaPaciente.text
+                            text: {
+                                if (buscarPorCedula.checked) {
+                                    return "Modo: Crear nuevo paciente con cédula " + campoBusquedaPaciente.text
+                                } else {
+                                    return "Modo: Crear nuevo paciente: " + campoBusquedaPaciente.text
+                                }
+                            }
                             color: "#047857"
                             font.pixelSize: fontBaseSize * 0.8
                             font.bold: true
@@ -1781,26 +1997,12 @@ Item {
                                 }
                                 
                                 onCurrentIndexChanged: {
-                                    console.log("🔍 COMBO DEBUG - Index cambiado a:", currentIndex)
-                                    console.log("🔍 COMBO DEBUG - Texto seleccionado:", displayText)
-                                    console.log("🔍 COMBO DEBUG - IsEditMode:", isEditMode)
-                                    
                                     if (currentIndex > 0 && consultaModel && consultaModel.especialidades) {
                                         var newSelectedIndex = currentIndex - 1
                                         var selectedEsp = consultaModel.especialidades[newSelectedIndex]
-                                        
-                                        console.log("🔍 COMBO DEBUG - Especialidad seleccionada:")
-                                        console.log("   - Array Index:", newSelectedIndex)
-                                        console.log("   - ID:", selectedEsp.id)
-                                        console.log("   - Nombre:", selectedEsp.text)
-                                        console.log("   - Doctor:", selectedEsp.doctor_nombre)
-                                        
                                         consultationFormDialog.selectedEspecialidadIndex = newSelectedIndex
                                         consultationFormDialog.updatePrices()
                                         
-                                        console.log("🔍 COMBO DEBUG - Dialog actualizado:")
-                                        console.log("   - selectedEspecialidadIndex:", consultationFormDialog.selectedEspecialidadIndex)
-                                        console.log("   - calculatedPrice:", consultationFormDialog.calculatedPrice)
                                         
                                     } else {
                                         console.log("🔍 COMBO DEBUG - Especialidad limpiada")
@@ -2013,16 +2215,27 @@ Item {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
                     var especialidadSeleccionada = consultationFormDialog.selectedEspecialidadIndex >= 0
-                    var cedulaValida = cedulaPaciente.text.length >= 5
                     var nombreValido = nombrePaciente.text.length >= 2
                     var detallesValidos = detallesConsulta.text.length >= 10
                     
-                    if (cedulaPaciente.pacienteNoEncontrado) {
-                        var apellidoValido = apellidoPaterno.text.length >= 2
-                        return especialidadSeleccionada && cedulaValida && nombreValido && apellidoValido && detallesValidos
+                    // Validación según tipo de búsqueda
+                    var validacionPaciente
+                    if (buscarPorCedula.checked) {
+                        // Por cédula: requiere cédula válida
+                        var cedulaValida = campoBusquedaPaciente.text.length >= 5
+                        if (campoBusquedaPaciente.pacienteNoEncontrado) {
+                            var apellidoValido = apellidoPaterno.text.length >= 2
+                            validacionPaciente = cedulaValida && nombreValido && apellidoValido
+                        } else {
+                            validacionPaciente = cedulaValida && nombreValido
+                        }
                     } else {
-                        return especialidadSeleccionada && cedulaValida && nombreValido && detallesValidos
+                        // Por nombre: no requiere cédula, solo nombre y apellido
+                        var apellidoValido = apellidoPaterno.text.length >= 2
+                        validacionPaciente = nombreValido && apellidoValido
                     }
+                    
+                    return especialidadSeleccionada && validacionPaciente && detallesValidos
                 }
                 Layout.preferredHeight: baseUnit * 4
                 
@@ -2153,7 +2366,7 @@ Item {
                     Item { Layout.preferredHeight: baseUnit * 0.5 }
                     
                     Label {
-                        text: "¿Estás seguro de eliminar esta consulta?"
+                        text: "¿Está seguro de eliminar esta consulta?"
                         font.pixelSize: fontBaseSize * 1.1
                         font.bold: true
                         color: textColor
@@ -2162,10 +2375,48 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         font.family: "Segoe UI, Arial, sans-serif"
                     }
-                    
+
+                    // ✅ NUEVO: Mostrar información de permisos
                     Label {
-                        text: "Esta acción no se puede deshacer y el registro de la consulta se eliminará permanentemente."
-                        font.pixelSize: fontBaseSize
+                        text: {
+                            if (!consultaIdToDelete) return "Seleccione una consulta"
+                            
+                            var permisos = verificarPermisosConsulta(parseInt(consultaIdToDelete))
+                            
+                            if (permisos.es_administrador) {
+                                return "Como administrador, puede eliminar cualquier consulta sin restricciones."
+                            }
+                            
+                            if (permisos.es_medico) {
+                                if (permisos.puede_eliminar) {
+                                    var diasRestantes = Math.max(0, 30 - permisos.dias_antiguedad)
+                                    return `Consulta de ${permisos.dias_antiguedad} días. Le quedan ${diasRestantes} días más para poder eliminar.`
+                                } else {
+                                    return `Esta consulta tiene ${permisos.dias_antiguedad} días (límite: 30 días).`
+                                }
+                            }
+                            
+                            return "Verificando permisos..."
+                        }
+                        font.pixelSize: fontBaseSize * 0.9
+                        color: {
+                            if (!consultaIdToDelete) return "#6b7280"
+                            
+                            var permisos = verificarPermisosConsulta(parseInt(consultaIdToDelete))
+                            if (permisos.es_administrador) return "#059669"
+                            if (permisos.puede_eliminar) return "#059669"
+                            return "#dc2626"
+                        }
+                        Layout.alignment: Qt.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.maximumWidth: parent.width - baseUnit * 4
+                        font.family: "Segoe UI, Arial, sans-serif"
+                    }
+
+                    Label {
+                        text: "Esta acción no se puede deshacer y el registro se eliminará permanentemente."
+                        font.pixelSize: fontBaseSize * 0.85
                         color: "#6b7280"
                         Layout.alignment: Qt.AlignHCenter
                         wrapMode: Text.WordWrap
@@ -2361,14 +2612,6 @@ Item {
         })
         timer.start()
     }
-    Timer {
-        id: initialLoadTimer
-        interval: 100
-        running: true
-        onTriggered: {
-            aplicarFiltros()
-        }
-    }
     function construirFiltrosActuales() {
         var filtros = {}
         
@@ -2383,12 +2626,22 @@ Item {
         
         // Filtro por especialidad
         if (filtroEspecialidad && filtroEspecialidad.currentIndex > 0) {
-            var selectedIndexInMap = filtroEspecialidad.currentIndex - 1
+            // Calcular el índice real en la lista de especialidades
+            var selectedIndexInEspecialidades = filtroEspecialidad.currentIndex - 1
             
-            if (selectedIndexInMap >= 0 && selectedIndexInMap < especialidadMap.length) {
-                var selectedEspecialidad = especialidadMap[selectedIndexInMap]
-                filtros.especialidad = selectedEspecialidad.nombre
-                console.log("✅ Filtro especialidad aplicado:", selectedEspecialidad.nombre, "ID:", selectedEspecialidad.id)
+            // Obtener directamente desde consultaModel.especialidades
+            if (consultaModel && consultaModel.especialidades && 
+                selectedIndexInEspecialidades >= 0 && 
+                selectedIndexInEspecialidades < consultaModel.especialidades.length) {
+                
+                var selectedEspecialidad = consultaModel.especialidades[selectedIndexInEspecialidades]
+                
+                // Usar el nombre de la especialidad para el filtro
+                filtros.especialidad = selectedEspecialidad.text
+                
+                console.log("✅ Filtro especialidad aplicado:", selectedEspecialidad.text, "ID:", selectedEspecialidad.id)
+            } else {
+                console.log("❌ Índice de especialidad fuera de rango:", selectedIndexInEspecialidades)
             }
         }
         
@@ -2501,7 +2754,7 @@ Item {
             consultationFormDialog.enabled = false
             
             // 1. Gestionar paciente
-            var pacienteId = buscarOCrearPacientePorCedula()
+            var pacienteId = buscarOCrearPaciente()
             if (pacienteId <= 0) {
                 throw new Error("Error gestionando datos del paciente")
             }
@@ -2581,32 +2834,39 @@ Item {
     }
 
     function autocompletarDatosPaciente(paciente) {
-        nombrePaciente.text = paciente.Nombre || paciente.nombre || ""
-        apellidoPaterno.text = paciente.Apellido_Paterno || paciente.apellido_paterno || ""
-        apellidoMaterno.text = paciente.Apellido_Materno || paciente.apellido_materno || ""
+        nombrePaciente.text = paciente.Nombre || ""
+        apellidoPaterno.text = paciente.Apellido_Paterno || ""
+        apellidoMaterno.text = paciente.Apellido_Materno || ""
+        cedulaPaciente.text = paciente.Cedula || ""
         
-        // Marcar como encontrado y autocompletado
-        cedulaPaciente.pacienteAutocompletado = true
-        cedulaPaciente.pacienteNoEncontrado = false
-        apellidoPaterno.pacienteAutocompletado = true
-        apellidoMaterno.pacienteAutocompletado = true
+        // ✅ CORREGIR: Cuando se encuentra, NO es nuevo paciente
+        campoBusquedaPaciente.pacienteAutocompletado = true
+        campoBusquedaPaciente.pacienteNoEncontrado = false  // ← ESTO ES CLAVE
         
         console.log("✅ Paciente encontrado y autocompletado:", paciente.nombre_completo || "")
     }
 
     function limpiarDatosPaciente() {
+        // ✅ NO limpiar si estamos en modo edición
+        if (isEditMode) {
+            console.log("🔒 Modo edición activo - NO limpiar datos")
+            return
+        }
+        
+        campoBusquedaPaciente.text = ""
         cedulaPaciente.text = ""
         nombrePaciente.text = ""
         apellidoPaterno.text = ""
         apellidoMaterno.text = ""
         
-        cedulaPaciente.pacienteAutocompletado = false
-        apellidoPaterno.pacienteAutocompletado = false
-        apellidoMaterno.pacienteAutocompletado = false
+        // Resetear estados
+        campoBusquedaPaciente.pacienteAutocompletado = false
+        campoBusquedaPaciente.pacienteNoEncontrado = false
+        
         console.log("🧹 Datos del paciente limpiados")
     }
 
-    function buscarOCrearPacientePorCedula() {
+    function buscarOCrearPaciente() {
         if (!consultaModel) {
             throw new Error("ConsultaModel no disponible")
         }
@@ -2614,12 +2874,9 @@ Item {
         var nombre = nombrePaciente.text.trim()
         var apellidoP = apellidoPaterno.text.trim()
         var apellidoM = apellidoMaterno.text.trim()
-        var cedula = cedulaPaciente.text.trim()
+        var cedula = cedulaPaciente.text.trim() // ✅ Puede estar vacía
         
-        // Validaciones
-        if (!cedula || cedula.length < 5) {
-            throw new Error("Cédula inválida: " + cedula)
-        }
+        // Validaciones básicas
         if (!nombre || nombre.length < 2) {
             throw new Error("Nombre inválido: " + nombre)
         }
@@ -2627,13 +2884,15 @@ Item {
             throw new Error("Apellido paterno inválido: " + apellidoP)
         }
         
-        console.log("📄 Gestionando paciente:", nombre, apellidoP, "- Cédula:", cedula)
+        // ✅ CORREGIR: Solo validar cédula si se busca por cédula
+        if (buscarPorCedula.checked && (!cedula || cedula.length < 5)) {
+            throw new Error("Cédula inválida para búsqueda por cédula: " + cedula)
+        }
+        
+        console.log("📄 Gestionando paciente:", nombre, apellidoP, "- Cedula:", cedula || "vacia")
         
         var pacienteId = consultaModel.buscar_o_crear_paciente_inteligente(
-            nombre,
-            apellidoP, 
-            apellidoM,
-            cedula
+            nombre, apellidoP, apellidoM, cedula
         )
         
         if (!pacienteId || pacienteId <= 0) {
@@ -2643,14 +2902,12 @@ Item {
         console.log("✅ Paciente gestionado correctamente - ID:", pacienteId)
         return pacienteId
     }
-
     function buscarPacientePorCedula(cedula) {
         if (!consultaModel || cedula.length < 5) return
         
-        console.log("🔍 Buscando paciente con cédula:", cedula)
+        console.log("🔍 Buscando paciente por cédula:", cedula)
         
-        // Limpiar estado anterior
-        cedulaPaciente.pacienteNoEncontrado = false
+        campoBusquedaPaciente.pacienteNoEncontrado = false
         
         var pacienteData = consultaModel.buscar_paciente_por_cedula(cedula.trim())
         
@@ -2663,16 +2920,36 @@ Item {
     }
 
     function limpiarYCerrarDialogoConsulta() {
+        // Cerrar diálogo
         showNewConsultationDialog = false
+        
+        // Limpiar datos del paciente
         limpiarDatosPaciente()
+        
+        // ✅ RESETEAR RADIOBUTTONS DE BÚSQUEDA
+        buscarPorCedula.checked = true    // Por defecto buscar por cédula
+        buscarPorNombre.checked = false
+        
+        // Limpiar campos de consulta
         detallesConsulta.text = ""
         especialidadCombo.currentIndex = 0
+        
+        // ✅ RESETEAR RADIOBUTTONS DE TIPO DE CONSULTA
         normalRadio.checked = true
+        emergenciaRadio.checked = false
+        
+        // ✅ RESETEAR PROPIEDADES DEL DIALOG
+        consultationFormDialog.selectedEspecialidadIndex = -1
+        consultationFormDialog.calculatedPrice = 0.0
+        consultationFormDialog.consultationType = "Normal"
+        consultationFormDialog.consultaParaEditar = null
+        
+        // Resetear estados de la interfaz
         selectedRowIndex = -1
         isEditMode = false
         editingIndex = -1
-        consultationFormDialog.consultaParaEditar = null
-        console.log("🧹 Formulario de consulta limpiado y diálogo cerrado")
+        
+        console.log("🧹 Formulario de consulta limpiado completamente y diálogo cerrado")
     }
 
     function aplicarFiltros() {
@@ -2722,72 +2999,48 @@ Item {
     
     // Nuevas Funciones
     function habilitarNuevoPaciente() {
-        console.log("✅ Habilitando creación de nuevo paciente con cédula:", cedulaPaciente.text)
+        console.log("✅ Habilitando creación de nuevo paciente con cédula:", campoBusquedaPaciente.text)
         
-        // Mantener la cédula ingresada
-        cedulaPaciente.pacienteNoEncontrado = true
-        cedulaPaciente.pacienteAutocompletado = false
+        campoBusquedaPaciente.pacienteNoEncontrado = true
+        campoBusquedaPaciente.pacienteAutocompletado = false
         
-        // Limpiar campos de nombre para edición
-        nombrePaciente.text = ""
-        apellidoPaterno.text = ""
-        apellidoMaterno.text = ""
-        
-        // Enfocar en el primer campo editable
         nombrePaciente.forceActiveFocus()
     }
-    function marcarPacienteNoEncontrado(cedula) {
-        cedulaPaciente.pacienteNoEncontrado = true
-        cedulaPaciente.pacienteAutocompletado = false
-        
-        // Limpiar campos pero mantener la cédula
-        nombrePaciente.text = ""
-        apellidoPaterno.text = ""
-        apellidoMaterno.text = ""
-        
-        console.log("⚠️ Paciente no encontrado. Habilitando modo crear nuevo paciente.")
-    }
+
     function validarFormularioConsulta() {
-        console.log("✅ Validando formulario de consulta...")
-        
-        // ✅ DECLARAR VARIABLES ANTES DE USARLAS
-        var tieneEspecialidad = consultationFormDialog.selectedEspecialidadIndex >= 0
-        var tieneCedula = cedulaPaciente.text.length >= 5
-        var tieneNombre = nombrePaciente.text.length >= 2
-        var tieneDetalles = detallesConsulta.text.length >= 10
-        
-        if (!tieneEspecialidad) {
+        if (consultationFormDialog.selectedEspecialidadIndex < 0) {
             showNotification("Error", "Debe seleccionar una especialidad")
             return false
         }
         
-        if (!tieneCedula) {
-            showNotification("Error", "Debe ingresar una cédula válida (mínimo 5 dígitos)")
-            return false
-        }
-        
-        if (!tieneNombre) {
+        if (nombrePaciente.text.length < 2) {
             showNotification("Error", "Nombre del paciente es obligatorio")
             return false
         }
         
-        if (!tieneDetalles) {
-            showNotification("Error", "Los detalles de la consulta son obligatorios (mínimo 10 caracteres)")
+        if (detallesConsulta.text.length < 10) {
+            showNotification("Error", "Los detalles son obligatorios (mínimo 10 caracteres)")
             return false
         }
         
-        // Validación adicional para pacientes nuevos
-        if (cedulaPaciente.pacienteNoEncontrado) {
-            if (!apellidoPaterno.text || apellidoPaterno.text.length < 2) {
-                showNotification("Error", "Apellido paterno es obligatorio para pacientes nuevos")
+        // ✅ CORREGIR: Solo validar cédula si se busca por cédula
+        if (buscarPorCedula.checked) {
+            if (campoBusquedaPaciente.text.length < 5) {
+                showNotification("Error", "Debe ingresar una cédula válida")
                 return false
             }
         }
         
-        console.log("✅ Formulario de consulta válido")
+        // Apellido paterno obligatorio para pacientes nuevos
+        if (campoBusquedaPaciente.pacienteNoEncontrado) {
+            if (apellidoPaterno.text.length < 2) {
+                showNotification("Error", "Apellido paterno es obligatorio")
+                return false
+            }
+        }
+        
         return true
     }
-
 
 
     function procesarResultadoCreacionConsulta(resultado) {
@@ -2863,9 +3116,6 @@ Item {
     }
 
     function verificarPermisosConsulta(consultaId) {
-        /**
-        * Verifica permisos para una consulta específica
-        */
         try {
             if (!consultaModel || !consultaId) {
                 return {
@@ -2889,11 +3139,28 @@ Item {
             }
         }
     }
+    function verificarYCorregirDatos() {
+        if (!isEditMode) return
+        
+        console.log("🔍 Verificando datos cargados...")
+        
+        // Verificar paciente
+        if (!campoBusquedaPaciente.pacienteAutocompletado) {
+            console.log("⚠️ Paciente no autocompletado, reintentando...")
+            loadEditData()
+        }
+        
+        // Verificar especialidad
+        if (consultationFormDialog.selectedEspecialidadIndex < 0) {
+            console.log("⚠️ Especialidad no seleccionada, reintentando...")
+            reintentarCargaEspecialidad()
+        }
+        
+        console.log("✅ Verificación completada")
+    }
+    
 
     function puedeEliminarConsulta(consultaId) {
-        /**
-        * Verifica si puede eliminar una consulta específica
-        */
         if (!consultaId) return false
         
         var permisos = verificarPermisosConsulta(consultaId)
@@ -2901,9 +3168,6 @@ Item {
     }
 
     function obtenerMensajePermiso(consultaId) {
-        /**
-        * Obtiene mensaje explicativo de permisos
-        */
         var permisos = verificarPermisosConsulta(consultaId)
         
         if (permisos.es_administrador) {
@@ -2911,27 +3175,15 @@ Item {
         }
         
         if (permisos.es_medico) {
-            if (!permisos.es_propietario) {
-                return "Solo puede editar sus propias consultas"
+            if (permisos.dias_antiguedad > 30) {
+                return `Solo puede eliminar consultas de máximo 30 días (esta tiene ${permisos.dias_antiguedad} días)`
             }
-            
-            if (permisos.dias_antiguedad > permisos.limite_dias) {
-                return `Solo puede editar consultas de máximo ${permisos.limite_dias} días (esta tiene ${permisos.dias_antiguedad} días)`
-            }
-            
-            if (permisos.puede_editar) {
-                return "Puede editar (consulta propia y reciente)"
-            }
-            
-            return permisos.razon_editar
+            return "Médico: Puede editar siempre, eliminar si es reciente"
         }
         
         return "Sin permisos para esta operación"
     }
     function editarConsulta(consultaIndex) {
-        /**
-        * Editar consulta con verificación de permisos mejorada
-        */
         try {
             if (consultaIndex < 0 || consultaIndex >= consultasPaginadasModel.count) {
                 showNotification("Error", "Consulta no encontrada")
@@ -2941,24 +3193,56 @@ Item {
             var consulta = consultasPaginadasModel.get(consultaIndex)
             var consultaId = consulta.id
             
+            console.log("📝 EDITANDO CONSULTA:", consultaId)
             
-            // Configurar datos para edición
-            consultationFormDialog.consultaParaEditar = {
-                consultaId: consulta.id,
-                paciente: consulta.paciente_completo,
-                pacienteCedula: consulta.paciente_cedula,
-                especialidadDoctor: consulta.especialidad_doctor,
-                tipo: consulta.tipo_consulta,
-                precio: consulta.precio,
-                detalles: consulta.Detalles,
-                fecha: consulta.fecha
+            // ✅ OBTENER DATOS COMPLETOS
+            var resultadoCompleto = consultaModel.obtener_consulta_completa(parseInt(consultaId))
+            var datosCompletos = null
+            
+            try {
+                var resultadoObj = JSON.parse(resultadoCompleto)
+                if (resultadoObj.exito && resultadoObj.consulta) {
+                    datosCompletos = resultadoObj.consulta
+                }
+            } catch (e) {
+                console.log("⚠️ Usando datos básicos")
             }
             
+            // ✅ PREPARAR DATOS COMPLETOS
+            var datosParaEdicion = datosCompletos || consulta
+            
+            consultationFormDialog.consultaParaEditar = {
+                // IDs
+                consultaId: parseInt(consultaId),
+                pacienteId: datosParaEdicion.paciente_id || datosParaEdicion.Id_Paciente,
+                especialidadId: datosParaEdicion.especialidad_id || datosParaEdicion.Id_Especialidad,
+                
+                // Datos del paciente
+                paciente: datosParaEdicion.paciente_completo || consulta.paciente_completo,
+                pacienteCedula: datosParaEdicion.paciente_cedula || consulta.paciente_cedula,
+                pacienteNombre: datosParaEdicion.paciente_nombre,
+                pacienteApellidoP: datosParaEdicion.paciente_apellido_p,
+                pacienteApellidoM: datosParaEdicion.paciente_apellido_m,
+                
+                // Datos de especialidad
+                especialidadDoctor: datosParaEdicion.especialidad_doctor || consulta.especialidad_doctor,
+                especialidadNombre: datosParaEdicion.especialidad_nombre,
+                
+                // Datos de consulta
+                tipo: datosParaEdicion.tipo_consulta || consulta.tipo_consulta,
+                precio: parseFloat(datosParaEdicion.precio || consulta.precio || 0),
+                detalles: datosParaEdicion.Detalles || consulta.Detalles,
+                fecha: datosParaEdicion.Fecha || consulta.fecha
+            }
+            
+            // ✅ CONFIGURAR MODO EDICIÓN ANTES DE ABRIR DIALOG
             isEditMode = true
             editingIndex = consultaIndex
+            
+            // ✅ ABRIR DIALOG (esto disparará onVisibleChanged)
             showNewConsultationDialog = true
             
-            console.log("✅ Consulta habilitada para edición:", consultaId)
+            console.log("✅ Modo edición configurado para consulta:", consultaId)
             
         } catch (error) {
             console.log("❌ Error en editarConsulta:", error.message)
@@ -2967,9 +3251,6 @@ Item {
     }
 
     function eliminarConsulta(consultaIndex) {
-        /**
-        * FUNCIÓN FALTANTE: Eliminar consulta con verificación de permisos
-        */
         try {
             if (consultaIndex < 0 || consultaIndex >= consultasPaginadasModel.count) {
                 showNotification("Error", "Consulta no encontrada")
@@ -3000,54 +3281,177 @@ Item {
         }
     }
     // 2. AGREGAR DEBUGGING EN obtenerDatosFormularioConsulta() (línea ~1370)
-function obtenerDatosFormularioConsulta() {
-    try {
-        console.log("🔍 FORM DEBUG - Obteniendo datos del formulario...")
-        console.log("🔍 FORM DEBUG - selectedEspecialidadIndex:", consultationFormDialog.selectedEspecialidadIndex)
-        console.log("🔍 FORM DEBUG - Total especialidades disponibles:", consultaModel.especialidades ? consultaModel.especialidades.length : "N/A")
-        
-        if (!consultaModel || !consultaModel.especialidades) {
-            throw new Error("No hay especialidades disponibles")
+    function obtenerDatosFormularioConsulta() {
+        try {
+            if (!consultaModel || !consultaModel.especialidades) {
+                throw new Error("No hay especialidades disponibles")
+            }
+            
+            if (consultationFormDialog.selectedEspecialidadIndex < 0 || 
+                consultationFormDialog.selectedEspecialidadIndex >= consultaModel.especialidades.length) {
+                throw new Error("Índice de especialidad inválido: " + consultationFormDialog.selectedEspecialidadIndex)
+            }
+            
+            var especialidadSeleccionada = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
+            var especialidadId = especialidadSeleccionada.id
+            
+            if (!especialidadId || especialidadId <= 0) {
+                throw new Error("ID de especialidad inválido: " + especialidadId)
+            }
+            
+            var tipoConsulta = consultationFormDialog.consultationType.toLowerCase()
+            
+            var resultado = {
+                especialidadId: especialidadId,
+                tipoConsulta: tipoConsulta,
+                detalles: detallesConsulta.text.trim(),
+                especialidad_id: especialidadId
+            }
+            
+            return resultado
+            
+        } catch (error) {
+            console.log("❌ FORM DEBUG - Error:", error.message)
+            throw error
         }
-        
-        if (consultationFormDialog.selectedEspecialidadIndex < 0 || 
-            consultationFormDialog.selectedEspecialidadIndex >= consultaModel.especialidades.length) {
-            throw new Error("Índice de especialidad inválido: " + consultationFormDialog.selectedEspecialidadIndex)
-        }
-        
-        var especialidadSeleccionada = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
-        
-        console.log("🔍 FORM DEBUG - Especialidad seleccionada del array:")
-        console.log("   - Objeto completo:", JSON.stringify(especialidadSeleccionada))
-        console.log("   - ID extraído:", especialidadSeleccionada.id)
-        console.log("   - Nombre:", especialidadSeleccionada.text)
-        
-        var especialidadId = especialidadSeleccionada.id
-        
-        if (!especialidadId || especialidadId <= 0) {
-            throw new Error("ID de especialidad inválido: " + especialidadId)
-        }
-        
-        var tipoConsulta = consultationFormDialog.consultationType.toLowerCase()
-        
-        var resultado = {
-            especialidadId: especialidadId,
-            tipoConsulta: tipoConsulta,
-            detalles: detallesConsulta.text.trim(),
-            especialidad_id: especialidadId
-        }
-        
-        console.log("🔍 FORM DEBUG - Datos finales a enviar:")
-        console.log("   - especialidadId:", resultado.especialidadId)
-        console.log("   - especialidad_id:", resultado.especialidad_id)
-        console.log("   - tipoConsulta:", resultado.tipoConsulta)
-        console.log("   - detalles length:", resultado.detalles.length)
-        
-        return resultado
-        
-    } catch (error) {
-        console.log("❌ FORM DEBUG - Error:", error.message)
-        throw error
     }
-}
+    
+    function obtenerTooltipEliminacion(consultaId) {
+        if (!consultaId) return "Consulta no válida"
+        
+        var permisos = verificarPermisosConsulta(consultaId)
+        
+        if (permisos.es_administrador) {
+            return "Eliminar consulta (Administrador - Sin restricciones)"
+        }
+        
+        if (permisos.es_medico) {
+            if (permisos.puede_eliminar) {
+                var diasRestantes = Math.max(0, 30 - permisos.dias_antiguedad)
+                return `Eliminar (${permisos.dias_antiguedad} días - ${diasRestantes} días restantes)`
+            } else {
+                return `Bloqueado: ${permisos.dias_antiguedad} días (Límite: 30 días)`
+            }
+        }
+        
+        return "Sin permisos para eliminar"
+    }
+    function buscarPacientePorNombreCompleto(nombreCompleto) {
+        if (!consultaModel || nombreCompleto.length < 3) return
+        
+        console.log("🔍 Buscando paciente por nombre:", nombreCompleto)
+        
+        campoBusquedaPaciente.pacienteNoEncontrado = false
+        
+        var pacientes = consultaModel.buscar_pacientes_por_nombre(nombreCompleto.trim(), 5) // ✅ Buscar más resultados
+        
+        if (pacientes && pacientes.length > 0) {
+            // ✅ Buscar coincidencia exacta o parcial
+            var pacienteEncontrado = null
+            for (var i = 0; i < pacientes.length; i++) {
+                var nombreCompleteDB = pacientes[i].nombre_completo || 
+                    (pacientes[i].Nombre + " " + pacientes[i].Apellido_Paterno + " " + (pacientes[i].Apellido_Materno || "")).trim()
+                
+                if (nombreCompleteDB.toLowerCase().includes(nombreCompleto.toLowerCase()) ||
+                    nombreCompleto.toLowerCase().includes(nombreCompleteDB.toLowerCase())) {
+                    pacienteEncontrado = pacientes[i]
+                    break
+                }
+            }
+            
+            if (pacienteEncontrado) {
+                autocompletarDatosPacientePorNombre(pacienteEncontrado)
+            } else {
+                marcarPacienteNoEncontradoPorNombre(nombreCompleto)
+            }
+        } else {
+            marcarPacienteNoEncontradoPorNombre(nombreCompleto)
+        }
+    }
+    function autocompletarDatosPacientePorNombre(paciente) {
+        nombrePaciente.text = paciente.Nombre || ""
+        apellidoPaterno.text = paciente.Apellido_Paterno || ""
+        apellidoMaterno.text = paciente.Apellido_Materno || ""
+        cedulaPaciente.text = paciente.Cedula || ""
+        
+        campoBusquedaPaciente.pacienteAutocompletado = true
+        campoBusquedaPaciente.pacienteNoEncontrado = false
+        
+        console.log("✅ Paciente encontrado por nombre:", paciente.nombre_completo || "")
+    }
+    function marcarPacienteNoEncontradoPorNombre(nombreCompleto) {
+    // ✅ SOLO cuando realmente NO se encuentra
+        campoBusquedaPaciente.pacienteNoEncontrado = true
+        campoBusquedaPaciente.pacienteAutocompletado = false
+        
+        // Pre-llenar campos basándose en el nombre completo
+        var palabras = nombreCompleto.trim().split(' ')
+        nombrePaciente.text = palabras[0] || ""
+        apellidoPaterno.text = palabras[1] || ""
+        apellidoMaterno.text = palabras.slice(2).join(' ')
+        cedulaPaciente.text = ""
+        
+        console.log("❌ Paciente NO encontrado por nombre. Habilitando modo crear nuevo.")
+    }
+    function habilitarNuevoPacientePorNombre() {
+        console.log("✅ Habilitando creación de nuevo paciente por nombre:", campoBusquedaPaciente.text)
+        
+        campoBusquedaPaciente.pacienteNoEncontrado = true
+        campoBusquedaPaciente.pacienteAutocompletado = false
+        
+        nombrePaciente.forceActiveFocus()
+    }
+    function crearPacienteSinCedula(nombreCompleto) {
+        var palabras = nombreCompleto.trim().split(' ')
+        nombrePaciente.text = palabras[0]
+        apellidoPaterno.text = palabras[1] || ""
+        apellidoMaterno.text = palabras.slice(2).join(' ')
+        cedulaPaciente.text = "" // Vacío
+    }
+    function marcarPacienteNoEncontrado(cedula) {
+        // ✅ SOLO cuando realmente NO se encuentra
+        campoBusquedaPaciente.pacienteNoEncontrado = true
+        campoBusquedaPaciente.pacienteAutocompletado = false
+        
+        cedulaPaciente.text = cedula
+        nombrePaciente.text = ""
+        apellidoPaterno.text = ""
+        apellidoMaterno.text = ""
+        
+        console.log("❌ Paciente NO encontrado con cédula:", cedula)
+    }
+    function reintentarCargaEspecialidad() {
+        if (!isEditMode || !consultationFormDialog.consultaParaEditar) {
+            return
+        }
+        
+        var consulta = consultationFormDialog.consultaParaEditar
+        
+        // Reintentar con diferentes métodos
+        if (consulta.especialidadId) {
+            // Método 1: Por ID
+            for (var i = 0; i < consultaModel.especialidades.length; i++) {
+                if (consultaModel.especialidades[i].id === consulta.especialidadId) {
+                    especialidadCombo.currentIndex = i + 1
+                    consultationFormDialog.selectedEspecialidadIndex = i
+                    console.log("✅ Especialidad encontrada por ID:", consulta.especialidadId)
+                    return
+                }
+            }
+        }
+        
+        if (consulta.especialidadNombre) {
+            // Método 2: Por nombre de especialidad
+            for (var i = 0; i < consultaModel.especialidades.length; i++) {
+                if (consultaModel.especialidades[i].text.includes(consulta.especialidadNombre)) {
+                    especialidadCombo.currentIndex = i + 1
+                    consultationFormDialog.selectedEspecialidadIndex = i
+                    console.log("✅ Especialidad encontrada por nombre:", consulta.especialidadNombre)
+                    return
+                }
+            }
+        }
+        
+        console.log("⚠️ No se pudo recargar la especialidad")
+    }
 }

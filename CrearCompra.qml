@@ -11,7 +11,9 @@ Item {
     property var inventarioModel: null
     property var ventaModel: null
     property var compraModel: null
-    
+    property bool modoEdicion: false
+    property int compraIdEdicion: 0
+    property var datosCompraOriginal: null
     // Señales para comunicación
     signal compraCompletada()
     signal cancelarCompra()
@@ -73,9 +75,7 @@ Item {
     // Campos de entrada para productos
     property string inputProductCode: ""
     property string inputProductName: ""
-    property int inputBoxes: 0
-    property int inputUnits: 0
-    property int inputTotalStock: 0
+    property int inputStock: 0
     property real inputPurchasePrice: 0.0  // ESTE ES EL COSTO TOTAL DEL PRODUCTO (NO UNITARIO)
     property real inputSalePrice: 0.0
     property string inputExpiryDate: ""
@@ -147,7 +147,56 @@ Item {
         
         providerNames = names
     }
-    
+    // FUNCIÓN PARA CARGAR DATOS DE COMPRA EN EDICIÓN
+    function cargarDatosCompraEdicion() {
+        if (!modoEdicion || compraIdEdicion <= 0 || !compraModel) {
+            return
+        }
+        
+        console.log("📝 Cargando datos para editar compra:", compraIdEdicion)
+        
+        // Obtener datos completos de la compra
+        var datosCompra = compraModel.get_compra_detalle(compraIdEdicion)
+        
+        if (datosCompra && datosCompra.detalles) {
+            // Establecer proveedor
+            newPurchaseProvider = datosCompra.proveedor || ""
+            
+            // Buscar y establecer el proveedor en el combo
+            for (var i = 0; i < providerNames.length; i++) {
+                if (providerNames[i] === newPurchaseProvider) {
+                    if (providerCombo) {
+                        providerCombo.currentIndex = i
+                    }
+                    break
+                }
+            }
+            
+            // Limpiar productos temporales
+            temporaryProductsModel.clear()
+            
+            // Cargar productos de la compra
+            for (var j = 0; j < datosCompra.detalles.length; j++) {
+                var detalle = datosCompra.detalles[j]
+                
+                temporaryProductsModel.append({
+                    "codigo": detalle.codigo || "",
+                    "nombre": detalle.nombre || "",
+                    "stock": detalle.cantidad_unitario || 0,
+                    "costoTotalProducto": detalle.costo_total || 0,
+                    "fechaVencimiento": detalle.fecha_vencimiento || ""
+                })
+            }
+            
+            updatePurchaseTotal()
+            console.log("✅ Datos de compra cargados - Productos:", temporaryProductsModel.count)
+            showSuccess("📝 Compra cargada para edición")
+        } else {
+            console.log("❌ No se pudieron cargar los datos de la compra")
+            showSuccess("⚠ Error cargando datos de la compra")
+        }
+    }
+        
     Timer {
         id: autoRefreshTimer
         interval: 30000
@@ -227,8 +276,8 @@ Item {
         productCodeField.text = nombre
         
         Qt.callLater(function() {
-            if (boxesField) {
-                boxesField.focus = true
+            if (stockField) {
+                stockField.focus = true
             }
         })
         
@@ -247,8 +296,8 @@ Item {
             return false
         }
         
-        if (inputBoxes <= 0 && inputUnits <= 0) {
-            showSuccess("⚠ Error: Ingrese cantidad de cajas o unidades")
+        if (inputStock <= 0) {  // CAMBIAR: solo validar stock
+            showSuccess("⚠ Error: Ingrese cantidad de stock")
             return false
         }
         
@@ -281,38 +330,21 @@ Item {
         temporaryProductsModel.append({
             "codigo": inputProductCode,
             "nombre": inputProductName,
-            "cajas": inputBoxes,
-            "unidades": inputUnits,
-            "stockTotal": inputTotalStock,
+            "stock": inputStock,
             "costoTotalProducto": inputPurchasePrice,  // COSTO TOTAL DEL PRODUCTO (lo que realmente pagamos)
             'fechaVencimiento': inputNoExpiry ? "" : inputExpiryDate
         })
         
         updatePurchaseTotal()
-        var tipoProducto = isNewProduct ? "🆕 Producto nuevo agregado" : "📦 Stock agregado a producto existente"
-        showSuccess(tipoProducto + ": " + inputProductName + " - Costo: Bs" + inputPurchasePrice.toFixed(2))
-        
+        showSuccess("Producto agregado: " + inputProductName + " - Stock: " + inputStock)
         clearProductFields()
-        
         return true
-    }
-
-    function calculateTotalStock() {
-        if (inputBoxes > 0) {
-            inputTotalStock = (inputBoxes * inputUnits)
-        } else {
-            inputTotalStock = inputUnits
-        }
-        
-        if (totalStockField) totalStockField.text = inputTotalStock.toString()
     }
 
     function clearProductFields() {
         inputProductCode = ""
         inputProductName = ""
-        inputBoxes = 0
-        inputUnits = 0
-        inputTotalStock = 0
+        inputStock = 0
         inputPurchasePrice = 0.0
         inputExpiryDate = ""
         inputNoExpiry = false
@@ -321,13 +353,9 @@ Item {
         productSearchResultsModel.clear()
         
         if (productCodeField) productCodeField.text = ""
-        if (boxesField) boxesField.text = ""
-        if (unitsField) unitsField.text = ""
-        if (totalStockField) totalStockField.text = ""
+        if (stockField) stockField.text = "" 
         if (purchasePriceField) purchasePriceField.text = ""
         if (expiryField) expiryField.text = ""
-
-        calculateTotalStock()
     }
 
     function autoFormatDate(input) {
@@ -423,9 +451,7 @@ Item {
             var productoCompra = {
                 "codigo": item.codigo,
                 "nombre": item.nombre,
-                "cajas": item.cajas,
-                "unidades": item.unidades,
-                "stockTotal": item.stockTotal,
+                "cantidad_unitario": item.stock,
                 "costoTotal": item.costoTotalProducto,  // COSTO TOTAL (no unitario)
                'fechaVencimiento': item.fechaVencimiento || ""  
             }
@@ -435,7 +461,7 @@ Item {
             totalCalculado += item.costoTotalProducto
             
             console.log("🚚 Producto a comprar:", item.codigo, 
-                       "- Stock:", item.stockTotal, 
+                       "- Stock:", item.stock, 
                        "- Costo total:", item.costoTotalProducto)
         }
         
@@ -468,8 +494,7 @@ Item {
                 var prod = productosArray[j]
                 compraModel.agregar_item_compra(
                     prod.codigo,
-                    prod.cajas || 0,
-                    prod.stockTotal || prod.cantidad || 0,
+                    prod.cantidad_unitario,
                     prod.costoTotal,
                     prod.fechaVencimiento === null ? "" : prod.fechaVencimiento
                 )
@@ -603,7 +628,7 @@ Item {
                         spacing: 2
                         
                         Label {
-                            text: "Nueva Compra"
+                           text: modoEdicion ? "Editar Compra #" + compraIdEdicion : "Nueva Compra" 
                             font.pixelSize: fontLarge
                             font.bold: true
                             color: textColor
@@ -826,85 +851,6 @@ Item {
                         anchors.fill: parent
                         spacing: spacing8
                         
-                        // Cajas
-                        Column {
-                            spacing: 2
-                            
-                            Label {
-                                text: "Cajas:"
-                                color: darkGrayColor
-                                font.pixelSize: fontSmall
-                                font.bold: true
-                            }
-                            
-                            TextField {
-                                id: boxesField
-                                width: 50
-                                height: inputHeight
-                                placeholderText: "0"
-                                text: inputBoxes > 0 ? inputBoxes.toString() : ""
-                                
-                                background: Rectangle {
-                                    color: whiteColor
-                                    radius: radiusSmall
-                                    border.color: parent.activeFocus ? successColor : darkGrayColor
-                                    border.width: 1
-                                }
-                                
-                                validator: IntValidator { bottom: 0; top: 9999 }
-                                font.pixelSize: fontSmall
-                                horizontalAlignment: Text.AlignHCenter
-                                
-                                onTextChanged: {
-                                    var newValue = text.length > 0 ? (parseInt(text) || 0) : 0
-                                    if (inputBoxes !== newValue) {
-                                        inputBoxes = newValue
-                                        calculateTotalStock()
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Unidades
-                        Column {
-                            spacing: 2
-                            
-                            Label {
-                                text: "Unid:"
-                                color: darkGrayColor
-                                font.pixelSize: fontSmall
-                                font.bold: true
-                            }
-                            
-                            TextField {
-                                id: unitsField
-                                width: 50
-                                height: inputHeight
-                                placeholderText: "0"
-                                text: inputUnits > 0 ? inputUnits.toString() : ""
-                                
-                                background: Rectangle {
-                                    color: whiteColor
-                                    radius: radiusSmall
-                                    border.color: parent.activeFocus ? successColor : darkGrayColor
-                                    border.width: 1
-                                }
-                                
-                                validator: IntValidator { bottom: 0; top: 9999 }
-                                font.pixelSize: fontSmall
-                                horizontalAlignment: Text.AlignHCenter
-                                
-                                onTextChanged: {
-                                    var newValue = text.length > 0 ? (parseInt(text) || 0) : 0
-                                    if (inputUnits !== newValue) {
-                                        inputUnits = newValue
-                                        calculateTotalStock()
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Stock Total
                         Column {
                             spacing: 2
                             
@@ -916,16 +862,16 @@ Item {
                             }
                             
                             TextField {
-                                id: totalStockField
-                                width: 60
+                                id: stockField
+                                width: 80
                                 height: inputHeight
-                                placeholderText: "0"
-                                text: inputTotalStock > 0 ? inputTotalStock.toString() : ""
+                                placeholderText: "Cantidad"
+                                text: inputStock > 0 ? inputStock.toString() : ""
                                 
                                 background: Rectangle {
                                     color: whiteColor
                                     radius: radiusSmall
-                                    border.color: parent.activeFocus ? blueColor : darkGrayColor
+                                    border.color: parent.activeFocus ? successColor : darkGrayColor
                                     border.width: 1
                                 }
                                 
@@ -934,17 +880,17 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 
                                 onTextChanged: {
-                                    inputTotalStock = text.length > 0 ? (parseInt(text) || 0) : 0
+                                    inputStock = text.length > 0 ? (parseInt(text) || 0) : 0
                                 }
                             }
                         }
                         
-                        // COSTO TOTAL (CORREGIDO)
+                        // COSTO TOTAL (mantener)
                         Column {
                             spacing: 2
                             
                             Label {
-                                text: "Costo Total:"  // ETIQUETA CORREGIDA
+                                text: "Costo Total:"
                                 color: darkGrayColor
                                 font.pixelSize: fontSmall
                                 font.bold: true
@@ -976,7 +922,6 @@ Item {
                                 }
                             }
                         }
-                        
                         // Fecha Vencimiento
                         Column {
                             spacing: 2
@@ -1075,13 +1020,13 @@ Item {
                         
                         // Botón Agregar
                         Button {
-                            width: 70
-                            height: buttonHeight
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.preferredWidth: 70
+                            Layout.preferredHeight: buttonHeight
+                            Layout.alignment: Qt.AlignVCenter  
                             text: "Agregar"
                             enabled: inputProductCode.length > 0 && 
                                     inputProductName.length > 0 && 
-                                    inputTotalStock > 0 && 
+                                    inputStock > 0 &&
                                     inputPurchasePrice > 0 &&
                                     // CORRECCIÓN: Lógica corregida para fecha de vencimiento
                                     (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
@@ -1200,21 +1145,7 @@ Item {
                                     }
                                 }
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: 60
-                                    Layout.fillHeight: true
-                                    color: "#F8F9FA"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CAJAS"
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                    }
-                                }
+                                
                                 
                                 Rectangle {
                                     Layout.preferredWidth: 80
@@ -1327,31 +1258,6 @@ Item {
                                                 }
                                             }
                                         }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 60
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: 30
-                                                height: 16
-                                                color: warningColor
-                                                radius: 8
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: model.cajas
-                                                    color: whiteColor
-                                                    font.bold: true
-                                                    font.pixelSize: 8
-                                                }
-                                            }
-                                        }
-                                        
                                         Rectangle {
                                             Layout.preferredWidth: 80
                                             Layout.fillHeight: true
@@ -1368,13 +1274,14 @@ Item {
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: model.stockTotal
+                                                    text: model.stock  // SOLO ESTE VALOR
                                                     color: whiteColor
                                                     font.bold: true
                                                     font.pixelSize: 8
                                                 }
                                             }
                                         }
+                                        
                                         
                                         Rectangle {
                                             Layout.preferredWidth: 100
@@ -1642,6 +1549,11 @@ Item {
                 if (compraModel) {
                     console.log("✅ CompraModel disponible en retry")
                     updateProviderNames()
+                    
+                    // AGREGAR ESTA LÍNEA PARA CARGAR DATOS DE EDICIÓN
+                    if (modoEdicion) {
+                        Qt.callLater(cargarDatosCompraEdicion)
+                    }
                 }
             })
         } else {
@@ -1649,6 +1561,11 @@ Item {
             
             compraModel.force_refresh_proveedores()
             Qt.callLater(updateProviderNames)
+            
+            // AGREGAR ESTA LÍNEA PARA CARGAR DATOS DE EDICIÓN
+            if (modoEdicion) {
+                Qt.callLater(cargarDatosCompraEdicion)
+            }
         }
         
         Qt.callLater(function() {
