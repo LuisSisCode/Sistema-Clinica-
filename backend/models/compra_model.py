@@ -83,6 +83,7 @@ class CompraModel(QObject):
         
         # Cargar datos iniciales
         self._cargar_compras_recientes()
+        
         print(f"🔍 DEBUG: Compras cargadas en __init__: {len(self._compras_recientes)}")
         self._cargar_proveedores()
         self._cargar_estadisticas()
@@ -312,66 +313,69 @@ class CompraModel(QObject):
         except ValueError:
             return False
         
-    @Slot(str, int, int, float, str)
-    def agregar_item_compra(self, codigo: str, cantidad_caja: int, cantidad_unitario: int, 
-                           precio_unitario: float, fecha_vencimiento: str):
-        """Agrega item a la compra actual - SIN VERIFICACIÓN (solo preparación)"""
-        if not codigo or (cantidad_caja <= 0 and cantidad_unitario <= 0):
-            self.operacionError.emit("Código o cantidades inválidos")
+    @Slot(str, int, float, str)
+    def agregar_item_compra(self, codigo: str, cantidad_unitario: int, 
+                        precio_unitario: float, fecha_vencimiento: str):
+        """
+        Agrega item a la compra actual - SIMPLIFICADO SOLO UNIDADES
+        """
+        if not codigo or cantidad_unitario <= 0:
+            self.operacionError.emit("Código y cantidad válida requeridos")
             return
-        
+
         if precio_unitario <= 0:
             self.operacionError.emit("Precio unitario debe ser mayor a 0")
             return
-        
+
+        # Validar formato de fecha
         fecha_procesada = fecha_vencimiento.strip() if fecha_vencimiento else ""
         if fecha_procesada and not self._validar_fecha_formato(fecha_procesada):
             self.operacionError.emit("Fecha debe ser formato YYYY-MM-DD o vacía")
             return
-        
+
         try:
             # Verificar que el producto existe
             producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
             if not producto:
                 raise ProductoNotFoundError(codigo=codigo)
-            
+
             # Verificar si ya existe en items de compra
             item_existente = None
             for item in self._items_compra:
                 if item['codigo'] == codigo.strip():
                     item_existente = item
                     break
-            
-            cantidad_total = cantidad_caja * cantidad_unitario
-            subtotal = cantidad_total * precio_unitario
+
+            mensaje = ""  # ✅ Inicializar la variable aquí
             
             if item_existente:
-                # Actualizar item existente
-                item_existente['cantidad_caja'] += cantidad_caja
+                # Actualizar item existente - SIMPLIFICADO
                 item_existente['cantidad_unitario'] += cantidad_unitario
-                item_existente['cantidad_total'] = item_existente['cantidad_caja'] * item_existente['cantidad_unitario']
+                item_existente['cantidad_total'] = item_existente['cantidad_unitario']
                 item_existente['subtotal'] = item_existente['cantidad_total'] * precio_unitario
-                item_existente['fecha_vencimiento'] = fecha_vencimiento  # Actualizar fecha
+                item_existente['fecha_vencimiento'] = fecha_vencimiento
+                
+                mensaje = f"Actualizado: {cantidad_unitario} unidades más agregadas a {codigo}"
             else:
-                # Agregar nuevo item
                 nuevo_item = {
                     'codigo': codigo.strip(),
                     'producto_id': producto['id'],
                     'nombre': producto['Nombre'],
                     'marca': producto.get('Marca_Nombre', ''),
-                    'cantidad_caja': cantidad_caja,
                     'cantidad_unitario': cantidad_unitario,
-                    'cantidad_total': cantidad_total,
+                    'cantidad_total': cantidad_unitario,
                     'precio_unitario': precio_unitario,
                     'fecha_vencimiento': fecha_procesada if fecha_procesada else None,
-                    'subtotal': subtotal
+                    'subtotal': cantidad_unitario * precio_unitario
                 }
                 self._items_compra.append(nuevo_item)
-            
+                
+                mensaje = f"Agregado: {cantidad_unitario}x {codigo}"  # ✅ Ahora está en el scope correcto
+
             self.itemsCompraCambiado.emit()
-            self.operacionExitosa.emit(f"Agregado: {cantidad_total}x {codigo}")
-            print(f"📦 Item compra agregado - {codigo}: {cantidad_total}x${precio_unitario}")
-            
+            self.operacionExitosa.emit(mensaje)
+            print(f"📦 Item compra agregado/actualizado - {codigo}: {cantidad_unitario} unidades @ ${precio_unitario}")
+
         except Exception as e:
             self.operacionError.emit(f"Error agregando item: {str(e)}")
     
@@ -388,26 +392,24 @@ class CompraModel(QObject):
         self.itemsCompraCambiado.emit()
         self.operacionExitosa.emit(f"Removido: {codigo}")
     
-    @Slot(str, int, int)
-    def actualizar_cantidades_item(self, codigo: str, nueva_cantidad_caja: int, nueva_cantidad_unitario: int):
-        """Actualiza cantidades de un item en compra - SIN VERIFICACIÓN (solo preparación)"""
-        if not codigo or (nueva_cantidad_caja < 0 or nueva_cantidad_unitario < 0):
+    @Slot(str, int)
+    def actualizar_cantidades_item(self, codigo: str, nueva_cantidad_unitario: int):
+        if not codigo or nueva_cantidad_unitario < 0:
             return
-        
-        if nueva_cantidad_caja == 0 and nueva_cantidad_unitario == 0:
+
+        if nueva_cantidad_unitario == 0:
             self.remover_item_compra(codigo)
             return
-        
+
         for item in self._items_compra:
             if item['codigo'] == codigo.strip():
-                item['cantidad_caja'] = nueva_cantidad_caja
                 item['cantidad_unitario'] = nueva_cantidad_unitario
-                item['cantidad_total'] = nueva_cantidad_caja * nueva_cantidad_unitario
-                item['subtotal'] = item['cantidad_total'] * item['precio_unitario']
+                item['cantidad_total'] = nueva_cantidad_unitario  # Simplificado
+                item['subtotal'] = nueva_cantidad_unitario * item['precio_unitario']
                 break
-        
+
         self.itemsCompraCambiado.emit()
-        print(f"📦 Cantidades actualizadas - {codigo}: {nueva_cantidad_caja}+{nueva_cantidad_unitario}")
+        print(f"📦 Cantidades actualizadas - {codigo}: {nueva_cantidad_unitario} unidades")
     
     @Slot(str, float)
     def actualizar_precio_item(self, codigo: str, nuevo_precio: float):
@@ -460,7 +462,6 @@ class CompraModel(QObject):
             for item in self._items_compra:
                 items_compra.append({
                     'codigo': item['codigo'],
-                    'cantidad_caja': item['cantidad_caja'],
                     'cantidad_unitario': item['cantidad_unitario'],
                     'precio_unitario': item['precio_unitario'],
                     'fecha_vencimiento': item['fecha_vencimiento']
@@ -473,7 +474,14 @@ class CompraModel(QObject):
                 self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
                 items_compra
             )
-            
+            if compra:
+                # DEBUG: Verificar que se creó la compra y los lotes
+                print(f"🔍 DEBUG: Compra creada - ID: {compra.get('id')}")
+                print(f"🔍 DEBUG: Items en compra: {len(compra.get('detalles', []))}")
+                
+            # Verificar cada detalle
+            for i, detalle in enumerate(compra.get('detalles', [])):
+                print(f"  Detalle {i+1}: Producto {detalle.get('Producto_Codigo')} - Lote: {detalle.get('Id_Lote')} - Cantidad: {detalle.get('Cantidad_Unitario')}")
             if compra:
                 monto_compra = float(compra['Total'])
                 proveedor_id = self._proveedor_seleccionado
@@ -489,6 +497,13 @@ class CompraModel(QObject):
                 # Actualizar datos locales con delay para BD
                 QTimer.singleShot(0, self._update_all_data_after_purchase)
                 
+                # NUEVO: Notificar a InventarioModel para que actualice productos
+                try:
+                    if hasattr(self, '_inventario_model_ref') and self._inventario_model_ref:
+                        QTimer.singleShot(100, self._inventario_model_ref.refresh_productos)
+                        print("📦 InventarioModel será refrescado después de compra")
+                except Exception as e:
+                    print(f"❌ Error notificando a InventarioModel: {str(e)}")
                 # Notificar inmediatamente a proveedor model
                 self._notify_proveedor_updated_immediate(proveedor_id, monto_compra)
                 
@@ -615,6 +630,7 @@ class CompraModel(QObject):
                 'fecha': compra.get('Fecha', ''),
                 'total': float(compra.get('Total', 0)),
                 'usuario': compra.get('Usuario', 'Sin usuario'),
+                'proveedor_id': compra.get('Id_Proveedor', 0),
                 'detalles': [],
                 'resumen': {
                     'total_productos': compra.get('total_items', 0),
@@ -630,10 +646,9 @@ class CompraModel(QObject):
                         'codigo': detalle.get('Producto_Codigo', ''),
                         'nombre': detalle.get('Producto_Nombre', 'Producto no encontrado'),
                         'marca': detalle.get('Marca_Nombre', 'Sin marca'),
-                        'cantidad_caja': detalle.get('Cantidad_Caja', 0),
                         'cantidad_unitario': detalle.get('Cantidad_Unitario', 0),
-                        'cantidad_total': detalle.get('Cantidad_Total', 0),
                         'precio_unitario': float(detalle.get('Precio_Unitario', 0)),
+                        'costo_total': float(detalle.get('Costo_Total', 0)),
                         'subtotal': float(detalle.get('Subtotal', 0)),
                         'fecha_vencimiento': detalle.get('Fecha_Vencimiento', 'Sin fecha')
                     }
@@ -675,6 +690,36 @@ class CompraModel(QObject):
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo compras por proveedor: {str(e)}")
             return []
+        
+    @Slot(int, result='QVariant')
+    def cargar_compra_para_edicion(self, compra_id: int):
+        """Carga una compra existente para edición"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        try:
+            compra = self.get_compra_detalle(compra_id)
+            if compra and compra.get('detalles'):
+                # Limpiar items actuales
+                self._items_compra.clear()
+                
+                # Cargar items de la compra
+                for detalle in compra['detalles']:
+                    self._items_compra.append({
+                        'codigo': detalle['codigo'],
+                        'cantidad_unitario': detalle['cantidad_unitario'], 
+                        'precio_unitario': detalle['precio_unitario'],
+                        'fecha_vencimiento': detalle['fecha_vencimiento']
+                    })
+                
+                # Establecer proveedor
+                self._proveedor_seleccionado = compra.get('proveedor_id', 0)
+                
+                self.itemsCompraCambiado.emit()
+                return True
+        except Exception as e:
+            self.operacionError.emit(f"Error cargando compra: {str(e)}")
+        return False
     
     @Slot(result='QVariant')
     def get_reporte_gastos(self):
@@ -1092,6 +1137,18 @@ class CompraModel(QObject):
                 print("🔗 Signals conectados correctamente")
             except Exception as e:
                 print(f"❌ Error conectando signals: {str(e)}")
+
+    @Slot()
+    def set_inventario_model_reference(self, inventario_model):
+        """Establece referencia a InventarioModel para actualizar stock"""
+        self._inventario_model_ref = inventario_model
+        print("🔗 Referencia a InventarioModel establecida en CompraModel")
+        
+        # DEBUG: Verificar que la referencia es correcta
+        if inventario_model:
+            print(f"✅ Referencia válida: {type(inventario_model).__name__}")
+        else:
+            print("❌ Referencia es None")
 
     def crear_producto_completo(self, producto_data):
         """Crea producto + primer lote desde QML"""

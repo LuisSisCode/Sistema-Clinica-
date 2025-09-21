@@ -30,7 +30,7 @@ class CompraRepository(BaseRepository):
         return self._execute_query(query)
     
     def get_compras_con_detalles(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
-        """Obtiene compras con sus detalles en período específico"""
+        """Obtiene compras con sus detalles en período específico - CORREGIDO"""
         where_clause = ""
         params = []
         
@@ -53,8 +53,7 @@ class CompraRepository(BaseRepository):
             p.Direccion as Proveedor_Direccion,
             u.Nombre + ' ' + u.Apellido_Paterno as Usuario,
             COUNT(dc.id) as Items_Comprados,
-            SUM(dc.Cantidad_Caja) as Total_Cajas,
-            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Unidades_Totales
+            SUM(dc.Cantidad_Unitario) as Unidades_Totales
         FROM Compra c
         INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
@@ -66,7 +65,7 @@ class CompraRepository(BaseRepository):
         return self._execute_query(query, tuple(params))
     
     def get_compra_completa(self, compra_id: int) -> Dict[str, Any]:
-        """Obtiene compra con todos sus detalles - CORREGIDO"""
+        """Obtiene compra con todos sus detalles - CORREGIDO SIN CAJAS"""
         validate_required(compra_id, "compra_id")
         
         # Datos principales de la compra
@@ -83,7 +82,7 @@ class CompraRepository(BaseRepository):
         if not compra:
             raise CompraError(f"Compra no encontrada: {compra_id}", compra_id=compra_id)
         
-        # Detalles de la compra - CORREGIDO: Sin multiplicación por cantidad
+        # Detalles de la compra - CORREGIDO SIN CAJAS
         detalles_query = """
         SELECT 
             dc.*,
@@ -91,7 +90,7 @@ class CompraRepository(BaseRepository):
             p.Codigo as Producto_Codigo,
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca_Nombre,
-            (dc.Cantidad_Caja * dc.Cantidad_Unitario) as Cantidad_Total,
+            dc.Cantidad_Unitario as Cantidad_Total,
             dc.Precio_Unitario as Subtotal,
             dc.Precio_Unitario as Costo_Total
         FROM DetalleCompra dc
@@ -146,9 +145,8 @@ class CompraRepository(BaseRepository):
         Args:
             proveedor_id: ID del proveedor
             usuario_id: ID del usuario comprador
-            items_compra: Lista de items [{'codigo': str, 'cantidad_caja': int, 'cantidad_unitario': int, 
-                                        'precio_unitario': float, 'fecha_vencimiento': str}]
-                          IMPORTANTE: precio_unitario es el COSTO TOTAL del producto, no por unidad
+            items_compra: Lista de items [{'codigo': str, 'cantidad_unitario': int, 
+                            'precio_unitario': float, 'fecha_vencimiento': str}]
         
         Returns:
             Información completa de la compra creada
@@ -260,7 +258,7 @@ class CompraRepository(BaseRepository):
     @ExceptionHandler.handle_exception
     def eliminar_compra_completa(self, compra_id: int) -> bool:
         """
-        Elimina compra completa revirtiendo stock automáticamente
+        Elimina compra completa revirtiendo stock automáticamente - SIN CAJAS
         
         Returns:
             True si se eliminó correctamente
@@ -280,7 +278,7 @@ class CompraRepository(BaseRepository):
         except Exception as e:
             raise CompraError(f"Error obteniendo datos de compra: {str(e)}")
         
-        # 2. Revertir stock por cada detalle
+        # 2. Revertir stock por cada detalle - SIN CAJAS
         stock_revertido = []
         try:
             for detalle in compra.get('detalles', []):
@@ -289,27 +287,17 @@ class CompraRepository(BaseRepository):
                 lote = self._execute_query(lote_query, (detalle['Id_Lote'],), fetch_one=True)
                 
                 if lote:
-                    # Revertir stock del producto
+                    # Revertir stock del producto - SOLO UNITARIOS
                     producto_id = lote['Id_Producto']
-                    cantidad_caja = lote['Cantidad_Caja']
                     cantidad_unitario = lote['Cantidad_Unitario']
-                    
-                    # Reducir stock del producto
-                    reducir_stock_query = """
-                    UPDATE Productos 
-                    SET Stock_Caja = Stock_Caja - ?, Stock_Unitario = Stock_Unitario - ?
-                    WHERE id = ?
-                    """
-                    self._execute_query(reducir_stock_query, (cantidad_caja, cantidad_unitario, producto_id), fetch_all=False, use_cache=False)
                     
                     stock_revertido.append({
                         'producto_id': producto_id,
                         'codigo': detalle.get('Producto_Codigo', ''),
-                        'cantidad_caja': cantidad_caja,
                         'cantidad_unitario': cantidad_unitario
                     })
                     
-                    print(f"  📦 Stock revertido - {detalle.get('Producto_Codigo', '')}: -{cantidad_caja}c/{cantidad_unitario}u")
+                    print(f"  📦 Stock revertido - {detalle.get('Producto_Codigo', '')}: -{cantidad_unitario}u")
             
         except Exception as e:
             print(f"❌ Error revirtiendo stock: {str(e)}")
@@ -349,7 +337,7 @@ class CompraRepository(BaseRepository):
     
     def _rollback_compra_completa(self, compra_id: int, lotes_creados: List[Dict[str, Any]]):
         """
-        Rollback completo: elimina compra, lotes y restaura stocks
+        Rollback completo: elimina compra y lotes - CORREGIDO
         """
         print(f"🔄 EJECUTANDO ROLLBACK COMPLETO - Compra: {compra_id}")
         
@@ -359,25 +347,16 @@ class CompraRepository(BaseRepository):
             self._execute_query(delete_detalles_query, (compra_id,), fetch_all=False, use_cache=False)
             print(f"  ✅ Detalles de compra eliminados")
             
-            # 2. Eliminar lotes y restaurar stocks
+            # 2. Eliminar lotes SOLAMENTE (sin restaurar stock manual)
             for lote_info in lotes_creados:
                 try:
                     lote_id = lote_info.get('lote_id')
                     if lote_id:
-                        # Obtener info del lote antes de eliminarlo
-                        lote_query = "SELECT * FROM Lote WHERE id = ?"
-                        lote = self._execute_query(lote_query, (lote_id,), fetch_one=True)
+                        # Solo eliminar lote - el stock se calcula automáticamente
+                        delete_lote_query = "DELETE FROM Lote WHERE id = ?"
+                        self._execute_query(delete_lote_query, (lote_id,), fetch_all=False, use_cache=False)
+                        print(f"  ✅ Lote {lote_id} eliminado")
                         
-                        if lote:
-                            # Eliminar lote
-                            delete_lote_query = "DELETE FROM Lote WHERE id = ?"
-                            self._execute_query(delete_lote_query, (lote_id,), fetch_all=False, use_cache=False)
-                            
-                            # Restaurar stock del producto
-                            self._restaurar_stock_producto(lote['Id_Producto'], lote['Cantidad_Caja'], lote['Cantidad_Unitario'])
-                            
-                            print(f"  ✅ Lote {lote_id} eliminado y stock restaurado")
-                            
                 except Exception as lote_error:
                     print(f"  ❌ Error eliminando lote {lote_info.get('lote_id', 'N/A')}: {str(lote_error)}")
             
@@ -402,7 +381,7 @@ class CompraRepository(BaseRepository):
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca_Nombre,
             COUNT(dc.id) as Items_Compra,
-            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Total_Unidades
+            SUM(dc.Cantidad_Unitario) as Total_Unidades
         FROM DetalleCompra dc
         INNER JOIN Lote l ON dc.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
@@ -413,30 +392,10 @@ class CompraRepository(BaseRepository):
         """
         
         return self._execute_query(query, (compra_id,))
-    
-    def _restaurar_stock_producto(self, producto_id: int, cantidad_caja: int, cantidad_unitario: int):
-        """
-        Restaura stock de un producto específico
-        """
-        try:
-            producto = self.producto_repo.get_by_id(producto_id)
-            if producto:
-                nuevo_stock_caja = max(0, producto['Stock_Caja'] - cantidad_caja)
-                nuevo_stock_unitario = max(0, producto['Stock_Unitario'] - cantidad_unitario)
-                
-                restore_query = """
-                UPDATE Productos 
-                SET Stock_Caja = ?, Stock_Unitario = ?
-                WHERE id = ?
-                """
-                self._execute_query(restore_query, (nuevo_stock_caja, nuevo_stock_unitario, producto_id), fetch_all=False, use_cache=False)
-                
-        except Exception as e:
-            print(f"❌ Error restaurando stock producto {producto_id}: {str(e)}")
 
     def _validar_y_preparar_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Valida y prepara un item para la compra - FECHAS CORREGIDAS
+        Valida y prepara un item para la compra - SIMPLIFICADO SOLO UNIDADES
         
         Args:
             item: Diccionario con datos del item desde QML
@@ -450,7 +409,6 @@ class CompraRepository(BaseRepository):
         """
         # Validaciones básicas
         codigo = item.get('codigo', '').strip() if item.get('codigo') else ''
-        cantidad_caja = item.get('cantidad_caja', 0)
         cantidad_unitario = item.get('cantidad_unitario', 0)
         precio_unitario = item.get('precio_unitario', 0)
         fecha_vencimiento = item.get('fecha_vencimiento')  # Puede ser None, "", o string
@@ -458,10 +416,10 @@ class CompraRepository(BaseRepository):
         validate_required(codigo, "codigo")
         validate_positive_number(precio_unitario, "precio_unitario")
         
-        if cantidad_caja <= 0 and cantidad_unitario <= 0:
-            raise ValidationError("cantidad", f"{cantidad_caja}/{cantidad_unitario}", 
-                                "Debe especificar cantidad de cajas o unitarios")
-        
+        if cantidad_unitario <= 0:
+            raise ValidationError("cantidad_unitario", cantidad_unitario, 
+                                "Debe especificar cantidad unitaria mayor a 0")
+
         # VALIDACIÓN DE FECHA CORREGIDA - MANEJO SEGURO DE None Y STRINGS
         fecha_vencimiento_bd = None
         
@@ -498,15 +456,14 @@ class CompraRepository(BaseRepository):
             print(f"❌ Error obteniendo producto {codigo}: {str(e)}")
             raise ProductoNotFoundError(codigo=codigo)
         
-        # Calcular totales
-        cantidad_total = cantidad_caja + cantidad_unitario  # CORREGIDO: suma no multiplicación
+        # Calcular totales - SIMPLIFICADO
+        cantidad_total = cantidad_unitario
         
-        # Preparar item validado
+        # Preparar item validado - SIN CANTIDAD_CAJA
         item_preparado = {
             'codigo': codigo,
             'producto_id': producto['id'],
             'producto_nombre': producto['Nombre'],
-            'cantidad_caja': cantidad_caja,
             'cantidad_unitario': cantidad_unitario,
             'cantidad_total': cantidad_total,
             'precio_unitario': precio_unitario,  # COSTO TOTAL del producto
@@ -518,10 +475,9 @@ class CompraRepository(BaseRepository):
         print(f"✅ Item preparado - {codigo}: stock={cantidad_total}, precio=${precio_unitario}, vencimiento={fecha_vencimiento_bd or 'Sin vencimiento'}")
         
         return item_preparado
-    
     def _procesar_item_con_lote(self, compra_id: int, item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Procesa un item creando lote y detalle de compra - FECHAS CORREGIDAS
+        Procesa un item creando lote y detalle de compra - SIMPLIFICADO SOLO UNIDADES
         
         Args:
             compra_id: ID de la compra
@@ -533,7 +489,7 @@ class CompraRepository(BaseRepository):
         Raises:
             CompraError: Si hay errores en el procesamiento
         """
-        print(f"🔄 Procesando item: {item['codigo']} - Cajas: {item['cantidad_caja']}, Unitarios: {item['cantidad_unitario']}")
+        print(f"🔄 Procesando item: {item['codigo']} - Unitarios: {item['cantidad_unitario']}")
         
         # 1. Validar compra_id
         if not compra_id or compra_id <= 0:
@@ -554,7 +510,7 @@ class CompraRepository(BaseRepository):
         else:
             print(f"📅 Producto sin vencimiento (fecha None o no string)")
         
-        # 3. Crear nuevo lote
+        # 3. Crear nuevo lote - SIN CANTIDAD_CAJA
         lote_id = None
         try:
             precio_por_unidad = item['precio_unitario'] / item['cantidad_total'] if item['cantidad_total'] > 0 else 0
@@ -563,7 +519,6 @@ class CompraRepository(BaseRepository):
             
             lote_id = self.producto_repo.aumentar_stock_compra(
                 producto_id=item['producto_id'],
-                cantidad_caja=item['cantidad_caja'],
                 cantidad_unitario=item['cantidad_unitario'],
                 fecha_vencimiento=fecha_venc_final,  # None para sin vencimiento, string para con vencimiento
                 precio_compra=precio_por_unidad
@@ -578,28 +533,26 @@ class CompraRepository(BaseRepository):
             print(f"❌ ERROR creando lote para {item['codigo']}: {str(e)}")
             raise CompraError(f"Error creando lote para producto {item['codigo']}: {str(e)}")
         
-        # 4. Crear detalle de compra
+        # 4. Crear detalle de compra - SIN CANTIDAD_CAJA
         detalle_id = None
         try:
             detalle_data = {
                 'Id_Compra': compra_id,
                 'Id_Lote': lote_id,
-                'Cantidad_Caja': item['cantidad_caja'],
                 'Cantidad_Unitario': item['cantidad_unitario'],
                 'Precio_Unitario': item['precio_unitario']  # COSTO TOTAL del producto
             }
             
-            # Usar query directo para consistencia
+            # Query SIN Cantidad_Caja
             detalle_query = """
-            INSERT INTO DetalleCompra (Id_Compra, Id_Lote, Cantidad_Caja, Cantidad_Unitario, Precio_Unitario)
+            INSERT INTO DetalleCompra (Id_Compra, Id_Lote, Cantidad_Unitario, Precio_Unitario)
             OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?)
             """
             
             detalle_result = self._execute_query(
                 detalle_query,
-                (compra_id, lote_id, item['cantidad_caja'], 
-                item['cantidad_unitario'], item['precio_unitario']),
+                (compra_id, lote_id, item['cantidad_unitario'], item['precio_unitario']),
                 fetch_one=True
             )
             
@@ -607,7 +560,7 @@ class CompraRepository(BaseRepository):
             if not detalle_result or not isinstance(detalle_result, dict) or 'id' not in detalle_result:
                 # ROLLBACK: Si falló el detalle, eliminar el lote creado
                 print(f"❌ ERROR: Fallo creando DetalleCompra, ejecutando rollback para lote {lote_id}")
-                self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
+                self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_unitario'])
                 raise CompraError(f"Error creando detalle de compra para {item['codigo']}")
             
             detalle_id = detalle_result['id']
@@ -629,12 +582,12 @@ class CompraRepository(BaseRepository):
             # ROLLBACK: Si algo falló, eliminar el lote creado
             print(f"❌ ERROR en detalle de compra para {item['codigo']}: {str(e)}")
             if lote_id:
-                self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_caja'], item['cantidad_unitario'])
+                self._rollback_lote_created(lote_id, item['producto_id'], item['cantidad_unitario'])
             raise CompraError(f"Error procesando item {item['codigo']}: {str(e)}")
     
-    def _rollback_lote_created(self, lote_id: int, producto_id: int, cantidad_caja: int, cantidad_unitario: int):
+    def _rollback_lote_created(self, lote_id: int, producto_id: int, cantidad_unitario: int):
         """
-        Método de rollback para eliminar lote creado si falla el detalle
+        Método de rollback para eliminar lote creado si falla el detalle - SIMPLIFICADO
         """
         try:
             print(f"🔄 Ejecutando rollback - Lote: {lote_id}, Producto: {producto_id}")
@@ -643,24 +596,7 @@ class CompraRepository(BaseRepository):
             delete_lote_query = "DELETE FROM Lote WHERE id = ?"
             self._execute_query(delete_lote_query, (lote_id,), fetch_all=False, use_cache=False)
             
-            # 2. Restaurar stock del producto
-            producto = self.producto_repo.get_by_id(producto_id)
-            if producto:
-                nuevo_stock_caja = producto['Stock_Caja'] - cantidad_caja
-                nuevo_stock_unitario = producto['Stock_Unitario'] - cantidad_unitario
-                
-                # Evitar stocks negativos
-                nuevo_stock_caja = max(0, nuevo_stock_caja)
-                nuevo_stock_unitario = max(0, nuevo_stock_unitario)
-                
-                restore_stock_query = """
-                UPDATE Productos 
-                SET Stock_Caja = ?, Stock_Unitario = ?
-                WHERE id = ?
-                """
-                self._execute_query(restore_stock_query, (nuevo_stock_caja, nuevo_stock_unitario, producto_id), fetch_all=False, use_cache=False)
-                
-            print(f"✅ Rollback completado - Lote {lote_id} eliminado, stock restaurado")
+            print(f"✅ Rollback completado - Lote {lote_id} eliminado")
             
         except Exception as rollback_error:
             print(f"❌ ERROR EN ROLLBACK: {str(rollback_error)} - Lote: {lote_id}")
@@ -783,16 +719,16 @@ class CompraRepository(BaseRepository):
         }
     
     def get_productos_mas_comprados(self, dias: int = 30, limit: int = 10) -> List[Dict[str, Any]]:
-        """Productos más comprados en período - CORREGIDO"""
+        """Productos más comprados en período - SIN CAJAS"""
         query = f"""
         SELECT TOP {limit}
             p.Codigo,
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca_Nombre,
-            SUM(dc.Cantidad_Caja * dc.Cantidad_Unitario) as Cantidad_Comprada,
+            SUM(dc.Cantidad_Unitario) as Cantidad_Comprada,
             COUNT(DISTINCT c.id) as Num_Compras,
             SUM(dc.Precio_Unitario) as Costo_Total,
-            AVG(dc.Precio_Unitario / (dc.Cantidad_Caja * dc.Cantidad_Unitario)) as Precio_Promedio_Unitario
+            AVG(dc.Precio_Unitario / dc.Cantidad_Unitario) as Precio_Promedio_Unitario
         FROM Compra c
         INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
         INNER JOIN Lote l ON dc.Id_Lote = l.id
@@ -856,7 +792,7 @@ class CompraRepository(BaseRepository):
         }
     
     def verificar_integridad_compra(self, compra_id: int) -> Dict[str, Any]:
-        """Verifica la integridad de una compra - CORREGIDO"""
+        """Verifica la integridad de una compra - SIN CAJAS"""
         compra = self.get_compra_completa(compra_id)
         
         if not compra:
@@ -873,13 +809,13 @@ class CompraRepository(BaseRepository):
         if abs(total_calculado - compra['Total']) > 0.01:
             errores.append(f"Total inconsistente: DB={compra['Total']}, Calculado={total_calculado}")
         
-        # Verificar que todos los lotes existen y tienen stock
+        # Verificar que todos los lotes existen y tienen stock - SIN CAJAS
         for detalle in compra['detalles']:
             lote_query = "SELECT * FROM Lote WHERE id = ?"
             lote = self._execute_query(lote_query, (detalle['Id_Lote'],), fetch_one=True)
             if not lote:
                 errores.append(f"Lote {detalle['Id_Lote']} no existe")
-            elif (lote['Cantidad_Caja'] * lote['Cantidad_Unitario']) <= 0:
+            elif lote['Cantidad_Unitario'] <= 0:
                 errores.append(f"Lote {detalle['Id_Lote']} sin stock")
         
         return {
@@ -888,7 +824,7 @@ class CompraRepository(BaseRepository):
             'total_db': compra['Total'],
             'total_calculado': total_calculado
         }
-    
+        
     # ===============================
     # MÉTODO ADICIONAL PARA ESTADÍSTICAS DE FILTROS
     # ===============================

@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-// Dialog para crear/editar producto - CORREGIDO
+// Dialog para crear/editar producto - SIN CAJAS - SOLO STOCK UNITARIO
 Dialog {
     id: crearProductoDialog
     
@@ -13,7 +13,7 @@ Dialog {
     closePolicy: Popup.NoAutoClose
     anchors.centerIn: parent
     width: Math.min(parent.width * 0.9, 900)
-    height: Math.min(parent.height * 0.9,550)
+    height: Math.min(parent.height * 0.9, 550)
     
     // Propiedades de comunicación
     property var inventarioModel: null
@@ -26,8 +26,9 @@ Dialog {
     signal productoCreado(var producto)
     signal productoActualizado(var producto) 
     signal cancelarCreacion()
+    signal volverALista() 
     
-    // Métricas del diseño - OPTIMIZADAS
+    // Métricas del diseño
     readonly property real baseSpacing: 12
     readonly property real cardPadding: 16
     readonly property real inputHeight: 40
@@ -60,27 +61,26 @@ Dialog {
     property string inputMeasureUnit: "Tabletas"
     property string inputMarca: ""
 
-    // Datos del formulario - PRIMER LOTE (CORREGIDO)
-    property string inputExpirationDate: ""  // CORREGIDO: nombre consistente
-    property bool inputNoExpiry: false  // Por defecto tiene vencimiento
-    property int inputStockBox: 0
-    property int inputStockUnit: 0
+    // Datos del formulario - PRIMER LOTE SIN CAJAS
+    property string inputExpirationDate: ""
+    property bool inputNoExpiry: false
+    property int inputStockUnit: 0  // Solo stock unitario
     property string inputSupplier: ""
     
-    // Validación - CORREGIDA
-    
     property bool isFormValid: {
-        // Validaciones básicas requeridas para todos los casos
+        // Validaciones básicas requeridas
         var basicValidation = inputProductName.length > 0 &&
                             inputPurchasePrice > 0 &&
                             inputSalePrice > 0 &&
                             inputMarca.length > 0
         
         if (modoEdicion) {
-            // En modo edición solo requerimos los campos básicos
+            // ✅ EN MODO EDICIÓN SOLO VALIDACIÓN BÁSICA
+            console.log("Modo edición - solo validación básica:", basicValidation)
             return basicValidation
         } else {
-            var stockValidation = (inputStockBox > 0 || inputStockUnit > 0)
+            // En modo creación: stock unitario > 0 y fecha válida
+            var stockValidation = inputStockUnit > 0
             var fechaValidation = inputNoExpiry || 
                                 (inputExpirationDate.length > 0 && validateExpiryDate(inputExpirationDate))
             
@@ -96,20 +96,26 @@ Dialog {
 
     // FUNCIONES
     function cargarMarcasDisponibles() {
-        if (!inventarioModel) return
+        if (!inventarioModel || !crearProductoDialog) {
+            marcasCargadas = false
+            return
+        }
         
         try {
             var marcas = inventarioModel.get_marcas_disponibles()
             if (marcas && marcas.length > 0) {
                 marcasModel = marcas
                 marcasCargadas = true
+                console.log("Marcas cargadas:", marcas.length)
             } else {
                 marcasModel = []
+                marcasCargadas = true
             }
         } catch (error) {
+            console.error("Error al cargar marcas:", error)
             marcasModel = []
+            marcasCargadas = false
         }
-        marcasCargadas = true
     }
 
     function autoFormatDate(input) {
@@ -175,23 +181,31 @@ Dialog {
     }
     
     function guardarProducto() {
+        // Guard para prevenir errores de contexto
+        if (!crearProductoDialog || !crearProductoDialog.visible) {
+            return false
+        }
+        
         // Generar código automático si está vacío
         if (inputProductCode.trim().length === 0) {
             inputProductCode = generarCodigoAutomatico()
-            codigoField.text = inputProductCode
+            if (codigoField) {
+                codigoField.text = inputProductCode
+            }
         }
         
         if (!isFormValid) {
-            showSuccess("Complete todos los campos obligatorios")
+            showMessage("Complete todos los campos obligatorios")
             return false
         }
         
-        // CORREGIDO: Validación de fecha
+        // Validación de fecha
         if (!modoEdicion && !inputNoExpiry && !validateExpiryDate(inputExpirationDate)) {
-            showshowSuccess("Fecha de vencimiento inválida (YYYY-MM-DD)")
+            showMessage("Fecha de vencimiento inválida (YYYY-MM-DD)")
             return false
         }
         
+        // SIN CAJAS: producto solo con stock unitario
         var producto = {
             codigo: inputProductCode.trim(),
             nombre: inputProductName.trim(),
@@ -200,94 +214,145 @@ Dialog {
             precio_compra: inputPurchasePrice,
             precio_venta: inputSalePrice,
             unidad_medida: inputMeasureUnit,
-            stock_caja: inputStockBox,
-            stock_unitario: inputStockUnit,
+            stock_unitario: inputStockUnit,  // Solo stock unitario
             fecha_vencimiento: formatearFechaParaBD(),
             proveedor: inputSupplier.trim(),
             sin_vencimiento: inputNoExpiry
         }
         
-        if (modoEdicion) {
-            producto.id = productoData.id
-            productoActualizado(producto)
-            showSuccess("Producto actualizado correctamente")
-        } else {
-            productoCreado(producto)
-            var tipoVencimiento = inputNoExpiry ? " (sin vencimiento)" : ""
-            showSuccess("Producto y primer lote creados correctamente" + tipoVencimiento)
-        }
-        
-        Qt.callLater(function() {
-            limpiarFormulario()
+        try {
+            if (modoEdicion) {
+                producto.id = productoData.id
+                productoActualizado(producto)
+                console.log("✅ Producto actualizado correctamente")
+            } else {
+                productoCreado(producto)
+                var tipoVencimiento = inputNoExpiry ? " (sin vencimiento)" : ""
+                console.log("✅ Producto y primer lote creados correctamente" + tipoVencimiento)
+            }
+            
+            // ✅ CAMBIAR ESTA SECCIÓN - CERRAR PRIMERO, LIMPIAR DESPUÉS
+            console.log("✅ Cerrando diálogo")
             close()
-        })
+            
+            // ✅ LIMPIAR DESPUÉS DE CERRAR CON DELAY
+            Qt.callLater(function() {
+                try {
+                    limpiarFormulario()
+                    console.log("🧹 Formulario limpiado")
+                } catch (cleanError) {
+                    console.log("⚠️ Error limpiando formulario (no crítico):", cleanError)
+                }
+            })
+            
+        } catch (error) {
+            console.error("Error al guardar producto:", error)
+            return false
+        }
         
         return true
     }
     
     function limpiarFormulario() {
-        inputProductCode = ""
-        inputProductName = ""
-        inputProductDetails = ""
-        inputPurchasePrice = 0.0
-        inputSalePrice = 0.0
-        inputMarca = ""
+        // Guard para prevenir errores de contexto
+        if (!crearProductoDialog) {
+            return
+        }
         
-        inputExpirationDate = ""  // CORREGIDO
-        inputNoExpiry = false  // Volver al estado por defecto
-        inputStockBox = 0
-        inputStockUnit = 0
-        inputSupplier = ""
-        
-        codigoField.text = ""
-        nombreField.text = ""
-        detallesField.text = ""
-        precioCompraField.text = ""
-        precioVentaField.text = ""
-        marcaField.text = ""
-        fechaVencimientoField.text = ""
-        stockCajaField.text = ""
-        stockUnitarioField.text = ""
-        proveedorField.text = ""
-        
-        if (unidadCombo) unidadCombo.currentIndex = 0
+        try {
+            inputProductCode = ""
+            inputProductName = ""
+            inputProductDetails = ""
+            inputPurchasePrice = 0.0
+            inputSalePrice = 0.0
+            inputMarca = ""
+            
+            inputExpirationDate = ""
+            inputNoExpiry = false
+            inputStockUnit = 0  // Solo stock unitario
+            inputSupplier = ""
+            
+            // Verificar que los campos existen antes de limpiarlos
+            if (codigoField) codigoField.text = ""
+            if (nombreField) nombreField.text = ""
+            if (detallesField) detallesField.text = ""
+            if (precioCompraField) precioCompraField.text = ""
+            if (precioVentaField) precioVentaField.text = ""
+            if (marcaField) marcaField.text = ""
+            if (fechaVencimientoField) fechaVencimientoField.text = ""
+            if (stockUnitarioField) stockUnitarioField.text = ""
+            if (proveedorField) proveedorField.text = ""
+            
+            if (unidadCombo && typeof unidadCombo.currentIndex !== 'undefined') {
+                unidadCombo.currentIndex = 0
+            }
+        } catch (error) {
+            console.error("Error al limpiar formulario:", error)
+        }
     }
     
-    function showSuccess(message) {
-        successMessage = message
+    function showMessage(mensaje) {
+        if (!crearProductoDialog || !crearProductoDialog.visible) {
+            return
+        }
+        successMessage = mensaje
         showSuccessMessage = true
         successTimer.restart()
     }
     
     function abrirCrearProducto(modo = false, datos = null) {
+        console.log("🚀 Abriendo CrearProducto - Modo edición:", modo)
+        
         modoEdicion = modo
         productoData = datos
         cargarMarcasDisponibles()
         limpiarFormulario()
         
         if (modoEdicion && productoData) {
-            Qt.callLater(cargarDatosProducto)
+            console.log("📝 Modo edición detectado, cargando datos...")
+            // ✅ USAR TIMER MÁS LARGO PARA ASEGURAR QUE LOS CAMPOS ESTÉN LISTOS
+            Qt.callLater(function() {
+                Qt.callLater(cargarDatosProducto)
+            })
         }
         
         open()
     }
     
     function cargarDatosProducto() {
-        if (!productoData) return
+        if (!productoData) {
+            console.log("❌ No hay datos de producto para cargar")
+            return
+        }
         
+        console.log("📝 Cargando datos del producto:", JSON.stringify(productoData))
+        
+        // ✅ ASIGNAR VALORES A LAS PROPIEDADES
         inputProductCode = productoData.codigo || ""
         inputProductName = productoData.nombre || ""
         inputProductDetails = productoData.detalles || ""
         inputPurchasePrice = productoData.precio_compra || 0
         inputSalePrice = productoData.precio_venta || 0
         inputMarca = productoData.marca || ""
+        inputMeasureUnit = productoData.unidad_medida || "Tabletas"
         
-        codigoField.text = inputProductCode
-        nombreField.text = inputProductName
-        detallesField.text = inputProductDetails
-        precioCompraField.text = inputPurchasePrice.toString()
-        precioVentaField.text = inputSalePrice.toString()
-        marcaField.text = inputMarca
+        // ✅ ASIGNAR VALORES A LOS CAMPOS DE TEXTO
+        if (codigoField) codigoField.text = inputProductCode
+        if (nombreField) nombreField.text = inputProductName
+        if (detallesField) detallesField.text = inputProductDetails
+        if (precioCompraField) precioCompraField.text = inputPurchasePrice.toString()
+        if (precioVentaField) precioVentaField.text = inputSalePrice.toString()
+        if (marcaField) marcaField.text = inputMarca
+        
+        // ✅ ESTABLECER COMBOBOX DE UNIDAD
+        if (unidadCombo) {
+            var unidadIndex = unidadCombo.model.indexOf(inputMeasureUnit)
+            if (unidadIndex >= 0) {
+                unidadCombo.currentIndex = unidadIndex
+            }
+        }
+        
+        console.log("✅ Datos cargados en el formulario")
     }
 
     // Header personalizado
@@ -348,7 +413,7 @@ Dialog {
                     }
                     
                     Text {
-                        text: modoEdicion ? "Actualizar información del producto" : "Crear producto e inventario inicial"
+                        text: modoEdicion ? "Actualizar información del producto" : "Crear producto e inventario inicial (solo stock unitario)"
                         font.pixelSize: 12
                         color: grayMedium
                     }
@@ -542,7 +607,7 @@ Dialog {
                         }
                     }
                     
-                    // Fila 2: Unidad, P. Compra, P. Venta, Fecha Vencimiento con Checkbox CORREGIDO
+                    // Fila 2: Unidad, P. Compra, P. Venta, Fecha Vencimiento
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 12
@@ -686,7 +751,7 @@ Dialog {
                             }
                         }
                         
-                        // Fecha Vencimiento con checkbox CORREGIDO
+                        // Fecha Vencimiento con checkbox
                         ColumnLayout {
                             Layout.preferredWidth: 200
                             spacing: 4
@@ -705,7 +770,7 @@ Dialog {
                                 Rectangle {
                                     Layout.preferredWidth: 120
                                     Layout.preferredHeight: inputHeight
-                                    color: inputNoExpiry ? "#F5F5F5" : white  // Deshabilitado cuando es sin vencimiento
+                                    color: inputNoExpiry ? "#F5F5F5" : white
                                     border.color: fechaVencimientoField.activeFocus ? warningAmber : borderColor
                                     border.width: 1
                                     radius: 6
@@ -720,7 +785,7 @@ Dialog {
                                         color: grayDark
                                         inputMethodHints: Qt.ImhDigitsOnly
                                         maximumLength: 10
-                                        enabled: !inputNoExpiry  // Deshabilitado cuando es sin vencimiento
+                                        enabled: !inputNoExpiry
                                         
                                         onTextChanged: {
                                             if (!inputNoExpiry) {
@@ -728,7 +793,7 @@ Dialog {
                                                 if (formatted !== text) {
                                                     text = formatted
                                                 }
-                                                inputExpirationDate = formatted  // CORREGIDO
+                                                inputExpirationDate = formatted
                                             }
                                         }
                                         
@@ -742,11 +807,10 @@ Dialog {
                                     }
                                 }
                                 
-                                // CHECKBOX CORREGIDO - Por defecto marcado (tiene vencimiento)
                                 CheckBox {
                                     Layout.preferredWidth: 20
                                     Layout.preferredHeight: inputHeight
-                                    checked: !inputNoExpiry  // CORREGIDO: checked cuando tiene vencimiento
+                                    checked: !inputNoExpiry
                                     
                                     indicator: Rectangle {
                                         width: 16
@@ -769,9 +833,8 @@ Dialog {
                                     contentItem: Item {}
                                     
                                     onCheckedChanged: {
-                                        inputNoExpiry = !checked  // CORREGIDO: sin vencimiento cuando NO está checked
+                                        inputNoExpiry = !checked
                                         if (!checked) {
-                                            // Si NO está marcado (sin vencimiento), limpiar fecha
                                             inputExpirationDate = ""
                                             fechaVencimientoField.text = ""
                                         }
@@ -779,7 +842,7 @@ Dialog {
                                 }
                                 
                                 Text {
-                                    text: "Con vencimiento"  // CORREGIDO: texto más claro
+                                    text: "Con vencimiento"
                                     font.pixelSize: 10
                                     color: grayMedium
                                     Layout.alignment: Qt.AlignVCenter
@@ -790,71 +853,19 @@ Dialog {
                         Item { Layout.fillWidth: true }
                     }
                     
-                    // Fila 3: Stock Caja, Stock Unitario, Total, Proveedor
+                    // Fila 3: Solo Stock Unitario y Proveedor (SIN CAJAS)
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 12
                         visible: !modoEdicion
                         
-                        // Stock Caja
+                        // Stock 
                         ColumnLayout {
-                            Layout.preferredWidth: 90
+                            Layout.preferredWidth: 120
                             spacing: 4
                             
                             Text {
-                                text: "Stock Caja *"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: stockCajaField.activeFocus ? warningAmber : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextInput {
-                                    id: stockCajaField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    inputMethodHints: Qt.ImhDigitsOnly
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    
-                                    onTextChanged: {
-                                        var cleanText = text.replace(/[^0-9]/g, '');
-                                        if (cleanText !== text) {
-                                            text = cleanText;
-                                        }
-                                        
-                                        inputStockBox = text.length > 0 ? (parseInt(text) || 0) : 0;
-                                    }
-                                    
-                                    Text {
-                                        text: "0"
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Stock Unitario
-                        ColumnLayout {
-                            Layout.preferredWidth: 100
-                            spacing: 4
-                            
-                            Text {
-                                text: "Stock Unitario *"
+                                text: "Stock *"
                                 font.pixelSize: 12
                                 font.bold: true
                                 color: grayDark
@@ -899,37 +910,7 @@ Dialog {
                                 }
                             }
                         }
-                        
-                        // Total
-                        ColumnLayout {
-                            Layout.preferredWidth: 70
-                            spacing: 4
-                            
-                            Text {
-                                text: "Stock Total"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: "#F0F9FF"
-                                border.color: primaryBlue
-                                border.width: 1
-                                radius: 6
-                                
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: (inputStockBox * inputStockUnit).toString()  // CORREGIDO: suma no multiplicación
-                                    color: primaryBlue
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                }
-                            }
-                        }
-                        
+
                         // Proveedor
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -1031,7 +1012,7 @@ Dialog {
                         }
                     }
                     
-                    // Botones de acción (debajo de descripción)
+                    // Botones de acción
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 20
@@ -1061,6 +1042,7 @@ Dialog {
                             onClicked: {
                                 limpiarFormulario()
                                 cancelarCreacion()
+                                volverALista() 
                                 close()
                             }
                         }
@@ -1073,6 +1055,11 @@ Dialog {
                             background: Rectangle {
                                 color: parent.enabled ? (parent.pressed ? "#1D4ED8" : primaryBlue) : "#E5E7EB"
                                 radius: 8
+                            }
+                            onEnabledChanged: {
+                                console.log("🔘 Botón Guardar enabled:", enabled)
+                                console.log("  - isFormValid:", isFormValid)
+                                console.log("  - marcasCargadas:", marcasCargadas)
                             }
                             
                             contentItem: Text {
@@ -1138,7 +1125,7 @@ Dialog {
 
     onOpened: {
         Qt.callLater(function() {
-            if (nombreField) {  // Cambio: ahora el foco va al nombre ya que el código es opcional
+            if (nombreField) {
                 nombreField.forceActiveFocus()
             }
         })

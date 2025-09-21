@@ -13,7 +13,13 @@ Item {
     
     // Señal para navegar a crear venta
     signal navegarACrearVenta()
-    
+    signal navegarAEditarVenta(int ventaId)
+
+    property bool mostrandoMenuContextual: false
+    property var ventaMenuContextual: null
+    property var selectedSale: null
+    property bool showDeleteConfirmDialog: false
+    property var ventaToDelete: null
     // Propiedades de control de vistas
     property bool detalleVentaDialogOpen: false
     property var ventaSeleccionada: null
@@ -158,15 +164,28 @@ Item {
                 for (var i = 0; i < detallesArray.length; i++) {
                     var detalle = detallesArray[i]
                     if (detalle && typeof detalle === 'object') {
-                        var cantidad = parseFloat(detalle.cantidad || detalle.Cantidad_Unitario || 0)
-                        var precio = parseFloat(detalle.precio || detalle.Precio_Unitario || 0)
+                        // CORREGIDO: Extraer valores con prioridad correcta
+                        var cantidad = parseFloat(detalle.Cantidad_Unitario || detalle.cantidad || 0)
+                        var precio = parseFloat(detalle.Precio_Unitario || detalle.precio || 0)
+                        var subtotalBD = parseFloat(detalle.Subtotal || detalle.subtotal || 0)
+                        
+                        // CORREGIDO: Usar subtotal de BD o calcular como fallback
+                        var subtotalFinal = subtotalBD > 0 ? subtotalBD : (cantidad * precio)
                         
                         productosDetalleModel.append({
-                            codigo: String(detalle.codigo || detalle.Producto_Codigo || "N/A"),
-                            nombre: String(detalle.nombre || detalle.Producto_Nombre || "Producto desconocido"),
+                            codigo: String(detalle.Producto_Codigo || detalle.codigo || "N/A"),
+                            nombre: String(detalle.Producto_Nombre || detalle.nombre || "Producto desconocido"),
                             precio: precio,
                             cantidad: cantidad,
-                            subtotal: cantidad * precio
+                            subtotal: subtotalFinal  // USAR SUBTOTAL CORRECTO
+                        })
+                        
+                        console.log("Producto agregado:", {
+                            codigo: detalle.Producto_Codigo || detalle.codigo,
+                            cantidad: cantidad,
+                            precio: precio,
+                            subtotalBD: subtotalBD,
+                            subtotalFinal: subtotalFinal
                         })
                     }
                 }
@@ -181,8 +200,10 @@ Item {
             }
             
             detalleVentaDialogOpen = true
+            console.log("Detalle de venta mostrado con", productosDetalleModel.count, "productos")
             
         } catch (e) {
+            console.log("Error mostrando detalle:", e.message)
             productosDetalleModel.clear()
             productosDetalleModel.append({
                 codigo: "ERROR",
@@ -278,31 +299,23 @@ Item {
                 }
             }
             
-            // Botón de Nueva Venta
-            Button {
+            // Botón de Nueva Venta - REEMPLAZADO CON RECTANGLE + MOUSEAREA
+            Rectangle {
                 id: nuevaVentaButton
                 Layout.preferredWidth: 230
                 Layout.preferredHeight: 75
+                color: mouseArea.pressed ? Qt.darker(successColor, 1.2) : successColor
+                radius: radiusMedium
                 
-                
-                background: Rectangle {
-                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.topMargin: 2
+                    color: "#00000020"
                     radius: radiusMedium
-                    
-                    Behavior on color {
-                        ColorAnimation { duration: 150 }
-                    }
-                    
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.topMargin: 2
-                        color: "#00000020"
-                        radius: radiusMedium
-                        z: -1
-                    }
+                    z: -1
                 }
                 
-                contentItem: RowLayout {
+                RowLayout {
                     spacing: 8
                     anchors.centerIn: parent
                     
@@ -322,20 +335,21 @@ Item {
                     }
                 }
                 
-                onClicked: {
-                    navegarACrearVenta()
-                }
-                
                 MouseArea {
+                    id: mouseArea
                     anchors.fill: parent
                     hoverEnabled: true
                     onEntered: parent.scale = 1.02
                     onExited: parent.scale = 1.0
-                    onClicked: parent.clicked()
+                    onClicked: navegarACrearVenta()
                 }
                 
                 Behavior on scale {
                     NumberAnimation { duration: 100 }
+                }
+                
+                Behavior on color {
+                    ColorAnimation { duration: 150 }
                 }
             }
         }
@@ -482,8 +496,41 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: ventasTable.currentIndex === index ? "#E3F2FD" : "transparent"
-                                opacity: 0.3
+                                color: {
+                                    if (selectedSale && selectedSale.idVenta === model.idVenta) {
+                                        return "#E3F2FD"  // Azul claro para fila seleccionada
+                                    } else if (ventasTable.currentIndex === index) {
+                                        return "#F5F5F5"  // Gris muy claro para hover
+                                    } else {
+                                        return "transparent"
+                                    }
+                                }
+                                opacity: selectedSale && selectedSale.idVenta === model.idVenta ? 0.8 : 0.4
+                                
+                                // Animación suave al cambiar color
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                                
+                                Behavior on opacity {
+                                    NumberAnimation { duration: 150 }
+                                }
+                            }
+            
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                border.color: selectedSale && selectedSale.idVenta === model.idVenta ? "#2196F3" : "transparent"
+                                border.width: selectedSale && selectedSale.idVenta === model.idVenta ? 2 : 0
+                                radius: 0
+                                
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                                
+                                Behavior on border.width {
+                                    NumberAnimation { duration: 150 }
+                                }
                             }
                             
                             RowLayout {
@@ -620,28 +667,25 @@ Item {
                                     border.color: "#D5DBDB"
                                     border.width: 1
                                     
-                                    Button {
+                                    // REEMPLAZADO CON RECTANGLE + MOUSEAREA
+                                    Rectangle {
                                         anchors.centerIn: parent
                                         width: 70
                                         height: 30
-                                        text: "Ver"
+                                        color: blueColor
+                                        radius: 15
                                         
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                            radius: 15
-                                        }
-                                        
-                                        contentItem: Label {
-                                            text: parent.text
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "Ver"
                                             color: whiteColor
                                             font.bold: true
                                             font.pixelSize: fontSmall
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
                                         }
                                         
-                                        onClicked: {
-                                            mostrarDetalleVenta(index)
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: mostrarDetalleVenta(index)
                                         }
                                     }
                                 }
@@ -652,10 +696,115 @@ Item {
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 anchors.right: parent.right
-                                anchors.rightMargin: 100
+                                anchors.rightMargin: 100  // Mantener margen para botón Ver
                                 
-                                onClicked: {
-                                    ventasTable.currentIndex = index
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                z: -1
+                                
+                                onClicked: function(mouse) {
+                                    if (mouse.button === Qt.LeftButton) {
+                                        // Clic izquierdo: seleccionar fila
+                                        ventasTable.currentIndex = index
+                                        selectedSale = model
+                                        // Ocultar menú contextual si estaba visible
+                                        mostrandoMenuContextual = false
+                                        ventaMenuContextual = null
+                                    } else if (mouse.button === Qt.RightButton) {
+                                        // Clic derecho: mostrar menú contextual solo si la fila está seleccionada
+                                        if (selectedSale && selectedSale.idVenta === model.idVenta) {
+                                            mostrandoMenuContextual = true
+                                            ventaMenuContextual = model
+                                        }
+                                    }
+                                }
+                            }
+                            // Menú contextual superpuesto
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                visible: mostrandoMenuContextual && ventaMenuContextual && ventaMenuContextual.idVenta === model.idVenta
+                                z: 10
+                                
+                                // Cuadro contenedor estilo menú contextual
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 120
+                                    height: 50
+                                    color: "#F8F9FA"
+                                    border.width: 0
+                                    radius: 4
+                                    
+                                    // Sombra sutil
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.topMargin: 2
+                                        anchors.leftMargin: 2
+                                        color: "#00000015"
+                                        radius: 4
+                                        z: -1
+                                    }
+                                    
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 0
+                                        spacing: 0
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25
+                                            color: editarHover.containsMouse ? "#E3F2FD" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Editar"
+                                                color: editarHover.containsMouse ? "#1976D2" : "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: editarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Editando venta:", model.idVenta)
+                                                    editarVenta(model.idVenta)
+                                                    mostrandoMenuContextual = false
+                                                    ventaMenuContextual = null
+                                                    selectedSale = null
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25
+                                            color: eliminarHover.containsMouse ? "#FFEBEE" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Eliminar"
+                                                color: eliminarHover.containsMouse ? "#D32F2F" : "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: eliminarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Eliminando venta:", model.idVenta)
+                                                    confirmarEliminarVenta(model)
+                                                    mostrandoMenuContextual = false
+                                                    ventaMenuContextual = null
+                                                    selectedSale = null
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -712,37 +861,37 @@ Item {
                         anchors.centerIn: parent
                         spacing: 20
                         
-                        Button {
+                        // REEMPLAZADO CON RECTANGLE + MOUSEAREA
+                        Rectangle {
+                            id: btnAnterior
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 36
-                            text: "← Anterior"
+                            color: enabled ? (mouseAreaAnterior.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : "#E5E7EB"
+                            radius: 18
                             enabled: currentPageVentas > 0
                             
-                            background: Rectangle {
-                                color: parent.enabled ? 
-                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") :
-                                    "#E5E7EB"
-                                radius: 18
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
+                            Label {
+                                text: "← Anterior"
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
                                 font.pixelSize: fontMedium
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                                anchors.centerIn: parent
                             }
                             
-                            onClicked: {
-                                if (currentPageVentas > 0) {
-                                    currentPageVentas--
-                                    actualizarPaginacionVentas()
+                            MouseArea {
+                                id: mouseAreaAnterior
+                                anchors.fill: parent
+                                enabled: parent.enabled
+                                onClicked: {
+                                    if (currentPageVentas > 0) {
+                                        currentPageVentas--
+                                        actualizarPaginacionVentas()
+                                    }
                                 }
+                            }
+                            
+                            Behavior on color {
+                                ColorAnimation { duration: 150 }
                             }
                         }
 
@@ -753,37 +902,37 @@ Item {
                             font.weight: Font.Medium
                         }
 
-                        Button {
+                        // REEMPLAZADO CON RECTANGLE + MOUSEAREA
+                        Rectangle {
+                            id: btnSiguiente
                             Layout.preferredWidth: 110
                             Layout.preferredHeight: 36
-                            text: "Siguiente →"
+                            color: enabled ? (mouseAreaSiguiente.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : "#E5E7EB"
+                            radius: 18
                             enabled: currentPageVentas < totalPagesVentas - 1
                             
-                            background: Rectangle {
-                                color: parent.enabled ? 
-                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
-                                    "#E5E7EB"
-                                radius: 18
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
+                            Label {
+                                text: "Siguiente →"
                                 color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                 font.bold: true
                                 font.pixelSize: fontMedium
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                                anchors.centerIn: parent
                             }
                             
-                            onClicked: {
-                                if (currentPageVentas < totalPagesVentas - 1) {
-                                    currentPageVentas++
-                                    actualizarPaginacionVentas()
+                            MouseArea {
+                                id: mouseAreaSiguiente
+                                anchors.fill: parent
+                                enabled: parent.enabled
+                                onClicked: {
+                                    if (currentPageVentas < totalPagesVentas - 1) {
+                                        currentPageVentas++
+                                        actualizarPaginacionVentas()
+                                    }
                                 }
+                            }
+                            
+                            Behavior on color {
+                                ColorAnimation { duration: 150 }
                             }
                         }
                     }
@@ -792,7 +941,7 @@ Item {
         }
     }
 
-    // MODAL DE DETALLE DE VENTA (sin cambios)
+    // MODAL DE DETALLE DE VENTA
     Rectangle {
         id: modalOverlay
         anchors.fill: parent
@@ -863,6 +1012,7 @@ Item {
                         
                         Item { Layout.fillWidth: true }
                         
+                        // REEMPLAZADO CON RECTANGLE + MOUSEAREA
                         Rectangle {
                             width: 32
                             height: 32
@@ -880,9 +1030,7 @@ Item {
                             MouseArea {
                                 id: cerrarMouseArea
                                 anchors.fill: parent
-                                onClicked: {
-                                    detalleVentaDialogOpen = false
-                                }
+                                onClicked: detalleVentaDialogOpen = false
                             }
                         }
                     }
@@ -1230,6 +1378,15 @@ Item {
                                     }
                                 }
                             }
+                            MouseArea {
+                                anchors.fill: parent
+                                visible: mostrandoMenuContextual
+                                z: 5
+                                onClicked: {
+                                    mostrandoMenuContextual = false
+                                    ventaMenuContextual = null
+                                }
+                            }
                         }
                     }
                 }
@@ -1263,16 +1420,7 @@ Item {
                         Item { Layout.fillWidth: true }
                         
                         Label {
-                            text: {
-                                var total = 0
-                                for (var i = 0; i < productosDetalleModel.count; i++) {
-                                    var item = productosDetalleModel.get(i)
-                                    if (item && item.subtotal) {
-                                        total += item.subtotal
-                                    }
-                                }
-                                return "Bs " + total.toFixed(2)
-                            }
+                            text: ventaSeleccionada ? "Bs " + parseFloat(ventaSeleccionada.total || 0).toFixed(2) : "Bs 0.00"
                             color: "#e74c3c"
                             font.pixelSize: fontLarge
                             font.bold: true
@@ -1287,6 +1435,7 @@ Item {
                 
                 Item { Layout.fillWidth: true }
                 
+                // REEMPLAZADO CON RECTANGLE + MOUSEAREA
                 Rectangle {
                     Layout.preferredWidth: baseUnit * 20
                     Layout.preferredHeight: baseUnit * 8
@@ -1306,13 +1455,52 @@ Item {
                     MouseArea {
                         id: cerrarBtnMouseArea
                         anchors.fill: parent
-                        onClicked: {
-                            detalleVentaDialogOpen = false
-                        }
+                        onClicked: detalleVentaDialogOpen = false
                     }
                 }
             }
         }
+    }
+    function editarVenta(ventaId) {
+        console.log("Editando venta ID:", ventaId)
+        
+        // Verificar permisos antes de editar
+        if (!ventaModel.puede_editar_ventas) {
+            mostrarMensajeError("No tiene permisos para editar ventas")
+            return
+        }
+        
+        navegarAEditarVenta(parseInt(ventaId))
+    }
+
+    function confirmarEliminarVenta(venta) {
+        // Verificar permisos antes de mostrar confirmación
+        if (!ventaModel.puede_eliminar_ventas) {
+            mostrarMensajeError("No tiene permisos para eliminar ventas")
+            return
+        }
+        
+        ventaToDelete = venta
+        showDeleteConfirmDialog = true
+    }
+
+    function eliminarVentaConfirmada() {
+        if (!ventaModel || !ventaToDelete) return
+        
+        var ventaId = parseInt(ventaToDelete.idVenta)
+        var exito = ventaModel.eliminar_venta(ventaId)
+        
+        if (exito) {
+            // AGREGAR: Actualización inmediata después de eliminar
+            Qt.callLater(function() {
+                actualizarPaginacionVentas()
+                ventaModel.refresh_ventas_hoy()
+                ventaModel.refresh_estadisticas()
+            })
+        }
+        
+        showDeleteConfirmDialog = false
+        ventaToDelete = null
     }
 
     Component.onCompleted: {
@@ -1335,9 +1523,135 @@ Item {
         
         Keys.onEscapePressed: {
             console.log("Escape pressed in Ventas.qml")
-            ventasMainRoot.forceActiveFocus()
+            ventasRoot.forceActiveFocus()
         }
         
         z: -1
     }
+    // Modal de confirmación para eliminar venta
+    Rectangle {
+        id: deleteConfirmOverlay
+        anchors.fill: parent
+        color: "#000000"
+        opacity: 0.7
+        visible: showDeleteConfirmDialog
+        z: 3000
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                showDeleteConfirmDialog = false
+                ventaToDelete = null
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.centerIn: parent
+        width: 400
+        height: 220
+        color: "#ffffff"
+        radius: radiusLarge
+        border.color: "#dee2e6"
+        border.width: 1
+        visible: showDeleteConfirmDialog
+        z: 3001
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: marginLarge
+            spacing: marginMedium
+            
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 8
+                
+                Text {
+                    text: "⚠️"
+                    font.pixelSize: fontLarge
+                    color: dangerColor
+                }
+                
+                Label {
+                    text: "Confirmar Eliminación"
+                    font.bold: true
+                    font.pixelSize: fontLarge
+                    color: dangerColor
+                }
+            }
+            
+            Label {
+                text: ventaToDelete ? 
+                    "¿Está seguro de eliminar la venta #" + ventaToDelete.idVenta + 
+                    " por un total de Bs " + ventaToDelete.total.toFixed(2) + "?" : ""
+                font.pixelSize: fontMedium
+                color: textColor
+                Layout.alignment: Qt.AlignHCenter
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                Layout.maximumWidth: 350
+            }
+            
+            Label {
+                text: "Esta acción no se puede deshacer y restaurará el stock de los productos."
+                font.pixelSize: fontSmall
+                color: darkGrayColor
+                Layout.alignment: Qt.AlignHCenter
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                Layout.maximumWidth: 350
+            }
+            
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: marginMedium
+                
+                Rectangle {
+                    width: 100
+                    height: 40
+                    color: cancelDeleteMouseArea.pressed ? "#6c757d" : "#495057"
+                    radius: radiusMedium
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "Cancelar"
+                        color: whiteColor
+                        font.bold: true
+                        font.pixelSize: fontMedium
+                    }
+                    
+                    MouseArea {
+                        id: cancelDeleteMouseArea
+                        anchors.fill: parent
+                        onClicked: {
+                            showDeleteConfirmDialog = false
+                            ventaToDelete = null
+                        }
+                    }
+                }
+                
+                Rectangle {
+                    width: 100
+                    height: 40
+                    color: confirmDeleteMouseArea.pressed ? "#C62828" : dangerColor
+                    radius: radiusMedium
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "Eliminar"
+                        color: whiteColor
+                        font.bold: true
+                        font.pixelSize: fontMedium
+                    }
+                    
+                    MouseArea {
+                        id: confirmDeleteMouseArea
+                        anchors.fill: parent
+                        onClicked: eliminarVentaConfirmada()
+                    }
+                }
+            }
+        }
+    }
+
 }
