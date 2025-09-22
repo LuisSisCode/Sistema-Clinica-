@@ -8,7 +8,7 @@ Item {
     id: crearCompraRoot
     
     // Propiedades de comunicación con el componente padre
-    property var inventarioModel: null
+    property var inventarioModel: parent.inventarioModel || nul
     property var ventaModel: null
     property var compraModel: null
     property bool modoEdicion: false
@@ -233,7 +233,9 @@ Item {
         
         var textoBusqueda = texto.toLowerCase()
         
-        inventarioModel.buscar_productos(textoBusqueda)
+        if (inventarioModel) {
+            inventarioModel.buscar_productos(textoBusqueda)
+        }
         
         Qt.callLater(function() {
             var resultados = inventarioModel.search_results || []

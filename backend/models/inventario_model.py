@@ -267,22 +267,15 @@ class InventarioModel(QObject):
                     
                     # Información adicional para UI
                     resultado_normalizado.update({
-                        # Estado de disponibilidad
                         'disponible': stock_total > 0,
                         'estado_stock': estado_stock,
-                        'nivel_stock': self._clasificar_nivel_stock(stock_total),
-                        
-                        # Información de lotes
+                        'nivel_stock': 'BAJO' if stock_total <= 5 else 'DISPONIBLE',
                         'lotes_activos': lotes_activos,
                         'tiene_lotes': lotes_activos > 0,
                         'proxima_vencimiento': proxima_vencimiento,
-                        'dias_vencimiento': self._calcular_dias_vencimiento(proxima_vencimiento),
-                        
-                        # Indicadores visuales para UI
-                        'color_stock': self._get_color_stock(estado_stock),
-                        'icono_estado': self._get_icono_estado(estado_stock),
-                        
-                        # Información para ventas
+                        'dias_vencimiento': 0,  # Simplificado
+                        'color_stock': '#e74c3c' if stock_total <= 0 else '#27ae60',
+                        'icono_estado': '✅' if stock_total > 0 else '🚫',
                         'puede_vender': stock_total > 0,
                         'stock_calculado_desde_lotes': True,
                         'fifo_enabled': True

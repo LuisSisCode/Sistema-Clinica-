@@ -651,7 +651,8 @@ Item {
                             }
                             // MouseArea para detectar clics fuera del menú contextual
                             MouseArea {
-                                anchors.fill: parent
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
                                 visible: mostrandoMenuContextual
                                 z: 5
                                 onClicked: {
