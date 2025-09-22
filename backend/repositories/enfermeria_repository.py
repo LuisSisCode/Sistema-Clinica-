@@ -713,6 +713,48 @@ class EnfermeriaRepository:
         except Exception as e:
             logger.error(f"Error al buscar pacientes: {e}")
             return []
+        
+    def buscar_pacientes_por_nombre_completo(self, nombre_completo: str, limite: int = 10) -> List[Dict[str, Any]]:
+        """Busca pacientes por nombre completo con múltiples estrategias"""
+        try:
+            if not nombre_completo or len(nombre_completo.strip()) < 3:
+                return []
+            
+            nombre_limpio = nombre_completo.strip()
+            
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Búsqueda con LIKE
+                cursor.execute("""
+                    SELECT TOP (?)
+                        id,
+                        Nombre,
+                        Apellido_Paterno,
+                        ISNULL(Apellido_Materno, '') as Apellido_Materno,
+                        ISNULL(Cedula, '') as Cedula,
+                        CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombreCompleto
+                    FROM Pacientes
+                    WHERE CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) LIKE ?
+                    ORDER BY Nombre, Apellido_Paterno
+                """, (limite, f'%{nombre_limpio}%'))
+                
+                pacientes = []
+                for row in cursor.fetchall():
+                    pacientes.append({
+                        'id': row.id,
+                        'nombre': row.Nombre,
+                        'apellidoPaterno': row.Apellido_Paterno,
+                        'apellidoMaterno': row.Apellido_Materno,
+                        'cedula': row.Cedula,
+                        'nombreCompleto': row.nombreCompleto.strip()
+                    })
+                
+                return pacientes
+                
+        except Exception as e:
+            logger.error(f"Error buscando pacientes por nombre: {e}")
+            return []
     
     # ===============================
     # OPERACIONES DE TRABAJADORES (mejoradas)
