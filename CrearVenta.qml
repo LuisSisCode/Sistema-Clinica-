@@ -11,7 +11,12 @@ Item {
     property var inventarioModel: null
     property var ventaModel: null
     property var compraModel: null
-    
+
+    property bool modoEdicion: false
+    property int ventaIdAEditar: 0
+    property var productosEliminadosTemp: [] 
+    property int productoEditandoIndex: -1 
+
     // Señales para comunicación
     signal ventaCompletada()
     signal cancelarVenta()
@@ -55,7 +60,7 @@ Item {
     property color darkGrayColor: "#7f8c8d"
     property color lightGrayColor: "#bdc3c7"
 
-    // NUEVAS VARIABLES DE ESTADO PARA FLUJO DE DOS PASOS
+    // VARIABLES DE ESTADO PARA FLUJO DE DOS PASOS
     property string productoSeleccionadoCodigo: ""
     property string productoSeleccionadoNombre: ""
     property real productoSeleccionadoPrecio: 0
@@ -63,10 +68,19 @@ Item {
     property bool panelResultadosVisible: false
     property bool productoPreseleccionado: false
 
+    // CONEXIONES
     Connections {
         target: inventarioModel
         function onSearchResultsChanged() {
-            console.log("🔍 Resultados de búsqueda actualizados")
+            console.log("Resultados de búsqueda actualizados")
+        }
+    }
+
+    Connections {
+        target: ventaModel
+        function onOperacionError(mensaje) {
+            console.log("Error en ventaModel:", mensaje)
+            mostrarMensajeError(mensaje)
         }
     }
 
@@ -79,7 +93,85 @@ Item {
         id: resultadosBusquedaModel
     }
 
+    // ✅ COMPONENTE PARA MOSTRAR MENSAJES DE ERROR
+    Rectangle {
+        id: mensajeError
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: 20
+        
+        width: Math.min(400, parent.width - 40)
+        height: 60
+        
+        color: "#f8d7da"
+        border.color: "#f5c6cb" 
+        radius: 6
+        
+        visible: false
+        z: 2000
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 10
+            
+            Text {
+                text: "⚠️"
+                font.pixelSize: fontLarge
+                color: "#721c24"
+            }
+            
+            Text {
+                id: textoMensajeError
+                Layout.fillWidth: true
+                text: ""
+                color: "#721c24"
+                font.pixelSize: fontSmall
+                wrapMode: Text.WordWrap
+            }
+            
+            Rectangle {
+                width: 20
+                height: 20
+                color: "transparent"
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: "×"
+                    color: "#721c24"
+                    font.pixelSize: fontMedium
+                    font.bold: true
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: ocultarMensajeError()
+                }
+            }
+        }
+        
+        // Timer para ocultar automáticamente
+        Timer {
+            id: timerMensajeError
+            interval: 4000
+            onTriggered: ocultarMensajeError()
+        }
+    }
+
     // FUNCIONES DE NEGOCIO
+    
+    // Función para mostrar mensaje de error
+    function mostrarMensajeError(mensaje) {
+        textoMensajeError.text = mensaje
+        mensajeError.visible = true
+        timerMensajeError.restart()
+    }
+    
+    // Función para ocultar mensaje de error
+    function ocultarMensajeError() {
+        mensajeError.visible = false
+        timerMensajeError.stop()
+    }
     
     // Función para calcular el total de la venta
     function calcularTotal() {
@@ -109,10 +201,9 @@ Item {
     function calcularProductos() {
         return productosVentaModel.count
     }
-
-    // Función para buscar productos
+    // ✅ FUNCIÓN CORREGIDA: Buscar productos con verificación de stock real
     function buscarProductos(textoBusqueda) {
-        console.log("🔍 CrearVenta: Buscando productos con:", textoBusqueda)
+        console.log("Buscando productos para venta:", textoBusqueda)
         
         resultadosBusquedaModel.clear()
         panelResultadosVisible = false
@@ -121,18 +212,20 @@ Item {
             return
         }
         
-        if (inventarioModel) {
-            inventarioModel.buscar_productos(textoBusqueda)
-            var resultados = inventarioModel.search_results || []
-            console.log("🔍 Resultados encontrados:", resultados.length)
+        if (ventaModel) {
+            // USAR método específico para ventas
+            var resultados = ventaModel.buscar_productos_para_venta(textoBusqueda)
             
             for (var i = 0; i < resultados.length; i++) {
                 var producto = resultados[i]
+                
                 resultadosBusquedaModel.append({
-                    codigo: producto.Codigo || producto.codigo,
-                    nombre: producto.Nombre || producto.nombre,
-                    precio: producto.Precio_venta || producto.precio || 0,
-                    stock: producto.Stock_Total || producto.stock || 0
+                    codigo: producto.codigo,
+                    nombre: producto.nombre,
+                    precio: producto.precio,
+                    stock: producto.stock,  // STOCK TOTAL SIMPLE
+                    disponible: producto.disponible,
+                    marca: producto.marca
                 })
             }
             
@@ -140,12 +233,19 @@ Item {
         }
     }
 
-    // NUEVA FUNCIÓN: Seleccionar producto (primer paso)
+    // ✅ FUNCIÓN CORREGIDA: Seleccionar producto con validación de stock
     function seleccionarProducto(codigo, nombre, precio, stock) {
-        console.log("✅ Producto seleccionado:", codigo, "-", nombre)
+        console.log("Producto seleccionado:", codigo, "-", nombre)
+        
+        // Validar stock antes de seleccionar
+        if (stock <= 0) {
+            console.log("Producto sin stock disponible:", codigo)
+            mostrarMensajeProductoAgotado(nombre)
+            return
+        }
         
         productoSeleccionadoCodigo = codigo
-        productoSeleccionadoNombre = nombre
+        productoSeleccionadoNombre = nombre  
         productoSeleccionadoPrecio = precio
         productoSeleccionadoStock = stock
         productoPreseleccionado = true
@@ -163,7 +263,14 @@ Item {
         })
     }
 
-    // NUEVA FUNCIÓN: Cerrar panel de resultados
+    // ✅ FUNCIÓN CORREGIDA: Mostrar mensaje de producto agotado
+    function mostrarMensajeProductoAgotado(nombreProducto) {
+        var mensaje = "PRODUCTO AGOTADO: " + nombreProducto + " no tiene stock disponible"
+        mostrarMensajeError(mensaje)
+        limpiarCamposBusqueda()
+    }
+
+    // Función para cerrar panel de resultados
     function cerrarPanelResultados() {
         panelResultadosVisible = false
         resultadosBusquedaModel.clear()
@@ -171,7 +278,7 @@ Item {
 
     // Función para agregar producto a venta (segundo paso)
     function agregarProductoAVenta(codigo, cantidad) {
-        console.log("🛒 Agregando producto:", codigo, "Cantidad:", cantidad)
+        console.log("Agregando producto:", codigo, "Cantidad:", cantidad)
         
         if (!codigo || cantidad <= 0) {
             return false
@@ -184,7 +291,7 @@ Item {
         
         // Verificar stock
         if (cantidad > stock) {
-            console.log("❌ Stock insuficiente")
+            mostrarMensajeError("Stock insuficiente. Disponible: " + stock)
             return false
         }
         
@@ -208,7 +315,7 @@ Item {
             var nuevoSubtotal = precio * nuevaCantidad
             
             if (nuevaCantidad > stock) {
-                console.log("❌ Stock insuficiente para nueva cantidad")
+                mostrarMensajeError("Stock insuficiente para nueva cantidad. Disponible: " + stock)
                 return false
             }
             
@@ -233,16 +340,65 @@ Item {
 
     // Función para completar venta
     function completarVenta() {
-        console.log("🛒 Completando venta...")
+        console.log("Completando venta...")
         
         if (productosVentaModel.count === 0) {
+            mostrarMensajeError("No hay productos en la venta")
             return false
         }
         
         if (!ventaModel) {
-            console.log("❌ VentaModel no disponible")
+            mostrarMensajeError("VentaModel no disponible")
             return false
         }
+        
+        // ✅ VERIFICAR SI ES MODO EDICIÓN
+        if (modoEdicion && ventaIdAEditar > 0) {
+            return actualizarVentaExistente()
+        } else {
+            return crearNuevaVenta()
+        }
+    }
+    function actualizarVentaExistente() {
+        console.log("Actualizando venta existente:", ventaIdAEditar)
+        
+        // Preparar productos para actualización
+        var productosParaActualizar = []
+        
+        for (var i = 0; i < productosVentaModel.count; i++) {
+            var prod = productosVentaModel.get(i)
+            productosParaActualizar.push({
+                codigo: prod.codigo,
+                cantidad: prod.cantidad,
+                precio: prod.precio,
+                subtotal: prod.subtotal
+            })
+        }
+        
+        // Llamar al método de actualización del modelo
+        var exito = ventaModel.actualizar_venta_completa(ventaIdAEditar, productosParaActualizar)
+        
+        if (exito) {
+            mostrarMensajeExito("Venta actualizada exitosamente")
+            limpiarTodo()
+            ventaCompletada() // Emitir señal
+            
+            Qt.callLater(function() {
+                console.log("Venta actualizada, regresando a lista...")
+                if (typeof stackView !== 'undefined') {
+                    stackView.pop()
+                }
+            })
+            
+            return true
+        } else {
+            mostrarMensajeError("Error actualizando la venta")
+            return false
+        }
+    }
+    // ✅ SEPARAR: Función para crear nueva venta
+    function crearNuevaVenta() {
+        console.log("Creando nueva venta...")
         
         // Limpiar carrito previo
         ventaModel.limpiar_carrito()
@@ -259,16 +415,27 @@ Item {
             limpiarTodo()
             ventaCompletada() // Emitir señal
             
-            // ✅ AGREGAR: Regresar automáticamente
             Qt.callLater(function() {
-                console.log("🔙 Venta completada, regresando a lista...")
-                stackView.pop() // Regresar a Ventas.qml
+                console.log("Venta completada, regresando a lista...")
+                if (typeof stackView !== 'undefined') {
+                    stackView.pop()
+                }
             })
             
             return true
         }
         
         return false
+    }
+
+    // ✅ NUEVO: Función para mostrar mensaje de éxito
+    function mostrarMensajeExito(mensaje) {
+        // Reutilizar el componente de mensaje de error pero con colores de éxito
+        textoMensajeError.text = mensaje
+        mensajeError.color = "#d4edda"
+        mensajeError.border.color = "#c3e6cb"
+        mensajeError.visible = true
+        timerMensajeError.restart()
     }
 
     // Función para limpiar campos de búsqueda
@@ -293,30 +460,44 @@ Item {
     // Función para limpiar todo
     function limpiarTodo() {
         productosVentaModel.clear()
+        productosEliminadosTemp = []  // Limpiar productos eliminados temporales
+        productoEditandoIndex = -1    // Cancelar cualquier edición
         limpiarCamposBusqueda()
+        ocultarMensajeError()
     }
 
-    // MODIFICADA: Función para agregar producto desde input (solo si hay preselección)
-    function agregarProductoDesdeInput() {
-        var cantidadTexto = cantidadField.text.trim()
-        var cantidad = parseInt(cantidadTexto) || 1
-        
-        if (cantidad <= 0) {
-            cantidad = 1
+    function cargarVentaParaEdicion() {
+        if (!modoEdicion || !ventaIdAEditar || !ventaModel) {
+            return
         }
         
-        // Solo agregar si hay un producto preseleccionado
-        if (productoPreseleccionado && productoSeleccionadoCodigo) {
-            agregarProductoAVenta(productoSeleccionadoCodigo, cantidad)
-        } else {
-            // Si no hay preselección, buscar automáticamente
-            var texto = busquedaField.text.trim()
-            if (texto) {
-                buscarProductos(texto)
-            } else {
-                busquedaField.focus = true
+        console.log("Cargando venta para edición:", ventaIdAEditar)
+        
+        var datosEdicion = ventaModel.cargar_venta_para_edicion(ventaIdAEditar)
+        
+        if (!datosEdicion || !datosEdicion.productos) {
+            mostrarMensajeError("No se pudo cargar la venta para edición")
+            return
+        }
+        
+        productosVentaModel.clear()
+        
+        for (var i = 0; i < datosEdicion.productos.length; i++) {
+            var producto = datosEdicion.productos[i]
+            
+            // VALIDAR datos antes de agregar
+            if (producto.codigo && producto.cantidad > 0 && producto.precio > 0) {
+                productosVentaModel.append({
+                    codigo: producto.codigo,
+                    nombre: producto.nombre,
+                    precio: producto.precio,
+                    cantidad: producto.cantidad,
+                    subtotal: producto.subtotal
+                })
             }
         }
+        
+        console.log("✅ Venta cargada:", datosEdicion.productos.length, "productos")
     }
 
     // INTERFAZ DE USUARIO
@@ -348,26 +529,24 @@ Item {
                         spacing: 20
                         
                         // Botón de regreso
-                        Button {
+                        Rectangle {
                             width: 40
                             height: 40
+                            color: regresarMouseArea.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                            radius: 20
                             
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                radius: 20
-                            }
-                            
-                            contentItem: Label {
+                            Label {
+                                anchors.centerIn: parent
                                 text: "←"
                                 color: whiteColor
                                 font.bold: true
                                 font.pixelSize: fontLarge
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
                             }
                             
-                            onClicked: {
-                                cancelarVenta() // Emitir señal para regresar
+                            MouseArea {
+                                id: regresarMouseArea
+                                anchors.fill: parent
+                                onClicked: cancelarVenta()
                             }
                         }
                         
@@ -389,7 +568,7 @@ Item {
                             }
                             
                             Label {
-                                text: "Nueva Venta"
+                                text: modoEdicion ? "Editar Venta #" + ventaIdAEditar : "Nueva Venta"
                                 font.pixelSize: fontLarge
                                 font.bold: true
                                 color: textColor
@@ -404,7 +583,7 @@ Item {
                         spacing: 20
                         
                         Label {
-                            text: "Usuario: Dr. Admin"
+                            text: "Usuario: " + (ventaModel && ventaModel.get_rol_display ? ventaModel.get_rol_display() : "Usuario")
                             color: textColor
                             font.pixelSize: fontMedium
                         }
@@ -593,14 +772,14 @@ Item {
                                     spacing: 6
                                     
                                     Text {
-                                        text: "+"
+                                        text: productoEditandoIndex >= 0 ? "📝" : "+"
                                         color: "#ffffff"
                                         font.bold: true
                                         font.pixelSize: fontMedium
                                     }
                                     
                                     Text {
-                                        text: "Agregar"
+                                        text: productoEditandoIndex >= 0 ? "Actualizar" : "Agregar"
                                         color: "#ffffff"
                                         font.bold: true
                                         font.pixelSize: fontMedium
@@ -911,47 +1090,80 @@ Item {
                                         }
                                         
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: 120  // Aumentar ancho para dos botones
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
                                             border.width: 1
                                             
-                                            Rectangle {
+                                            RowLayout {
                                                 anchors.centerIn: parent
-                                                width: 32
-                                                height: 32
-                                                color: eliminarMouseArea.pressed ? "#c0392b" : "#E74C3C"
-                                                radius: 16
+                                                spacing: 4
                                                 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: "🗑️"
-                                                    color: "#ffffff"
-                                                    font.pixelSize: fontMedium
-                                                    font.bold: true
-                                                }
-                                                
-                                                Behavior on color {
-                                                    ColorAnimation { duration: 150 }
-                                                }
-                                                
-                                                MouseArea {
-                                                    id: eliminarMouseArea
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
+                                                // Botón Editar
+                                                Rectangle {
+                                                    width: 28
+                                                    height: 28
+                                                    color: editarMouseArea.pressed ? "#2980b9" : "#3498db"
+                                                    radius: 14
                                                     
-                                                    onClicked: {
-                                                        productosVentaModel.remove(index)
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "✏️"
+                                                        color: "#ffffff"
+                                                        font.pixelSize: fontSmall
                                                     }
                                                     
-                                                    onHoveredChanged: {
-                                                        parent.scale = hovered ? 1.1 : 1.0
+                                                    MouseArea {
+                                                        id: editarMouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        
+                                                        onClicked: {
+                                                            editarProductoExistente(index)
+                                                        }
+                                                        
+                                                        onHoveredChanged: {
+                                                            parent.scale = containsMouse ? 1.1 : 1.0
+                                                        }
+                                                    }
+                                                    
+                                                    Behavior on scale {
+                                                        NumberAnimation { duration: 100 }
                                                     }
                                                 }
                                                 
-                                                Behavior on scale {
-                                                    NumberAnimation { duration: 100 }
+                                                // Botón Eliminar (modificado)
+                                                Rectangle {
+                                                    width: 28
+                                                    height: 28
+                                                    color: eliminarMouseArea.pressed ? "#c0392b" : "#E74C3C"
+                                                    radius: 14
+                                                    
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "🗑️"
+                                                        color: "#ffffff"
+                                                        font.pixelSize: fontSmall
+                                                    }
+                                                    
+                                                    MouseArea {
+                                                        id: eliminarMouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        
+                                                        onClicked: {
+                                                            eliminarProductoDeVenta(index)  // Usar nueva función
+                                                        }
+                                                        
+                                                        onHoveredChanged: {
+                                                            parent.scale = containsMouse ? 1.1 : 1.0
+                                                        }
+                                                    }
+                                                    
+                                                    Behavior on scale {
+                                                        NumberAnimation { duration: 100 }
+                                                    }
                                                 }
                                             }
                                         }
@@ -1106,80 +1318,84 @@ Item {
                 RowLayout {
                     spacing: 8
                     
-                    Button {
-                        text: "🧹 Limpiar"
+                    Rectangle {
+                        Layout.preferredWidth: 100
                         Layout.preferredHeight: 40
+                        color: limpiarMouseArea.pressed ? Qt.darker("#ffc107", 1.2) : "#ffc107"
+                        radius: 6
                         visible: productosVentaModel.count > 0
                         
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker("#ffc107", 1.2) : "#ffc107"
-                            radius: 6
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
+                        Label {
+                            anchors.centerIn: parent
+                            text: "🧹 Limpiar"
                             color: "#212529"
                             font.bold: true
                             font.pixelSize: fontSmall
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
                         }
                         
-                        onClicked: limpiarTodo()
+                        MouseArea {
+                            id: limpiarMouseArea
+                            anchors.fill: parent
+                            onClicked: limpiarTodo()
+                        }
                     }
                     
-                    Button {
-                        text: "✕ Cancelar"
+                    Rectangle {
+                        Layout.preferredWidth: 100
                         Layout.preferredHeight: 40
+                        color: cancelarMouseArea.pressed ? Qt.darker("#dc3545", 1.2) : "#dc3545"
+                        radius: 6
                         
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker("#dc3545", 1.2) : "#dc3545"
-                            radius: 6
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
+                        Label {
+                            anchors.centerIn: parent
+                            text: "✕ Cancelar"
                             color: whiteColor
                             font.bold: true
                             font.pixelSize: fontSmall
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
                         }
                         
-                        onClicked: {
-                            limpiarTodo()
-                            cancelarVenta() // Emitir señal
+                        MouseArea {
+                            id: cancelarMouseArea
+                            anchors.fill: parent
+                            onClicked: {
+                                limpiarTodo()
+                                cancelarVenta()
+                            }
                         }
                     }
                     
-                    Button {
+                    Rectangle {
                         id: completarVentaButton
-                        text: "✓ Completar Venta"
+                        Layout.preferredWidth: 140
                         Layout.preferredHeight: 40
-                        enabled: productosVentaModel.count > 0
+                        color: productosVentaModel.count > 0 ? 
+                            (completarMouseArea.pressed ? Qt.darker("#28a745", 1.2) : "#28a745") : 
+                            "#6c757d"
+                        radius: 6
                         
-                        background: Rectangle {
-                            color: parent.enabled ? 
-                                (parent.pressed ? Qt.darker("#28a745", 1.2) : "#28a745") : 
-                                "#6c757d"
-                            radius: 6
-                        }
+                        property string textoOriginal: "✓ Completar Venta"
+                        property string textoTemporal: ""
                         
-                        contentItem: Label {
-                            text: parent.text
+                        Label {
+                            id: labelCompletarVenta
+                            anchors.centerIn: parent
+                            text: completarVentaButton.textoTemporal || completarVentaButton.textoOriginal
                             color: whiteColor
                             font.bold: true
                             font.pixelSize: fontSmall
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
                         }
                         
-                        onClicked: {
-                            if (completarVenta()) {
-                                completarVentaButton.text = "✅ ¡Completado!"
-                                Qt.callLater(function() {
-                                    completarVentaButton.text = "✓ Completar Venta"
-                                })
+                        MouseArea {
+                            id: completarMouseArea
+                            anchors.fill: parent
+                            enabled: productosVentaModel.count > 0
+                            onClicked: {
+                                if (completarVenta()) {
+                                    completarVentaButton.textoTemporal = "✅ ¡Completado!"
+                                    Qt.callLater(function() {
+                                        completarVentaButton.textoTemporal = ""
+                                    })
+                                }
                             }
                         }
                     }
@@ -1188,7 +1404,7 @@ Item {
         }
     }
 
-    // PANEL FLOTANTE DE RESULTADOS DE BÚSQUEDA
+    // ✅ PANEL CORREGIDO DE RESULTADOS DE BÚSQUEDA
     Rectangle {
         id: panelResultadosOverlay
         anchors.fill: parent
@@ -1196,15 +1412,11 @@ Item {
         visible: panelResultadosVisible
         z: 1000
         
-        // MouseArea para detectar clics fuera del panel
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                cerrarPanelResultados()
-            }
+            onClicked: cerrarPanelResultados()
         }
         
-        // Panel flotante de resultados
         Rectangle {
             id: panelResultados
             x: campoBusquedaContainer.x + marginMedium + 20
@@ -1217,7 +1429,6 @@ Item {
             border.width: 2
             radius: 8
             
-            // Sombra del panel
             Rectangle {
                 anchors.fill: parent
                 anchors.topMargin: 4
@@ -1284,15 +1495,19 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 35
-                                    Layout.preferredHeight: 16
-                                    color: model.stock > 10 ? successColor : (model.stock > 0 ? warningColor : dangerColor)
-                                    radius: 8
+                                    Layout.preferredWidth: 60
+                                    Layout.preferredHeight: 20
+                                    color: {
+                                        if (model.stock <= 0) return "#e74c3c"      // Rojo: Agotado
+                                        if (model.stock <= 30) return "#f39c12"      // Naranja: Bajo
+                                        return "#27ae60"                            // Verde: Disponible
+                                    }
+                                    radius: 10
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: model.stock.toString()
-                                        color: whiteColor
+                                        text: model.stock <= 0 ? "AGOTADO" : model.stock.toString()
+                                        color: "#ffffff"
                                         font.bold: true
                                         font.pixelSize: fontTiny
                                     }
@@ -1303,9 +1518,7 @@ Item {
                                 id: mouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                
                                 onClicked: {
-                                    // MODIFICADO: En lugar de agregar automáticamente, seleccionar el producto
                                     seleccionarProducto(model.codigo, model.nombre, model.precio, model.stock)
                                 }
                             }
@@ -1315,21 +1528,212 @@ Item {
             }
         }
     }
+    function editarProductoExistente(index) {
+        if (index < 0 || index >= productosVentaModel.count) {
+            return
+        }
+        
+        var producto = productosVentaModel.get(index)
+        
+        // Cargar datos en el formulario
+        busquedaField.text = producto.nombre
+        cantidadField.text = producto.cantidad.toString()
+        
+        // Marcar como editando
+        productoEditandoIndex = index
+        
+        // Preseleccionar el producto
+        productoSeleccionadoCodigo = producto.codigo
+        productoSeleccionadoNombre = producto.nombre
+        productoSeleccionadoPrecio = producto.precio
+        productoSeleccionadoStock = producto.cantidad + verificarStockReal(producto.codigo)
+        productoPreseleccionado = true
+        
+        // Enfocar el campo de cantidad
+        cantidadField.focus = true
+        cantidadField.selectAll()
+        
+        console.log("Editando producto:", producto.codigo, "- Índice:", index)
+    }
+
+    // Función mejorada para eliminar producto con restauración inmediata
+    function eliminarProductoDeVenta(index) {
+        if (index < 0 || index >= productosVentaModel.count) {
+            console.log("❌ Índice inválido para eliminar:", index)
+            return
+        }
+        
+        var producto = productosVentaModel.get(index)
+        
+        if (!producto || !producto.codigo) {
+            console.log("❌ Producto inválido en índice", index)
+            return
+        }
+        
+        console.log(`🗑️ Eliminando producto ${producto.codigo} cantidad: ${producto.cantidad}`)
+        
+        // ✅ VERIFICAR si ya existe en eliminados temporales para este código
+        var existeEnEliminados = false
+        for (var i = 0; i < productosEliminadosTemp.length; i++) {
+            if (productosEliminadosTemp[i].codigo === producto.codigo) {
+                // Sumar cantidad al existente
+                productosEliminadosTemp[i].cantidad += (producto.cantidad || 0)
+                existeEnEliminados = true
+                console.log(`📦 Stock temporal actualizado para ${producto.codigo}: +${producto.cantidad}`)
+                break
+            }
+        }
+        
+        // Si no existe, agregar nuevo
+        if (!existeEnEliminados) {
+            productosEliminadosTemp.push({
+                codigo: producto.codigo,
+                cantidad: producto.cantidad || 0,
+                precio: producto.precio || 0,
+                nombre: producto.nombre || ""
+            })
+            console.log(`📦 Nuevo stock temporal para ${producto.codigo}: +${producto.cantidad}`)
+        }
+        
+        // Eliminar del modelo
+        productosVentaModel.remove(index)
+        
+        // Gestionar índices de edición
+        if (productoEditandoIndex === index) {
+            cancelarEdicion()
+        } else if (productoEditandoIndex > index) {
+            productoEditandoIndex--
+        }
+        
+        console.log(`✅ Producto ${producto.codigo} eliminado y agregado a restauración temporal`)
+    }
+
+    // Función para cancelar edición
+    function cancelarEdicion() {
+        productoEditandoIndex = -1
+        limpiarCamposBusqueda()
+        console.log("Edición cancelada")
+    }
+
+    // MODIFICAR la función agregarProductoDesdeInput para manejar edición
+    function agregarProductoDesdeInput() {
+        var cantidadTexto = cantidadField.text.trim()
+        var cantidad = parseInt(cantidadTexto) || 1
+        
+        if (cantidad <= 0) {
+            cantidad = 1
+        }
+        
+        if (productoPreseleccionado && productoSeleccionadoCodigo) {
+            if (productoEditandoIndex >= 0) {
+                // MODO EDICIÓN: Actualizar producto existente
+                actualizarProductoExistente(productoEditandoIndex, cantidad)
+            } else {
+                // MODO AGREGAR: Agregar nuevo producto
+                agregarProductoAVenta(productoSeleccionadoCodigo, cantidad)
+            }
+        } else {
+            var texto = busquedaField.text.trim()
+            if (texto) {
+                buscarProductos(texto)
+            } else {
+                busquedaField.focus = true
+            }
+        }
+    }
+
+    // NUEVA función para actualizar producto existente
+    function actualizarProductoExistente(index, nuevaCantidad) {
+        if (index < 0 || index >= productosVentaModel.count) {
+            console.log("❌ Índice inválido:", index)
+            return
+        }
+        
+        var producto = productosVentaModel.get(index)
+        if (!producto || !producto.codigo) {
+            console.log("❌ Producto inválido en índice:", index)
+            return
+        }
+        
+        console.log(`📝 Actualizando producto ${producto.codigo} de ${producto.cantidad} a ${nuevaCantidad}`)
+        
+        // ✅ VERIFICAR STOCK ACTUAL DESDE BD (sin cache)
+        var stockDisponible = verificarStockReal(producto.codigo)
+        
+        // ✅ IMPORTANT: No sumar cantidad actual, ya está incluida en productosEliminadosTemp
+        if (nuevaCantidad > stockDisponible) {
+            mostrarMensajeError(`Stock insuficiente para ${producto.codigo}. Disponible: ${stockDisponible}`)
+            return
+        }
+        
+        var nuevoSubtotal = productoSeleccionadoPrecio * nuevaCantidad
+        
+        // Actualizar el producto en el modelo
+        productosVentaModel.setProperty(index, "cantidad", nuevaCantidad)
+        productosVentaModel.setProperty(index, "subtotal", nuevoSubtotal)
+        
+        console.log(`✅ Producto ${producto.codigo} actualizado: ${nuevaCantidad} unidades, subtotal: ${nuevoSubtotal}`)
+        
+        // Cancelar modo edición
+        cancelarEdicion()
+    }
+
+    // MODIFICAR la función verificarStockReal para considerar productos eliminados
+    function verificarStockReal(codigo) {
+        if (!ventaModel || !codigo) {
+            return 0
+        }
+        
+        try {
+            // ✅ FORZAR REFRESCO - NO usar cache
+            var resultado = ventaModel.verificar_disponibilidad_producto(codigo)
+            var stockBase = 0
+            
+            if (resultado && typeof resultado === 'object') {
+                stockBase = resultado.cantidad_disponible || 0
+            }
+            
+            // ✅ CORREGIR: Solo agregar stock eliminado temporalmente PARA ESTE CÓDIGO
+            var stockEliminado = 0
+            for (var i = 0; i < productosEliminadosTemp.length; i++) {
+                if (productosEliminadosTemp[i].codigo === codigo) {
+                    stockEliminado += productosEliminadosTemp[i].cantidad
+                }
+            }
+            
+            var stockFinal = stockBase + stockEliminado
+            console.log(`🔍 Stock verificado para ${codigo}: Base=${stockBase}, Eliminado=${stockEliminado}, Final=${stockFinal}`)
+            
+            return stockFinal
+            
+        } catch (e) {
+            console.log("❌ Error verificando stock para", codigo, ":", e)
+            return 0
+        }
+    }
 
     // Inicialización
     Component.onCompleted: {
-        console.log("✅ CrearVenta.qml inicializado")
+        console.log("CrearVenta.qml inicializado")
         
         if (!inventarioModel || !ventaModel) {
-            console.log("⚠️ Models no disponibles aún")
+            console.log("Models no disponibles aún")
         } else {
-            console.log("✅ Models conectados correctamente")
+            console.log("Models conectados correctamente")
         }
         
-        Qt.callLater(function() {
-            if (busquedaField) {
-                busquedaField.focus = true
-            }
-        })
+        // ✅ AGREGAR LÓGICA PARA MODO EDICIÓN
+        if (modoEdicion && ventaIdAEditar > 0) {
+            console.log("Modo edición activado para venta:", ventaIdAEditar)
+            Qt.callLater(function() {
+                cargarVentaParaEdicion()
+            })
+        } else {
+            Qt.callLater(function() {
+                if (busquedaField) {
+                    busquedaField.focus = true
+                }
+            })
+        }
     }
 }

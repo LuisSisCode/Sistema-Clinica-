@@ -14,7 +14,10 @@ Item {
     
     // Señal para navegar a crear compra
     signal navegarACrearCompra()
-    
+    signal navegarAEditarCompra(int compraId, var datosCompra)
+
+    property bool mostrandoMenuContextual: false
+    property var compraMenuContextual: null
     // Propiedades de control de vistas
     property bool showPurchaseDetailsDialog: false
     property var selectedPurchase: null
@@ -47,6 +50,7 @@ Item {
     ListModel {
         id: detallesCompraModel
     }
+    
     // Detectar cuando el usuario regresa al módulo
     onVisibleChanged: {
         if (visible) {
@@ -54,6 +58,7 @@ Item {
             Qt.callLater(actualizarPaginacionCompras)
         }
     }
+    
     // FUNCIÓN para actualizar paginación de compras
     function actualizarPaginacionCompras() {
         if (!compraModel) return
@@ -138,10 +143,8 @@ Item {
                     codigo: item.codigo || "",
                     nombre: item.nombre || "Producto no encontrado",
                     marca: item.marca || "Sin marca",
-                    cantidad_caja: item.cantidad_caja || 0,
                     cantidad_unitario: item.cantidad_unitario || 0,
                     cantidad_total: item.cantidad_total || 0,
-                    // CORREGIDO: El precio ya es el costo total, no se multiplica
                     costo_total: item.costo_total || item.precio_unitario || item.subtotal || 0,
                     fecha_vencimiento: item.fecha_vencimiento || "Sin fecha"
                 })
@@ -152,6 +155,20 @@ Item {
         }
     }
 
+    // Función para cargar compra en edición
+    function cargarCompraParaEdicion(compraId) {
+        console.log("✏️ Cargando compra para edición:", compraId)
+        
+        // Llamar al método del modelo para cargar los datos
+        var exito = compraModel.cargar_compra_para_edicion(compraId)
+        
+        if (exito) {
+            // Emitir señal para navegar a CrearCompra
+            navegarAEditarCompra(compraId, null)
+        } else {
+            console.log("❌ Error cargando compra para edición")
+        }
+    }
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
@@ -299,6 +316,7 @@ Item {
                 }
             }
         }
+        
         // Tabla de compras
         Rectangle {
             Layout.fillWidth: true
@@ -417,7 +435,7 @@ Item {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: "TOTAL GASTADO"  // TÍTULO CORREGIDO
+                                text: "TOTAL GASTADO"
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -433,7 +451,7 @@ Item {
                             
                             Label {
                                 anchors.centerIn: parent
-                                text: "ACCIONES"
+                                text: "DETALLE"  // CAMBIADO DE "ACCIONES"
                                 color: "#2C3E50"
                                 font.bold: true
                                 font.pixelSize: 12
@@ -441,7 +459,7 @@ Item {
                         }
                     }
                 }
-                
+
                 // Contenido de la tabla
                 ScrollView {
                     Layout.fillWidth: true
@@ -459,8 +477,8 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: comprasTable.currentIndex === index ? "#E3F2FD" : "transparent"
-                                opacity: 0.3
+                                color: selectedPurchase && selectedPurchase.id === model.id ? "#E3F2FD" : "transparent"
+                                opacity: selectedPurchase && selectedPurchase.id === model.id ? 0.8 : 0.0
                             }
                             
                             RowLayout {
@@ -606,7 +624,7 @@ Item {
                                     }
                                 }
                                 
-                                // TOTAL GASTADO (CORREGIDO)
+                                // TOTAL GASTADO
                                 Rectangle {
                                     Layout.preferredWidth: 100
                                     Layout.fillHeight: true
@@ -623,7 +641,7 @@ Item {
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "Bs" + model.total.toFixed(2)  // Solo mostramos el total registrado
+                                            text: "Bs" + model.total.toFixed(2)
                                             color: "#FFFFFF"
                                             font.bold: true
                                             font.pixelSize: 10
@@ -631,7 +649,7 @@ Item {
                                     }
                                 }
                                 
-                                // ACCIONES MEJORADAS
+                                // BOTÓN VER SOLAMENTE
                                 Rectangle {
                                     Layout.preferredWidth: 120
                                     Layout.fillHeight: true
@@ -639,73 +657,146 @@ Item {
                                     border.color: "#D5DBDB"
                                     border.width: 1
                                     
-                                    RowLayout {
+                                    Button {
                                         anchors.centerIn: parent
-                                        spacing: 4
+                                        width: 60
+                                        height: 30
                                         
-                                        // Botón Ver
-                                        Button {
-                                            width: 30
-                                            height: 30
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                                radius: 15
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: "👁️"
-                                                color: whiteColor
-                                                font.pixelSize: 12
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("👁️ Ver detalle de compra, index:", index)
-                                                selectedPurchase = model
-                                                obtenerDetallesCompra(model.id)
-                                                showPurchaseDetailsDialog = true
-                                            }
+                                        background: Rectangle {
+                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                            radius: 15
                                         }
-
-                                        // Botón Eliminar
-                                        Button {
-                                            width: 30
-                                            height: 30
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                                radius: 15
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: "🗑️"
-                                                color: whiteColor
-                                                font.pixelSize: 12
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("🗑️ Confirmar eliminar compra:", model.id)
-                                                compraToDelete = model
-                                                showDeleteConfirmDialog = true
-                                            }
+                                        
+                                        contentItem: Label {
+                                            text: "Ver"  // CAMBIADO DE "👁️"
+                                            color: whiteColor
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        
+                                        onClicked: {
+                                            console.log("👁️ Ver detalle de compra, index:", index)
+                                            obtenerDetallesCompra(model.id)
+                                            showPurchaseDetailsDialog = true
+                                            selectedPurchase = null
                                         }
                                     }
                                 }
                             }
-                            
                             MouseArea {
                                 anchors.left: parent.left
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 anchors.right: parent.right
-                                anchors.rightMargin: 120
+                                anchors.rightMargin: 0  // Eliminar margen condicional
                                 
-                                onClicked: {
-                                    comprasTable.currentIndex = index
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                z: -1
+                                
+                                onClicked: function(mouse) {
+                                    if (mouse.button === Qt.LeftButton) {
+                                        comprasTable.currentIndex = index
+                                        selectedPurchase = model
+                                        mostrandoMenuContextual = false
+                                        compraMenuContextual = null
+                                    } else if (mouse.button === Qt.RightButton) {
+                                        if (selectedPurchase && selectedPurchase.id === model.id) {
+                                            mostrandoMenuContextual = true
+                                            compraMenuContextual = model
+                                        }
+                                    }
+                                }
+                            }
+                            // BOTONES SUPERPUESTOS CENTRADOS EN TODA LA FILA
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                visible: mostrandoMenuContextual && compraMenuContextual && compraMenuContextual.id === model.id
+                                z: 10
+                                
+                                // Cuadro contenedor estilo menú contextual
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 120
+                                    height: 50
+                                    color: "#F8F9FA"
+                                    border.width: 0
+                                    radius: 4
+                                    
+                                    // Sombra sutil
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.topMargin: 2
+                                        anchors.leftMargin: 2
+                                        color: "#00000015"
+                                        radius: 4
+                                        z: -1
+                                    }
+                                    
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 0
+                                        spacing: 0
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25
+                                            color: editarHover.containsMouse ? "#E3F2FD" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Editar"
+                                                color: editarHover.containsMouse ? "#1976D2" : "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: editarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Editando compra:", model.id)
+                                                    cargarCompraParaEdicion(model.id)
+                                                    mostrandoMenuContextual = false
+                                                    compraMenuContextual = null
+                                                    selectedPurchase = null
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25
+                                            color: eliminarHover.containsMouse ? "#FFEBEE" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Eliminar"
+                                                color: eliminarHover.containsMouse ? "#D32F2F" : "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: eliminarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Eliminando compra:", model.id)
+                                                    compraToDelete = model
+                                                    showDeleteConfirmDialog = true
+                                                    mostrandoMenuContextual = false
+                                                    compraMenuContextual = null
+                                                    selectedPurchase = null
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -749,6 +840,7 @@ Item {
                         }
                     }
                 }
+                
 
                 // Control de Paginación
                 Rectangle {
@@ -842,7 +934,7 @@ Item {
         }
     }
 
-    // MODAL DE DETALLE DE COMPRA (CORREGIDO)
+    // MODAL DE DETALLE DE COMPRA
     Rectangle {
         id: modalOverlay
         anchors.fill: parent
@@ -862,7 +954,7 @@ Item {
     Rectangle {
         id: modalContainer
         anchors.centerIn: parent
-        width: Math.min(900, parent.width * 0.95)
+        width: Math.min(1000, parent.width * 0.95)  // Aumentado para nueva columna
         height: Math.min(600, parent.height * 0.9)
         
         visible: showPurchaseDetailsDialog
@@ -1028,21 +1120,6 @@ Item {
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 70
-                                Layout.fillHeight: true
-                                color: "#34495E"
-                                border.color: "#2C3E50"
-                                border.width: 1
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "CAJAS"
-                                    color: "#FFFFFF"
-                                    font.bold: true
-                                    font.pixelSize: 11
-                                }
-                            }
-                            
-                            Rectangle {
                                 Layout.preferredWidth: 80
                                 Layout.fillHeight: true
                                 color: "#34495E"
@@ -1065,7 +1142,7 @@ Item {
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "COSTO TOTAL"  // TÍTULO CORREGIDO
+                                    text: "COSTO TOTAL"
                                     color: "#FFFFFF"
                                     font.bold: true
                                     font.pixelSize: 11
@@ -1171,31 +1248,6 @@ Item {
                                         }
                                     }
                                     
-                                    // CAJAS
-                                    Rectangle {
-                                        Layout.preferredWidth: 70
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: 35
-                                            height: 20
-                                            color: "#F39C12"
-                                            radius: 10
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: model.cantidad_caja || "0"
-                                                color: "#FFFFFF"
-                                                font.bold: true
-                                                font.pixelSize: 10
-                                            }
-                                        }
-                                    }
-                                    
                                     // UNIDADES
                                     Rectangle {
                                         Layout.preferredWidth: 80
@@ -1213,7 +1265,7 @@ Item {
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: model.cantidad_total || "0"
+                                                text: model.cantidad_unitario || "0"
                                                 color: "#FFFFFF"
                                                 font.bold: true
                                                 font.pixelSize: 10
@@ -1221,7 +1273,7 @@ Item {
                                         }
                                     }
                                     
-                                    // COSTO TOTAL (CORREGIDO)
+                                    // COSTO TOTAL - NUEVA SECCIÓN AGREGADA
                                     Rectangle {
                                         Layout.preferredWidth: 90
                                         Layout.fillHeight: true
@@ -1229,12 +1281,20 @@ Item {
                                         border.color: "#D5DBDB"
                                         border.width: 1
                                         
-                                        Label {
+                                        Rectangle {
                                             anchors.centerIn: parent
-                                            text: "Bs" + (model.costo_total ? model.costo_total.toFixed(2) : "0.00")
+                                            width: 75
+                                            height: 25
                                             color: "#27AE60"
-                                            font.bold: true
-                                            font.pixelSize: 11
+                                            radius: 12
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Bs" + (model.costo_total || model.precio_unitario || 0).toFixed(2)
+                                                color: "#FFFFFF"
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
                                         }
                                     }
                                     
@@ -1288,6 +1348,15 @@ Item {
                                         Layout.alignment: Qt.AlignHCenter
                                     }
                                 }
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            visible: mostrandoMenuContextual
+                            z: 5
+                            onClicked: {
+                                mostrandoMenuContextual = false
+                                compraMenuContextual = null
                             }
                         }
                     }
@@ -1362,7 +1431,7 @@ Item {
                             spacing: 2
                             
                             Label {
-                                text: "TOTAL GASTADO:"  // TEXTO CORREGIDO
+                                text: "TOTAL GASTADO:"
                                 color: "#BDC3C7"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -1381,6 +1450,7 @@ Item {
         }
     }
     
+    // MODAL DE CONFIRMACIÓN DE ELIMINACIÓN
     Rectangle {
         id: deleteConfirmOverlay
         anchors.fill: parent
@@ -1528,6 +1598,7 @@ Item {
                         
                         showDeleteConfirmDialog = false
                         compraToDelete = null
+                        selectedPurchase = null  // Limpiar selección
                     }
                 }
             }
@@ -1538,24 +1609,27 @@ Item {
     function getTotalComprasCount() {
         return compraModel ? compraModel.total_compras_mes : 0
     }
+    
     // FUNCIÓN DE NOTIFICACIÓN (agregar si no existe)
     function showNotification(message, type) {
         console.log(`[${type.toUpperCase()}] ${message}`)
         // Aquí puedes implementar una notificación visual si tienes un sistema de toast
     }
 
+    // Conexiones con el modelo
     Connections {
         target: compraModel
-        function onComprasActualizadas() {
-            console.log("📋 Signal: Compras actualizadas, refrescando vista")
-            actualizarPaginacionCompras()
-        }
         
         function onOperacionExitosa(mensaje) {
             if (mensaje.includes("compra") || mensaje.includes("eliminad")) {
                 console.log("📢 Operación exitosa:", mensaje)
                 Qt.callLater(actualizarPaginacionCompras)
             }
+        }
+        
+        function onComprasRecientesChanged() {
+            console.log("📋 Signal: Compras recientes actualizadas, refrescando vista")
+            actualizarPaginacionCompras()
         }
     }
  

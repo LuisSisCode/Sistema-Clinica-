@@ -15,6 +15,7 @@ from .excepciones import (
 class BaseRepository(ABC):
     """
     Clase base para todos los repositories con CRUD + Caché + Transacciones
+    ✅ CORREGIDO: Con invalidación mejorada de cache para ventas
     """
     
     def __init__(self, table_name: str, cache_type: str = 'default'):
@@ -23,6 +24,12 @@ class BaseRepository(ABC):
         self.db = DatabaseConnection()
         self.cache = get_cache()
         self._lock = threading.RLock()
+        
+        # ✅ NUEVOS: Flags para control de cache
+        self._bypass_all_cache = False
+        self._force_reload = False
+        self._force_reload_productos = False
+        self._last_cache_invalidation = None
         
         print(f"🗃️ Repository inicializado: {table_name} (cache: {cache_type})")
     
@@ -40,22 +47,28 @@ class BaseRepository(ABC):
     def _execute_query(self, query: str, params: tuple = (), fetch_one: bool = False, 
                       fetch_all: bool = True, use_cache: bool = True) -> Union[List[Dict], Dict, int]:
         """
-        Ejecuta consulta SQL con manejo de errores y caché
-        
-        Args:
-            query: Consulta SQL
-            params: Parámetros de la consulta
-            fetch_one: Retornar solo un registro
-            fetch_all: Retornar todos los registros
-            use_cache: Usar sistema de caché
-            
-        Returns:
-            Lista de diccionarios, diccionario único, o número de filas afectadas
+        ✅ CORREGIDO: Ejecuta consulta SQL con manejo mejorado de cache bypass
         """
-        # Verificar caché para SELECT queries
+        # ✅ VERIFICAR FLAGS DE BYPASS PRIMERO
+        if hasattr(self, '_bypass_all_cache') and self._bypass_all_cache:
+            use_cache = False
+            print(f"🚫 Cache bypassed por flag _bypass_all_cache en {self.table_name}")
+        
+        if hasattr(self, '_force_reload') and self._force_reload:
+            use_cache = False
+            print(f"🚫 Cache bypassed por flag _force_reload en {self.table_name}")
+        
+        # Flag específico para productos después de ventas
+        if (hasattr(self, '_force_reload_productos') and self._force_reload_productos 
+            and ('Productos' in query or 'productos' in query.lower())):
+            use_cache = False
+            print(f"🚫 Cache bypassed para consulta de productos en {self.table_name}")
+        
+        # Verificar caché para SELECT queries (solo si use_cache es True)
         if use_cache and query.strip().upper().startswith('SELECT'):
             cached_result = self.cache.get(query, params, self.cache_type)
             if cached_result is not None:
+                print(f"📋 Cache hit para {self.table_name}")
                 return cached_result
         
         with self._lock:
@@ -69,6 +82,11 @@ class BaseRepository(ABC):
                 is_select = query_upper.startswith('SELECT')
                 has_output = 'OUTPUT INSERTED' in query_upper
                 has_insert = 'INSERT' in query_upper
+                
+                # ✅ LOG mejorado para debug
+                if not use_cache:
+                    print(f"🔄 Ejecutando query SIN CACHE en {self.table_name}: {query[:100]}...")
+                
                 cursor.execute(query, params)
                 
                 if query_upper.startswith('SELECT'):
@@ -80,17 +98,19 @@ class BaseRepository(ABC):
                         rows = cursor.fetchall()
                         result = [self._row_to_dict(cursor, row) for row in rows]
                     
-                    # Cachear resultado
+                    # Cachear resultado SOLO SI use_cache es True
                     if use_cache and result is not None:
                         self.cache.set(query, result, params, self.cache_type)
+                        print(f"💾 Resultado cacheado para {self.table_name}")
+                    elif not use_cache:
+                        print(f"🚫 Resultado NO cacheado (bypass activo) para {self.table_name}")
                     
                     return result
                     
                 elif has_output and has_insert:
                     # INSERT con OUTPUT - MANEJO ESPECÍFICO PARA SQL SERVER
-                    print(f"🔍 DEBUG: Procesando INSERT con OUTPUT...")
+                    print(f"🔍 DEBUG: Procesando INSERT con OUTPUT en {self.table_name}...")
                     
-                    # En SQL Server, después de INSERT con OUTPUT, necesitamos fetchone()
                     try:
                         row = cursor.fetchone()
                         print(f"🔍 DEBUG: Row obtenida: {row} (tipo: {type(row)})")
@@ -108,8 +128,9 @@ class BaseRepository(ABC):
                             # Verificar que tenemos el ID
                             if 'id' in result and result['id'] is not None:
                                 conn.commit()
+                                # ✅ INVALIDACIÓN MEJORADA DESPUÉS DE INSERT
                                 self._invalidate_cache_after_modification()
-                                print(f"✅ INSERT con OUTPUT exitoso - ID: {result['id']}")
+                                print(f"✅ INSERT con OUTPUT exitoso en {self.table_name} - ID: {result['id']}")
                                 return result
                             else:
                                 print(f"❌ ERROR: ID no encontrado en resultado: {result}")
@@ -127,27 +148,27 @@ class BaseRepository(ABC):
                         
                 else:
                     # UPDATE, DELETE queries normales
-                    print(f"🔍 DEBUG: Procesando query normal (UPDATE/DELETE)...")
+                    print(f"🔍 DEBUG: Procesando query normal (UPDATE/DELETE) en {self.table_name}...")
                     affected_rows = cursor.rowcount
                     conn.commit()
                     
-                    # Invalidar caché después de operaciones CUD
+                    # ✅ INVALIDAR caché después de operaciones CUD
                     self._invalidate_cache_after_modification()
                     
-                    print(f"✅ {query.split()[0]} completado - Filas afectadas: {affected_rows}")
+                    print(f"✅ {query.split()[0]} completado en {self.table_name} - Filas afectadas: {affected_rows}")
                     return affected_rows
                     
             except pyodbc.Error as e:
                 if conn:
                     conn.rollback()
-                print(f"❌ ERROR SQL: {str(e)}")
+                print(f"❌ ERROR SQL en {self.table_name}: {str(e)}")
                 print(f"🔍 Query problemática: {query}")
                 print(f"🔍 Parámetros: {params}")
                 raise DatabaseQueryError(f"Error SQL: {str(e)}", query, params)
             except Exception as e:
                 if conn:
                     conn.rollback()
-                print(f"❌ ERROR INESPERADO: {str(e)}")
+                print(f"❌ ERROR INESPERADO en {self.table_name}: {str(e)}")
                 raise DatabaseQueryError(f"Error inesperado: {str(e)}", query, params)
             finally:
                 if conn:
@@ -172,19 +193,167 @@ class BaseRepository(ABC):
         return result
     
     def _invalidate_cache_after_modification(self):
-        """Invalida caché después de operaciones que modifican datos"""
-        invalidate_after_update([self.cache_type])
+        """
+        ✅ MEJORADO: Invalida caché después de operaciones que modifican datos
+        """
+        try:
+            print(f"🧹 INICIANDO INVALIDACIÓN COMPLETA DE CACHE para {self.table_name}...")
+            
+            # Marcar timestamp de invalidación
+            self._last_cache_invalidation = datetime.now()
+            
+            # Invalidar caché principal
+            invalidate_after_update([self.cache_type])
+            print(f"   🗑️ Cache tipo '{self.cache_type}' invalidado")
+            
+            # ✅ INVALIDACIÓN CRUZADA MEJORADA según el tipo de tabla
+            if self.cache_type == 'productos' or self.table_name == 'Productos':
+                # Productos afecta stock, lotes, ventas
+                cache_types_to_invalidate = ['stock_producto', 'lotes_activos', 'ventas', 'ventas_today']
+                invalidate_after_update(cache_types_to_invalidate)
+                print(f"   🔄 Caches cruzados invalidados para productos: {cache_types_to_invalidate}")
+                
+            elif self.cache_type == 'ventas' or self.table_name == 'Ventas':
+                # Ventas afecta productos, stock, estadísticas
+                cache_types_to_invalidate = ['productos', 'stock_producto', 'ventas_today', 'estadisticas_ventas']
+                invalidate_after_update(cache_types_to_invalidate)
+                print(f"   🔄 Caches cruzados invalidados para ventas: {cache_types_to_invalidate}")
+                
+            elif self.cache_type == 'lotes' or self.table_name == 'Lote':
+                # Lotes afecta productos y stock
+                cache_types_to_invalidate = ['productos', 'stock_producto', 'lotes_activos']
+                invalidate_after_update(cache_types_to_invalidate)
+                print(f"   🔄 Caches cruzados invalidados para lotes: {cache_types_to_invalidate}")
+                
+            elif self.cache_type == 'compras' or self.table_name == 'Compras':
+                # Compras afecta productos, lotes, stock
+                cache_types_to_invalidate = ['productos', 'lotes_activos', 'stock_producto']
+                invalidate_after_update(cache_types_to_invalidate)
+                print(f"   🔄 Caches cruzados invalidados para compras: {cache_types_to_invalidate}")
+            
+            # ✅ LIMPIAR CACHES INTERNOS DEL OBJETO
+            caches_to_clear = [
+                '_cache', '_query_cache', '_result_cache', '_data_cache', 
+                '_product_cache', '_stock_cache', '_search_cache'
+            ]
+            
+            cache_cleared_count = 0
+            for cache_name in caches_to_clear:
+                if hasattr(self, cache_name):
+                    cache_obj = getattr(self, cache_name)
+                    if hasattr(cache_obj, 'clear'):
+                        cache_obj.clear()
+                        cache_cleared_count += 1
+                        print(f"   🗑️ {cache_name} limpiado")
+            
+            # ✅ RESETEAR TIMESTAMPS DE CACHÉ
+            timestamp_attrs = [
+                '_last_cache_time', '_cache_timestamp', '_last_update',
+                '_last_product_cache', '_last_stock_update'
+            ]
+            
+            for attr_name in timestamp_attrs:
+                if hasattr(self, attr_name):
+                    setattr(self, attr_name, None)
+            
+            # ✅ ACTIVAR FLAGS DE BYPASS TEMPORALES
+            self._force_reload = True
+            self._bypass_all_cache = True
+            
+            # Para queries de productos específicamente
+            if self.cache_type in ['ventas', 'lotes', 'compras']:
+                self._force_reload_productos = True
+            
+            print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches internos limpiados, flags de bypass activados")
+            
+        except Exception as e:
+            print(f"⚠️ Error en invalidación completa de cache: {e}")
+            # No fallar por esto, es solo optimización
+    
+    # ✅ NUEVOS MÉTODOS PARA CONTROL DE CACHE
+    
+    def force_query_without_cache(self, query: str, params: tuple = (), fetch_one: bool = False):
+        """
+        ✅ NUEVO: Fuerza una consulta sin usar cache bajo ninguna circunstancia
+        """
+        print(f"🚫 FORZANDO CONSULTA SIN CACHE en {self.table_name}: {query[:50]}...")
         
-        # Invalidar cachés relacionados (ej: productos también afecta stock)
-        if self.cache_type == 'productos':
-            invalidate_after_update(['stock_producto', 'lotes_activos'])
-        elif self.cache_type == 'ventas':
-            invalidate_after_update(['productos', 'stock_producto', 'ventas_today'])
-        elif self.cache_type == 'compras':
-            invalidate_after_update(['productos', 'lotes_activos'])
+        # Temporalmente desactivar TODOS los caches
+        original_bypass = getattr(self, '_bypass_all_cache', False)
+        original_force = getattr(self, '_force_reload', False)
+        
+        self._bypass_all_cache = True
+        self._force_reload = True
+        
+        try:
+            result = self._execute_query(query, params, fetch_one=fetch_one, use_cache=False)
+            print(f"✅ Consulta sin cache completada en {self.table_name}")
+            return result
+        finally:
+            # Restaurar estados originales
+            self._bypass_all_cache = original_bypass
+            self._force_reload = original_force
+    
+    def reset_bypass_flags(self):
+        """
+        ✅ NUEVO: Resetea flags de bypass después de operaciones críticas
+        """
+        try:
+            self._bypass_all_cache = False
+            self._force_reload = False
+            self._force_reload_productos = False
+            print(f"🔄 Flags de bypass reseteados en {self.table_name}")
+        except Exception as e:
+            print(f"⚠️ Error reseteando flags en {self.table_name}: {e}")
+    
+    def invalidate_all_caches(self):
+        """
+        ✅ NUEVO: Invalida TODOS los caches - para usar después de ventas críticas
+        """
+        try:
+            print(f"🧹 INVALIDACIÓN TOTAL DE CACHES iniciada desde {self.table_name}")
+            
+            # Invalidar todos los tipos de cache conocidos
+            all_cache_types = [
+                'default', 'productos', 'ventas', 'lotes', 'compras', 'usuarios',
+                'stock_producto', 'lotes_activos', 'ventas_today', 'estadisticas_ventas',
+                'search_productos', 'producto_cache', 'venta_cache'
+            ]
+            
+            invalidate_after_update(all_cache_types)
+            
+            # Activar todos los flags de bypass
+            self._bypass_all_cache = True
+            self._force_reload = True
+            self._force_reload_productos = True
+            
+            # Limpiar cache del objeto
+            if hasattr(self, 'cache') and self.cache:
+                if hasattr(self.cache, 'clear_all'):
+                    self.cache.clear_all()
+                elif hasattr(self.cache, 'clear'):
+                    self.cache.clear()
+            
+            print(f"✅ INVALIDACIÓN TOTAL completada desde {self.table_name}")
+            
+        except Exception as e:
+            print(f"❌ Error en invalidación total: {e}")
+    
+    def get_cache_status(self):
+        """
+        ✅ NUEVO: Obtiene estado actual del cache para debug
+        """
+        return {
+            'table_name': self.table_name,
+            'cache_type': self.cache_type,
+            'bypass_all_cache': getattr(self, '_bypass_all_cache', False),
+            'force_reload': getattr(self, '_force_reload', False),
+            'force_reload_productos': getattr(self, '_force_reload_productos', False),
+            'last_invalidation': getattr(self, '_last_cache_invalidation', None)
+        }
     
     # ===============================
-    # MÉTODOS CRUD BÁSICOS
+    # MÉTODOS CRUD BÁSICOS (MEJORADOS)
     # ===============================
     
     def get_all(self, order_by: str = "id", where_clause: str = "", params: tuple = ()) -> List[Dict[str, Any]]:
@@ -209,6 +378,17 @@ class BaseRepository(ABC):
         query = f"SELECT * FROM {self.table_name} WHERE {field_name} = ?"
         return self._execute_query(query, (value,), fetch_one=True)
     
+    # ✅ NUEVOS MÉTODOS SIN CACHE
+    def get_by_id_no_cache(self, record_id: int) -> Optional[Dict[str, Any]]:
+        """✅ NUEVO: Obtiene registro por ID SIN usar cache"""
+        query = f"SELECT * FROM {self.table_name} WHERE id = ?"
+        return self.force_query_without_cache(query, (record_id,), fetch_one=True)
+    
+    def get_by_field_no_cache(self, field_name: str, value: Any) -> List[Dict[str, Any]]:
+        """✅ NUEVO: Obtiene registros por campo SIN usar cache"""
+        query = f"SELECT * FROM {self.table_name} WHERE {field_name} = ?"
+        return self.force_query_without_cache(query, (value,))
+    
     def exists(self, field_name: str, value: Any) -> bool:
         """Verifica si existe un registro"""
         query = f"SELECT COUNT(*) as count FROM {self.table_name} WHERE {field_name} = ?"
@@ -223,6 +403,7 @@ class BaseRepository(ABC):
         return result['count'] if result else 0
     
     def insert(self, data: Dict[str, Any]) -> int:
+        """✅ MEJORADO: Insert con invalidación automática de cache"""
         validate_required(data, "data")
         
         fields = list(data.keys())
@@ -240,12 +421,16 @@ class BaseRepository(ABC):
         print(f"🔍 DEBUG INSERT: Campos {fields}")
         print(f"🔍 DEBUG INSERT: Valores {values}")
         
-        result = self._execute_query(query, values, fetch_one=True)
+        result = self._execute_query(query, values, fetch_one=True, use_cache=False)
         
         # Manejo mejorado del resultado
         if result and isinstance(result, dict) and 'id' in result:
             inserted_id = result['id']
             print(f"✅ INSERT {self.table_name}: ID {inserted_id}")
+            
+            # ✅ INVALIDACIÓN FORZADA DESPUÉS DE INSERT EXITOSO
+            self.invalidate_all_caches()
+            
             return inserted_id
         else:
             print(f"❌ ERROR: INSERT falló para {self.table_name}")
@@ -254,14 +439,7 @@ class BaseRepository(ABC):
 
     def update(self, record_id: int, data: Dict[str, Any]) -> bool:
         """
-        Actualiza registro existente
-        
-        Args:
-            record_id: ID del registro a actualizar
-            data: Diccionario con datos a actualizar
-            
-        Returns:
-            True si se actualizó correctamente
+        ✅ MEJORADO: Actualiza registro con invalidación de cache
         """
         validate_required(data, "data")
         validate_required(record_id, "record_id")
@@ -277,6 +455,8 @@ class BaseRepository(ABC):
         
         if success:
             print(f"✅ UPDATE {self.table_name}: ID {record_id}")
+            # ✅ INVALIDACIÓN FORZADA DESPUÉS DE UPDATE EXITOSO
+            self.invalidate_all_caches()
         else:
             print(f"⚠️ UPDATE {self.table_name}: ID {record_id} no encontrado")
             
@@ -284,13 +464,7 @@ class BaseRepository(ABC):
     
     def delete(self, record_id: int) -> bool:
         """
-        Elimina registro por ID
-        
-        Args:
-            record_id: ID del registro a eliminar
-            
-        Returns:
-            True si se eliminó correctamente
+        ✅ MEJORADO: Elimina registro con invalidación de cache
         """
         validate_required(record_id, "record_id")
         
@@ -300,24 +474,20 @@ class BaseRepository(ABC):
         
         if success:
             print(f"🗑️ DELETE {self.table_name}: ID {record_id}")
+            # ✅ INVALIDACIÓN FORZADA DESPUÉS DE DELETE EXITOSO
+            self.invalidate_all_caches()
         else:
             print(f"⚠️ DELETE {self.table_name}: ID {record_id} no encontrado")
             
         return success
     
     # ===============================
-    # MÉTODOS DE TRANSACCIONES
+    # MÉTODOS DE TRANSACCIONES (MEJORADOS)
     # ===============================
     
     def execute_transaction(self, operations: List[Tuple[str, tuple]]) -> bool:
         """
-        Ejecuta múltiples operaciones en una transacción
-        
-        Args:
-            operations: Lista de tuplas (query, params)
-            
-        Returns:
-            True si todas las operaciones fueron exitosas
+        ✅ MEJORADO: Ejecuta múltiples operaciones con invalidación completa
         """
         if not operations:
             return True
@@ -335,8 +505,8 @@ class BaseRepository(ABC):
                 # Confirmar transacción
                 conn.commit()
                 
-                # Invalidar caché después de transacción exitosa
-                self._invalidate_cache_after_modification()
+                # ✅ INVALIDACIÓN COMPLETA después de transacción exitosa
+                self.invalidate_all_caches()
                 
                 print(f"✅ TRANSACTION {self.table_name}: {len(operations)} operaciones")
                 return True
@@ -354,15 +524,9 @@ class BaseRepository(ABC):
     # ===============================
     
     def search(self, search_term: str, search_fields: List[str], 
-              limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+              limit: int = 50, offset: int = 0, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
-        Búsqueda de texto en múltiples campos
-        
-        Args:
-            search_term: Término a buscar
-            search_fields: Campos donde buscar
-            limit: Límite de resultados
-            offset: Offset para paginación
+        ✅ MEJORADO: Búsqueda con control de cache
         """
         if not search_term or not search_fields:
             return []
@@ -383,22 +547,18 @@ class BaseRepository(ABC):
         """
         params.extend([offset, limit])
         
-        return self._execute_query(query, tuple(params))
+        return self._execute_query(query, tuple(params), use_cache=use_cache)
+    
+    def search_no_cache(self, search_term: str, search_fields: List[str], 
+                       limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """✅ NUEVO: Búsqueda garantizada sin cache"""
+        return self.search(search_term, search_fields, limit, offset, use_cache=False)
     
     def get_paginated(self, page: int = 1, per_page: int = 50, 
                      order_by: str = "id", where_clause: str = "", 
                      params: tuple = ()) -> Dict[str, Any]:
         """
         Obtiene resultados paginados
-        
-        Returns:
-            {
-                'data': [...],
-                'total': int,
-                'page': int,
-                'per_page': int,
-                'pages': int
-            }
         """
         offset = (page - 1) * per_page
         
@@ -436,19 +596,80 @@ class BaseRepository(ABC):
         pass
     
     # ===============================
-    # MÉTODOS DE UTILIDAD
+    # MÉTODOS DE UTILIDAD (MEJORADOS)
     # ===============================
     
     def refresh_cache(self):
-        """Refresca el caché para este repository"""
+        """✅ MEJORADO: Refresca el caché para este repository"""
         self.cache.invalidate_by_type(self.cache_type)
-        print(f"🔄 Cache refrescado: {self.cache_type}")
+        self.invalidate_all_caches()
+        print(f"🔄 Cache completamente refrescado: {self.cache_type}")
     
     def get_cache_stats(self):
         """Obtiene estadísticas de caché"""
-        return self.cache.get_stats()
+        stats = self.cache.get_stats() if self.cache else {}
+        stats.update(self.get_cache_status())
+        return stats
     
     @ExceptionHandler.handle_exception
     def safe_execute_custom(self, query: str, params: tuple = ()):
         """Ejecuta consulta personalizada de forma segura"""
         return self._execute_query(query, params, use_cache=False)
+    
+    # ✅ NUEVOS MÉTODOS DE MANTENIMIENTO
+    
+    def clear_all_internal_caches(self):
+        """✅ NUEVO: Limpia todos los caches internos del objeto"""
+        try:
+            # Lista extendida de posibles caches internos
+            possible_caches = [
+                '_cache', '_query_cache', '_result_cache', '_data_cache',
+                '_product_cache', '_stock_cache', '_search_cache', '_lote_cache',
+                '_venta_cache', '_user_cache', '_stats_cache'
+            ]
+            
+            cleared_count = 0
+            for cache_name in possible_caches:
+                if hasattr(self, cache_name):
+                    cache_obj = getattr(self, cache_name)
+                    if hasattr(cache_obj, 'clear'):
+                        cache_obj.clear()
+                        cleared_count += 1
+                    elif isinstance(cache_obj, dict):
+                        cache_obj.clear()
+                        cleared_count += 1
+            
+            print(f"🧹 {cleared_count} caches internos limpiados en {self.table_name}")
+            
+        except Exception as e:
+            print(f"⚠️ Error limpiando caches internos: {e}")
+    
+    def emergency_cache_reset(self):
+        """✅ NUEVO: Reseteo de emergencia de todos los caches"""
+        try:
+            print(f"🚨 RESETEO DE EMERGENCIA DE CACHE en {self.table_name}")
+            
+            # Limpiar todos los caches internos
+            self.clear_all_internal_caches()
+            
+            # Invalidar completamente
+            self.invalidate_all_caches()
+            
+            # Activar todos los flags de bypass
+            self._bypass_all_cache = True
+            self._force_reload = True
+            self._force_reload_productos = True
+            
+            # Resetear todos los timestamps
+            time_attrs = [attr for attr in dir(self) if 'time' in attr.lower() or 'timestamp' in attr.lower()]
+            for attr in time_attrs:
+                if not attr.startswith('__'):
+                    try:
+                        setattr(self, attr, None)
+                    except:
+                        pass
+            
+            print(f"✅ RESETEO DE EMERGENCIA completado en {self.table_name}")
+            
+        except Exception as e:
+            print(f"❌ Error en reseteo de emergencia: {e}")

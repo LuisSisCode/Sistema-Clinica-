@@ -100,6 +100,10 @@ Item {
                                     console.log("📱 Señal recibida: Navegar a CrearCompra")
                                     comprasMainRoot.irACrearCompra()
                                 }
+                                onNavegarAEditarCompra: {
+                                    console.log("📝 Señal recibida: Navegar a Editar Compra", compraId)
+                                    comprasMainRoot.irAEditarCompra(compraId)
+                                }
                             }
                         }
                     }
@@ -180,7 +184,43 @@ Item {
             }
         }
     }
-    
+    // ✅ NUEVA FUNCIÓN PARA EDITAR COMPRA
+    function irAEditarCompra(compraId) {
+        console.log("📝 ComprasMain: Navegando a Editar Compra ID:", compraId)
+        
+        var crearCompraComponent = Qt.createComponent("CrearCompra.qml")
+        
+        if (crearCompraComponent.status === Component.Ready) {
+            var crearCompraItem = crearCompraComponent.createObject(stackView, {
+                "inventarioModel": inventarioModel,
+                "ventaModel": ventaModel,
+                "compraModel": compraModel,
+                // ✅ PARÁMETROS ESPECÍFICOS PARA EDICIÓN
+                "modoEdicion": true,
+                "compraIdEdicion": compraId
+            });
+            
+            if (crearCompraItem) {
+                // Conectar señales del componente CrearCompra
+                crearCompraItem.compraCompletada.connect(function() {
+                    console.log("✅ Edición de compra completada, regresando a lista")
+                    regresarACompras()
+                })
+                
+                crearCompraItem.cancelarCompra.connect(function() {
+                    console.log("❌ Edición de compra cancelada, regresando a lista")
+                    regresarACompras()
+                })
+                
+                stackView.push(crearCompraItem)
+                console.log("✅ CrearCompra en modo edición agregado al stack")
+            } else {
+                console.log("❌ Error al crear instancia de CrearCompra para edición")
+            }
+        } else if (crearCompraComponent.status === Component.Error) {
+            console.log("❌ Error al cargar CrearCompra.qml para edición:", crearCompraComponent.errorString())
+        }
+    }
     // Función para regresar a la lista de compras
     function regresarACompras() {
         console.log("🔙 ComprasMain: Regresando a lista de compras")

@@ -115,6 +115,7 @@ class AppController(QObject):
             self.reportes_model = ReportesModel()
             self.dashboard_model = DashboardModel()
             self.auth_model = AuthModel()
+            self.venta_model.stockModificado.connect(self.inventario_model.actualizar_por_venta)
 
             print("🔗 Conectando signals entre modelos...")
             # Conectar signals entre models
