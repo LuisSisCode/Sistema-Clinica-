@@ -40,6 +40,12 @@ ApplicationWindow {
     property bool farmaciaExpanded: false
     property int farmaciaSubsection: 0
 
+    // ===== PROPIEDADES SEGURAS PARA EVITAR UNDEFINED =====
+    property bool modelsReady: false
+    property int totalProductos: 0
+    property int totalProveedores: 0
+    property int ventasHoyCount: 0
+
     
     Universal.theme: Universal.Light
     Universal.accent: primaryColor
@@ -57,20 +63,37 @@ ApplicationWindow {
         }
     }
     
-    // ===== CONEXIONES CON MODELOS =====
+    // ===== CONEXIONES CON MODELOS SEGURAS =====
     Connections {
         target: appController
         function onModelsReady() {
             console.log("🔗 Models listos desde AppController")
-            if (appController.inventario_model_instance) {
-                console.log("📦 Productos disponibles BD:", appController.inventario_model_instance.totalProductos)
+            modelsReady = true
+            
+            // Actualizar propiedades de forma segura
+            updateModelProperties()
+        }
+    }
+    
+    // Función para actualizar propiedades de forma segura
+    function updateModelProperties() {
+        try {
+            if (appController && appController.inventario_model_instance) {
+                totalProductos = appController.inventario_model_instance.totalProductos || 0
+                console.log("📦 Productos disponibles BD:", totalProductos)
             }
-            if (appController.proveedor_model_instance) {
-                console.log("📋 Proveedores BD:", appController.proveedor_model_instance.totalProveedores)
+            
+            if (appController && appController.proveedor_model_instance) {
+                totalProveedores = appController.proveedor_model_instance.totalProveedores || 0
+                console.log("📋 Proveedores BD:", totalProveedores)
             }
-            if (appController.venta_model_instance) {
-                console.log("💰 Ventas del día BD:", appController.venta_model_instance.ventasHoy.length)
+            
+            if (appController && appController.venta_model_instance && appController.venta_model_instance.ventasHoy) {
+                ventasHoyCount = appController.venta_model_instance.ventasHoy.length || 0
+                console.log("💰 Ventas del día BD:", ventasHoyCount)
             }
+        } catch (error) {
+            console.log("⚠️ Error actualizando propiedades:", error)
         }
     }
     
@@ -674,14 +697,20 @@ ApplicationWindow {
                     
                     var tiposGastosData = []
                     
-                    for (var i = 0; i < serviciosPage.tiposGastosModel.count; i++) {
-                        var item = serviciosPage.tiposGastosModel.get(i)
-                        tiposGastosData.push({
-                            nombre: item.nombre,
-                            descripcion: item.descripcion,
-                            ejemplos: item.ejemplos,
-                            color: item.color
-                        })
+                    try {
+                        if (serviciosPage.tiposGastosModel && serviciosPage.tiposGastosModel.count) {
+                            for (var i = 0; i < serviciosPage.tiposGastosModel.count; i++) {
+                                var item = serviciosPage.tiposGastosModel.get(i)
+                                tiposGastosData.push({
+                                    nombre: item.nombre || "",
+                                    descripcion: item.descripcion || "",
+                                    ejemplos: item.ejemplos || "",
+                                    color: item.color || ""
+                                })
+                            }
+                        }
+                    } catch (error) {
+                        console.log("⚠️ Error obteniendo tipos de gastos:", error)
                     }
                     
                     console.log("📊 Datos de tipos de gastos obtenidos:", JSON.stringify(tiposGastosData))
@@ -721,14 +750,20 @@ ApplicationWindow {
                     
                     var tiposTrabajadoresData = []
                     
-                    for (var i = 0; i < trabajadoresPage.tiposTrabajadoresModel.count; i++) {
-                        var item = trabajadoresPage.tiposTrabajadoresModel.get(i)
-                        tiposTrabajadoresData.push({
-                            nombre: item.nombre,
-                            descripcion: item.descripcion,
-                            requiereMatricula: item.requiereMatricula,
-                            especialidades: item.especialidades
-                        })
+                    try {
+                        if (trabajadoresPage.tiposTrabajadoresModel && trabajadoresPage.tiposTrabajadoresModel.count) {
+                            for (var i = 0; i < trabajadoresPage.tiposTrabajadoresModel.count; i++) {
+                                var item = trabajadoresPage.tiposTrabajadoresModel.get(i)
+                                tiposTrabajadoresData.push({
+                                    nombre: item.nombre || "",
+                                    descripcion: item.descripcion || "",
+                                    requiereMatricula: item.requiereMatricula || false,
+                                    especialidades: item.especialidades || ""
+                                })
+                            }
+                        }
+                    } catch (error) {
+                        console.log("⚠️ Error obteniendo tipos de trabajadores:", error)
                     }
                     
                     console.log("📊 Datos de tipos de trabajadores obtenidos:", JSON.stringify(tiposTrabajadoresData))
@@ -762,8 +797,8 @@ ApplicationWindow {
                 layer.enabled: true
                 source: "Configuracion.qml"
                 
-                readonly property var tiposGastosModel: item ? item.tiposGastosModel : []
-                readonly property var especialidadesModel: item ? item.especialidadesModel : []
+                readonly property var tiposGastosModel: item && item.tiposGastosModel ? item.tiposGastosModel : []
+                readonly property var especialidadesModel: item && item.especialidadesModel ? item.especialidadesModel : []
                 
                 function changeView(view) {
                     if (item && item.changeView) {
@@ -786,7 +821,9 @@ ApplicationWindow {
             
             currentIndex = index
             Qt.callLater(function() {
-                appController.navigateToModule(getCurrentPageName())
+                if (appController && appController.navigateToModule) {
+                    appController.navigateToModule(getCurrentPageName())
+                }
             })
         }
     }
@@ -806,63 +843,87 @@ ApplicationWindow {
 
     // ===== FUNCIONES PARA OBTENER DATOS DEL USUARIO DESDE BD =====
     function getCurrentUserInitials() {
-        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
-            const name = authModel.userName
-            const parts = name.split(" ")
-            if (parts.length >= 2) {
-                return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
-            } else if (parts.length === 1) {
-                return parts[0].substring(0, 2).toUpperCase()
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                const name = authModel.userName
+                const parts = name.split(" ")
+                if (parts.length >= 2) {
+                    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+                } else if (parts.length === 1) {
+                    return parts[0].substring(0, 2).toUpperCase()
+                }
             }
+        } catch (error) {
+            console.log("⚠️ Error obteniendo iniciales:", error)
         }
         return "US"
     }
     
     function getCurrentUserName() {
-        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
-            const userName = authModel.userName
-            const userRole = authModel.userRole
-            if (userRole && userRole.toLowerCase().includes("medico")) {
-                return "Dr. " + userName.split(" ")[0]
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                const userName = authModel.userName
+                const userRole = authModel.userRole
+                if (userRole && userRole.toLowerCase().includes("medico")) {
+                    return "Dr. " + userName.split(" ")[0]
+                }
+                return userName.split(" ")[0] || "Usuario"
             }
-            return userName.split(" ")[0] || "Usuario"
+        } catch (error) {
+            console.log("⚠️ Error obteniendo nombre:", error)
         }
         return "Usuario"
     }
     
     function getCurrentUserFullName() {
-        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
-            return authModel.userName
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                return authModel.userName
+            }
+        } catch (error) {
+            console.log("⚠️ Error obteniendo nombre completo:", error)
         }
         return "Usuario"
     }
     
     function getCurrentUserRole() {
-        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
-            return authModel.userRole
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                return authModel.userRole
+            }
+        } catch (error) {
+            console.log("⚠️ Error obteniendo rol:", error)
         }
         return "Sin sesión"
     }
     
     function getCurrentUserEmail() {
-        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
-            return authModel.userEmail
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                return authModel.userEmail
+            }
+        } catch (error) {
+            console.log("⚠️ Error obteniendo email:", error)
         }
         return ""
     }
     
     function canAccessModule(moduleName) {
-        if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
-            switch(moduleName) {
-                case "farmacia":
-                    return authModel.canAccessFarmacia()
-                case "usuarios":
-                    return authModel.canAccessUsuarios()
-                case "reportes":
-                    return authModel.canAccessReportes()
-                default:
-                    return true
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                switch(moduleName) {
+                    case "farmacia":
+                        return authModel.canAccessFarmacia()
+                    case "usuarios":
+                        return authModel.canAccessUsuarios()
+                    case "reportes":
+                        return authModel.canAccessReportes()
+                    default:
+                        return true
+                }
             }
+        } catch (error) {
+            console.log("⚠️ Error verificando acceso:", error)
         }
         return true
     }
@@ -875,12 +936,18 @@ ApplicationWindow {
 
     function confirmLogout() {
         console.log("Iniciando logout...")
-        appController.showNotification("Cerrando Sesión", "Hasta pronto!")
-        Qt.callLater(function() {
-            if (typeof authModel !== "undefined") {
-                authModel.logout()
+        try {
+            if (appController && appController.showNotification) {
+                appController.showNotification("Cerrando Sesión", "Hasta pronto!")
             }
-        })
+            Qt.callLater(function() {
+                if (typeof authModel !== "undefined" && authModel && authModel.logout) {
+                    authModel.logout()
+                }
+            })
+        } catch (error) {
+            console.log("⚠️ Error en logout:", error)
+        }
     }
 
     // ===== COMPONENTES ADAPTATIVOS =====
@@ -1203,48 +1270,6 @@ ApplicationWindow {
         }
     }
     
-    // ===== FUNCIONES AUXILIARES PARA DEBUG Y MONITOREO =====
-    function logEspecialidadesSync() {
-        if (consultasPage && configuracionPage) {
-            console.log("📊 Estado de sincronización de especialidades:")
-            console.log("   - Consultas tiene:", consultasPage.especialidades ? consultasPage.especialidades.length : 0, "especialidades")
-            console.log("   - Configuración tiene:", configuracionPage.especialidadesModel ? configuracionPage.especialidadesModel.length : 0, "especialidades")
-        }
-    }
-    
-    function logTiposTrabajadoresSync() {
-        if (trabajadoresPage && configuracionPage) {
-            console.log("📊 Estado de sincronización de tipos de trabajadores:")
-            console.log("   - Trabajadores tiene:", trabajadoresPage.tiposTrabajadoresModel ? trabajadoresPage.tiposTrabajadoresModel.count : 0, "tipos")
-            console.log("   - Configuración tiene:", configuracionPage.tiposTrabajadoresModel ? configuracionPage.tiposTrabajadoresModel.length : 0, "tipos")
-        }
-    }
-    
-    function syncEspecialidadesFromConfig() {
-        if (configuracionPage && consultasPage && configuracionPage.especialidadesModel) {
-            consultasPage.especialidades = configuracionPage.especialidadesModel
-            console.log("🔄 Especialidades sincronizadas desde Configuración hacia Consultas")
-        }
-    }
-
-    function syncTiposTrabajadoresFromConfig() {
-        if (configuracionPage && trabajadoresPage && configuracionPage.tiposTrabajadoresModel) {
-            console.log("🔄 Tipos de trabajadores podrían sincronizarse desde Configuración hacia Trabajadores")
-        }
-    }
-
-    // Timer para monitoreo periódico de sincronización (solo en desarrollo)
-    Timer {
-        id: syncMonitorTimer
-        interval: 10000
-        running: false
-        repeat: true
-        onTriggered: {
-            logEspecialidadesSync()
-            logTiposTrabajadoresSync()
-        }
-    }
-
     // Click fuera para cerrar menú
     MouseArea {
         anchors.fill: parent
