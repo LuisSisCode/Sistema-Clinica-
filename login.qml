@@ -3,7 +3,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
-import Qt.labs.settings 1.1
+import QtCore  // ✅ CAMBIADO: Era Qt.labs.settings 1.1
 
 ApplicationWindow {
     id: mainWindow
@@ -15,9 +15,12 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
 
-    // ===== CONFIGURACIÓN PERSISTENTE =====
+    // ===== CONFIGURACIÓN PERSISTENTE ===== 
+    // ✅ CORREGIDO: Agregando category para mejor organización
     Settings {
         id: loginSettings
+        category: "LoginCredentials"  // ✅ NUEVO: Recomendado para QtCore
+        
         property string savedUsername: ""
         property string savedPassword: ""
         property bool rememberCredentials: false

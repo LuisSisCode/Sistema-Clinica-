@@ -262,7 +262,7 @@ class VentaModel(QObject):
     @Slot(str, result='QVariant')
     def buscar_productos_para_venta(self, texto_busqueda: str):
         """
-        PARA VENTAS: Busca productos mostrando SOLO stock total disponible
+        ✅ CORREGIDO: Busca productos SIEMPRE sin cache después de ventas
         """
         if not self._verificar_permisos('buscar_productos'):
             return []
@@ -271,8 +271,8 @@ class VentaModel(QObject):
             return []
         
         try:
-            # Usar método específico para ventas
-            productos = self.venta_repo.buscar_productos_para_venta(texto_busqueda.strip())
+            # ✅ FORZAR búsqueda sin cache
+            productos = self.venta_repo.buscar_productos_para_venta_sin_cache(texto_busqueda.strip())
             
             # Formatear para QML (solo datos esenciales para venta)
             productos_venta = []
@@ -281,11 +281,13 @@ class VentaModel(QObject):
                     'codigo': producto['Codigo'],
                     'nombre': producto['Nombre'],
                     'precio': float(producto['Precio_venta']),
-                    'stock': int(producto['Stock_Total']),  # SOLO TOTAL
+                    'stock': int(producto['Stock_Total']),  # STOCK FRESCO SIN CACHE
                     'disponible': producto['Stock_Total'] > 0,
-                    'marca': producto.get('Marca_Nombre', '')
+                    'marca': producto.get('Marca_Nombre', ''),
+                    'timestamp_consulta': datetime.now().isoformat()  # Para debug
                 })
             
+            print(f"🔍 Búsqueda sin cache completada: {len(productos_venta)} productos")
             return productos_venta
             
         except Exception as e:
@@ -841,7 +843,7 @@ class VentaModel(QObject):
     @Slot(result=bool)
     def procesar_venta_carrito(self):
         """
-        ✅ CORREGIDO: Procesar venta con mejor gestión de timeouts
+        ✅ CORREGIDO: Procesar venta con invalidación COMPLETA de cache
         """
         print(f"INICIO procesar_venta_carrito - Items: {len(self._carrito_items)}")
         
@@ -884,17 +886,24 @@ class VentaModel(QObject):
             
             print(f"Items preparados para repository: {len(items_venta)}")
             
-            # ✅ PROCESAR con timeout extendido
+            # ✅ PROCESAR venta
             venta = self.venta_repo.crear_venta(self._usuario_actual_id, items_venta)
             
             if venta and isinstance(venta, dict) and 'id' in venta:
                 # Limpiar carrito
                 self.limpiar_carrito()
                 
-                # ✅ ACTUALIZACIÓN FORZADA
+                # ✅ INVALIDACIÓN COMPLETA DE TODOS LOS CACHES
                 self._invalidar_cache_completo()
+                self._invalidar_cache_productos()  # NUEVO método
+                
+                # ✅ FORZAR RECARGA SIN CACHE
                 self._cargar_ventas_hoy(usar_cache=False)
                 self._cargar_estadisticas(usar_cache=False)
+                
+                # ✅ EMITIR SIGNAL ESPECÍFICO PARA ACTUALIZAR BÚSQUEDAS DE PRODUCTOS
+                self.stockModificado.emit()
+                self.operacionExitosa.emit("Stock actualizado - busque nuevamente el producto")
                 
                 # Forzar emisión de signals
                 self.ventasHoyChanged.emit()
@@ -907,7 +916,7 @@ class VentaModel(QObject):
                 # Emitir signals de éxito
                 self.ventaCreada.emit(int(venta['id']), float(venta['Total']))
                 self.operacionExitosa.emit(f"Venta procesada: ${venta['Total']:.2f}")
-                self.stockModificado.emit()
+                
                 print(f"ÉXITO: Venta creada - ID: {venta['id']}, Total: ${venta['Total']}")
                 return True
             else:
@@ -927,7 +936,31 @@ class VentaModel(QObject):
             return False
         finally:
             self._set_procesando_venta(False)
-    
+
+    def _invalidar_cache_productos(self):
+        """
+        ✅ NUEVO: Invalida específicamente el cache de productos
+        """
+        try:
+            # Invalidar cache del ProductoRepository
+            if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
+                self.producto_repo._invalidate_cache_after_modification()
+                print("🔄 Cache ProductoRepository invalidado")
+            
+            # Invalidar cache del VentaRepository para búsquedas de productos
+            if hasattr(self.venta_repo, '_invalidate_cache_after_modification'):
+                self.venta_repo._invalidate_cache_after_modification()
+                print("🔄 Cache VentaRepository invalidado")
+            
+            # Forzar que las próximas búsquedas sean sin cache
+            if hasattr(self.venta_repo, '_force_reload_productos'):
+                self.venta_repo._force_reload_productos = True
+            
+            print("✅ Cache de productos invalidado completamente")
+            
+        except Exception as e:
+            print(f"⚠️ Error invalidando cache de productos: {e}")
+
     @Slot(str, int, int, result=bool)
     def venta_rapida(self, codigo: str, cantidad: int, usuario_id: int = 0):
         """Venta rápida de un producto sin usar carrito - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
@@ -1011,10 +1044,9 @@ class VentaModel(QObject):
         
         return permisos.get(accion, False)
     
-    @Slot(str, result='QVariantMap')
     def verificar_disponibilidad_producto(self, codigo: str):
         """
-        ✅ CORREGIDO: Verifica disponibilidad SIN cache usando SISTEMA FIFO DE LOTES
+        ✅ CORREGIDO: SIEMPRE verifica sin cache para datos frescos
         """
         if not self._verificar_autenticacion():
             return {"cantidad_disponible": 0, "disponible": False, "error": "No autenticado"}
@@ -1023,8 +1055,8 @@ class VentaModel(QObject):
             return {"cantidad_disponible": 0, "disponible": False, "error": "Código requerido"}
         
         try:
-            # PASO 1: Obtener producto desde tabla Productos (con stock calculado desde lotes)
-            producto = self.venta_repo.get_producto_por_codigo(codigo.strip())
+            # ✅ USAR MÉTODO ESPECÍFICO SIN CACHE
+            producto = self.venta_repo.get_producto_por_codigo_sin_cache(codigo.strip())
             if not producto:
                 return {
                     "cantidad_disponible": 0, 
@@ -1032,10 +1064,8 @@ class VentaModel(QObject):
                     "error": f"Producto {codigo} no encontrado"
                 }
             
-            # PASO 2: Stock total calculado desde lotes (ya viene en la consulta)
             stock_total = producto.get('Stock_Total', 0)
             
-            # PASO 3: Información adicional del sistema FIFO
             resultado = {
                 "cantidad_disponible": stock_total,
                 "disponible": stock_total > 0,
@@ -1043,22 +1073,12 @@ class VentaModel(QObject):
                 "codigo": codigo.strip(),
                 "nombre": producto.get('Nombre', ''),
                 "precio_venta": float(producto.get('Precio_venta', 0)),
-                
-                # ✅ INFORMACIÓN FIFO ADICIONAL
                 "lotes_activos": producto.get('Lotes_Activos', 0),
-                "lote_fifo_id": producto.get('Lote_FIFO_ID'),
-                "lote_fifo_stock": producto.get('Lote_FIFO_Stock', 0),
-                "lote_fifo_vencimiento": producto.get('Lote_FIFO_Vencimiento'),
-                "estado_stock": producto.get('Estado_Stock', 'DESCONOCIDO'),
-                
-                # ✅ VALIDACIONES ADICIONALES
-                "puede_vender": stock_total > 0,
-                "stock_calculado_desde_lotes": True,
+                "consulta_sin_cache": True,  # Indicador para debug
                 "timestamp": datetime.now().isoformat()
             }
             
-            print(f"✅ Verificación FIFO para {codigo}: {stock_total} unidades disponibles desde {resultado['lotes_activos']} lotes")
-            
+            print(f"✅ Verificación SIN CACHE para {codigo}: {stock_total} unidades disponibles")
             return resultado
             
         except Exception as e:
@@ -1069,6 +1089,27 @@ class VentaModel(QObject):
                 "disponible": False, 
                 "error": error_msg
             }
+    @Slot(str)
+    def refrescar_stock_producto(self, codigo: str):
+        """
+        ✅ NUEVO: Refresca stock específico de un producto
+        """
+        if not codigo:
+            return
+        
+        try:
+            # Invalidar cache primero
+            self._invalidar_cache_productos()
+            
+            # Obtener stock fresco
+            stock_info = self.verificar_disponibilidad_producto(codigo)
+            
+            # Emitir signal para que UI se actualice
+            self.stockModificado.emit()
+            self.operacionExitosa.emit(f"Stock actualizado para {codigo}: {stock_info.get('cantidad_disponible', 0)} unidades")
+            
+        except Exception as e:
+            self.operacionError.emit(f"Error refrescando stock: {str(e)}")
     @Slot(str, int, result='QVariantMap')
     def verificar_disponibilidad_para_cantidad(self, codigo: str, cantidad_solicitada: int):
         """

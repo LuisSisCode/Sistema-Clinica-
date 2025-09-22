@@ -41,7 +41,7 @@ class VentaRepository(BaseRepository):
     # ✅ NUEVO: Método para buscar productos directamente de tabla Productos
     def buscar_productos_para_venta(self, termino: str) -> List[Dict[str, Any]]:
         """
-        ESPECÍFICO PARA VENTAS: Busca productos mostrando SOLO stock total
+        ✅ CORREGIDO: Busca productos SIEMPRE sin cache
         """
         if not termino:
             return []
@@ -53,26 +53,92 @@ class VentaRepository(BaseRepository):
             p.Nombre,
             p.Precio_venta,
             m.Nombre as Marca_Nombre,
-            -- SOLO STOCK TOTAL (suma de lotes)
+            -- STOCK TOTAL CALCULADO EN TIEMPO REAL
             ISNULL((SELECT SUM(l.Cantidad_Unitario) 
                     FROM Lote l 
                     WHERE l.Id_Producto = p.id), 0) as Stock_Total,
-            -- Estado simple para ventas
+            -- Estado en tiempo real
             CASE 
                 WHEN (SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id) > 0 
                 THEN 'DISPONIBLE'
                 ELSE 'AGOTADO'
-            END as Estado
+            END as Estado,
+            -- Timestamp para debug
+            GETDATE() as Consulta_Timestamp
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?)
-        AND (SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id) > 0
         ORDER BY p.Nombre
         """
         
         termino_like = f"%{termino}%"
-        return self._execute_query(query, (termino_like, termino_like)) or []
+        # ✅ FORZAR use_cache=False SIEMPRE
+        resultado = self._execute_query(query, (termino_like, termino_like), use_cache=False) or []
+        
+        print(f"🔍 Búsqueda de productos SIN CACHE: {len(resultado)} resultados para '{termino}'")
+        return resultado
     
+    def buscar_productos_para_venta_sin_cache(self, termino: str) -> List[Dict[str, Any]]:
+        """
+        ✅ NUEVO: Búsqueda garantizada SIN cache para después de ventas
+        """
+        if not termino:
+            return []
+        
+        print(f"🚫 BÚSQUEDA FORZADA SIN CACHE para: '{termino}'")
+        
+        query = """
+        SELECT 
+            p.id,
+            p.Codigo,
+            p.Nombre,
+            p.Precio_venta,
+            p.Stock_Unitario,
+            m.Nombre as Marca_Nombre,
+            -- RECALCULAR STOCK DESDE LOTES EN TIEMPO REAL
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            -- Información adicional para debug
+            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
+            GETDATE() as Timestamp_Consulta
+        FROM Productos p
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?)
+        ORDER BY p.Nombre
+        """
+        
+        termino_like = f"%{termino}%"
+        
+        # ✅ FORZAR conexión directa sin ningún tipo de cache
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, (termino_like, termino_like))
+            
+            columns = [desc[0] for desc in cursor.description]
+            results = []
+            
+            for row in cursor.fetchall():
+                row_dict = dict(zip(columns, row))
+                results.append(row_dict)
+            
+            print(f"✅ Consulta directa sin cache completada: {len(results)} productos")
+            
+            # Debug: mostrar stock de productos encontrados
+            for producto in results:
+                print(f"   📦 {producto['Codigo']}: Stock={producto['Stock_Total']}, Lotes={producto.get('Lotes_Activos', 0)}")
+            
+            return results
+            
+        except Exception as e:
+            print(f"❌ Error en búsqueda sin cache: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
     # ✅ NUEVO: Método para obtener producto por código desde tabla Productos
     def get_producto_por_codigo_completo(self, codigo: str) -> Dict[str, Any]:
         """
@@ -105,9 +171,10 @@ class VentaRepository(BaseRepository):
             print(f"🔍 Producto encontrado para edición: {resultado['Codigo']} - Stock: {resultado['Stock_Actual']}")
         
         return resultado
+    
     def get_producto_por_codigo(self, codigo: str) -> Optional[Dict[str, Any]]:
         """
-        ✅ CORREGIDO: Obtiene producto por código - STOCK CALCULADO DESDE LOTES
+        ✅ CORREGIDO: SIEMPRE sin cache para datos frescos
         """
         validate_required(codigo, "codigo")
         
@@ -120,17 +187,19 @@ class VentaRepository(BaseRepository):
             p.Precio_compra,
             p.Precio_venta,
             p.Unidad_Medida,
+            p.Stock_Unitario,
             p.ID_Marca,
             m.Nombre as Marca_Nombre,
             m.Detalles as Marca_Detalles,
-            -- ✅ STOCK REAL DESDE LOTES
+            -- ✅ STOCK REAL CALCULADO EN TIEMPO REAL DESDE LOTES
             ISNULL((SELECT SUM(l.Cantidad_Unitario) 
                     FROM Lote l 
                     WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            -- Para compatibilidad, pero usar Stock_Total como real
             ISNULL((SELECT SUM(l.Cantidad_Unitario) 
                     FROM Lote l 
-                    WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
-            -- ✅ LOTE MÁS PRÓXIMO A VENCER (FIFO)
+                    WHERE l.Id_Producto = p.id), 0) as Stock_Unitario_Calculado,
+            -- Información FIFO
             (SELECT TOP 1 l.id 
             FROM Lote l 
             WHERE l.Id_Producto = p.id 
@@ -141,22 +210,80 @@ class VentaRepository(BaseRepository):
             WHERE l.Id_Producto = p.id 
             AND l.Cantidad_Unitario > 0 
             ORDER BY l.Fecha_Vencimiento ASC, l.id ASC) as Lote_FIFO_Stock,
-            (SELECT TOP 1 l.Fecha_Vencimiento 
-            FROM Lote l 
-            WHERE l.Id_Producto = p.id 
-            AND l.Cantidad_Unitario > 0 
-            ORDER BY l.Fecha_Vencimiento ASC, l.id ASC) as Lote_FIFO_Vencimiento
+            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
+            GETDATE() as Timestamp_Consulta
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE p.Codigo = ?
         """
         
-        resultado = self._execute_query(query, (codigo,), fetch_one=True)
+        # ✅ SIEMPRE sin cache
+        resultado = self._execute_query(query, (codigo,), fetch_one=True, use_cache=False)
         
         if resultado:
-            print(f"📦 Producto {codigo}: Stock total desde lotes = {resultado['Stock_Total']}")
+            # Usar el stock calculado como el real
+            resultado['Stock_Unitario'] = resultado['Stock_Total']
+            print(f"📦 Producto {codigo}: Stock FRESCO desde lotes = {resultado['Stock_Total']}")
+        else:
+            print(f"❌ Producto {codigo} no encontrado")
         
         return resultado
+    def get_producto_por_codigo_sin_cache(self, codigo: str) -> Optional[Dict[str, Any]]:
+        """
+        ✅ NUEVO: Garantiza consulta directa sin ningún cache
+        """
+        validate_required(codigo, "codigo")
+        
+        print(f"🚫 CONSULTA FORZADA SIN CACHE para producto: '{codigo}'")
+        
+        query = """
+        SELECT 
+            p.id,
+            p.Codigo,
+            p.Nombre,
+            p.Precio_venta,
+            p.Stock_Unitario as Stock_Original,
+            m.Nombre as Marca_Nombre,
+            -- RECALCULAR STOCK COMPLETO DESDE LOTES
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            -- Información de lotes para debug
+            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
+            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id) as Total_Lotes,
+            GETDATE() as Timestamp_Consulta
+        FROM Productos p
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        WHERE p.Codigo = ?
+        """
+        
+        # ✅ CONEXIÓN DIRECTA BYPASS COMPLETE
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, (codigo,))
+            
+            row = cursor.fetchone()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                resultado = dict(zip(columns, row))
+                
+                # Usar stock calculado como el real
+                resultado['Stock_Unitario'] = resultado['Stock_Total']
+                
+                print(f"✅ Consulta directa producto {codigo}: Stock_Total={resultado['Stock_Total']}, Lotes_Activos={resultado['Lotes_Activos']}")
+                return resultado
+            else:
+                print(f"❌ Producto {codigo} no encontrado en consulta directa")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error en consulta directa: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
         
     def get_ventas_con_detalles(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
         """Obtiene ventas con sus detalles en período específico"""
@@ -978,34 +1105,51 @@ class VentaRepository(BaseRepository):
     
     def _invalidate_cache_after_modification(self):
         """
-        ✅ MEJORADO: Invalida el caché después de modificaciones que afectan los datos
+        ✅ MEJORADO: Invalidación completa y forzada
         """
         try:
-            # Limpiar todos los tipos de caché posibles
-            caches_to_clear = ['_cache', '_query_cache', '_result_cache', '_data_cache']
+            print("🧹 INICIANDO INVALIDACIÓN COMPLETA DE CACHE...")
             
+            # Limpiar todos los tipos de caché posibles
+            caches_to_clear = [
+                '_cache', '_query_cache', '_result_cache', '_data_cache', 
+                '_product_cache', '_stock_cache', '_search_cache'
+            ]
+            
+            cache_cleared_count = 0
             for cache_name in caches_to_clear:
                 if hasattr(self, cache_name):
                     cache_obj = getattr(self, cache_name)
                     if hasattr(cache_obj, 'clear'):
                         cache_obj.clear()
-                        print(f"🗑️ {cache_name} limpiado en VentaRepository")
+                        cache_cleared_count += 1
+                        print(f"   🗑️ {cache_name} limpiado")
             
             # Resetear timestamps de caché
-            timestamp_attrs = ['_last_cache_time', '_cache_timestamp', '_last_update']
+            timestamp_attrs = [
+                '_last_cache_time', '_cache_timestamp', '_last_update',
+                '_last_product_cache', '_last_stock_update'
+            ]
+            
             for attr_name in timestamp_attrs:
                 if hasattr(self, attr_name):
                     setattr(self, attr_name, None)
             
             # Forzar recarga en próximas consultas
-            if hasattr(self, '_force_reload'):
-                self._force_reload = True
+            self._force_reload = True
+            self._force_reload_productos = True
+            self._bypass_all_cache = True
             
-            print("✅ Invalidación completa de caché VentaRepository completada")
+            print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches limpiados, flags de bypass activados")
+            
+            # También invalidar ProductoRepository si está disponible
+            if hasattr(self, 'producto_repo') and self.producto_repo:
+                if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
+                    self.producto_repo._invalidate_cache_after_modification()
+                    print("   🔄 ProductoRepository cache también invalidado")
             
         except Exception as e:
-            print(f"⚠️ Error en invalidación de caché VentaRepository: {e}")
-            # No fallar por esto, es solo optimización
+            print(f"⚠️ Error en invalidación completa: {e}")
     
     def _limpiar_venta_fallida(self, venta_id: int):
         """Limpia una venta que falló durante la creación"""
