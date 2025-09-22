@@ -1351,13 +1351,13 @@ Item {
                     apellidoMaterno.text = analisis.pacienteApellidoM || ""
                 } else {
                     //Dividir Nombre Completo
-                    var nombrePartes = analisis.pciente.split(" ")
+                    var nombrePartes = analisis.paciente.split(" ")
                     nombrePaciente.text = nombrePartes[0] || ""
                     apellidoPaterno.text = nombrePartes[1] || ""   
                     apellidoMaterno.text = nombrePartes.slice(2).join(" ") || ""
                 }
 
-                cedulaPaciente.text = tieneCedula ? (analisis.pacienteCedula || "") : ""
+                campoBusquedaPaciente.text = tieneCedula ? (analisis.pacienteCedula || "") : ""
                 console.log("Datos del paciente cargados:", nombrePaciente.text, apellidoPaterno.text, apellidoMaterno.text, cedulaPaciente.text)
                 console.log("Cargando Analisis --------")
                 // Cargar tipo de análisis
@@ -1521,12 +1521,6 @@ Item {
                             Layout.fillWidth: true
                             spacing: baseUnit
 
-                            Label {
-                                text: "Buscar por:"
-                                font.bold: true
-                                color: textColor
-                                font.family: "Segoe UI, Arial, sans-serif"
-                            }
                             Label {
                                 text: "Buscar por:"
                                 font.bold: true
@@ -1935,7 +1929,7 @@ Item {
                         }
                         
                         Label {
-                            text: "Modo: Crear nuevo paciente con cédula " + cedulaPaciente.text +
+                            text: "Modo: Crear nuevo paciente con cédula " + campoBusquedaPaciente.text +
                                   (buscarPorNombre.checked ? " y nombre completo." : ".")
                             color: "#047857"
                             font.pixelSize: fontBaseSize * 0.8
@@ -2850,8 +2844,6 @@ Item {
         }
     }
     
-
-    
     function habilitarNuevoPaciente() {
         console.log("✅ Habilitando creación de nuevo paciente con cédula:", campoBusquedaPaciente.text)
         
@@ -2869,7 +2861,7 @@ Item {
         }
         
         campoBusquedaPaciente.text = ""
-        cedulaPaciente.text = ""
+        //cedulaPaciente.text = ""
         nombrePaciente.text = ""
         apellidoPaterno.text = ""
         apellidoMaterno.text = ""
@@ -3432,6 +3424,7 @@ Item {
             if (pacienteEncontrado) {
                 autocompletarDatosPacientePorNombre(pacienteEncontrado)
             } else {
+                console.log("No se encontró paciente coincidente por nombre:", nombreCompleto)
                 marcarPacienteNoEncontradoPorNombre(nombreCompleto)
             }
         } else {
@@ -3471,7 +3464,7 @@ Item {
         nombrePaciente.text = palabras[0] || ""
         apellidoPaterno.text = palabras[1] || ""
         apellidoMaterno.text = palabras.slice(2).join(' ')
-        cedulaPaciente.text = ""
+        campoBusquedaPaciente.text = ""
         
         console.log("❌ Paciente NO encontrado por nombre. Habilitando modo crear nuevo.")
     }

@@ -135,81 +135,48 @@ class EnfermeriaModel(QObject):
             return False
         
         return True
-    
-    def _validar_fecha_edicion(self, fecha_registro, dias_limite: int = 7) -> bool:
-        """Valida que el registro no sea muy antiguo para editar - ENFERMERÍA: 7 días"""
+
+    def _verificar_permisos_eliminacion(self, procedimiento_id: int) -> tuple[bool, str]:
+        """Permisos de eliminación - ADMINS sin límite, MÉDICOS máximo 30 días"""
+        if not self._verificar_autenticacion():
+            return False, "Usuario no autenticado"
+        
+        if self._usuario_actual_rol == "Administrador":
+            return True, "Administrador: Sin restricciones"
+        
+        if self._usuario_actual_rol == "Médico":
+            proc_data = self.repository.get_procedimiento_by_id(procedimiento_id)
+            if not proc_data:
+                return False, "Procedimiento no encontrado"
+            
+            # Verificar fecha (30 días límite para eliminación)
+            fecha_proc = proc_data.get('Fecha')
+            if not self._validar_fecha_eliminacion(fecha_proc, dias_limite=30):
+                return False, "Solo puede eliminar procedimientos de máximo 30 días"
+            
+            return True, "Médico: Puede eliminar (procedimiento reciente)"
+        
+        return False, "Sin permisos para eliminar procedimientos"
+
+    def _validar_fecha_eliminacion(self, fecha_registro, dias_limite: int = 30) -> bool:
+        """Valida que el registro no sea muy antiguo para eliminar"""
         try:
             if not fecha_registro:
                 return True
             
             if isinstance(fecha_registro, str):
-                try:
-                    fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
-                except:
-                    fecha_obj = datetime.strptime(fecha_registro[:10], '%Y-%m-%d')
+                fecha_obj = datetime.fromisoformat(fecha_registro.replace('Z', ''))
             elif isinstance(fecha_registro, datetime):
                 fecha_obj = fecha_registro
             else:
                 return True
             
             dias_transcurridos = (datetime.now() - fecha_obj).days
-            
-            if dias_transcurridos > dias_limite:
-                self.operacionError.emit(f"No se pueden editar procedimientos de más de {dias_limite} días")
-                print(f"📅 Edición bloqueada: {dias_transcurridos} días transcurridos (límite: {dias_limite})")
-                return False
-            
-            return True
+            return dias_transcurridos <= dias_limite
             
         except Exception as e:
-            print(f"❌ Error validando fecha: {e}")
+            print(f"⚠️ Error validando fecha eliminación: {e}")
             return True
-
-    def _verificar_permisos_edicion(self, procedimiento_id: int) -> bool:
-        try:
-            print(f"🔍 DEBUG: Verificando permisos para procedimiento {procedimiento_id}")
-            print(f"🔍 DEBUG: Usuario actual: ID={self._usuario_actual_id}, Rol={self._usuario_actual_rol}")
-            
-            if not self._verificar_autenticacion():
-                return False
-            
-            if self._usuario_actual_rol == "Administrador":
-                print(f"✅ DEBUG: Admin puede editar todo")
-                return True
-            
-            if self._usuario_actual_rol != "Médico":
-                self.operacionError.emit("Solo médicos y administradores pueden editar procedimientos")
-                return False
-            
-            # 4. Obtener datos del procedimiento
-            proc_data = self.repository.get_procedimiento_by_id(procedimiento_id)
-            print(f"🔍 DEBUG: Datos del procedimiento: {proc_data}")
-            
-            if not proc_data:
-                self.operacionError.emit("Procedimiento no encontrado")
-                return False
-            
-            # 5. Verificar propietario
-            usuario_registro = proc_data.get('Id_RegistradoPor')
-            print(f"🔍 DEBUG: Registrado por: {usuario_registro}, Usuario actual: {self._usuario_actual_id}")
-            
-            if usuario_registro != self._usuario_actual_id:
-                self.operacionError.emit("Solo puede editar sus propios procedimientos")
-                return False
-            
-            # 6. Verificar fecha
-            fecha_proc = proc_data.get('Fecha')
-            print(f"🔍 DEBUG: Fecha procedimiento: {fecha_proc}")
-            
-            if not self._validar_fecha_edicion(fecha_proc, 7):
-                return False
-            
-            print(f"✅ DEBUG: Todos los permisos OK")
-            return True
-            
-        except Exception as e:
-            print(f"❌ DEBUG: Error verificando permisos: {e}")
-            return False
     
     @Slot(int, str)
     def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
@@ -628,6 +595,29 @@ class EnfermeriaModel(QObject):
             self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
             return []
     
+        
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
+        """Busca pacientes por nombre completo"""
+        try:
+            if len(nombre_completo.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
+            
+            resultados = self.repository.buscar_pacientes_por_nombre_completo(
+                nombre_completo.strip(), limite
+            )
+            
+            print(f"📋 Encontrados {len(resultados)} pacientes por nombre")
+            return resultados
+            
+        except Exception as e:
+            error_msg = f"Error buscando por nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return []
+    
     # ===============================
     # ✅ OPERACIONES CRUD CON RESTRICCIONES DE SEGURIDAD
     # ===============================
@@ -704,8 +694,6 @@ class EnfermeriaModel(QObject):
         """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN
-            if not self._verificar_permisos_edicion(procedimiento_id):
-                return self._crear_respuesta_json(False, "Sin permisos para editar este procedimiento")
             
             self._set_estado_actual("cargando")
             
@@ -781,6 +769,11 @@ class EnfermeriaModel(QObject):
         try:
             # ✅ VERIFICAR PERMISOS DE ADMIN PARA ELIMINACIÓN
             if not self._verificar_permisos_admin():
+                return False
+            # ✅ VERIFICAR RESTRICCIONES DE ELIMINACIÓN SEGÚN ROL
+            puede_eliminar, razon = self._verificar_permisos_eliminacion(procedimiento_id)
+            if not puede_eliminar:
+                self.operacionError.emit(razon)
                 return False
             
             self._set_estado_actual("cargando")
@@ -1077,14 +1070,6 @@ class EnfermeriaModel(QObject):
             print(f"❌ {error_msg}")
             return json.dumps({'error': error_msg})
         
-    @Slot(int, result=bool)
-    def puede_editar_procedimiento(self, procedimiento_id: int) -> bool:
-        """Verifica si el usuario actual puede editar un procedimiento específico"""
-        try:
-            return self._verificar_permisos_edicion(procedimiento_id)
-        except Exception as e:
-            print(f"Error verificando permisos: {e}")
-            return False
     
     # ===============================
     # MÉTODOS INTERNOS (SIN CAMBIOS IMPORTANTES)
@@ -1151,6 +1136,55 @@ class EnfermeriaModel(QObject):
         except (ValueError, TypeError) as e:
             self.operacionError.emit(f"Error en validación de datos: {str(e)}")
             return False
+        
+    @Slot(int, result='QVariantMap')
+    def verificar_permisos_procedimiento(self, procedimiento_id: int):
+        """Verifica permisos del usuario actual para un procedimiento específico"""
+        try:
+            puede_editar = self._usuario_actual_rol in ["Administrador", "Médico"]
+            puede_eliminar, razon_eliminar = self._verificar_permisos_eliminacion(procedimiento_id)
+            es_admin = self._usuario_actual_rol == "Administrador"
+            es_medico = self._usuario_actual_rol == "Médico"
+            
+            # Obtener información del procedimiento
+            procedimiento = self.repository.get_procedimiento_by_id(procedimiento_id)
+            dias_antiguedad = 0
+            
+            if procedimiento:
+                fecha_procedimiento = procedimiento.get('Fecha')
+                if fecha_procedimiento:
+                    try:
+                        if isinstance(fecha_procedimiento, str):
+                            fecha_obj = datetime.fromisoformat(fecha_procedimiento.replace('Z', ''))
+                        elif isinstance(fecha_procedimiento, datetime):
+                            fecha_obj = fecha_procedimiento
+                        else:
+                            fecha_obj = datetime.now()
+                        
+                        dias_antiguedad = (datetime.now() - fecha_obj).days
+                    except:
+                        dias_antiguedad = 0
+            
+            return {
+                'puede_editar': puede_editar,
+                'puede_eliminar': puede_eliminar,
+                'razon_eliminar': razon_eliminar,
+                'es_administrador': es_admin,
+                'es_medico': es_medico,
+                'dias_antiguedad': dias_antiguedad,
+                'limite_dias': 30
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando permisos procedimiento: {e}")
+            return {
+                'puede_editar': False,
+                'puede_eliminar': False,
+                'es_administrador': False,
+                'es_medico': False,
+                'dias_antiguedad': 999,
+                'limite_dias': 30
+            }
     
     def _gestionar_paciente_procedimiento(self, datos: Dict[str, Any]) -> int:
         """Gestiona paciente para procedimiento"""
