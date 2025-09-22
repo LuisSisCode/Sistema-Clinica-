@@ -127,7 +127,7 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_consultas', ttl=300)
     def get_reporte_consultas(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte de consultas médicas - CORREGIDO para mostrar detalles completos"""
+        """Consultas: fecha, especialidad, descripción, paciente, médico, precio"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
@@ -135,14 +135,19 @@ class ReportesRepository(BaseRepository):
         SELECT 
             FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
             e.Nombre as especialidad,
-            c.Detalles as descripcion,
-            p.Nombre + ' ' + p.Apellido_Paterno as paciente,
-            d.Nombre + ' ' + d.Apellido_Paterno + ' ' + ISNULL(d.Apellido_Materno, '') as doctor_nombre,
-            c.Tipo_Consulta as tipo,
+            COALESCE(c.Detalles, 'Consulta médica') as descripcion,
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, 
+                CASE WHEN p.Apellido_Materno IS NOT NULL AND p.Apellido_Materno != '' 
+                        THEN ' ' + p.Apellido_Materno 
+                        ELSE '' END) as paciente,
+            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, 
+                CASE WHEN d.Apellido_Materno IS NOT NULL AND d.Apellido_Materno != '' 
+                        THEN ' ' + d.Apellido_Materno 
+                        ELSE '' END) as doctor_nombre,
             CASE 
-                WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
-                ELSE ISNULL(e.Precio_Normal, 0) 
-            END as valor,  -- Asegúrate de que este alias sea 'valor'
+                WHEN c.Tipo_Consulta = 'Emergencia' THEN COALESCE(e.Precio_Emergencia, 0)
+                ELSE COALESCE(e.Precio_Normal, 0) 
+            END as valor,
             1 as cantidad
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
@@ -159,34 +164,89 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_laboratorio', ttl=300)
     def get_reporte_laboratorio(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte de análisis de laboratorio"""
-
+        """Laboratorio: fecha, tipoAnalisis, descripción, paciente, técnico, precio"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(l.Fecha, 'dd/MM/yyyy') as fecha,
-            COALESCE(ta.Nombre, 'Análisis General') as descripcion,
-            p.Nombre + ' ' + p.Apellido_Paterno as paciente,
+            COALESCE(ta.Nombre, 'Análisis General') as tipoAnalisis,
+            COALESCE(ta.Descripcion, COALESCE(ta.Nombre, 'Análisis de laboratorio')) as descripcion,
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, 
+                CASE WHEN p.Apellido_Materno IS NOT NULL AND p.Apellido_Materno != '' 
+                        THEN ' ' + p.Apellido_Materno 
+                        ELSE '' END) as paciente,
             CASE 
-                WHEN l.Detalles IS NOT NULL THEN 'Completado'
-                ELSE 'Procesado' 
-            END as estado,
-            CASE WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
-                 ELSE COALESCE(ta.Precio_Normal, 20.00) END as valor,
-            l.Tipo as tipo,
-            1 as cantidad,
-            COALESCE(t.Nombre + ' ' + t.Apellido_Paterno, 'Sin asignar') as tecnico
+                WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno,
+                    CASE WHEN t.Apellido_Materno IS NOT NULL AND t.Apellido_Materno != '' 
+                        THEN ' ' + t.Apellido_Materno 
+                        ELSE '' END)
+                ELSE 'Sin asignar'
+            END as tecnico,
+            CASE 
+                WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
+                ELSE COALESCE(ta.Precio_Normal, 20.00) 
+            END as valor,
+            1 as cantidad
         FROM Laboratorio l
         INNER JOIN Pacientes p ON l.Id_Paciente = p.id
         LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+        INNER JOIN Usuario u ON l.Id_RegistradoPor = u.id
         LEFT JOIN Trabajadores t ON l.Id_Trabajador = t.id
         WHERE l.Fecha >= ? AND l.Fecha <= ?
         ORDER BY l.Fecha DESC, l.id DESC
         """
-        
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+
+    # ✅ OPCIONAL: Método adicional para obtener estadísticas de laboratorio para el PDF
+    def get_estadisticas_laboratorio(self, fecha_desde: str, fecha_hasta: str) -> Dict[str, Any]:
+        """Obtiene estadísticas adicionales para el pie del reporte"""
+        try:
+            fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+            fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
+            
+            query = """
+            SELECT 
+                COUNT(*) as total_analisis,
+                COUNT(DISTINCT Id_Paciente) as pacientes_unicos,
+                COUNT(DISTINCT Id_Tipo_Analisis) as tipos_analisis_diferentes,
+                COUNT(CASE WHEN Id_Trabajador IS NOT NULL THEN 1 END) as con_tecnico_asignado,
+                COUNT(CASE WHEN Tipo = 'Normal' THEN 1 END) as servicios_normales,
+                COUNT(CASE WHEN Tipo = 'Emergencia' THEN 1 END) as servicios_emergencia,
+                SUM(CASE 
+                    WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
+                    ELSE COALESCE(ta.Precio_Normal, 20.00) 
+                END) as valor_total
+            FROM Laboratorio l
+            LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+            WHERE l.Fecha >= ? AND l.Fecha <= ?
+            """
+            
+            result = self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql), fetch_one=True)
+            
+            if result:
+                return {
+                    'total_analisis': result.get('total_analisis', 0),
+                    'pacientes_unicos': result.get('pacientes_unicos', 0),
+                    'tipos_analisis_diferentes': result.get('tipos_analisis_diferentes', 0),
+                    'con_tecnico_asignado': result.get('con_tecnico_asignado', 0),
+                    'servicios_normales': result.get('servicios_normales', 0),
+                    'servicios_emergencia': result.get('servicios_emergencia', 0),
+                    'valor_total': float(result.get('valor_total', 0)),
+                    'porcentaje_con_tecnico': round(
+                        (result.get('con_tecnico_asignado', 0) / max(result.get('total_analisis', 1), 1)) * 100, 2
+                    ),
+                    'valor_promedio': round(
+                        float(result.get('valor_total', 0)) / max(result.get('total_analisis', 1), 1), 2
+                    )
+                }
+            
+            return {}
+            
+        except Exception as e:
+            print(f"⚠️ Error obteniendo estadísticas de laboratorio: {e}")
+            return {}
     
     # ===============================
     # REPORTES DE ENFERMERÍA (TIPO 6)
@@ -194,31 +254,39 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_enfermeria', ttl=300)
     def get_reporte_enfermeria(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte de procedimientos de enfermería"""
-
+        """Enfermería: fecha, tipoProcedimiento, descripción, paciente, enfermero, precio"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(e.Fecha, 'dd/MM/yyyy') as fecha,
-            tp.Nombre as descripcion,
-            p.Nombre + ' ' + p.Apellido_Paterno as paciente,
-            e.Cantidad as cantidad,
-            (CASE WHEN e.Tipo = 'Emergencia' THEN tp.Precio_Emergencia 
-                  ELSE tp.Precio_Normal END) * e.Cantidad as valor,
-            e.Tipo as tipo,
-            COALESCE(t.Nombre + ' ' + t.Apellido_Paterno, 'Sin asignar') as enfermero,
-            u.Nombre + ' ' + u.Apellido_Paterno as registrado_por
+            COALESCE(tp.Nombre, 'Procedimiento General') as tipoProcedimiento,
+            COALESCE(tp.Descripcion, COALESCE(tp.Nombre, 'Procedimiento de enfermería')) as descripcion,
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, 
+                CASE WHEN p.Apellido_Materno IS NOT NULL AND p.Apellido_Materno != '' 
+                        THEN ' ' + p.Apellido_Materno 
+                        ELSE '' END) as paciente,
+            CASE 
+                WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno,
+                    CASE WHEN t.Apellido_Materno IS NOT NULL AND t.Apellido_Materno != '' 
+                        THEN ' ' + t.Apellido_Materno 
+                        ELSE '' END)
+                ELSE 'Sin asignar'
+            END as enfermero,
+            (e.Cantidad * CASE 
+                WHEN e.Tipo = 'Emergencia' THEN COALESCE(tp.Precio_Emergencia, 25.00)
+                ELSE COALESCE(tp.Precio_Normal, 20.00) 
+            END) as valor,
+            e.Cantidad as cantidad
         FROM Enfermeria e
-        INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
         INNER JOIN Pacientes p ON e.Id_Paciente = p.id
+        LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
         INNER JOIN Usuario u ON e.Id_RegistradoPor = u.id
         LEFT JOIN Trabajadores t ON e.Id_Trabajador = t.id
         WHERE e.Fecha >= ? AND e.Fecha <= ?
         ORDER BY e.Fecha DESC, e.id DESC
         """
-        
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
     
     # ===============================
@@ -227,8 +295,7 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_gastos', ttl=300)
     def get_reporte_gastos(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte de gastos operativos"""
-
+        """Gastos: fecha, tipo de gasto, descripción, monto, proveedor - EXACTO"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
@@ -238,8 +305,8 @@ class ReportesRepository(BaseRepository):
             tg.Nombre as categoria,
             g.Descripcion as descripcion,
             g.Monto as valor,
-            g.Proveedor as proveedor,
-            u.Nombre + ' ' + u.Apellido_Paterno as registrado_por,
+            COALESCE(g.Proveedor, 'Sin proveedor') as proveedor,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as registrado_por,
             1 as cantidad
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
@@ -247,7 +314,6 @@ class ReportesRepository(BaseRepository):
         WHERE g.Fecha >= ? AND g.Fecha <= ?
         ORDER BY g.Fecha DESC, g.id DESC
         """
-        
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
     
     # ===============================

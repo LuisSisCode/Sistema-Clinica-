@@ -766,8 +766,12 @@ Item {
                                 }
                             }
                         }
-                        
-                        // Tabla de datos con zebra striping
+                                                
+                        // ========================================
+                        // REEMPLAZAR LA TABLA COMPLETA EN REPORTES.QML
+                        // ========================================
+
+                        // Tabla de datos con zebra striping Y TOTALES
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -847,11 +851,10 @@ Item {
                                                             color: textColor
                                                             horizontalAlignment: modelData.align || Text.AlignLeft
                                                             verticalAlignment: Text.AlignVCenter
-                                                            // ✅ CORRECCIÓN: Para descripción, usar WordWrap en lugar de ElideRight
                                                             wrapMode: modelData.campo === "descripcion" ? Text.WordWrap : Text.NoWrap
                                                             elide: modelData.campo === "descripcion" ? Text.ElideNone : Text.ElideRight
                                                             font.bold: modelData.campo === "valor"
-                                                            maximumLineCount: modelData.campo === "descripcion" ? 3 : 1 // ✅ Permitir hasta 3 líneas
+                                                            maximumLineCount: modelData.campo === "descripcion" ? 3 : 1
                                                         }
                                                     }
                                                 }
@@ -860,52 +863,99 @@ Item {
                                     }
                                 }
                                 
-                                // Fila de total
+                                // ==========================================
+                                // FILA DE TOTAL UNIVERSAL - FUNCIONA PARA TODOS LOS REPORTES
+                                // ==========================================
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 50
-                                    color: lightGrayColor
-                                    border.color: textColor
-                                    border.width: 1
+                                    color: "#2C3E50"  // Color destacado para totales
+                                    border.color: "#34495E"
+                                    border.width: 2
                                     
                                     RowLayout {
                                         anchors.fill: parent
                                         anchors.margins: 12
-                                        spacing: 5
+                                        spacing: 0
                                         
-                                        Item {
-                                            Layout.fillWidth: true
+                                        // Obtener columnas actuales
+                                        property var columnasActuales: obtenerColumnasReporte()
+                                        
+                                        Repeater {
+                                            model: parent.columnasActuales.length
                                             
-                                            Label {
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: "TOTAL GENERAL:"
-                                                font.bold: true
-                                                font.pixelSize: 13
-                                                font.family: "Segoe UI"
-                                                color: textColor
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.columnasActuales[index].width
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: {
+                                                        var columna = parent.parent.columnasActuales[index]
+                                                        var nombreColumna = columna.titulo
+                                                        var campoColumna = columna.campo
+                                                        
+                                                        console.log("Procesando columna:", index, nombreColumna, campoColumna, "Tipo reporte:", tipoReporteSeleccionado)
+                                                        
+                                                        // MOSTRAR TOTAL en columna de valor monetario
+                                                        if (campoColumna === "valor") {
+                                                            var total = calcularTotalReporte()
+                                                            console.log("Mostrando total:", total)
+                                                            return "Bs " + total.toFixed(2)
+                                                        }
+                                                        
+                                                        // PARA GASTOS: mostrar "TOTAL GENERAL:" en DESCRIPCIÓN
+                                                        if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
+                                                            console.log("Mostrando TOTAL GENERAL en descripción para gastos")
+                                                            return "TOTAL GENERAL:"
+                                                        }
+                                                        
+                                                        // PARA OTROS REPORTES: mostrar "TOTAL GENERAL:" en penúltima columna
+                                                        if (tipoReporteSeleccionado !== 7 && 
+                                                            index === parent.parent.columnasActuales.length - 2 && 
+                                                            campoColumna !== "valor") {
+                                                            console.log("Mostrando TOTAL GENERAL en penúltima columna")
+                                                            return "TOTAL GENERAL:"
+                                                        }
+                                                        
+                                                        // Todas las demás columnas vacías
+                                                        return ""
+                                                    }
+                                                    
+                                                    font.bold: true
+                                                    font.pixelSize: 13
+                                                    font.family: "Segoe UI"
+                                                    color: whiteColor
+                                                    horizontalAlignment: {
+                                                        var columna = parent.parent.parent.columnasActuales[index]
+                                                        var campoColumna = columna.campo
+                                                        
+                                                        if (campoColumna === "valor") {
+                                                            return Text.AlignRight
+                                                        } else if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
+                                                            return Text.AlignRight
+                                                        } else if (tipoReporteSeleccionado !== 7 && index === parent.parent.parent.columnasActuales.length - 2) {
+                                                            return Text.AlignRight
+                                                        } else {
+                                                            return Text.AlignCenter
+                                                        }
+                                                    }
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
                                             }
-                                        }
-                                        
-                                        Label {
-                                            Layout.preferredWidth: 120
-                                            text: "Bs " + (resumenReporte.totalValor || 0).toFixed(2)
-                                            font.bold: true
-                                            font.pixelSize: 13
-                                            font.family: "Segoe UI"
-                                            color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
-                                            horizontalAlignment: Text.AlignRight
-                                            verticalAlignment: Text.AlignVCenter
                                         }
                                     }
                                 }
                             }
                         }
-                        
-                        // Resumen inferior
+
+                        // ==========================================
+                        // RESUMEN INFERIOR UNIVERSAL CON ESTADÍSTICAS
+                        // ==========================================
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 70
+                            Layout.preferredHeight: 90
                             color: "#F8F9FA"
                             radius: 4
                             border.color: "#E9ECEF"
@@ -914,36 +964,106 @@ Item {
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: 15
-                                spacing: 40
+                                spacing: 30
                                 
+                                // ESTADÍSTICAS PRINCIPALES
                                 ColumnLayout {
                                     spacing: 6
                                     
                                     Label {
-                                        text: "Total de Registros: " + datosReporte.length
+                                        text: "📊 RESUMEN EJECUTIVO"
                                         font.pixelSize: 12
                                         font.bold: true
                                         font.family: "Segoe UI"
-                                        color: textColor
+                                        color: primaryColor
                                     }
                                     
-                                    Label {
-                                        text: "Valor Total: Bs " + (resumenReporte.totalValor || 0).toFixed(2)
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        font.family: "Segoe UI"
-                                        color: resumenReporte.totalValor >= 0 ? successColor : dangerColor
+                                    Row {
+                                        spacing: 25
+                                        
+                                        Label {
+                                            text: "Total Registros: " + datosReporte.length
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            font.family: "Segoe UI"
+                                            color: textColor
+                                        }
+                                        
+                                        Label {
+                                            text: "Valor Total: Bs " + calcularTotalReporte().toFixed(2)
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            font.family: "Segoe UI"
+                                            color: calcularTotalReporte() >= 0 ? successColor : dangerColor
+                                        }
+                                        
+                                        Label {
+                                            text: "Promedio: Bs " + (datosReporte.length > 0 ? (calcularTotalReporte() / datosReporte.length).toFixed(2) : "0.00")
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            font.family: "Segoe UI"
+                                            color: infoColor
+                                        }
+                                    }
+                                    
+                                    // SEGUNDA FILA DE ESTADÍSTICAS
+                                    Row {
+                                        spacing: 25
+                                        
+                                        Label {
+                                            text: "Tipo de Reporte: " + obtenerTituloReporte()
+                                            font.pixelSize: 10
+                                            font.family: "Segoe UI"
+                                            color: darkGrayColor
+                                        }
+                                        
+                                        Label {
+                                            text: "Período: " + fechaDesde + " al " + fechaHasta
+                                            font.pixelSize: 10
+                                            font.family: "Segoe UI"
+                                            color: darkGrayColor
+                                        }
                                     }
                                 }
                                 
                                 Item { Layout.fillWidth: true }
                                 
-                                Label {
-                                    text: "Sistema de Gestión Médica - Clínica María Inmaculada"
-                                    font.pixelSize: 10
-                                    font.family: "Segoe UI"
-                                    color: darkGrayColor
-                                    horizontalAlignment: Text.AlignRight
+                                // INFORMACIÓN DEL SISTEMA
+                                ColumnLayout {
+                                    spacing: 4
+                                    Layout.alignment: Qt.AlignTop
+                                    
+                                    Label {
+                                        text: "📅 Generado: " + Qt.formatDateTime(new Date(), "dd/MM/yyyy hh:mm")
+                                        font.pixelSize: 10
+                                        font.family: "Segoe UI"
+                                        color: darkGrayColor
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    
+                                    Label {
+                                        text: "👤 Usuario: " + (typeof authModel !== 'undefined' && authModel ? authModel.userName : "Sistema")
+                                        font.pixelSize: 10
+                                        font.family: "Segoe UI"
+                                        color: darkGrayColor
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    
+                                    Label {
+                                        text: "🏥 Sistema de Gestión Médica - CMI"
+                                        font.pixelSize: 9
+                                        font.family: "Segoe UI"
+                                        color: darkGrayColor
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    
+                                    Label {
+                                        text: "📍 Villa Yapacaní, Santa Cruz - Bolivia"
+                                        font.pixelSize: 9
+                                        font.family: "Segoe UI"
+                                        color: darkGrayColor
+                                        horizontalAlignment: Text.AlignRight
+                                    }
                                 }
                             }
                         }
@@ -1047,91 +1167,185 @@ Item {
             mostrarNotificacionError("Error inesperado al generar PDF")
         }
     }
-    
-    function obtenerTituloReporte() {
-        if (tipoReporteSeleccionado <= 0) return "REPORTE GENERAL"
         
-        switch(tipoReporteSeleccionado) {
-            case 1: return "REPORTE DE VENTAS DE FARMACIA"
-            case 2: return "REPORTE DE INVENTARIO VALORIZADO"
-            case 3: return "REPORTE DE COMPRAS DE FARMACIA"
-            case 4: return "REPORTE DE CONSULTAS MÉDICAS"
-            case 5: return "REPORTE DE ANÁLISIS DE LABORATORIO"
-            case 6: return "REPORTE DE PROCEDIMIENTOS DE ENFERMERÍA"
-            case 7: return "REPORTE DE GASTOS OPERATIVOS"
-            case 8: return "REPORTE FINANCIERO CONSOLIDADO"
-            default: return "REPORTE GENERAL"
-        }
-    }
-    
     function obtenerColumnasReporte() {
         switch(tipoReporteSeleccionado) {
-            case 1: // Ventas
+            case 1: // Ventas de Farmacia
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "N° VENTA", campo: "numeroVenta", width: 80},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 250},
-                    {titulo: "CANT.", campo: "cantidad", width: 60, align: Text.AlignRight},
-                    {titulo: "TOTAL (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
+                    {titulo: "Nº VENTA", campo: "numeroVenta", width: 80},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 200},
+                    {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
+                    {titulo: "TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
-            case 2: // Inventario
+                
+            case 2: // Inventario de Productos
                 return [
                     {titulo: "CÓDIGO", campo: "codigo", width: 80},
-                    {titulo: "PRODUCTO", campo: "descripcion", width: 250},
-                    {titulo: "UM", campo: "unidad", width: 50},
-                    {titulo: "STOCK", campo: "cantidad", width: 70, align: Text.AlignRight},
-                    {titulo: "P.U.", campo: "precioUnitario", width: 80, align: Text.AlignRight},
-                    {titulo: "VALOR (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 180},
+                    {titulo: "UNIDAD", campo: "unidad", width: 60},
+                    {titulo: "STOCK", campo: "cantidad", width: 80, align: Text.AlignRight},
+                    {titulo: "PRECIO UNIT.", campo: "precioUnitario", width: 100, align: Text.AlignRight},
+                    {titulo: "VALOR TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
-
-            case 4: // ✅ Consultas - CORREGIDO para mostrar detalles completos
-                return [
-                    {titulo: "FECHA", campo: "fecha", width: 100},
-                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 150},
-                    {titulo: "DESCRIPCIÓN COMPLETA", campo: "descripcion", width: 400}, // ✅ Ancho aumentado
-                    {titulo: "PACIENTE", campo: "paciente", width: 200},
-                    {titulo: "DOCTOR", campo: "doctor_nombre", width: 200}, // ✅ Campo separado
-                    {titulo: "TIPO", campo: "tipo", width: 100},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
-                ]            
-
-            default:
+                
+            case 3: // Compras de Farmacia
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 300},
-                    {titulo: "CANT.", campo: "cantidad", width: 60, align: Text.AlignRight},
+                    {titulo: "Nº COMPRA", campo: "numeroCompra", width: 90},
+                    {titulo: "PROVEEDOR", campo: "descripcion", width: 180},
+                    {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
+                    {titulo: "TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                ]
+                
+            case 4: // Consultas Médicas
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 100},
+                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 140},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
+                    {titulo: "PACIENTE", campo: "paciente", width: 150},
+                    {titulo: "MÉDICO", campo: "doctor_nombre", width: 150},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                ]
+                
+            case 5: // Laboratorio
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 90},
+                    {titulo: "TIPO ANÁLISIS", campo: "tipoAnalisis", width: 140},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
+                    {titulo: "PACIENTE", campo: "paciente", width: 150},
+                    {titulo: "TÉCNICO", campo: "tecnico", width: 140},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                ]
+                
+            case 6: // Enfermería
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 90},
+                    {titulo: "TIPO PROCEDIMIENTO", campo: "tipoProcedimiento", width: 140},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
+                    {titulo: "PACIENTE", campo: "paciente", width: 150},
+                    {titulo: "ENFERMERO/A", campo: "enfermero", width: 140},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                ]
+                
+            case 7: // Gastos Operativos - SEGÚN REQUERIMIENTO EXACTO
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 90},
+                    {titulo: "TIPO DE GASTO", campo: "categoria", width: 140},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
+                    {titulo: "MONTO (Bs)", campo: "valor", width: 120, align: Text.AlignRight},
+                    {titulo: "PROVEEDOR", campo: "proveedor", width: 150}
+                ]
+                
+            case 8: // Consolidado
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "TIPO", campo: "tipo", width: 100, align: Text.AlignCenter},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
+                    {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
+                    {titulo: "VALOR (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                ]
+                
+            default:
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 90},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 250},
+                    {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
                     {titulo: "VALOR (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
         }
     }
+
+    function calcularTotalReporte() {
+        var total = 0.0
+        
+        if (!datosReporte || datosReporte.length === 0) {
+            return 0.0
+        }
+        
+        for (var i = 0; i < datosReporte.length; i++) {
+            var registro = datosReporte[i]
+            var valor = 0.0
+            
+            // Buscar valor en diferentes campos posibles
+            if (registro.valor !== undefined && registro.valor !== null) {
+                valor = parseFloat(registro.valor) || 0.0
+            } else if (registro.Monto !== undefined && registro.Monto !== null) {
+                valor = parseFloat(registro.Monto) || 0.0
+            } else if (registro.Total !== undefined && registro.Total !== null) {
+                valor = parseFloat(registro.Total) || 0.0
+            }
+            
+            total += valor
+        }
+        
+        console.log("Total calculado para", datosReporte.length, "registros:", total.toFixed(2))
+        return total
+    }    
     
+
     function obtenerValorColumna(index, campo) {
         if (!datosReporte[index]) return "---"
         
         var registro = datosReporte[index]
         
         switch(campo) {
+            // CAMPOS BÁSICOS
             case "fecha":
                 return registro.fecha || "---"
             case "descripcion":
-                // ✅ CORRECCIÓN: Mostrar texto completo sin truncar
                 return registro.descripcion || "Sin detalles"
-            case "doctor_nombre":
-                return registro.doctor_nombre || "Sin doctor asignado"
-            case "especialidad":
-                return registro.especialidad || "Sin especialidad"
             case "cantidad":
                 return (registro.cantidad || 0).toString()
             case "valor":
                 return (registro.valor || 0).toFixed(2)
+                
+            // VENTAS
             case "numeroVenta":
                 return registro.numeroVenta || ("V" + String(index + 1).padStart(3, '0'))
+                
+            // INVENTARIO
             case "codigo":
                 return registro.codigo || ("COD" + String(index + 1).padStart(3, '0'))
             case "unidad":
                 return registro.unidad || "UND"
             case "precioUnitario":
                 return registro.precioUnitario ? registro.precioUnitario.toFixed(2) : "0.00"
+                
+            // COMPRAS
+            case "numeroCompra":
+                return registro.numeroCompra || ("C" + String(index + 1).padStart(3, '0'))
+                
+            // CONSULTAS
+            case "especialidad":
+                return registro.especialidad || "Sin especialidad"
+            case "paciente":
+                return registro.paciente || "Paciente"
+            case "doctor_nombre":
+                return registro.doctor_nombre || "Sin médico"
+                
+            // LABORATORIO
+            case "tipoAnalisis":
+                return registro.tipoAnalisis || registro.tipo || "Análisis General"
+            case "tecnico":
+                return registro.tecnico || "Sin asignar"
+                
+            // ENFERMERÍA
+            case "tipoProcedimiento":
+                return registro.tipoProcedimiento || registro.tipo || "Procedimiento General"
+            case "enfermero":
+                return registro.enfermero || "Sin asignar"
+                
+            // GASTOS - SEGÚN REQUERIMIENTO EXACTO
+            case "categoria":
+                return registro.categoria || registro.tipo_nombre || "General"
+            case "proveedor":
+                return registro.proveedor || "Sin proveedor"
+                
+            // CONSOLIDADO
+            case "tipo":
+                return registro.tipo || "Normal"
+                
             default:
                 return registro[campo] || "---"
         }
