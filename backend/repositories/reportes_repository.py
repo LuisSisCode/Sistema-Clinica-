@@ -96,31 +96,44 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_compras', ttl=300)
     def get_reporte_compras(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte de compras de farmacia"""
-
+        """
+        Genera reporte DETALLADO de compras por producto
+        Campos: fecha, producto, marca, stock (unidades compradas), proveedor, total gastado
+        """
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
+            p.Nombre as descripcion,  -- PRODUCTO
+            m.Nombre as marca,         -- MARCA
+            dc.Cantidad_Unitario as cantidad,  -- STOCK/UNIDADES COMPRADAS
+            pr.Nombre as proveedor,    -- PROVEEDOR
+            CASE 
+                WHEN l.Fecha_Vencimiento IS NOT NULL 
+                THEN FORMAT(l.Fecha_Vencimiento, 'dd/MM/yyyy')
+                ELSE 'Sin vencimiento'
+            END as fecha_vencimiento,  -- FECHA DE VENCIMIENTO
+            u.Nombre + ' ' + u.Apellido_Paterno as usuario,  -- USUARIO QUE COMPRÓ
+            dc.Precio_Unitario as valor,  -- TOTAL GASTADO POR PRODUCTO
+            
+            -- Campos adicionales para compatibilidad
             'C' + RIGHT('000' + CAST(c.id AS VARCHAR), 3) as numeroCompra,
-            pr.Nombre as descripcion,
-            SUM(dc.Cantidad_Caja + dc.Cantidad_Unitario) as cantidad,
-            c.Total as valor,
-            u.Nombre + ' ' + u.Apellido_Paterno as usuario,
-            pr.Direccion as direccion_proveedor
+            p.Codigo as codigo
         FROM Compra c
-        INNER JOIN Proveedor pr ON c.Id_Proveedor = pr.id
         INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
+        INNER JOIN Lote l ON dc.Id_Lote = l.id
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        INNER JOIN Proveedor pr ON c.Id_Proveedor = pr.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE c.Fecha >= ? AND c.Fecha <= ?
-        GROUP BY c.id, c.Fecha, pr.Nombre, pr.Direccion, c.Total, u.Nombre, u.Apellido_Paterno
-        ORDER BY c.Fecha DESC, c.id DESC
+        ORDER BY c.Fecha DESC, c.id DESC, p.Nombre ASC
         """
         
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
-    
+
     # ===============================
     # REPORTES DE CONSULTAS (TIPO 4)
     # ===============================

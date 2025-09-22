@@ -223,16 +223,16 @@ class GeneradorReportesPDF:
             doc = BaseDocTemplate(
                 filepath,
                 pagesize=letter,
-                rightMargin=25*mm,
-                leftMargin=25*mm,
-                topMargin=50*mm,  # Reducido de 55mm a 50mm
+                rightMargin=20*mm,     # Reducido de 25mm
+                leftMargin=20*mm,      # Reducido de 25mm  
+                topMargin=50*mm,
                 bottomMargin=45*mm
             )
             
             # Frame para el contenido
             frame = Frame(
-                25*mm, 45*mm, 
-                letter[0]-50*mm, letter[1]-95*mm,  # Ajustado para nuevo topMargin
+                20*mm, 45*mm,                          # Ajustado a nuevos márgenes
+                letter[0]-40*mm, letter[1]-95*mm,      # Ancho ajustado
                 id='normal'
             )
             
@@ -487,14 +487,15 @@ class GeneradorReportesPDF:
         print(f"🔍 Fila de total final: {fila_total}")
         tabla_datos.append(fila_total)
         
-        # Crear tabla
+        # Crear tabla CENTRADA
         tabla = Table(
             tabla_datos, 
             colWidths=anchos_columnas, 
             repeatRows=1,
             splitByRow=1,
-            spaceAfter=0,
-            spaceBefore=0
+            spaceAfter=12,
+            spaceBefore=12,
+            hAlign='CENTER'  # AGREGAR ESTA LÍNEA PARA CENTRAR
         )
         
         # Estilos de tabla
@@ -505,34 +506,42 @@ class GeneradorReportesPDF:
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),  # Aumentado de 8 a 12
+            ('TOPPADDING', (0, 0), (-1, 0), 12),     # Aumentado de 8 a 12
             
-            # Datos principales
+            # Datos principales - ESPACIADO MEJORADO
             ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 8),
-            ('TOPPADDING', (0, 1), (-1, -2), 10),
-            ('BOTTOMPADDING', (0, 1), (-1, -2), 10),
-            ('LEFTPADDING', (0, 1), (-1, -2), 4),
-            ('RIGHTPADDING', (0, 1), (-1, -2), 4),
-            ('VALIGN', (0, 1), (-1, -2), 'TOP'),
+            ('FONTSIZE', (0, 1), (-1, -2), 9),        # Aumentado de 8 a 9
+            ('TOPPADDING', (0, 1), (-1, -2), 14),     # Aumentado de 10 a 14
+            ('BOTTOMPADDING', (0, 1), (-1, -2), 14),  # Aumentado de 10 a 14
+            ('LEFTPADDING', (0, 1), (-1, -2), 8),     # Aumentado de 4 a 8
+            ('RIGHTPADDING', (0, 1), (-1, -2), 8),    # Aumentado de 4 a 8
+            ('VALIGN', (0, 1), (-1, -2), 'MIDDLE'),   # Centrado vertical
+            
+            # ALTURA MÍNIMA para todas las filas de datos
+            ('ROWHEIGHT', (0, 1), (-1, -2), 40),      # NUEVO: Altura fija de 40 puntos
             
             # FILA DE TOTAL - MUY DESTACADA
             ('BACKGROUND', (0, -1), (-1, -1), COLOR_AZUL_PRINCIPAL),
             ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 12),  # Más grande para ser visible
-            ('TOPPADDING', (0, -1), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, -1), (-1, -1), 10),
+            ('FONTSIZE', (0, -1), (-1, -1), 12),      # Más grande para ser visible
+            ('TOPPADDING', (0, -1), (-1, -1), 12),    # Aumentado
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 12), # Aumentado
+            ('LEFTPADDING', (0, -1), (-1, -1), 8),    # Aumentado
+            ('RIGHTPADDING', (0, -1), (-1, -1), 8),   # Aumentado
             
-            # Configuración general
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('GRID', (0, 0), (-1, -2), 1, COLOR_AZUL_PRINCIPAL),
+            # Configuración general MEJORADA
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),   # Todo centrado verticalmente
+            ('GRID', (0, 0), (-1, -2), 1.5, COLOR_AZUL_PRINCIPAL),  # Líneas más gruesas
             ('LINEBELOW', (0, 0), (-1, 0), 2, COLOR_AZUL_PRINCIPAL),
-            ('LINEABOVE', (0, -1), (-1, -1), 3, COLOR_AZUL_PRINCIPAL),  # Línea más gruesa
+            ('LINEABOVE', (0, -1), (-1, -1), 3, COLOR_AZUL_PRINCIPAL),
             
-            # Zebra striping
+            # Zebra striping MEJORADO
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_AZUL_CLARO]),
+            
+            # SEPARACIÓN entre celdas más clara
+            ('INNERGRID', (0, 0), (-1, -1), 1, COLOR_AZUL_PRINCIPAL),
         ]
         
         # Aplicar alineaciones específicas por columna
@@ -617,7 +626,7 @@ class GeneradorReportesPDF:
         """
         
         return Paragraph(mensaje, sin_datos_style)
-    
+        
     def _obtener_columnas_reporte(self, tipo_reporte):
         """Define las columnas EXACTAMENTE IGUALES a QML"""
         columnas = {
@@ -636,12 +645,15 @@ class GeneradorReportesPDF:
                 ("PRECIO UNIT.", 25, 'RIGHT'),
                 ("VALOR TOTAL (Bs)", 30, 'RIGHT')
             ],
-            3: [  # Compras de Farmacia
-                ("FECHA", 25, 'LEFT'),
-                ("Nº COMPRA", 25, 'LEFT'),
-                ("PROVEEDOR", 55, 'LEFT'),
-                ("CANTIDAD", 20, 'RIGHT'),
-                ("TOTAL (Bs)", 30, 'RIGHT')
+            3: [  # Compras de Farmacia - ANCHOS CORREGIDOS PARA CABER EN PÁGINA
+                ("FECHA", 20, 'LEFT'),          
+                ("PRODUCTO", 35, 'LEFT'),       
+                ("MARCA", 20, 'LEFT'),          
+                ("UNID.", 15, 'RIGHT'),         
+                ("PROVEEDOR", 25, 'LEFT'),     
+                ("F.VENC.", 20, 'LEFT'),        
+                ("USUARIO", 20, 'LEFT'),        
+                ("TOTAL (Bs)", 20, 'RIGHT')     
             ],
             4: [  # Consultas Médicas
                 ("FECHA", 25, 'LEFT'),
@@ -667,7 +679,7 @@ class GeneradorReportesPDF:
                 ("ENFERMERO/A", 35, 'LEFT'),
                 ("PRECIO (Bs)", 30, 'RIGHT')
             ],
-            7: [  # Gastos Operativos - EXACTO COMO SOLICITAS
+            7: [  # Gastos Operativos
                 ("FECHA", 25, 'LEFT'),
                 ("TIPO DE GASTO", 35, 'LEFT'),
                 ("DESCRIPCIÓN", 55, 'LEFT'),
@@ -719,9 +731,14 @@ class GeneradorReportesPDF:
             "STOCK": "cantidad",
             "PRECIO UNIT.": "precioUnitario",
             
-            # COMPRAS
+            # COMPRAS - NUEVOS CAMPOS DETALLADOS
             "Nº COMPRA": "numeroCompra",
-            "PROVEEDOR": "descripcion",  # En compras va en descripcion
+            "MARCA": "marca",                    # Campo marca
+            "UNID.": "cantidad",                 # Unidades compradas (título corto)
+            "PROVEEDOR": "proveedor",            # Campo proveedor específico
+            "F.VENC.": "fecha_vencimiento",      # Fecha de vencimiento (título corto)
+            "USUARIO": "usuario",                # Usuario que compró
+            "TOTAL (Bs)": "valor",               # Total con título completo
             
             # CONSULTAS
             "ESPECIALIDAD": "especialidad",
@@ -736,9 +753,8 @@ class GeneradorReportesPDF:
             "TIPO PROCEDIMIENTO": "tipoProcedimiento", 
             "ENFERMERO/A": "enfermero",
             
-            # GASTOS - CAMPOS EXACTOS
+            # GASTOS
             "TIPO DE GASTO": "categoria",
-            "PROVEEDOR": "proveedor",  # En gastos va en campo separado
             
             # CONSOLIDADO
             "TIPO": "tipo",
@@ -772,12 +788,16 @@ class GeneradorReportesPDF:
             except:
                 return "Bs 0.00"
         
-        # 2. Campos numéricos
-        elif campo_titulo in ["CANTIDAD", "STOCK"]:
+        # 2. Campos numéricos - CORREGIDO PARA EVITAR "---"
+        elif campo_titulo in ["CANTIDAD", "STOCK", "UNID."]:
             try:
-                return f"{int(float(valor)):,}"
+                # Siempre convertir a número, nunca mostrar "---"
+                if valor == "" or valor is None or str(valor).strip() == "":
+                    return "0"
+                valor_num = float(valor)
+                return f"{int(valor_num):,}"
             except:
-                return "0"
+                return "0"  # Siempre retornar número, nunca "---"
         
         elif campo_titulo == "PRECIO UNIT.":
             try:
@@ -797,7 +817,7 @@ class GeneradorReportesPDF:
                 valor = defaults.get(campo_titulo, "Sin asignar")
             return crear_parrafo(valor)
         
-        # 4. Descripciones
+        # 4. Descripciones y nombres de productos
         elif campo_titulo in ["DESCRIPCIÓN", "PRODUCTO"]:
             if not valor:
                 valor = "Sin detalles"
@@ -814,16 +834,32 @@ class GeneradorReportesPDF:
             if len(valor) > 18:
                 return crear_parrafo(valor)
             return valor
-            
-        # 6. PROVEEDOR - ESPECIAL PARA GASTOS
+        
+        # 6. NUEVOS CAMPOS ESPECÍFICOS PARA COMPRAS
+    
+        elif campo_titulo == "MARCA":
+            if not valor:
+                valor = "Sin marca"
+            if len(valor) > 12:  # Ajustado para nueva columna más pequeña
+                return crear_parrafo(valor)
+            return valor
+        
         elif campo_titulo == "PROVEEDOR":
             if not valor:
-                if tipo_reporte == 7:  # Gastos
-                    valor = registro.get('proveedor', 'Sin proveedor')
-                else:  # Compras
-                    valor = registro.get('descripcion', 'General')
-            
-            if len(valor) > 18:
+                valor = "Sin proveedor"
+            if len(valor) > 15:  # Ajustado para nueva columna más pequeña
+                return crear_parrafo(valor)
+            return valor
+        
+        elif campo_titulo == "F.VENC.":  # Cambiar de "FECHA VENC." a "F.VENC."
+            if not valor or valor in ["", "None", "null"]:
+                return "Sin venc."  # Texto más corto
+            return valor
+        
+        elif campo_titulo == "USUARIO":
+            if not valor:
+                valor = "Sin usuario"
+            if len(valor) > 12:  # Ajustado para nueva columna más pequeña
                 return crear_parrafo(valor)
             return valor
         

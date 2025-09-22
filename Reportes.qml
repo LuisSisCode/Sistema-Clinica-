@@ -1167,7 +1167,7 @@ Item {
             mostrarNotificacionError("Error inesperado al generar PDF")
         }
     }
-        
+
     function obtenerColumnasReporte() {
         switch(tipoReporteSeleccionado) {
             case 1: // Ventas de Farmacia
@@ -1188,14 +1188,16 @@ Item {
                     {titulo: "PRECIO UNIT.", campo: "precioUnitario", width: 100, align: Text.AlignRight},
                     {titulo: "VALOR TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
-                
             case 3: // Compras de Farmacia
                 return [
-                    {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "Nº COMPRA", campo: "numeroCompra", width: 90},
-                    {titulo: "PROVEEDOR", campo: "descripcion", width: 180},
-                    {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
-                    {titulo: "TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                    {titulo: "FECHA", campo: "fecha", width: 85},
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 170},
+                    {titulo: "MARCA", campo: "marca", width: 85},
+                    {titulo: "UNID.", campo: "cantidad", width: 60, align: Text.AlignRight},
+                    {titulo: "PROVEEDOR", campo: "proveedor", width: 135},
+                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 85},   // Cambiado
+                    {titulo: "USUARIO", campo: "usuario", width: 100},
+                    {titulo: "TOTAL (Bs)", campo: "valor", width: 85, align: Text.AlignRight}
                 ]
                 
             case 4: // Consultas Médicas
@@ -1228,7 +1230,7 @@ Item {
                     {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
                 
-            case 7: // Gastos Operativos - SEGÚN REQUERIMIENTO EXACTO
+            case 7: // Gastos Operativos
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 90},
                     {titulo: "TIPO DE GASTO", campo: "categoria", width: 140},
