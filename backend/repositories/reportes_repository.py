@@ -27,35 +27,30 @@ class ReportesRepository(BaseRepository):
     # REPORTES DE VENTAS (TIPO 1)
     # ===============================
     
-    @cached_query('reporte_ventas', ttl=300)
+    @cached_query('reporte_ventas', ttl=30)  # ✅ CAMBIAR: TTL muy bajo para actualizaciones rápidas
     def get_reporte_ventas(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """
-        Genera reporte de ventas de farmacia
-        
-        Args:
-            fecha_desde: Fecha inicio en formato DD/MM/YYYY
-            fecha_hasta: Fecha fin en formato DD/MM/YYYY
+        ✅ CORREGIDO: Muestra productos individuales, no agregados
         """
-        # Convertir fechas del formato DD/MM/YYYY a YYYY-MM-DD
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
-        
+                
         query = """
         SELECT 
             FORMAT(v.Fecha, 'dd/MM/yyyy') as fecha,
-            'V' + RIGHT('000' + CAST(v.id AS VARCHAR), 3) as numeroVenta,
-            STRING_AGG(p.Nombre + ' x' + CAST(dv.Cantidad_Unitario AS VARCHAR), ', ') as descripcion,
-            SUM(dv.Cantidad_Unitario) as cantidad,
-            v.Total as valor,
-            u.Nombre + ' ' + u.Apellido_Paterno as usuario
+            'V' + RIGHT('000' + CAST(v.id AS VARCHAR), 3) as numeroVenta,  -- ✅ DEBE ser numeroVenta
+            p.Nombre as descripcion,
+            dv.Cantidad_Unitario as cantidad,                              -- ✅ DEBE ser cantidad  
+            dv.Precio_Unitario as precio_unitario,                         -- ✅ DEBE ser precio_unitario
+            (dv.Cantidad_Unitario * dv.Precio_Unitario) as valor,
+            u.Nombre + ' ' + u.Apellido_Paterno as usuario                 -- ✅ DEBE ser usuario
         FROM Ventas v
         INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
         INNER JOIN Lote l ON dv.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Usuario u ON v.Id_Usuario = u.id
         WHERE v.Fecha >= ? AND v.Fecha <= ?
-        GROUP BY v.id, v.Fecha, v.Total, u.Nombre, u.Apellido_Paterno
-        ORDER BY v.Fecha DESC, v.id DESC
+        ORDER BY v.Fecha DESC, v.id DESC, p.Nombre ASC
         """
         
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
@@ -237,31 +232,43 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_laboratorio', ttl=300)
     def get_reporte_laboratorio(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Laboratorio: fecha, tipoAnalisis, descripción, paciente, técnico, precio"""
+        """Laboratorio: fecha, análisis, tipo, paciente, laboratorista, precio"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(l.Fecha, 'dd/MM/yyyy') as fecha,
-            COALESCE(ta.Nombre, 'Análisis General') as tipoAnalisis,
-            COALESCE(ta.Descripcion, COALESCE(ta.Nombre, 'Análisis de laboratorio')) as descripcion,
+            
+            -- ✅ ANÁLISIS - Nombre del tipo de análisis
+            COALESCE(ta.Nombre, 'Análisis General') as analisis,
+            
+            -- ✅ TIPO - Normal o Emergencia  
+            COALESCE(l.Tipo, 'Normal') as tipo,
+            
+            -- ✅ PACIENTE - Nombre completo
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, 
                 CASE WHEN p.Apellido_Materno IS NOT NULL AND p.Apellido_Materno != '' 
                         THEN ' ' + p.Apellido_Materno 
                         ELSE '' END) as paciente,
+            
+            -- ✅ LABORATORISTA - Técnico encargado
             CASE 
                 WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno,
                     CASE WHEN t.Apellido_Materno IS NOT NULL AND t.Apellido_Materno != '' 
                         THEN ' ' + t.Apellido_Materno 
                         ELSE '' END)
                 ELSE 'Sin asignar'
-            END as tecnico,
+            END as laboratorista,
+            
+            -- ✅ PRECIO - Según tipo de servicio
             CASE 
                 WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
                 ELSE COALESCE(ta.Precio_Normal, 20.00) 
             END as valor,
+            
             1 as cantidad
+            
         FROM Laboratorio l
         INNER JOIN Pacientes p ON l.Id_Paciente = p.id
         LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
@@ -325,22 +332,20 @@ class ReportesRepository(BaseRepository):
     # REPORTES DE ENFERMERÍA (TIPO 6)
     # ===============================
     
-    @cached_query('reporte_enfermeria', ttl=300)
     def get_reporte_enfermeria(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Enfermería: CONSULTA SIMPLIFICADA con campos que SÍ EXISTEN"""
+        """Enfermería: fecha, procedimiento, tipo, paciente, enfermero/a, precio"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
-        # ✅ CONSULTA CORREGIDA - Solo campos que existen realmente
         query = """
         SELECT 
             FORMAT(e.Fecha, 'dd/MM/yyyy') as fecha,
             
-            -- ✅ PROCEDIMIENTO - Solo de tabla Tipos_Procedimientos
-            COALESCE(tp.Nombre, 'Procedimiento General') as tipoProcedimiento,
+            -- ✅ PROCEDIMIENTO - Detalles del procedimiento
+            COALESCE(tp.Descripcion, tp.Nombre, 'Procedimiento de enfermería') as procedimiento,
             
-            -- ✅ DESCRIPCIÓN - Solo de tabla Tipos_Procedimientos  
-            COALESCE(tp.Descripcion, tp.Nombre, 'Procedimiento de enfermería') as descripcion,
+            -- ✅ TIPO - Normal o Emergencia
+            COALESCE(e.Tipo, 'Normal') as tipo,
             
             -- ✅ PACIENTE - Nombre completo
             CONCAT(
@@ -387,25 +392,36 @@ class ReportesRepository(BaseRepository):
         ORDER BY e.Fecha DESC, e.id DESC
         """
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
+    
     # ===============================
     # REPORTES DE GASTOS (TIPO 7)
     # ===============================
     
     @cached_query('reporte_gastos', ttl=300)
     def get_reporte_gastos(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Gastos: fecha, tipo de gasto, descripción, monto, proveedor - EXACTO"""
+        """Gastos: fecha, tipo de gasto, descripción, proveedor, monto"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(g.Fecha, 'dd/MM/yyyy') as fecha,
-            tg.Nombre as categoria,
+            
+            -- ✅ TIPO DE GASTO
+            tg.Nombre as tipo_gasto,
+            
+            -- ✅ DESCRIPCIÓN
             g.Descripcion as descripcion,
-            g.Monto as valor,
+            
+            -- ✅ PROVEEDOR
             COALESCE(g.Proveedor, 'Sin proveedor') as proveedor,
+            
+            -- ✅ MONTO
+            g.Monto as valor,
+            
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as registrado_por,
             1 as cantidad
+            
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
         INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
@@ -417,97 +433,301 @@ class ReportesRepository(BaseRepository):
     # ===============================
     # REPORTE CONSOLIDADO (TIPO 8)
     # ===============================
-    
-    @cached_query('reporte_consolidado', ttl=600)
-    def get_reporte_consolidado(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Genera reporte financiero consolidado"""
 
+    @cached_query('reporte_ingresos_egresos', ttl=600)
+    def get_reporte_consolidado(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
+        """
+        ✅ MEJORADO: Genera reporte de ingresos y egresos comprehensivo y detallado
+        Incluye análisis por categorías y datos estructurados para el PDF profesional
+        """
+        
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
-        # Consulta UNION para consolidar todos los ingresos y egresos
-        query = """
-        -- VENTAS (INGRESOS)
-        SELECT 
-            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
-            'INGRESO' as tipo,
-            'Ventas de Farmacia' as descripcion,
-            COUNT(*) as cantidad,
-            SUM(Total) as valor
-        FROM Ventas 
-        WHERE Fecha >= ? AND Fecha <= ?
+        movimientos_financieros = []
         
-        UNION ALL
-        
-        -- CONSULTAS (INGRESOS)
-        SELECT 
-            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
-            'INGRESO' as tipo,
-            'Consultas Médicas' as descripcion,
-            COUNT(*) as cantidad,
-            SUM(CASE WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia 
-                     ELSE e.Precio_Normal END) as valor
-        FROM Consultas c
-        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        WHERE c.Fecha >= ? AND c.Fecha <= ?
-        
-        UNION ALL
-        
-        -- LABORATORIO (INGRESOS)
-        SELECT 
-            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
-            'INGRESO' as tipo,
-            'Análisis de Laboratorio' as descripcion,
-            COUNT(*) as cantidad,
-            SUM(CASE WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
-                     ELSE COALESCE(ta.Precio_Normal, 20.00) END) as valor
-        FROM Laboratorio l
-        LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-        WHERE l.Fecha >= ? AND l.Fecha <= ?
-        
-        UNION ALL
-        
-        -- ENFERMERÍA (INGRESOS)
-        SELECT 
-            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
-            'INGRESO' as tipo,
-            'Procedimientos de Enfermería' as descripcion,
-            COUNT(*) as cantidad,
-            SUM((CASE WHEN e.Tipo = 'Emergencia' THEN tp.Precio_Emergencia 
-                      ELSE tp.Precio_Normal END) * e.Cantidad) as valor
-        FROM Enfermeria e
-        INNER JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-        WHERE e.Fecha >= ? AND e.Fecha <= ?
-        
-        UNION ALL
-        
-        -- COMPRAS (EGRESOS)
-        SELECT 
-            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
-            'EGRESO' as tipo,
-            'Compras de Farmacia' as descripcion,
-            COUNT(*) as cantidad,
-            -SUM(Total) as valor
-        FROM Compra
-        WHERE Fecha >= ? AND Fecha <= ?
-        
-        UNION ALL
-        
-        -- GASTOS (EGRESOS)
-        SELECT 
-            FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
-            'EGRESO' as tipo,
-            'Gastos Operativos' as descripcion,
-            COUNT(*) as cantidad,
-            -SUM(Monto) as valor
-        FROM Gastos
-        WHERE Fecha >= ? AND Fecha <= ?
-        
-        ORDER BY tipo DESC, valor DESC
+        try:
+            print(f"💰 Generando Reporte de Ingresos y Egresos para período: {fecha_desde} - {fecha_hasta}")
+            
+            # ===== INGRESOS DETALLADOS =====
+            
+            # 1. VENTAS DE FARMACIA (INGRESOS)
+            try:
+                query_ventas = """
+                SELECT 
+                    FORMAT(v.Fecha, 'dd/MM/yyyy') as fecha,
+                    'INGRESO' as tipo,
+                    'Ventas de Farmacia - ' + p.Nombre as descripcion,
+                    dv.Cantidad_Unitario as cantidad,
+                    (dv.Cantidad_Unitario * dv.Precio_Unitario) as valor,
+                    'farmacia' as categoria,
+                    'Venta #' + CAST(v.id AS VARCHAR) as referencia
+                FROM Ventas v
+                INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
+                INNER JOIN Lote l ON dv.Id_Lote = l.id
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                WHERE v.Fecha >= ? AND v.Fecha <= ?
+                """
+                
+                ventas_detalle = self._execute_query(query_ventas, (fecha_desde_sql, fecha_hasta_sql))
+                if ventas_detalle:
+                    movimientos_financieros.extend(ventas_detalle)
+                    print(f"✅ Ventas detalladas: {len(ventas_detalle)} movimientos")
+                
+            except Exception as e:
+                print(f"⚠️ Error en ventas detalladas: {e}")
+            
+            # 2. CONSULTAS MÉDICAS (INGRESOS)
+            try:
+                query_consultas = """
+                SELECT 
+                    FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
+                    'INGRESO' as tipo,
+                    'Consulta Médica - ' + e.Nombre as descripcion,
+                    1 as cantidad,
+                    CASE 
+                        WHEN c.Tipo_Consulta = 'Emergencia' THEN COALESCE(e.Precio_Emergencia, 50.00)
+                        ELSE COALESCE(e.Precio_Normal, 30.00) 
+                    END as valor,
+                    'consultas' as categoria,
+                    'Consulta #' + CAST(c.id AS VARCHAR) as referencia
+                FROM Consultas c
+                INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
+                WHERE c.Fecha >= ? AND c.Fecha <= ?
+                """
+                
+                consultas_detalle = self._execute_query(query_consultas, (fecha_desde_sql, fecha_hasta_sql))
+                if consultas_detalle:
+                    movimientos_financieros.extend(consultas_detalle)
+                    print(f"✅ Consultas médicas: {len(consultas_detalle)} movimientos")
+                
+            except Exception as e:
+                print(f"⚠️ Error en consultas médicas: {e}")
+            
+            # 3. ANÁLISIS DE LABORATORIO (INGRESOS)
+            try:
+                query_laboratorio = """
+                SELECT 
+                    FORMAT(l.Fecha, 'dd/MM/yyyy') as fecha,
+                    'INGRESO' as tipo,
+                    'Análisis de Laboratorio - ' + COALESCE(ta.Nombre, 'Análisis General') as descripcion,
+                    1 as cantidad,
+                    CASE 
+                        WHEN l.Tipo = 'Emergencia' THEN COALESCE(ta.Precio_Emergencia, 25.00)
+                        ELSE COALESCE(ta.Precio_Normal, 20.00) 
+                    END as valor,
+                    'laboratorio' as categoria,
+                    'Lab #' + CAST(l.id AS VARCHAR) as referencia
+                FROM Laboratorio l
+                LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
+                WHERE l.Fecha >= ? AND l.Fecha <= ?
+                """
+                
+                laboratorio_detalle = self._execute_query(query_laboratorio, (fecha_desde_sql, fecha_hasta_sql))
+                if laboratorio_detalle:
+                    movimientos_financieros.extend(laboratorio_detalle)
+                    print(f"✅ Análisis de laboratorio: {len(laboratorio_detalle)} movimientos")
+                
+            except Exception as e:
+                print(f"⚠️ Error en análisis de laboratorio: {e}")
+            
+            # 4. PROCEDIMIENTOS DE ENFERMERÍA (INGRESOS)
+            try:
+                query_enfermeria = """
+                SELECT 
+                    FORMAT(e.Fecha, 'dd/MM/yyyy') as fecha,
+                    'INGRESO' as tipo,
+                    'Enfermería - ' + COALESCE(tp.Nombre, 'Procedimiento General') as descripcion,
+                    COALESCE(e.Cantidad, 1) as cantidad,
+                    (COALESCE(e.Cantidad, 1) * 
+                    CASE 
+                        WHEN COALESCE(e.Tipo, 'Normal') = 'Emergencia' 
+                        THEN COALESCE(tp.Precio_Emergencia, 25.00)
+                        ELSE COALESCE(tp.Precio_Normal, 20.00) 
+                    END) as valor,
+                    'enfermeria' as categoria,
+                    'Proc #' + CAST(e.id AS VARCHAR) as referencia
+                FROM Enfermeria e
+                LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
+                WHERE e.Fecha >= ? AND e.Fecha <= ?
+                """
+                
+                enfermeria_detalle = self._execute_query(query_enfermeria, (fecha_desde_sql, fecha_hasta_sql))
+                if enfermeria_detalle:
+                    movimientos_financieros.extend(enfermeria_detalle)
+                    print(f"✅ Procedimientos de enfermería: {len(enfermeria_detalle)} movimientos")
+                
+            except Exception as e:
+                print(f"⚠️ Error en procedimientos de enfermería: {e}")
+            
+            # ===== EGRESOS DETALLADOS =====
+            
+            # 5. COMPRAS DE FARMACIA (EGRESOS)
+            try:
+                query_compras = """
+                SELECT 
+                    FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
+                    'EGRESO' as tipo,
+                    'Compra Farmacia - ' + p.Nombre as descripcion,
+                    dc.Cantidad_Unitario as cantidad,
+                    -(dc.Cantidad_Unitario * dc.Precio_Unitario) as valor,  -- Negativo para egresos
+                    'compras_farmacia' as categoria,
+                    'Compra #' + CAST(c.id AS VARCHAR) as referencia
+                FROM Compra c
+                INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
+                INNER JOIN Lote l ON dc.Id_Lote = l.id
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                WHERE c.Fecha >= ? AND c.Fecha <= ?
+                """
+                
+                compras_detalle = self._execute_query(query_compras, (fecha_desde_sql, fecha_hasta_sql))
+                if compras_detalle:
+                    movimientos_financieros.extend(compras_detalle)
+                    print(f"✅ Compras de farmacia: {len(compras_detalle)} movimientos")
+                
+            except Exception as e:
+                print(f"⚠️ Error en compras de farmacia: {e}")
+            
+            # 6. GASTOS OPERATIVOS (EGRESOS)
+            try:
+                query_gastos = """
+                SELECT 
+                    FORMAT(g.Fecha, 'dd/MM/yyyy') as fecha,
+                    'EGRESO' as tipo,
+                    tg.Nombre + ' - ' + g.Descripcion as descripcion,
+                    1 as cantidad,
+                    -g.Monto as valor,  -- Negativo para egresos
+                    'gastos_operativos' as categoria,
+                    'Gasto #' + CAST(g.id AS VARCHAR) as referencia
+                FROM Gastos g
+                INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
+                WHERE g.Fecha >= ? AND g.Fecha <= ?
+                """
+                
+                gastos_detalle = self._execute_query(query_gastos, (fecha_desde_sql, fecha_hasta_sql))
+                if gastos_detalle:
+                    movimientos_financieros.extend(gastos_detalle)
+                    print(f"✅ Gastos operativos: {len(gastos_detalle)} movimientos")
+                
+            except Exception as e:
+                print(f"⚠️ Error en gastos operativos: {e}")
+            
+            # ===== ORDENAR MOVIMIENTOS POR FECHA =====
+            if movimientos_financieros:
+                # Ordenar por fecha descendente
+                movimientos_financieros.sort(key=lambda x: self._parse_fecha_dd_mm_yyyy(x.get('fecha', '01/01/2024')), reverse=True)
+                
+                # Calcular totales para logging
+                total_ingresos = sum(float(m.get('valor', 0)) for m in movimientos_financieros if m.get('tipo') == 'INGRESO')
+                total_egresos = sum(abs(float(m.get('valor', 0))) for m in movimientos_financieros if m.get('tipo') == 'EGRESO')
+                saldo_neto = total_ingresos - total_egresos
+                
+                print(f"💹 RESUMEN FINANCIERO:")
+                print(f"   📈 Total Ingresos: Bs {total_ingresos:,.2f}")
+                print(f"   📉 Total Egresos: Bs {total_egresos:,.2f}")
+                print(f"   💰 Saldo Neto: Bs {saldo_neto:,.2f}")
+                print(f"   📊 Total Movimientos: {len(movimientos_financieros)}")
+                
+                return movimientos_financieros
+            else:
+                print("ℹ️ No se encontraron movimientos financieros para el período")
+                return []
+            
+        except Exception as e:
+            print(f"❌ Error crítico en get_reporte_consolidado mejorado: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _parse_fecha_dd_mm_yyyy(self, fecha_str: str) -> datetime:
+        """Convierte fecha DD/MM/YYYY a objeto datetime para ordenamiento"""
+        try:
+            return datetime.strptime(fecha_str, "%d/%m/%Y")
+        except:
+            return datetime(2024, 1, 1)  # Fecha por defecto
+    
+    def get_analisis_financiero_avanzado(self, fecha_desde: str, fecha_hasta: str) -> Dict[str, Any]:
         """
-        
-        params = (fecha_desde_sql, fecha_hasta_sql) * 6  # 6 consultas x 2 parámetros cada una
-        return self._execute_query(query, params)
+        ✅ NUEVO: Genera análisis financiero avanzado para complementar el reporte
+        """
+        try:
+            fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+            fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
+            
+            # Análisis de ingresos por categoría
+            query_ingresos_categoria = """
+            SELECT 
+                'Ventas Farmacia' as categoria,
+                COUNT(*) as transacciones,
+                SUM(dv.Cantidad_Unitario * dv.Precio_Unitario) as valor_total,
+                AVG(dv.Cantidad_Unitario * dv.Precio_Unitario) as valor_promedio
+            FROM Ventas v
+            INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
+            WHERE v.Fecha >= ? AND v.Fecha <= ?
+            
+            UNION ALL
+            
+            SELECT 
+                'Consultas Médicas' as categoria,
+                COUNT(*) as transacciones,
+                SUM(CASE 
+                    WHEN c.Tipo_Consulta = 'Emergencia' THEN COALESCE(e.Precio_Emergencia, 50.00)
+                    ELSE COALESCE(e.Precio_Normal, 30.00) 
+                END) as valor_total,
+                AVG(CASE 
+                    WHEN c.Tipo_Consulta = 'Emergencia' THEN COALESCE(e.Precio_Emergencia, 50.00)
+                    ELSE COALESCE(e.Precio_Normal, 30.00) 
+                END) as valor_promedio
+            FROM Consultas c
+            INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
+            WHERE c.Fecha >= ? AND c.Fecha <= ?
+            """
+            
+            params_ingresos = (fecha_desde_sql, fecha_hasta_sql) * 2
+            analisis_ingresos = self._execute_query(query_ingresos_categoria, params_ingresos)
+            
+            # Análisis de egresos por categoría
+            query_egresos_categoria = """
+            SELECT 
+                'Compras Farmacia' as categoria,
+                COUNT(*) as transacciones,
+                SUM(dc.Cantidad_Unitario * dc.Precio_Unitario) as valor_total,
+                AVG(dc.Cantidad_Unitario * dc.Precio_Unitario) as valor_promedio
+            FROM Compra c
+            INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
+            WHERE c.Fecha >= ? AND c.Fecha <= ?
+            
+            UNION ALL
+            
+            SELECT 
+                'Gastos Operativos' as categoria,
+                COUNT(*) as transacciones,
+                SUM(g.Monto) as valor_total,
+                AVG(g.Monto) as valor_promedio
+            FROM Gastos g
+            WHERE g.Fecha >= ? AND g.Fecha <= ?
+            """
+            
+            params_egresos = (fecha_desde_sql, fecha_hasta_sql) * 2
+            analisis_egresos = self._execute_query(query_egresos_categoria, params_egresos)
+            
+            return {
+                'ingresos_por_categoria': analisis_ingresos or [],
+                'egresos_por_categoria': analisis_egresos or [],
+                'fecha_analisis': datetime.now().strftime("%d/%m/%Y %H:%M"),
+                'periodo_desde': fecha_desde,
+                'periodo_hasta': fecha_hasta
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Error en análisis financiero avanzado: {e}")
+            return {
+                'ingresos_por_categoria': [],
+                'egresos_por_categoria': [],
+                'fecha_analisis': datetime.now().strftime("%d/%m/%Y %H:%M"),
+                'periodo_desde': fecha_desde,
+                'periodo_hasta': fecha_hasta
+            }
     
     # ===============================
     # MÉTODOS DE UTILIDAD
@@ -621,7 +841,7 @@ class ReportesRepository(BaseRepository):
                 5: "Laboratorio",
                 6: "Enfermeria",
                 7: "Gastos",
-                8: "Ventas"  # Para consolidado, verificamos al menos una tabla
+                8: "Ventas"  # Para ingresos y egresos, verificamos al menos una tabla
             }
             
             tabla = tablas_por_tipo.get(tipo_reporte, "Ventas")
@@ -648,7 +868,7 @@ class ReportesRepository(BaseRepository):
         cache_types = [
             'reporte_ventas', 'reporte_inventario', 'reporte_compras',
             'reporte_consultas', 'reporte_laboratorio', 'reporte_enfermeria',
-            'reporte_gastos', 'reporte_consolidado'
+            'reporte_gastos', 'reporte_ingresos_egresos'  # ✅ Actualizado el nombre del caché
         ]
         invalidate_after_update(cache_types)
         print("🗑️ Cachés de reportes invalidados")
