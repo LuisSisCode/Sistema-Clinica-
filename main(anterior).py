@@ -1,9 +1,7 @@
-# main.py - VERSIÓN FUSIONADA Y COMPLETA
-
 import sys
 import os
 import gc
-from PySide6.QtCore import QObject, Signal, Slot, QUrl, QTimer, Property, QSettings, QDateTime
+from PySide6.QtCore import QObject, Signal, Slot, QUrl, QTimer, Property
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -74,7 +72,7 @@ class AppController(QObject):
         self.dashboard_model = None
         self.auth_model = None
         
-        # Usuario autenticado - SIMPLIFICADO
+        # Usuario autenticado
         self._usuario_autenticado_id = 0
         self._usuario_autenticado_nombre = ""
         self._usuario_autenticado_rol = ""
@@ -94,7 +92,7 @@ class AppController(QObject):
     def initialize_models(self):
         """Inicializa todos los models QObject"""
         try:
-            print("🗂️ Creando instancias de modelos...")
+            print("🏗️ Creando instancias de modelos...")
             
             # Crear instancias de models
             self.auth_model = AuthModel() 
@@ -107,7 +105,7 @@ class AppController(QObject):
             self.usuario_model = UsuarioModel()
             self.gasto_model = GastoModel()
             self.laboratorio_model = LaboratorioModel()
-            self.trabajador_model = TrabajadorModel()
+            self.trabajador_model = TrabajadorModel()  # ← AHORA SE CREA CORRECTAMENTE
             self.enfermeria_model = EnfermeriaModel()
             self.configuracion_model = ConfiguracionModel()
             self.confi_laboratorio_model = ConfiLaboratorioModel()
@@ -123,8 +121,11 @@ class AppController(QObject):
             # Conectar signals entre models
             self._connect_models()
             
-            print("✅ Modelos inicializados correctamente")
+            print("✅ Modelos inicializados, listos para autenticación")
             self.modelsReady.emit()
+            
+            # ❌ REMOVER ESTA LÍNEA - La autenticación se establecerá desde AuthAppController
+            # self._establecer_usuario_autenticado()
             
         except Exception as e:
             print(f"❌ Error inicializando models: {e}")
@@ -133,34 +134,179 @@ class AppController(QObject):
 
     @Slot()
     def cleanup(self):
-        """Limpia recursos usando el sistema de cleanup gradual"""
-        self.gradual_cleanup()
+        """Limpia recursos usando el sistema de emergency shutdown"""
+        self.emergency_shutdown()
 
     @Slot()
-    def gradual_cleanup(self):
-        """Sistema de cleanup gradual - preserva la estructura para transiciones"""
+    def emergency_shutdown(self):
+        """
+        Sistema de shutdown de emergencia - detiene TODO inmediatamente
+        Proceso sincronizado en 3 fases para evitar retención de procesos
+        """
         try:
-            print("🧹 CLEANUP GRADUAL INICIADO")
+            print("🔴 EMERGENCY SHUTDOWN INICIADO")
             
-            # RESETEAR USUARIO AUTENTICADO INMEDIATAMENTE
-            self._usuario_autenticado_id = 0
-            self._usuario_autenticado_nombre = ""
-            self._usuario_autenticado_rol = ""
-            self.usuarioChanged.emit()
+            # FASE 1: DETENER TODOS LOS TIMERS INMEDIATAMENTE
+            self._stop_all_timers_immediately()
             
-            # LIMPIAR DATOS EN MEMORIA SIN DESTRUIR OBJETOS
-            self._clear_model_data_only()
+            # FASE 2: DESCONECTAR SEÑALES ORDENADAMENTE  
+            self._disconnect_all_signals_ordered()
             
-            print("✅ CLEANUP GRADUAL COMPLETADO")
+            # FASE 3: LIMPIEZA SINCRONIZADA DE RECURSOS
+            self._cleanup_resources_synchronously()
+            
+            print("✅ EMERGENCY SHUTDOWN COMPLETADO")
             
         except Exception as e:
-            print(f"⚠️ Error en cleanup gradual: {e}")
+            print(f"⚠️ Error en emergency shutdown: {e}")
+            # Forzar limpieza básica aunque falle
+            self._force_basic_cleanup()
 
-    def _clear_model_data_only(self):
-        """Limpia datos sin destruir objetos"""
+    def _stop_all_timers_immediately(self):
+        """FASE 1: Detiene TODOS los timers sin excepción"""
         try:
-            print("🧹 Limpiando datos...")
+            print("⏹️ FASE 1: Deteniendo todos los timers...")
             
+            # Lista de todos los modelos
+            models = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.paciente_model,
+                self.usuario_model, self.gasto_model, self.laboratorio_model,
+                self.trabajador_model, self.enfermeria_model, self.configuracion_model,
+                self.confi_laboratorio_model, self.confi_enfermeria_model,
+                self.confi_consulta_model, self.confi_trabajadores_model,
+                self.reportes_model, self.dashboard_model, self.auth_model
+            ]
+            
+            timer_count = 0
+            
+            for model in models:
+                if model:
+                    try:
+                        # Buscar y detener timers por nombres conocidos
+                        timer_names = [
+                            '_refresh_timer', 'update_timer', '_autoRefreshTimer', 
+                            'search_timer', '_timer', 'refresh_timer', 'auto_timer',
+                            'notification_timer', '_update_timer'
+                        ]
+                        
+                        for timer_name in timer_names:
+                            if hasattr(model, timer_name):
+                                timer = getattr(model, timer_name)
+                                if timer and hasattr(timer, 'isActive') and timer.isActive():
+                                    timer.stop()
+                                    timer_count += 1
+                                    print(f"   ⏹️ Timer detenido: {type(model).__name__}.{timer_name}")
+                        
+                        # Buscar timers por inspección de atributos
+                        for attr_name in dir(model):
+                            if not attr_name.startswith('__'):
+                                try:
+                                    attr = getattr(model, attr_name)
+                                    if (hasattr(attr, 'isActive') and 
+                                        hasattr(attr, 'stop') and 
+                                        callable(getattr(attr, 'stop')) and
+                                        attr.isActive()):
+                                        attr.stop()
+                                        timer_count += 1
+                                        print(f"   ⏹️ Timer detectado detenido: {type(model).__name__}.{attr_name}")
+                                except:
+                                    pass
+                                    
+                    except Exception as e:
+                        print(f"⚠️ Error deteniendo timers en {type(model).__name__}: {e}")
+            
+            print(f"✅ FASE 1 COMPLETA: {timer_count} timers detenidos")
+            
+        except Exception as e:
+            print(f"❌ Error en FASE 1: {e}")
+
+    def _disconnect_all_signals_ordered(self):
+        """FASE 2: Desconecta señales en orden específico"""
+        try:
+            print("🔌 FASE 2: Desconectando señales...")
+            
+            # 2.1: Desconectar señales globales primero
+            try:
+                # Intentar desconectar señales globales si existen
+                app = QGuiApplication.instance()
+                if app:
+                    # Desconectar todas las señales de la aplicación
+                    for signal_name in dir(app):
+                        if not signal_name.startswith('__'):
+                            try:
+                                signal = getattr(app, signal_name)
+                                if hasattr(signal, 'disconnect'):
+                                    signal.disconnect()
+                            except:
+                                pass
+                    print("   🔌 Señales globales desconectadas")
+            except Exception as e:
+                print(f"   ⚠️ Error desconectando señales globales: {e}")
+            
+            # 2.2: Desconectar referencias bidireccionales
+            try:
+                if self.compra_model and self.proveedor_model:
+                    # Romper referencia bidireccional
+                    if hasattr(self.compra_model, '_proveedor_model_ref'):
+                        self.compra_model._proveedor_model_ref = None
+                    if hasattr(self.proveedor_model, '_compra_model_ref'):
+                        self.proveedor_model._compra_model_ref = None
+                    print("   🔌 Referencias bidireccionales rotas")
+            except Exception as e:
+                print(f"   ⚠️ Error rompiendo referencias: {e}")
+            
+            # 2.3: Desconectar señales internas de cada modelo
+            models = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.paciente_model,
+                self.usuario_model, self.gasto_model, self.laboratorio_model,
+                self.trabajador_model, self.enfermeria_model, self.configuracion_model,
+                self.confi_laboratorio_model, self.confi_enfermeria_model,
+                self.confi_consulta_model, self.confi_trabajadores_model,
+                self.reportes_model, self.dashboard_model, self.auth_model
+            ]
+            
+            for model in models:
+                if model:
+                    try:
+                        # Llamar método cleanup específico si existe
+                        if hasattr(model, 'emergency_disconnect'):
+                            model.emergency_disconnect()
+                        elif hasattr(model, 'cleanup'):
+                            model.cleanup()
+                    except Exception as e:
+                        print(f"   ⚠️ Error cleanup {type(model).__name__}: {e}")
+            
+            print("✅ FASE 2 COMPLETA: Señales desconectadas")
+            
+        except Exception as e:
+            print(f"❌ Error en FASE 2: {e}")
+
+    def _cleanup_resources_synchronously(self):
+        """FASE 3: Limpieza sincronizada de recursos"""
+        try:
+            print("🧹 FASE 3: Limpieza sincronizada...")
+            
+            # 3.1: Invalidar todos los caches
+            models_with_repos = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.gasto_model,
+                self.laboratorio_model, self.trabajador_model, self.enfermeria_model
+            ]
+            
+            for model in models_with_repos:
+                if model and hasattr(model, 'repository'):
+                    try:
+                        repo = model.repository
+                        if hasattr(repo, '_cache_manager'):
+                            repo._cache_manager.clear()
+                        if hasattr(repo, 'invalidate_all_caches'):
+                            repo.invalidate_all_caches()
+                    except Exception as e:
+                        print(f"   ⚠️ Error limpiando cache {type(model).__name__}: {e}")
+            
+            # 3.2: Establecer estados de shutdown
             all_models = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.consulta_model, self.paciente_model,
@@ -168,28 +314,66 @@ class AppController(QObject):
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
-                self.reportes_model, self.dashboard_model
+                self.reportes_model, self.dashboard_model, self.auth_model
             ]
             
             for model in all_models:
                 if model:
                     try:
-                        # Establecer estado shutdown sin destruir
+                        # Establecer estado shutdown
+                        if hasattr(model, '_estadoActual'):
+                            model._estadoActual = "shutdown"
+                        if hasattr(model, '_loading'):
+                            model._loading = False
+                        # ✅ RESETEAR USUARIO EN TODOS LOS MODELOS
                         if hasattr(model, '_usuario_actual_id'):
                             model._usuario_actual_id = 0
-                        if hasattr(model, '_usuario_actual_rol'):
-                            model._usuario_actual_rol = ""
-                        
                         # Limpiar datos en memoria
                         self._clear_model_data(model)
-                        
                     except Exception as e:
-                        print(f"⚠️ Error limpiando datos {type(model).__name__}: {e}")
+                        print(f"   ⚠️ Error estableciendo shutdown {type(model).__name__}: {e}")
             
-            print("✅ Datos limpiados")
+            # 3.3: Usar destroy() en lugar de deleteLater()
+            for model in all_models:
+                if model:
+                    try:
+                        # Disconnect all signals before destroying
+                        model.blockSignals(True)
+                        # Forzar destrucción inmediata
+                        model.setParent(None)
+                    except Exception as e:
+                        print(f"   ⚠️ Error destruyendo {type(model).__name__}: {e}")
+            
+            # 3.4: Limpiar referencias
+            self.inventario_model = None
+            self.venta_model = None
+            self.compra_model = None
+            self.proveedor_model = None
+            self.consulta_model = None
+            self.paciente_model = None
+            self.usuario_model = None
+            self.gasto_model = None
+            self.laboratorio_model = None
+            self.trabajador_model = None
+            self.enfermeria_model = None
+            self.configuracion_model = None
+            self.confi_laboratorio_model = None
+            self.confi_enfermeria_model = None
+            self.confi_consulta_model = None
+            self.confi_trabajadores_model = None
+            self.reportes_model = None
+            self.dashboard_model = None
+            self.auth_model = None
+            
+            # ✅ RESETEAR USUARIO AUTENTICADO
+            self._usuario_autenticado_id = 0
+            self._usuario_autenticado_nombre = ""
+            self._usuario_autenticado_rol = ""
+            
+            print("✅ FASE 3 COMPLETA: Recursos limpiados")
             
         except Exception as e:
-            print(f"❌ Error en limpieza de datos: {e}")
+            print(f"❌ Error en FASE 3: {e}")
 
     def _clear_model_data(self, model):
         """Limpia datos específicos de un modelo"""
@@ -216,6 +400,29 @@ class AppController(QObject):
                     
         except Exception as e:
             print(f"   ⚠️ Error limpiando datos de modelo: {e}")
+
+    def _force_basic_cleanup(self):
+        """Limpieza básica de emergencia si falla el shutdown normal"""
+        try:
+            print("🆘 FORZANDO LIMPIEZA BÁSICA...")
+            
+            # Forzar parada de todos los QTimer activos
+            # No hay una forma directa de obtener todos los QTimer, 
+            # pero podemos forzar garbage collection
+            gc.collect()
+            
+            # Establecer todas las referencias a None
+            for attr_name in dir(self):
+                if attr_name.endswith('_model') and not attr_name.startswith('__'):
+                    try:
+                        setattr(self, attr_name, None)
+                    except:
+                        pass
+            
+            print("✅ Limpieza básica completada")
+            
+        except Exception as e:
+            print(f"❌ Error en limpieza básica: {e}")
 
     def _connect_models(self):
         """Conecta signals entre models para sincronización"""
@@ -299,49 +506,45 @@ class AppController(QObject):
         except Exception as e:
             print(f"Error conectando models: {e}")
 
-    @Slot(int, str, str)
-    def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
-        """Establece el usuario autenticado - VERSIÓN SIMPLIFICADA"""
-        print(f"🔑 Estableciendo usuario autenticado...")
-        print(f"   ID: {usuario_id}")
-        print(f"   Nombre: {usuario_nombre}")
-        print(f"   Rol: {usuario_rol}")
-        
-        # Establecer usuario inmediatamente
-        self._usuario_autenticado_id = usuario_id
-        self._usuario_autenticado_nombre = usuario_nombre
-        self._usuario_autenticado_rol = usuario_rol
-        
-        # Emitir señal de cambio
-        self.usuarioChanged.emit()
-        
-        # Establecer usuario en todos los modelos
-        self._establecer_usuario_en_modelos()
-        
-        print(f"✅ Usuario autenticado establecido correctamente")
-
-    def _establecer_usuario_en_modelos(self):
+    def _establecer_usuario_autenticado(self):
         """Establece el usuario autenticado en todos los modelos que lo necesiten"""
         if self._usuario_autenticado_id > 0:
             print(f"👤 Estableciendo usuario {self._usuario_autenticado_id} en modelos...")
             
-            # Lista de modelos y sus métodos de autenticación
+            # ✅ MODELOS CON VERIFICACIÓN DE AUTENTICACIÓN IMPLEMENTADA - CORREGIDO
             models_to_set = [
                 (self.usuario_model, 'set_usuario_actual_con_rol'),
                 (self.venta_model, 'set_usuario_actual_con_rol'),
                 (self.compra_model, 'set_usuario_actual'),
-                (self.consulta_model, 'set_usuario_actual_con_rol'),
-                (self.enfermeria_model, 'set_usuario_actual_con_rol'),
-                (self.laboratorio_model, 'set_usuario_actual_con_rol'),
-                (self.gasto_model, 'set_usuario_actual_con_rol'),
+                (self.consulta_model, 'set_usuario_actual_con_rol'),    # ✅ CORREGIDO
+                (self.enfermeria_model, 'set_usuario_actual_con_rol'),  # ✅ CORREGIDO  
+                (self.laboratorio_model, 'set_usuario_actual_con_rol'), # ✅ CORREGIDO
+                (self.gasto_model, 'set_usuario_actual_con_rol'),       # ✅ CORREGIDO
                 (self.trabajador_model, 'set_usuario_actual_con_rol'),  
-                (self.reportes_model, 'set_usuario_actual'),
-                (self.dashboard_model, 'set_usuario_actual_con_rol'),
+                (self.reportes_model, 'set_usuario_actual'),                 # ✅ CORREGIDO
             ]
             
-            # Establecer usuario en cada modelo
+            # ✅ MODELOS QUE DEBERÍAN TENER AUTENTICACIÓN PERO AÚN NO LA TIENEN
+            models_pending_auth = [
+                (self.gasto_model, 'set_usuario_actual'),           
+                (self.paciente_model, 'set_usuario_actual'),        
+                #(self.usuario_model, 'set_usuario_actual'), # ✅ CORREGIDO
+                #(self.trabajador_model, 'set_usuario_actual'),      
+                (self.proveedor_model, 'set_usuario_actual'),       
+                # Modelos de configuración (operaciones críticas)
+                (self.configuracion_model, 'set_usuario_actual'),
+                (self.confi_laboratorio_model, 'set_usuario_actual'),
+                (self.confi_enfermeria_model, 'set_usuario_actual'),
+                (self.confi_consulta_model, 'set_usuario_actual'),
+                (self.confi_trabajadores_model, 'set_usuario_actual'),
+            ]
+            
+            # Establecer usuario en modelos que ya tienen autenticación
             for model, method_name in models_to_set:
-                if model and hasattr(model, method_name):
+                if model is None:
+                    print(f"  ❌ Modelo {model} es None - no se puede establecer usuario")
+                    continue
+                if hasattr(model, method_name):
                     try:
                         if method_name == 'set_usuario_actual_con_rol':
                             getattr(model, method_name)(self._usuario_autenticado_id, self._usuario_autenticado_rol)
@@ -351,18 +554,66 @@ class AppController(QObject):
                             print(f"  ✅ Usuario establecido en {type(model).__name__}")
                     except Exception as e:
                         print(f"  ❌ Error estableciendo usuario en {type(model).__name__}: {e}")
+                else:
+                    print(f"  ❌ {type(model).__name__} no tiene el método {method_name}")
+            
+            # Intentar establecer usuario en modelos pendientes
+            for model, method_name in models_pending_auth:
+                if model and hasattr(model, method_name):
+                    try:
+                        if method_name == 'set_usuario_actual_con_rol':
+                            getattr(model, method_name)(self._usuario_autenticado_id, self._usuario_autenticado_rol)
+                        else:
+                            getattr(model, method_name)(self._usuario_autenticado_id)
+                        print(f"  ✅ Usuario establecido en {type(model).__name__} (pendiente)")
+                    except Exception as e:
+                        print(f"  ⚠️ {type(model).__name__} no tiene autenticación implementada")
+                else:
+                    if model:
+                        print(f"  ⏳ {type(model).__name__} pendiente de implementar autenticación")
+
+    @Slot(int, str, str)
+    def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
+        """Establece el usuario autenticado CON ROL"""
+        self._usuario_autenticado_id = usuario_id
+        self._usuario_autenticado_nombre = usuario_nombre
+        self._usuario_autenticado_rol = usuario_rol
+        
+        print(f"👤 Usuario autenticado: {usuario_nombre} (ID: {usuario_id}, Rol: {usuario_rol})")
+        
+        
+        # ✅ LLAMAR AL MÉTODO CORREGIDO INMEDIATAMENTE
+        self._establecer_usuario_autenticado()
+        
+        # ✅ ESTABLECER USUARIO CON ROL EN MODELOS ADICIONALES (REDUNDANCIA PARA GARANTIZAR)
+        models_with_roles_extra = [
+            (self.reportes_model, 'set_usuario_actual_con_rol'),
+            (self.dashboard_model, 'set_usuario_actual_con_rol'),
+        ]
+
+        # ✅ VERIFICACIÓN ESPECÍFICA PARA REPORTES
+        if self.reportes_model:
+            try:
+                self.reportes_model.set_usuario_actual(usuario_id)
+                print(f"✅ Usuario {usuario_id} establecido específicamente en ReportesModel")
+            except Exception as e:
+                print(f"❌ Error estableciendo usuario en ReportesModel: {e}")
+
+        # Establecer referencia al authModel en gastoModel para verificación de roles
+        if self.gasto_model and hasattr(self, 'auth_model'):
+            if hasattr(self.gasto_model, 'set_auth_model_ref'):
+                self.gasto_model.set_auth_model_ref(self.auth_model)
+            else:
+                self.gasto_model._auth_model_ref = self.auth_model
+        for model, method_name in models_with_roles_extra:
+            if model and hasattr(model, method_name):
+                try:
+                    getattr(model, method_name)(usuario_id, usuario_rol)
+                    print(f"  ✅ Rol establecido en {type(model).__name__}")
+                except Exception as e:
+                    print(f"  ❌ Error estableciendo rol en {type(model).__name__}: {e}")
 
     # Handlers para eventos específicos de modelos
-    @Slot(int, float)
-    def _on_venta_creada(self, venta_id: int, total: float):
-        if self.inventario_model:
-            QTimer.singleShot(1000, self.inventario_model.refresh_productos)
-
-    @Slot(int, float)
-    def _on_compra_creada(self, compra_id: int, total: float):
-        if self.inventario_model:
-            QTimer.singleShot(1000, self.inventario_model.refresh_productos)
-
     @Slot(int, str)
     def _on_proveedor_creado(self, proveedor_id: int, nombre: str):
         self.showNotification("Proveedor Creado", f"Proveedor '{nombre}' agregado exitosamente")
@@ -381,6 +632,16 @@ class AppController(QObject):
             self.showNotification("Reporte Generado", message)
         else:
             self.showNotification("Error en Reporte", message)
+
+    @Slot(int, float)
+    def _on_venta_creada(self, venta_id: int, total: float):
+        if self.inventario_model:
+            QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+
+    @Slot(int, float)
+    def _on_compra_creada(self, compra_id: int, total: float):
+        if self.inventario_model:
+            QTimer.singleShot(1000, self.inventario_model.refresh_productos)
 
     @Slot(bool, str)
     def _on_gasto_creado(self, success: bool, message: str):
@@ -603,7 +864,7 @@ class AppController(QObject):
         pass  # Implementación en QML
 
     # ===============================
-    # MÉTODOS DE GENERACIÓN DE PDF (COMPLETOS)
+    # MÉTODOS DE GENERACIÓN DE PDF (SIN CAMBIOS)
     # ===============================
     
     @Slot(str, result=str)
@@ -1015,7 +1276,7 @@ class AppController(QObject):
             return False
 
 class AuthAppController(QObject):
-    """Controller principal SIMPLIFICADO - CORREGIDO para cambios de usuario"""
+    """Controller principal con manejo de autenticación"""
     
     # Signals
     authenticationRequired = Signal()
@@ -1028,7 +1289,8 @@ class AuthAppController(QObject):
         self.main_controller = None
         self.authenticated = False
         self.main_engine = None
-        self.login_engine = None
+        # alamcenar datos de autenticación pendientes
+        self._pending_auth_data = None
         
         # Conectar signals del AuthModel
         self.auth_model.loginSuccessful.connect(self.handleLoginSuccess)
@@ -1037,263 +1299,123 @@ class AuthAppController(QObject):
     
     @Slot(bool, str, 'QVariantMap')
     def handleLoginSuccess(self, success: bool, message: str, userData: dict):
-        """Manejo simplificado de login exitoso"""
         if success:
             self.authenticated = True
             
-            print(f"✅ Login exitoso para usuario: {userData.get('nombre_usuario', 'Unknown')}")
-            print(f"   Datos del usuario: {userData}")
+            # ✅ ALMACENAR DATOS PARA ESTABLECER DESPUÉS
+            self._pending_auth_data = {
+                'user_id': userData.get('id', 0),
+                'user_name': userData.get('Nombre', 'Usuario') + " " + userData.get('Apellido_Paterno', ''),
+                'user_role': userData.get('rol_nombre', 'Usuario')
+            }
             
-            # Delay para mostrar animación y asegurar destrucción completa
-            QTimer.singleShot(1500, lambda: self.initializeMainApp(userData))
+            print(f"🔄 Datos de autenticación almacenados: {self._pending_auth_data}")
+            
+            # Delay para mostrar animación
+            QTimer.singleShot(1000, self.initializeMainApp)
         
     @Slot(str)
     def handleLoginFailed(self, message: str):
-        """Manejo de login fallido"""
-        print(f"❌ Login fallido: {message}")
+        pass
     
     @Slot()
     def handleLogout(self):
-        """LOGOUT MANUAL - CORREGIDO para limpiar completamente"""
         try:
-            print("🚪 Cierre de sesión manual - INICIANDO LIMPIEZA COMPLETA...")
-            
+            print("🚪 Cerrando sesión y limpiando recursos...")
             self.authenticated = False
             
-            # PASO 1: Cleanup del controlador principal
+            # Limpiar controlador principal si existe
             if self.main_controller:
                 try:
-                    print("🧹 Limpiando main_controller...")
-                    self.main_controller.gradual_cleanup()
-                    # IMPORTANTE: Resetear la referencia
-                    self.main_controller = None
-                    print("✅ main_controller limpiado y reseteado")
+                    self.main_controller.cleanup()
                 except Exception as e:
                     print(f"⚠️ Error en cleanup del controlador: {e}")
-                    self.main_controller = None  # Forzar reset
+                self.main_controller = None
             
-            # PASO 2: Destruir motor principal y esperar
+            # Destruir motor principal si existe
             if self.main_engine:
                 try:
-                    print("🗑️ Destruyendo main_engine...")
                     self.main_engine.deleteLater()
-                    self.main_engine = None
-                    print("✅ main_engine destruido")
                 except Exception as e:
-                    print(f"⚠️ Error destruyendo motor principal: {e}")
-                    self.main_engine = None  # Forzar reset
-            
-            # PASO 3: Forzar garbage collection
-            import gc
-            gc.collect()
-            
-            # PASO 4: Crear y mostrar nuevo login con delay para asegurar limpieza
-            QTimer.singleShot(500, self.createAndShowLogin)
-            
-            print("✅ Logout manual completado - Limpieza completa")
-            
-        except Exception as e:
-            print(f"❌ Error durante logout manual: {e}")
-            # Forzar reset completo en caso de error
-            self.main_controller = None
-            self.main_engine = None
-            QTimer.singleShot(1000, self.createAndShowLogin)
-
-    def createAndShowLogin(self):
-        """Crea y muestra una nueva instancia de login - MEJORADO"""
-        try:
-            print("🔐 Creando nueva instancia de login...")
-            
-            # Asegurar que login anterior esté destruido
-            if self.login_engine:
-                try:
-                    self.login_engine.deleteLater()
-                    self.login_engine = None
-                except:
-                    pass
-            
-            # Crear nueva engine para login
-            self.login_engine = QQmlApplicationEngine()
-            
-            # Configurar contexto para login
-            root_context = self.login_engine.rootContext()
-            root_context.setContextProperty("authController", self)
-            root_context.setContextProperty("authModel", self.auth_model)
-            
-            # Cargar login.qml
-            login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
-            self.login_engine.load(QUrl.fromLocalFile(login_qml))
-            
-            # Verificar que se cargó correctamente
-            if not self.login_engine.rootObjects():
-                print("❌ Error: login.qml no se cargó correctamente")
-                return
-            
+                    print(f"⚠️ Error destruyendo motor: {e}")
+                self.main_engine = None
+                
+            # Emitir señal para mostrar login
             self.authenticationRequired.emit()
-            print("✅ Login creado y mostrado exitosamente")
+            print("✅ Logout completado exitosamente")
             
         except Exception as e:
-            print(f"❌ Error creando login: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error durante logout: {e}")
+            # Asegurarse de emitir la señal incluso si hay error
+            self.authenticationRequired.emit()
 
-    def initializeMainApp(self, userData):
-        """Inicializa la aplicación principal - CORREGIDO para recrear siempre"""
-        try:
-            print("🚀 Inicializando aplicación principal...")
-            
-            # PASO 1: Destruir login engine si existe
-            if self.login_engine:
-                try:
-                    print("🗑️ Destruyendo login_engine...")
-                    self.login_engine.deleteLater()
-                    self.login_engine = None
-                    print("✅ login_engine destruido")
-                except Exception as e:
-                    print(f"⚠️ Error destruyendo login engine: {e}")
-                    self.login_engine = None
-            
-            # PASO 2: SIEMPRE crear nuevo controller (no reutilizar)
-            print("🗂️ Creando nuevo AppController...")
-            self.main_controller = AppController()
-            print("✅ Nuevo AppController creado")
-            
-            # PASO 3: Crear nueva engine para main app
-            print("🔧 Creando nuevo QQmlApplicationEngine...")
-            self.main_engine = QQmlApplicationEngine()
-            
-            # PASO 4: Configurar contexto para app principal
-            root_context = self.main_engine.rootContext()
-            root_context.setContextProperty("appController", self.main_controller)
-            root_context.setContextProperty("authModel", self.auth_model)
-            root_context.setContextProperty("authController", self)
-            
-            # PASO 5: Cargar main.qml
-            main_qml = os.path.join(os.path.dirname(__file__), "main.qml")
-            print(f"📄 Cargando main.qml desde: {main_qml}")
-            self.main_engine.load(QUrl.fromLocalFile(main_qml))
-            
-            # PASO 6: Verificar que se cargó correctamente
-            if not self.main_engine.rootObjects():
-                print("❌ Error: main.qml no se cargó correctamente")
-                return
-            
-            print("✅ main.qml cargado exitosamente")
-            
-            # PASO 7: Inicializar modelos
-            print("🔧 Inicializando modelos...")
-            self.main_controller.initialize_models()
-            
-            # PASO 8: Establecer autenticación con delay
-            QTimer.singleShot(800, lambda: self._set_user_authentication(userData))
-            
-            self.authenticationSuccess.emit()
-            print("🎉 Aplicación principal inicializada exitosamente")
-            
-        except Exception as e:
-            print(f"❌ Error inicializando app principal: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # En caso de error, mostrar login nuevamente
-            QTimer.singleShot(2000, self.createAndShowLogin)
-
-    def _set_user_authentication(self, userData):
-        """Establece la autenticación del usuario - MEJORADO con verificaciones"""
+    def initializeMainApp(self):
         try:
             if not self.main_controller:
-                print("❌ Error: main_controller es None al establecer autenticación")
-                return
-            
-            if not userData:
-                print("❌ Error: userData es None al establecer autenticación")
-                return
-            
-            user_id = userData.get('id', 0)
-            user_name = f"{userData.get('Nombre', '')} {userData.get('Apellido_Paterno', '')}"
-            user_role = userData.get('rol_nombre', 'Usuario')
-            
-            print(f"🔑 Estableciendo autenticación:")
-            print(f"   ID: {user_id}")
-            print(f"   Nombre: {user_name}")
-            print(f"   Rol: {user_role}")
-            
-            # Verificar que los datos son válidos
-            if user_id <= 0:
-                print("❌ Error: ID de usuario inválido")
-                return
-            
-            if not user_role:
-                print("❌ Error: Rol de usuario vacío")
-                return
-            
-            # Establecer autenticación
-            self.main_controller.set_usuario_autenticado(user_id, user_name, user_role)
-            
-            print("✅ Autenticación establecida exitosamente")
-            
-            # Verificación adicional con delay
-            QTimer.singleShot(1000, lambda: self._verify_authentication(user_id, user_role))
+                self.main_controller = AppController()
+                
+                # Crear nueva engine para main app
+                self.main_engine = QQmlApplicationEngine()
+                
+                # Configurar contexto para app principal
+                root_context = self.main_engine.rootContext()
+                root_context.setContextProperty("appController", self.main_controller)
+                root_context.setContextProperty("authModel", self.auth_model)
+                
+                # Cargar main.qml
+                main_qml = os.path.join(os.path.dirname(__file__), "main.qml")
+                self.main_engine.load(QUrl.fromLocalFile(main_qml))
+                
+                # ✅ INICIALIZAR MODELOS Y LUEGO ESTABLECER AUTENTICACIÓN
+                QTimer.singleShot(500, self._initialize_models_and_auth)
+                
+                self.authenticationSuccess.emit()
             
         except Exception as e:
-            print(f"❌ Error estableciendo autenticación: {e}")
+            print(f"Error inicializando app principal: {e}")
             import traceback
             traceback.print_exc()
-    
-    def _verify_authentication(self, expected_id, expected_role):
-        """Verifica que la autenticación se estableció correctamente"""
+
+    def _initialize_models_and_auth(self):
+        """Inicializa modelos y establece autenticación en el orden correcto"""
         try:
-            if self.main_controller:
-                actual_id = self.main_controller.usuario_actual_id
-                actual_role = self.main_controller.usuario_actual_rol
+            print("🔧 Inicializando modelos...")
+            
+            # 1. Inicializar modelos primero
+            self.main_controller.initialize_models()
+            
+            # 2. Esperar un momento para que terminen de inicializarse
+            QTimer.singleShot(200, self._set_pending_authentication)
+            
+        except Exception as e:
+            print(f"❌ Error en _initialize_models_and_auth: {e}")
+
+    def _set_pending_authentication(self):
+        """Establece la autenticación pendiente después de que los modelos estén listos"""
+        try:
+            if self._pending_auth_data and self.main_controller:
+                print(f"🔐 Estableciendo autenticación pendiente: {self._pending_auth_data}")
                 
-                print(f"🔍 VERIFICACIÓN DE AUTENTICACIÓN:")
-                print(f"   Esperado: ID={expected_id}, Rol='{expected_role}'")
-                print(f"   Actual: ID={actual_id}, Rol='{actual_role}'")
+                self.main_controller.set_usuario_autenticado(
+                    self._pending_auth_data['user_id'],
+                    self._pending_auth_data['user_name'], 
+                    self._pending_auth_data['user_role']
+                )
                 
-                if actual_id == expected_id and actual_role == expected_role:
-                    print("✅ Autenticación verificada correctamente")
-                else:
-                    print("⚠️ Autenticación no coincide - reintentando...")
-                    # Reintentar establecer autenticación
-                    user_name = f"Usuario {expected_id}"
-                    self.main_controller.set_usuario_autenticado(expected_id, user_name, expected_role)
-            else:
-                print("❌ main_controller es None durante verificación")
+                # Limpiar datos pendientes
+                self._pending_auth_data = None
+                print("✅ Autenticación establecida exitosamente después de inicialización")
                 
         except Exception as e:
-            print(f"❌ Error verificando autenticación: {e}")
+            print(f"❌ Error estableciendo autenticación pendiente: {e}")
     
-    # Métodos públicos para QML
     @Slot()
     def showLogin(self):
-        """Muestra login (para uso desde QML)"""
-        self.createAndShowLogin()
+        self.authenticationRequired.emit()
     
     @Slot()
     def exitApp(self):
-        """Sale de la aplicación"""
         QGuiApplication.quit()
-    
-    @Slot()
-    def forceRestart(self):
-        """Fuerza un reinicio completo (para debug)"""
-        print("🔄 FORZANDO REINICIO COMPLETO...")
-        
-        # Limpiar todo
-        self.main_controller = None
-        self.main_engine = None
-        self.login_engine = None
-        self.authenticated = False
-        
-        # Forzar garbage collection
-        import gc
-        gc.collect()
-        
-        # Recrear login después de un delay
-        QTimer.singleShot(1000, self.createAndShowLogin)
-        
-        print("✅ Reinicio completo ejecutado")
 
 def register_qml_types():
     register_inventario_model()
@@ -1330,28 +1452,24 @@ def main():
     try:
         register_qml_types()
         
+        login_engine = QQmlApplicationEngine()
         auth_controller = AuthAppController()
         
-        # Mostrar login directamente (sin persistencia)
-        login_engine = QQmlApplicationEngine()
         setup_qml_context(login_engine, auth_controller)
         
         login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
         if not os.path.exists(login_qml):
-            print(f"❌ Archivo login.qml no encontrado: {login_qml}")
             return -1
         
         login_engine.load(QUrl.fromLocalFile(login_qml))
         
         if not login_engine.rootObjects():
-            print("❌ Error cargando login.qml")
             return -1
         
-        print("✅ Aplicación iniciada correctamente")
         return app.exec()
         
     except Exception as e:
-        print(f"❌ Error crítico iniciando aplicación: {e}")
+        print(f"Error crítico iniciando aplicación: {e}")
         import traceback
         traceback.print_exc()
         return -1
