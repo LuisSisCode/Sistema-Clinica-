@@ -66,25 +66,41 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_inventario', ttl=600)
     def get_reporte_inventario(self, fecha_desde: str = "", fecha_hasta: str = "") -> List[Dict[str, Any]]:
-        """Genera reporte de inventario valorizado actual"""
+        """Genera reporte de inventario con lotes y vencimientos"""
         query = """
         SELECT 
-            p.Codigo as codigo,
-            p.Nombre as descripcion,
-            p.Unidad_Medida as unidad,
-            (p.Stock_Caja * 12 + p.Stock_Unitario) as cantidad,
-            p.Precio_venta as precioUnitario,
-            (p.Stock_Caja * 12 + p.Stock_Unitario) * p.Precio_venta as valor,
             FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
+            p.Nombre as descripcion,
             m.Nombre as marca,
+            (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id) as cantidad,
+            (SELECT COUNT(*) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as lotes,
+            p.Precio_venta as precioUnitario,
+            (SELECT MIN(l.Fecha_Vencimiento) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id 
+            AND l.Cantidad_Unitario > 0 
+            AND l.Fecha_Vencimiento IS NOT NULL) as fecha_vencimiento,
+            ((SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id) * p.Precio_venta) as valor,
+            
+            -- Campos adicionales para compatibilidad
+            p.Codigo as codigo,
+            p.Unidad_Medida as unidad,
             CASE 
-                WHEN p.Fecha_Venc IS NOT NULL AND p.Fecha_Venc <= DATEADD(MONTH, 3, GETDATE()) 
+                WHEN (SELECT MIN(l.Fecha_Vencimiento) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) <= DATEADD(MONTH, 3, GETDATE()) 
                 THEN 'Próximo a vencer'
                 ELSE 'Normal'
             END as estado
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (p.Stock_Caja + p.Stock_Unitario) > 0
+        WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
+            FROM Lote l 
+            WHERE l.Id_Producto = p.id) > 0
         ORDER BY valor DESC, p.Nombre
         """
         

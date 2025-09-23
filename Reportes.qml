@@ -12,6 +12,8 @@ Item {
     // PROPIEDAD PARA EL MODELO DE REPORTES
     property var reportesModel: appController ? appController.reportes_model_instance : null
     
+    property bool mostrandoVistaPrevia: false
+
     // Colores del tema PROFESIONAL
     readonly property color primaryColor: "#2C3E50"
     readonly property color successColor: "#27AE60"
@@ -787,13 +789,13 @@ Item {
                                 // Encabezados de la tabla
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 45
+                                    Layout.preferredHeight: 50  // ✅ Aumentado para títulos largos
                                     color: blackColor
                                     radius: 4
                                     
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.margins: 12
+                                        anchors.margins: 8  // ✅ Reducido para más espacio
                                         spacing: 0
                                         
                                         Repeater {
@@ -801,13 +803,19 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: modelData.width
+                                                Layout.fillHeight: true
                                                 text: modelData.titulo
                                                 font.bold: true
-                                                font.pixelSize: 11
+                                                font.pixelSize: 10  // ✅ Tamaño ligeramente más pequeño
                                                 font.family: "Segoe UI"
                                                 color: whiteColor
                                                 horizontalAlignment: modelData.align || Text.AlignLeft
                                                 verticalAlignment: Text.AlignVCenter
+                                                
+                                                // ✅ AGREGAR AJUSTE DE TEXTO PARA TÍTULOS LARGOS
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
@@ -869,7 +877,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 50
-                                    color: "#2C3E50"  // Color destacado para totales
+                                    color: "#2C3E50"  
                                     border.color: "#34495E"
                                     border.width: 2
                                     
@@ -878,21 +886,22 @@ Item {
                                         anchors.margins: 12
                                         spacing: 0
                                         
-                                        // Obtener columnas actuales
-                                        property var columnasActuales: obtenerColumnasReporte()
+                                        // ✅ DEFINIR COLUMNAS UNA SOLA VEZ AL NIVEL CORRECTO
+                                        property var todasLasColumnas: obtenerColumnasReporte()
                                         
                                         Repeater {
-                                            model: parent.columnasActuales.length
+                                            model: parent.todasLasColumnas.length  // ✅ Usar parent directamente
                                             
                                             Rectangle {
-                                                Layout.preferredWidth: parent.columnasActuales[index].width
+                                                Layout.preferredWidth: parent.todasLasColumnas[index].width  // ✅ Acceso directo
                                                 Layout.fillHeight: true
                                                 color: "transparent"
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: {
-                                                        var columna = parent.parent.columnasActuales[index]
+                                                        // ✅ ACCESO DIRECTO SIN PARENT.PARENT
+                                                        var columna = parent.parent.todasLasColumnas[index]
                                                         var nombreColumna = columna.titulo
                                                         var campoColumna = columna.campo
                                                         
@@ -913,7 +922,7 @@ Item {
                                                         
                                                         // PARA OTROS REPORTES: mostrar "TOTAL GENERAL:" en penúltima columna
                                                         if (tipoReporteSeleccionado !== 7 && 
-                                                            index === parent.parent.columnasActuales.length - 2 && 
+                                                            index === parent.parent.todasLasColumnas.length - 2 && 
                                                             campoColumna !== "valor") {
                                                             console.log("Mostrando TOTAL GENERAL en penúltima columna")
                                                             return "TOTAL GENERAL:"
@@ -928,14 +937,15 @@ Item {
                                                     font.family: "Segoe UI"
                                                     color: whiteColor
                                                     horizontalAlignment: {
-                                                        var columna = parent.parent.parent.columnasActuales[index]
+                                                        // ✅ ACCESO CORREGIDO
+                                                        var columna = parent.parent.parent.todasLasColumnas[index]
                                                         var campoColumna = columna.campo
                                                         
                                                         if (campoColumna === "valor") {
                                                             return Text.AlignRight
                                                         } else if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
                                                             return Text.AlignRight
-                                                        } else if (tipoReporteSeleccionado !== 7 && index === parent.parent.parent.columnasActuales.length - 2) {
+                                                        } else if (tipoReporteSeleccionado !== 7 && index === parent.parent.parent.todasLasColumnas.length - 2) {
                                                             return Text.AlignRight
                                                         } else {
                                                             return Text.AlignCenter
@@ -1174,75 +1184,78 @@ Item {
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
                     {titulo: "Nº VENTA", campo: "numeroVenta", width: 80},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 200},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180}, // ✅ Reducido
                     {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
                     {titulo: "TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
-                
-            case 2: // Inventario de Productos
+                    
+            case 2: // Inventario de Productos 
                 return [
-                    {titulo: "CÓDIGO", campo: "codigo", width: 80},
-                    {titulo: "PRODUCTO", campo: "descripcion", width: 180},
-                    {titulo: "UNIDAD", campo: "unidad", width: 60},
-                    {titulo: "STOCK", campo: "cantidad", width: 80, align: Text.AlignRight},
-                    {titulo: "PRECIO UNIT.", campo: "precioUnitario", width: 100, align: Text.AlignRight},
-                    {titulo: "VALOR TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                    {titulo: "FECHA", campo: "fecha", width: 70},
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 140},
+                    {titulo: "MARCA", campo: "marca", width: 80},
+                    {titulo: "STOCK", campo: "cantidad", width: 60, align: Text.AlignRight},
+                    {titulo: "LOTES", campo: "lotes", width: 50, align: Text.AlignCenter},
+                    {titulo: "P.UNIT.", campo: "precioUnitario", width: 80, align: Text.AlignRight},
+                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 80},
+                    {titulo: "VALOR (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
+
             case 3: // Compras de Farmacia
                 return [
-                    {titulo: "FECHA", campo: "fecha", width: 85},
-                    {titulo: "PRODUCTO", campo: "descripcion", width: 170},
-                    {titulo: "MARCA", campo: "marca", width: 85},
-                    {titulo: "UNID.", campo: "cantidad", width: 60, align: Text.AlignRight},
-                    {titulo: "PROVEEDOR", campo: "proveedor", width: 135},
-                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 85},   // Cambiado
-                    {titulo: "USUARIO", campo: "usuario", width: 100},
-                    {titulo: "TOTAL (Bs)", campo: "valor", width: 85, align: Text.AlignRight}
+                    {titulo: "FECHA", campo: "fecha", width: 70},          
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 120},     
+                    {titulo: "MARCA", campo: "marca", width: 80},          
+                    {titulo: "UNID.", campo: "cantidad", width: 50, align: Text.AlignRight},         
+                    {titulo: "PROVEEDOR", campo: "proveedor", width: 100},     
+                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 70},        
+                    {titulo: "USUARIO", campo: "usuario", width: 80},        
+                    {titulo: "TOTAL (Bs)", campo: "valor", width: 80, align: Text.AlignRight}     
                 ]
                 
-            case 4: // Consultas Médicas
+            case 4: // Consultas Médicas - ✅ TÍTULOS CORTOS
                 return [
-                    {titulo: "FECHA", campo: "fecha", width: 100},
-                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "PACIENTE", campo: "paciente", width: 150},
-                    {titulo: "MÉDICO", campo: "doctor_nombre", width: 150},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 120},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
+                    {titulo: "PACIENTE", campo: "paciente", width: 130},
+                    {titulo: "MÉDICO", campo: "doctor_nombre", width: 130},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
             case 5: // Laboratorio
                 return [
-                    {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "TIPO ANÁLISIS", campo: "tipoAnalisis", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "PACIENTE", campo: "paciente", width: 150},
-                    {titulo: "TÉCNICO", campo: "tecnico", width: 140},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "TIPO ANÁLISIS", campo: "tipoAnalisis", width: 120},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
+                    {titulo: "PACIENTE", campo: "paciente", width: 130},
+                    {titulo: "TÉCNICO", campo: "tecnico", width: 130},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
             case 6: // Enfermería
                 return [
-                    {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "TIPO PROCEDIMIENTO", campo: "tipoProcedimiento", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "PACIENTE", campo: "paciente", width: 150},
-                    {titulo: "ENFERMERO/A", campo: "enfermero", width: 140},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "TIPO PROC.", campo: "tipoProcedimiento", width: 120}, // ✅ Título corto
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
+                    {titulo: "PACIENTE", campo: "paciente", width: 130},
+                    {titulo: "ENFERMERO/A", campo: "enfermero", width: 130},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
             case 7: // Gastos Operativos
                 return [
-                    {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "TIPO DE GASTO", campo: "categoria", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "MONTO (Bs)", campo: "valor", width: 120, align: Text.AlignRight},
-                    {titulo: "PROVEEDOR", campo: "proveedor", width: 150}
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "TIPO GASTO", campo: "categoria", width: 120}, // ✅ Título corto
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
+                    {titulo: "MONTO (Bs)", campo: "valor", width: 100, align: Text.AlignRight},
+                    {titulo: "PROVEEDOR", campo: "proveedor", width: 130}
                 ]
                 
             case 8: // Consolidado
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "TIPO", campo: "tipo", width: 100, align: Text.AlignCenter},
+                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},
                     {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
                     {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
                     {titulo: "VALOR (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
@@ -1251,7 +1264,7 @@ Item {
             default:
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 250},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 200},
                     {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
                     {titulo: "VALOR (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
@@ -1291,68 +1304,151 @@ Item {
         
         var registro = datosReporte[index]
         
+        // 🔍 DEBUG: Imprimir el primer registro para ver qué campos llegan realmente
+        if (index === 0 && tipoReporteSeleccionado === 2) {
+            console.log("🔍 PRIMER REGISTRO INVENTARIO:", JSON.stringify(registro, null, 2))
+        }
+        
         switch(campo) {
-            // CAMPOS BÁSICOS
             case "fecha":
-                return registro.fecha || "---"
-            case "descripcion":
-                return registro.descripcion || "Sin detalles"
-            case "cantidad":
-                return (registro.cantidad || 0).toString()
-            case "valor":
-                return (registro.valor || 0).toFixed(2)
+                return registro.fecha || Qt.formatDate(new Date(), "dd/MM/yyyy")
                 
-            // VENTAS
+            case "descripcion":
+                // Inventario: nombre del producto
+                return registro.descripcion || registro.Nombre || registro.nombre || "Sin nombre"
+                
+            case "marca":
+                // ✅ CORREGIR: Buscar en todos los campos posibles de marca
+                return registro.marca || 
+                    registro.Marca_Nombre || 
+                    registro.marca_nombre || 
+                    registro.Marca || 
+                    "Sin marca"
+                
+            case "cantidad":
+                // ✅ CORREGIR: Stock total desde lotes
+                var stock = registro.cantidad || 
+                        registro.Stock_Total || 
+                        registro.stock_total ||
+                        registro.Stock_Calculado ||
+                        0
+                return stock.toString()
+                
+            case "lotes":
+                // ✅ CORREGIR: Número de lotes activos
+                var numLotes = registro.lotes || 
+                            registro.Lotes_Activos || 
+                            registro.lotes_activos ||
+                            0
+                return numLotes.toString()
+                
+            case "precioUnitario":
+                // ✅ CORREGIR: Precio de venta unitario
+                var precio = registro.precioUnitario || 
+                            registro.Precio_venta || 
+                            registro.precio_venta ||
+                            registro.precioVenta ||
+                            0
+                return "Bs " + precio.toFixed(2)
+                
+            case "fecha_vencimiento":
+                // ✅ CORREGIR: Fecha de vencimiento más próxima
+                var fechaVenc = registro.fecha_vencimiento || 
+                            registro.Proxima_Vencimiento || 
+                            registro.proxima_vencimiento ||
+                            registro.Fecha_Vencimiento
+                
+                if (!fechaVenc || fechaVenc === "" || fechaVenc === null || fechaVenc === "None") {
+                    return "Sin venc."
+                }
+                
+                // Si viene en formato YYYY-MM-DD, convertir a DD/MM/YYYY
+                if (typeof fechaVenc === 'string' && fechaVenc.length === 10 && fechaVenc.includes('-')) {
+                    try {
+                        var partes = fechaVenc.split('-')
+                        return partes[2] + "/" + partes[1] + "/" + partes[0]
+                    } catch(e) {
+                        return fechaVenc
+                    }
+                }
+                
+                return fechaVenc
+                
+            case "valor":
+                // ✅ CORREGIR: Valor total (stock * precio)
+                var valorTotal = registro.valor || 0
+                
+                if (valorTotal === 0) {
+                    // Calcular: stock * precio_unitario
+                    var stockCalc = registro.cantidad || registro.Stock_Total || registro.Stock_Calculado || 0
+                    var precioCalc = registro.precioUnitario || registro.Precio_venta || registro.precio_venta || 0
+                    valorTotal = stockCalc * precioCalc
+                }
+                
+                return valorTotal.toFixed(2)
+                
+            // ==========================================
+            // OTROS REPORTES (CONSERVAR LÓGICA EXISTENTE)
+            // ==========================================
+            
             case "numeroVenta":
                 return registro.numeroVenta || ("V" + String(index + 1).padStart(3, '0'))
-                
-            // INVENTARIO
-            case "codigo":
-                return registro.codigo || ("COD" + String(index + 1).padStart(3, '0'))
-            case "unidad":
-                return registro.unidad || "UND"
-            case "precioUnitario":
-                return registro.precioUnitario ? registro.precioUnitario.toFixed(2) : "0.00"
-                
-            // COMPRAS
+
             case "numeroCompra":
                 return registro.numeroCompra || ("C" + String(index + 1).padStart(3, '0'))
                 
-            // CONSULTAS
             case "especialidad":
                 return registro.especialidad || "Sin especialidad"
+                
             case "paciente":
                 return registro.paciente || "Paciente"
+                
             case "doctor_nombre":
                 return registro.doctor_nombre || "Sin médico"
                 
-            // LABORATORIO
             case "tipoAnalisis":
                 return registro.tipoAnalisis || registro.tipo || "Análisis General"
+                
             case "tecnico":
                 return registro.tecnico || "Sin asignar"
                 
-            // ENFERMERÍA
             case "tipoProcedimiento":
                 return registro.tipoProcedimiento || registro.tipo || "Procedimiento General"
+                
             case "enfermero":
                 return registro.enfermero || "Sin asignar"
                 
-            // GASTOS - SEGÚN REQUERIMIENTO EXACTO
             case "categoria":
                 return registro.categoria || registro.tipo_nombre || "General"
+                
             case "proveedor":
                 return registro.proveedor || "Sin proveedor"
                 
-            // CONSOLIDADO
+            case "usuario":
+                return registro.usuario || "Sin usuario"
+                
             case "tipo":
                 return registro.tipo || "Normal"
                 
             default:
-                return registro[campo] || "---"
+                // Búsqueda genérica
+                var valor = registro[campo]
+                if (valor === undefined || valor === null || valor === "") {
+                    return "---"
+                }
+                return valor.toString()
         }
     }
-    
+
+    function debugearDatosInventario() {
+        if (tipoReporteSeleccionado === 2 && datosReporte.length > 0) {
+            console.log("🔍 DEBUG - Primer registro de inventario:")
+            var primer = datosReporte[0]
+            console.log("Campos disponibles:", Object.keys(primer))
+            console.log("Datos:", JSON.stringify(primer, null, 2))
+        }
+    }
+
     // ===== FUNCIONES DE NOTIFICACIÓN =====
     
     function mostrarNotificacionError(mensaje) {
