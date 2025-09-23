@@ -1233,10 +1233,10 @@ Item {
                     {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
-            case 6: // Enfermería
+            case 6: // Enfermería - ✅ CORREGIR TÍTULO
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "TIPO PROC.", campo: "tipoProcedimiento", width: 120}, // ✅ Título corto
+                    {titulo: "PROCEDIMIENTO", campo: "tipoProcedimiento", width: 140},  // ✅ CAMBIO
                     {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
                     {titulo: "PACIENTE", campo: "paciente", width: 130},
                     {titulo: "ENFERMERO/A", campo: "enfermero", width: 130},
@@ -1343,12 +1343,28 @@ Item {
                 return numLotes.toString()
                 
             case "precioUnitario":
-                // ✅ CORREGIR: Precio de venta unitario
-                var precio = registro.precioUnitario || 
-                            registro.Precio_venta || 
-                            registro.precio_venta ||
-                            registro.precioVenta ||
-                            0
+                // ✅ PRECIO UNITARIO - NUNCA mostrar "---"
+                var precio = 0
+                
+                // Buscar precio en múltiples campos
+                if (registro.precioUnitario !== undefined && registro.precioUnitario !== null) {
+                    precio = parseFloat(registro.precioUnitario) || 0
+                } else if (registro.Precio_venta !== undefined && registro.Precio_venta !== null) {
+                    precio = parseFloat(registro.Precio_venta) || 0
+                } else if (registro.precio_venta !== undefined && registro.precio_venta !== null) {
+                    precio = parseFloat(registro.precio_venta) || 0
+                }
+                
+                // Si es 0, intentar calcular desde valor total
+                if (precio === 0) {
+                    var valorTotal = parseFloat(registro.valor) || 0
+                    var cantidadStock = parseFloat(registro.cantidad) || 0
+                    if (cantidadStock > 0 && valorTotal > 0) {
+                        precio = valorTotal / cantidadStock
+                    }
+                }
+                
+                // ✅ SIEMPRE mostrar precio, nunca "---"
                 return "Bs " + precio.toFixed(2)
                 
             case "fecha_vencimiento":

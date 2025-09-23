@@ -415,8 +415,53 @@ class GeneradorReportesPDF:
             styles = getSampleStyleSheet()
             return [Paragraph("INFORMACIÓN DEL REPORTE", styles['Heading2'])]
         
+    def _crear_estilos_tabla_unificados(self):
+        """Estilos unificados para todas las tablas de reportes"""
+        return [
+            # ✅ ENCABEZADO PRINCIPAL - ESTILO ÚNICO
+            ('BACKGROUND', (0, 0), (-1, 0), COLOR_AZUL_PRINCIPAL),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('LEFTPADDING', (0, 0), (-1, 0), 4),
+            ('RIGHTPADDING', (0, 0), (-1, 0), 4),
+            
+            # ✅ FILAS DE DATOS - ESTILO UNIFORME
+            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -2), 8),
+            ('TOPPADDING', (0, 1), (-1, -2), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -2), 6),
+            ('LEFTPADDING', (0, 1), (-1, -2), 4),
+            ('RIGHTPADDING', (0, 1), (-1, -2), 4),
+            ('VALIGN', (0, 1), (-1, -2), 'MIDDLE'),
+            ('ROWHEIGHT', (0, 1), (-1, -2), 28),  # Altura fija uniforme
+            
+            # ✅ FILA DE TOTAL - ESTILO PROFESIONAL ÚNICO
+            ('BACKGROUND', (0, -1), (-1, -1), COLOR_AZUL_PRINCIPAL),
+            ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, -1), (-1, -1), 10),
+            ('TOPPADDING', (0, -1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 8),
+            ('LEFTPADDING', (0, -1), (-1, -1), 4),
+            ('RIGHTPADDING', (0, -1), (-1, -1), 4),
+            
+            # ✅ CONFIGURACIÓN GENERAL UNIFORME
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -2), 0.5, colors.black),  # Líneas más delgadas
+            ('LINEBELOW', (0, 0), (-1, 0), 2, COLOR_AZUL_PRINCIPAL),
+            ('LINEABOVE', (0, -1), (-1, -1), 2, COLOR_AZUL_PRINCIPAL),
+            
+            # ✅ ZEBRA STRIPING SUTIL Y UNIFORME
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
+        ]
+    
+        
     def _crear_tabla_profesional_mejorada(self, datos, tipo_reporte):
-        """Crea tabla con TOTAL GENERAL visible en PDF - VERSIÓN CORREGIDA"""
+        """Crea tabla con estilo COMPLETAMENTE UNIFICADO"""
         from reportlab.platypus import Table, TableStyle
         from reportlab.lib import colors
         
@@ -440,7 +485,7 @@ class GeneradorReportesPDF:
                 
             tabla_datos.append(fila)
             
-            # CÁLCULO DE TOTALES
+            # Calcular totales
             try:
                 valor_monetario = 0
                 if 'valor' in registro and registro['valor']:
@@ -455,64 +500,28 @@ class GeneradorReportesPDF:
             except (ValueError, TypeError):
                 continue
         
-        # ==========================================
-        # NUEVA LÓGICA SIMPLIFICADA PARA EL TOTAL
-        # ==========================================
-        
-        print(f"🔍 DEBUG - Tipo reporte PDF: {tipo_reporte}")
-        print(f"🔍 DEBUG - Columnas: {[col[0] for col in columnas_def]}")
-        print(f"🔍 DEBUG - Total calculado: Bs {total_valor:,.2f}")
-        
-        # Crear fila de total inicializada vacía
+        # ✅ CREAR FILA DE TOTAL SIMPLIFICADA
         fila_total = [""] * len(columnas_def)
         
-        # ENCONTRAR LA COLUMNA DE VALOR MONETARIO
+        # Encontrar columna de valor y penúltima columna
         columna_valor_index = -1
-        columna_descripcion_index = -1
+        penultima_columna_index = len(columnas_def) - 2 if len(columnas_def) >= 2 else -1
         
         for i, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
             if any(palabra in col_titulo.upper() for palabra in ["TOTAL", "MONTO", "PRECIO", "VALOR"]):
                 columna_valor_index = i
-                print(f"✅ Columna de valor encontrada en índice {i}: {col_titulo}")
-            
-            if "DESCRIPCIÓN" in col_titulo.upper():
-                columna_descripcion_index = i
-                print(f"✅ Columna de descripción encontrada en índice {i}")
+                break
         
-        # ASIGNAR VALORES A LA FILA DE TOTAL
+        # Asignar valores
         if columna_valor_index != -1:
             fila_total[columna_valor_index] = f"Bs {total_valor:,.2f}"
-            print(f"💰 Total asignado en columna {columna_valor_index}")
         
-        # PARA GASTOS: "TOTAL GENERAL:" en DESCRIPCIÓN
-        if tipo_reporte == 7 and columna_descripcion_index != -1:
-            fila_total[columna_descripcion_index] = "TOTAL GENERAL:"
-            print(f"📝 TOTAL GENERAL asignado en descripción para gastos")
+        if penultima_columna_index >= 0 and penultima_columna_index != columna_valor_index:
+            fila_total[penultima_columna_index] = "TOTAL GENERAL:"
         
-        # PARA OTROS REPORTES: "TOTAL GENERAL:" en PENÚLTIMA columna (si no es la de valor)
-        elif tipo_reporte != 7 and len(columnas_def) >= 2:
-            penultima_columna = len(columnas_def) - 2
-            if penultima_columna != columna_valor_index and penultima_columna >= 0:
-                fila_total[penultima_columna] = "TOTAL GENERAL:"
-                print(f"📝 TOTAL GENERAL asignado en penúltima columna {penultima_columna}")
-        
-        # Si no se pudo asignar en penúltima, usar la primera columna disponible
-        elif tipo_reporte != 7 and columna_valor_index != -1 and columna_valor_index > 0:
-            fila_total[columna_valor_index - 1] = "TOTAL GENERAL:"
-            print(f"📝 TOTAL GENERAL asignado en columna anterior al valor")
-        
-        print(f"🔍 Fila de total final: {fila_total}")
         tabla_datos.append(fila_total)
         
-        # ==========================================
-        # CREAR TABLA CON MÁRGENES MEJORADOS
-        # ==========================================
-        
-        # Calcular ancho total para centrado
-        ancho_total = sum(anchos_columnas)
-        margen_disponible = letter[0] - 40*mm  # Considerando márgenes de 20mm cada lado
-        h_align = 'LEFT' if ancho_total > margen_disponible else 'CENTER'
-        
+        # ✅ CREAR TABLA CON ESTILOS UNIFICADOS
         tabla = Table(
             tabla_datos, 
             colWidths=anchos_columnas, 
@@ -520,50 +529,11 @@ class GeneradorReportesPDF:
             splitByRow=1,
             spaceAfter=12,
             spaceBefore=12,
-            hAlign=h_align
+            hAlign='CENTER'  # Centrar todas las tablas
         )
         
-        # ==========================================
-        # ESTILOS MEJORADOS - EVITAR SOLAPAMIENTO
-        # ==========================================
-        
-        estilos_tabla = [
-            # Encabezado principal
-            ('BACKGROUND', (0, 0), (-1, 0), COLOR_AZUL_PRINCIPAL),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('TOPPADDING', (0, 0), (-1, 0), 12),
-            
-            # Datos principales - ESPACIADO MEJORADO
-            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 9),
-            ('TOPPADDING', (0, 1), (-1, -2), 10),  # Reducido de 14 a 10
-            ('BOTTOMPADDING', (0, 1), (-1, -2), 10), # Reducido de 14 a 10
-            ('LEFTPADDING', (0, 1), (-1, -2), 6),   # Reducido de 8 a 6
-            ('RIGHTPADDING', (0, 1), (-1, -2), 6),  # Reducido de 8 a 6
-            ('VALIGN', (0, 1), (-1, -2), 'MIDDLE'),
-            ('ROWHEIGHT', (0, 1), (-1, -2), 35),    # Reducido de 40 a 35
-            
-            # FILA DE TOTAL - ESTILO SIMPLIFICADO
-            ('BACKGROUND', (0, -1), (-1, -1), COLOR_AZUL_PRINCIPAL),
-            ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 11),    # Reducido de 12 a 11
-            ('TOPPADDING', (0, -1), (-1, -1), 8),   # Reducido
-            ('BOTTOMPADDING', (0, -1), (-1, -1), 8), # Reducido
-            
-            # Configuración general
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -2), 1, colors.black),  # Líneas más delgadas
-            ('LINEBELOW', (0, 0), (-1, 0), 2, COLOR_AZUL_PRINCIPAL),
-            ('LINEABOVE', (0, -1), (-1, -1), 2, COLOR_AZUL_PRINCIPAL),
-            
-            # Zebra striping más sutil
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor(0xF5F5F5)]),
-        ]
+        # ✅ APLICAR ESTILOS UNIFICADOS
+        estilos_base = self._crear_estilos_tabla_unificados()
         
         # Aplicar alineaciones específicas por columna
         for col_idx, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
@@ -571,24 +541,22 @@ class GeneradorReportesPDF:
             tabla_align = align_map.get(alineacion, 'LEFT')
             
             # Alineación para datos normales
-            estilos_tabla.append(('ALIGN', (col_idx, 1), (col_idx, -2), tabla_align))
+            estilos_base.append(('ALIGN', (col_idx, 1), (col_idx, -2), tabla_align))
             
-            # Alineación especial para fila de total
+            # Alineación para fila de total
             if col_idx == columna_valor_index:
-                estilos_tabla.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
-            elif (tipo_reporte == 7 and col_idx == columna_descripcion_index) or \
-                (tipo_reporte != 7 and col_idx == len(columnas_def) - 2):
-                estilos_tabla.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
+                estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
+            elif col_idx == penultima_columna_index:
+                estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
             else:
-                estilos_tabla.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'CENTER'))
+                estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'CENTER'))
         
         # Aplicar estilos
-        tabla.setStyle(TableStyle(estilos_tabla))
+        tabla.setStyle(TableStyle(estilos_base))
         
-        print(f"✅ Tabla PDF creada exitosamente: {len(datos)} filas + total")
+        print(f"✅ Tabla PDF creada con estilo unificado: {len(datos)} filas + total")
         
         return tabla
-
 
     def _crear_analisis_conclusiones(self, datos):
         """Crea sección de análisis simple como antes"""
@@ -648,136 +616,133 @@ class GeneradorReportesPDF:
         """
         
         return Paragraph(mensaje, sin_datos_style)
-            
+
+
     def _obtener_columnas_reporte(self, tipo_reporte):
-        """Define las columnas con TÍTULOS CORTOS Y ANCHOS OPTIMIZADOS"""
+        """Define las columnas con ANCHOS UNIFORMES Y TÍTULOS ESTANDARIZADOS"""
+        
+        # ✅ ANCHOS ESTÁNDAR UNIFICADOS (suman ~165mm para página A4)
+        ANCHO_FECHA = 22      # Estándar para fechas
+        ANCHO_CODIGO = 20     # Para códigos/números
+        ANCHO_CORTO = 25      # Campos cortos (stock, cantidad, etc)
+        ANCHO_MEDIO = 35      # Campos medios (marca, proveedor, etc)
+        ANCHO_LARGO = 45      # Descripción/producto
+        ANCHO_VALOR = 28      # Valores monetarios
+        
         columnas = {
-            1: [  # Ventas de Farmacia
-                ("FECHA", 22, 'LEFT'),
-                ("Nº VENTA", 22, 'LEFT'), 
-                ("DESCRIPCIÓN", 55, 'LEFT'),
-                ("CANTIDAD", 18, 'RIGHT'),
-                ("TOTAL (Bs)", 25, 'RIGHT')
+            1: [  # Ventas de Farmacia - ✅ BALANCEADO
+                ("FECHA", ANCHO_FECHA, 'LEFT'),
+                ("N° VENTA", ANCHO_CODIGO, 'LEFT'), 
+                ("DESCRIPCIÓN", ANCHO_LARGO, 'LEFT'),
+                ("CANT", ANCHO_CORTO-5, 'RIGHT'),      # 20mm
+                ("TOTAL (Bs)", ANCHO_VALOR, 'RIGHT')
             ],
-            2: [  # Inventario de Productos - ✅ TÍTULOS CORTOS
-                ("FECHA", 18, 'LEFT'),
-                ("PRODUCTO", 40, 'LEFT'),      # Reducido para dar más espacio
-                ("MARCA", 20, 'LEFT'),         # Reducido
-                ("STOCK", 16, 'RIGHT'),        # Más pequeño
-                ("LOTES", 12, 'CENTER'),       # Más pequeño
-                ("P.UNIT", 20, 'RIGHT'),       # ✅ SIN PUNTO y más corto
-                ("F.VENC", 20, 'LEFT'),        # ✅ SIN PUNTO y más corto
-                ("VALOR (Bs)", 24, 'RIGHT')    # ✅ Título corto
+            2: [  # Inventario - ✅ REDISTRIBUIDO UNIFORMEMENTE
+                ("FECHA", ANCHO_FECHA-4, 'LEFT'),      # 18mm
+                ("PRODUCTO", ANCHO_LARGO-5, 'LEFT'),   # 40mm  
+                ("MARCA", ANCHO_MEDIO-10, 'LEFT'),     # 25mm
+                ("STOCK", ANCHO_CORTO-9, 'RIGHT'),     # 16mm
+                ("LOTES", ANCHO_CORTO-13, 'CENTER'),   # 12mm
+                ("P.UNIT", ANCHO_CORTO-2, 'RIGHT'),    # 23mm
+                ("F.VENC", ANCHO_CORTO-3, 'LEFT'),     # 22mm
+                ("VALOR (Bs)", ANCHO_VALOR-1, 'RIGHT') # 27mm
             ],
-            3: [  # Compras de Farmacia - ✅ TÍTULOS OPTIMIZADOS
-                ("FECHA", 18, 'LEFT'),          
-                ("PRODUCTO", 30, 'LEFT'),       # Reducido
-                ("MARCA", 16, 'LEFT'),          # Reducido
-                ("UNID.", 12, 'RIGHT'),         # Más pequeño
-                ("PROVEEDOR", 20, 'LEFT'),      # Reducido
-                ("F.VENC", 16, 'LEFT'),         # ✅ Título corto
-                ("USUARIO", 16, 'LEFT'),        # Reducido
-                ("TOTAL (Bs)", 16, 'RIGHT')     # Reducido
+            3: [  # Compras - ✅ CORREGIR ORDEN Y NOMBRES
+                ("FECHA", ANCHO_FECHA-4, 'LEFT'),           # 18mm
+                ("PRODUCTO", ANCHO_MEDIO+5, 'LEFT'),        # 40mm
+                ("MARCA", ANCHO_CORTO-3, 'LEFT'),           # 22mm
+                ("UNIDADES", ANCHO_CORTO-5, 'RIGHT'),       # ✅ CAMBIO: era "UNID"
+                ("PROVEEDOR", ANCHO_MEDIO-5, 'LEFT'),       # 30mm
+                ("F.VENC", ANCHO_CODIGO, 'LEFT'),           # 20mm
+                ("USUARIO", ANCHO_CORTO-2, 'LEFT'),         # 23mm
+                ("TOTAL (Bs)", ANCHO_VALOR-2, 'RIGHT')      # 26mm
             ],
-            4: [  # Consultas Médicas - ✅ TÍTULOS OPTIMIZADOS
-                ("FECHA", 22, 'LEFT'),
-                ("ESPECIALIDAD", 32, 'LEFT'),   # Reducido
-                ("DESCRIPCIÓN", 50, 'LEFT'),    # Reducido
-                ("PACIENTE", 32, 'LEFT'),       # Reducido
-                ("MÉDICO", 32, 'LEFT'),         # Reducido
-                ("PRECIO (Bs)", 26, 'RIGHT')    # Reducido
+            4: [  # Consultas Médicas - ✅ BALANCEADO
+                ("FECHA", ANCHO_FECHA, 'LEFT'),            # 22mm
+                ("ESPECIALIDAD", ANCHO_MEDIO, 'LEFT'),     # 35mm
+                ("DESCRIPCIÓN", ANCHO_LARGO, 'LEFT'),      # 45mm
+                ("PACIENTE", ANCHO_MEDIO+3, 'LEFT'),       # 38mm
+                ("MÉDICO", ANCHO_MEDIO-3, 'LEFT'),         # 32mm
+                ("PRECIO (Bs)", ANCHO_VALOR-3, 'RIGHT')    # 25mm
             ],
-            5: [  # Laboratorio - ✅ TÍTULOS OPTIMIZADOS
-                ("FECHA", 20, 'LEFT'),
-                ("TIPO ANÁLISIS", 30, 'LEFT'),  # Reducido
-                ("DESCRIPCIÓN", 50, 'LEFT'),    # Reducido
-                ("PACIENTE", 30, 'LEFT'),       # Reducido
-                ("TÉCNICO", 30, 'LEFT'),        # Reducido
-                ("PRECIO (Bs)", 26, 'RIGHT')    # Reducido
+            5: [  # Laboratorio - ✅ CONSISTENTE
+                ("FECHA", ANCHO_FECHA-2, 'LEFT'),          # 20mm
+                ("TIPO ANÁLISIS", ANCHO_MEDIO, 'LEFT'),    # 35mm
+                ("DESCRIPCIÓN", ANCHO_LARGO, 'LEFT'),      # 45mm
+                ("PACIENTE", ANCHO_MEDIO+3, 'LEFT'),       # 38mm
+                ("TÉCNICO", ANCHO_MEDIO-3, 'LEFT'),        # 32mm
+                ("PRECIO (Bs)", ANCHO_VALOR-3, 'RIGHT')    # 25mm
             ],
-            6: [  # Enfermería - ✅ TÍTULOS OPTIMIZADOS
-                ("FECHA", 20, 'LEFT'),
-                ("TIPO PROC.", 30, 'LEFT'),     # ✅ Título muy corto
-                ("DESCRIPCIÓN", 50, 'LEFT'),    # Reducido
-                ("PACIENTE", 30, 'LEFT'),       # Reducido
-                ("ENFERMERO/A", 30, 'LEFT'),    # Reducido
-                ("PRECIO (Bs)", 26, 'RIGHT')    # Reducido
+            6: [  # Enfermería - ✅ CAMBIAR NOMBRE
+                ("FECHA", ANCHO_FECHA-2, 'LEFT'),           # 20mm
+                ("PROCEDIMIENTO", ANCHO_MEDIO+5, 'LEFT'),   # ✅ ERA "TIPO PROC"
+                ("DESCRIPCIÓN", ANCHO_LARGO, 'LEFT'),       # 45mm
+                ("PACIENTE", ANCHO_MEDIO+3, 'LEFT'),        # 38mm
+                ("ENFERMERO/A", ANCHO_MEDIO-3, 'LEFT'),     # 32mm
+                ("PRECIO (Bs)", ANCHO_VALOR-3, 'RIGHT')     # 25mm
             ],
-            7: [  # Gastos Operativos - ✅ TÍTULOS OPTIMIZADOS
-                ("FECHA", 22, 'LEFT'),
-                ("TIPO GASTO", 30, 'LEFT'),     # ✅ Título corto (sin "DE")
-                ("DESCRIPCIÓN", 50, 'LEFT'),    # Reducido
-                ("MONTO (Bs)", 26, 'RIGHT'),    # Reducido
-                ("PROVEEDOR", 30, 'LEFT')       # Reducido
+            7: [  # Gastos - ✅ OPTIMIZADO PARA 5 COLUMNAS
+                ("FECHA", ANCHO_FECHA, 'LEFT'),            # 22mm
+                ("TIPO GASTO", ANCHO_MEDIO+5, 'LEFT'),     # 40mm
+                ("DESCRIPCIÓN", ANCHO_LARGO+10, 'LEFT'),   # 55mm
+                ("MONTO (Bs)", ANCHO_VALOR, 'RIGHT'),      # 28mm
+                ("PROVEEDOR", ANCHO_MEDIO-5, 'LEFT')       # 30mm
             ],
-            8: [  # Consolidado
-                ("FECHA", 20, 'LEFT'),
-                ("TIPO", 22, 'CENTER'),
-                ("DESCRIPCIÓN", 50, 'LEFT'),    # Reducido
-                ("CANTIDAD", 18, 'RIGHT'),
-                ("VALOR (Bs)", 26, 'RIGHT')     # Reducido
+            8: [  # Consolidado - ✅ LIMPIO Y PROFESIONAL
+                ("FECHA", ANCHO_FECHA-2, 'LEFT'),          # 20mm
+                ("TIPO", ANCHO_CORTO-3, 'CENTER'),         # 22mm
+                ("DESCRIPCIÓN", ANCHO_LARGO+10, 'LEFT'),   # 55mm
+                ("CANTIDAD", ANCHO_CORTO-2, 'RIGHT'),      # 23mm
+                ("VALOR (Bs)", ANCHO_VALOR-3, 'RIGHT')     # 25mm
             ]
         }
+        
         return columnas.get(tipo_reporte, [
-            ("FECHA", 25, 'LEFT'),
-            ("DESCRIPCIÓN", 70, 'LEFT'),        # Reducido
-            ("CANTIDAD", 20, 'RIGHT'),
-            ("VALOR (Bs)", 26, 'RIGHT')         # Reducido
+            ("FECHA", ANCHO_FECHA, 'LEFT'),
+            ("DESCRIPCIÓN", ANCHO_LARGO+15, 'LEFT'),       # 60mm por defecto
+            ("CANTIDAD", ANCHO_CORTO, 'RIGHT'),
+            ("VALOR (Bs)", ANCHO_VALOR, 'RIGHT')
         ])
 
     def _obtener_valor_campo(self, registro, campo_titulo, tipo_reporte):
-        """Extrae valores con MAPEO ACTUALIZADO para títulos cortos"""
+        """Extrae valores con MAPEO CORREGIDO"""
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.platypus import Paragraph
         from reportlab.lib.enums import TA_LEFT
         
-        # ✅ MAPEO ACTUALIZADO CON TÍTULOS CORTOS
+        # ✅ MAPEO ACTUALIZADO Y CORREGIDO
         mapeo_campos = {
             # CAMPOS BÁSICOS
             "FECHA": "fecha",
             "DESCRIPCIÓN": "descripcion",
             "CANTIDAD": "cantidad",
+            "UNIDADES": "cantidad",          # ✅ NUEVO
             
             # VALORES MONETARIOS
             "PRECIO (Bs)": "valor",
             "TOTAL (Bs)": "valor", 
-            "VALOR (Bs)": "valor",          # ✅ Nuevo título corto
+            "VALOR (Bs)": "valor",
             "MONTO (Bs)": "valor",
             
-            # VENTAS
-            "Nº VENTA": "numeroVenta",
-            
-            # INVENTARIO - ✅ NUEVOS TÍTULOS CORTOS
-            "PRODUCTO": "descripcion",
-            "STOCK": "cantidad",
-            "P.UNIT": "precioUnitario",      # ✅ Sin punto
-            "F.VENC": "fecha_vencimiento",   # ✅ Sin punto
-            "LOTES": "lotes",
-            
-            # COMPRAS
-            "Nº COMPRA": "numeroCompra",
-            "MARCA": "marca",
-            "UNID.": "cantidad",
-            "PROVEEDOR": "proveedor",
-            "USUARIO": "usuario",
-            
-            # CONSULTAS
-            "ESPECIALIDAD": "especialidad",
-            "PACIENTE": "paciente",
-            "MÉDICO": "doctor_nombre",
-            
-            # LABORATORIO
-            "TIPO ANÁLISIS": "tipoAnalisis",
-            "TÉCNICO": "tecnico",
-            
-            # ENFERMERÍA
-            "TIPO PROC.": "tipoProcedimiento",   # ✅ Título corto
+            # ENFERMERÍA - ✅ MAPEO CORREGIDO
+            "PROCEDIMIENTO": "tipoProcedimiento",  # ✅ CAMBIO: era "TIPO PROC"
             "ENFERMERO/A": "enfermero",
             
-            # GASTOS
-            "TIPO GASTO": "categoria",           # ✅ Sin "DE"
+            # COMPRAS - ✅ MAPEO MEJORADO
+            "PRODUCTO": "descripcion",
+            "MARCA": "marca", 
+            "PROVEEDOR": "proveedor",
+            "F.VENC": "fecha_vencimiento",
+            "USUARIO": "usuario",
             
-            # CONSOLIDADO
+            # OTROS CAMPOS
+            "PACIENTE": "paciente",
+            "MÉDICO": "doctor_nombre",
+            "ESPECIALIDAD": "especialidad",
+            "TÉCNICO": "tecnico",
+            "TIPO ANÁLISIS": "tipoAnalisis",
+            "TIPO GASTO": "categoria",
+            "N° VENTA": "numeroVenta",
             "TIPO": "tipo",
         }
         
@@ -800,7 +765,7 @@ class GeneradorReportesPDF:
             )
             return Paragraph(str(texto), style)
 
-        # ✅ PROCESAMIENTO ACTUALIZADO PARA TÍTULOS CORTOS
+        # ✅ PROCESAMIENTO MEJORADO
 
         # 1. Campos monetarios
         if any(palabra in campo_titulo.upper() for palabra in ["PRECIO", "TOTAL", "VALOR", "MONTO"]):
@@ -810,96 +775,185 @@ class GeneradorReportesPDF:
                 return "Bs 0.00"
         
         # 2. Campos numéricos
-        elif campo_titulo in ["CANTIDAD", "STOCK", "UNID.", "LOTES"]:
+        elif campo_titulo in ["CANTIDAD", "UNIDADES", "STOCK", "LOTES"]:
             try:
                 if valor == "" or valor is None or str(valor).strip() == "":
-                    return "0"
+                    # ✅ PARA STOCK: Buscar en múltiples campos posibles
+                    if campo_titulo == "STOCK":
+                        # Buscar stock en diferentes campos
+                        stock_valor = (registro.get('cantidad') or 
+                                    registro.get('Stock_Total') or 
+                                    registro.get('stock_total') or
+                                    registro.get('Stock_Calculado') or
+                                    registro.get('Cantidad_Unitario') or
+                                    0)
+                        return str(int(float(stock_valor)))
+                    else:
+                        return "0"
+                
                 valor_num = float(valor)
                 return f"{int(valor_num):,}"
             except:
+                # ✅ FALLBACK específico para STOCK
+                if campo_titulo == "STOCK":
+                    stock_valor = (registro.get('cantidad') or 
+                                registro.get('Stock_Total') or 
+                                registro.get('stock_total') or
+                                0)
+                    try:
+                        return str(int(float(stock_valor)))
+                    except:
+                        return "0"
                 return "0"
+        
+        # 3. Campo PROCEDIMIENTO (enfermería) - ✅ CORREGIR
+        elif campo_titulo == "PROCEDIMIENTO":
+            # Buscar en múltiples campos posibles
+            procedimiento = (registro.get('tipoProcedimiento') or 
+                            registro.get('tipo_procedimiento') or
+                            registro.get('procedimiento') or 
+                            registro.get('Procedimiento') or
+                            registro.get('tipo') or
+                            "Procedimiento General")
             
-        # 3. Precio unitario (nuevo título corto)
-        elif campo_titulo == "P.UNIT":  # ✅ Sin punto
+            if len(procedimiento) > 25:
+                return crear_parrafo(procedimiento)
+            return procedimiento
+        
+        # 4. Enfermero/a - ✅ MEJORAR BÚSQUEDA
+        elif campo_titulo == "ENFERMERO/A":
+            enfermero = (registro.get('enfermero') or
+                        registro.get('Enfermero') or 
+                        registro.get('enfermero_nombre') or
+                        registro.get('trabajador_nombre') or
+                        "Sin asignar")
+            
+            if len(enfermero) > 20:
+                return crear_parrafo(enfermero)
+            return enfermero
+        
+        # 5. Marca - ✅ MEJORAR BÚSQUEDA  
+        elif campo_titulo == "MARCA":
+            marca = (registro.get('marca') or 
+                    registro.get('Marca') or
+                    registro.get('Marca_Nombre') or
+                    registro.get('marca_nombre') or
+                    "Sin marca")
+            
+            if len(marca) > 15:
+                return crear_parrafo(marca)
+            return marca
+        
+        # 6. Proveedor - ✅ MEJORAR BÚSQUEDA
+        elif campo_titulo == "PROVEEDOR":
+            proveedor = (registro.get('proveedor') or
+                        registro.get('Proveedor') or 
+                        registro.get('proveedor_nombre') or
+                        registro.get('Proveedor_Nombre') or
+                        "Sin proveedor")
+            
+            if len(proveedor) > 18:
+                return crear_parrafo(proveedor)
+            return proveedor
+        
+        elif campo_titulo == "P.UNIT":
+            # ✅ PRECIO UNITARIO - NUNCA mostrar "---"
             try:
-                return f"Bs {float(valor):,.2f}"
-            except:
-                return "Bs 0.00"
+                precio = 0
+                
+                # Buscar precio en múltiples campos posibles
+                if 'precioUnitario' in registro and registro['precioUnitario'] is not None:
+                    precio = float(registro['precioUnitario'])
+                elif 'Precio_venta' in registro and registro['Precio_venta'] is not None:
+                    precio = float(registro['Precio_venta'])
+                elif 'precio_venta' in registro and registro['precio_venta'] is not None:
+                    precio = float(registro['precio_venta'])
+                elif 'Precio_compra' in registro and registro['Precio_compra'] is not None:
+                    precio = float(registro['Precio_compra'])
+                
+                # Si el precio es 0 o None, calcular desde el valor total
+                if precio == 0:
+                    try:
+                        valor_total = float(registro.get('valor', 0))
+                        cantidad_stock = float(registro.get('cantidad', 0))
+                        if cantidad_stock > 0 and valor_total > 0:
+                            precio = valor_total / cantidad_stock
+                    except (ValueError, ZeroDivisionError):
+                        precio = 0
+                
+                # ✅ SIEMPRE mostrar un precio, nunca "---"
+                return f"Bs {precio:.2f}"
+                
+            except (ValueError, TypeError, KeyError):
+                return "Bs 0.00"  # ✅ NUNCA "---", siempre un precio
         
-        # 4. Fecha de vencimiento (nuevo título corto)
-        elif campo_titulo == "F.VENC":  # ✅ Sin punto
-            if not valor or valor in ["", "None", "null"]:
+        # 7. Usuario - ✅ MEJORAR BÚSQUEDA
+        elif campo_titulo == "USUARIO":
+            usuario = (registro.get('usuario') or
+                    registro.get('Usuario') or
+                    registro.get('usuario_nombre') or
+                    registro.get('registrado_por') or
+                    "Sin usuario")
+            
+            if len(usuario) > 15:
+                return crear_parrafo(usuario)
+            return usuario
+        
+        # 8. Fecha de vencimiento - ✅ MEJORAR FORMATO
+        elif campo_titulo == "F.VENC":
+            fecha_venc = (registro.get('fecha_vencimiento') or 
+                        registro.get('Fecha_Vencimiento') or
+                        registro.get('proxima_vencimiento') or
+                        None)
+            
+            if not fecha_venc or str(fecha_venc) in ["", "None", "null"]:
                 return "Sin venc."
-            return valor
+            
+            # Formatear fecha si viene en formato ISO
+            if isinstance(fecha_venc, str) and len(fecha_venc) >= 10:
+                try:
+                    if '-' in fecha_venc:  # Formato YYYY-MM-DD
+                        partes = fecha_venc[:10].split('-')
+                        return f"{partes[2]}/{partes[1]}/{partes[0]}"
+                except:
+                    pass
+            
+            return str(fecha_venc)
         
-        # 5. Campos con nombres largos (usar Paragraph para texto largo)
-        elif campo_titulo in ["PACIENTE", "MÉDICO", "TÉCNICO", "ENFERMERO/A"]:
-            if not valor:
-                defaults = {
-                    "PACIENTE": "Paciente",
-                    "MÉDICO": "Sin médico",
-                    "TÉCNICO": "Sin asignar", 
-                    "ENFERMERO/A": "Sin asignar"
-                }
-                valor = defaults.get(campo_titulo, "Sin asignar")
-            return crear_parrafo(valor)
-        
-        # 6. Descripciones (usar Paragraph)
+        # 9. Descripciones (usar Paragraph para texto largo)
         elif campo_titulo in ["DESCRIPCIÓN", "PRODUCTO"]:
             if not valor:
-                valor = "Sin detalles"
-            return crear_parrafo(valor)
-        
-        # 7. Campos medianos
-        elif campo_titulo in ["ESPECIALIDAD", "TIPO GASTO", "TIPO ANÁLISIS", "TIPO PROC."]:  # ✅ Incluir nuevos títulos
-            if not valor:
-                if campo_titulo == "TIPO GASTO":
-                    valor = registro.get('tipo_nombre', 'General')
-                else:
-                    valor = "General"
+                valor = "Sin descripción"
             
-            if len(valor) > 15:  # Reducido de 18 a 15 por columnas más pequeñas
+            if len(valor) > 30:
                 return crear_parrafo(valor)
             return valor
         
-        # 8. Otros campos
-        elif campo_titulo == "MARCA":
+        # 10. Otros campos con búsqueda mejorada
+        elif campo_titulo == "PACIENTE":
+            paciente = (registro.get('paciente') or
+                    registro.get('Paciente') or
+                    registro.get('paciente_nombre') or
+                    "Paciente")
+            
+            if len(paciente) > 25:
+                return crear_parrafo(paciente)
+            return paciente
+        
+        # 11. Genérico con fallback
+        if not valor or valor == "":
+            # Intentar búsqueda alternativa
+            campo_alt = campo_dato.replace('_', '').lower()
+            for key in registro.keys():
+                if key.lower().replace('_', '') == campo_alt:
+                    valor = registro[key]
+                    break
+            
             if not valor:
-                valor = "Sin marca"
-            if len(valor) > 10:  # Reducido por columna más pequeña
-                return crear_parrafo(valor)
-            return valor
+                return "---"
         
-        elif campo_titulo == "PROVEEDOR":
-            if not valor:
-                valor = "Sin proveedor"
-            if len(valor) > 12:  # Reducido por columna más pequeña
-                return crear_parrafo(valor)
-            return valor
-        
-        elif campo_titulo == "USUARIO":
-            if not valor:
-                valor = "Sin usuario"
-            if len(valor) > 10:  # Reducido por columna más pequeña
-                return crear_parrafo(valor)
-            return valor
-        
-        # 9. Campos simples
-        elif campo_titulo == "FECHA":
-            return valor if valor else "---"
-        elif campo_titulo in ["Nº VENTA", "Nº COMPRA"]:
-            if not valor:
-                prefijo = "V" if "VENTA" in campo_titulo else "C"
-                valor = f"{prefijo}{registro.get('id', '001'):03d}"
-            return valor
-        elif campo_titulo == "TIPO":
-            return valor if valor else "Normal"
-        
-        # 10. Genérico
-        if not valor:
-            return "---"
-        
-        if len(str(valor)) > 20:  # Reducido de 25 a 20 por columnas más pequeñas
+        # Formatear valor final
+        if len(str(valor)) > 25:
             return crear_parrafo(str(valor))
         
         return str(valor)

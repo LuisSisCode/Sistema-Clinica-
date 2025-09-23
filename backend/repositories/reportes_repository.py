@@ -63,45 +63,78 @@ class ReportesRepository(BaseRepository):
     # ===============================
     # REPORTES DE INVENTARIO (TIPO 2)
     # ===============================
-    
+        
     @cached_query('reporte_inventario', ttl=600)
     def get_reporte_inventario(self, fecha_desde: str = "", fecha_hasta: str = "") -> List[Dict[str, Any]]:
-        """Genera reporte de inventario con lotes y vencimientos"""
+        """Genera reporte de inventario con PRECIOS REALES - NO más "---" """
         query = """
         SELECT 
             FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
             p.Nombre as descripcion,
             m.Nombre as marca,
+            
+            -- ✅ STOCK REAL - Suma de todos los lotes
             (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id) as cantidad,
+            
+            -- ✅ LOTES ACTIVOS - Solo lotes con stock
             (SELECT COUNT(*) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as lotes,
-            p.Precio_venta as precioUnitario,
-            (SELECT MIN(l.Fecha_Vencimiento) 
-            FROM Lote l 
-            WHERE l.Id_Producto = p.id 
-            AND l.Cantidad_Unitario > 0 
-            AND l.Fecha_Vencimiento IS NOT NULL) as fecha_vencimiento,
+            
+            -- ✅ PRECIO UNITARIO REAL - Nunca NULL, siempre un valor
+            CASE 
+                WHEN p.Precio_venta IS NULL OR p.Precio_venta = 0 
+                THEN COALESCE(p.Precio_compra, 0)  -- Usar precio de compra si no hay precio de venta
+                ELSE p.Precio_venta
+            END as precioUnitario,
+            
+            -- ✅ FECHA VENCIMIENTO MÁS PRÓXIMA - Formato correcto
+            CASE 
+                WHEN EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id 
+                            AND l.Cantidad_Unitario > 0 AND l.Fecha_Vencimiento IS NOT NULL)
+                THEN (SELECT MIN(FORMAT(l.Fecha_Vencimiento, 'dd/MM/yyyy'))
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id 
+                    AND l.Cantidad_Unitario > 0 
+                    AND l.Fecha_Vencimiento IS NOT NULL)
+                ELSE 'Sin vencimiento'
+            END as fecha_vencimiento,
+            
+            -- ✅ VALOR TOTAL REAL - Stock × Precio de venta
             ((SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
             FROM Lote l 
-            WHERE l.Id_Producto = p.id) * p.Precio_venta) as valor,
+            WHERE l.Id_Producto = p.id) * 
+            CASE 
+                WHEN p.Precio_venta IS NULL OR p.Precio_venta = 0 
+                THEN COALESCE(p.Precio_compra, 0)
+                ELSE p.Precio_venta
+            END) as valor,
             
-            -- Campos adicionales para compatibilidad
+            -- Campos adicionales
             p.Codigo as codigo,
             p.Unidad_Medida as unidad,
+            
+            -- ✅ ESTADO BASADO EN VENCIMIENTO REAL
             CASE 
-                WHEN (SELECT MIN(l.Fecha_Vencimiento) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) <= DATEADD(MONTH, 3, GETDATE()) 
+                WHEN EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id 
+                            AND l.Cantidad_Unitario > 0 
+                            AND l.Fecha_Vencimiento IS NOT NULL
+                            AND l.Fecha_Vencimiento <= DATEADD(MONTH, 3, GETDATE()))
                 THEN 'Próximo a vencer'
+                WHEN NOT EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0)
+                THEN 'Sin stock'
                 ELSE 'Normal'
             END as estado
+            
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
-            FROM Lote l 
-            WHERE l.Id_Producto = p.id) > 0
-        ORDER BY valor DESC, p.Nombre
+        WHERE EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id)  -- Solo productos que tienen lotes
+        ORDER BY 
+            CASE WHEN EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) 
+                THEN 0 ELSE 1 END,  -- Productos con stock primero
+            valor DESC, p.Nombre
         """
         
         return self._execute_query(query)
@@ -112,36 +145,47 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_compras', ttl=300)
     def get_reporte_compras(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """
-        Genera reporte DETALLADO de compras por producto
-        Campos: fecha, producto, marca, stock (unidades compradas), proveedor, total gastado
-        """
+        """Compras: CONSULTA SIMPLIFICADA - Solo campos que existen"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
         query = """
         SELECT 
             FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
-            p.Nombre as descripcion,  -- PRODUCTO
-            m.Nombre as marca,         -- MARCA
-            dc.Cantidad_Unitario as cantidad,  -- STOCK/UNIDADES COMPRADAS
-            pr.Nombre as proveedor,    -- PROVEEDOR
+            
+            -- ✅ PRODUCTO - Solo nombre del producto
+            p.Nombre as descripcion,
+            
+            -- ✅ MARCA - Solo nombre de marca 
+            COALESCE(m.Nombre, 'Sin marca') as marca,
+            
+            -- ✅ CANTIDAD - Unidades compradas
+            dc.Cantidad_Unitario as cantidad,
+            
+            -- ✅ PROVEEDOR - Solo nombre
+            pr.Nombre as proveedor,
+            
+            -- ✅ FECHA VENCIMIENTO - Formato correcto
             CASE 
                 WHEN l.Fecha_Vencimiento IS NOT NULL 
                 THEN FORMAT(l.Fecha_Vencimiento, 'dd/MM/yyyy')
                 ELSE 'Sin vencimiento'
-            END as fecha_vencimiento,  -- FECHA DE VENCIMIENTO
-            u.Nombre + ' ' + u.Apellido_Paterno as usuario,  -- USUARIO QUE COMPRÓ
-            dc.Precio_Unitario as valor,  -- TOTAL GASTADO POR PRODUCTO
+            END as fecha_vencimiento,
             
-            -- Campos adicionales para compatibilidad
-            'C' + RIGHT('000' + CAST(c.id AS VARCHAR), 3) as numeroCompra,
-            p.Codigo as codigo
+            -- ✅ USUARIO - Nombre completo
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario,
+            
+            -- ✅ TOTAL - Precio unitario (no el total de la compra)
+            dc.Precio_Unitario as valor,
+            
+            -- Campos adicionales
+            'C' + RIGHT('000' + CAST(c.id AS VARCHAR), 3) as numeroCompra
+            
         FROM Compra c
         INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
         INNER JOIN Lote l ON dc.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
-        INNER JOIN Marca m ON p.ID_Marca = m.id
+        LEFT JOIN Marca m ON p.ID_Marca = m.id
         INNER JOIN Proveedor pr ON c.Id_Proveedor = pr.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE c.Fecha >= ? AND c.Fecha <= ?
@@ -283,31 +327,57 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_enfermeria', ttl=300)
     def get_reporte_enfermeria(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Enfermería: fecha, tipoProcedimiento, descripción, paciente, enfermero, precio"""
+        """Enfermería: CONSULTA SIMPLIFICADA con campos que SÍ EXISTEN"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
+        # ✅ CONSULTA CORREGIDA - Solo campos que existen realmente
         query = """
         SELECT 
             FORMAT(e.Fecha, 'dd/MM/yyyy') as fecha,
+            
+            -- ✅ PROCEDIMIENTO - Solo de tabla Tipos_Procedimientos
             COALESCE(tp.Nombre, 'Procedimiento General') as tipoProcedimiento,
-            COALESCE(tp.Descripcion, COALESCE(tp.Nombre, 'Procedimiento de enfermería')) as descripcion,
-            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, 
-                CASE WHEN p.Apellido_Materno IS NOT NULL AND p.Apellido_Materno != '' 
-                        THEN ' ' + p.Apellido_Materno 
-                        ELSE '' END) as paciente,
+            
+            -- ✅ DESCRIPCIÓN - Solo de tabla Tipos_Procedimientos  
+            COALESCE(tp.Descripcion, tp.Nombre, 'Procedimiento de enfermería') as descripcion,
+            
+            -- ✅ PACIENTE - Nombre completo
+            CONCAT(
+                p.Nombre, ' ', 
+                p.Apellido_Paterno,
+                CASE 
+                    WHEN p.Apellido_Materno IS NOT NULL AND p.Apellido_Materno != '' 
+                    THEN ' ' + p.Apellido_Materno 
+                    ELSE '' 
+                END
+            ) as paciente,
+            
+            -- ✅ ENFERMERO/A - Preferir Trabajador, fallback a Usuario
             CASE 
-                WHEN t.id IS NOT NULL THEN CONCAT(t.Nombre, ' ', t.Apellido_Paterno,
-                    CASE WHEN t.Apellido_Materno IS NOT NULL AND t.Apellido_Materno != '' 
-                        THEN ' ' + t.Apellido_Materno 
-                        ELSE '' END)
-                ELSE 'Sin asignar'
+                WHEN t.id IS NOT NULL THEN 
+                    CONCAT(
+                        t.Nombre, ' ', 
+                        t.Apellido_Paterno,
+                        CASE 
+                            WHEN t.Apellido_Materno IS NOT NULL AND t.Apellido_Materno != '' 
+                            THEN ' ' + t.Apellido_Materno 
+                            ELSE '' 
+                        END
+                    )
+                ELSE CONCAT(u.Nombre, ' ', u.Apellido_Paterno)
             END as enfermero,
-            (e.Cantidad * CASE 
-                WHEN e.Tipo = 'Emergencia' THEN COALESCE(tp.Precio_Emergencia, 25.00)
+            
+            -- ✅ PRECIO - Cálculo basado en cantidad y tipo
+            (COALESCE(e.Cantidad, 1) * 
+            CASE 
+                WHEN COALESCE(e.Tipo, 'Normal') = 'Emergencia' 
+                THEN COALESCE(tp.Precio_Emergencia, 25.00)
                 ELSE COALESCE(tp.Precio_Normal, 20.00) 
             END) as valor,
-            e.Cantidad as cantidad
+            
+            COALESCE(e.Cantidad, 1) as cantidad
+            
         FROM Enfermeria e
         INNER JOIN Pacientes p ON e.Id_Paciente = p.id
         LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
@@ -317,7 +387,6 @@ class ReportesRepository(BaseRepository):
         ORDER BY e.Fecha DESC, e.id DESC
         """
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
-    
     # ===============================
     # REPORTES DE GASTOS (TIPO 7)
     # ===============================
