@@ -21,7 +21,8 @@ from .paciente_model import PacienteModel, register_paciente_model              
 from .trabajador_model import TrabajadorModel, register_trabajador_model     # 10
 from .usuario_model import UsuarioModel, register_usuario_model                     # 11
 from .venta_model import VentaModel, register_venta_model 
-from .proveedor_model import ProveedorModel, register_proveedor_model                          # 12
+from .proveedor_model import ProveedorModel, register_proveedor_model   
+from .cierre_caja_model import CierreCajaModel, register_cierre_caja_model                        # 12
 
 
 __all__ = [
@@ -37,7 +38,8 @@ __all__ = [
     'TrabajadorModel', 'register_trabajador_model',
     'UsuarioModel', 'register_usuario_model',
     'VentaModel', 'register_venta_model',
-    'ProveedorModel','register_proveedor_model'
+    'ProveedorModel','register_proveedor_model',
+    'CierreCajaModel', 'register_cierre_caja_model'
     
 ]
 

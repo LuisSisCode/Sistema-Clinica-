@@ -83,10 +83,6 @@ class BaseRepository(ABC):
                 has_output = 'OUTPUT INSERTED' in query_upper
                 has_insert = 'INSERT' in query_upper
                 
-                # ✅ LOG mejorado para debug
-                if not use_cache:
-                    print(f"🔄 Ejecutando query SIN CACHE en {self.table_name}: {query[:100]}...")
-                
                 cursor.execute(query, params)
                 
                 if query_upper.startswith('SELECT'):
@@ -101,10 +97,10 @@ class BaseRepository(ABC):
                     # Cachear resultado SOLO SI use_cache es True
                     if use_cache and result is not None:
                         self.cache.set(query, result, params, self.cache_type)
-                        print(f"💾 Resultado cacheado para {self.table_name}")
+                        #→print(f"💾 Resultado cacheado para {self.table_name}")
                     elif not use_cache:
-                        print(f"🚫 Resultado NO cacheado (bypass activo) para {self.table_name}")
-                    
+                        #print(f"🚫 Resultado NO cacheado (bypass activo) para {self.table_name}")
+                        pass
                     return result
                     
                 elif has_output and has_insert:
@@ -123,17 +119,17 @@ class BaseRepository(ABC):
                             for column, value in zip(columns, row):
                                 result[column] = value
                                 
-                            print(f"🔍 DEBUG: Resultado convertido: {result}")
+                            #print(f"🔍 DEBUG: Resultado convertido: {result}")
                             
                             # Verificar que tenemos el ID
                             if 'id' in result and result['id'] is not None:
                                 conn.commit()
                                 # ✅ INVALIDACIÓN MEJORADA DESPUÉS DE INSERT
                                 self._invalidate_cache_after_modification()
-                                print(f"✅ INSERT con OUTPUT exitoso en {self.table_name} - ID: {result['id']}")
+                                #print(f"✅ INSERT con OUTPUT exitoso en {self.table_name} - ID: {result['id']}")
                                 return result
                             else:
-                                print(f"❌ ERROR: ID no encontrado en resultado: {result}")
+                                #print(f"❌ ERROR: ID no encontrado en resultado: {result}")
                                 conn.rollback()
                                 return None
                         else:
@@ -148,7 +144,7 @@ class BaseRepository(ABC):
                         
                 else:
                     # UPDATE, DELETE queries normales
-                    print(f"🔍 DEBUG: Procesando query normal (UPDATE/DELETE) en {self.table_name}...")
+                    #print(f"🔍 DEBUG: Procesando query normal (UPDATE/DELETE) en {self.table_name}...")
                     affected_rows = cursor.rowcount
                     conn.commit()
                     

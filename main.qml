@@ -956,7 +956,7 @@ ApplicationWindow {
     // FUNCIONES PARA MANEJAR PERFIL Y LOGOUT
     function showUserProfile() {
         console.log("Navegando a perfil de usuario")
-        switchToPage(9) // Ir a configuración donde está la info del usuario
+        switchToPage(10) // Ir a configuración donde está la info del usuario
     }
 
     function confirmLogout() {

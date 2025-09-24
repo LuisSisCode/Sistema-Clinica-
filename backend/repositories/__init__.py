@@ -19,6 +19,7 @@ from .paciente_repository import PacienteRepository         # 8
 from .estadistica_repository import EstadisticaRepository   # 9
 from .trabajador_repository import TrabajadorRepository     # 10
 from .proveedor_repository import ProveedorRepository     # 11
+from .cierre_caja_repository import CierreCajaRepository    
 
 __all__ = [
     'AuthRepository',
@@ -32,7 +33,8 @@ __all__ = [
     'PacienteRepository',
     'EstadisticaRepository',
     'TrabajadorRepository',
-    'ProveedorRepository'
+    'ProveedorRepository',
+    'CierreCajaRepository'
 
 ]
 

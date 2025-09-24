@@ -34,6 +34,7 @@ clinica_app/
 │   │   ├── auth_model.py                        # Autenticación (QObject)
 │   │   ├── proveedor_model.py
 │   │   ├── reportes_model.py
+│   │   ├── reportes_model.py
 │   │   └── dashboard_model.py                   # Estadísticas generales (QObject)
 │   │
 │   ├── repositories/                            # 📊 Acceso a datos
@@ -47,7 +48,8 @@ clinica_app/
 │   │   ├── __init__.py
 │   │   ├── usuario_repository.py                # Usuario + Roles
 │   │   ├── auth_repository.py   
-│   │   ├── reportes_repository.py              
+│   │   ├── reportes_repository.py
+│   │   ├── cierre_caja_repository.py               
 │   │   ├── enfermeria_repository.py             
 │   │   ├── paciente_repository.py               # Pacientes
 │   │   ├── doctor_repository.py                 # Doctores + Especialidades

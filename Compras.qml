@@ -111,14 +111,7 @@ Item {
             comprasPaginadasModel.append(compraQML)
         }
         
-        console.log("📄 Compras: Página", currentPageCompras + 1, "de", totalPagesCompras, 
-                    "- Mostrando", comprasPaginadasModel.count, "de", totalItems)
         
-        // DEBUG: Verificar modelo final
-        if (comprasPaginadasModel.count > 0) {
-            console.log("🔍 DEBUG QML - Primer elemento en modelo:", JSON.stringify(comprasPaginadasModel.get(0)))
-        }
-        console.log("📄 Vista actualizada: Página", currentPageCompras + 1, "de", totalPagesCompras)
     }
     
     // Función para obtener detalles de una compra

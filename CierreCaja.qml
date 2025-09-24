@@ -30,11 +30,46 @@ Item {
     property var datosIngresos: []
     property var datosEgresos: []
     property var resumenFinanciero: ({})
-    property real efectivoReal: 10000.00
-    property real saldoTeorico: -2559.00
-    property real diferencia: efectivoReal - saldoTeorico
-    property bool mostrandoVistaPrevia: false
     
+    // PROPIEDADES DINÁMICAS DESDE EL MODEL
+    property real efectivoReal: cierreCajaModel ? cierreCajaModel.efectivoReal : 0.0
+    property real totalIngresos: cierreCajaModel ? cierreCajaModel.totalIngresos : 0.0
+    property real totalEgresos: cierreCajaModel ? cierreCajaModel.totalEgresos : 0.0
+    property real saldoTeorico: cierreCajaModel ? cierreCajaModel.saldoTeorico : 0.0
+    property real diferencia: cierreCajaModel ? cierreCajaModel.diferencia : 0.0
+    property bool dentroDeLimite: cierreCajaModel ? cierreCajaModel.dentroDeLimite : true
+    property bool requiereAutorizacion: cierreCajaModel ? cierreCajaModel.requiereAutorizacion : false
+    property string tipoDiferencia: cierreCajaModel ? cierreCajaModel.tipoDiferencia : "NEUTRO"
+    
+    // CONEXIONES CON EL MODEL
+    Connections {
+        target: cierreCajaModel
+        function onDatosChanged() {
+            console.log("📊 Datos de cierre actualizados")
+        }
+        
+        function onCierreCompletado(success, message) {
+            if (success) {
+                mostrarNotificacion("Cierre Completado", message)
+                cierreGenerado = true
+            } else {
+                mostrarNotificacion("Error", message)
+            }
+        }
+        
+        function onPdfGenerado(rutaArchivo) {
+            mostrarNotificacion("PDF Generado", "Archivo guardado: " + rutaArchivo)
+            // Abrir el PDF automáticamente después de generarlo
+            if (appController && appController.abrirArchivo) {
+                appController.abrirArchivo(rutaArchivo)
+            }
+        }
+        
+        function onErrorOccurred(title, message) {
+            mostrarNotificacion(title, message)
+        }
+    }
+
     StackLayout {
         anchors.fill: parent
         currentIndex: vistaActual
@@ -65,35 +100,6 @@ Item {
                         anchors.margins: 15
                         spacing: 15
                         
-                        Button {
-                            text: "← Volver"
-                            Layout.preferredHeight: 40
-                            Layout.preferredWidth: 100
-                            visible: vistaActual > 0
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#40FFFFFF" : "transparent"
-                                radius: 4
-                                border.color: whiteColor
-                                border.width: 1
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 12
-                                font.family: "Segoe UI"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                vistaActual = 0
-                                mostrandoVistaPrevia = false
-                            }
-                        }
-                        
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 4
@@ -118,34 +124,13 @@ Item {
                             spacing: 12
                             
                             Button {
-                                text: "👁️ Ver PDF"
-                                Layout.preferredHeight: 40
-                                Layout.preferredWidth: 120
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
-                                    radius: 6
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 12
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: verPDFArqueo()
-                            }
-                            
-                            Button {
-                                text: "📄 Descargar PDF"
+                                text: "📄 Generar PDF"
                                 Layout.preferredHeight: 40
                                 Layout.preferredWidth: 150
+                                enabled: !cierreCajaModel || (!cierreCajaModel.loading && efectivoReal > 0)
                                 
                                 background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                                    color: parent.pressed ? Qt.darker(successColor, 1.2) : (parent.enabled ? successColor : darkGrayColor)
                                     radius: 6
                                 }
                                 
@@ -156,6 +141,7 @@ Item {
                                     font.pixelSize: 12
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
+                                    opacity: parent.enabled ? 1.0 : 0.6
                                 }
                                 
                                 onClicked: descargarPDFArqueo()
@@ -165,9 +151,10 @@ Item {
                                 text: "✅ Cerrar Caja"
                                 Layout.preferredHeight: 40
                                 Layout.preferredWidth: 130
+                                enabled: !cierreCajaModel || (!cierreCajaModel.loading && efectivoReal > 0 && !cierreCajaModel.cierreCompletadoHoy)
                                 
                                 background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
+                                    color: parent.pressed ? Qt.darker(successColor, 1.2) : (parent.enabled ? successColor : darkGrayColor)
                                     radius: 6
                                 }
                                 
@@ -178,6 +165,7 @@ Item {
                                     font.pixelSize: 12
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
+                                    opacity: parent.enabled ? 1.0 : 0.6
                                 }
                                 
                                 onClicked: cerrarCaja()
@@ -238,7 +226,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: "Bs 12,797.00"
+                                            text: "Bs " + totalIngresos.toFixed(2)
                                             font.pixelSize: 28
                                             font.bold: true
                                             color: successColor
@@ -246,7 +234,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: "60 transacciones"
+                                            text: (cierreCajaModel ? cierreCajaModel.transaccionesIngresos : 0) + " transacciones"
                                             font.pixelSize: 10
                                             color: darkGrayColor
                                             Layout.alignment: Qt.AlignHCenter
@@ -275,7 +263,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: "Bs 15,356.00"
+                                            text: "Bs " + totalEgresos.toFixed(2)
                                             font.pixelSize: 28
                                             font.bold: true
                                             color: dangerColor
@@ -283,7 +271,7 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: "8 transacciones"
+                                            text: (cierreCajaModel ? cierreCajaModel.transaccionesEgresos : 0) + " transacciones"
                                             font.pixelSize: 10
                                             color: darkGrayColor
                                             Layout.alignment: Qt.AlignHCenter
@@ -312,10 +300,10 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: "Bs -2,559.00"
+                                            text: "Bs " + saldoTeorico.toFixed(2)
                                             font.pixelSize: 28
                                             font.bold: true
-                                            color: dangerColor
+                                            color: saldoTeorico >= 0 ? successColor : dangerColor
                                             Layout.alignment: Qt.AlignHCenter
                                         }
                                         
@@ -374,7 +362,7 @@ Item {
                                             Item { Layout.fillWidth: true }
                                             
                                             Label {
-                                                text: "Bs 12,797.00"
+                                                text: "Bs " + totalIngresos.toFixed(2)
                                                 font.pixelSize: 16
                                                 font.bold: true
                                                 color: successColor
@@ -432,12 +420,7 @@ Item {
                                                 spacing: 0
                                                 
                                                 Repeater {
-                                                    model: [
-                                                        {concepto: "💊 Farmacia - Ventas", transacciones: 47, importe: 11655.00},
-                                                        {concepto: "🩺 Consultas Médicas", transacciones: 5, importe: 500.00},
-                                                        {concepto: "🧪 Análisis de Laboratorio", transacciones: 6, importe: 600.00},
-                                                        {concepto: "💉 Procedimientos Enfermería", transacciones: 2, importe: 42.00}
-                                                    ]
+                                                    model: cierreCajaModel ? cierreCajaModel.ingresosDetalle : []
                                                     
                                                     Rectangle {
                                                         Layout.fillWidth: true
@@ -451,7 +434,7 @@ Item {
                                                             
                                                             Label {
                                                                 Layout.preferredWidth: 180
-                                                                text: modelData.concepto
+                                                                text: modelData.concepto || "Sin concepto"
                                                                 font.pixelSize: 10
                                                                 color: textColor
                                                                 elide: Text.ElideRight
@@ -459,7 +442,7 @@ Item {
                                                             
                                                             Label {
                                                                 Layout.preferredWidth: 80
-                                                                text: modelData.transacciones.toString()
+                                                                text: (modelData.transacciones || 0).toString()
                                                                 font.pixelSize: 10
                                                                 color: textColor
                                                                 horizontalAlignment: Text.AlignCenter
@@ -467,7 +450,7 @@ Item {
                                                             
                                                             Label {
                                                                 Layout.fillWidth: true
-                                                                text: modelData.importe.toFixed(2)
+                                                                text: (modelData.importe || 0).toFixed(2)
                                                                 font.pixelSize: 10
                                                                 font.bold: true
                                                                 color: successColor
@@ -498,7 +481,7 @@ Item {
                                                         
                                                         Label {
                                                             Layout.preferredWidth: 80
-                                                            text: "60"
+                                                            text: (cierreCajaModel ? cierreCajaModel.transaccionesIngresos : 0).toString()
                                                             font.bold: true
                                                             font.pixelSize: 12
                                                             color: whiteColor
@@ -507,7 +490,7 @@ Item {
                                                         
                                                         Label {
                                                             Layout.fillWidth: true
-                                                            text: "12,797.00"
+                                                            text: totalIngresos.toFixed(2)
                                                             font.bold: true
                                                             font.pixelSize: 12
                                                             color: whiteColor
@@ -556,7 +539,7 @@ Item {
                                             Item { Layout.fillWidth: true }
                                             
                                             Label {
-                                                text: "Bs 15,356.00"
+                                                text: "Bs " + totalEgresos.toFixed(2)
                                                 font.pixelSize: 16
                                                 font.bold: true
                                                 color: dangerColor
@@ -574,21 +557,15 @@ Item {
                                                 spacing: 8
                                                 
                                                 Repeater {
-                                                    model: [
-                                                        {concepto: "🧾 Servicios Básicos", detalle: "Electricidad, agua, gas, internet", importe: 15356.00},
-                                                        {concepto: "📦 Compras de Farmacia", detalle: "Sin compras registradas", importe: 0.00},
-                                                        {concepto: "🏥 Gastos Operativos", detalle: "Sin gastos adicionales", importe: 0.00},
-                                                        {concepto: "🔧 Mantenimiento", detalle: "Sin mantenimientos", importe: 0.00},
-                                                        {concepto: "📋 Otros gastos", detalle: "Sin otros gastos", importe: 0.00}
-                                                    ]
+                                                    model: cierreCajaModel ? cierreCajaModel.egresosDetalle : []
                                                     
                                                     Rectangle {
                                                         Layout.fillWidth: true
                                                         Layout.preferredHeight: 60
                                                         color: index % 2 === 0 ? whiteColor : zebraColor
                                                         radius: 6
-                                                        border.color: modelData.importe > 0 ? dangerColor : lightGrayColor
-                                                        border.width: modelData.importe > 0 ? 2 : 1
+                                                        border.color: (modelData.importe || 0) > 0 ? dangerColor : lightGrayColor
+                                                        border.width: (modelData.importe || 0) > 0 ? 2 : 1
                                                         
                                                         RowLayout {
                                                             anchors.fill: parent
@@ -600,24 +577,24 @@ Item {
                                                                 spacing: 4
                                                                 
                                                                 Label {
-                                                                    text: modelData.concepto
+                                                                    text: modelData.concepto || "Sin concepto"
                                                                     font.pixelSize: 12
                                                                     font.bold: true
                                                                     color: textColor
                                                                 }
                                                                 
                                                                 Label {
-                                                                    text: modelData.detalle
+                                                                    text: modelData.detalle || "Sin detalles"
                                                                     font.pixelSize: 9
                                                                     color: darkGrayColor
                                                                 }
                                                             }
                                                             
                                                             Label {
-                                                                text: "Bs " + modelData.importe.toFixed(2)
+                                                                text: "Bs " + (modelData.importe || 0).toFixed(2)
                                                                 font.pixelSize: 14
                                                                 font.bold: true
-                                                                color: modelData.importe > 0 ? dangerColor : darkGrayColor
+                                                                color: (modelData.importe || 0) > 0 ? dangerColor : darkGrayColor
                                                             }
                                                         }
                                                     }
@@ -673,7 +650,6 @@ Item {
                                                 placeholderText: "0.00"
                                                 font.pixelSize: 16
                                                 font.bold: true
-                                                text: "10559.00"
                                                 
                                                 background: Rectangle {
                                                     color: whiteColor
@@ -683,8 +659,10 @@ Item {
                                                 }
                                                 
                                                 onTextChanged: {
-                                                    efectivoReal = parseFloat(text) || 0.0
-                                                    diferencia = efectivoReal - saldoTeorico
+                                                    var nuevoValor = parseFloat(text) || 0.0
+                                                    if (cierreCajaModel && nuevoValor !== efectivoReal) {
+                                                        cierreCajaModel.establecerEfectivoReal(nuevoValor)
+                                                    }
                                                 }
                                             }
                                         }
@@ -715,7 +693,7 @@ Item {
                                                         text: "Bs " + saldoTeorico.toFixed(2)
                                                         font.pixelSize: 12
                                                         font.bold: true
-                                                        color: dangerColor
+                                                        color: saldoTeorico >= 0 ? successColor : dangerColor
                                                     }
                                                 }
                                                 
@@ -742,9 +720,9 @@ Item {
                                         Rectangle {
                                             Layout.preferredWidth: 250
                                             Layout.preferredHeight: 80
-                                            color: diferencia >= 0 ? "#d1fae5" : "#fee2e2"
+                                            color: dentroDeLimite ? "#d1fae5" : "#fee2e2"
                                             radius: 8
-                                            border.color: diferencia >= 0 ? successColor : dangerColor
+                                            border.color: dentroDeLimite ? successColor : dangerColor
                                             border.width: 2
                                             
                                             ColumnLayout {
@@ -752,10 +730,11 @@ Item {
                                                 spacing: 4
                                                 
                                                 Label {
-                                                    text: diferencia >= 0 ? "✅ SOBRANTE" : "❌ FALTANTE"
+                                                    text: tipoDiferencia === "SOBRANTE" ? "✅ SOBRANTE" : 
+                                                          tipoDiferencia === "FALTANTE" ? "❌ FALTANTE" : "⚖️ NEUTRO"
                                                     font.pixelSize: 14
                                                     font.bold: true
-                                                    color: diferencia >= 0 ? "#065f46" : "#dc2626"
+                                                    color: dentroDeLimite ? "#065f46" : "#dc2626"
                                                     Layout.alignment: Qt.AlignHCenter
                                                 }
                                                 
@@ -763,12 +742,13 @@ Item {
                                                     text: "Bs " + Math.abs(diferencia).toFixed(2)
                                                     font.pixelSize: 18
                                                     font.bold: true
-                                                    color: diferencia >= 0 ? "#065f46" : "#dc2626"
+                                                    color: dentroDeLimite ? "#065f46" : "#dc2626"
                                                     Layout.alignment: Qt.AlignHCenter
                                                 }
                                                 
                                                 Label {
-                                                    text: diferencia >= 0 ? "Revisar origen del sobrante" : "Verificar transacciones"
+                                                    text: requiereAutorizacion ? "Requiere autorización" : 
+                                                          tipoDiferencia === "NEUTRO" ? "Balanceado" : "Dentro del límite"
                                                     font.pixelSize: 9
                                                     color: darkGrayColor
                                                     Layout.alignment: Qt.AlignHCenter
@@ -808,8 +788,9 @@ Item {
                                         
                                         Label {
                                             text: "Arqueo realizado correctamente. " + 
-                                                  (diferencia >= 0 ? "Se registra sobrante." : "Se registra faltante.") + 
-                                                  " Revisar movimientos del día."
+                                                  (tipoDiferencia === "SOBRANTE" ? "Se registra sobrante." : 
+                                                   tipoDiferencia === "FALTANTE" ? "Se registra faltante." : "Sin diferencias.") + 
+                                                  (requiereAutorizacion ? " Requiere autorización de supervisor." : " Dentro de límites permitidos.")
                                             font.pixelSize: 10
                                             color: darkGrayColor
                                             wrapMode: Text.WordWrap
@@ -852,517 +833,46 @@ Item {
                 }
             }
         }
-        
-        // VISTA 1: VISTA PREVIA DEL PDF
-        Item {
-            id: vistaPreviaPDF
-            
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
-                
-                // Header de navegación
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 80
-                    color: primaryColor
-                    
-                    Rectangle {
-                        anchors.fill: parent
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "transparent" }
-                            GradientStop { position: 1.0; color: "#10000000" }
-                        }
-                    }
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: 15
-                        spacing: 15
-                        
-                        Button {
-                            text: "← Volver al Arqueo"
-                            Layout.preferredHeight: 40
-                            Layout.preferredWidth: 150
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#40FFFFFF" : "transparent"
-                                radius: 4
-                                border.color: whiteColor
-                                border.width: 1
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 12
-                                font.family: "Segoe UI"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                vistaActual = 0
-                                mostrandoVistaPrevia = false
-                            }
-                        }
-                        
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            
-                            Label {
-                                text: "VISTA PREVIA - ARQUEO DE CAJA"
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 16
-                                font.family: "Segoe UI"
-                            }
-                            
-                            Label {
-                                text: "Fecha: " + fechaActual + " • Generado: " + Qt.formatDateTime(new Date(), "dd/MM/yyyy hh:mm")
-                                color: "#E8F4FD"
-                                font.pixelSize: 11
-                                font.family: "Segoe UI"
-                            }
-                        }
-                        
-                        RowLayout {
-                            spacing: 12
-                            
-                            Button {
-                                text: "📄 Descargar PDF"
-                                Layout.preferredHeight: 40
-                                Layout.preferredWidth: 150
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                                    radius: 6
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 12
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: descargarPDFArqueo()
-                            }
-                        }
-                    }
-                }
-                
-                // Contenido de la vista previa (simulación del PDF)
-                ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    
-                    Rectangle {
-                        width: cierreCajaRoot.width
-                        height: contenidoPDF.height + 40
-                        color: "#f5f5f5"
-                        
-                        Column {
-                            id: contenidoPDF
-                            width: parent.width
-                            spacing: 0
-                            anchors.top: parent.top
-                            anchors.topMargin: 20
-                            
-                            // Simulación del PDF con el estilo del ejemplo
-                            Rectangle {
-                                width: parent.width - 40
-                                height: childrenRect.height + 30
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                color: "white"
-                                border.color: "#E0E6ED"
-                                border.width: 1
-                                
-                                Column {
-                                    width: parent.width - 30
-                                    anchors.centerIn: parent
-                                    spacing: 15
-                                    padding: 15
-                                    
-                                    // Encabezado del PDF
-                                    Rectangle {
-                                        width: parent.width
-                                        height: 80
-                                        color: "transparent"
-                                        
-                                        Row {
-                                            width: parent.width
-                                            spacing: 15
-                                            
-                                            Rectangle {
-                                                width: 60
-                                                height: 60
-                                                color: "#1e3a8a"
-                                                radius: 6
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: "CMI"
-                                                    color: "white"
-                                                    font.bold: true
-                                                    font.pixelSize: 16
-                                                }
-                                            }
-                                            
-                                            Column {
-                                                spacing: 2
-                                                
-                                                Label {
-                                                    text: "CLÍNICA MARÍA INMACULADA"
-                                                    color: "#1e3a8a"
-                                                    font.bold: true
-                                                    font.pixelSize: 16
-                                                }
-                                                
-                                                Label {
-                                                    text: "Atención Médica Integral"
-                                                    color: "#666"
-                                                    font.pixelSize: 10
-                                                }
-                                                
-                                                Label {
-                                                    text: "Villa Yapacaní, Santa Cruz - Bolivia"
-                                                    color: "#666"
-                                                    font.pixelSize: 10
-                                                }
-                                                
-                                                Label {
-                                                    text: "NIT: 123456789"
-                                                    color: "#666"
-                                                    font.pixelSize: 10
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Título del documento
-                                    Rectangle {
-                                        width: parent.width
-                                        height: 40
-                                        color: "#1e3a8a"
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "ARQUEO DE CAJA DETALLADO - " + fechaActual.toUpperCase()
-                                            color: "white"
-                                            font.bold: true
-                                            font.pixelSize: 14
-                                        }
-                                    }
-                                    
-                                    // Información del cierre
-                                    Grid {
-                                        width: parent.width
-                                        columns: 3
-                                        spacing: 15
-                                        
-                                        Repeater {
-                                            model: [
-                                                {label: "Fecha:", value: fechaActual},
-                                                {label: "Hora:", value: Qt.formatTime(new Date(), "hh:mm")},
-                                                {label: "Turno:", value: "Diurno"},
-                                                {label: "Responsable:", value: "María González"},
-                                                {label: "N° Arqueo:", value: "ARQ-2025-266"},
-                                                {label: "Estado:", value: "COMPLETADO"},
-                                                {label: "Saldo Inicial:", value: "Bs 12,559.00"},
-                                                {label: "Temperatura:", value: "28°C"},
-                                                {label: "Supervisor:", value: "Dr. Mendoza"}
-                                            ]
-                                            
-                                            Row {
-                                                spacing: 5
-                                                
-                                                Label {
-                                                    text: modelData.label
-                                                    font.bold: true
-                                                    font.pixelSize: 10
-                                                    color: "#333"
-                                                }
-                                                
-                                                Label {
-                                                    text: modelData.value
-                                                    font.pixelSize: 10
-                                                    color: "#333"
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Resumen financiero
-                                    Rectangle {
-                                        width: parent.width
-                                        height: 100
-                                        color: "#f8f9fa"
-                                        border.color: "#1e3a8a"
-                                        border.width: 2
-                                        radius: 8
-                                        
-                                        Column {
-                                            width: parent.width - 20
-                                            anchors.centerIn: parent
-                                            spacing: 10
-                                            
-                                            Label {
-                                                text: "📊 RESUMEN FINANCIERO"
-                                                font.bold: true
-                                                font.pixelSize: 14
-                                                color: "#1e3a8a"
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                            }
-                                            
-                                            Row {
-                                                width: parent.width
-                                                spacing: 40
-                                                
-                                                Column {
-                                                    spacing: 5
-                                                    
-                                                    Label {
-                                                        text: "TOTAL INGRESOS"
-                                                        font.pixelSize: 10
-                                                        color: "#666"
-                                                    }
-                                                    
-                                                    Label {
-                                                        text: "Bs 12,797.00"
-                                                        font.bold: true
-                                                        font.pixelSize: 16
-                                                        color: "#065f46"
-                                                    }
-                                                    
-                                                    Label {
-                                                        text: "60 transacciones"
-                                                        font.pixelSize: 9
-                                                        color: "#666"
-                                                    }
-                                                }
-                                                
-                                                Column {
-                                                    spacing: 5
-                                                    
-                                                    Label {
-                                                        text: "TOTAL EGRESOS"
-                                                        font.pixelSize: 10
-                                                        color: "#666"
-                                                    }
-                                                    
-                                                    Label {
-                                                        text: "Bs 16,985.00"
-                                                        font.bold: true
-                                                        font.pixelSize: 16
-                                                        color: "#dc2626"
-                                                    }
-                                                    
-                                                    Label {
-                                                        text: "8 transacciones"
-                                                        font.pixelSize: 9
-                                                        color: "#666"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Resultado del arqueo
-                                    Rectangle {
-                                        width: parent.width
-                                        height: 60
-                                        color: diferencia >= 0 ? "#d1fae5" : "#fee2e2"
-                                        border.color: diferencia >= 0 ? "#10b981" : "#dc2626"
-                                        border.width: 2
-                                        radius: 6
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: (diferencia >= 0 ? "✅ SOBRANTE EN CAJA: " : "❌ FALTANTE EN CAJA: ") + 
-                                                  "Bs " + Math.abs(diferencia).toFixed(2)
-                                            font.bold: true
-                                            font.pixelSize: 14
-                                            color: diferencia >= 0 ? "#065f46" : "#dc2626"
-                                        }
-                                    }
-                                    
-                                    // Mensaje informativo
-                                    Label {
-                                        width: parent.width
-                                        text: "Este es un documento oficial de arqueo de caja. Para más detalles, descargue el PDF completo."
-                                        font.pixelSize: 10
-                                        color: "#666"
-                                        wrapMode: Text.WordWrap
-                                    }
-                                }
-                            }
-                            
-                            // Espacio final
-                            Item { height: 20 }
-                        }
-                    }
-                }
-            }
-        }
     }
     
     // ===== FUNCIONES =====
     
-    function verPDFArqueo() {
-        console.log("👁️ Ver PDF de arqueo completo...")
-        vistaActual = 1
-        mostrandoVistaPrevia = true
-    }
-    
     function descargarPDFArqueo() {
-        console.log("📄 Descargando PDF de arqueo completo...")
-        
-        try {
-            // Generar contenido HTML del PDF
-            var htmlContent = generarHTMLCierreCaja()
-            
-            // Crear diálogo para guardar archivo
-            var fileDialog = Qt.createQmlObject('
-                import Qt.labs.platform 1.1
-                FileDialog {
-                    fileMode: FileDialog.SaveFile
-                    folder: StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
-                    nameFilters: ["PDF files (*.pdf)", "HTML files (*.html)"]
-                    selectedNameFilter: "PDF files (*.pdf)"
-                    defaultSuffix: "pdf"
-                }', cierreCajaRoot)
-            
-            fileDialog.onAccepted = function() {
-                var filePath = fileDialog.file.toString().replace("file:///", "")
-                console.log("Guardando PDF en:", filePath)
-                
-                // Aquí iría la lógica real para generar el PDF
-                // Por ahora, simulamos la generación
-                mostrarNotificacion("PDF generado exitosamente", "El arqueo de caja se ha guardado en: " + filePath)
+        console.log("📄 Generando PDF de arqueo...")
+        if (cierreCajaModel) {
+            var rutaPDF = cierreCajaModel.generarPDFArqueoCorregido()
+            if (rutaPDF) {
+                // El PDF se abrirá automáticamente a través de la señal onPdfGenerado
+                console.log("✅ PDF generado: " + rutaPDF)
             }
-            
-            fileDialog.open()
-            
-        } catch (error) {
-            console.log("❌ Error al generar PDF:", error)
-            mostrarNotificacion("Error", "No se pudo generar el PDF: " + error)
         }
-    }
-    
-    function generarHTMLCierreCaja() {
-        // Esta función generaría el HTML completo similar al ejemplo proporcionado
-        // Por simplicidad, retornamos el ejemplo estático
-        return `<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Arqueo de Caja Detallado</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: Arial, sans-serif;
-            background: white;
-            color: #333;
-            line-height: 1.3;
-            max-width: 210mm;
-            margin: 0 auto;
-            padding: 15mm;
-            background: #f5f5f5;
-        }
-        
-        .documento {
-            background: white;
-            padding: 15mm;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-            min-height: 297mm;
-        }
-        
-        /* ... resto del CSS del ejemplo ... */
-    </style>
-</head>
-<body>
-    <div class="documento">
-        <!-- ENCABEZADO -->
-        <div class="header">
-            <div class="logo-section">
-                <div class="logo">CMI</div>
-                <div class="institucion">
-                    <h1>CLÍNICA MARÍA INMACULADA</h1>
-                    <p>Atención Médica Integral</p>
-                    <p>Villa Yapacaní, Santa Cruz - Bolivia</p>
-                    <p>NIT: 123456789</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="titulo-documento">
-            ARQUEO DE CAJA DETALLADO - ${fechaActual.toUpperCase()}
-        </div>
-        
-        <!-- INFORMACIÓN DEL CIERRE -->
-        <div class="info-cierre">
-            <div>
-                <div class="info-item"><strong>Fecha:</strong> <span>${fechaActual}</span></div>
-                <div class="info-item"><strong>Hora:</strong> <span>${Qt.formatTime(new Date(), "hh:mm")}</span></div>
-                <div class="info-item"><strong>Turno:</strong> <span>Diurno</span></div>
-            </div>
-            <div>
-                <div class="info-item"><strong>Responsable:</strong> <span>María González</span></div>
-                <div class="info-item"><strong>N° Arqueo:</strong> <span>ARQ-2025-266</span></div>
-                <div class="info-item"><strong>Estado:</strong> <span>COMPLETADO</span></div>
-            </div>
-            <div>
-                <div class="info-item"><strong>Saldo Inicial:</strong> <span>Bs 12,559.00</span></div>
-                <div class="info-item"><strong>Temperatura:</strong> <span>28°C</span></div>
-                <div class="info-item"><strong>Supervisor:</strong> <span>Dr. Mendoza</span></div>
-            </div>
-        </div>
-        
-        <!-- ... resto del contenido HTML con datos dinámicos ... -->
-        
-    </div>
-</body>
-</html>`
     }
     
     function cerrarCaja() {
-        console.log("✅ Cerrando caja del día...")
+        console.log("✅ Iniciando cierre de caja...")
+        if (!cierreCajaModel) return
         
-        // Validar que no haya diferencias significativas
-        if (Math.abs(diferencia) > 100) {
-            mostrarConfirmacion("¿Está seguro?", 
-                "Se ha detectado una diferencia significativa (Bs " + Math.abs(diferencia).toFixed(2) + 
-                "). ¿Desea cerrar la caja de todas formas?",
-                function() {
-                    realizarCierreCaja()
-                })
-        } else {
-            realizarCierreCaja()
+        if (cierreCajaModel.validarCierre()) {
+            if (requiereAutorizacion) {
+                mostrarConfirmacion(
+                    "Diferencia Significativa",
+                    "Se detectó una diferencia de Bs " + Math.abs(diferencia).toFixed(2) + 
+                    ". ¿Confirma el cierre?",
+                    function() {
+                        cierreCajaModel.completarCierre("Diferencia autorizada por supervisor")
+                    }
+                )
+            } else {
+                cierreCajaModel.completarCierre("Cierre automático - diferencia dentro del límite")
+            }
         }
-    }
-    
-    function realizarCierreCaja() {
-        console.log("✅ Realizando cierre de caja...")
-        mostrarNotificacion("Cierre exitoso", "La caja ha sido cerrada correctamente.")
-        cierreGenerado = true
     }
     
     function actualizarDatos() {
         console.log("🔄 Actualizando datos del arqueo...")
-        diferencia = efectivoReal - saldoTeorico
-        mostrarNotificacion("Datos actualizados", "Los cálculos han sido actualizados.")
+        if (cierreCajaModel) {
+            cierreCajaModel.actualizarDatos()
+        }
     }
     
     function mostrarNotificacion(titulo, mensaje) {
@@ -1378,7 +888,37 @@ Item {
     
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("💰 Cierre de Caja inicializado - Fecha:", fechaActual)
-        diferencia = efectivoReal - saldoTeorico
+        console.log("💰 Cierre de Caja inicializado con backend")
+        if (cierreCajaModel) {
+            cierreCajaModel.cargarDatosDia()
+            cierreCajaModel.iniciarAutoRefresh()
+            console.log("📊 Datos cargados desde BD y auto-refresh activado")
+        } else {
+            console.log("⚠️ CierreCajaModel no disponible")
+        }
+    }
+    Timer {
+        id: manualRefreshTimer
+        interval: 5000  // 5 segundos
+        running: false
+        repeat: false
+        onTriggered: {
+            if (cierreCajaModel) {
+                cierreCajaModel.forzarActualizacion()
+            }
+        }
+    }
+    function activarRefreshManual() {
+        console.log("🔄 Activando refresh manual en 5 segundos...")
+        manualRefreshTimer.restart()
+    }
+    function onDatosChanged() {
+        console.log("📊 Datos de cierre actualizados automáticamente")
+        // Activar refresh manual como respaldo
+        activarRefreshManual()
+    }
+
+    function onResumenChanged() {
+        console.log("💰 Resumen financiero actualizado")
     }
 }

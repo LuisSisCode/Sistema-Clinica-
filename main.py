@@ -29,6 +29,7 @@ from backend.models.ConfiguracionModel.ConfiEnfermeria_model import ConfiEnferme
 from backend.models.ConfiguracionModel.ConfiConsulta_model import ConfiConsultaModel, register_confi_consulta_model
 from backend.models.ConfiguracionModel.ConfiTrabajadores_model import ConfiTrabajadoresModel, register_confi_trabajadores_model
 from backend.models.auth_model import AuthModel, register_auth_model
+from backend.models.cierre_caja_model import CierreCajaModel, register_cierre_caja_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -73,6 +74,7 @@ class AppController(QObject):
         self.reportes_model = None
         self.dashboard_model = None
         self.auth_model = None
+        self.cierre_caja_model = None
         
         # Usuario autenticado - SIMPLIFICADO
         self._usuario_autenticado_id = 0
@@ -116,8 +118,8 @@ class AppController(QObject):
             self.confi_trabajadores_model = ConfiTrabajadoresModel()
             self.reportes_model = ReportesModel()
             self.dashboard_model = DashboardModel()
-            self.auth_model = AuthModel()
             self.venta_model.stockModificado.connect(self.inventario_model.actualizar_por_venta)
+            self.cierre_caja_model = CierreCajaModel()
 
             print("🔗 Conectando signals entre modelos...")
             # Conectar signals entre models
@@ -174,7 +176,8 @@ class AppController(QObject):
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
-                self.reportes_model, self.dashboard_model, self.auth_model
+                self.reportes_model, self.dashboard_model, self.auth_model,
+                self.cierre_caja_model
             ]
             
             timer_count = 0
@@ -313,7 +316,8 @@ class AppController(QObject):
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
-                self.reportes_model, self.dashboard_model, self.auth_model
+                self.reportes_model, self.dashboard_model, self.auth_model,
+                self.cierre_caja_model
             ]
             
             for model in all_models:
@@ -363,6 +367,7 @@ class AppController(QObject):
             self.reportes_model = None
             self.dashboard_model = None
             self.auth_model = None
+            self.cierre_caja_model = None
             
             # ✅ RESETEAR USUARIO AUTENTICADO
             self._usuario_autenticado_id = 0
@@ -429,7 +434,8 @@ class AppController(QObject):
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
-                self.reportes_model, self.dashboard_model
+                self.reportes_model, self.dashboard_model,
+                self.cierre_caja_model
             ]
             
             for model in all_models:
@@ -492,7 +498,7 @@ class AppController(QObject):
                 self.consulta_model, self.paciente_model, self.laboratorio_model,
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
-                self.confi_consulta_model, self.confi_trabajadores_model
+                self.confi_consulta_model, self.confi_trabajadores_model, self.cierre_caja_model
             ]
             
             for model in models_with_errors:
@@ -557,6 +563,40 @@ class AppController(QObject):
                 self.reportes_model.reporteGenerado.connect(self._on_reporte_generado)
                 self.reportes_model.set_app_controller(self)
 
+            # ✅ SOLUCIÓN: Conectar AppController al CierreCajaModel
+            if self.cierre_caja_model:
+                self.cierre_caja_model.set_app_controller(self)
+                print("🔗 AppController conectado al CierreCajaModel para generación de PDFs")
+
+            # ✅ NUEVO: Conexiones para actualizar Cierre de Caja en tiempo real
+            if self.cierre_caja_model:
+                # Cuando se crea una venta, actualizar cierre
+                if self.venta_model:
+                    self.venta_model.ventaCreada.connect(self._on_transaccion_financiera)
+                    self.venta_model.operacionExitosa.connect(self._refresh_cierre_caja)
+                
+                # Cuando se crea una compra, actualizar cierre  
+                if self.compra_model:
+                    self.compra_model.compraCreada.connect(self._on_transaccion_financiera)
+                    self.compra_model.operacionExitosa.connect(self._refresh_cierre_caja)
+                
+                # Cuando se crea un gasto, actualizar cierre
+                if self.gasto_model:
+                    self.gasto_model.gastoCreado.connect(self._refresh_cierre_caja)
+                    self.gasto_model.operacionExitosa.connect(self._refresh_cierre_caja)
+                
+                # Cuando se registra consulta, laboratorio o enfermería
+                if self.consulta_model:
+                    self.consulta_model.operacionExitosa.connect(self._refresh_cierre_caja)
+                
+                if self.laboratorio_model:
+                    self.laboratorio_model.operacionExitosa.connect(self._refresh_cierre_caja)
+                
+                if self.enfermeria_model:
+                    self.enfermeria_model.operacionExitosa.connect(self._refresh_cierre_caja)
+
+            print("🔗 Conexiones de sincronización establecidas para Cierre de Caja")
+
         except Exception as e:
             print(f"Error conectando models: {e}")
 
@@ -599,6 +639,7 @@ class AppController(QObject):
                 (self.trabajador_model, 'set_usuario_actual_con_rol'),  
                 (self.reportes_model, 'set_usuario_actual'),
                 (self.dashboard_model, 'set_usuario_actual_con_rol'),
+                (self.cierre_caja_model, 'set_usuario_actual_con_rol'),
             ]
             
             # Establecer usuario en cada modelo
@@ -643,6 +684,29 @@ class AppController(QObject):
             self.showNotification("Reporte Generado", message)
         else:
             self.showNotification("Error en Reporte", message)
+
+    @Slot(int, float)  
+    def _on_transaccion_financiera(self, transaccion_id: int, monto: float):
+        """Handler para transacciones financieras que afectan el cierre"""
+        if self.cierre_caja_model:
+            print(f"💰 Transacción registrada - ID: {transaccion_id}, Monto: {monto}")
+            # Delay de 500ms para que la BD se actualice completamente
+            QTimer.singleShot(500, self._refresh_cierre_caja)
+
+    @Slot(str)
+    def _refresh_cierre_caja(self, mensaje: str = ""):
+        """Refresca los datos del cierre de caja"""
+        try:
+            if self.cierre_caja_model:
+                print("🔄 Refrescando datos de Cierre de Caja...")
+                self.cierre_caja_model.actualizarDatos()
+                
+                # También invalidar caché del repository
+                if hasattr(self.cierre_caja_model, 'repository'):
+                    self.cierre_caja_model.repository.refresh_cache()
+                    
+        except Exception as e:
+            print(f"❌ Error refrescando cierre de caja: {e}")
 
     @Slot(bool, str)
     def _on_gasto_creado(self, success: bool, message: str):
@@ -847,6 +911,10 @@ class AppController(QObject):
     @Property(QObject, notify=modelsReady)
     def dashboard_model_instance(self):
         return self.dashboard_model
+    
+    @Property(QObject, notify=modelsReady)
+    def cierre_caja_model_instance(self):
+        return self.cierre_caja_model
 
     @Property(QObject, notify=modelsReady)
     def auth_model_instance(self):
@@ -1225,7 +1293,8 @@ class AppController(QObject):
     def generarReportePDF(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
         try:
             if not datos_json or datos_json.strip() == "":
-                return ""
+                if tipo_reporte != "9":
+                    return ""
             
             resultado = self.pdf_generator.generar_reporte_pdf(
                 datos_json,
@@ -1577,6 +1646,7 @@ def register_qml_types():
     register_reportes_model()
     register_dashboard_model()
     register_auth_model()
+    register_cierre_caja_model()
 
 def setup_qml_context(engine, controller):
     root_context = engine.rootContext()
