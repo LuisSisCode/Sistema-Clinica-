@@ -104,6 +104,7 @@ clinica_app/
 ├── ConfiTrabajadores.qml
 ├── ConfiUsuarios.qml
 ├── Reportes.qml
+├── CierreCaja.qml
 ├── login.qml
 ├── main.qml
 │     

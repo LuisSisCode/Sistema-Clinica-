@@ -137,6 +137,267 @@ class AppController(QObject):
         self.gradual_cleanup()
 
     @Slot()
+    def emergency_shutdown(self):
+        """
+        Sistema de shutdown de emergencia - detiene TODO inmediatamente
+        Proceso sincronizado en 3 fases para evitar retención de procesos
+        """
+        try:
+            print("🔴 EMERGENCY SHUTDOWN INICIADO")
+            
+            # FASE 1: DETENER TODOS LOS TIMERS INMEDIATAMENTE
+            self._stop_all_timers_immediately()
+            
+            # FASE 2: DESCONECTAR SEÑALES ORDENADAMENTE  
+            self._disconnect_all_signals_ordered()
+            
+            # FASE 3: LIMPIEZA SINCRONIZADA DE RECURSOS
+            self._cleanup_resources_synchronously()
+            
+            print("✅ EMERGENCY SHUTDOWN COMPLETADO")
+            
+        except Exception as e:
+            print(f"⚠️ Error en emergency shutdown: {e}")
+            # Forzar limpieza básica aunque falle
+            self._force_basic_cleanup()
+
+    def _stop_all_timers_immediately(self):
+        """FASE 1: Detiene TODOS los timers sin excepción"""
+        try:
+            print("⏹️ FASE 1: Deteniendo todos los timers...")
+            
+            # Lista de todos los modelos
+            models = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.paciente_model,
+                self.usuario_model, self.gasto_model, self.laboratorio_model,
+                self.trabajador_model, self.enfermeria_model, self.configuracion_model,
+                self.confi_laboratorio_model, self.confi_enfermeria_model,
+                self.confi_consulta_model, self.confi_trabajadores_model,
+                self.reportes_model, self.dashboard_model, self.auth_model
+            ]
+            
+            timer_count = 0
+            
+            for model in models:
+                if model:
+                    try:
+                        # Buscar y detener timers por nombres conocidos
+                        timer_names = [
+                            '_refresh_timer', 'update_timer', '_autoRefreshTimer', 
+                            'search_timer', '_timer', 'refresh_timer', 'auto_timer',
+                            'notification_timer', '_update_timer'
+                        ]
+                        
+                        for timer_name in timer_names:
+                            if hasattr(model, timer_name):
+                                timer = getattr(model, timer_name)
+                                if timer and hasattr(timer, 'isActive') and timer.isActive():
+                                    timer.stop()
+                                    timer_count += 1
+                                    print(f"   ⏹️ Timer detenido: {type(model).__name__}.{timer_name}")
+                        
+                        # Buscar timers por inspección de atributos
+                        for attr_name in dir(model):
+                            if not attr_name.startswith('__'):
+                                try:
+                                    attr = getattr(model, attr_name)
+                                    if (hasattr(attr, 'isActive') and 
+                                        hasattr(attr, 'stop') and 
+                                        callable(getattr(attr, 'stop')) and
+                                        attr.isActive()):
+                                        attr.stop()
+                                        timer_count += 1
+                                        print(f"   ⏹️ Timer detectado detenido: {type(model).__name__}.{attr_name}")
+                                except:
+                                    pass
+                                    
+                    except Exception as e:
+                        print(f"⚠️ Error deteniendo timers en {type(model).__name__}: {e}")
+            
+            print(f"✅ FASE 1 COMPLETA: {timer_count} timers detenidos")
+            
+        except Exception as e:
+            print(f"❌ Error en FASE 1: {e}")
+
+    def _disconnect_all_signals_ordered(self):
+        """FASE 2: Desconecta señales en orden específico"""
+        try:
+            print("🔌 FASE 2: Desconectando señales...")
+            
+            # 2.1: Desconectar señales globales primero
+            try:
+                # Intentar desconectar señales globales si existen
+                app = QGuiApplication.instance()
+                if app:
+                    # Desconectar todas las señales de la aplicación
+                    for signal_name in dir(app):
+                        if not signal_name.startswith('__'):
+                            try:
+                                signal = getattr(app, signal_name)
+                                if hasattr(signal, 'disconnect'):
+                                    signal.disconnect()
+                            except:
+                                pass
+                    print("   🔌 Señales globales desconectadas")
+            except Exception as e:
+                print(f"   ⚠️ Error desconectando señales globales: {e}")
+            
+            # 2.2: Desconectar referencias bidireccionales
+            try:
+                if self.compra_model and self.proveedor_model:
+                    # Romper referencia bidireccional
+                    if hasattr(self.compra_model, '_proveedor_model_ref'):
+                        self.compra_model._proveedor_model_ref = None
+                    if hasattr(self.proveedor_model, '_compra_model_ref'):
+                        self.proveedor_model._compra_model_ref = None
+                    print("   🔌 Referencias bidireccionales rotas")
+            except Exception as e:
+                print(f"   ⚠️ Error rompiendo referencias: {e}")
+            
+            # 2.3: Desconectar señales internas de cada modelo
+            models = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.paciente_model,
+                self.usuario_model, self.gasto_model, self.laboratorio_model,
+                self.trabajador_model, self.enfermeria_model, self.configuracion_model,
+                self.confi_laboratorio_model, self.confi_enfermeria_model,
+                self.confi_consulta_model, self.confi_trabajadores_model,
+                self.reportes_model, self.dashboard_model, self.auth_model
+            ]
+            
+            for model in models:
+                if model:
+                    try:
+                        # Llamar método cleanup específico si existe
+                        if hasattr(model, 'emergency_disconnect'):
+                            model.emergency_disconnect()
+                        elif hasattr(model, 'cleanup'):
+                            model.cleanup()
+                    except Exception as e:
+                        print(f"   ⚠️ Error cleanup {type(model).__name__}: {e}")
+            
+            print("✅ FASE 2 COMPLETA: Señales desconectadas")
+            
+        except Exception as e:
+            print(f"❌ Error en FASE 2: {e}")
+
+    def _cleanup_resources_synchronously(self):
+        """FASE 3: Limpieza sincronizada de recursos"""
+        try:
+            print("🧹 FASE 3: Limpieza sincronizada...")
+            
+            # 3.1: Invalidar todos los caches
+            models_with_repos = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.gasto_model,
+                self.laboratorio_model, self.trabajador_model, self.enfermeria_model
+            ]
+            
+            for model in models_with_repos:
+                if model and hasattr(model, 'repository'):
+                    try:
+                        repo = model.repository
+                        if hasattr(repo, '_cache_manager'):
+                            repo._cache_manager.clear()
+                        if hasattr(repo, 'invalidate_all_caches'):
+                            repo.invalidate_all_caches()
+                    except Exception as e:
+                        print(f"   ⚠️ Error limpiando cache {type(model).__name__}: {e}")
+            
+            # 3.2: Establecer estados de shutdown
+            all_models = [
+                self.inventario_model, self.venta_model, self.compra_model,
+                self.proveedor_model, self.consulta_model, self.paciente_model,
+                self.usuario_model, self.gasto_model, self.laboratorio_model,
+                self.trabajador_model, self.enfermeria_model, self.configuracion_model,
+                self.confi_laboratorio_model, self.confi_enfermeria_model,
+                self.confi_consulta_model, self.confi_trabajadores_model,
+                self.reportes_model, self.dashboard_model, self.auth_model
+            ]
+            
+            for model in all_models:
+                if model:
+                    try:
+                        # Establecer estado shutdown
+                        if hasattr(model, '_estadoActual'):
+                            model._estadoActual = "shutdown"
+                        if hasattr(model, '_loading'):
+                            model._loading = False
+                        # ✅ RESETEAR USUARIO EN TODOS LOS MODELOS
+                        if hasattr(model, '_usuario_actual_id'):
+                            model._usuario_actual_id = 0
+                        # Limpiar datos en memoria
+                        self._clear_model_data(model)
+                    except Exception as e:
+                        print(f"   ⚠️ Error estableciendo shutdown {type(model).__name__}: {e}")
+            
+            # 3.3: Usar destroy() en lugar de deleteLater()
+            for model in all_models:
+                if model:
+                    try:
+                        # Disconnect all signals before destroying
+                        model.blockSignals(True)
+                        # Forzar destrucción inmediata
+                        model.setParent(None)
+                    except Exception as e:
+                        print(f"   ⚠️ Error destruyendo {type(model).__name__}: {e}")
+            
+            # 3.4: Limpiar referencias
+            self.inventario_model = None
+            self.venta_model = None
+            self.compra_model = None
+            self.proveedor_model = None
+            self.consulta_model = None
+            self.paciente_model = None
+            self.usuario_model = None
+            self.gasto_model = None
+            self.laboratorio_model = None
+            self.trabajador_model = None
+            self.enfermeria_model = None
+            self.configuracion_model = None
+            self.confi_laboratorio_model = None
+            self.confi_enfermeria_model = None
+            self.confi_consulta_model = None
+            self.confi_trabajadores_model = None
+            self.reportes_model = None
+            self.dashboard_model = None
+            self.auth_model = None
+            
+            # ✅ RESETEAR USUARIO AUTENTICADO
+            self._usuario_autenticado_id = 0
+            self._usuario_autenticado_nombre = ""
+            self._usuario_autenticado_rol = ""
+            
+            print("✅ FASE 3 COMPLETA: Recursos limpiados")
+            
+        except Exception as e:
+            print(f"❌ Error en FASE 3: {e}")
+
+    def _force_basic_cleanup(self):
+        """Limpieza básica de emergencia si falla el shutdown normal"""
+        try:
+            print("🆘 FORZANDO LIMPIEZA BÁSICA...")
+            
+            # Forzar parada de todos los QTimer activos
+            # No hay una forma directa de obtener todos los QTimer, 
+            # pero podemos forzar garbage collection
+            gc.collect()
+            
+            # Establecer todas las referencias a None
+            for attr_name in dir(self):
+                if attr_name.endswith('_model') and not attr_name.startswith('__'):
+                    try:
+                        setattr(self, attr_name, None)
+                    except:
+                        pass
+            
+            print("✅ Limpieza básica completada")
+            
+        except Exception as e:
+            print(f"❌ Error en limpieza básica: {e}")
+
+    @Slot()
     def gradual_cleanup(self):
         """Sistema de cleanup gradual - preserva la estructura para transiciones"""
         try:
@@ -330,6 +591,7 @@ class AppController(QObject):
                 (self.usuario_model, 'set_usuario_actual_con_rol'),
                 (self.venta_model, 'set_usuario_actual_con_rol'),
                 (self.compra_model, 'set_usuario_actual'),
+                (self.proveedor_model, 'set_usuario_actual_con_rol'),  # ✅ AGREGADO
                 (self.consulta_model, 'set_usuario_actual_con_rol'),
                 (self.enfermeria_model, 'set_usuario_actual_con_rol'),
                 (self.laboratorio_model, 'set_usuario_actual_con_rol'),
@@ -1064,7 +1326,7 @@ class AuthAppController(QObject):
             if self.main_controller:
                 try:
                     print("🧹 Limpiando main_controller...")
-                    self.main_controller.gradual_cleanup()
+                    self.main_controller.emergency_shutdown()  # Usar shutdown de emergencia
                     # IMPORTANTE: Resetear la referencia
                     self.main_controller = None
                     print("✅ main_controller limpiado y reseteado")

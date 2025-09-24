@@ -30,7 +30,7 @@ CREATE TABLE Usuario (
     Apellido_Materno VARCHAR(100) NOT NULL,
     nombre_usuario VARCHAR(200) NOT NULL UNIQUE,
     contrasena VARCHAR(255) NOT NULL
-);
+    FOREIGN KEY (Id_Rol) REFERENCES Roles(id);
 
 -- Tabla Pacientes
 CREATE TABLE Pacientes (
@@ -68,11 +68,9 @@ CREATE TABLE Productos (
     Detalles VARCHAR(500),
     Precio_compra DECIMAL(10,2) NOT NULL CHECK (Precio_compra >= 0),
     Precio_venta DECIMAL(10,2) NOT NULL CHECK (Precio_venta >= 0),
-    Stock_Caja INT NOT NULL DEFAULT 0 CHECK (Stock_Caja >= 0),
     Stock_Unitario INT NOT NULL DEFAULT 0 CHECK (Stock_Unitario >= 0),
     Unidad_Medida VARCHAR(50) NOT NULL,
     ID_Marca INT NOT NULL,
-    Fecha_Venc DATETIME NOT NULL DEFAULT GETDATE(),
     FOREIGN KEY (ID_Marca) REFERENCES Marca(id)
 );
 
@@ -164,7 +162,6 @@ CREATE TABLE Compra (
 CREATE TABLE Lote (
     id INT IDENTITY(1,1) PRIMARY KEY,
     Id_Producto INT NOT NULL,
-    Cantidad_Caja INT NOT NULL DEFAULT 0 CHECK (Cantidad_Caja >= 0),
     Cantidad_Unitario INT NOT NULL DEFAULT 0 CHECK (Cantidad_Unitario >= 0),
     Fecha_Vencimiento DATE NOT NULL,
     FOREIGN KEY (Id_Producto) REFERENCES Productos(id)
@@ -175,7 +172,6 @@ CREATE TABLE DetalleCompra (
     id INT IDENTITY(1,1) PRIMARY KEY,
     Id_Compra INT NOT NULL,
     Id_Lote INT NOT NULL,
-    Cantidad_Caja INT NOT NULL DEFAULT 0 CHECK (Cantidad_Caja >= 0),
     Cantidad_Unitario INT NOT NULL DEFAULT 0 CHECK (Cantidad_Unitario >= 0),
     Precio_Unitario DECIMAL(10,2) NOT NULL CHECK (Precio_Unitario >= 0),
     FOREIGN KEY (Id_Compra) REFERENCES Compra(id),
@@ -241,16 +237,6 @@ CREATE INDEX IX_Compra_Fecha ON Compra(Fecha);
 CREATE INDEX IX_Enfermeria_Fecha ON Enfermeria(Fecha);
 CREATE INDEX IX_Tipos_Procedimientos_Nombre ON Tipos_Procedimientos(Nombre);
 
--- Comentarios de documentación
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = N'Sistema de control interno para clínica médica - Gestión de inventario, consultas y operaciones', 
-    @level0type = N'SCHEMA', @level0name = 'dbo';
-
-PRINT 'Base de datos de Control Interno ClinicaMariaInmaculada creada exitosamente';
-PRINT 'Sistema configurado para control interno con gestión de apellidos paterno/materno';
-PRINT 'Inventario configurado con Stock_Caja y Stock_Unitario';
-
 -- 1. Crear la tabla Roles
 CREATE TABLE Roles (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -266,39 +252,5 @@ INSERT INTO Roles (Nombre, Descripcion, Estado) VALUES
 ('Médico', 'Acceso a consultas, pacientes y laboratorio', 1);
 GO
 
--- 3. Agregar columnas a la tabla Usuario existente
-ALTER TABLE Usuario 
-ADD Id_Rol INT,
-    Estado BIT DEFAULT 1;
-GO
 
--- 4. Actualizar usuarios existentes con rol por defecto (Administrador)
-UPDATE Usuario 
-SET Id_Rol = 1, Estado = 1 
-WHERE Id_Rol IS NULL;
-GO
-
--- 5. Hacer obligatorio el campo Id_Rol
-ALTER TABLE Usuario 
-ALTER COLUMN Id_Rol INT NOT NULL;
-GO
-
--- 6. Agregar la clave foránea
-ALTER TABLE Usuario 
-ADD CONSTRAINT FK_Usuario_Rol 
-FOREIGN KEY (Id_Rol) REFERENCES Roles(id);
-GO
-
--- 7. Crear índices para mejorar rendimiento
-CREATE INDEX IX_Usuario_Rol ON Usuario(Id_Rol);
-CREATE INDEX IX_Roles_Estado ON Roles(Estado);
-GO
-
--- 8. Verificar que todo se creó correctamente
-SELECT 'Tabla Roles creada correctamente' AS Mensaje;
-SELECT COUNT(*) AS 'Total_Roles_Insertados' FROM Roles;
-SELECT 'Columnas agregadas a Usuario correctamente' AS Mensaje;
-
-PRINT 'Sistema de Roles implementado exitosamente - Solo Administrador y Médico';
-PRINT 'Todos los usuarios existentes asignados como Administrador por defecto';
 

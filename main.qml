@@ -541,29 +541,36 @@ ApplicationWindow {
                                     switchToPage(1)
                                 }
                             }
-                            
                             NavItem {
                                 id: navItem2
-                                text: "CONSULTAS"
-                                icon: "Resources/iconos/Consulta.png"
+                                text: "CIERRE DE CAJA"
+                                icon: "Resources/iconos/camaraderia.png"  // Necesitarás este ícono
                                 active: currentIndex === 2
                                 onClicked: switchToPage(2)
                             }
                             
                             NavItem {
                                 id: navItem3
-                                text: "LABORATORIO"
-                                icon: "Resources/iconos/Laboratorio.png"
+                                text: "CONSULTAS"
+                                icon: "Resources/iconos/Consulta.png"
                                 active: currentIndex === 3
                                 onClicked: switchToPage(3)
                             }
                             
                             NavItem {
                                 id: navItem4
-                                text: "ENFERMERÍA"
-                                icon: "Resources/iconos/Enfermeria.png"
+                                text: "LABORATORIO"
+                                icon: "Resources/iconos/Laboratorio.png"
                                 active: currentIndex === 4
                                 onClicked: switchToPage(4)
+                            }
+                            
+                            NavItem {
+                                id: navItem5
+                                text: "ENFERMERÍA"
+                                icon: "Resources/iconos/Enfermeria.png"
+                                active: currentIndex === 5
+                                onClicked: switchToPage(5)
                             }
                         }
                         
@@ -571,35 +578,35 @@ ApplicationWindow {
                             title: "SERVICIOS"
                             
                             NavItem {
-                                id: navItem5
+                                id: navItem6
                                 text: "SERVICIOS BÁSICOS"
                                 icon: "Resources/iconos/ServiciosBasicos.png"
-                                active: currentIndex === 5
-                                onClicked: switchToPage(5)
-                            }
-                                                        
-                            NavItem {
-                                id: navItem6
-                                text: "USUARIOS"
-                                icon: "Resources/iconos/usuario.png"
                                 active: currentIndex === 6
                                 onClicked: switchToPage(6)
                             }
-                            
+                                                        
                             NavItem {
                                 id: navItem7
-                                text: "PERSONAL"
-                                icon: "Resources/iconos/Trabajadores.png"
+                                text: "USUARIOS"
+                                icon: "Resources/iconos/usuario.png"
                                 active: currentIndex === 7
                                 onClicked: switchToPage(7)
                             }
                             
                             NavItem {
                                 id: navItem8
-                                text: "REPORTES"
-                                icon: "Resources/iconos/reportes.png"
+                                text: "PERSONAL"
+                                icon: "Resources/iconos/Trabajadores.png"
                                 active: currentIndex === 8
                                 onClicked: switchToPage(8)
+                            }
+                            
+                            NavItem {
+                                id: navItem9
+                                text: "REPORTES"
+                                icon: "Resources/iconos/reportes.png"
+                                active: currentIndex === 9
+                                onClicked: switchToPage(9)
                             }
                         }
                         
@@ -607,13 +614,14 @@ ApplicationWindow {
                             title: "SISTEMA"
                             
                             NavItem {
-                                id: navItem9
+                                id: navItem10
                                 text: "CONFIGURACIÓN"
                                 icon: "Resources/iconos/configuraciones.png"
-                                active: currentIndex === 9
-                                onClicked: switchToPage(9)
+                                active: currentIndex === 10
+                                onClicked: switchToPage(10)
                             }
                         }
+
                     }
                 }
             }
@@ -655,13 +663,21 @@ ApplicationWindow {
                     }
                 }
             }
+
+            CierreCaja {
+                id: cierreCajaPage
+                objectName: "cierreCajaPage"
+                anchors.fill: parent
+                visible: currentIndex === 2
+                layer.enabled: true
+            }
             
             // ===== CONSULTAS PAGE CON NUEVA CONEXIÓN DE SEÑAL =====
             Consultas {
                 id: consultasPage
                 objectName: "consultasPage"
                 anchors.fill: parent
-                visible: currentIndex === 2
+                visible: currentIndex === 3
                 layer.enabled: true
             }
             
@@ -670,7 +686,7 @@ ApplicationWindow {
                 id: laboratorioPage
                 objectName: "laboratorioPage"
                 anchors.fill: parent
-                visible: currentIndex === 3
+                visible: currentIndex === 4
                 layer.enabled: true
             }
             
@@ -679,7 +695,7 @@ ApplicationWindow {
                 id: enfermeriaPage
                 objectName: "enfermeriaPage"
                 anchors.fill: parent
-                visible: currentIndex === 4
+                visible: currentIndex === 5
                 layer.enabled: true
             }   
             
@@ -688,7 +704,7 @@ ApplicationWindow {
                 id: serviciosPage
                 objectName: "serviciosPage"
                 anchors.fill: parent
-                visible: currentIndex === 5
+                visible: currentIndex === 6
                 layer.enabled: true
                 
                 // ===== NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN A CONFIGURACIÓN =====
@@ -723,7 +739,7 @@ ApplicationWindow {
                     configuracionPage.changeView("servicios")
                     console.log("🔄 Vista de configuración cambiada a: servicios")
                     
-                    switchToPage(9)
+                    switchToPage(10)
                     console.log("🎯 Navegación completada hacia módulo Configuración")
                 }
             }
@@ -733,7 +749,7 @@ ApplicationWindow {
                 id: usuarioPage
                 objectName: "usuarioPage"
                 anchors.fill: parent
-                visible: currentIndex === 6
+                visible: currentIndex === 7
                 layer.enabled: true
             }
 
@@ -742,7 +758,7 @@ ApplicationWindow {
                 id: trabajadoresPage
                 objectName: "trabajadoresPage"
                 anchors.fill: parent
-                visible: currentIndex === 7
+                visible: currentIndex === 8
                 layer.enabled: true
                 
                 onIrAConfigPersonal: {
@@ -774,7 +790,7 @@ ApplicationWindow {
                     configuracionPage.changeView("personal")
                     console.log("🔄 Vista de configuración cambiada a: personal")
                     
-                    switchToPage(9)
+                    switchToPage(10)
                     console.log("🎯 Navegación completada hacia módulo Configuración - Personal")
                 }
             }
@@ -784,7 +800,7 @@ ApplicationWindow {
                 id: reportesPage
                 objectName: "reportesPage"
                 anchors.fill: parent
-                visible: currentIndex === 8
+                visible: currentIndex === 9
                 layer.enabled: true
             }
             
@@ -793,7 +809,7 @@ ApplicationWindow {
                 id: configuracionPage
                 objectName: "configuracionPage" 
                 anchors.fill: parent
-                visible: currentIndex === 9
+                visible: currentIndex === 10
                 layer.enabled: true
                 source: "Configuracion.qml"
                 
@@ -809,7 +825,7 @@ ApplicationWindow {
         }
     }
     
-    property var navItems: [navItem0, navItem1, navItem2, navItem3, navItem4, navItem5, navItem6, navItem7, navItem8, navItem9]
+    property var navItems: [navItem0, navItem1, navItem2, navItem3, navItem4, navItem5, navItem6, navItem7, navItem8, navItem9, navItem10]
     
     function switchToPage(index) {
         if (currentIndex !== index) {
@@ -835,8 +851,17 @@ ApplicationWindow {
         }
         
         const pageNames = [
-            "Dashboard", "Farmacia", "Consultas", "Laboratorio", "Enfermería",
-            "Servicios Básicos", "Usuarios", "Trabajadores", "Reportes", "Configuración"
+            "Dashboard",        // 0
+            "Farmacia",         // 1  
+            "Cierre de Caja",   // 2 - NUEVO
+            "Consultas",        // 3 - ERA 2
+            "Laboratorio",      // 4 - ERA 3
+            "Enfermería",       // 5 - ERA 4
+            "Servicios Básicos", // 6 - ERA 5
+            "Usuarios",         // 7 - ERA 6
+            "Trabajadores",     // 8 - ERA 7
+            "Reportes",         // 9 - ERA 8
+            "Configuración"     // 10 - ERA 9
         ]
         return pageNames[currentIndex] || "Dashboard"
     }
