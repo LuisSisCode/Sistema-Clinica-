@@ -352,7 +352,7 @@ ApplicationWindow {
                 spacing: 10
                 
                 Text {
-                    text: "CLÍNICA APP"
+                    text: "CLINICA MARIA INMACULADA"
                     font.pixelSize: 12
                     font.bold: true
                     color: "white"
@@ -431,11 +431,12 @@ ApplicationWindow {
                             height: width
                             color: "transparent"
                             
-                            Text {
+                            Image {
                                 anchors.centerIn: parent
-                                text: "🏥"
-                                font.pixelSize: 120
-                                color: "white"
+                                source: "Resources/iconos/logo_CMI.svg"  
+                                width: 350
+                                height: 600
+                                fillMode: Image.PreserveAspectFit
                                 opacity: 0.6
                                 
                                 SequentialAnimation on scale {
