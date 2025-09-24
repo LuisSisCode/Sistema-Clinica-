@@ -921,7 +921,6 @@ class CompraModel(QObject):
             
             # Forzar emisión adicional después de un momento
             QTimer.singleShot(100, lambda: self.comprasRecientesChanged.emit())
-            
             print(f"✅ Compras recientes cargadas y transformadas: {len(compras_transformadas)}")
             
         except Exception as e:
