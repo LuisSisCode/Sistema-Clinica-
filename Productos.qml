@@ -204,6 +204,7 @@ Item {
             }
         })
     }
+
     
     function abrirEditarProducto(producto) {
         console.log("🔧 Abriendo edición de producto:", producto.codigo)
@@ -1843,6 +1844,207 @@ Item {
                 forceActiveFocus()
             }
         }
+        Dialog {
+            id: confirmarEliminacionDialog
+            anchors.centerIn: parent
+            width: Math.min(400, parent.width * 0.8)
+            height: Math.min(250, parent.height * 0.6)
+            modal: true
+            visible: false
+            z: 1500
+            
+            property var productoAEliminar: null
+            
+            background: Rectangle {
+                color: whiteColor
+                radius: 16
+                border.color: lightGrayColor
+                border.width: 1
+                
+                // Sombra
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.topMargin: 3
+                    anchors.leftMargin: 3
+                    color: "#00000020"
+                    radius: 16
+                    z: -1
+                }
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 16
+                
+                // Header con icono de advertencia
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+                    
+                    Rectangle {
+                        width: 48
+                        height: 48
+                        color: dangerColor
+                        radius: 24
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "⚠️"
+                            font.pixelSize: 24
+                        }
+                    }
+                    
+                    ColumnLayout {
+                        spacing: 4
+                        
+                        Label {
+                            text: "¿Eliminar Producto?"
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: textColor
+                        }
+                        
+                        Label {
+                            text: "Esta acción no se puede deshacer"
+                            font.pixelSize: 12
+                            color: darkGrayColor
+                        }
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                }
+                
+                // Información del producto
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 80
+                    color: "#FEF2F2"
+                    radius: 8
+                    border.color: "#FECACA"
+                    border.width: 1
+                    
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 6
+                        
+                        Label {
+                            text: "Producto: " + (confirmarEliminacionDialog.productoAEliminar ? confirmarEliminacionDialog.productoAEliminar.nombre : "")
+                            font.bold: true
+                            font.pixelSize: 14
+                            color: textColor
+                        }
+                        
+                        Label {
+                            text: "Código: " + (confirmarEliminacionDialog.productoAEliminar ? confirmarEliminacionDialog.productoAEliminar.codigo : "")
+                            font.pixelSize: 12
+                            color: darkGrayColor
+                        }
+                        
+                        Label {
+                            text: "Stock actual: " + (confirmarEliminacionDialog.productoAEliminar ? confirmarEliminacionDialog.productoAEliminar.stockUnitario : "0") + " unidades"
+                            font.pixelSize: 12
+                            color: dangerColor
+                            font.bold: confirmarEliminacionDialog.productoAEliminar && confirmarEliminacionDialog.productoAEliminar.stockUnitario > 0
+                        }
+                    }
+                }
+                
+                // Advertencia si tiene stock
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 40
+                    color: "#FEF3C7"
+                    radius: 6
+                    border.color: "#FDE68A"
+                    border.width: 1
+                    visible: confirmarEliminacionDialog.productoAEliminar && confirmarEliminacionDialog.productoAEliminar.stockUnitario > 0
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 8
+                        
+                        Label {
+                            text: "⚠️"
+                            font.pixelSize: 16
+                        }
+                        
+                        Label {
+                            text: "ADVERTENCIA: Este producto tiene stock disponible"
+                            font.pixelSize: 11
+                            font.bold: true
+                            color: "#92400E"
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+                
+                Item { Layout.fillHeight: true }
+                
+                // Botones
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        Layout.preferredWidth: 100
+                        Layout.preferredHeight: 40
+                        text: "Cancelar"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
+                            radius: 8
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            confirmarEliminacionDialog.close()
+                            productoAEliminar = null
+                        }
+                    }
+                    
+                    Button {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
+                        text: "SÍ, Eliminar"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                            radius: 8
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.bold: true
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            if (confirmarEliminacionDialog.productoAEliminar) {
+                                ejecutarEliminacionProducto(confirmarEliminacionDialog.productoAEliminar)
+                            }
+                            confirmarEliminacionDialog.close()
+                            confirmarEliminacionDialog.productoAEliminar = null 
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // DIÁLOGO MODAL CREAR/EDITAR PRODUCTO - FUERA DEL STACKLAYOUT
@@ -1864,10 +2066,10 @@ Item {
                     item.marcasCargadas = true
                 }
                 
-                // Conectar señales
                 if (item && item.productoCreado) {
                     item.productoCreado.connect(function(producto) {
                         console.log("✅ Producto creado:", producto.codigo)
+                        mostrarMensajeExito("Producto creado: " + producto.codigo)
                         
                         if (farmaciaData) {
                             farmaciaData.crearProductoUnico(JSON.stringify(producto))
@@ -1880,8 +2082,9 @@ Item {
                 if (item && item.productoActualizado) {
                     item.productoActualizado.connect(function(producto) {
                         console.log("✅ Producto actualizado:", producto.codigo)
+                        mostrarMensajeExito("Producto actualizado: " + producto.codigo)
                         
-                        // ✅ AGREGAR ACTUALIZACIÓN INMEDIATA
+                        // Actualización inmediata
                         if (farmaciaData && farmaciaData.actualizarProductoInventario) {
                             var exito = farmaciaData.actualizarProductoInventario(producto.codigo, JSON.stringify(producto))
                             if (exito) {
@@ -1889,7 +2092,7 @@ Item {
                             }
                         }
                         
-                        // ✅ FORZAR ACTUALIZACIÓN INMEDIATA DE LA VISTA
+                        // Forzar actualización inmediata de la vista
                         Qt.callLater(function() {
                             cargarDatosParaFiltros()
                             actualizarDesdeDataCentral()
@@ -1923,6 +2126,93 @@ Item {
                 console.error("❌ Error cargando CrearProductoOptimizado.qml")
                 mostrandoCrearProducto = false
             }
+        }
+    }
+    Rectangle {
+        id: notificacionFlotante
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 80
+        
+        width: Math.min(400, parent.width - 32)
+        height: 50
+        
+        color: mensajeColor
+        radius: 25
+        
+        visible: mostrandoMensaje
+        opacity: mostrandoMensaje ? 1.0 : 0.0
+        
+        z: 2000
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+        
+        // Sombra
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 2
+            color: "#00000030"
+            radius: 25
+            z: -1
+        }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            
+            Label {
+                text: {
+                    switch(mensajeTipo) {
+                        case "success": return "✅"
+                        case "error": return "❌" 
+                        case "warning": return "⚠️"
+                        default: return "ℹ️"
+                    }
+                }
+                font.pixelSize: 18
+                color: whiteColor
+            }
+            
+            Label {
+                Layout.fillWidth: true
+                text: mensajeTexto
+                font.pixelSize: 12
+                font.bold: true
+                color: whiteColor
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+            
+            Button {
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 20
+                text: "×"
+                
+                background: Rectangle {
+                    color: parent.pressed ? "#FFFFFF40" : "#FFFFFF20"
+                    radius: 10
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: whiteColor
+                    font.pixelSize: 12
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: mostrandoMensaje = false
+            }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: mostrandoMensaje = false
         }
     }
     
@@ -2080,6 +2370,7 @@ Item {
             onClicked: parent.clicked()
         }
     }
+
     
     // ===== FUNCIONES ACTUALIZADAS SIN CAJAS =====
 
@@ -2286,24 +2577,66 @@ Item {
     }
         
     function eliminarProducto(producto) {
-        console.log("🗑️ Solicitando eliminación de producto:", producto.codigo)
+        console.log("🗑️ Iniciando proceso de eliminación de producto:", producto.codigo)
         
-        if (farmaciaData && farmaciaData.eliminarProductoInventario) {
-            var exito = farmaciaData.eliminarProductoInventario(producto.codigo)
+        // Validar que el producto existe
+        if (!producto || !producto.codigo) {
+            console.log("❌ Producto inválido para eliminar")
+            return
+        }
+        
+        // Mostrar diálogo de confirmación
+        confirmarEliminacionDialog.productoAEliminar = {
+            id: producto.id,
+            codigo: producto.codigo,
+            nombre: producto.nombre,
+            stockUnitario: producto.stockUnitario || 0
+        }
+        
+        confirmarEliminacionDialog.open()
+    }
+    function ejecutarEliminacionProducto(producto) {
+        console.log("🗑️ Ejecutando eliminación confirmada de producto:", producto.codigo)
+        
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            mostrarMensajeError("Error: Sistema no disponible")
+            return
+        }
+        
+        try {
+            
+            // Llamar al método de InventarioModel
+            var exito = inventarioModel.eliminar_producto(producto.codigo)
+                if (typeof inventarioModel.eliminar_producto !== 'function') {
+                console.log("❌ Método eliminar_producto no disponible en InventarioModel")
+                mostrarMensajeError("Función de eliminación no disponible")
+                return
+            }
             if (exito) {
-                console.log("✅ Producto eliminado exitosamente del centro de datos")
+                console.log("✅ Producto eliminado exitosamente del InventarioModel")
+                mostrarMensajeExito("Producto eliminado: " + producto.codigo)
                 
-                // ✅ ACTUALIZACIÓN INMEDIATA DESPUÉS DE ELIMINAR
+                // Actualizar interfaz inmediatamente
                 Qt.callLater(function() {
                     cargarDatosParaFiltros()
                     actualizarDesdeDataCentral()
                     updateFilteredModel()
+                    
+                    // Ocultar menú contextual
+                    mostrandoMenuContextual = false
+                    productoMenuContextual = null
+                    selectedProduct = null
                 })
+                
             } else {
                 console.log("❌ No se pudo eliminar el producto")
+                mostrarMensajeError("No se pudo eliminar el producto")
             }
-        } else {
-            console.log("❌ Función eliminarProductoInventario no disponible")
+            
+        } catch (error) {
+            console.log("❌ Error durante eliminación:", error)
+            mostrarMensajeError("Error eliminando producto: " + error.toString())
         }
     }
     
@@ -2393,6 +2726,44 @@ Item {
         cargarDatosParaFiltros()
         actualizarDesdeDataCentral()
     }
+    property bool mostrandoMensaje: false
+    property string mensajeTexto: ""
+    property string mensajeTipo: "info" // "success", "error", "warning", "info"
+    property color mensajeColor: blueColor
+
+    Timer {
+        id: mensajeTimer
+        interval: 4000
+        onTriggered: mostrandoMensaje = false
+    }
+
+    function mostrarMensajeExito(mensaje) {
+        mensajeTexto = mensaje
+        mensajeTipo = "success"
+        mensajeColor = successColor
+        mostrandoMensaje = true
+        mensajeTimer.restart()
+        console.log("✅ Mensaje éxito:", mensaje)
+    }
+
+    function mostrarMensajeError(mensaje) {
+        mensajeTexto = mensaje
+        mensajeTipo = "error"
+        mensajeColor = dangerColor
+        mostrandoMensaje = true
+        mensajeTimer.restart()
+        console.log("❌ Mensaje error:", mensaje)
+    }
+
+    function mostrarMensajeWarning(mensaje) {
+        mensajeTexto = mensaje
+        mensajeTipo = "warning"
+        mensajeColor = warningColor
+        mostrandoMensaje = true
+        mensajeTimer.restart()
+        console.log("⚠️ Mensaje warning:", mensaje)
+    }
+
 
     Component.onCompleted: {
         console.log("📦 Módulo Productos iniciado (SIN CAJAS - SOLO STOCK UNITARIO)")

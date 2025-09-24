@@ -131,14 +131,53 @@ class InventarioModel(QObject):
     # ===============================
     # PROPIEDADES DE AUTENTICACIÓN
     # ===============================
-    
+    @Slot(result=str)
+    def verificar_sistema_eliminacion(self):
+        """Verifica que todos los componentes para eliminación funcionen"""
+        try:
+            # Verificar autenticación
+            if not self._verificar_autenticacion():
+                return "❌ Sistema no autenticado"
+            
+            # Verificar repository
+            if not self.producto_repo:
+                return "❌ ProductoRepository no disponible"
+            
+            # Verificar método de eliminación
+            if not hasattr(self.producto_repo, 'eliminar_producto'):
+                return "❌ Método eliminar_producto no existe en repository"
+            
+            # Verificar conexión a BD
+            try:
+                # Intentar una consulta simple
+                productos_count = len(self.producto_repo.get_productos_con_marca() or [])
+                mensaje = f"✅ Sistema eliminación OK - {productos_count} productos disponibles - Usuario: {self._usuario_actual_id}"
+                self.operacionExitosa.emit(mensaje)
+                return mensaje
+            except Exception as e:
+                return f"❌ Error BD: {str(e)}"
+            
+        except Exception as e:
+            return f"❌ Error verificación: {str(e)}"
+
     def _verificar_autenticacion(self) -> bool:
-        """Verifica si el usuario está autenticado"""
+        """Verifica si el usuario está autenticado - CON MÁS LOGGING"""
         if self._usuario_actual_id <= 0:
+            print(f"🚫 AUTENTICACIÓN FALLÓ: Usuario actual ID = {self._usuario_actual_id}")
             self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
             return False
+        
+        print(f"✅ AUTENTICACIÓN OK: Usuario ID = {self._usuario_actual_id}")
         return True
     
+    def safe_execute_local(func, *args, **kwargs):
+        """Ejecuta función de forma segura con manejo de excepciones"""
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f"❌ Error en safe_execute_local: {e}")
+            return None
+        
     # ===============================
     # PROPERTIES PARA QML
     # ===============================
@@ -519,7 +558,19 @@ class InventarioModel(QObject):
             
             # Parsear nuevos datos
             datos = json.loads(producto_json)
-            
+            datos_mapeados = {}
+
+            # Mapear campos con nombres correctos para BD
+            if 'nombre' in datos:
+                datos_mapeados['Nombre'] = datos['nombre']
+            if 'detalles' in datos:
+                datos_mapeados['Detalles'] = datos['detalles']
+            if 'precio_compra' in datos:
+                datos_mapeados['Precio_compra'] = datos['precio_compra']
+            if 'precio_venta' in datos:
+                datos_mapeados['Precio_venta'] = datos['precio_venta']
+            if 'unidad_medida' in datos:
+                datos_mapeados['Unidad_Medida'] = datos['unidad_medida']
             # Obtener ID de marca si cambió
             if 'marca' in datos:
                 datos['ID_Marca'] = self._obtener_id_marca(datos['marca'])
@@ -529,7 +580,7 @@ class InventarioModel(QObject):
             exito = safe_execute(
                 self.producto_repo.actualizar_producto, 
                 producto_actual['id'], 
-                datos
+                datos_mapeados
             )
             
             if exito:
@@ -558,44 +609,78 @@ class InventarioModel(QObject):
         """Elimina un producto (solo si no tiene stock) - CON VERIFICACIÓN DE AUTENTICACIÓN"""
         # VERIFICAR AUTENTICACIÓN
         if not self._verificar_autenticacion():
+            print(f"❌ ELIMINACIÓN BLOQUEADA: Usuario no autenticado (ID: {self._usuario_actual_id})")
             return False
         
         if not codigo:
+            print("❌ ELIMINACIÓN BLOQUEADA: Código de producto requerido")
             self.operacionError.emit("Código de producto requerido")
             return False
         
+        print(f"🗑️ INICIANDO ELIMINACIÓN - Código: {codigo}, Usuario: {self._usuario_actual_id}")
+        
         self._set_loading(True)
         try:
-            print(f"🗑️ Eliminando producto - Código: {codigo}, Usuario: {self._usuario_actual_id}")
-            
-            # Obtener producto
+            # Obtener producto ANTES de intentar eliminar
             producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
             if not producto:
+                print(f"❌ PRODUCTO NO ENCONTRADO: {codigo}")
                 raise ProductoNotFoundError(codigo=codigo)
             
-            # Eliminar producto
+            print(f"📊 Producto encontrado: {producto['Nombre']} (ID: {producto['id']}) - Stock: {producto.get('Stock_Total', 0)}")
+            
+            # Verificar stock antes de eliminar
+            stock_total = producto.get('Stock_Total', 0)
+            if stock_total > 0:
+                mensaje_error = f"No se puede eliminar: el producto '{producto['Nombre']}' tiene {stock_total} unidades en stock"
+                print(f"❌ ELIMINACIÓN BLOQUEADA POR STOCK: {mensaje_error}")
+                self.operacionError.emit(mensaje_error)
+                return False
+            
+            print(f"✅ VALIDACIÓN PASADA - Producto sin stock, procediendo a eliminar...")
+            
+            # Eliminar producto usando el repository
             exito = safe_execute(self.producto_repo.eliminar_producto, producto['id'])
             
             if exito:
-                # Refrescar datos
+                print(f"✅ ELIMINACIÓN EXITOSA EN BD - Producto: {codigo}")
+                
+                # Refrescar datos inmediatamente
+                print("🔄 Refrescando datos después de eliminación...")
                 self.refresh_productos()
                 self._cargar_lotes_activos()
                 
-                self.operacionExitosa.emit(f"Producto eliminado: {codigo}")
+                # Emitir señales de éxito
+                mensaje_exito = f"Producto eliminado: {codigo}"
+                self.operacionExitosa.emit(mensaje_exito)
                 self.productoEliminado.emit(codigo)
-                print(f"🗑️ Producto eliminado - {codigo}, Usuario: {self._usuario_actual_id}")
+                
+                print(f"✅ ELIMINACIÓN COMPLETA - {codigo}, Usuario: {self._usuario_actual_id}")
                 return True
             else:
-                raise Exception("Error eliminando producto")
+                print(f"❌ ERROR EN BD - No se pudo eliminar producto {codigo}")
+                raise Exception("Error eliminando producto en base de datos")
                 
         except ProductoNotFoundError:
-            self.operacionError.emit(f"Producto no encontrado: {codigo}")
+            mensaje_error = f"Producto no encontrado: {codigo}"
+            print(f"❌ PRODUCTO NO ENCONTRADO: {mensaje_error}")
+            self.operacionError.emit(mensaje_error)
         except Exception as e:
-            self.operacionError.emit(f"Error eliminando producto: {str(e)}")
+            mensaje_error = f"Error eliminando producto: {str(e)}"
+            print(f"❌ ERROR GENERAL EN ELIMINACIÓN: {mensaje_error}")
+            self.operacionError.emit(mensaje_error)
         finally:
             self._set_loading(False)
         
         return False
+
+    @Slot(str, result=str)
+    def debug_eliminar_producto(self, codigo: str):
+        """Método de debug para verificar que QML puede llamar a Python"""
+        mensaje_debug = f"DEBUG: Método Python llamado correctamente para código {codigo}. Usuario: {self._usuario_actual_id}"
+        print(f"🔍 {mensaje_debug}")
+        self.operacionExitosa.emit(f"Debug: Conexión QML-Python OK para {codigo}")
+        return mensaje_debug
     
     @Slot(str, float, result=bool)
     def actualizar_precio_venta(self, codigo: str, nuevo_precio: float):

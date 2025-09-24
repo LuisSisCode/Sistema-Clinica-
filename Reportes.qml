@@ -12,6 +12,8 @@ Item {
     // PROPIEDAD PARA EL MODELO DE REPORTES
     property var reportesModel: appController ? appController.reportes_model_instance : null
     
+    property bool mostrandoVistaPrevia: false
+
     // Colores del tema PROFESIONAL
     readonly property color primaryColor: "#2C3E50"
     readonly property color successColor: "#27AE60"
@@ -35,7 +37,7 @@ Item {
     property var datosReporte: []
     property var resumenReporte: ({})
 
-    // Tipos de reportes disponibles
+    // Tipos de reportes disponibles - CAMBIO APLICADO
     property var tiposReportes: [
         {
             id: 0,
@@ -102,14 +104,30 @@ Item {
             color: dangerColor
         },
         {
+            // ✅ CAMBIO PRINCIPAL: Nuevo nombre y descripción
             id: 8,
-            nombre: "Reporte Financiero Consolidado",
-            modulo: "consolidado",
+            nombre: "Reporte de Ingresos y Egresos",
+            modulo: "financiero",
             icono: "📈",
-            descripcion: "Resumen financiero de todos los módulos",
+            descripcion: "Análisis financiero completo de ingresos, egresos y saldo neto del período",
             color: blackColor
         }
     ]
+
+    // Función para obtener título del reporte - ACTUALIZADA
+    function obtenerTituloReporte() {
+        switch(tipoReporteSeleccionado) {
+            case 1: return "REPORTE DE VENTAS DE FARMACIA"
+            case 2: return "REPORTE DE INVENTARIO DE PRODUCTOS"
+            case 3: return "REPORTE DE COMPRAS DE FARMACIA"
+            case 4: return "REPORTE DE CONSULTAS MÉDICAS"
+            case 5: return "REPORTE DE ANÁLISIS DE LABORATORIO"
+            case 6: return "REPORTE DE PROCEDIMIENTOS DE ENFERMERÍA"
+            case 7: return "REPORTE DE GASTOS OPERATIVOS"
+            case 8: return "REPORTE DE INGRESOS Y EGRESOS"  // ✅ CAMBIO APLICADO
+            default: return "REPORTE GENERAL"
+        }
+    }
 
     // CONEXIONES AL MODELO DE REPORTES
     Connections {
@@ -756,6 +774,26 @@ Item {
                                     font.family: "Segoe UI"
                                 }
                                 
+                                // ✅ NUEVO: Indicador especial para Ingresos y Egresos
+                                Rectangle {
+                                    Layout.preferredWidth: 120
+                                    Layout.preferredHeight: 25
+                                    color: tipoReporteSeleccionado === 8 ? "#E8F5E8" : "transparent"
+                                    radius: 12
+                                    border.color: tipoReporteSeleccionado === 8 ? successColor : "transparent"
+                                    border.width: 1
+                                    visible: tipoReporteSeleccionado === 8
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "💰 ANÁLISIS FINANCIERO"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        color: successColor
+                                        font.family: "Segoe UI"
+                                    }
+                                }
+                                
                                 Item { Layout.fillWidth: true }
                                 
                                 Label {
@@ -766,6 +804,8 @@ Item {
                                 }
                             }
                         }
+
+
                                                 
                         // ========================================
                         // REEMPLAZAR LA TABLA COMPLETA EN REPORTES.QML
@@ -787,13 +827,13 @@ Item {
                                 // Encabezados de la tabla
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 45
+                                    Layout.preferredHeight: 50  // ✅ Aumentado para títulos largos
                                     color: blackColor
                                     radius: 4
                                     
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.margins: 12
+                                        anchors.margins: 8  // ✅ Reducido para más espacio
                                         spacing: 0
                                         
                                         Repeater {
@@ -801,13 +841,19 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: modelData.width
+                                                Layout.fillHeight: true
                                                 text: modelData.titulo
                                                 font.bold: true
-                                                font.pixelSize: 11
+                                                font.pixelSize: 10  // ✅ Tamaño ligeramente más pequeño
                                                 font.family: "Segoe UI"
                                                 color: whiteColor
                                                 horizontalAlignment: modelData.align || Text.AlignLeft
                                                 verticalAlignment: Text.AlignVCenter
+                                                
+                                                // ✅ AGREGAR AJUSTE DE TEXTO PARA TÍTULOS LARGOS
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
@@ -869,7 +915,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 50
-                                    color: "#2C3E50"  // Color destacado para totales
+                                    color: "#2C3E50"  
                                     border.color: "#34495E"
                                     border.width: 2
                                     
@@ -878,21 +924,22 @@ Item {
                                         anchors.margins: 12
                                         spacing: 0
                                         
-                                        // Obtener columnas actuales
-                                        property var columnasActuales: obtenerColumnasReporte()
+                                        // ✅ DEFINIR COLUMNAS UNA SOLA VEZ AL NIVEL CORRECTO
+                                        property var todasLasColumnas: obtenerColumnasReporte()
                                         
                                         Repeater {
-                                            model: parent.columnasActuales.length
+                                            model: parent.todasLasColumnas.length  // ✅ Usar parent directamente
                                             
                                             Rectangle {
-                                                Layout.preferredWidth: parent.columnasActuales[index].width
+                                                Layout.preferredWidth: parent.todasLasColumnas[index].width  // ✅ Acceso directo
                                                 Layout.fillHeight: true
                                                 color: "transparent"
                                                 
-                                                Label {
+                                                  Label {
                                                     anchors.centerIn: parent
                                                     text: {
-                                                        var columna = parent.parent.columnasActuales[index]
+                                                        // ✅ ACCESO DIRECTO SIN PARENT.PARENT
+                                                        var columna = parent.parent.todasLasColumnas[index]
                                                         var nombreColumna = columna.titulo
                                                         var campoColumna = columna.campo
                                                         
@@ -901,24 +948,26 @@ Item {
                                                         // MOSTRAR TOTAL en columna de valor monetario
                                                         if (campoColumna === "valor") {
                                                             var total = calcularTotalReporte()
-                                                            console.log("Mostrando total:", total)
                                                             return "Bs " + total.toFixed(2)
                                                         }
-                                                        
+
+                                                        // ✅ PARA VENTAS: mostrar "TOTAL GENERAL:" en VENDEDOR (ahora en la posición correcta)
+                                                        if (tipoReporteSeleccionado === 1 && campoColumna === "usuario") {
+                                                            return "TOTAL GENERAL:"
+                                                        }
+
                                                         // PARA GASTOS: mostrar "TOTAL GENERAL:" en DESCRIPCIÓN
                                                         if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
-                                                            console.log("Mostrando TOTAL GENERAL en descripción para gastos")
                                                             return "TOTAL GENERAL:"
                                                         }
-                                                        
+
                                                         // PARA OTROS REPORTES: mostrar "TOTAL GENERAL:" en penúltima columna
-                                                        if (tipoReporteSeleccionado !== 7 && 
-                                                            index === parent.parent.columnasActuales.length - 2 && 
+                                                        if (tipoReporteSeleccionado !== 7 && tipoReporteSeleccionado !== 1 && 
+                                                            index === parent.parent.todasLasColumnas.length - 2 && 
                                                             campoColumna !== "valor") {
-                                                            console.log("Mostrando TOTAL GENERAL en penúltima columna")
                                                             return "TOTAL GENERAL:"
                                                         }
-                                                        
+
                                                         // Todas las demás columnas vacías
                                                         return ""
                                                     }
@@ -928,14 +977,17 @@ Item {
                                                     font.family: "Segoe UI"
                                                     color: whiteColor
                                                     horizontalAlignment: {
-                                                        var columna = parent.parent.parent.columnasActuales[index]
+                                                        // ✅ ACCESO CORREGIDO
+                                                        var columna = parent.parent.parent.todasLasColumnas[index]
                                                         var campoColumna = columna.campo
                                                         
                                                         if (campoColumna === "valor") {
                                                             return Text.AlignRight
                                                         } else if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
                                                             return Text.AlignRight
-                                                        } else if (tipoReporteSeleccionado !== 7 && index === parent.parent.parent.columnasActuales.length - 2) {
+                                                        } else if (tipoReporteSeleccionado === 1 && campoColumna === "usuario") {
+                                                            return Text.AlignRight  // ✅ CAMBIO: VENDEDOR ahora alineado a la derecha para "TOTAL GENERAL:"
+                                                        } else if (tipoReporteSeleccionado !== 7 && tipoReporteSeleccionado !== 1 && index === parent.parent.parent.todasLasColumnas.length - 2) {
                                                             return Text.AlignRight
                                                         } else {
                                                             return Text.AlignCenter
@@ -955,7 +1007,7 @@ Item {
                         // ==========================================
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 90
+                            Layout.preferredHeight: tipoReporteSeleccionado === 8 ? 110 : 90  // ✅ Más alto para reporte financiero
                             color: "#F8F9FA"
                             radius: 4
                             border.color: "#E9ECEF"
@@ -966,12 +1018,12 @@ Item {
                                 anchors.margins: 15
                                 spacing: 30
                                 
-                                // ESTADÍSTICAS PRINCIPALES
+                                // ESTADÍSTICAS PRINCIPALES - MEJORADAS
                                 ColumnLayout {
                                     spacing: 6
                                     
                                     Label {
-                                        text: "📊 RESUMEN EJECUTIVO"
+                                        text: tipoReporteSeleccionado === 8 ? "💹 RESUMEN FINANCIERO" : "📊 RESUMEN EJECUTIVO"
                                         font.pixelSize: 12
                                         font.bold: true
                                         font.family: "Segoe UI"
@@ -990,11 +1042,24 @@ Item {
                                         }
                                         
                                         Label {
-                                            text: "Valor Total: Bs " + calcularTotalReporte().toFixed(2)
+                                            text: {
+                                                var total = calcularTotalReporte()
+                                                if (tipoReporteSeleccionado === 8) {
+                                                    return total >= 0 ? "Saldo: +Bs " + total.toFixed(2) : "Saldo: -Bs " + Math.abs(total).toFixed(2)
+                                                } else {
+                                                    return "Valor Total: Bs " + total.toFixed(2)
+                                                }
+                                            }
                                             font.pixelSize: 11
                                             font.bold: true
                                             font.family: "Segoe UI"
-                                            color: calcularTotalReporte() >= 0 ? successColor : dangerColor
+                                            color: {
+                                                if (tipoReporteSeleccionado === 8) {
+                                                    return calcularTotalReporte() >= 0 ? successColor : dangerColor
+                                                } else {
+                                                    return calcularTotalReporte() >= 0 ? successColor : dangerColor
+                                                }
+                                            }
                                         }
                                         
                                         Label {
@@ -1006,12 +1071,18 @@ Item {
                                         }
                                     }
                                     
-                                    // SEGUNDA FILA DE ESTADÍSTICAS
+                                    // SEGUNDA FILA DE ESTADÍSTICAS - MEJORADA
                                     Row {
                                         spacing: 25
                                         
                                         Label {
-                                            text: "Tipo de Reporte: " + obtenerTituloReporte()
+                                            text: {
+                                                if (tipoReporteSeleccionado === 8) {
+                                                    return "Análisis: " + obtenerTituloReporte()
+                                                } else {
+                                                    return "Tipo: " + obtenerTituloReporte()
+                                                }
+                                            }
                                             font.pixelSize: 10
                                             font.family: "Segoe UI"
                                             color: darkGrayColor
@@ -1024,11 +1095,32 @@ Item {
                                             color: darkGrayColor
                                         }
                                     }
+                                    
+                                    // ✅ TERCERA FILA ESPECIAL PARA REPORTE FINANCIERO
+                                    Row {
+                                        spacing: 25
+                                        visible: tipoReporteSeleccionado === 8
+                                        
+                                        Label {
+                                            text: "Estado: " + (calcularTotalReporte() >= 0 ? "SUPERÁVIT FINANCIERO" : "DÉFICIT FINANCIERO")
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            font.family: "Segoe UI"
+                                            color: calcularTotalReporte() >= 0 ? successColor : dangerColor
+                                        }
+                                        
+                                        Label {
+                                            text: "Evaluación: " + (calcularTotalReporte() >= 0 ? "Gestión Saludable" : "Requiere Atención")
+                                            font.pixelSize: 10
+                                            font.family: "Segoe UI"
+                                            color: darkGrayColor
+                                        }
+                                    }
                                 }
                                 
                                 Item { Layout.fillWidth: true }
                                 
-                                // INFORMACIÓN DEL SISTEMA
+                                // INFORMACIÓN DEL SISTEMA - MANTENIDA
                                 ColumnLayout {
                                     spacing: 4
                                     Layout.alignment: Qt.AlignTop
@@ -1170,79 +1262,85 @@ Item {
 
     function obtenerColumnasReporte() {
         switch(tipoReporteSeleccionado) {
-            case 1: // Ventas de Farmacia
+
+            case 1: // Ventas de Farmacia - MANTENER COMO ESTÁ
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 70},
+                    {titulo: "Nº VENTA", campo: "numeroVenta", width: 70},
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 140},
+                    {titulo: "CANT", campo: "cantidad", width: 50, align: Text.AlignRight},
+                    {titulo: "P.UNIT.", campo: "precio_unitario", width: 80, align: Text.AlignRight},
+                    {titulo: "VENDEDOR", campo: "usuario", width: 100},
+                    {titulo: "TOTAL", campo: "valor", width: 80, align: Text.AlignRight}
+                ]
+                    
+            case 2: // Inventario de Productos - MANTENER COMO ESTÁ
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 70},
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 140},
+                    {titulo: "MARCA", campo: "marca", width: 80},
+                    {titulo: "STOCK", campo: "cantidad", width: 60, align: Text.AlignRight},
+                    {titulo: "LOTES", campo: "lotes", width: 50, align: Text.AlignCenter},
+                    {titulo: "P.UNIT.", campo: "precioUnitario", width: 80, align: Text.AlignRight},
+                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 80},
+                    {titulo: "VALOR (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
+                ]
+
+            case 3: // Compras de Farmacia - MANTENER COMO ESTÁ
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 70},          
+                    {titulo: "PRODUCTO", campo: "descripcion", width: 120},     
+                    {titulo: "MARCA", campo: "marca", width: 80},          
+                    {titulo: "UNID.", campo: "cantidad", width: 50, align: Text.AlignRight},         
+                    {titulo: "PROVEEDOR", campo: "proveedor", width: 100},     
+                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 70},        
+                    {titulo: "USUARIO", campo: "usuario", width: 80},        
+                    {titulo: "TOTAL (Bs)", campo: "valor", width: 80, align: Text.AlignRight}     
+                ]
+                
+            case 4: // Consultas Médicas - MANTENER COMO ESTÁ
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "Nº VENTA", campo: "numeroVenta", width: 80},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 200},
-                    {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
-                    {titulo: "TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
+                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 120},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
+                    {titulo: "PACIENTE", campo: "paciente", width: 130},
+                    {titulo: "MÉDICO", campo: "doctor_nombre", width: 130},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
-            case 2: // Inventario de Productos
-                return [
-                    {titulo: "CÓDIGO", campo: "codigo", width: 80},
-                    {titulo: "PRODUCTO", campo: "descripcion", width: 180},
-                    {titulo: "UNIDAD", campo: "unidad", width: 60},
-                    {titulo: "STOCK", campo: "cantidad", width: 80, align: Text.AlignRight},
-                    {titulo: "PRECIO UNIT.", campo: "precioUnitario", width: 100, align: Text.AlignRight},
-                    {titulo: "VALOR TOTAL (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
-                ]
-            case 3: // Compras de Farmacia
-                return [
-                    {titulo: "FECHA", campo: "fecha", width: 85},
-                    {titulo: "PRODUCTO", campo: "descripcion", width: 170},
-                    {titulo: "MARCA", campo: "marca", width: 85},
-                    {titulo: "UNID.", campo: "cantidad", width: 60, align: Text.AlignRight},
-                    {titulo: "PROVEEDOR", campo: "proveedor", width: 135},
-                    {titulo: "F.VENC.", campo: "fecha_vencimiento", width: 85},   // Cambiado
-                    {titulo: "USUARIO", campo: "usuario", width: 100},
-                    {titulo: "TOTAL (Bs)", campo: "valor", width: 85, align: Text.AlignRight}
-                ]
-                
-            case 4: // Consultas Médicas
-                return [
-                    {titulo: "FECHA", campo: "fecha", width: 100},
-                    {titulo: "ESPECIALIDAD", campo: "especialidad", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "PACIENTE", campo: "paciente", width: 150},
-                    {titulo: "MÉDICO", campo: "doctor_nombre", width: 150},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
-                ]
-                
-            case 5: // Laboratorio
-                return [
-                    {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "TIPO ANÁLISIS", campo: "tipoAnalisis", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "PACIENTE", campo: "paciente", width: 150},
-                    {titulo: "TÉCNICO", campo: "tecnico", width: 140},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
-                ]
-                
-            case 6: // Enfermería
-                return [
-                    {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "TIPO PROCEDIMIENTO", campo: "tipoProcedimiento", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "PACIENTE", campo: "paciente", width: 150},
-                    {titulo: "ENFERMERO/A", campo: "enfermero", width: 140},
-                    {titulo: "PRECIO (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
-                ]
-                
-            case 7: // Gastos Operativos
-                return [
-                    {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "TIPO DE GASTO", campo: "categoria", width: 140},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
-                    {titulo: "MONTO (Bs)", campo: "valor", width: 120, align: Text.AlignRight},
-                    {titulo: "PROVEEDOR", campo: "proveedor", width: 150}
-                ]
-                
-            case 8: // Consolidado
+            case 5: // ✅ LABORATORIO - ESTRUCTURA CORREGIDA SEGÚN SOLICITUD
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "TIPO", campo: "tipo", width: 100, align: Text.AlignCenter},
+                    {titulo: "ANÁLISIS", campo: "analisis", width: 140},        // ✅ CAMBIO: Era "TIPO ANÁLISIS"
+                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},  // ✅ NUEVO: Normal/Emergencia
+                    {titulo: "PACIENTE", campo: "paciente", width: 130},
+                    {titulo: "LABORATORISTA", campo: "laboratorista", width: 130}, // ✅ CAMBIO: Era "TÉCNICO"
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
+                ]
+                
+            case 6: // ✅ ENFERMERÍA - ESTRUCTURA CORREGIDA SEGÚN SOLICITUD
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "PROCEDIMIENTO", campo: "procedimiento", width: 140},  // ✅ CAMBIO: Con detalles
+                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},   // ✅ NUEVO: Normal/Emergencia
+                    {titulo: "PACIENTE", campo: "paciente", width: 130},
+                    {titulo: "ENFERMERO/A", campo: "enfermero", width: 130},
+                    {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
+                ]
+                
+            case 7: // ✅ GASTOS OPERATIVOS - ESTRUCTURA CORREGIDA SEGÚN SOLICITUD
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "TIPO GASTO", campo: "tipo_gasto", width: 120},       // ✅ CAMBIO: Campo específico
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
+                    {titulo: "PROVEEDOR", campo: "proveedor", width: 130},
+                    {titulo: "MONTO (Bs)", campo: "valor", width: 100, align: Text.AlignRight} // ✅ CAMBIO: Era "VALOR"
+                ]
+                
+            case 8: // Consolidado - MANTENER COMO ESTÁ
+                return [
+                    {titulo: "FECHA", campo: "fecha", width: 80},
+                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},
                     {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 180},
                     {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
                     {titulo: "VALOR (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
@@ -1251,7 +1349,7 @@ Item {
             default:
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 90},
-                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 250},
+                    {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 200},
                     {titulo: "CANTIDAD", campo: "cantidad", width: 80, align: Text.AlignRight},
                     {titulo: "VALOR (Bs)", campo: "valor", width: 120, align: Text.AlignRight}
                 ]
@@ -1292,67 +1390,145 @@ Item {
         var registro = datosReporte[index]
         
         switch(campo) {
-            // CAMPOS BÁSICOS
             case "fecha":
-                return registro.fecha || "---"
-            case "descripcion":
-                return registro.descripcion || "Sin detalles"
-            case "cantidad":
-                return (registro.cantidad || 0).toString()
-            case "valor":
-                return (registro.valor || 0).toFixed(2)
+                return registro.fecha || Qt.formatDate(new Date(), "dd/MM/yyyy")
                 
-            // VENTAS
+            case "descripcion":
+                return registro.descripcion || registro.Nombre || registro.nombre || "Sin descripción"
+                
+            // ✅ NUEVOS CAMPOS PARA LABORATORIO
+            case "analisis":
+                // ✅ CAMBIO: Buscar en campo 'analisis' (nombre del análisis)
+                return registro.analisis || 
+                    registro.tipoAnalisis || 
+                    registro.tipo_analisis ||
+                    "Análisis General"
+            
+            case "tipo":
+                // ✅ NUEVO: Tipo de servicio (Normal/Emergencia)  
+                var tipoServicio = registro.tipo || "Normal"
+                return tipoServicio === "Emergencia" ? "Emergencia" : "Normal"
+            
+            case "laboratorista":
+                // ✅ CAMBIO: Era 'tecnico', ahora 'laboratorista'
+                return registro.laboratorista || 
+                    registro.tecnico ||
+                    registro.trabajador_nombre ||
+                    "Sin asignar"
+            
+            // ✅ NUEVOS CAMPOS PARA ENFERMERÍA
+            case "procedimiento":
+                // ✅ NUEVO: Procedimiento con detalles
+                return registro.procedimiento ||
+                    registro.tipoProcedimiento ||
+                    registro.descripcion ||
+                    "Procedimiento General"
+            
+            case "enfermero":
+                // ✅ MANTENER: Campo enfermero/a
+                return registro.enfermero ||
+                    registro.trabajador_nombre ||
+                    registro.usuario ||
+                    "Sin asignar"
+            
+            // ✅ NUEVOS CAMPOS PARA GASTOS
+            case "tipo_gasto":
+                // ✅ NUEVO: Tipo específico de gasto
+                return registro.tipo_gasto ||
+                    registro.categoria ||
+                    registro.tipo_nombre ||
+                    "General"
+            
+            // CAMPOS EXISTENTES - MANTENER LÓGICA
+            case "marca":
+                return registro.marca || 
+                    registro.Marca_Nombre || 
+                    registro.marca_nombre || 
+                    "Sin marca"
+                
+            case "cantidad":
+                var stock = registro.cantidad || 
+                        registro.Stock_Total || 
+                        registro.stock_total ||
+                        0
+                return stock.toString()
+                
+            case "lotes":
+                var numLotes = registro.lotes || 
+                            registro.Lotes_Activos || 
+                            0
+                return numLotes.toString()
+
+            case "precio_unitario":
+            case "precioUnitario":
+                try {
+                    var precioUnit = parseFloat(registro.precio_unitario || registro.precioUnitario) || 0
+                    return "Bs " + precioUnit.toFixed(2)
+                } catch(e) {
+                    return "Bs 0.00"
+                }
+                
+            case "usuario":
+                return registro.usuario || "Sin usuario"
+                
+            case "fecha_vencimiento":
+                var fechaVenc = registro.fecha_vencimiento || 
+                            registro.Proxima_Vencimiento || 
+                            null
+                
+                if (!fechaVenc || fechaVenc === "" || fechaVenc === "None") {
+                    return "Sin venc."
+                }
+                
+                // Convertir formato si es necesario
+                if (typeof fechaVenc === 'string' && fechaVenc.includes('-')) {
+                    try {
+                        var partes = fechaVenc.split('-')
+                        return partes[2] + "/" + partes[1] + "/" + partes[0]
+                    } catch(e) {
+                        return fechaVenc
+                    }
+                }
+                return fechaVenc
+                
+            case "valor":
+                var valorTotal = registro.valor || 0
+                return valorTotal.toFixed(2)
+                
             case "numeroVenta":
                 return registro.numeroVenta || ("V" + String(index + 1).padStart(3, '0'))
-                
-            // INVENTARIO
-            case "codigo":
-                return registro.codigo || ("COD" + String(index + 1).padStart(3, '0'))
-            case "unidad":
-                return registro.unidad || "UND"
-            case "precioUnitario":
-                return registro.precioUnitario ? registro.precioUnitario.toFixed(2) : "0.00"
-                
-            // COMPRAS
-            case "numeroCompra":
-                return registro.numeroCompra || ("C" + String(index + 1).padStart(3, '0'))
-                
-            // CONSULTAS
+
             case "especialidad":
                 return registro.especialidad || "Sin especialidad"
+                
             case "paciente":
                 return registro.paciente || "Paciente"
+                
             case "doctor_nombre":
                 return registro.doctor_nombre || "Sin médico"
                 
-            // LABORATORIO
-            case "tipoAnalisis":
-                return registro.tipoAnalisis || registro.tipo || "Análisis General"
-            case "tecnico":
-                return registro.tecnico || "Sin asignar"
-                
-            // ENFERMERÍA
-            case "tipoProcedimiento":
-                return registro.tipoProcedimiento || registro.tipo || "Procedimiento General"
-            case "enfermero":
-                return registro.enfermero || "Sin asignar"
-                
-            // GASTOS - SEGÚN REQUERIMIENTO EXACTO
-            case "categoria":
-                return registro.categoria || registro.tipo_nombre || "General"
             case "proveedor":
                 return registro.proveedor || "Sin proveedor"
                 
-            // CONSOLIDADO
-            case "tipo":
-                return registro.tipo || "Normal"
-                
             default:
-                return registro[campo] || "---"
+                // Búsqueda genérica
+                var valor = registro[campo]
+                if (valor === undefined || valor === null || valor === "") {
+                    return "---"
+                }
+                return valor.toString()
         }
     }
-    
+
+    function debugearDatosInventario() {
+        if (tipoReporteSeleccionado === 2 && datosReporte.length > 0) {
+            console.log("🔍 DEBUG - Primer registro de inventario:")
+            var primer = datosReporte[0]
+            console.log("Campos disponibles:", Object.keys(primer))
+            console.log("Datos:", JSON.stringify(primer, null, 2))
+        }
+    }
+
     // ===== FUNCIONES DE NOTIFICACIÓN =====
     
     function mostrarNotificacionError(mensaje) {

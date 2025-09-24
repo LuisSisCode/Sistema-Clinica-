@@ -87,6 +87,17 @@ Dialog {
             return basicValidation && stockValidation && fechaValidation
         }
     }
+    onClosed: {
+        try {
+            showSuccessMessage = false
+            if (successTimer.running) {
+                successTimer.stop()
+            }
+            console.log("🚪 Diálogo cerrado - estado limpiado")
+        } catch (error) {
+            console.log("⚠️ Error limpiando al cerrar:", error)
+        }
+    }
 
     Timer {
         id: successTimer
@@ -214,90 +225,147 @@ Dialog {
             precio_compra: inputPurchasePrice,
             precio_venta: inputSalePrice,
             unidad_medida: inputMeasureUnit,
-            stock_unitario: inputStockUnit,  // Solo stock unitario
+            stock_unitario: inputStockUnit,
             fecha_vencimiento: formatearFechaParaBD(),
             proveedor: inputSupplier.trim(),
             sin_vencimiento: inputNoExpiry
         }
         
         try {
+            // MOSTRAR MENSAJE DE ÉXITO INMEDIATAMENTE (mientras el contexto es válido)
+            var mensajeExito = ""
+            
             if (modoEdicion) {
                 producto.id = productoData.id
+                mensajeExito = "Producto actualizado correctamente"
+                
+                // ✅ LLAMAR AL INVENTARIOMODEL PARA ACTUALIZAR EN BD
+                if (!inventarioModel) {
+                    showMessage("Error: Sistema no disponible")
+                    return false
+                }
+                
+                var exito = inventarioModel.actualizar_producto(
+                    productoData.codigo, 
+                    JSON.stringify(producto)
+                )
+                
+                if (!exito) {
+                    showMessage("Error al actualizar producto")
+                    return false
+                }
+            } else {
+                mensajeExito = "Producto y primer lote creados correctamente"
+                var tipoVencimiento = inputNoExpiry ? " (sin vencimiento)" : ""
+                mensajeExito += tipoVencimiento
+            }
+            
+            // MOSTRAR MENSAJE ANTES de cualquier operación de cierre
+            showMessage(mensajeExito)
+            
+            // LIMPIAR FORMULARIO INMEDIATAMENTE (mientras el contexto es válido)
+            limpiarFormularioSeguro()
+            
+            // EMITIR SEÑAL Y CERRAR (sin más llamadas a funciones del diálogo)
+            if (modoEdicion) {
                 productoActualizado(producto)
                 console.log("✅ Producto actualizado correctamente")
             } else {
                 productoCreado(producto)
-                var tipoVencimiento = inputNoExpiry ? " (sin vencimiento)" : ""
-                console.log("✅ Producto y primer lote creados correctamente" + tipoVencimiento)
+                console.log("✅ Producto y primer lote creados correctamente")
             }
             
-            // ✅ CAMBIAR ESTA SECCIÓN - CERRAR PRIMERO, LIMPIAR DESPUÉS
-            console.log("✅ Cerrando diálogo")
-            close()
-            
-            // ✅ LIMPIAR DESPUÉS DE CERRAR CON DELAY
+            // CERRAR DIÁLOGO CON DELAY MÍNIMO
             Qt.callLater(function() {
-                try {
-                    limpiarFormulario()
-                    console.log("🧹 Formulario limpiado")
-                } catch (cleanError) {
-                    console.log("⚠️ Error limpiando formulario (no crítico):", cleanError)
-                }
+                close()
             })
+            
+            return true
             
         } catch (error) {
             console.error("Error al guardar producto:", error)
+            // NO llamar showMessage aquí porque puede estar en contexto inválido
             return false
         }
-        
-        return true
     }
     
-    function limpiarFormulario() {
-        // Guard para prevenir errores de contexto
+    function limpiarFormularioSeguro() {
+        // GUARDS MÚLTIPLES para prevenir errores de contexto
         if (!crearProductoDialog) {
+            console.log("⚠️ Dialog no disponible para limpieza")
             return
         }
         
         try {
+            // Limpiar propiedades primero
             inputProductCode = ""
             inputProductName = ""
             inputProductDetails = ""
             inputPurchasePrice = 0.0
             inputSalePrice = 0.0
             inputMarca = ""
-            
             inputExpirationDate = ""
             inputNoExpiry = false
-            inputStockUnit = 0  // Solo stock unitario
+            inputStockUnit = 0
             inputSupplier = ""
             
-            // Verificar que los campos existen antes de limpiarlos
-            if (codigoField) codigoField.text = ""
-            if (nombreField) nombreField.text = ""
-            if (detallesField) detallesField.text = ""
-            if (precioCompraField) precioCompraField.text = ""
-            if (precioVentaField) precioVentaField.text = ""
-            if (marcaField) marcaField.text = ""
-            if (fechaVencimientoField) fechaVencimientoField.text = ""
-            if (stockUnitarioField) stockUnitarioField.text = ""
-            if (proveedorField) proveedorField.text = ""
+            // Limpiar campos UI con verificación individual
+            if (typeof codigoField !== 'undefined' && codigoField) {
+                codigoField.text = ""
+            }
+            if (typeof nombreField !== 'undefined' && nombreField) {
+                nombreField.text = ""
+            }
+            if (typeof detallesField !== 'undefined' && detallesField) {
+                detallesField.text = ""
+            }
+            if (typeof precioCompraField !== 'undefined' && precioCompraField) {
+                precioCompraField.text = ""
+            }
+            if (typeof precioVentaField !== 'undefined' && precioVentaField) {
+                precioVentaField.text = ""
+            }
+            if (typeof marcaField !== 'undefined' && marcaField) {
+                marcaField.text = ""
+            }
+            if (typeof fechaVencimientoField !== 'undefined' && fechaVencimientoField) {
+                fechaVencimientoField.text = ""
+            }
+            if (typeof stockUnitarioField !== 'undefined' && stockUnitarioField) {
+                stockUnitarioField.text = ""
+            }
+            if (typeof proveedorField !== 'undefined' && proveedorField) {
+                proveedorField.text = ""
+            }
             
-            if (unidadCombo && typeof unidadCombo.currentIndex !== 'undefined') {
+            // Resetear ComboBox con verificación
+            if (typeof unidadCombo !== 'undefined' && unidadCombo && 
+                typeof unidadCombo.currentIndex !== 'undefined') {
                 unidadCombo.currentIndex = 0
             }
+            
+            console.log("🧹 Formulario limpiado exitosamente")
+            
         } catch (error) {
-            console.error("Error al limpiar formulario:", error)
+            console.log("⚠️ Error en limpieza (no crítico):", error)
+            // No propagar el error para evitar crashes
         }
     }
     
     function showMessage(mensaje) {
         if (!crearProductoDialog || !crearProductoDialog.visible) {
+            console.log("📢 Mensaje:", mensaje)
             return
         }
-        successMessage = mensaje
-        showSuccessMessage = true
-        successTimer.restart()
+        
+        try {
+            successMessage = mensaje
+            showSuccessMessage = true
+            successTimer.restart()
+            console.log("📢 Mostrando mensaje:", mensaje)
+        } catch (error) {
+            console.log("⚠️ Error mostrando mensaje:", error)
+        }
     }
     
     function abrirCrearProducto(modo = false, datos = null) {
@@ -306,13 +374,19 @@ Dialog {
         modoEdicion = modo
         productoData = datos
         cargarMarcasDisponibles()
-        limpiarFormulario()
+        
+        // Limpiar formulario de forma segura
+        limpiarFormularioSeguro()
         
         if (modoEdicion && productoData) {
             console.log("📝 Modo edición detectado, cargando datos...")
-            // ✅ USAR TIMER MÁS LARGO PARA ASEGURAR QUE LOS CAMPOS ESTÉN LISTOS
+            // Usar múltiples Qt.callLater para asegurar que los campos estén listos
             Qt.callLater(function() {
-                Qt.callLater(cargarDatosProducto)
+                Qt.callLater(function() {
+                    if (crearProductoDialog && crearProductoDialog.visible) {
+                        cargarDatosProducto()
+                    }
+                })
             })
         }
         

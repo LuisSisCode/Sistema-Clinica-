@@ -668,7 +668,7 @@ Item {
                                         }
                                         
                                         contentItem: Label {
-                                            text: "Ver"  // CAMBIADO DE "👁️"
+                                            text: "Ver"  
                                             color: whiteColor
                                             font.pixelSize: 11
                                             font.bold: true
@@ -678,9 +678,9 @@ Item {
                                         
                                         onClicked: {
                                             console.log("👁️ Ver detalle de compra, index:", index)
+                                            selectedPurchase = model
                                             obtenerDetallesCompra(model.id)
                                             showPurchaseDetailsDialog = true
-                                            selectedPurchase = null
                                         }
                                     }
                                 }
@@ -1457,7 +1457,7 @@ Item {
         color: "#000000"
         opacity: 0.7
         visible: showDeleteConfirmDialog
-        z: 2000
+        z: 1000
         
         MouseArea {
             anchors.fill: parent
@@ -1591,7 +1591,7 @@ Item {
                             console.log("🗑️ Eliminando compra:", compraToDelete.id)
                             var exito = compraModel.eliminar_compra(compraToDelete.id)
                             if (exito) {
-                                showSuccess("Compra eliminada exitosamente", "success")
+                                showNotification("Compra eliminada exitosamente", "success")
                                 actualizarPaginacionCompras()
                             }
                         }
@@ -1605,6 +1605,74 @@ Item {
         }
     }
 
+    // SISTEMA DE NOTIFICACIÓN VISUAL - Agregar antes de Component.onCompleted
+    Rectangle {
+        id: notificationToast
+        anchors.centerIn: parent
+        anchors.right: parent.right
+        anchors.margins: 20
+        anchors.topMargin: 80
+        width: 300
+        height: 50
+        color: "#27ae60"
+        radius: 8
+        visible: false
+        opacity: 0
+        z: 2000
+        
+        property string notificationText: ""
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+            
+            Rectangle {
+                width: 20
+                height: 20
+                color: "#ffffff"
+                radius: 10
+                
+                Label {
+                    anchors.centerIn: parent
+                    text: "✓"
+                    color: "#27ae60"
+                    font.bold: true
+                    font.pixelSize: 12
+                }
+            }
+            
+            Label {
+                text: notificationToast.notificationText
+                color: "#ffffff"
+                font.bold: true
+                font.pixelSize: 12
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+        }
+        
+        Timer {
+            id: hideNotificationTimer
+            interval: 3000
+            onTriggered: {
+                notificationToast.opacity = 0
+                notificationToast.visible = false
+            }
+        }
+        
+        function showToast(message) {
+            notificationText = message
+            visible = true
+            opacity = 1
+            hideNotificationTimer.restart()
+        }
+    }
+
     // Función para obtener total de compras
     function getTotalComprasCount() {
         return compraModel ? compraModel.total_compras_mes : 0
@@ -1613,9 +1681,10 @@ Item {
     // FUNCIÓN DE NOTIFICACIÓN (agregar si no existe)
     function showNotification(message, type) {
         console.log(`[${type.toUpperCase()}] ${message}`)
-        // Aquí puedes implementar una notificación visual si tienes un sistema de toast
+        if (notificationToast) {
+            notificationToast.showToast(message)
+        }
     }
-
     // Conexiones con el modelo
     Connections {
         target: compraModel
