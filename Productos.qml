@@ -411,7 +411,7 @@ Item {
                         }
                     }
 
-                    // Tabla de lotes - SIN COLUMNA DE CAJAS
+                    // Tabla de lotes
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -424,8 +424,7 @@ Item {
                             anchors.fill: parent
                             anchors.margins: 0
                             spacing: 0
-                            
-                            // Header - SIN CANTIDAD CAJA
+
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 40
@@ -451,7 +450,7 @@ Item {
                                             text: "PRODUCTO"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                     
@@ -466,7 +465,7 @@ Item {
                                             text: "CANTIDAD"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                     
@@ -481,7 +480,7 @@ Item {
                                             text: "FECHA VENCIMIENTO"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                     
@@ -496,7 +495,7 @@ Item {
                                             text: "ACCIONES"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                 }
@@ -609,7 +608,7 @@ Item {
                                                     text: parent.text
                                                     color: whiteColor
                                                     font.bold: true
-                                                    font.pixelSize: 9
+                                                    font.pixelSize: 12
                                                     horizontalAlignment: Text.AlignHCenter
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
@@ -1034,7 +1033,7 @@ Item {
                                     text: "NOMBRE"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                             
@@ -1052,7 +1051,7 @@ Item {
                                     text: "DESCRIPCIÓN"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                             
@@ -1067,7 +1066,7 @@ Item {
                                     text: "PRECIO COMPRA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 9
+                                    font.pixelSize: 12
                                 }
                             }
                             
@@ -1082,7 +1081,7 @@ Item {
                                     text: "PRECIO VENTA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 9
+                                    font.pixelSize: 12
                                 }
                             }
                             
@@ -1097,7 +1096,7 @@ Item {
                                     text: "STOCK"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                             
@@ -1112,7 +1111,7 @@ Item {
                                     text: "UNIDAD"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 11
                                 }
                             }
                             
@@ -1127,7 +1126,7 @@ Item {
                                     text: "MARCA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
 
@@ -1142,13 +1141,13 @@ Item {
                                     text: "LOTES"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                         }
                     }
                     
-                    // Contenido de la tabla - SIN CAMPO STOCK CAJA
+                    // Contenido de la tabla
                     ListView {
                         id: productosTable
                         Layout.fillWidth: true
@@ -1178,7 +1177,7 @@ Item {
                                         anchors.centerIn: parent
                                         text: model.id ? model.id.toString() : ""
                                         color: "#2C3E50"
-                                        font.pixelSize: 9
+                                        font.pixelSize: 12
                                         font.bold: true
                                     }
                                 }
@@ -1194,7 +1193,7 @@ Item {
                                         text: model.codigo || ""
                                         color: "#3498DB"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                     }
                                 }
                                 
@@ -1214,7 +1213,7 @@ Item {
                                         text: model.nombre || ""
                                         color: "#2C3E50"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -1234,7 +1233,7 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: model.detalles || ""
                                         color: "#7f8c8d"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -1250,7 +1249,7 @@ Item {
                                         text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
                                         color: "#27AE60"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                     }
                                 }
                                 
@@ -1265,7 +1264,7 @@ Item {
                                         text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
                                         color: "#F39C12"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                     }
                                 }
                                 
@@ -1288,7 +1287,7 @@ Item {
                                             text: (model.stockUnitario || 0).toString()
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 11
+                                            font.pixelSize: 12
                                         }
                                     }
                                 }
@@ -1312,7 +1311,7 @@ Item {
                                             text: model.unidadMedida || "mg"
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 7
+                                            font.pixelSize: 10
                                         }
                                     }
                                 }
@@ -1329,7 +1328,7 @@ Item {
                                         text: model.idMarca || "N/A"
                                         color: "#34495e"
                                         font.bold: true
-                                        font.pixelSize: 9
+                                        font.pixelSize: 12
                                     }
                                 }
 
@@ -2359,7 +2358,7 @@ Item {
                     text: parent.parent.parent.count.toString()
                     color: active ? backgroundColor : whiteColor
                     font.bold: true
-                    font.pixelSize: 9
+                    font.pixelSize: 14
                     Behavior on color { ColorAnimation { duration: 200 } }
                 }
             }
