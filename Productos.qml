@@ -411,7 +411,7 @@ Item {
                         }
                     }
 
-                    // Tabla de lotes - SIN COLUMNA DE CAJAS
+                    // Tabla de lotes
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -424,8 +424,7 @@ Item {
                             anchors.fill: parent
                             anchors.margins: 0
                             spacing: 0
-                            
-                            // Header - SIN CANTIDAD CAJA
+
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 40
@@ -451,7 +450,7 @@ Item {
                                             text: "PRODUCTO"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                     
@@ -466,7 +465,7 @@ Item {
                                             text: "CANTIDAD"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                     
@@ -481,7 +480,7 @@ Item {
                                             text: "FECHA VENCIMIENTO"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                     
@@ -496,7 +495,7 @@ Item {
                                             text: "ACCIONES"
                                             color: "#2C3E50"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
                                     }
                                 }
@@ -609,7 +608,7 @@ Item {
                                                     text: parent.text
                                                     color: whiteColor
                                                     font.bold: true
-                                                    font.pixelSize: 9
+                                                    font.pixelSize: 12
                                                     horizontalAlignment: Text.AlignHCenter
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
@@ -964,7 +963,7 @@ Item {
                 }
             }
             
-            // Tabla principal de productos - SIN COLUMNA STOCK CAJA
+            // Tabla principal de productos 
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -978,7 +977,7 @@ Item {
                     anchors.margins: 0
                     spacing: 0
                     
-                    // Header de la tabla - SIN STOCK CAJA
+                    // Header de la tabla - SIN STOCK CAJA - RESPONSIVA
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
@@ -992,6 +991,8 @@ Item {
                             
                             Rectangle {
                                 Layout.preferredWidth: 50
+                                Layout.minimumWidth: 50
+                                Layout.maximumWidth: 50
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1007,6 +1008,8 @@ Item {
                             
                             Rectangle {
                                 Layout.preferredWidth: 80
+                                Layout.minimumWidth: 80
+                                Layout.maximumWidth: 80
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1022,6 +1025,7 @@ Item {
                             
                             Rectangle {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 150
                                 Layout.preferredWidth: 200
                                 Layout.fillHeight: true
                                 color: "transparent"
@@ -1034,13 +1038,14 @@ Item {
                                     text: "NOMBRE"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                             
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 200
+                                Layout.minimumWidth: 120
+                                Layout.preferredWidth: 180
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1052,12 +1057,14 @@ Item {
                                     text: "DESCRIPCIÓN"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 120
+                                Layout.minimumWidth: 100
+                                Layout.maximumWidth: 140
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1067,12 +1074,16 @@ Item {
                                     text: "PRECIO COMPRA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 9
+                                    font.pixelSize: 11
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WordWrap
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 120
+                                Layout.minimumWidth: 100
+                                Layout.maximumWidth: 140
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1082,12 +1093,16 @@ Item {
                                     text: "PRECIO VENTA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 9
+                                    font.pixelSize: 11
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WordWrap
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 80
+                                Layout.minimumWidth: 70
+                                Layout.maximumWidth: 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1097,12 +1112,14 @@ Item {
                                     text: "STOCK"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                             
                             Rectangle {
                                 Layout.preferredWidth: 80
+                                Layout.minimumWidth: 70
+                                Layout.maximumWidth: 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1112,12 +1129,14 @@ Item {
                                     text: "UNIDAD"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 11
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 70
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 90
+                                Layout.maximumWidth: 120
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1127,12 +1146,14 @@ Item {
                                     text: "MARCA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
 
                             Rectangle {
                                 Layout.preferredWidth: 80
+                                Layout.minimumWidth: 70
+                                Layout.maximumWidth: 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1142,13 +1163,13 @@ Item {
                                     text: "LOTES"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
                             }
                         }
                     }
                     
-                    // Contenido de la tabla - SIN CAMPO STOCK CAJA
+                    // Contenido de la tabla
                     ListView {
                         id: productosTable
                         Layout.fillWidth: true
@@ -1170,6 +1191,8 @@ Item {
                                 
                                 Rectangle {
                                     Layout.preferredWidth: 50
+                                    Layout.minimumWidth: 50
+                                    Layout.maximumWidth: 50
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1178,13 +1201,15 @@ Item {
                                         anchors.centerIn: parent
                                         text: model.id ? model.id.toString() : ""
                                         color: "#2C3E50"
-                                        font.pixelSize: 9
+                                        font.pixelSize: 12
                                         font.bold: true
                                     }
                                 }
                                 
                                 Rectangle {
                                     Layout.preferredWidth: 80
+                                    Layout.minimumWidth: 80
+                                    Layout.maximumWidth: 80
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1194,12 +1219,13 @@ Item {
                                         text: model.codigo || ""
                                         color: "#3498DB"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                     }
                                 }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true
+                                    Layout.minimumWidth: 150
                                     Layout.preferredWidth: 200
                                     Layout.fillHeight: true
                                     color: "transparent"
@@ -1214,14 +1240,16 @@ Item {
                                         text: model.nombre || ""
                                         color: "#2C3E50"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                         elide: Text.ElideRight
+                                        wrapMode: Text.NoWrap
                                     }
                                 }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredWidth: 200
+                                    Layout.minimumWidth: 120
+                                    Layout.preferredWidth: 180
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1234,13 +1262,16 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: model.detalles || ""
                                         color: "#7f8c8d"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 11
                                         elide: Text.ElideRight
+                                        wrapMode: Text.NoWrap
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: 120
+                                    Layout.minimumWidth: 100
+                                    Layout.maximumWidth: 140
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1250,12 +1281,15 @@ Item {
                                         text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
                                         color: "#27AE60"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 11
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: 120
+                                    Layout.minimumWidth: 100
+                                    Layout.maximumWidth: 140
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1265,12 +1299,15 @@ Item {
                                         text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
                                         color: "#F39C12"
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 11
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: 80
+                                    Layout.minimumWidth: 70
+                                    Layout.maximumWidth: 90
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1278,7 +1315,7 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 50
+                                        width: Math.min(50, parent.width - 10)
                                         height: 20
                                         color: getStockColor(model.stockUnitario || 0)
                                         radius: 10
@@ -1295,6 +1332,8 @@ Item {
                                 
                                 Rectangle {
                                     Layout.preferredWidth: 80
+                                    Layout.minimumWidth: 70
+                                    Layout.maximumWidth: 90
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1302,7 +1341,7 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 50
+                                        width: Math.min(60, parent.width - 10)
                                         height: 14
                                         color: "#9b59b6"
                                         radius: 7
@@ -1312,13 +1351,16 @@ Item {
                                             text: model.unidadMedida || "mg"
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 7
+                                            font.pixelSize: 9
+                                            elide: Text.ElideRight
                                         }
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 70
+                                    Layout.preferredWidth: 100
+                                    Layout.minimumWidth: 90
+                                    Layout.maximumWidth: 120
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1326,15 +1368,23 @@ Item {
                                     
                                     Label {
                                         anchors.centerIn: parent
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 4
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 4
                                         text: model.idMarca || "N/A"
                                         color: "#34495e"
                                         font.bold: true
-                                        font.pixelSize: 9
+                                        font.pixelSize: 11
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
                                     }
                                 }
 
                                 Rectangle {
                                     Layout.preferredWidth: 80
+                                    Layout.minimumWidth: 70
+                                    Layout.maximumWidth: 90
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1342,7 +1392,7 @@ Item {
                                     
                                     Button {
                                         anchors.centerIn: parent
-                                        width: 80
+                                        width: Math.min(70, parent.width - 10)
                                         height: 28
                                         text: "Ver"
                                         
@@ -1393,7 +1443,7 @@ Item {
                                 anchors.right: parent.right
                                 anchors.rightMargin: 0
                                 
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton  // ✅ QUITAR Qt.RightButton
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 z: -1
                                 
                                 onClicked: function(mouse) {
@@ -1413,7 +1463,8 @@ Item {
                                     }
                                 }
                             }
-                            // ✅ AGREGAR DESPUÉS DEL MOUSEAREA - BOTONES SUPERPUESTOS
+                            
+                            // Botones superpuestos del menú contextual
                             Rectangle {
                                 anchors.fill: parent
                                 color: "transparent"
@@ -1424,7 +1475,7 @@ Item {
                                 Rectangle {
                                     anchors.centerIn: parent
                                     width: 120
-                                    height: 50  // Reducido de 70 a 50
+                                    height: 50
                                     color: "#F8F9FA"
                                     border.width: 0
                                     radius: 4
@@ -1446,7 +1497,7 @@ Item {
                                         
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 25  // Altura fija de 25px por botón
+                                            Layout.preferredHeight: 25
                                             color: editarHover.containsMouse ? "#E3F2FD" : "transparent"
                                             radius: 0
                                             
@@ -1454,7 +1505,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 text: "Editar"
                                                 color: editarHover.containsMouse ? "#1976D2" : "#2C3E50"
-                                                font.pixelSize: 11  // Texto ligeramente más pequeño
+                                                font.pixelSize: 11
                                                 font.weight: Font.Medium
                                             }
                                             
@@ -1474,7 +1525,7 @@ Item {
                                         
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 25  // Altura fija de 25px por botón
+                                            Layout.preferredHeight: 25
                                             color: eliminarHover.containsMouse ? "#FFEBEE" : "transparent"
                                             radius: 0
                                             
@@ -1482,7 +1533,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 text: "Eliminar"
                                                 color: eliminarHover.containsMouse ? "#D32F2F" : "#2C3E50"
-                                                font.pixelSize: 11  // Texto ligeramente más pequeño
+                                                font.pixelSize: 11
                                                 font.weight: Font.Medium
                                             }
                                             
@@ -1582,7 +1633,7 @@ Item {
                                 font.pixelSize: 12
                                 font.weight: Font.Medium
                             }
-                                                        
+                                                            
                             Button {
                                 Layout.preferredWidth: 80
                                 Layout.preferredHeight: 30
@@ -2359,7 +2410,7 @@ Item {
                     text: parent.parent.parent.count.toString()
                     color: active ? backgroundColor : whiteColor
                     font.bold: true
-                    font.pixelSize: 9
+                    font.pixelSize: 14
                     Behavior on color { ColorAnimation { duration: 200 } }
                 }
             }
@@ -2715,16 +2766,34 @@ Item {
     function eliminarLote(loteId) {
         console.log("🗑️ Eliminando lote ID:", loteId)
         
-        // Por ahora mostrar mensaje de que la funcionalidad no está disponible
-        console.log("⚠️ Función eliminar_lote no implementada aún")
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            return
+        }
         
-        // Simular eliminación cerrando el modal
-        mostrandoLotesProducto = false
-        productoParaLotes = null
+        // LLAMAR AL MÉTODO REAL DEL INVENTARIOMODEL
+        var exito = inventarioModel.eliminar_lote(loteId)
         
-        // Actualizar datos cuando la función esté disponible
-        cargarDatosParaFiltros()
-        actualizarDesdeDataCentral()
+        if (exito) {
+            console.log("✅ Lote eliminado exitosamente")
+            // Cerrar modal y actualizar datos
+            mostrandoLotesProducto = false
+            productoParaLotes = null
+            
+            // Refrescar datos
+            Qt.callLater(function() {
+                cargarDatosParaFiltros()
+                actualizarDesdeDataCentral()
+                // Reabrir modal con datos actualizados si es necesario
+                if (productoSeleccionado) {
+                    Qt.callLater(function() {
+                        mostrarLotesProducto(productoSeleccionado)
+                    })
+                }
+            })
+        } else {
+            console.log("❌ Error eliminando lote")
+        }
     }
     property bool mostrandoMensaje: false
     property string mensajeTexto: ""
