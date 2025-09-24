@@ -890,11 +890,5 @@ Item {
             datosActualizados()
         }
     }    
-    // Monitor de cambios en productos para debug BD
-    onProductosUnicosModelChanged: {
-        console.log("📊 ProductosUnicosModel BD actualizado - Total productos:", productosUnicosModel.length)
-        if (productosUnicosModel.length > 0) {
-            console.log("🔍 Ejemplo de producto BD:", JSON.stringify(productosUnicosModel[0]))
-        }
-    }
+    
 }

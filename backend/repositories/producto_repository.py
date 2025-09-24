@@ -541,10 +541,11 @@ class ProductoRepository(BaseRepository):
             cursor.execute("SELECT SUM(Cantidad_Unitario) as Stock_Total FROM Lote WHERE Id_Producto = ?", (producto_id,))
             resultado = cursor.fetchone()
             stock_total = resultado[0] if resultado and resultado[0] else 0
-            
+            # por ahora se quitara la restriccion de eliminar porducto bajo en stock
+            """""
             if stock_total > 0:
                 raise ValueError(f"No se puede eliminar: el producto tiene {stock_total} unidades en stock")
-            
+            """""
             # Eliminar lotes vacíos y producto
             cursor.execute("DELETE FROM Lote WHERE Id_Producto = ?", (producto_id,))
             cursor.execute("DELETE FROM Productos WHERE id = ?", (producto_id,))

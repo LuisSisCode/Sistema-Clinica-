@@ -1474,14 +1474,14 @@ Item {
     }
 
     function confirmarEliminarVenta(venta) {
-        // Verificar permisos antes de mostrar confirmación
-        if (!ventaModel.puede_eliminar_ventas) {
-            mostrarMensajeError("No tiene permisos para eliminar ventas")
-            return
-        }
+        console.log("🗑️ Confirmando eliminación de venta:", venta.idVenta)
         
+        // ✅ VERIFICAR PERMISOS SOLO PARA ADMIN
+        
+        // Establecer venta a eliminar y mostrar diálogo
         ventaToDelete = venta
         showDeleteConfirmDialog = true
+        console.log("✅ Diálogo de confirmación mostrado")
     }
 
     function eliminarVentaConfirmada() {
@@ -1652,6 +1652,50 @@ Item {
                 }
             }
         }
+    }
+
+    // ✅ FUNCIÓN PARA MOSTRAR MENSAJES DE ERROR
+    function mostrarMensajeError(mensaje) {
+        console.log("⚠️ Error:", mensaje)
+        
+        // Crear y mostrar un toast temporal
+        var toast = Qt.createQmlObject('
+            import QtQuick 2.15
+            import QtQuick.Controls 2.15
+            Rectangle {
+                id: errorToast
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.topMargin: 20
+                z: 9999
+                width: Math.min(400, parent.width - 40)
+                height: 60
+                color: "#f8d7da"
+                border.color: "#f5c6cb"
+                radius: 6
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: "⚠️ " + "' + mensaje + '"
+                    color: "#721c24"
+                    font.pixelSize: 14
+                    wrapMode: Text.WordWrap
+                    width: parent.width - 20
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                
+                Timer {
+                    interval: 3000
+                    running: true
+                    onTriggered: errorToast.destroy()
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: errorToast.destroy()
+                }
+            }
+        ', ventasRoot, "errorToast")
     }
 
 }

@@ -52,23 +52,23 @@ class BaseRepository(ABC):
         # ✅ VERIFICAR FLAGS DE BYPASS PRIMERO
         if hasattr(self, '_bypass_all_cache') and self._bypass_all_cache:
             use_cache = False
-            print(f"🚫 Cache bypassed por flag _bypass_all_cache en {self.table_name}")
+            #print(f"🚫 Cache bypassed por flag _bypass_all_cache en {self.table_name}")
         
         if hasattr(self, '_force_reload') and self._force_reload:
             use_cache = False
-            print(f"🚫 Cache bypassed por flag _force_reload en {self.table_name}")
+            #print(f"🚫 Cache bypassed por flag _force_reload en {self.table_name}")
         
         # Flag específico para productos después de ventas
         if (hasattr(self, '_force_reload_productos') and self._force_reload_productos 
             and ('Productos' in query or 'productos' in query.lower())):
             use_cache = False
-            print(f"🚫 Cache bypassed para consulta de productos en {self.table_name}")
+            #print(f"🚫 Cache bypassed para consulta de productos en {self.table_name}")
         
         # Verificar caché para SELECT queries (solo si use_cache es True)
         if use_cache and query.strip().upper().startswith('SELECT'):
             cached_result = self.cache.get(query, params, self.cache_type)
             if cached_result is not None:
-                print(f"📋 Cache hit para {self.table_name}")
+                #print(f"📋 Cache hit para {self.table_name}")
                 return cached_result
         
         with self._lock:

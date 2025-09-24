@@ -570,7 +570,7 @@ class ReportesRepository(BaseRepository):
                     'EGRESO' as tipo,
                     'Compra Farmacia - ' + p.Nombre as descripcion,
                     dc.Cantidad_Unitario as cantidad,
-                    -(dc.Cantidad_Unitario * dc.Precio_Unitario) as valor,  -- Negativo para egresos
+                    -dc.Precio_Unitario as valor,  -- Negativo para egresos
                     'compras_farmacia' as categoria,
                     'Compra #' + CAST(c.id AS VARCHAR) as referencia
                 FROM Compra c
@@ -691,8 +691,8 @@ class ReportesRepository(BaseRepository):
             SELECT 
                 'Compras Farmacia' as categoria,
                 COUNT(*) as transacciones,
-                SUM(dc.Cantidad_Unitario * dc.Precio_Unitario) as valor_total,
-                AVG(dc.Cantidad_Unitario * dc.Precio_Unitario) as valor_promedio
+                SUM(dc.Precio_Unitario) as valor_total,
+                AVG(dc.Precio_Unitario) as valor_promedio
             FROM Compra c
             INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
             WHERE c.Fecha >= ? AND c.Fecha <= ?

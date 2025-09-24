@@ -630,6 +630,7 @@ class InventarioModel(QObject):
             print(f"📊 Producto encontrado: {producto['Nombre']} (ID: {producto['id']}) - Stock: {producto.get('Stock_Total', 0)}")
             
             # Verificar stock antes de eliminar
+            """""
             stock_total = producto.get('Stock_Total', 0)
             if stock_total > 0:
                 mensaje_error = f"No se puede eliminar: el producto '{producto['Nombre']}' tiene {stock_total} unidades en stock"
@@ -638,7 +639,7 @@ class InventarioModel(QObject):
                 return False
             
             print(f"✅ VALIDACIÓN PASADA - Producto sin stock, procediendo a eliminar...")
-            
+            """""
             # Eliminar producto usando el repository
             exito = safe_execute(self.producto_repo.eliminar_producto, producto['id'])
             

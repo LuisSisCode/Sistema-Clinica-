@@ -14,9 +14,8 @@ from ..core.excepciones import (
 
 class VentaModel(QObject):
     """
-    Model QObject para gestión de ventas con autenticación estandarizada y control de roles
-    Conecta directamente con QML mediante Signals/Slots/Properties
-    ✅ CORREGIDO: Usa datos directos de tabla Productos
+    Model QObject para gestión de ventas con permisos simplificados
+    ✅ CORREGIDO: Solo identifica usuario, permite operaciones básicas a todos
     """
     
     # ===============================
@@ -33,11 +32,11 @@ class VentaModel(QObject):
     # Signals de operaciones
     ventaCreada = Signal(int, float)  # venta_id, total
     ventaAnulada = Signal(int, str)   # venta_id, motivo
-    ventaActualizada = Signal(int, float)  # ✅ NUEVO
-    ventaEliminada = Signal(int)      # ✅ NUEVO
+    ventaActualizada = Signal(int, float)
+    ventaEliminada = Signal(int)
     operacionExitosa = Signal(str)    # mensaje
     operacionError = Signal(str)  
-    stockModificado = Signal()     # mensaje_error
+    stockModificado = Signal()
     
     # Signals de estados
     loadingChanged = Signal()
@@ -61,68 +60,62 @@ class VentaModel(QObject):
         self._loading = False
         self._procesando_venta = False
         
-        # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
-        self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
-        self._usuario_rol = ""       # NUEVO: Control de roles
-        print("💰 VentaModel inicializado - Esperando autenticación")
+        # ✅ SIMPLIFICADO: Solo identificar usuario, sin restricciones de rol
+        self._usuario_actual_id = 0
+        self._usuario_rol = ""
+        self._usuario_nombre = ""  # NUEVO: Para mostrar en UI
+        
+        print("💰 VentaModel inicializado con permisos simplificados")
         
         # Timer para actualización automática
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update_ventas_hoy)
         self.update_timer.start(60000)  # 1 minuto
-        
-        # Cargar datos iniciales (vacíos hasta autenticación)
-        print("💰 VentaModel inicializado con autenticación estandarizada y control de roles")
     
     # ===============================
-    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER
+    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER (SIMPLIFICADOS)
     # ===============================
     
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
-        """
-        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
-        """
+        """Establece el usuario actual para las operaciones"""
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario autenticado establecido en VentaModel: {usuario_id}")
+                print(f"👤 Usuario establecido en VentaModel: {usuario_id}")
                 
-                # Cargar datos iniciales después de autenticación
+                # Cargar datos iniciales
                 self._cargar_ventas_hoy(usar_cache=False)
                 self._cargar_estadisticas(usar_cache=False)
                 
-                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de ventas")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en ventas")
             else:
-                print(f"⚠️ ID de usuario inválido en VentaModel: {usuario_id}")
+                print(f"⚠️ ID de usuario inválido: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
         except Exception as e:
-            print(f"❌ Error estableciendo usuario en VentaModel: {e}")
+            print(f"❌ Error estableciendo usuario: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
     
     @Slot(int, str)
     def set_usuario_actual_con_rol(self, usuario_id: int, rol: str):
-        """
-        MODIFICADO: Establece usuario + rol y emite signals de permisos
-        """
+        """Establece usuario + rol solo para identificación"""
         try:
-            if usuario_id > 0 and rol.strip():
+            if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
                 self._usuario_rol = rol.strip()
-                print(f"Usuario autenticado con rol en VentaModel: {usuario_id} - {rol}")
-                print(f"🔐 DEBUG: Usuario establecido: {usuario_id}, Rol: '{rol}' -------------------------------------")
-                print(f"🔐 DEBUG: _usuario_rol almacenado: '{self._usuario_rol}'") 
-                # Cargar datos iniciales después de autenticación
+                
+                print(f"👤 Usuario autenticado: {usuario_id} - {rol}")
+                
+                # Cargar datos iniciales
                 self._cargar_ventas_hoy(usar_cache=False)
                 self._cargar_estadisticas(usar_cache=False)
                 
-                # NUEVO: Emitir signal para que QML actualice permisos
-                self.operacionExitosa.emit(f"Usuario {usuario_id} ({rol}) establecido en ventas")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} ({rol}) establecido")
                 
             else:
                 self.operacionError.emit("Usuario o rol inválido")
         except Exception as e:
-            print(f"Error estableciendo usuario con rol: {e}")
+            print(f"❌ Error estableciendo usuario con rol: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
     
     @Property(int, notify=operacionExitosa)
@@ -137,27 +130,22 @@ class VentaModel(QObject):
     
     @Slot(int, result='QVariantMap')
     def cargar_venta_para_edicion(self, venta_id: int):
-        """
-        Carga una venta CON PRODUCTOS CONSOLIDADOS para edición
-        """
+        """Carga una venta para edición - ✅ DISPONIBLE PARA TODOS"""
         try:
-            print(f"🔍 Cargando venta {venta_id} para edición")
+            print(f"📝 Cargando venta {venta_id} para edición")
             
             if not self._verificar_autenticacion():
                 return {}
             
-            if not self.puede_editar_venta(venta_id):
-                self.operacionError.emit("No tiene permisos para editar esta venta")
-                return {}
+            # ✅ PERMITIR A TODOS LOS USUARIOS (solo admin puede eliminar)
             
-            # ✅ USAR MÉTODO CONSOLIDADO PARA EDICIÓN
             detalle = self.venta_repo.get_venta_completa_consolidada(venta_id)
             
             if not detalle:
                 self.operacionError.emit("Venta no encontrada")
                 return {}
             
-            # Formatear productos CONSOLIDADOS para CrearVenta.qml
+            # Formatear productos consolidados para edición
             productos_edicion = []
             
             if 'detalles' in detalle and detalle['detalles']:
@@ -172,8 +160,8 @@ class VentaModel(QObject):
                             'codigo': codigo,
                             'nombre': str(item.get('Producto_Nombre', '')),
                             'precio': float(item.get('Precio_Unitario', 0)),
-                            'cantidad': int(item.get('Cantidad_Unitario', 0)),  # Consolidado
-                            'subtotal': float(item.get('Subtotal', 0)),         # Consolidado
+                            'cantidad': int(item.get('Cantidad_Unitario', 0)),
+                            'subtotal': float(item.get('Subtotal', 0)),
                             'stock_disponible': stock_actual + int(item.get('Cantidad_Unitario', 0))
                         }
                         productos_edicion.append(producto_edicion)
@@ -185,10 +173,10 @@ class VentaModel(QObject):
                 'total_original': float(detalle['Total']),
                 'productos': productos_edicion,
                 'total_productos': len(productos_edicion),
-                'es_editable': True
+                'es_editable': True  # ✅ TODOS PUEDEN EDITAR
             }
             
-            print(f"✅ Venta {venta_id} cargada para edición: {len(productos_edicion)} productos consolidados")
+            print(f"✅ Venta {venta_id} cargada para edición: {len(productos_edicion)} productos")
             return resultado
             
         except Exception as e:
@@ -197,7 +185,7 @@ class VentaModel(QObject):
             return {}
     
     # ===============================
-    # PROPIEDADES DE AUTENTICACIÓN Y PERMISOS
+    # ✅ VERIFICACIÓN SIMPLIFICADA (SOLO AUTENTICACIÓN)
     # ===============================
     
     def _verificar_autenticacion(self) -> bool:
@@ -207,87 +195,37 @@ class VentaModel(QObject):
             return False
         return True
     
-    def _verificar_permisos(self, operacion: str) -> bool:
-        """
-        NUEVO: Verifica permisos específicos según el rol del usuario
-        
-        Args:
-            operacion: Nombre de la operación a verificar
-            
-        Returns:
-            bool: True si tiene permisos, False caso contrario
-        """
-        # Verificar autenticación primero
-        if not self._verificar_autenticacion():
-            return False
-        
-        # Admin tiene acceso completo
-        if self._usuario_rol == "Administrador":
-            return True
-        
-        # Operaciones restringidas solo para Admin
-        operaciones_admin = [
-            'ver_ventas_otros_usuarios', 
-            'reportes_financieros',
-            'estadisticas_completas',
-            'editar_venta',  # ✅ NUEVO
-            'eliminar_venta'  # ✅ NUEVO
-        ]
-        
-        if operacion in operaciones_admin:
-            if self._usuario_rol != "Administrador":
-                self.operacionError.emit("Operación requiere permisos de administrador")
-                return False
-        
-
-        # Médico puede hacer ventas básicas
-        if self._usuario_rol == "Médico":
-            operaciones_medico = [
-                'crear_venta',
-                'ver_propias_ventas',
-                'agregar_carrito',
-                'estadisticas_basicas',
-                'buscar_productos'  # ✅ NUEVO
-            ]
-            
-            if operacion not in operaciones_medico and operacion not in operaciones_admin:
-                return True  # Permitir operaciones no clasificadas
-        
 
     
     # ===============================
-    # ✅ NUEVOS MÉTODOS PARA BÚSQUEDA DE PRODUCTOS DESDE TABLA PRODUCTOS
+    # ✅ BÚSQUEDA DE PRODUCTOS (SIN RESTRICCIONES)
     # ===============================
     
     @Slot(str, result='QVariant')
     def buscar_productos_para_venta(self, texto_busqueda: str):
-        """
-        ✅ CORREGIDO: Busca productos SIEMPRE sin cache después de ventas
-        """
-        if not self._verificar_permisos('buscar_productos'):
+        """Busca productos - ✅ DISPONIBLE PARA TODOS"""
+        if not self._verificar_autenticacion():  # Solo verificar autenticación
             return []
         
         if not texto_busqueda or len(texto_busqueda.strip()) < 2:
             return []
         
         try:
-            # ✅ FORZAR búsqueda sin cache
             productos = self.venta_repo.buscar_productos_para_venta_sin_cache(texto_busqueda.strip())
             
-            # Formatear para QML (solo datos esenciales para venta)
             productos_venta = []
             for producto in productos:
                 productos_venta.append({
                     'codigo': producto['Codigo'],
                     'nombre': producto['Nombre'],
                     'precio': float(producto['Precio_venta']),
-                    'stock': int(producto['Stock_Total']),  # STOCK FRESCO SIN CACHE
+                    'stock': int(producto['Stock_Total']),
                     'disponible': producto['Stock_Total'] > 0,
                     'marca': producto.get('Marca_Nombre', ''),
-                    'timestamp_consulta': datetime.now().isoformat()  # Para debug
+                    'timestamp_consulta': datetime.now().isoformat()
                 })
             
-            print(f"🔍 Búsqueda sin cache completada: {len(productos_venta)} productos")
+            print(f"🔍 Búsqueda completada: {len(productos_venta)} productos")
             return productos_venta
             
         except Exception as e:
@@ -296,9 +234,7 @@ class VentaModel(QObject):
     
     @Slot(str, result='QVariantMap')
     def obtener_producto_por_codigo(self, codigo: str):
-        """
-        ✅ NUEVO: Obtiene producto por código desde tabla Productos
-        """
+        """Obtiene producto por código - ✅ DISPONIBLE PARA TODOS"""
         if not self._verificar_autenticacion():
             return {}
         
@@ -308,11 +244,9 @@ class VentaModel(QObject):
         try:
             print(f"🔍 Obteniendo producto por código: '{codigo}'")
             
-            # Usar método directo del repository
             if hasattr(self.venta_repo, 'get_producto_por_codigo'):
                 producto = self.venta_repo.get_producto_por_codigo(codigo)
             else:
-                # Fallback
                 producto = safe_execute(self.producto_repo.get_by_codigo, codigo)
             
             if producto:
@@ -337,14 +271,13 @@ class VentaModel(QObject):
             return {}
     
     # ===============================
-    # ✅ NUEVOS MÉTODOS PARA EDITAR Y ELIMINAR VENTAS
+    # ✅ EDITAR Y ELIMINAR VENTAS (SIMPLIFICADO)
     # ===============================
+    
     @Slot(int, 'QVariantList', result=bool)
     def actualizar_venta_completa(self, venta_id: int, nuevos_productos: list):
-        """
-        ✅ CORREGIDO: Actualiza venta con mejor manejo de errores y timeouts
-        """
-        if not self._verificar_permisos('editar_venta'):
+        """Actualiza venta - ✅ DISPONIBLE PARA TODOS"""
+        if not self._verificar_autenticacion():  # Solo verificar autenticación
             return False
         
         if venta_id <= 0 or not nuevos_productos:
@@ -354,7 +287,7 @@ class VentaModel(QObject):
         try:
             print(f"INICIO actualización venta {venta_id} con {len(nuevos_productos)} productos")
             
-            # ✅ VALIDAR cada producto antes de enviar al repository
+            # Validar productos
             productos_validados = []
             for i, prod in enumerate(nuevos_productos):
                 if not isinstance(prod, dict):
@@ -376,7 +309,7 @@ class VentaModel(QObject):
                         self.operacionError.emit(f"Precio inválido en producto {i}: {precio}")
                         return False
                     
-                    # ✅ VERIFICAR stock disponible ANTES de procesar
+                    # Verificar stock disponible
                     stock_check = self.verificar_disponibilidad_producto(codigo)
                     if stock_check['cantidad_disponible'] < cantidad:
                         self.operacionError.emit(
@@ -399,70 +332,33 @@ class VentaModel(QObject):
             
             print(f"Productos validados exitosamente: {len(productos_validados)}")
             
-            # ✅ LLAMAR al repository con productos validados
+            # Llamar al repository
             exito = self.venta_repo.actualizar_venta_completa(venta_id, productos_validados)
             
             if exito:
-                # ✅ FORZAR actualización inmediata de datos
                 self._invalidar_cache_completo()
                 self._cargar_ventas_hoy(usar_cache=False)
                 self._cargar_estadisticas(usar_cache=False)
                 
-                # Calcular nuevo total
                 nuevo_total = sum(float(p.get('subtotal', 0)) for p in productos_validados)
                 
-                # Emitir signals
                 self.ventaActualizada.emit(venta_id, nuevo_total)
                 self.operacionExitosa.emit(f"Venta {venta_id} actualizada exitosamente")
                 
-                print(f"ÉXITO: Venta {venta_id} actualizada con {len(productos_validados)} productos")
+                print(f"✅ Venta {venta_id} actualizada")
                 return True
             else:
                 self.operacionError.emit("Error en base de datos al actualizar la venta")
                 return False
                 
         except Exception as e:
-            print(f"ERROR en actualizar_venta_completa: {e}")
-            error_msg = str(e)
-            
-            # Mensajes de error más específicos
-            if "Stock insuficiente" in error_msg:
-                self.operacionError.emit("Stock insuficiente para uno o más productos")
-            elif "Venta no encontrada" in error_msg:
-                self.operacionError.emit("La venta a editar no existe")
-            elif "timeout" in error_msg.lower():
-                self.operacionError.emit("Operación demorada. Intente nuevamente.")
-            else:
-                self.operacionError.emit(f"Error actualizando venta: {error_msg}")
-            
+            print(f"❌ Error en actualizar_venta_completa: {e}")
+            self.operacionError.emit(f"Error actualizando venta: {str(e)}")
             return False
-    def _invalidar_cache_completo(self):
-        """
-        ✅ NUEVO: Invalida completamente todos los caches
-        """
-        try:
-            # Invalidar cache de venta repository
-            if hasattr(self.venta_repo, '_invalidate_cache_after_modification'):
-                self.venta_repo._invalidate_cache_after_modification()
-            
-            # Invalidar cache de producto repository
-            if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
-                self.producto_repo._invalidate_cache_after_modification()
-            
-            print("Cache completamente invalidado")
-            
-        except Exception as e:
-            print(f"Error invalidando cache: {e}")
-
-    @Slot(result=bool)
-        
+    
     @Slot(int, result=bool)
     def eliminar_venta(self, venta_id: int):
-        """
-        ✅ NUEVO: Elimina una venta y restaura stock (solo Admin)
-        """
-        if not self._verificar_permisos('eliminar_venta'):
-            return False
+        """Elimina venta - ✅ SOLO ADMIN"""
         
         if venta_id <= 0:
             self.operacionError.emit("ID de venta inválido")
@@ -474,19 +370,16 @@ class VentaModel(QObject):
             if hasattr(self.venta_repo, 'eliminar_venta'):
                 exito = self.venta_repo.eliminar_venta(venta_id)
             else:
-                # Usar método de anulación como fallback
                 exito = self.venta_repo.anular_venta(venta_id, "Eliminación por administrador")
             
             if exito:
-                # Actualizar datos locales
                 self._cargar_ventas_hoy(usar_cache=False)
                 self._cargar_estadisticas(usar_cache=False)
                 
-                # Emitir signals
                 self.ventaEliminada.emit(venta_id)
                 self.operacionExitosa.emit(f"Venta {venta_id} eliminada exitosamente")
                 
-                print(f"✅ Venta {venta_id} eliminada correctamente")
+                print(f"✅ Venta {venta_id} eliminada")
                 return True
             else:
                 self.operacionError.emit("Error eliminando la venta")
@@ -497,62 +390,14 @@ class VentaModel(QObject):
             self.operacionError.emit(f"Error eliminando venta: {str(e)}")
             return False
     
-    @Slot(int, result=bool)
-    def puede_editar_venta(self, venta_id: int):
-        """
-        ✅ NUEVO: Verifica si el usuario puede editar una venta específica
-        """
-        if not self._verificar_autenticacion():
-            return False
-        
-        # Solo Admin puede editar
-        if self._usuario_rol != "Administrador":
-            return False
-        
-        # Verificar que la venta existe
-        try:
-            venta = self.venta_repo.get_venta_completa(venta_id)
-            return venta is not None
-        except:
-            return False
-    
-    @Slot(int, result=bool)
-    def puede_eliminar_venta(self, venta_id: int):
-        """
-        ✅ NUEVO: Verifica si el usuario puede eliminar una venta específica
-        """
-        if not self._verificar_autenticacion():
-            return False
-        
-        # Solo Admin puede eliminar
-        if self._usuario_rol != "Administrador":
-            return False
-        
-        # Verificar que la venta existe
-        try:
-            venta = self.venta_repo.get_venta_completa(venta_id)
-            return venta is not None
-        except:
-            return False
-    
     # ===============================
-    # PROPERTIES PARA QML (MODIFICADAS CON FILTRADO)
+    # ✅ PROPERTIES SIMPLIFICADAS (SIN FILTROS RESTRICTIVOS)
     # ===============================
     
     @Property(list, notify=ventasHoyChanged)
     def ventas_hoy(self):
-
-        """Lista de ventas del día actual (con restricciones por rol)"""
-        # ✅ FILTRAR POR ROL: Médico solo ve sus propias ventas
-        if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
-            ventas_filtradas_por_usuario = [
-                venta for venta in self._ventas_hoy 
-                if venta.get('Id_Usuario') == self._usuario_actual_id
-            ]
-            return ventas_filtradas_por_usuario
-        
-        # Admin ve todas las ventas
-        return self._ventas_hoy
+        """Lista de ventas del día - ✅ TODOS PUEDEN VER TODAS"""
+        return self._ventas_hoy  # Sin filtros por rol
     
     @Property('QVariant', notify=ventaActualChanged)
     def venta_actual(self):
@@ -566,11 +411,8 @@ class VentaModel(QObject):
     
     @Property('QVariant', notify=estadisticasChanged)
     def estadisticas(self):
-        """MODIFICADO: Estadísticas con información limitada para Médico"""
-        # Admin ve todas las estadísticas
-        estadisticas_completas = self._estadisticas.copy()
-        estadisticas_completas['mostrar_limitado'] = False  # NUEVO: Flag para UI
-        return estadisticas_completas
+        """Estadísticas - ✅ TODOS PUEDEN VER"""
+        return self._estadisticas
     
     @Property(list, notify=topProductosChanged)
     def top_productos(self):
@@ -594,13 +436,12 @@ class VentaModel(QObject):
     
     @Property(int, notify=ventasHoyChanged)
     def total_ventas_hoy(self):
-        """Total de ventas mostradas (con restricciones aplicadas)"""
-        ventas_a_mostrar = self.ventas_hoy  # Usa la property que ya filtra por rol
-        return len(ventas_a_mostrar)
+        """Total de ventas del día"""
+        return len(self._ventas_hoy)
     
     @Property(float, notify=estadisticasChanged)
     def ingresos_hoy(self):
-        """MODIFICADO: Ingresos con restricción para Médico"""
+        """Ingresos del día"""
         return float(self._estadisticas.get('Ingresos_Total', 0))
     
     @Property(float, notify=carritoCambiado)
@@ -614,95 +455,57 @@ class VentaModel(QObject):
         return len(self._carrito_items)
     
     # ===============================
-    # NUEVAS PROPERTIES DE PERMISOS PARA QML
+    # ✅ PROPERTIES DE PERMISOS SIMPLIFICADAS
     # ===============================
     
     @Property(bool, notify=operacionExitosa)
     def puede_crear_ventas(self):
-        """Indica si puede crear ventas - Admin y Médico pueden"""
-        return self._usuario_rol in ["Administrador", "Médico"]
+        """✅ TODOS pueden crear ventas"""
+        return True
     
     @Property(bool, notify=operacionExitosa)
     def puede_ver_todas_ventas(self):
-        """Indica si puede ver ventas de otros usuarios - Todos los usuarios"""
+        """✅ TODOS pueden ver todas las ventas"""
         return True
     
     @Property(bool, notify=operacionExitosa)
     def puede_ver_reportes_financieros(self):
-        """Indica si puede ver información financiera completa - Solo Admin"""
-        return self._usuario_rol == "Administrador"
+        """✅ TODOS pueden ver reportes"""
+        return True
     
     @Property(bool, notify=operacionExitosa)
     def puede_modificar_precios(self):
-        """Indica si puede modificar precios en carrito - Solo Admin"""
-        return self._usuario_rol == "Administrador"
+        """✅ TODOS pueden modificar precios"""
+        return True
     
     @Property(bool, notify=operacionExitosa)
     def puede_exportar_datos(self):
-        """Indica si puede exportar reportes - Solo Admin"""
-        return self._usuario_rol == "Administrador"
+        """✅ TODOS pueden exportar"""
+        return True
     
     @Property(bool, notify=operacionExitosa)
     def mostrar_informacion_limitada(self):
-        """Indica si mostrar información limitada - Para Médicos"""
-        return self._usuario_rol == "Médico"
+        """✅ NO mostrar información limitada"""
+        return False
     
-    # ✅ NUEVAS PROPERTIES PARA EDITAR/ELIMINAR
     @Property(bool, notify=operacionExitosa)
     def puede_editar_ventas(self):
-        """Indica si puede editar ventas - Solo Admin"""
-        return self._usuario_rol == "Administrador"
+        """✅ TODOS pueden editar ventas"""
+        return True
     
     @Property(bool, notify=operacionExitosa)
     def puede_eliminar_ventas(self):
-        """Indica si puede eliminar ventas - Solo Admin"""
+        """✅ SOLO ADMIN puede eliminar"""
         return self._usuario_rol == "Administrador"
     
     # ===============================
-    # NUEVAS PROPERTIES CALCULADAS PARA FILTROS
-    # ===============================
-    
-    @Property(bool, notify=operacionExitosa)
-    def debe_filtrar_por_usuario(self):
-        """Indica si debe filtrar automáticamente por usuario actual"""
-        return self._usuario_rol == "Médico"
-    
-    @Property(str, notify=operacionExitosa)
-    def texto_usuario_limitado(self):
-        """Texto descriptivo para usuario con permisos limitados"""
-        return ""
-    
-    # ===============================
-    # SLOTS PARA QML - CONFIGURACIÓN
-    # ===============================
-    
-    @Slot()
-    def refresh_ventas_hoy(self):
-        """Refresca las ventas del día"""
-        # ✅ VERIFICAR AUTENTICACIÓN ANTES DE REFRESCO
-        if not self._verificar_autenticacion():
-            return 
-        self._cargar_ventas_hoy(usar_cache=False)
-    
-    @Slot()
-    def refresh_estadisticas(self):
-        """Refresca las estadísticas"""
-        # ✅ VERIFICAR AUTENTICACIÓN
-        if not self._verificar_autenticacion():
-            return
-        
-        self._cargar_estadisticas(usar_cache=False)
-    
-    # ===============================
-    # SLOTS PARA QML - CARRITO (CON VERIFICACIÓN)
+    # ✅ CARRITO (SIN VERIFICACIÓN DE PERMISOS)
     # ===============================
     
     @Slot(str, int, float)
     def agregar_item_carrito(self, codigo: str, cantidad: int, precio_custom: float = 0):
-        """
-        ✅ CORREGIDO: Agrega item al carrito con verificación FIFO
-        """
-        if not self._verificar_permisos('agregar_carrito'):
+        """Agrega item al carrito - ✅ DISPONIBLE PARA TODOS"""
+        if not self._verificar_autenticacion():  # Solo autenticación
             return
         
         if not codigo or cantidad <= 0:
@@ -710,14 +513,14 @@ class VentaModel(QObject):
             return
         
         try:
-            # PASO 1: Obtener producto con stock calculado desde lotes
+            # Obtener producto
             producto = self.venta_repo.get_producto_por_codigo(codigo.strip())
             if not producto:
                 raise ProductoNotFoundError(codigo=codigo)
             
             print(f"🛒 Producto encontrado: {producto['id']} - {producto['Nombre']}")
             
-            # PASO 2: Verificar disponibilidad FIFO para la cantidad solicitada
+            # Verificar disponibilidad
             verificacion = self.verificar_disponibilidad_para_cantidad(codigo, cantidad)
             if not verificacion['disponible']:
                 raise StockInsuficienteError(
@@ -726,11 +529,10 @@ class VentaModel(QObject):
                     cantidad
                 )
             
-            # Usar precio personalizado o precio del producto
             precio = precio_custom if precio_custom > 0 else float(producto['Precio_venta'])
             subtotal = cantidad * precio
             
-            # PASO 3: Verificar si ya existe en carrito
+            # Verificar si ya existe en carrito
             item_existente = None
             for item in self._carrito_items:
                 if item['codigo'] == codigo.strip():
@@ -738,7 +540,6 @@ class VentaModel(QObject):
                     break
             
             if item_existente:
-                # Actualizar cantidad existente - VERIFICAR DISPONIBILIDAD TOTAL
                 nueva_cantidad = item_existente['cantidad'] + cantidad
                 
                 verificacion_total = self.verificar_disponibilidad_para_cantidad(codigo, nueva_cantidad)
@@ -752,7 +553,6 @@ class VentaModel(QObject):
                 item_existente['cantidad'] = nueva_cantidad
                 item_existente['subtotal'] = nueva_cantidad * precio
             else:
-                # Agregar nuevo item
                 nuevo_item = {
                     'codigo': codigo.strip(),
                     'producto_id': producto['id'],
@@ -768,8 +568,8 @@ class VentaModel(QObject):
                 self._carrito_items.append(nuevo_item)
             
             self.carritoCambiado.emit()
-            self.operacionExitosa.emit(f"Agregado: {cantidad}x {codigo} (Verificado FIFO)")
-            print(f"🛒 Item agregado con FIFO - {codigo}: {cantidad}x${precio}")
+            self.operacionExitosa.emit(f"Agregado: {cantidad}x {codigo}")
+            print(f"🛒 Item agregado - {codigo}: {cantidad}x${precio}")
             
         except Exception as e:
             error_msg = f"Error agregando item: {str(e)}"
@@ -791,7 +591,7 @@ class VentaModel(QObject):
     
     @Slot(str, int)
     def actualizar_cantidad_carrito(self, codigo: str, nueva_cantidad: int):
-        """✅ MODIFICADO: Actualiza cantidad verificando stock desde tabla Productos"""
+        """Actualiza cantidad en carrito"""
         if not codigo or nueva_cantidad < 0:
             return
         
@@ -802,7 +602,6 @@ class VentaModel(QObject):
         try:
             for item in self._carrito_items:
                 if item['codigo'] == codigo.strip():
-                    # ✅ VERIFICAR STOCK ACTUAL DESDE TABLA PRODUCTOS
                     if hasattr(self.venta_repo, 'get_producto_por_codigo'):
                         producto = self.venta_repo.get_producto_por_codigo(codigo.strip())
                     else:
@@ -821,7 +620,7 @@ class VentaModel(QObject):
                     
                     item['cantidad'] = nueva_cantidad
                     item['subtotal'] = nueva_cantidad * item['precio']
-                    item['stock_disponible'] = stock_disponible  # Actualizar stock disponible
+                    item['stock_disponible'] = stock_disponible
                     break
             
             self.carritoCambiado.emit()
@@ -838,16 +637,15 @@ class VentaModel(QObject):
         self.operacionExitosa.emit("Carrito limpiado")
     
     # ===============================
-    # SLOTS PARA QML - VENTAS (CON VERIFICACIÓN) - ✅ CORREGIDO
+    # ✅ PROCESAMIENTO DE VENTAS (DISPONIBLE PARA TODOS)
     # ===============================
+    
     @Slot(result=bool)
     def procesar_venta_carrito(self):
-        """
-        ✅ CORREGIDO: Procesar venta con invalidación COMPLETA de cache
-        """
+        """Procesa venta - ✅ DISPONIBLE PARA TODOS"""
         print(f"INICIO procesar_venta_carrito - Items: {len(self._carrito_items)}")
         
-        if not self._verificar_permisos('crear_venta'):
+        if not self._verificar_autenticacion():  # Solo autenticación
             return False
         
         if not self._carrito_items:
@@ -857,7 +655,7 @@ class VentaModel(QObject):
         self._set_procesando_venta(True)
         
         try:
-            # ✅ VALIDAR stock ANTES de procesar
+            # Validar stock antes de procesar
             for i, item in enumerate(self._carrito_items):
                 codigo = str(item.get('codigo', '')).strip()
                 cantidad = int(item.get('cantidad', 0))
@@ -886,44 +684,40 @@ class VentaModel(QObject):
             
             print(f"Items preparados para repository: {len(items_venta)}")
             
-            # ✅ PROCESAR venta
+            # Procesar venta
             venta = self.venta_repo.crear_venta(self._usuario_actual_id, items_venta)
             
             if venta and isinstance(venta, dict) and 'id' in venta:
                 # Limpiar carrito
                 self.limpiar_carrito()
                 
-                # ✅ INVALIDACIÓN COMPLETA DE TODOS LOS CACHES
+                # Invalidar cache y recargar
                 self._invalidar_cache_completo()
-                self._invalidar_cache_productos()  # NUEVO método
+                self._invalidar_cache_productos()
                 
-                # ✅ FORZAR RECARGA SIN CACHE
                 self._cargar_ventas_hoy(usar_cache=False)
                 self._cargar_estadisticas(usar_cache=False)
                 
-                # ✅ EMITIR SIGNAL ESPECÍFICO PARA ACTUALIZAR BÚSQUEDAS DE PRODUCTOS
+                # Emitir signals
                 self.stockModificado.emit()
-                self.operacionExitosa.emit("Stock actualizado - busque nuevamente el producto")
+                self.operacionExitosa.emit("Venta procesada exitosamente")
                 
-                # Forzar emisión de signals
                 self.ventasHoyChanged.emit()
                 self.estadisticasChanged.emit()
                 
-                # Establecer venta actual
                 self._venta_actual = venta
                 self.ventaActualChanged.emit()
                 
-                # Emitir signals de éxito
                 self.ventaCreada.emit(int(venta['id']), float(venta['Total']))
                 self.operacionExitosa.emit(f"Venta procesada: ${venta['Total']:.2f}")
                 
-                print(f"ÉXITO: Venta creada - ID: {venta['id']}, Total: ${venta['Total']}")
+                print(f"✅ Venta creada - ID: {venta['id']}, Total: ${venta['Total']}")
                 return True
             else:
                 raise VentaError("Respuesta inválida del repository")
                 
         except Exception as e:
-            print(f"ERROR en procesar_venta_carrito: {e}")
+            print(f"❌ Error en procesar_venta_carrito: {e}")
             error_msg = str(e)
             
             if "Stock insuficiente" in error_msg:
@@ -936,23 +730,36 @@ class VentaModel(QObject):
             return False
         finally:
             self._set_procesando_venta(False)
-
-    def _invalidar_cache_productos(self):
-        """
-        ✅ NUEVO: Invalida específicamente el cache de productos
-        """
+    
+    # ===============================
+    # RESTO DE MÉTODOS (SIN CAMBIOS SIGNIFICATIVOS)
+    # ===============================
+    
+    def _invalidar_cache_completo(self):
+        """Invalida completamente todos los caches"""
         try:
-            # Invalidar cache del ProductoRepository
+            if hasattr(self.venta_repo, '_invalidate_cache_after_modification'):
+                self.venta_repo._invalidate_cache_after_modification()
+            
+            if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
+                self.producto_repo._invalidate_cache_after_modification()
+            
+            print("Cache completamente invalidado")
+            
+        except Exception as e:
+            print(f"Error invalidando cache: {e}")
+    
+    def _invalidar_cache_productos(self):
+        """Invalida específicamente el cache de productos"""
+        try:
             if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
                 self.producto_repo._invalidate_cache_after_modification()
                 print("🔄 Cache ProductoRepository invalidado")
             
-            # Invalidar cache del VentaRepository para búsquedas de productos
             if hasattr(self.venta_repo, '_invalidate_cache_after_modification'):
                 self.venta_repo._invalidate_cache_after_modification()
                 print("🔄 Cache VentaRepository invalidado")
             
-            # Forzar que las próximas búsquedas sean sin cache
             if hasattr(self.venta_repo, '_force_reload_productos'):
                 self.venta_repo._force_reload_productos = True
             
@@ -960,94 +767,26 @@ class VentaModel(QObject):
             
         except Exception as e:
             print(f"⚠️ Error invalidando cache de productos: {e}")
-
-    @Slot(str, int, int, result=bool)
-    def venta_rapida(self, codigo: str, cantidad: int, usuario_id: int = 0):
-        """Venta rápida de un producto sin usar carrito - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
-        # ✅ VERIFICAR AUTENTICACIÓN Y PERMISOS
-        if not self._verificar_permisos('crear_venta'):
-            return False
-        
-        if not codigo or cantidad <= 0:
-            self.operacionError.emit("Parámetros inválidos")
-            return False
-        
-        # Usar usuario autenticado, ignorar parámetro usuario_id
-        usuario = self._usuario_actual_id
-        
-        self._set_procesando_venta(True)
-        
-        try:
-            # ✅ OBTENER PRODUCTO DESDE TABLA PRODUCTOS
-            if hasattr(self.venta_repo, 'get_producto_por_codigo'):
-                producto = self.venta_repo.get_producto_por_codigo(codigo.strip())
-            else:
-                producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
-            
-            if not producto:
-                raise ProductoNotFoundError(codigo=codigo)
-            
-            # Crear item de venta
-            items = [{
-                'codigo': codigo.strip(),
-                'cantidad': cantidad,
-                'precio': float(producto['Precio_venta'])
-            }]
-            
-            # Procesar venta
-            venta = safe_execute(self.venta_repo.crear_venta, usuario, items)
-            
-            if venta:
-                # ✅ Actualización inmediata después de venta rápida
-                self._cargar_ventas_hoy(usar_cache=False)
-                self._cargar_estadisticas(usar_cache=False)
-                self.ventasHoyChanged.emit()
-                self.estadisticasChanged.emit()
-                
-                self.ventaCreada.emit(venta['id'], float(venta['Total']))
-                mensaje_exito = f"Venta rápida: ${venta['Total']:.2f}"
-                if self._usuario_rol == "Médico":
-                    mensaje_exito += f" (Usuario: {self._usuario_actual_id})"
-                
-                self.operacionExitosa.emit(mensaje_exito)
-                print(f"🚀 Venta rápida exitosa - Usuario: {self._usuario_actual_id} ({self._usuario_rol})")
-                
-                return True
-            else:
-                raise VentaError("Error en venta rápida")
-                
-        except Exception as e:
-            self.operacionError.emit(f"Error en venta rápida: {str(e)}")
-            return False
-        finally:
-            self._set_procesando_venta(False)
     
-    # ===============================
-    # NUEVOS SLOTS PARA VERIFICACIÓN DE PERMISOS DESDE QML
-    # ===============================
-    
-    @Slot(str, result=bool)
-    def tiene_permiso(self, accion: str):
-        """Verifica permisos específicos desde QML"""
+    # ✅ MÉTODOS DE REFRESH (SIN RESTRICCIONES)
+    @Slot()
+    def refresh_ventas_hoy(self):
+        """Refresca las ventas del día"""
         if not self._verificar_autenticacion():
-            return False
-        
-        permisos = {
-            'crear_venta': self._usuario_rol in ["Administrador", "Médico"],
-            'ver_todas_ventas': self._usuario_rol == "Administrador", 
-            'modificar_precios': self._usuario_rol == "Administrador",
-            'exportar_datos': self._usuario_rol == "Administrador",
-            'ver_reportes_financieros': self._usuario_rol == "Administrador",
-            'editar_venta': self._usuario_rol == "Administrador",  # ✅ NUEVO
-            'eliminar_venta': self._usuario_rol == "Administrador"  # ✅ NUEVO
-        }
-        
-        return permisos.get(accion, False)
+            return 
+        self._cargar_ventas_hoy(usar_cache=False)
     
+    @Slot()
+    def refresh_estadisticas(self):
+        """Refresca las estadísticas"""
+        if not self._verificar_autenticacion():
+            return
+        self._cargar_estadisticas(usar_cache=False)
+    
+    # ✅ VERIFICACIÓN DE STOCK (SIN RESTRICCIONES)
+    @Slot(str, result='QVariantMap')
     def verificar_disponibilidad_producto(self, codigo: str):
-        """
-        ✅ CORREGIDO: SIEMPRE verifica sin cache para datos frescos
-        """
+        """Verifica disponibilidad sin restricciones"""
         if not self._verificar_autenticacion():
             return {"cantidad_disponible": 0, "disponible": False, "error": "No autenticado"}
         
@@ -1055,7 +794,6 @@ class VentaModel(QObject):
             return {"cantidad_disponible": 0, "disponible": False, "error": "Código requerido"}
         
         try:
-            # ✅ USAR MÉTODO ESPECÍFICO SIN CACHE
             producto = self.venta_repo.get_producto_por_codigo_sin_cache(codigo.strip())
             if not producto:
                 return {
@@ -1074,11 +812,11 @@ class VentaModel(QObject):
                 "nombre": producto.get('Nombre', ''),
                 "precio_venta": float(producto.get('Precio_venta', 0)),
                 "lotes_activos": producto.get('Lotes_Activos', 0),
-                "consulta_sin_cache": True,  # Indicador para debug
+                "consulta_sin_cache": True,
                 "timestamp": datetime.now().isoformat()
             }
             
-            print(f"✅ Verificación SIN CACHE para {codigo}: {stock_total} unidades disponibles")
+            print(f"✅ Verificación para {codigo}: {stock_total} unidades disponibles")
             return resultado
             
         except Exception as e:
@@ -1089,32 +827,10 @@ class VentaModel(QObject):
                 "disponible": False, 
                 "error": error_msg
             }
-    @Slot(str)
-    def refrescar_stock_producto(self, codigo: str):
-        """
-        ✅ NUEVO: Refresca stock específico de un producto
-        """
-        if not codigo:
-            return
-        
-        try:
-            # Invalidar cache primero
-            self._invalidar_cache_productos()
-            
-            # Obtener stock fresco
-            stock_info = self.verificar_disponibilidad_producto(codigo)
-            
-            # Emitir signal para que UI se actualice
-            self.stockModificado.emit()
-            self.operacionExitosa.emit(f"Stock actualizado para {codigo}: {stock_info.get('cantidad_disponible', 0)} unidades")
-            
-        except Exception as e:
-            self.operacionError.emit(f"Error refrescando stock: {str(e)}")
+    
     @Slot(str, int, result='QVariantMap')
     def verificar_disponibilidad_para_cantidad(self, codigo: str, cantidad_solicitada: int):
-        """
-        ✅ NUEVO: Verifica disponibilidad FIFO para una cantidad específica
-        """
+        """Verifica disponibilidad FIFO para cantidad específica"""
         if not self._verificar_autenticacion():
             return {"disponible": False, "error": "No autenticado"}
         
@@ -1122,18 +838,15 @@ class VentaModel(QObject):
             return {"disponible": False, "error": "Parámetros inválidos"}
         
         try:
-            # Obtener producto
             producto = self.venta_repo.get_producto_por_codigo(codigo.strip())
             if not producto:
                 return {"disponible": False, "error": f"Producto {codigo} no encontrado"}
             
-            # Usar sistema FIFO para verificar disponibilidad específica
             disponibilidad = self.producto_repo.verificar_disponibilidad_fifo(
                 producto['id'], 
                 cantidad_solicitada
             )
             
-            # Agregar información adicional
             resultado = {
                 "disponible": disponibilidad['disponible'],
                 "cantidad_solicitada": cantidad_solicitada,
@@ -1146,7 +859,6 @@ class VentaModel(QObject):
                 "puede_procesar": disponibilidad['disponible']
             }
             
-            # Información detallada de lotes que se usarían
             if disponibilidad['disponible']:
                 lotes_info = []
                 for lote_info in disponibilidad.get('lotes_necesarios', []):
@@ -1166,65 +878,43 @@ class VentaModel(QObject):
             error_msg = f"Error verificando cantidad para {codigo}: {str(e)}"
             print(f"❌ {error_msg}")
             return {"disponible": False, "error": error_msg}
-        
-    @Slot(result=str)
-    def get_rol_display(self):
-        """Obtiene el rol formateado para mostrar en UI"""
-        roles_display = {
-            "Administrador": "Admin",
-            "Médico": "Médico"
-        }
-        return roles_display.get(self._usuario_rol, self._usuario_rol)
     
-    # ===============================
-    # MÉTODOS DE CONSULTA (CON RESTRICCIONES)
-    # ===============================
+    # ✅ OBTENER DETALLE DE VENTA (SIN RESTRICCIONES DE ROL)
     @Slot(int, result='QVariantMap')
     def obtener_detalle_venta(self, venta_id: int):
-        """Obtiene el detalle completo de una venta específica CON PRODUCTOS CONSOLIDADOS"""
+        """Obtiene detalle de venta - ✅ DISPONIBLE PARA TODOS"""
         try:
-            print(f"🔍 VentaModel: Obteniendo detalle de venta {venta_id}")
+            print(f"🔍 Obteniendo detalle de venta {venta_id}")
             
             if not self._verificar_autenticacion():
                 return {}
             
             if not isinstance(venta_id, int) or venta_id <= 0:
-                print(f"❌ VentaModel: ID de venta inválido: {venta_id}")
+                print(f"❌ ID de venta inválido: {venta_id}")
                 return {}
             
             try:
-                # ✅ USAR MÉTODO CONSOLIDADO PARA UI
                 detalle = self.venta_repo.get_venta_completa_consolidada(venta_id)
-                print(f"🔍 VentaModel: Detalle consolidado obtenido del repository")
+                print(f"🔍 Detalle consolidado obtenido del repository")
                 
                 if not detalle:
-                    print(f"❌ VentaModel: No se encontró venta con ID {venta_id}")
+                    print(f"❌ No se encontró venta con ID {venta_id}")
                     return {}
                 
-
-                # Verificar permisos: Médico solo puede ver sus propias ventas
-                if self._usuario_rol == "Médico":
-                    if detalle.get('Id_Usuario') != self._usuario_actual_id:
-                        self.operacionError.emit("No tiene permisos para ver esta venta")
-                        return {}
+                # ✅ NO VERIFICAR PERMISOS POR ROL - TODOS PUEDEN VER
                 
-                # CORREGIDO: Procesar detalles para asegurar que tengan subtotales
+                # Procesar detalles
                 detalles_procesados = []
                 if detalle.get('detalles'):
                     for item in detalle['detalles']:
-                        # Asegurar que todos los campos numéricos estén correctos
                         cantidad = float(item.get('Cantidad_Unitario', 0))
                         precio = float(item.get('Precio_Unitario', 0))
                         subtotal_bd = float(item.get('Subtotal', 0))
                         
-                        # Si no hay subtotal en BD, calcularlo
                         if subtotal_bd <= 0:
                             subtotal_calculado = cantidad * precio
-                            print(f"⚠️ Subtotal calculado para {item.get('Producto_Codigo')}: {cantidad} x {precio} = {subtotal_calculado}")
-
                         else:
                             subtotal_calculado = subtotal_bd
-                            print(f"✅ Subtotal de BD para {item.get('Producto_Codigo')}: {subtotal_bd}")
                         
                         detalle_procesado = {
                             'Producto_Codigo': str(item.get('Producto_Codigo', '')),
@@ -1232,80 +922,47 @@ class VentaModel(QObject):
                             'Marca_Nombre': str(item.get('Marca_Nombre', '')),
                             'Cantidad_Unitario': cantidad,
                             'Precio_Unitario': precio,
-                            'Subtotal': subtotal_calculado,  # ASEGURAR SUBTOTAL CORRECTO
+                            'Subtotal': subtotal_calculado,
                             'Fecha_Vencimiento': item.get('Fecha_Vencimiento')
                         }
                         
                         detalles_procesados.append(detalle_procesado)
                 
-                # Formatear resultado para QML
                 resultado = {
                     'id': int(detalle['id']),
                     'fecha': detalle['Fecha'].strftime('%Y-%m-%d %H:%M') if hasattr(detalle['Fecha'], 'strftime') else str(detalle['Fecha']),
                     'vendedor': str(detalle.get('Vendedor', 'Usuario desconocido')),
                     'total': float(detalle['Total']),
-                    'detalles': detalles_procesados,  # USAR DETALLES PROCESADOS
+                    'detalles': detalles_procesados,
                     'total_items': len(detalles_procesados),
                     'es_propia': detalle.get('Id_Usuario') == self._usuario_actual_id,
-                    'puede_editar': self.puede_editar_venta(venta_id),
-                    'puede_eliminar': self.puede_eliminar_venta(venta_id)
+                    'puede_editar': True,  # ✅ TODOS PUEDEN EDITAR
+                    'puede_eliminar': self._usuario_rol == "Administrador"  # Solo admin elimina
                 }
                 
-                # VERIFICACIÓN: Calcular total de subtotales para debug
                 total_calculado = sum(item['Subtotal'] for item in detalles_procesados)
-                print(f"📊 VentaModel: Total BD: {resultado['total']}, Total calculado: {total_calculado}")
+                print(f"📊 Total BD: {resultado['total']}, Total calculado: {total_calculado}")
                 
-                if abs(total_calculado - resultado['total']) > 0.01:
-                    print(f"⚠️ Discrepancia en totales detectada")
-                
-                print(f"📋 VentaModel: Detalle consolidado formateado exitosamente: {len(detalles_procesados)} productos únicos")
+                print(f"📋 Detalle consolidado formateado: {len(detalles_procesados)} productos únicos")
                 return resultado
                 
             except Exception as repo_error:
-                print(f"❌ VentaModel: Error del repository: {repo_error}")
+                print(f"❌ Error del repository: {repo_error}")
                 return {}
             
         except Exception as e:
-            print(f"❌ VentaModel: Error general obteniendo detalle: {e}")
+            print(f"❌ Error general obteniendo detalle: {e}")
             return {}
-    # ===============================
-    # MÉTODOS PRIVADOS (CON FILTRADO POR ROL) - ✅ CORREGIDOS
-    # ===============================
     
-    def _actualizar_datos_post_venta(self):
-        """✅ CORREGIDO: Actualiza todos los datos después de una venta exitosa"""
-        try:
-            print("🔄 Ejecutando actualización post-venta tardía...")
-            
-            # Recargar ventas del día SIN caché
-            self._cargar_ventas_hoy(usar_cache=False)
-            
-            # Recargar estadísticas SIN caché
-            self._cargar_estadisticas(usar_cache=False)
-            
-            # Emitir señales para forzar actualización de UI
-            self.ventasHoyChanged.emit()
-            self.estadisticasChanged.emit()
-            
-            print("✅ Actualización post-venta tardía completada")
-            
-        except Exception as e:
-            print(f"❌ Error en _actualizar_datos_post_venta: {e}")
-
+    # ✅ MÉTODOS PRIVADOS DE CARGA (SIN FILTROS POR ROL)
     def _cargar_ventas_hoy(self, usar_cache=True):
-        """✅ CORREGIDO: Carga ventas del día actual (se filtra por rol en las properties)"""
-        print(f"🛠 DEBUG VentaModel: _cargar_ventas_hoy() iniciado - usar_cache: {usar_cache}")
+        """Carga ventas del día - ✅ SIN FILTROS POR ROL"""
         try:
-            # ✅ CORREGIDO: Respeta el parámetro usar_cache
             if usar_cache:
                 ventas = safe_execute(self.venta_repo.get_active)
             else:
-                # Forzar recarga sin caché
                 ventas = self.venta_repo.get_active()
             
-            print(f"🛠 DEBUG VentaModel: Ventas desde repository: {len(ventas) if ventas else 0}")
-            
-            # Convertir a formato QML-compatible
             ventas_formateadas = []
             if ventas:
                 for venta in ventas:
@@ -1319,15 +976,14 @@ class VentaModel(QObject):
                             'fecha': venta['Fecha'].strftime('%Y-%m-%d') if hasattr(venta['Fecha'], 'strftime') else str(venta['Fecha']),
                             'hora': venta['Fecha'].strftime('%H:%M') if hasattr(venta['Fecha'], 'strftime') else '00:00',
                             'fechaCompleta': venta['Fecha'].isoformat() if hasattr(venta['Fecha'], 'isoformat') else str(venta['Fecha']),
-                            'Id_Usuario': venta.get('Id_Usuario')  # Para filtrado por rol
+                            'Id_Usuario': venta.get('Id_Usuario')
                         }
                         ventas_formateadas.append(venta_formateada)
                     except Exception as e:
                         print(f"⚠️ Error formateando venta: {e}")
                         continue
             
-            print(f"🛠 DEBUG VentaModel: Ventas formateadas: {len(ventas_formateadas)}")
-            
+            # ✅ NO FILTRAR - MOSTRAR TODAS LAS VENTAS A TODOS
             self._ventas_hoy = ventas_formateadas
             self.ventasHoyChanged.emit()
             
@@ -1337,25 +993,12 @@ class VentaModel(QObject):
             self.ventasHoyChanged.emit()
     
     def _cargar_estadisticas(self, usar_cache=True):
-        """✅ CORREGIDO: Carga estadísticas del día (se filtran por rol en las properties)"""
+        """Carga estadísticas - ✅ COMPLETAS PARA TODOS"""
         try:
             fecha_hoy = datetime.now().strftime('%Y-%m-%d')
             
-            # ✅ CARGAR ESTADÍSTICAS SEGÚN EL ROL
-            if self._usuario_rol == "Médico" and self._usuario_actual_id > 0:
-                # Para médico: solo estadísticas de sus propias ventas
-                if hasattr(self.venta_repo, 'get_ventas_del_dia_por_usuario'):
-                    estadisticas = safe_execute(
-                        self.venta_repo.get_ventas_del_dia_por_usuario, 
-                        fecha_hoy, self._usuario_actual_id
-                    )
-                else:
-                    # Fallback: usar estadísticas generales y filtrarlas después
-                    estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy) if usar_cache else self.venta_repo.get_ventas_del_dia(fecha_hoy)
-            else:
-                # Para admin: estadísticas completas
-                estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy) if usar_cache else self.venta_repo.get_ventas_del_dia(fecha_hoy)
-
+            # ✅ CARGAR ESTADÍSTICAS COMPLETAS PARA TODOS
+            estadisticas = safe_execute(self.venta_repo.get_ventas_del_dia, fecha_hoy) if usar_cache else self.venta_repo.get_ventas_del_dia(fecha_hoy)
             
             if estadisticas and estadisticas.get('resumen'):
                 self._estadisticas = estadisticas['resumen']
@@ -1393,26 +1036,88 @@ class VentaModel(QObject):
         if self._procesando_venta != procesando:
             self._procesando_venta = procesando
             self.procesandoVentaChanged.emit()
-
+    
+    # ✅ MÉTODOS AUXILIARES
+    @Slot(result=str)
+    def get_rol_display(self):
+        """Obtiene el rol formateado para mostrar en UI"""
+        roles_display = {
+            "Administrador": "Admin",
+            "Médico": "Médico"
+        }
+        return roles_display.get(self._usuario_rol, self._usuario_rol)
+    
+    @Slot(str, result=bool)
+    def tiene_permiso(self, accion: str):
+        """✅ SIMPLIFICADO: Solo verificar eliminación"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        # Solo restringir eliminación
+        if accion == 'eliminar_venta':
+            return self._usuario_rol == "Administrador"
+        
+        # ✅ TODAS LAS DEMÁS ACCIONES PERMITIDAS
+        return True
+    
+    @Slot(int, result=bool)
+    def puede_editar_venta(self, venta_id: int):
+        """✅ TODOS pueden editar"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        try:
+            venta = self.venta_repo.get_venta_completa(venta_id)
+            return venta is not None
+        except:
+            return False
+    
+    @Slot(int, result=bool)
+    def puede_eliminar_venta(self, venta_id: int):
+        """✅ SOLO ADMIN puede eliminar"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if self._usuario_rol != "Administrador":
+            return False
+        
+        try:
+            venta = self.venta_repo.get_venta_completa(venta_id)
+            return venta is not None
+        except:
+            return False
+    
+    @Slot(str)
+    def refrescar_stock_producto(self, codigo: str):
+        """Refresca stock específico de un producto"""
+        if not codigo:
+            return
+        
+        try:
+            self._invalidar_cache_productos()
+            stock_info = self.verificar_disponibilidad_producto(codigo)
+            self.stockModificado.emit()
+            self.operacionExitosa.emit(f"Stock actualizado para {codigo}: {stock_info.get('cantidad_disponible', 0)} unidades")
+            
+        except Exception as e:
+            self.operacionError.emit(f"Error refrescando stock: {str(e)}")
+    
     def emergency_disconnect(self):
         """Desconexión de emergencia para VentaModel"""
         try:
             print("🚨 VentaModel: Iniciando desconexión de emergencia...")
             
-            # Detener timer
             if hasattr(self, 'update_timer') and self.update_timer.isActive():
                 self.update_timer.stop()
-                print("   ⏹️ Update timer detenido")
+                print("   ℹ️ Update timer detenido")
             
-            # Establecer estado shutdown
             self._loading = False
             self._procesando_venta = False
             
-            # Desconectar todas las señales
             signals_to_disconnect = [
                 'ventasHoyChanged', 'ventaActualChanged', 'historialVentasChanged',
                 'estadisticasChanged', 'topProductosChanged',
-                'ventaCreada', 'ventaAnulada', 'ventaActualizada', 'ventaEliminada',  # ✅ NUEVO
+                'ventaCreada', 'ventaAnulada', 'ventaActualizada', 'ventaEliminada',
                 'operacionExitosa', 'operacionError',
                 'loadingChanged', 'procesandoVentaChanged', 'carritoCambiado'
             ]
@@ -1431,8 +1136,8 @@ class VentaModel(QObject):
             self._estadisticas = {}
             self._top_productos = []
             self._carrito_items = []
-            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
-            self._usuario_rol = ""       # ✅ RESETEAR ROL
+            self._usuario_actual_id = 0
+            self._usuario_rol = ""
             
             # Anular repositories
             self.venta_repo = None
@@ -1446,4 +1151,4 @@ class VentaModel(QObject):
 # Registrar el tipo para QML
 def register_venta_model():
     qmlRegisterType(VentaModel, "ClinicaModels", 1, 0, "VentaModel")
-    print("✅ VentaModel registrado para QML con autenticación estandarizada, control de roles y funciones CRUD")
+    print("✅ VentaModel registrado con permisos simplificados - Todos pueden ver/crear ventas, solo Admin elimina")

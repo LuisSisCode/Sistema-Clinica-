@@ -556,10 +556,7 @@ Item {
                             width: proveedoresTable.width
                             height: 70
                             
-                            // ✅ AGREGAR DEBUG PARA VER LOS DATOS
-                            Component.onCompleted: {
-                                console.log("🔍 DEBUG Proveedor item:", JSON.stringify(modelData))
-                            }
+                            
                             
                             Rectangle {
                                 anchors.fill: parent

@@ -244,7 +244,7 @@ class CierreCajaRepository(BaseRepository):
                 SELECT 
                     'Compras de Farmacia' as concepto,
                     COUNT(*) as transacciones,
-                    SUM(dc.Cantidad_Unitario * dc.Precio_Unitario) as importe
+                    SUM(dc.Precio_Unitario) as importe
                 FROM Compra c
                 INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
                 WHERE c.Fecha >= ? AND c.Fecha <= ?
@@ -539,7 +539,7 @@ class CierreCajaRepository(BaseRepository):
                 p.Nombre as descripcion,
                 dc.Cantidad_Unitario as cantidad,
                 dc.Precio_Unitario as precio_unitario,
-                (dc.Cantidad_Unitario * dc.Precio_Unitario) as valor,
+                dc.Precio_Unitario as valor,
                 pr.Nombre as proveedor,
                 u.Nombre + ' ' + u.Apellido_Paterno as usuario,
                 'Compras de Farmacia' as categoria,
