@@ -909,7 +909,7 @@ class CompraModel(QObject):
             
             for compra_raw in compras_raw or []:
                 compra_qml = self._format_compra_for_qml(compra_raw)
-                print(f"🔍 DEBUG COMPRA QML: {compra_qml}")
+                #print(f"🔍 DEBUG COMPRA QML: {compra_qml}")
                 compras_transformadas.append(compra_qml)
             
             # ASIGNAR Y EMITIR SIGNAL

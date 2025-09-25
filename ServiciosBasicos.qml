@@ -11,20 +11,25 @@ Item {
     readonly property real screenWidth: width
     readonly property real screenHeight: height
     readonly property real baseUnit: Math.min(screenWidth, screenHeight) / 40
-    readonly property real fontScale: screenHeight / 800
-    
-    // Márgenes escalables
+    readonly property real fontScale: Math.max(1.0, screenHeight / 700) // Mejorado: escala mínima de 1.0
+
+    // Márgenes escalables (sin cambio)
     readonly property real marginSmall: baseUnit * 0.5
     readonly property real marginMedium: baseUnit * 1
     readonly property real marginLarge: baseUnit * 1.5
-    
-    // Tamaños de fuente escalables
-    readonly property real fontTiny: Math.max(8, 10 * fontScale)
-    readonly property real fontSmall: Math.max(10, 12 * fontScale)
-    readonly property real fontBase: Math.max(12, 14 * fontScale)
-    readonly property real fontMedium: Math.max(14, 16 * fontScale)
-    readonly property real fontLarge: Math.max(16, 18 * fontScale)
-    readonly property real fontTitle: Math.max(18, 24 * fontScale)
+
+    // ✅ TAMAÑOS DE FUENTE MEJORADOS - MÁS GRANDES Y LEGIBLES
+    readonly property real fontTiny: Math.max(11, 13 * fontScale)      // Era: (8, 10 * fontScale)
+    readonly property real fontSmall: Math.max(13, 15 * fontScale)     // Era: (10, 12 * fontScale)  
+    readonly property real fontBase: Math.max(15, 17 * fontScale)      // Era: (12, 14 * fontScale)
+    readonly property real fontMedium: Math.max(17, 19 * fontScale)    // Era: (14, 16 * fontScale)
+    readonly property real fontLarge: Math.max(19, 21 * fontScale)     // Era: (16, 18 * fontScale)
+    readonly property real fontTitle: Math.max(22, 28 * fontScale)     // Era: (18, 24 * fontScale)
+
+    // ✅ NUEVOS TAMAÑOS PARA ELEMENTOS ESPECÍFICOS
+    readonly property real fontHeader: Math.max(16, 18 * fontScale)    // Para headers de tabla
+    readonly property real fontButton: Math.max(14, 16 * fontScale)    // Para botones
+    readonly property real fontInput: Math.max(14, 16 * fontScale)
     
     // NUEVA SEÑAL PARA NAVEGACIÓN A CONFIGURACIÓN
     signal irAConfigServiciosBasicos()
@@ -312,10 +317,10 @@ Item {
         var usuarioId = 10  // Cambiar por usuario actual
         
         // LLAMADA DIRECTA AL MÉTODO DEL MODEL
+        // ✅ CORRECTO
         var success = gastoModelInstance.crearGasto(
             tipoGastoId,                    // tipo_gasto_id
             parseFloat(gastoData.monto),    // monto
-            usuarioId,                      // usuario_id
             gastoData.descripcion,          // descripcion
             gastoData.fechaGasto,          // fecha_gasto
             gastoData.proveedor            // proveedor
@@ -626,7 +631,7 @@ Item {
                                 
                                 Label {
                                     text: "Gestión de Servicios Básicos"
-                                    font.pixelSize: fontBase * 0.85
+                                    font.pixelSize: fontMedium        // Era: fontBase * 0.85
                                     font.bold: true
                                     font.family: "Segoe UI, Arial, sans-serif"
                                     color: textColor
@@ -634,7 +639,7 @@ Item {
                                 
                                 Label {
                                     text: "y Gastos Operativos"
-                                    font.pixelSize: fontBase * 0.7
+                                    font.pixelSize: fontBase          // Era: fontBase * 0.7
                                     font.bold: false
                                     font.family: "Segoe UI, Arial, sans-serif"
                                     color: textColor
@@ -700,11 +705,10 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.alignment: Qt.AlignVCenter
                                     text: "Nuevo Gasto"
                                     color: whiteColor
                                     font.bold: true
-                                    font.pixelSize: fontBase * 1.1
+                                    font.pixelSize: fontButton        // Era: fontBase * 1.1
                                     font.family: "Segoe UI, Arial, sans-serif"
                                 }
                             }
@@ -927,7 +931,7 @@ Item {
                                         anchors.centerIn: parent
                                         text: "TIPO DE GASTO"
                                         font.bold: true
-                                        font.pixelSize: fontSmall
+                                        font.pixelSize: fontHeader        // Era: fontSmall
                                         color: textColor
                                     }
                                 }
@@ -1074,7 +1078,7 @@ Item {
                                                     anchors.centerIn: parent
                                                     text: model.tipoGasto
                                                     color: whiteColor
-                                                    font.pixelSize: fontTiny
+                                                    font.pixelSize: fontSmall 
                                                     font.bold: true
                                                 }
                                             }
@@ -1093,7 +1097,7 @@ Item {
                                                 anchors.margins: marginSmall * 0.5
                                                 text: model.descripcion || "Sin descripción"
                                                 color: textColor
-                                                font.pixelSize: fontTiny
+                                                font.pixelSize: fontSmall 
                                                 elide: Text.ElideRight
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
@@ -1120,7 +1124,7 @@ Item {
                                                     return successColor
                                                 }
                                                 font.bold: true
-                                                font.pixelSize: fontTiny
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
@@ -1136,7 +1140,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 text: model.fechaGasto
                                                 color: textColor
-                                                font.pixelSize: fontTiny
+                                                font.pixelSize: fontSmall
                                             }
                                         }
                                         
@@ -1595,7 +1599,7 @@ Item {
                                 text: "Tipo de Gasto:"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: 14
+                                font.pixelSize: fontInput
                             }
                             
                             ComboBox {
@@ -1630,6 +1634,7 @@ Item {
                                 width: parent.width
                                 height: 40
                                 placeholderText: "0.00"
+                                font.pixelSize: fontInput 
                                 validator: DoubleValidator { bottom: 0.0; decimals: 2 }
                             }
                         }
@@ -1708,6 +1713,7 @@ Item {
                                 id: descripcionField
                                 width: parent.width
                                 height: 100
+                                font.pixelSize: fontInput
                                 placeholderText: "Descripción detallada del gasto..."
                                 wrapMode: TextArea.Wrap
                             }
@@ -1742,7 +1748,7 @@ Item {
                         
                         contentItem: Label {
                             text: parent.text
-                            font.pixelSize: 14
+                            font.pixelSize: fontButton 
                             color: textColor
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1776,7 +1782,7 @@ Item {
                         
                         contentItem: Label {
                             text: parent.text
-                            font.pixelSize: 14
+                            font.pixelSize: fontButton
                             font.bold: true
                             color: whiteColor
                             horizontalAlignment: Text.AlignHCenter
