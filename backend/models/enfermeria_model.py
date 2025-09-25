@@ -412,8 +412,8 @@ class EnfermeriaModel(QObject):
             else:
                 filtros_dict = self._filtrosActuales
             
-            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
-            print(f"🔍 Filtros aplicados: {filtros_dict}")
+            #print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
+            #print(f"🔍 Filtros aplicados: {filtros_dict}")
             
             procedimientos = self.repository.obtener_procedimientos_paginados(
                 page * limit_real, limit_real, filtros_dict
@@ -691,38 +691,37 @@ class EnfermeriaModel(QObject):
     
     @Slot('QVariant', int, result=str)
     def actualizar_procedimiento(self, datos_procedimiento, procedimiento_id: int):
-        """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN Y FECHA"""
+        """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN (sin restricción de fecha)"""
         try:
             # ✅ VERIFICAR AUTENTICACIÓN
-            
+            if not self._verificar_autenticacion():
+                return self._crear_respuesta_json(False, "Usuario no autenticado")
+
             self._set_estado_actual("cargando")
-            
+
             if procedimiento_id <= 0:
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "ID de procedimiento inválido")
-            
-            # ✅ VALIDAR FECHA DE EDICIÓN (3 días para enfermería)
-            proc_actual = self.repository.get_procedimiento_by_id(procedimiento_id)
-            if proc_actual and not self._validar_fecha_edicion(proc_actual.get('Fecha'), dias_limite=3):
-                return self._crear_respuesta_json(False, "Procedimiento muy antiguo para editar")
-            
+
+            # Ya no se valida la fecha para edición
+
             # Convertir datos
             if hasattr(datos_procedimiento, 'toVariant'):
                 datos = datos_procedimiento.toVariant()
             else:
                 datos = datos_procedimiento
-            
+
             # Validaciones
             if not self._validar_datos_procedimiento_mejorado(datos):
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "Datos incompletos o inválidos")
-            
+
             # Gestionar paciente
             paciente_id = self._gestionar_paciente_procedimiento(datos)
             if paciente_id <= 0:
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "Error gestionando datos del paciente")
-            
+
             # Preparar datos para actualización
             datos_repo = {
                 'nombreCompleto': datos.get('paciente', '').strip(),
@@ -732,21 +731,21 @@ class EnfermeriaModel(QObject):
                 'tipo': datos.get('tipo', 'Normal'),
                 'idTrabajador': int(datos.get('idTrabajador', 0))
             }
-            
+
             print(f"📝 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando procedimiento ID: {procedimiento_id}")
-            
+
             # Actualizar procedimiento
             exito = self.repository.actualizar_procedimiento_enfermeria(procedimiento_id, datos_repo)
-            
+
             if exito:
                 # Recargar datos
                 self._cargar_procedimientos_actuales()
-                
+
                 # Emitir signals
                 procedimiento_completo = self._obtener_procedimiento_completo(procedimiento_id)
                 self.procedimientoActualizado.emit(self._crear_respuesta_json(True, procedimiento_completo))
                 self.operacionExitosa.emit(f"Procedimiento {procedimiento_id} actualizado correctamente")
-                
+
                 self._set_estado_actual("listo")
                 print(f"✅ Procedimiento {procedimiento_id} actualizado exitosamente")
                 return self._crear_respuesta_json(True, {'procedimiento_id': procedimiento_id})
@@ -755,7 +754,7 @@ class EnfermeriaModel(QObject):
                 self.errorOcurrido.emit(error_msg, 'UPDATE_ERROR')
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, error_msg)
-                
+
         except Exception as e:
             error_msg = f"Error actualizando procedimiento: {str(e)}"
             print(f"⚠️ {error_msg}")

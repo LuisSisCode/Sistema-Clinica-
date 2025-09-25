@@ -37,13 +37,14 @@ Item {
     readonly property color lineColor: "#D1D5DB"
 
     // Distribución de columnas responsive
-    readonly property real colId: 0.05
-    readonly property real colPaciente: 0.16
-    readonly property real colDetalle: 0.20
-    readonly property real colEspecialidad: 0.22
-    readonly property real colTipo: 0.09
-    readonly property real colPrecio: 0.10
-    readonly property real colFecha: 0.10
+    readonly property real colCodigo: 0.06        
+    readonly property real colPaciente: 0.18      
+    readonly property real colEspecialidad: 0.22   
+    readonly property real colDetalles: 0.20       
+    readonly property real colTipo: 0.08          
+    readonly property real colPrecio: 0.09        
+    readonly property real colFecha: 0.09         
+    readonly property real colAcciones: 0.08
 
     // Propiedades para los diálogos
     property bool showNewConsultationDialog: false
@@ -573,7 +574,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER CON LÍNEAS VERTICALES
+                        // HEADER CON LÍNEAS VERTICALES - ESTRUCTURA NUEVA
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -588,14 +589,14 @@ Item {
                                 anchors.rightMargin: baseUnit * 1.5
                                 spacing: 0
                                 
-                                // ID COLUMN
+                                // CÓDIGO COLUMN
                                 Item {
-                                    Layout.preferredWidth: parent.width * colId
+                                    Layout.preferredWidth: parent.width * colCodigo
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ID"
+                                        text: "CÓDIGO"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -634,14 +635,14 @@ Item {
                                     }
                                 }
                                 
-                                // DETALLE COLUMN
+                                // ESPECIALIDAD COLUMN
                                 Item {
-                                    Layout.preferredWidth: parent.width * colDetalle
+                                    Layout.preferredWidth: parent.width * colEspecialidad
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "DETALLE"
+                                        text: "ESPECIALIDAD - DOCTOR"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -657,14 +658,14 @@ Item {
                                     }
                                 }
                                 
-                                // ESPECIALIDAD COLUMN
+                                // DETALLES COLUMN
                                 Item {
-                                    Layout.preferredWidth: parent.width * colEspecialidad
+                                    Layout.preferredWidth: parent.width * colDetalles
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ESPECIALIDAD - DOCTOR"
+                                        text: "DETALLES"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -744,7 +745,7 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES
+                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES - NUEVA ESTRUCTURA
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -786,9 +787,9 @@ Item {
                                         anchors.rightMargin: baseUnit * 1.5
                                         spacing: 0
                                         
-                                        // ID COLUMN
+                                        // CÓDIGO COLUMN
                                         Item {
-                                            Layout.preferredWidth: parent.width * colId
+                                            Layout.preferredWidth: parent.width * colCodigo
                                             Layout.fillHeight: true
                                             
                                             Label {
@@ -847,9 +848,9 @@ Item {
                                             }
                                         }
                                         
-                                        // DETALLE COLUMN
+                                        // ESPECIALIDAD COLUMN
                                         Item {
-                                            Layout.preferredWidth: parent.width * colDetalle
+                                            Layout.preferredWidth: parent.width * colEspecialidad
                                             Layout.fillHeight: true
                                             
                                             Label {
@@ -858,8 +859,8 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.Detalles || "Sin detalles"
-                                                color: textColor
+                                                text: model.especialidad_doctor || "Sin especialidad/doctor"
+                                                color: primaryColor
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -876,9 +877,9 @@ Item {
                                             }
                                         }
                                         
-                                        // ESPECIALIDAD COLUMN
+                                        // DETALLES COLUMN
                                         Item {
-                                            Layout.preferredWidth: parent.width * colEspecialidad
+                                            Layout.preferredWidth: parent.width * colDetalles
                                             Layout.fillHeight: true
                                             
                                             Label {
@@ -887,8 +888,8 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.especialidad_doctor || "Sin especialidad/doctor"
-                                                color: primaryColor
+                                                text: model.Detalles || "Sin detalles"
+                                                color: textColorLight
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -977,7 +978,6 @@ Item {
                                         }
                                     }
 
-                                    
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
@@ -1000,7 +1000,7 @@ Item {
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
                                             
-                                            // ✅ VISIBILIDAD Y HABILITACIÓN BASADA EN PERMISOS
+                                            // Visibilidad y habilitación basada en permisos
                                             visible: consultasRoot.esAdministrador || consultasRoot.esMedico
                                             enabled: {
                                                 if (!model.id) return false
@@ -1040,7 +1040,7 @@ Item {
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
                                             
-                                            // ✅ SOLO ADMINISTRADORES PUEDEN VER Y USAR
+                                            // Solo administradores pueden ver y usar
                                             visible: consultasRoot.esAdministrador || consultasRoot.esMedico
                                             enabled: {
                                                 if (!model.id) return false
@@ -1069,14 +1069,16 @@ Item {
                                             }
                                             
                                             onClicked: {
-                                                eliminarConsulta(index) // Comentado para debug
+                                                eliminarConsulta(index)
                                             }
+                                            
                                             ToolTip {
                                                 visible: deleteButton.hovered
                                                 text: obtenerTooltipEliminacion(parseInt(model.id))
                                                 delay: 500
                                                 timeout: 5000
                                             }
+                                            
                                             onHoveredChanged: {
                                                 if (enabled) {
                                                     deleteIcon.opacity = hovered ? 0.7 : 1.0

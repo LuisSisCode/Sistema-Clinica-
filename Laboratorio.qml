@@ -1,3 +1,4 @@
+// Interfaz de laboratorio
 import QtQuick 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
@@ -39,14 +40,14 @@ Item {
     readonly property color lineColor: "#D1D5DB"
 
     // Distribución de columnas responsive
-    readonly property real colId: 0.05
-    readonly property real colPaciente: 0.18
-    readonly property real colAnalisis: 0.18
-    readonly property real colTipo: 0.09
-    readonly property real colPrecio: 0.10
-    readonly property real colTrabajador: 0.15
-    readonly property real colRegistradoPor: 0.15
-    readonly property real colFecha: 0.10
+    readonly property real colCodigo: 0.06        
+    readonly property real colPaciente: 0.18      
+    readonly property real colAnalisis: 0.20      
+    readonly property real colDetalles: 0.16      
+    readonly property real colEjecutadoPor: 0.14   
+    readonly property real colTipo: 0.08          
+    readonly property real colPrecio: 0.09        
+    readonly property real colFecha: 0.09
 
     // ✅ PROPIEDADES CONSOLIDADAS - SIN DUPLICADOS
     property string analisisIdToDelete: ""
@@ -542,7 +543,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER CON LÍNEAS VERTICALES
+                        // HEADER CON LÍNEAS VERTICALES - ESTRUCTURA NUEVA
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -557,14 +558,14 @@ Item {
                                 anchors.rightMargin: baseUnit * 1.5
                                 spacing: 0
                                 
-                                // ID COLUMN
+                                // CÓDIGO COLUMN
                                 Item {
-                                    Layout.preferredWidth: parent.width * colId
+                                    Layout.preferredWidth: parent.width * colCodigo
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ID"
+                                        text: "CÓDIGO"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -626,6 +627,52 @@ Item {
                                     }
                                 }
                                 
+                                // DETALLES COLUMN (NUEVA)
+                                Item {
+                                    Layout.preferredWidth: parent.width * colDetalles
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "DETALLES"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // EJECUTADO POR COLUMN (CONSOLIDADO)
+                                Item {
+                                    Layout.preferredWidth: parent.width * colEjecutadoPor
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "EJECUTADO POR"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
                                 // TIPO COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colTipo
@@ -672,52 +719,6 @@ Item {
                                     }
                                 }
                                 
-                                // TRABAJADOR COLUMN
-                                Item {
-                                    Layout.preferredWidth: parent.width * colTrabajador
-                                    Layout.fillHeight: true
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "TRABAJADOR"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.85
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        color: textColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                    
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        width: 1
-                                        height: parent.height
-                                        color: lineColor
-                                    }
-                                }
-                                
-                                // REGISTRADO POR COLUMN
-                                Item {
-                                    Layout.preferredWidth: parent.width * colRegistradoPor
-                                    Layout.fillHeight: true
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "REGISTRADO POR"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.85
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        color: textColor
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                    
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        width: 1
-                                        height: parent.height
-                                        color: lineColor
-                                    }
-                                }
-                                
                                 // FECHA COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colFecha
@@ -736,7 +737,7 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES
+                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES - NUEVA ESTRUCTURA
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -782,9 +783,9 @@ Item {
                                         anchors.rightMargin: baseUnit * 1.5
                                         spacing: 0
                                         
-                                        // ID COLUMN
+                                        // CÓDIGO COLUMN
                                         Item {
-                                            Layout.preferredWidth: parent.width * colId
+                                            Layout.preferredWidth: parent.width * colCodigo
                                             Layout.fillHeight: true
                                             
                                             Label {
@@ -843,9 +844,71 @@ Item {
                                             }
                                         }
                                         
-                                        // ANÁLISIS COLUMN MODIFICADA - CON DETALLES
+                                        // ANÁLISIS COLUMN (SIMPLIFICADO)
                                         Item {
                                             Layout.preferredWidth: parent.width * colAnalisis
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: model.tipoAnalisis || "Análisis General"
+                                                color: primaryColor
+                                                font.bold: false
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // DETALLES COLUMN (NUEVA - SEPARADA DE ANÁLISIS)
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colDetalles
+                                            Layout.fillHeight: true
+                                            
+                                            Label {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: baseUnit
+                                                anchors.rightMargin: baseUnit
+                                                text: {
+                                                    var detalles = model.detallesExamen || ""
+                                                    if (detalles && detalles.trim() !== "") {
+                                                        return detalles
+                                                    } else {
+                                                        return "Sin detalles específicos"
+                                                    }
+                                                }
+                                                color: textColorLight
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                font.family: "Segoe UI, Arial, sans-serif"
+                                                elide: Text.ElideRight
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // EJECUTADO POR COLUMN (CONSOLIDADO)
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colEjecutadoPor
                                             Layout.fillHeight: true
                                             
                                             Column {
@@ -854,8 +917,8 @@ Item {
                                                 
                                                 Label {
                                                     width: parent.width - baseUnit
-                                                    text: model.tipoAnalisis || "Análisis General"
-                                                    color: primaryColor
+                                                    text: model.trabajadorAsignado || "Sin asignar"
+                                                    color: textColor
                                                     font.bold: false
                                                     font.pixelSize: fontBaseSize * 0.85
                                                     font.family: "Segoe UI, Arial, sans-serif"
@@ -864,20 +927,11 @@ Item {
                                                 
                                                 Label {
                                                     width: parent.width - baseUnit
-                                                    text: {
-                                                        var detalles = model.detallesExamen || ""
-                                                        if (detalles && detalles.trim() !== "") {
-                                                            return "Detalles: " + detalles
-                                                        } else {
-                                                            return "Sin detalles específicos"
-                                                        }
-                                                    }
+                                                    text: "Por: " + (model.registradoPor || "Sistema")
                                                     color: textColorLight
                                                     font.pixelSize: fontBaseSize * 0.75
                                                     font.family: "Segoe UI, Arial, sans-serif"
                                                     elide: Text.ElideRight
-                                                    wrapMode: Text.WordWrap
-                                                    maximumLineCount: 1
                                                 }
                                             }
                                             
@@ -943,59 +997,6 @@ Item {
                                             }
                                         }
                                         
-                                        // TRABAJADOR COLUMN
-                                        Item {
-                                            Layout.preferredWidth: parent.width * colTrabajador
-                                            Layout.fillHeight: true
-                                            
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                anchors.rightMargin: baseUnit
-                                                text: model.trabajadorAsignado || "Sin asignar"
-                                                color: textColor
-                                                font.bold: false
-                                                font.pixelSize: fontBaseSize * 0.85
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                                elide: Text.ElideRight
-                                            }
-                                            
-                                            Rectangle {
-                                                anchors.right: parent.right
-                                                width: 1
-                                                height: parent.height
-                                                color: lineColor
-                                            }
-                                        }
-                                        
-                                        // REGISTRADO POR COLUMN
-                                        Item {
-                                            Layout.preferredWidth: parent.width * colRegistradoPor
-                                            Layout.fillHeight: true
-                                            
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                anchors.rightMargin: baseUnit
-                                                text: model.registradoPor || "Sistema"
-                                                color: textColorLight
-                                                font.pixelSize: fontBaseSize * 0.75
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                                elide: Text.ElideRight
-                                            }
-                                            
-                                            Rectangle {
-                                                anchors.right: parent.right
-                                                width: 1
-                                                height: parent.height
-                                                color: lineColor
-                                            }
-                                        }
-                                        
                                         // FECHA COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colFecha
@@ -1013,7 +1014,6 @@ Item {
                                             }
                                         }
                                     }
-                                    
                                     
                                     MouseArea {
                                         anchors.fill: parent
@@ -1036,8 +1036,8 @@ Item {
                                             id: editButton
                                             width: baseUnit * 3.5
                                             height: baseUnit * 3.5
-                                            visible: true
-                                            enabled: true
+                                            visible: laboratorioRoot.esAdministrador || laboratorioRoot.esMedico
+                                            enabled: laboratorioRoot.esAdministrador || laboratorioRoot.esMedico
                                             
                                             background: Rectangle {
                                                 color: "transparent"
@@ -1061,8 +1061,7 @@ Item {
                                             ToolTip {
                                                 visible: editButton.hovered
                                                 text: {
-                                                    if (laboratorioRoot.esAdministrador  || laboratorioRoot.esMedico) return "Editar análisis"
-                                                    
+                                                    if (laboratorioRoot.esAdministrador || laboratorioRoot.esMedico) return "Editar análisis"
                                                     return "Sin permisos"
                                                 }
                                             }
@@ -1200,12 +1199,7 @@ Item {
                         }
                         
                         Label {
-                            text: {
-                                var inicio = currentPageLaboratorio * itemsPerPageLaboratorio + 1
-                                var fin = Math.min((currentPageLaboratorio + 1) * itemsPerPageLaboratorio, totalItemsLaboratorio)
-                                return totalItemsLaboratorio + 
-                                    " Página " + (currentPageLaboratorio + 1) + " de " + Math.max(1, totalPagesLaboratorio) + " "
-                            }
+                            text: "Página " + (currentPageLaboratorio + 1) + " de " + (totalPagesLaboratorio > 0 ? totalPagesLaboratorio : 1)
                             color: textColor
                             font.pixelSize: fontBaseSize * 0.8
                             font.family: "Segoe UI, Arial, sans-serif"

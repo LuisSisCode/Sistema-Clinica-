@@ -1,3 +1,4 @@
+// Interfaz de enfermeria
 import QtQuick 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
@@ -45,15 +46,14 @@ Item {
     readonly property color lineColor: "#D1D5DB"
     
     // DISTRIBUCIÓN DE COLUMNAS (sin cambios)
-    readonly property real colId: 0.05
-    readonly property real colPaciente: 0.18
-    readonly property real colProcedimiento: 0.16
-    readonly property real colCantidad: 0.07
-    readonly property real colTipo: 0.09
-    readonly property real colPrecio: 0.10
-    readonly property real colTotal: 0.10
+    readonly property real colCodigo: 0.06        
+    readonly property real colPaciente: 0.18      
+    readonly property real colProcedimiento: 0.18  
+    readonly property real colDetalles: 0.16      
+    readonly property real colEjecutadoPor: 0.14   
+    readonly property real colTipo: 0.08          
+    readonly property real colPrecio: 0.10        
     readonly property real colFecha: 0.10
-    readonly property real colTrabajador: 0.15
     
     // ✅ PROPIEDADES DE PAGINACIÓN CORREGIDAS
     readonly property int currentPageEnfermeria: enfermeriaModel && modeloConectado ? 
@@ -499,11 +499,7 @@ Item {
                                 
                                 currentIndex: 0
                                 onCurrentIndexChanged: {
-                                    console.log("🏥 PROCEDIMIENTO FILTER CHANGED:")
-                                    console.log("   - currentIndex:", currentIndex)
-                                    console.log("   - currentText:", currentText) 
-                                    console.log("   - model length:", model.length)
-                                    console.log("   - model:", JSON.stringify(model))
+                                    
                                     
                                     // ✅ VALIDACIÓN ADICIONAL
                                     if (currentIndex >= 0 && currentIndex < model.length) {
@@ -656,7 +652,7 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER DE TABLA (sin cambios)
+                        // HEADER CON LÍNEAS VERTICALES - ESTRUCTURA NUEVA
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -671,13 +667,14 @@ Item {
                                 anchors.rightMargin: baseUnit * 1.5
                                 spacing: 0
                                 
+                                // CÓDIGO COLUMN
                                 Item {
-                                    Layout.preferredWidth: parent.width * colId
+                                    Layout.preferredWidth: parent.width * colCodigo
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ID"
+                                        text: "CÓDIGO"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -692,6 +689,7 @@ Item {
                                     }
                                 }
                                 
+                                // PACIENTE COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colPaciente
                                     Layout.fillHeight: true
@@ -713,6 +711,7 @@ Item {
                                     }
                                 }
                                 
+                                // PROCEDIMIENTO COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colProcedimiento
                                     Layout.fillHeight: true
@@ -734,13 +733,14 @@ Item {
                                     }
                                 }
                                 
+                                // DETALLES COLUMN (NUEVA)
                                 Item {
-                                    Layout.preferredWidth: parent.width * colCantidad
+                                    Layout.preferredWidth: parent.width * colDetalles
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "CANT."
+                                        text: "DETALLES"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -755,6 +755,29 @@ Item {
                                     }
                                 }
                                 
+                                // EJECUTADO POR COLUMN (REUBICADO)
+                                Item {
+                                    Layout.preferredWidth: parent.width * colEjecutadoPor
+                                    Layout.fillHeight: true
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "EJECUTADO POR"
+                                        font.bold: true
+                                        font.pixelSize: fontBaseSize * 0.85
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                    }
+                                    
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: lineColor
+                                    }
+                                }
+                                
+                                // TIPO COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colTipo
                                     Layout.fillHeight: true
@@ -776,6 +799,7 @@ Item {
                                     }
                                 }
                                 
+                                // PRECIO COLUMN (CONSOLIDADO)
                                 Item {
                                     Layout.preferredWidth: parent.width * colPrecio
                                     Layout.fillHeight: true
@@ -797,27 +821,7 @@ Item {
                                     }
                                 }
                                 
-                                Item {
-                                    Layout.preferredWidth: parent.width * colTotal
-                                    Layout.fillHeight: true
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "TOTAL"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.85
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        color: textColor
-                                    }
-                                    
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        width: 1
-                                        height: parent.height
-                                        color: lineColor
-                                    }
-                                }
-                                
+                                // FECHA COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colFecha
                                     Layout.fillHeight: true
@@ -830,32 +834,11 @@ Item {
                                         font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
                                     }
-                                    
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        width: 1
-                                        height: parent.height
-                                        color: lineColor
-                                    }
-                                }
-                                
-                                Item {
-                                    Layout.preferredWidth: parent.width * colTrabajador
-                                    Layout.fillHeight: true
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "TRABAJADOR"
-                                        font.bold: true
-                                        font.pixelSize: fontBaseSize * 0.85
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        color: textColor
-                                    }
                                 }
                             }
                         }
                         
-                        // ✅ CONTENIDO DE LA TABLA MEJORADO
+                        // CONTENIDO DE LA TABLA MEJORADO CON NUEVA ESTRUCTURA
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -897,8 +880,9 @@ Item {
                                         anchors.rightMargin: baseUnit * 1.5
                                         spacing: 0
                                         
+                                        // CÓDIGO COLUMN
                                         Item {
-                                            Layout.preferredWidth: parent.width * colId
+                                            Layout.preferredWidth: parent.width * colCodigo
                                             Layout.fillHeight: true
                                             
                                             Label {
@@ -919,6 +903,7 @@ Item {
                                             }
                                         }
                                         
+                                        // PACIENTE COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colPaciente
                                             Layout.fillHeight: true
@@ -955,6 +940,7 @@ Item {
                                             }
                                         }
                                         
+                                        // PROCEDIMIENTO COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colProcedimiento
                                             Layout.fillHeight: true
@@ -979,25 +965,56 @@ Item {
                                                 color: lineColor
                                             }
                                         }
-                                        
+                                    
+                                        // DETALLES COLUMN (ADAPTADA PARA ENFERMERÍA)
                                         Item {
-                                            Layout.preferredWidth: parent.width * colCantidad
+                                            Layout.preferredWidth: parent.width * colDetalles
                                             Layout.fillHeight: true
                                             
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: baseUnit * 2.5
-                                                height: baseUnit * 2.5
-                                                color: (model.cantidad || 1) > 1 ? warningColor : successColor
-                                                radius: height / 2
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: baseUnit * 0.5
+                                                spacing: baseUnit * 0.2
                                                 
                                                 Label {
-                                                    anchors.centerIn: parent
-                                                    text: model.cantidad || "0"
-                                                    color: whiteColor
-                                                    font.pixelSize: fontBaseSize * 0.75
-                                                    font.bold: true
+                                                    width: parent.width - baseUnit
+                                                    text: {
+                                                        var cantidad = model.cantidad || 1
+                                                        var info = ""
+                                                        
+                                                        if (cantidad > 1) {
+                                                            info = "Cantidad: " + cantidad + " unidades"
+                                                        } else {
+                                                            info = "Procedimiento único"
+                                                        }
+                                                        
+                                                        return info
+                                                    }
+                                                    color: textColor
+                                                    font.pixelSize: fontBaseSize * 0.85
                                                     font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                }
+                                                
+                                                Label {
+                                                    width: parent.width - baseUnit
+                                                    text: {
+                                                        // Mostrar información adicional según el tipo
+                                                        var tipo = model.tipo || "Normal"
+                                                        var precioUnit = parseFloat(model.precioUnitario || 0)
+                                                        
+                                                        if (tipo === "Emergencia") {
+                                                            return "🚨 Atención urgente"
+                                                        } else if (precioUnit > 50) {
+                                                            return "Procedimiento especializado"  
+                                                        } else {
+                                                            return "Atención estándar"
+                                                        }
+                                                    }
+                                                    color: textColorLight
+                                                    font.pixelSize: fontBaseSize * 0.75
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
                                                 }
                                             }
                                             
@@ -1009,6 +1026,43 @@ Item {
                                             }
                                         }
                                         
+                                        // EJECUTADO POR COLUMN (REUBICADO Y CONSOLIDADO)
+                                        Item {
+                                            Layout.preferredWidth: parent.width * colEjecutadoPor
+                                            Layout.fillHeight: true
+                                            
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: baseUnit * 0.5
+                                                
+                                                Label {
+                                                    width: parent.width
+                                                    text: model.trabajadorRealizador || "Sin asignar"
+                                                    color: textColor
+                                                    font.pixelSize: fontBaseSize * 0.85
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                }
+                                                
+                                                Label {
+                                                    width: parent.width
+                                                    text: "Por: " + (model.registradoPor || "Sistema")
+                                                    color: textColorLight
+                                                    font.pixelSize: fontBaseSize * 0.75
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                            
+                                            Rectangle {
+                                                anchors.right: parent.right
+                                                width: 1
+                                                height: parent.height
+                                                color: lineColor
+                                            }
+                                        }
+                                        
+                                        // TIPO COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colTipo
                                             Layout.fillHeight: true
@@ -1037,18 +1091,38 @@ Item {
                                             }
                                         }
                                         
+                                        // PRECIO COLUMN (CONSOLIDADO - MUESTRA TOTAL)
                                         Item {
                                             Layout.preferredWidth: parent.width * colPrecio
                                             Layout.fillHeight: true
                                             
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                text: "Bs " + (model.precioUnitario || "0.00")
-                                                color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
-                                                font.pixelSize: fontBaseSize * 0.9
-                                                font.family: "Segoe UI, Arial, sans-serif"
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: baseUnit * 0.5
+                                                
+                                                Label {
+                                                    width: parent.width
+                                                    text: "Bs " + (model.precioTotal || model.precioUnitario || "0.00")
+                                                    color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
+                                                    font.bold: true
+                                                    font.pixelSize: fontBaseSize * 0.9
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                }
+                                                
+                                                Label {
+                                                    width: parent.width
+                                                    text: {
+                                                        var cantidad = model.cantidad || 1
+                                                        var precioUnit = model.precioUnitario || "0.00"
+                                                        return cantidad > 1 ? cantidad + " x Bs " + precioUnit : ""
+                                                    }
+                                                    color: textColorLight
+                                                    font.pixelSize: fontBaseSize * 0.75
+                                                    font.family: "Segoe UI, Arial, sans-serif"
+                                                    elide: Text.ElideRight
+                                                    visible: (model.cantidad || 1) > 1
+                                                }
                                             }
                                             
                                             Rectangle {
@@ -1059,28 +1133,7 @@ Item {
                                             }
                                         }
                                         
-                                        Item {
-                                            Layout.preferredWidth: parent.width * colTotal
-                                            Layout.fillHeight: true
-                                            
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: baseUnit
-                                                text: "Bs " + (model.precioTotal || "0.00") 
-                                                color: model.tipo === "Emergencia" ? "#92400E" : "#047857"
-                                                font.pixelSize: fontBaseSize * 0.9
-                                                font.family: "Segoe UI, Arial, sans-serif"
-                                            }
-                                            
-                                            Rectangle {
-                                                anchors.right: parent.right
-                                                width: 1
-                                                height: parent.height
-                                                color: lineColor
-                                            }
-                                        }
-                                        
+                                        // FECHA COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colFecha
                                             Layout.fillHeight: true
@@ -1093,41 +1146,6 @@ Item {
                                                 color: textColor
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
-                                            }
-                                            
-                                            Rectangle {
-                                                anchors.right: parent.right
-                                                width: 1
-                                                height: parent.height
-                                                color: lineColor
-                                            }
-                                        }
-                                        
-                                        Item {
-                                            Layout.preferredWidth: parent.width * colTrabajador
-                                            Layout.fillHeight: true
-                                            
-                                            Column {
-                                                anchors.fill: parent
-                                                anchors.margins: baseUnit * 0.5
-                                                
-                                                Label {
-                                                    width: parent.width
-                                                    text: model.trabajadorRealizador || "Sin asignar"
-                                                    color: textColor
-                                                    font.pixelSize: fontBaseSize * 0.85
-                                                    font.family: "Segoe UI, Arial, sans-serif"
-                                                    elide: Text.ElideRight
-                                                }
-                                                
-                                                Label {
-                                                    width: parent.width
-                                                    text: "Por: " + (model.registradoPor || "Sistema")
-                                                    color: textColorLight
-                                                    font.pixelSize: fontBaseSize * 0.75
-                                                    font.family: "Segoe UI, Arial, sans-serif"
-                                                    elide: Text.ElideRight
-                                                }
                                             }
                                         }
                                     }
@@ -1315,10 +1333,7 @@ Item {
                         }
 
                         Label {
-                            text: modeloConectado ? 
-                                "Página " + (currentPageEnfermeria + 1) + " de " + Math.max(1, totalPagesEnfermeria) +
-                                " | Total: " + totalItemsEnfermeria + " registros" :
-                                "Conectando..."
+                            text:"Página " + (currentPageEnfermeria + 1) + " de " + Math.max(1, totalPagesEnfermeria)+ ""
                             color: textColor
                             font.pixelSize: fontBaseSize * 0.9
                             font.family: "Segoe UI, Arial, sans-serif"
@@ -1853,7 +1868,7 @@ Item {
                             running: false
                             repeat: false
                             onTriggered: {
-                                var cedula = cedulaPaciente.text.trim()
+                                var cedula = campoBusquedaPaciente.text.trim()
                                 if (cedula.length >= 5) {
                                     buscarPacientePorCedula(cedula)
                                 }
@@ -2291,7 +2306,7 @@ Item {
                                     id: cantidadTextField
                                     Layout.preferredWidth: baseUnit * 12
                                     Layout.preferredHeight: baseUnit * 4
-                                    placeholderText: "1"
+                                    placeholderText: "0"
                                     inputMethodHints: Qt.ImhDigitsOnly
                                     validator: IntValidator { bottom: 1; top: 50 }
                                     font.pixelSize: fontBaseSize
@@ -2947,15 +2962,7 @@ Item {
 
         console.log("🔍 Aplicando filtros...")
         
-        // ✅ LOGS DE DEBUG PARA DIAGNOSTICAR
-        console.log("🎯 FILTROS DEBUG:")
-        console.log("   - filtroFecha.currentIndex:", filtroFecha.currentIndex)
-        console.log("   - filtroFecha.currentText:", filtroFecha.currentText)
-        console.log("   - filtroProcedimiento.currentIndex:", filtroProcedimiento.currentIndex)
-        console.log("   - filtroProcedimiento.currentText:", filtroProcedimiento.currentText)
-        console.log("   - filtroTipo.currentIndex:", filtroTipo.currentIndex)
-        console.log("   - filtroTipo.currentText:", filtroTipo.currentText)
-        console.log("   - campoBusqueda.text:", campoBusqueda.text)
+
         
         try {
             // ✅ CONSTRUIR FILTROS CORRECTAMENTE (como en consultas)
