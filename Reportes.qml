@@ -114,6 +114,8 @@ Item {
         }
     ]
 
+//holaaa
+
     // Función para obtener título del reporte - ACTUALIZADA
     function obtenerTituloReporte() {
         switch(tipoReporteSeleccionado) {
