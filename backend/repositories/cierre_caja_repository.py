@@ -27,7 +27,7 @@ class CierreCajaRepository(BaseRepository):
     # CONSOLIDADO DEL DÍA ACTUAL
     # ===============================
     
-    @cached_query('cierre_datos_dia', ttl=10)  # TTL muy bajo para datos en tiempo real
+    @cached_query('cierre_datos_dia', ttl=2)  # 🔥 CAMBIO: TTL reducido a 2 segundos
     def get_datos_dia_actual(self, fecha: str = None) -> Dict[str, Any]:
         """
         Obtiene todos los datos financieros del día actual
@@ -83,6 +83,55 @@ class CierreCajaRepository(BaseRepository):
                     'fecha_calculo': datetime.now().strftime("%d/%m/%Y %H:%M")
                 }
             }
+    
+    # ===============================
+    # 🔥 CAMBIO 2: MÉTODO PARA INVALIDAR CACHÉ INMEDIATAMENTE
+    # ===============================
+    
+    def invalidar_cache_transaccion(self):
+        """Invalida el caché inmediatamente cuando ocurre una transacción"""
+        try:
+            invalidate_after_update(['cierre_datos_dia'])
+            print("🔄 Caché de cierre invalidado por transacción")
+        except Exception as e:
+            print(f"⚠️ Error invalidando caché: {e}")
+    
+    def refresh_cache_immediately(self):
+        """Refresca caché inmediatamente (forzado)"""
+        try:
+            # Invalidar caché actual
+            self.invalidar_cache_transaccion()
+            
+            # Forzar recarga de datos (esto regenerará el caché)
+            fecha_actual = datetime.now().strftime("%d/%m/%Y")
+            self.get_datos_dia_actual(fecha_actual)
+            
+            print("⚡ Caché de cierre refrescado inmediatamente")
+        except Exception as e:
+            print(f"❌ Error refrescando caché: {e}")
+    
+    # ===============================
+    # 🔥 CAMBIO 3: MÉTODO ESPECÍFICO PARA TRANSACCIONES
+    # ===============================
+    
+    def notificar_transaccion_nueva(self, tipo_transaccion: str, monto: float = 0.0):
+        """
+        Método que debe ser llamado cuando ocurre una nueva transacción
+        Invalida el caché y fuerza actualización
+        """
+        try:
+            print(f"💰 Nueva transacción registrada: {tipo_transaccion} - Bs {monto:,.2f}")
+            
+            # Invalidar caché inmediatamente
+            self.invalidar_cache_transaccion()
+            
+            # Opcional: log de transacción
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            print(f"   ⏰ Timestamp: {timestamp}")
+            print(f"   🔄 Caché invalidado para próxima consulta")
+            
+        except Exception as e:
+            print(f"❌ Error notificando transacción: {e}")
     
     def _obtener_ingresos_dia(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """Obtiene todos los ingresos del día agrupados por concepto"""
@@ -207,11 +256,11 @@ class CierreCajaRepository(BaseRepository):
             return []
     
     def _obtener_egresos_dia(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
-        """Obtiene todos los egresos del día agrupados por concepto"""
+        """Obtiene todos los egresos del día agrupados por concepto - SIN secciones vacías"""
         try:
             egresos = []
             
-            # 1. SERVICIOS BÁSICOS (del día si hay)
+            # 1. SERVICIOS BÁSICOS (solo si hay datos reales)
             try:
                 query_servicios = """
                 SELECT 
@@ -222,8 +271,8 @@ class CierreCajaRepository(BaseRepository):
                 INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
                 WHERE g.Fecha >= ? AND g.Fecha <= ?
                 AND (tg.Nombre LIKE '%servicio%' OR tg.Nombre LIKE '%básico%' 
-                     OR tg.Nombre LIKE '%luz%' OR tg.Nombre LIKE '%agua%'
-                     OR tg.Nombre LIKE '%internet%' OR tg.Nombre LIKE '%gas%')
+                    OR tg.Nombre LIKE '%luz%' OR tg.Nombre LIKE '%agua%'
+                    OR tg.Nombre LIKE '%internet%' OR tg.Nombre LIKE '%gas%')
                 """
                 
                 resultado_servicios = self._execute_query(query_servicios, (fecha_inicio, fecha_fin), fetch_one=True)
@@ -238,7 +287,7 @@ class CierreCajaRepository(BaseRepository):
             except Exception as e:
                 print(f"⚠️ Error en servicios básicos: {e}")
             
-            # 2. COMPRAS DE FARMACIA
+            # 2. COMPRAS DE FARMACIA (solo si hay datos reales)
             try:
                 query_compras = """
                 SELECT 
@@ -258,18 +307,11 @@ class CierreCajaRepository(BaseRepository):
                         'transacciones': int(resultado_compras.get('transacciones', 0)),
                         'importe': float(resultado_compras.get('importe', 0))
                     })
-                else:
-                    egresos.append({
-                        'concepto': '📦 Compras de Farmacia',
-                        'detalle': 'Sin compras registradas',
-                        'transacciones': 0,
-                        'importe': 0.0
-                    })
                 
             except Exception as e:
                 print(f"⚠️ Error en compras: {e}")
             
-            # 3. GASTOS OPERATIVOS GENERALES
+            # 3. GASTOS OPERATIVOS GENERALES (solo si hay datos reales)
             try:
                 query_gastos_otros = """
                 SELECT 
@@ -280,8 +322,8 @@ class CierreCajaRepository(BaseRepository):
                 INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
                 WHERE g.Fecha >= ? AND g.Fecha <= ?
                 AND NOT (tg.Nombre LIKE '%servicio%' OR tg.Nombre LIKE '%básico%' 
-                         OR tg.Nombre LIKE '%luz%' OR tg.Nombre LIKE '%agua%'
-                         OR tg.Nombre LIKE '%internet%' OR tg.Nombre LIKE '%gas%')
+                        OR tg.Nombre LIKE '%luz%' OR tg.Nombre LIKE '%agua%'
+                        OR tg.Nombre LIKE '%internet%' OR tg.Nombre LIKE '%gas%')
                 """
                 
                 resultado_gastos = self._execute_query(query_gastos_otros, (fecha_inicio, fecha_fin), fetch_one=True)
@@ -292,37 +334,25 @@ class CierreCajaRepository(BaseRepository):
                         'transacciones': int(resultado_gastos.get('transacciones', 0)),
                         'importe': float(resultado_gastos.get('importe', 0))
                     })
-                else:
-                    egresos.append({
-                        'concepto': '🏥 Gastos Operativos',
-                        'detalle': 'Sin gastos adicionales',
-                        'transacciones': 0,
-                        'importe': 0.0
-                    })
                 
             except Exception as e:
                 print(f"⚠️ Error en gastos operativos: {e}")
             
-            # 4. OTROS GASTOS VARIOS
-            egresos.extend([
-                {
-                    'concepto': '🔧 Mantenimiento',
-                    'detalle': 'Sin mantenimientos',
+            # ✅ ELIMINADO: Ya no agregamos secciones vacías de "Mantenimiento" y "Otros gastos"
+            
+            # Si no hay egresos reales, agregar mensaje informativo
+            if not egresos:
+                egresos.append({
+                    'concepto': '📋 Sin egresos registrados',
+                    'detalle': 'No se registraron gastos en este día',
                     'transacciones': 0,
                     'importe': 0.0
-                },
-                {
-                    'concepto': '📋 Otros gastos',
-                    'detalle': 'Sin otros gastos',
-                    'transacciones': 0,
-                    'importe': 0.0
-                }
-            ])
+                })
             
             return egresos
             
         except Exception as e:
-            print(f"❌ Error obteniendo egresos del día: {e}")
+            print(f"⛌ Error obteniendo egresos del día: {e}")
             return []
     
     # ===============================

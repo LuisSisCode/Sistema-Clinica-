@@ -41,7 +41,7 @@ Item {
     property bool requiereAutorizacion: cierreCajaModel ? cierreCajaModel.requiereAutorizacion : false
     property string tipoDiferencia: cierreCajaModel ? cierreCajaModel.tipoDiferencia : "NEUTRO"
     
-    // CONEXIONES CON EL MODEL
+    // CONEXIONES CON EL MODEL - CORREGIDO
     Connections {
         target: cierreCajaModel
         function onDatosChanged() {
@@ -58,11 +58,9 @@ Item {
         }
         
         function onPdfGenerado(rutaArchivo) {
-            mostrarNotificacion("PDF Generado", "Archivo guardado: " + rutaArchivo)
-            // Abrir el PDF automáticamente después de generarlo
-            if (appController && appController.abrirArchivo) {
-                appController.abrirArchivo(rutaArchivo)
-            }
+            console.log("✅ Señal PDF recibida: " + rutaArchivo)
+            // CAMBIO: Abrir PDF en navegador automáticamente
+            abrirPDFEnNavegador(rutaArchivo)
         }
         
         function onErrorOccurred(title, message) {
@@ -835,16 +833,50 @@ Item {
         }
     }
     
-    // ===== FUNCIONES =====
+    // Timer para refresh manual
+    Timer {
+        id: manualRefreshTimer
+        interval: 5000  // 5 segundos
+        running: false
+        repeat: false
+        onTriggered: {
+            if (cierreCajaModel) {
+                cierreCajaModel.forzarActualizacion()
+            }
+        }
+    }
+
+    // ===== FUNCIONES CORREGIDAS =====
     
     function descargarPDFArqueo() {
         console.log("📄 Generando PDF de arqueo...")
         if (cierreCajaModel) {
             var rutaPDF = cierreCajaModel.generarPDFArqueoCorregido()
             if (rutaPDF) {
-                // El PDF se abrirá automáticamente a través de la señal onPdfGenerado
                 console.log("✅ PDF generado: " + rutaPDF)
+                // Se abrirá automáticamente por la señal onPdfGenerado
+            } else {
+                console.log("❌ Error generando PDF")
+                mostrarNotificacion("Error", "No se pudo generar el PDF")
             }
+        }
+    }
+    
+    function abrirPDFEnNavegador(rutaArchivo) {
+        try {
+            console.log("🌐 Abriendo PDF en navegador: " + rutaArchivo)
+            
+            // Convertir la ruta a URL válida y abrir en navegador
+            var urlArchivo = "file:///" + rutaArchivo.replace(/\\/g, "/")
+            Qt.openUrlExternally(urlArchivo)
+            
+            // Mostrar notificación de éxito
+            var nombreArchivo = rutaArchivo.split("/").pop().split("\\").pop()
+            mostrarNotificacion("PDF Generado", "Archivo abierto en navegador: " + nombreArchivo)
+            
+        } catch (error) {
+            console.log("❌ Error abriendo PDF: " + error)
+            mostrarNotificacion("Error", "No se pudo abrir el PDF en el navegador")
         }
     }
     
@@ -860,10 +892,12 @@ Item {
                     ". ¿Confirma el cierre?",
                     function() {
                         cierreCajaModel.completarCierre("Diferencia autorizada por supervisor")
+                        console.log("🔒 Caja cerrada - NO se genera PDF automáticamente")
                     }
                 )
             } else {
                 cierreCajaModel.completarCierre("Cierre automático - diferencia dentro del límite")
+                console.log("🔒 Caja cerrada - NO se genera PDF automáticamente")
             }
         }
     }
@@ -886,6 +920,11 @@ Item {
         callback() // Por simplicidad, ejecutamos el callback directamente
     }
     
+    function activarRefreshManual() {
+        console.log("🔄 Activando refresh manual en 5 segundos...")
+        manualRefreshTimer.restart()
+    }
+    
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
         console.log("💰 Cierre de Caja inicializado con backend")
@@ -896,29 +935,5 @@ Item {
         } else {
             console.log("⚠️ CierreCajaModel no disponible")
         }
-    }
-    Timer {
-        id: manualRefreshTimer
-        interval: 5000  // 5 segundos
-        running: false
-        repeat: false
-        onTriggered: {
-            if (cierreCajaModel) {
-                cierreCajaModel.forzarActualizacion()
-            }
-        }
-    }
-    function activarRefreshManual() {
-        console.log("🔄 Activando refresh manual en 5 segundos...")
-        manualRefreshTimer.restart()
-    }
-    function onDatosChanged() {
-        console.log("📊 Datos de cierre actualizados automáticamente")
-        // Activar refresh manual como respaldo
-        activarRefreshManual()
-    }
-
-    function onResumenChanged() {
-        console.log("💰 Resumen financiero actualizado")
     }
 }
