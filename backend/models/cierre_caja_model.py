@@ -331,10 +331,10 @@ class CierreCajaModel(QObject):
         try:
             if not self._verificar_autenticacion():
                 return
-            
+                
             if not self.validarCierre():
                 return
-            
+                
             self._set_loading(True)
             
             # Establecer observaciones
@@ -344,19 +344,11 @@ class CierreCajaModel(QObject):
             self._cierre_completado = True
             self.cierreCompletadoChanged.emit()
             
-            # Generar PDF automáticamente
-            ruta_pdf = self.generarPDFArqueoCorregido()
-            
-            if ruta_pdf:
-                mensaje = f"Cierre de caja completado exitosamente. PDF: {ruta_pdf}"
-                self.cierreCompletado.emit(True, mensaje)
-                self.operacionExitosa.emit("Cierre completado con éxito")
-                self.cierreCompletadoChanged.emit()
-                print(f"✅ Cierre completado - Usuario: {self._usuario_actual_id}")
-            else:
-                mensaje = "Cierre completado, pero no se pudo generar el PDF"
-                self.cierreCompletado.emit(True, mensaje)
-                self.operacionError.emit("PDF no generado")
+            # Mensaje de éxito sin PDF
+            mensaje = "Cierre de caja completado exitosamente"
+            self.cierreCompletado.emit(True, mensaje)
+            self.operacionExitosa.emit("Cierre completado con éxito")
+            print(f"✅ Cierre completado - Usuario: {self._usuario_actual_id}")
                 
         except Exception as e:
             error_msg = f"Error completando cierre: {str(e)}"
