@@ -752,17 +752,6 @@ class ProveedorModel(QObject):
                 
                 print(f"✅ Proveedores cargados: {len(self._proveedores)} de {self._total_proveedores}")
                 
-                # Log detallado de proveedores con compras recientes
-                proveedores_activos = [p for p in self._proveedores if p.get('Estado') == 'Activo']
-                if proveedores_activos:
-                    print("📊 Proveedores ACTIVOS encontrados:")
-                    for prov in proveedores_activos:
-                        nombre = prov.get('Nombre', 'Sin nombre')
-                        compras = prov.get('Total_Compras', 0)
-                        monto = prov.get('Monto_Total', 0)
-                        ultima = prov.get('Ultima_Compra', 'Sin fecha')
-                        print(f"   • {nombre}: {compras} compras, Bs{monto}, última: {ultima}")
-                
             else:
                 self._proveedores = []
                 self._total_proveedores = 0

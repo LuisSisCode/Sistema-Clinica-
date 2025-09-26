@@ -683,7 +683,7 @@ Item {
                                     spacing: 10  // Aumenté el espaciado entre icono y texto
                                     
                                     Image {
-                                        source: "file:///D:/Sistema-Clinica-/Resources/iconos/descargarpdf.png"
+                                        source: "Resources/iconos/descargarpdf.png"
                                         Layout.preferredWidth: 28  // Aumentado de 20 a 28
                                         Layout.preferredHeight: 28 // Aumentado de 20 a 28
                                         fillMode: Image.PreserveAspectFit
@@ -942,8 +942,6 @@ Item {
                                                         var columna = parent.parent.todasLasColumnas[index]
                                                         var nombreColumna = columna.titulo
                                                         var campoColumna = columna.campo
-                                                        
-                                                        console.log("Procesando columna:", index, nombreColumna, campoColumna, "Tipo reporte:", tipoReporteSeleccionado)
                                                         
                                                         // MOSTRAR TOTAL en columna de valor monetario
                                                         if (campoColumna === "valor") {

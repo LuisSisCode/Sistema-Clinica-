@@ -983,7 +983,6 @@ class ConsultaModel(QObject):
         """Limpia el cache de consultas para forzar recarga"""
         try:
             self.repository.invalidate_consultation_caches()
-            print("🧹 Cache de consultas limpiado")
         except Exception as e:
             print(f"⚠️ Error limpiando cache: {e}")
     

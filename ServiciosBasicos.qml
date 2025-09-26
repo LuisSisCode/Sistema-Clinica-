@@ -210,7 +210,6 @@ Item {
         onTriggered: {
             if (appController && appController.gasto_model_instance) {
                 gastoModelInstance = appController.gasto_model_instance
-                console.log("🔄 Inicialización retrasada exitosa")
                 loadTiposGastosFromModel()
                 loadProveedoresFromModel()
                 cargarPaginaDesdeBD()
@@ -254,8 +253,6 @@ Item {
             tiposGastosModel.append(tipoFormatted)
         }
         
-        console.log("🏷️ Tipos de gastos cargados:", tiposGastosModel.count)
-        
         // Actualizar ComboBox
         filtroTipoServicio.model = getTiposGastosNombres()
 
@@ -270,8 +267,6 @@ Item {
             console.log("⚠️ GastoModel no disponible para cargar proveedores")
             return
         }
-        
-        console.log("🏢 Cargando proveedores desde modelo...")
         
         // LIMPIAR MODELO DE PROVEEDORES
         proveedoresModel.clear()
@@ -291,7 +286,7 @@ Item {
             })
         }
         
-        console.log("🏢 Proveedores cargados:", proveedoresModel.count)
+        //console.log("🏢 Proveedores cargados:", proveedoresModel.count)
     }
     
     // ✅ FUNCIÓN PARA CREAR GASTO - LLAMADA DIRECTA AL MODEL

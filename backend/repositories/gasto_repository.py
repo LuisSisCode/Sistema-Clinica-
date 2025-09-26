@@ -724,8 +724,6 @@ class GastoRepository(BaseRepository):
                     'nombre': proveedor,
                     'text': proveedor
                 })
-            
-            print(f"📋 Proveedores para ComboBox: {len(formatted_providers)} elementos")
             return formatted_providers
             
         except Exception as e:

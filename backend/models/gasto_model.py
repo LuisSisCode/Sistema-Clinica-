@@ -791,8 +791,6 @@ class GastoModel(QObject):
             if limit <= 0:
                 limit = 10
             
-            print(f"📊 Obteniendo gastos paginados: offset={offset}, limit={limit}")
-            
             processed_filters = {}
             if filters:
                 if 'tipo_id' in filters:
@@ -833,7 +831,7 @@ class GastoModel(QObject):
                 
                 gastos_convertidos.append(gasto_convertido)
             
-            print(f"✅ Gastos paginados obtenidos: {len(gastos_convertidos)}")
+            #print(f"✅ Gastos paginados obtenidos: {len(gastos_convertidos)}")
             return gastos_convertidos
             
         except Exception as e:

@@ -301,7 +301,7 @@ class ConsultaRepository(BaseRepository):
         """
         
         result = self._execute_query(query, (limit,))
-        print(f"🔍 Query devolvió {len(result)} consultas de BD")
+        #print(f"🔍 Query devolvió {len(result)} consultas de BD")
         return result
     
     def get_consultation_by_id_complete(self, consulta_id: int) -> Optional[Dict[str, Any]]:

@@ -783,6 +783,6 @@ class CierreCajaRepository(BaseRepository):
         """Refresca caché de cierre de caja"""
         try:
             invalidate_after_update(['cierre_datos_dia'])
-            print("🔄 Caché de cierre de caja refrescado")
+            #print("🔄 Caché de cierre de caja refrescado")
         except Exception as e:
             print(f"❌ Error refrescando caché: {e}")

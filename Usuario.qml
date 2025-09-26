@@ -178,8 +178,7 @@ Item {
         for (var i = 0; i < usuarioModel.usuarios.length; i++) {
             usuariosOriginales.push(usuarioModel.usuarios[i])
         }
-        
-        console.log("✅ Usuarios originales cargados:", usuariosOriginales.length)
+
         
         // Aplicar filtros para actualizar la vista
         aplicarFiltros()
@@ -860,7 +859,7 @@ Item {
             }
         }
         
-        console.log("✅ Filtros aplicados. Usuarios mostrados:", usuariosFiltradosModel.count, "de", usuariosOriginales.length)
+        //console.log("✅ Filtros aplicados. Usuarios mostrados:", usuariosFiltradosModel.count, "de", usuariosOriginales.length)
     }
     
     function mostrarNotificacion(titulo, mensaje, color) {

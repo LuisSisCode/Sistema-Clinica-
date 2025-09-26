@@ -68,7 +68,7 @@ class CacheSystem:
                     # Entrada expirada
                     del self._cache[cache_key]
                     self._misses += 1
-                    print(f"⏰ Cache EXPIRED: {cache_type}")
+                    #print(f"⏰ Cache EXPIRED: {cache_type}")
             
             self._misses += 1
             return None
@@ -117,7 +117,8 @@ class CacheSystem:
             
             count = len(keys_to_remove)
             if count > 0:
-                print(f"🗑️ Cache INVALIDATED: {cache_type} - {count} entries")
+                pass
+                #print(f"🗑️ Cache INVALIDATED: {cache_type} - {count} entries")
             return count
     
     def invalidate_pattern(self, pattern: str) -> int:

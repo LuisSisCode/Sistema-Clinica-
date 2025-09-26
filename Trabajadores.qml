@@ -924,7 +924,7 @@ Item {
 
     // ✅ FUNCIÓN aplicarFiltros() MEJORADA CON VERIFICACIONES
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
+        //console.log("🔍 Aplicando filtros...")
         
         // ✅ VERIFICAR QUE TRABAJADORMODEL ESTÉ DISPONIBLE
         if (!trabajadorModel) {
@@ -940,8 +940,6 @@ Item {
         
         // Obtener trabajadores desde el modelo
         var trabajadores = trabajadorModel.trabajadores || []
-        
-        console.log("📊 Total trabajadores disponibles:", trabajadores.length)
         
         for (var i = 0; i < trabajadores.length; i++) {
             var trabajador = trabajadores[i]

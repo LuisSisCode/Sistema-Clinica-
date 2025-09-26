@@ -183,17 +183,17 @@ Item {
         }
         
         function onProcedimientosRecientesChanged() {
-            console.log("🩹 Signal: Procedimientos actualizados")
+
             updateTimer.restart()
         }
         
         function onTiposProcedimientosChanged() {
-            console.log("🔧 Signal: Tipos de procedimientos actualizados")
+
             dataParseTimer.restart()
         }
         
         function onTrabajadoresChanged() {
-            console.log("👥 Signal: Trabajadores actualizados")
+
             dataParseTimer.restart()
         }
         
@@ -2879,7 +2879,7 @@ Item {
             // Aplicar filtros iniciales
             aplicarFiltros()
             
-            console.log("✅ Modelo inicializado correctamente")
+            //console.log("✅ Modelo inicializado correctamente")
         } catch (error) {
             console.log("❌ Error inicializando modelo:", error)
         }
@@ -2922,8 +2922,6 @@ Item {
                         pacienteApellidoM: proc.pacienteApellidoM || ""
                     })
                 }
-                
-                console.log("✅ Modelo actualizado con", procedimientosPaginadosModel.count, "elementos")
             } else {
                 console.log("ℹ️ No hay procedimientos disponibles")
             }
@@ -2960,7 +2958,7 @@ Item {
             return
         }
 
-        console.log("🔍 Aplicando filtros...")
+        //console.log("🔍 Aplicando filtros...")
         
 
         

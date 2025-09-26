@@ -94,7 +94,7 @@ Item {
     Connections {
         target: ventaModel
         function onVentasHoyChanged() {
-            console.log("🛒 Ventas: Ventas del día actualizadas")
+
             actualizarPaginacionVentas()
         }
         function onOperacionExitosa() {

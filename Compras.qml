@@ -1690,7 +1690,7 @@ Item {
         }
         
         function onComprasRecientesChanged() {
-            console.log("📋 Signal: Compras recientes actualizadas, refrescando vista")
+
             actualizarPaginacionCompras()
         }
     }

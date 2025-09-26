@@ -90,7 +90,7 @@ Item {
         target: consultaModel
         
         function onConsultasRecientesChanged() {
-            console.log("📋 Signal: Consultas recientes cambiadas")
+
             updateTimer.start()
         }
         
@@ -122,13 +122,7 @@ Item {
         target: appController
         function onUsuarioChanged() {
             console.log("🔄 USUARIO CAMBIÓ:")
-            console.log("   - Nuevo usuarioActualId desde appController:", appController.usuario_actual_id)
-            //usuarioActualId = appController ? appController.usuario_actual_id : 0
-            //console.log("   - usuarioActualId actualizado a:", usuarioActualId)
-            console.log("   - Nuevo usuarioActualRol:", usuarioActualRol)
-            console.log("   - Nuevos permisos - esAdministrador:", esAdministrador)
-            console.log("   - Nuevos permisos - esMedico:", esMedico)
-            console.log("   - Nuevos permisos - puedeCrearConsultas:", puedeCrearConsultas)
+            
             
         }
     }
@@ -435,11 +429,7 @@ Item {
                                     return especialidades
                                 }
                                 currentIndex: 0
-                                onCurrentIndexChanged: {
-                                    console.log("🔍 FILTRO ESPECIALIDAD DEBUG:")
-                                    console.log("   - currentIndex:", currentIndex)
-                                    console.log("   - displayText:", displayText)
-                                    
+                                onCurrentIndexChanged: {                                    
                                     if (currentIndex > 0) {
                                         var selectedIndex = currentIndex - 1
                                         if (consultaModel && consultaModel.especialidades && 
@@ -2549,47 +2539,11 @@ Item {
         console.log("🩺 Módulo Consultas iniciado con permisos")
         
         function conectarModelos() {
-
-            console.log("🔍 DEBUGGING PERMISOS:")
-            //console.log("   - usuarioActualId:", usuarioActualId)
-            console.log("   - usuarioActualRol:", usuarioActualRol)  
-            console.log("   - esAdministrador:", esAdministrador)
-            console.log("   - esMedico:", esMedico)
-            console.log("   - puedeCrearConsultas:", puedeCrearConsultas)
             
-            // Debug de las fuentes de datos
-            console.log("🔍 FUENTES DE DATOS:")
-            if (typeof appController !== 'undefined' && appController) {
-                console.log("   - appController.usuario_actual_id:", appController.usuario_actual_id)
-                console.log("   - appController disponible: SÍ")
-            } else {
-                console.log("   - appController disponible: NO")
-            }
-            
-            if (typeof authModel !== 'undefined' && authModel) {
-                console.log("   - authModel.userRole:", authModel.userRole)
-                console.log("   - authModel.get_user_id():", authModel.get_user_id ? authModel.get_user_id() : "método no existe")
-                console.log("   - authModel disponible: SÍ")
-            } else {
-                console.log("   - authModel disponible: NO")
-            }
-            
-            // Debug del botón
-            if (newConsultationBtn) {
-                console.log("🔍 BOTÓN NUEVA CONSULTA:")
-                console.log("   - visible:", newConsultationBtn.visible)
-                console.log("   - enabled:", newConsultationBtn.enabled)
-            }
             if (typeof appController !== 'undefined') {
                 consultaModel = appController.consulta_model_instance
                 
                 if (consultaModel) {
-                    
-                    // Verificar métodos disponibles
-                    console.log("🔍 Verificando métodos:")
-                    console.log("   - verificar_permisos_consulta:", typeof consultaModel.verificar_permisos_consulta === 'function' ? "✅" : "❌")
-                    console.log("   - actualizar_consulta:", typeof consultaModel.actualizar_consulta === 'function' ? "✅" : "❌")
-                    console.log("   - eliminar_consulta:", typeof consultaModel.eliminar_consulta === 'function' ? "✅" : "❌")
                     
                     consultaModel.consultasRecientesChanged.connect(function() {
                         console.log("🔄 Consultas recientes cambiadas")
@@ -2955,7 +2909,7 @@ Item {
     }
 
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
+        //console.log("🔍 Aplicando filtros...")
         
         // Resetear a primera página
         currentPageConsultas = 0

@@ -252,8 +252,6 @@ class LaboratorioModel(QObject):
                 
             limit_real = self._itemsPerPage
             
-            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
-            
             resultado = self.repository.get_paginated_exams_with_details(
                 page, limit_real,
                 filtros_dict.get('search_term', ''),
@@ -324,7 +322,7 @@ class LaboratorioModel(QObject):
             
             self.repository.invalidate_laboratory_caches()
             
-            print(f"🔄 Aplicando filtros con {self._itemsPerPage} elementos por página")
+            #print(f"🔄 Aplicando filtros con {self._itemsPerPage} elementos por página")
             self.obtener_examenes_paginados(0, self._itemsPerPage, filtros)
             
         except Exception as e:
@@ -664,7 +662,7 @@ class LaboratorioModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔄 Refrescando todos los datos del modelo...")
+            #print("🔄 Refrescando todos los datos del modelo...")
             
             self.cargarTiposAnalisis()
             self.cargarTrabajadores()

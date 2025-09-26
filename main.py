@@ -602,11 +602,7 @@ class AppController(QObject):
 
     @Slot(int, str, str)
     def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
-        """Establece el usuario autenticado - VERSIÓN SIMPLIFICADA"""
-        print(f"🔑 Estableciendo usuario autenticado...")
-        print(f"   ID: {usuario_id}")
-        print(f"   Nombre: {usuario_nombre}")
-        print(f"   Rol: {usuario_rol}")
+        
         
         # Establecer usuario inmediatamente
         self._usuario_autenticado_id = usuario_id
@@ -1543,12 +1539,6 @@ class AuthAppController(QObject):
             user_id = userData.get('id', 0)
             user_name = f"{userData.get('Nombre', '')} {userData.get('Apellido_Paterno', '')}"
             user_role = userData.get('rol_nombre', 'Usuario')
-            
-            print(f"🔑 Estableciendo autenticación:")
-            print(f"   ID: {user_id}")
-            print(f"   Nombre: {user_name}")
-            print(f"   Rol: {user_role}")
-            
             # Verificar que los datos son válidos
             if user_id <= 0:
                 print("❌ Error: ID de usuario inválido")
@@ -1583,7 +1573,7 @@ class AuthAppController(QObject):
                 print(f"   Actual: ID={actual_id}, Rol='{actual_role}'")
                 
                 if actual_id == expected_id and actual_role == expected_role:
-                    print("✅ Autenticación verificada correctamente")
+                    pass
                 else:
                     print("⚠️ Autenticación no coincide - reintentando...")
                     # Reintentar establecer autenticación

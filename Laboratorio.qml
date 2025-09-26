@@ -90,7 +90,7 @@ Item {
     Connections {
         target: appController
         function onModelsReady() {
-            console.log("🔬 Modelos listos, conectando LaboratorioModel...")
+            //console.log("🔬 Modelos listos, conectando LaboratorioModel...")
             laboratorioModel = appController.laboratorio_model_instance
             if (laboratorioModel) {
                 initializarModelo()
@@ -107,7 +107,6 @@ Item {
             console.log("⏰ Ejecutando inicialización retrasada...")
             if (laboratorioModel) {
                 laboratorioModel.aplicar_filtros_y_recargar("", "", "", "", "")
-                console.log("✅ Inicialización retrasada exitosa")
             }
         }
     }
@@ -118,12 +117,12 @@ Item {
         enabled: laboratorioModel !== null
         
         function onExamenesActualizados() {
-            console.log("🔬 Signal: Exámenes actualizados")
+
             updateTimer.start()
         }
         
         function onTiposAnalisisActualizados() {
-            console.log("📋 Signal: Tipos de análisis actualizados")
+   
             Qt.callLater(updateAnalisisCombo)
         }
         
@@ -136,7 +135,7 @@ Item {
         }
         
         function onOperacionExitosa(mensaje) {
-            console.log("✅ Signal: Operación exitosa -", mensaje)
+
             mostrarNotificacion("Éxito", mensaje)
             updatePaginatedModel()
             
@@ -148,7 +147,7 @@ Item {
         }
         
         function onExamenActualizado(datos) {
-            console.log("📝 Signal: Examen actualizado exitosamente")
+
             mostrarNotificacion("Éxito", "Análisis actualizado correctamente")
             
             Qt.callLater(function() {
@@ -2552,7 +2551,7 @@ Item {
     // ✅ FUNCIONES JAVASCRIPT CORREGIDAS
 
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
+        //console.log("🔍 Aplicando filtros...")
         
         if (!laboratorioModel) {
             console.log("❌ LaboratorioModel no disponible")
@@ -2609,8 +2608,6 @@ Item {
                         pacienteApellidoM: examen.pacienteApellidoM || ""
                     })
                 }
-                
-                console.log("✅ Modelo actualizado con", analisisPaginadosModel.count, "elementos (incluyendo detalles)")
             } else {
                 console.log("No hay exámenes disponibles")
             }
@@ -3262,13 +3259,6 @@ Item {
                         console.log("📄 Exámenes actualizados - forzando refresh")
                         updatePaginatedModel()
                     })
-                    
-                    // Verificar métodos disponibles
-                    console.log("🔍 Verificando métodos disponibles:")
-                    console.log("   - actualizarExamen:", typeof laboratorioModel.actualizarExamen === 'function' ? "✅" : "❌")
-                    console.log("   - editarExamen:", typeof laboratorioModel.editarExamen === 'function' ? "✅" : "❌")
-                    console.log("   - crearExamen:", typeof laboratorioModel.crearExamen === 'function' ? "✅" : "❌")
-                    console.log("   - refrescarDatos:", typeof laboratorioModel.refrescarDatos === 'function' ? "✅" : "❌")
                     
                     // Inicializar datos
                     if (typeof laboratorioModel.refrescarDatos === 'function') {

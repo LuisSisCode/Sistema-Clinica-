@@ -338,13 +338,6 @@ class EnfermeriaModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔍 FILTROS RECIBIDOS EN MODELO:")
-            print(f"   - search_term: '{search_term}'")
-            print(f"   - tipo_procedimiento: '{tipo_procedimiento}'") 
-            print(f"   - tipo: '{tipo}' ← CRÍTICO")
-            print(f"   - fecha_desde: '{fecha_desde}'")
-            print(f"   - fecha_hasta: '{fecha_hasta}'")
-            
             # Resetear a página 0 siempre que cambien filtros
             self._currentPage = 0
             
@@ -443,9 +436,6 @@ class EnfermeriaModel(QObject):
                 
             # Emitir señal de datos actualizados
             self.procedimientosRecientesChanged.emit()
-            
-            print(f"✅ Página {page + 1} cargada: {len(self._procedimientosData)} registros de {self._totalRecords}")
-            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
             
             self._set_estado_actual("listo")
             
@@ -826,13 +816,6 @@ class EnfermeriaModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔍 FILTROS RECIBIDOS EN MODELO:")
-            print(f"   - search_term: '{search_term}'")
-            print(f"   - tipo_procedimiento: '{tipo_procedimiento}'") 
-            print(f"   - tipo: '{tipo}' ← CRÍTICO")
-            print(f"   - fecha_desde: '{fecha_desde}'")
-            print(f"   - fecha_hasta: '{fecha_hasta}'")
-            
             # Resetear a página 0 siempre que cambien filtros
             self._currentPage = 0
             
@@ -895,9 +878,6 @@ class EnfermeriaModel(QObject):
                     filtros_dict = filters
             else:
                 filtros_dict = self._filtrosActuales
-            
-            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
-            print(f"🔍 Filtros aplicados: {filtros_dict}")
             
             procedimientos = self.repository.obtener_procedimientos_paginados(
                 page * limit_real, limit_real, filtros_dict
@@ -1016,7 +996,7 @@ class EnfermeriaModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔄 Refrescando todos los datos del modelo...")
+            #print("🔄 Refrescando todos los datos del modelo...")
             
             # Cargar datos de referencia
             self.actualizar_tipos_procedimientos()

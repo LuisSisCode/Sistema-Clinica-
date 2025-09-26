@@ -34,8 +34,6 @@ class LaboratorioRepository(BaseRepository):
                                    fecha_hasta: str = "") -> Dict[str, Any]:
         """Obtiene exámenes paginados con filtros y búsqueda SQL - CORREGIDO"""
         try:
-            print(f"🔍 Obteniendo página {page + 1}, {page_size} elementos por página")
-            print(f"🔍 Filtros: búsqueda='{search_term}', tipo='{tipo_analisis}', servicio='{tipo_servicio}'")
             search_term = search_term or ""
             tipo_analisis = tipo_analisis or ""
             tipo_servicio = tipo_servicio or ""
@@ -188,8 +186,6 @@ class LaboratorioRepository(BaseRepository):
             
             total_records = self.get_exam_count_with_filters(search_term, tipo_analisis, tipo_servicio, fecha_desde, fecha_hasta)
             
-            print(f"🔬 Exámenes paginados: página {page + 1}, {len(examenes_procesados)} registros de {total_records}")
-            
             return {
                 'examenes': examenes_procesados,
                 'page': page,
@@ -257,7 +253,6 @@ class LaboratorioRepository(BaseRepository):
             
             result = self._execute_query(query, params, fetch_one=True)
             count = result['total'] if result else 0
-            print(f"📊 Total exámenes con filtros: {count}")
             return count
             
         except Exception as e:
