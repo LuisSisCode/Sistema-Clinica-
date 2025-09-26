@@ -491,7 +491,89 @@ class AppController(QObject):
             self.venta_model.ventaCreada.connect(self._on_venta_creada)
             self.compra_model.compraCreada.connect(self._on_compra_creada)
             
-            # Conectar errores y éxitos
+            # 🔥 NUEVAS CONEXIONES ESPECÍFICAS PARA CIERRE DE CAJA
+            # Conectar con los nuevos métodos de notificación del CierreCajaModel
+            
+            if self.cierre_caja_model:
+                print("🔗 Configurando conexiones de tiempo real para Cierre de Caja...")
+                
+                # ===== VENTAS =====
+                if self.venta_model:
+                    # Conexión directa para notificar al cierre
+                    self.venta_model.ventaCreada.connect(
+                        lambda venta_id, monto: self.cierre_caja_model.notificar_nueva_venta(venta_id, monto)
+                    )
+                    # Conexión adicional para refresh general
+                    self.venta_model.operacionExitosa.connect(
+                        lambda: self._refresh_cierre_caja("Venta registrada")
+                    )
+                    print("   ✅ Ventas → Cierre de Caja conectado")
+                
+                # ===== COMPRAS =====
+                if self.compra_model:
+                    # Conexión directa para notificar al cierre
+                    self.compra_model.compraCreada.connect(
+                        lambda compra_id, monto: self.cierre_caja_model.notificar_nueva_compra(compra_id, monto)
+                    )
+                    # Conexión adicional para refresh general
+                    self.compra_model.operacionExitosa.connect(
+                        lambda: self._refresh_cierre_caja("Compra registrada")
+                    )
+                    print("   ✅ Compras → Cierre de Caja conectado")
+                
+                # ===== GASTOS =====
+                if self.gasto_model:
+                    # Conectar signal de creación de gasto
+                    if hasattr(self.gasto_model, 'gastoCreado'):
+                        self.gasto_model.gastoCreado.connect(
+                            lambda gasto_id, monto: self.cierre_caja_model.notificar_nuevo_gasto(gasto_id, monto)
+                        )
+                    # Alternativa: usar operacionExitosa con parámetros
+                    self.gasto_model.operacionExitosa.connect(
+                        lambda: self._refresh_cierre_caja("Gasto registrado")
+                    )
+                    print("   ✅ Gastos → Cierre de Caja conectado")
+                
+                # ===== CONSULTAS =====
+                if self.consulta_model:
+                    # Conectar signal de creación de consulta
+                    if hasattr(self.consulta_model, 'consultaCreada'):
+                        self.consulta_model.consultaCreada.connect(
+                            lambda consulta_id, monto: self.cierre_caja_model.notificar_nueva_consulta(consulta_id, monto)
+                        )
+                    # Alternativa: usar operacionExitosa
+                    self.consulta_model.operacionExitosa.connect(
+                        lambda: self._refresh_cierre_caja("Consulta registrada")
+                    )
+                    print("   ✅ Consultas → Cierre de Caja conectado")
+                
+                # ===== LABORATORIO =====
+                if self.laboratorio_model:
+                    # Conectar signal de creación de análisis
+                    if hasattr(self.laboratorio_model, 'analisisCreado'):
+                        self.laboratorio_model.analisisCreado.connect(
+                            lambda lab_id, monto: self.cierre_caja_model.notificar_nuevo_laboratorio(lab_id, monto)
+                        )
+                    # Alternativa: usar operacionExitosa
+                    self.laboratorio_model.operacionExitosa.connect(
+                        lambda: self._refresh_cierre_caja("Análisis registrado")
+                    )
+                    print("   ✅ Laboratorio → Cierre de Caja conectado")
+                
+                # ===== ENFERMERÍA =====
+                if self.enfermeria_model:
+                    # Conectar signal de creación de procedimiento
+                    if hasattr(self.enfermeria_model, 'procedimientoCreado'):
+                        self.enfermeria_model.procedimientoCreado.connect(
+                            lambda enf_id, monto: self.cierre_caja_model.notificar_nueva_enfermeria(enf_id, monto)
+                        )
+                    # Alternativa: usar operacionExitosa
+                    self.enfermeria_model.operacionExitosa.connect(
+                        lambda: self._refresh_cierre_caja("Procedimiento registrado")
+                    )
+                    print("   ✅ Enfermería → Cierre de Caja conectado")
+            
+            # Conectar errores y éxitos (código existente sin cambios)
             models_with_errors = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.usuario_model, self.gasto_model,
@@ -512,7 +594,7 @@ class AppController(QObject):
                     if hasattr(model, 'successMessage'):
                         model.successMessage.connect(self._on_model_success)
 
-            # Conexiones específicas para modelos especializados
+            # Conexiones específicas para modelos especializados (código existente...)
             if self.proveedor_model:
                 self.proveedor_model.proveedorCreado.connect(self._on_proveedor_creado)
                 self.proveedor_model.proveedorActualizado.connect(self._on_proveedor_actualizado)
@@ -654,13 +736,37 @@ class AppController(QObject):
     # Handlers para eventos específicos de modelos
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
-        if self.inventario_model:
-            QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+        """Handler mejorado para ventas creadas"""
+        try:
+            print(f"🛒 Venta creada - ID: {venta_id}, Total: Bs {total:,.2f}")
+            
+            # Actualizar inventario (código existente)
+            if self.inventario_model:
+                QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+            
+            # 🔥 NUEVO: Notificar al cierre de caja inmediatamente
+            if self.cierre_caja_model:
+                self.cierre_caja_model.notificar_nueva_venta(venta_id, total)
+                
+        except Exception as e:
+            print(f"❌ Error procesando venta creada: {e}")
 
     @Slot(int, float)
     def _on_compra_creada(self, compra_id: int, total: float):
-        if self.inventario_model:
-            QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+        """Handler mejorado para compras creadas"""
+        try:
+            print(f"🛍️ Compra creada - ID: {compra_id}, Total: Bs {total:,.2f}")
+            
+            # Actualizar inventario (código existente)
+            if self.inventario_model:
+                QTimer.singleShot(1000, self.inventario_model.refresh_productos)
+            
+            # 🔥 NUEVO: Notificar al cierre de caja inmediatamente
+            if self.cierre_caja_model:
+                self.cierre_caja_model.notificar_nueva_compra(compra_id, total)
+                
+        except Exception as e:
+            print(f"❌ Error procesando compra creada: {e}")
 
     @Slot(int, str)
     def _on_proveedor_creado(self, proveedor_id: int, nombre: str):
@@ -681,26 +787,36 @@ class AppController(QObject):
         else:
             self.showNotification("Error en Reporte", message)
 
-    @Slot(int, float)  
+    @Slot(int, float)
     def _on_transaccion_financiera(self, transaccion_id: int, monto: float):
-        """Handler para transacciones financieras que afectan el cierre"""
-        if self.cierre_caja_model:
-            print(f"💰 Transacción registrada - ID: {transaccion_id}, Monto: {monto}")
-            # Delay de 500ms para que la BD se actualice completamente
-            QTimer.singleShot(500, self._refresh_cierre_caja)
+        """Handler genérico para transacciones financieras - MEJORADO"""
+        try:
+            if self.cierre_caja_model:
+                print(f"💰 Transacción registrada - ID: {transaccion_id}, Monto: {monto}")
+                
+                # Refresh inmediato sin delay
+                self.cierre_caja_model.repository.refresh_cache_immediately()
+                # Delay mínimo para que la BD se actualice
+                QTimer.singleShot(200, lambda: self._refresh_cierre_caja("Transacción general"))
+        except Exception as e:
+            print(f"❌ Error procesando transacción: {e}")
 
     @Slot(str)
     def _refresh_cierre_caja(self, mensaje: str = ""):
-        """Refresca los datos del cierre de caja"""
+        """Refresca los datos del cierre de caja - MÉTODO MEJORADO"""
         try:
             if self.cierre_caja_model:
-                print("🔄 Refrescando datos de Cierre de Caja...")
-                self.cierre_caja_model.actualizarDatos()
+                print(f"🔄 Refrescando datos de Cierre de Caja... ({mensaje})")
                 
-                # También invalidar caché del repository
-                if hasattr(self.cierre_caja_model, 'repository'):
-                    self.cierre_caja_model.repository.refresh_cache()
-                    
+                # 1. Invalidar caché inmediatamente
+                if hasattr(self.cierre_caja_model.repository, 'refresh_cache_immediately'):
+                    self.cierre_caja_model.repository.refresh_cache_immediately()
+                
+                # 2. Forzar actualización del modelo
+                self.cierre_caja_model.forzarActualizacion()
+                
+                print(f"✅ Cierre de caja actualizado: {mensaje}")
+                
         except Exception as e:
             print(f"❌ Error refrescando cierre de caja: {e}")
 

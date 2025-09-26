@@ -43,7 +43,7 @@ Item {
             id: 0,
             nombre: "Seleccionar tipo de reporte...",
             modulo: "",
-            icono: "Resources/iconos/reportes.png",
+            icono: "📊", 
             descripcion: "Seleccione el tipo de reporte que desea generar",
             color: lightGrayColor
         },
@@ -354,6 +354,7 @@ Item {
                                     id: tipoReporteCombo
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 45
+                                    currentIndex: 0
                                     
                                     model: ListModel {
                                         id: tiposReportesModel
