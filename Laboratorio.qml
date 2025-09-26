@@ -2891,7 +2891,6 @@ Item {
     }
     
     function initializarModelo() {
-        console.log("✅ LaboratorioModel disponible, inicializando datos...")
         
         if (!laboratorioModel) {
             console.log("❌ Error: laboratorioModel es null")
@@ -2901,7 +2900,7 @@ Item {
         try {
             // Configurar elementos por página según tamaño de pantalla
             var elementosPorPagina = 6
-            console.log("📊 Configurando elementos por página:", elementosPorPagina)
+            //console.log("📊 Configurando elementos por página:", elementosPorPagina)
             
             // Establecer tamaño de página
             if (laboratorioModel.itemsPerPageProperty !== elementosPorPagina) {

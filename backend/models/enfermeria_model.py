@@ -238,7 +238,7 @@ class EnfermeriaModel(QObject):
         try:
             self.global_signals.tiposProcedimientosModificados.connect(self._actualizar_tipos_procedimientos_desde_signal)
             self.global_signals.enfermeriaNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            print("🔗 Señales globales conectadas en EnfermeriaModel")
+            #print("🔗 Señales globales conectadas en EnfermeriaModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en EnfermeriaModel: {e}")
     
@@ -278,7 +278,7 @@ class EnfermeriaModel(QObject):
         if self._estadoActual != nuevo_estado:
             self._estadoActual = nuevo_estado
             self.estadoCambiado.emit(nuevo_estado)
-            logger.info(f"Estado cambiado a: {nuevo_estado}")
+            #logger.info(f"Estado cambiado a: {nuevo_estado}")
     
     # Getters/setters paginación
     def _get_current_page(self) -> int:
@@ -364,8 +364,6 @@ class EnfermeriaModel(QObject):
             for key, value in filtros_limpios.items():
                 if value and value not in ["", "Todos", "Seleccionar procedimiento..."]:
                     filtros_aplicables[key] = value
-            
-            print(f"📋 FILTROS FINALES PARA REPOSITORIO: {filtros_aplicables}")
             
             # Actualizar filtros internos
             self._filtrosActuales = filtros_aplicables
@@ -843,8 +841,6 @@ class EnfermeriaModel(QObject):
                 if value and value not in ["", "Todos", "Seleccionar procedimiento..."]:
                     filtros_aplicables[key] = value
             
-            print(f"📋 FILTROS FINALES PARA REPOSITORIO: {filtros_aplicables}")
-            
             # Actualizar filtros internos
             self._filtrosActuales = filtros_aplicables
             
@@ -907,9 +903,6 @@ class EnfermeriaModel(QObject):
                 
             # Emitir señal de datos actualizados
             self.procedimientosRecientesChanged.emit()
-            
-            print(f"✅ Página {page + 1} cargada: {len(self._procedimientosData)} registros de {self._totalRecords}")
-            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
             
             self._set_estado_actual("listo")
             
@@ -1057,7 +1050,6 @@ class EnfermeriaModel(QObject):
     def _inicializar_datos(self):
         """Inicialización inmediata de datos"""
         try:
-            print("🚀 Inicializando datos de EnfermeriaModel...")
             
             # Cargar datos de referencia primero
             self.actualizar_tipos_procedimientos()
@@ -1074,7 +1066,7 @@ class EnfermeriaModel(QObject):
     def _cargar_procedimientos_actuales(self):
         """Carga procedimientos usando filtros actuales"""
         try:
-            print(f"🔄 Recargando procedimientos con {self._itemsPerPage} elementos por página")
+            #print(f"🔄 Recargando procedimientos con {self._itemsPerPage} elementos por página")
             self.obtener_procedimientos_paginados(self._currentPage, self._itemsPerPage, self._filtrosActuales)
         except Exception as e:
             print(f"❌ Error recargando procedimientos: {e}")

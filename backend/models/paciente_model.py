@@ -58,8 +58,6 @@ class PacienteModel(QObject):
         
         # Configuración inicial
         self._cargar_datos_iniciales()
-        
-        print("👥 PacienteModel inicializado - SIN campo Edad")
     
     # ===============================
     # PROPERTIES PARA QML
@@ -441,7 +439,6 @@ class PacienteModel(QObject):
         try:
             self._cargar_pacientes()
             self._cargar_estadisticas()
-            print("📊 Datos iniciales de pacientes cargados")
         except Exception as e:
             print(f"❌ Error cargando datos iniciales: {e}")
             self.errorOccurred.emit("Error inicial", f"Error cargando datos: {str(e)}")
@@ -458,7 +455,6 @@ class PacienteModel(QObject):
             self._pacientes = pacientes
             self._pacientes_filtrados = pacientes.copy()
             self.pacientesChanged.emit()
-            print(f"👥 Pacientes cargados: {len(pacientes)}")
                 
         except Exception as e:
             print(f"❌ Error cargando pacientes: {e}")
@@ -472,7 +468,6 @@ class PacienteModel(QObject):
             if estadisticas:
                 self._estadisticas = estadisticas
                 self.estadisticasChanged.emit()
-                print("📈 Estadísticas de pacientes cargadas")
         except Exception as e:
             print(f"❌ Error cargando estadísticas: {e}")
             self._estadisticas = {}

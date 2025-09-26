@@ -281,8 +281,6 @@ class LaboratorioModel(QObject):
                 
             self.examenesActualizados.emit()
             
-            print(f"✅ Página {page + 1} cargada: {len(self._examenesData)} registros de {self._totalRecords}")
-            
             return {
                 'examenes': self._examenesData,
                 'page': page,
@@ -641,7 +639,7 @@ class LaboratorioModel(QObject):
             tipos = self.repository.get_analysis_types()
             self._tiposAnalisisData = tipos
             self.tiposAnalisisActualizados.emit()
-            print(f"🔬 Tipos de análisis cargados: {len(tipos)}")
+            #print(f"🔬 Tipos de análisis cargados: {len(tipos)}")
         except Exception as e:
             self.errorOcurrido.emit(f"Error cargando tipos: {str(e)}", 'LOAD_TYPES_ERROR')
     

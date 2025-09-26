@@ -83,9 +83,6 @@ class EnfermeriaRepository:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # ✅ LOGS DE DIAGNÓSTICO DETALLADOS
-                logger.info(f"🔍 REPOSITORIO - Filtros recibidos: {filtros}")
-                
                 # Consulta base corregida
                 query = """
                     SELECT 
@@ -122,7 +119,6 @@ class EnfermeriaRepository:
                 
                 # ✅ FILTROS CORREGIDOS CON LOGS
                 if filtros:
-                    logger.info(f"📋 Aplicando filtros: {filtros}")
                     
                     # Filtro por búsqueda (paciente/cédula)
                     busqueda = filtros.get('busqueda', '').strip()
@@ -179,12 +175,6 @@ class EnfermeriaRepository:
                 query += " OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
                 params.extend([offset, limit])
                 
-                # ✅ LOG DE QUERY FINAL
-                logger.info(f"🗃️ Query final - offset={offset}, limit={limit}")
-                logger.info(f"📝 Condiciones WHERE: {len(conditions)} aplicadas")
-                if conditions:
-                    logger.info(f"🔍 WHERE clause: {' AND '.join(conditions)}")
-                
                 cursor.execute(query, params)
                 
                 procedimientos = []
@@ -207,13 +197,6 @@ class EnfermeriaRepository:
                         'pacienteApellidoM': row.pacienteApellidoM
                     })
                 
-                logger.info(f"✅ Obtenidos {len(procedimientos)} procedimientos paginados exitosamente")
-                
-                # ✅ LOG DE MUESTRA DE DATOS
-                if procedimientos:
-                    primer_proc = procedimientos[0]
-                    logger.info(f"📋 Muestra primer resultado - Tipo: '{primer_proc['tipo']}', ID: {primer_proc['procedimientoId']}")
-                
                 return procedimientos
                 
         except Exception as e:
@@ -227,9 +210,6 @@ class EnfermeriaRepository:
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
-                
-                # ✅ LOG DE DIAGNÓSTICO
-                logger.info(f"🔢 Contando registros con filtros: {filtros}")
                 
                 query = """
                     SELECT COUNT(*) as total 
@@ -283,8 +263,6 @@ class EnfermeriaRepository:
                 cursor.execute(query, params)
                 result = cursor.fetchone()
                 total = result.total if result else 0
-                
-                logger.info(f"✅ Total de procedimientos con filtros: {total}")
                 return total
                 
         except Exception as e:

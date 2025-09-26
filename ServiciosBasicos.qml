@@ -186,10 +186,10 @@ Item {
         target: appController
         
         function onModelsReady() {
-            console.log("🚀 Models listos desde AppController")
+            //console.log("🚀 Models listos desde AppController")
             if (appController && appController.gasto_model_instance) {
                 gastoModelInstance = appController.gasto_model_instance
-                console.log("✅ GastoModel disponible")
+                //console.log("✅ GastoModel disponible")
                 Qt.callLater(function() {
                     loadTiposGastosFromModel()
                     loadProveedoresFromModel()
@@ -2282,7 +2282,7 @@ Item {
         // Verificar si ya tenemos el modelo disponible
         if (appController && appController.gasto_model_instance) {
             gastoModelInstance = appController.gasto_model_instance
-            console.log("GastoModel disponible inmediatamente")
+            //console.log("GastoModel disponible inmediatamente")
             Qt.callLater(function() {
                 loadTiposGastosFromModel()
                 loadProveedoresFromModel()  // ✅ NUEVA CARGA

@@ -70,13 +70,10 @@ class ConsultaModel(QObject):
         # ✅ AUTENTICACIÓN CON ROL
         self._usuario_actual_id = 0
         self._usuario_actual_rol = ""  # ✅ NUEVO: Almacenar rol del usuario
-        print("🩺 ConsultaModel inicializado - Esperando autenticación")
         
         # Configuración
         self._autoRefreshInterval = 30000  # 30 segundos
         self._setupAutoRefresh()
-        
-        print("🩺 ConsultaModel inicializado con gestión de pacientes por cédula")
     
     # ===============================
     # ✅ MÉTODO FALTANTE PARA APPCONTROLLER
@@ -88,7 +85,7 @@ class ConsultaModel(QObject):
             self.global_signals.especialidadesModificadas.connect(self._actualizar_especialidades_desde_signal)
             self.global_signals.consultasNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             
-            print("🔗 Señales globales conectadas en ConsultaModel")
+            #print("🔗 Señales globales conectadas en ConsultaModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en ConsultaModel: {e}")
     @Slot(int)

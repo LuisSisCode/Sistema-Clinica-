@@ -907,9 +907,6 @@ Item {
     
     function cargarDatosOriginales() {
         if (!usuarioModel || !usuarioModel.usuarios) return
-        
-        console.log("📄 Cargando datos originales de usuarios...")
-        
         usuariosOriginales = []
         
         for (var i = 0; i < usuarioModel.usuarios.length; i++) {

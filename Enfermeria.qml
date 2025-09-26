@@ -137,7 +137,7 @@ Item {
     Connections {
         target: appController
         function onModelsReady() {
-            console.log("🔗 Modelos listos, conectando EnfermeriaModel...")
+            //console.log("🔗 Modelos listos, conectando EnfermeriaModel...")
             conectarModelo()
         }
     }
@@ -226,7 +226,6 @@ Item {
         }
         
         function onEstadoCambiado(nuevoEstado) {
-            console.log("🔄 Estado enfermería:", nuevoEstado)
             if (nuevoEstado === "listo") {
                 formEnabled = true
             } else if (nuevoEstado === "cargando") {
@@ -493,7 +492,6 @@ Item {
                                             }
                                         }
                                     }
-                                    console.log("🏥 Modelo procedimientos actualizado:", modelData.length, "elementos")
                                     return modelData
                                 }
                                 
@@ -2827,7 +2825,7 @@ Item {
             
             if (enfermeriaModel) {
                 modeloConectado = true
-                console.log("✅ EnfermeriaModel conectado exitosamente")
+                //console.log("✅ EnfermeriaModel conectado exitosamente")
                 initializarModelo()
                 return true
             }
@@ -2858,8 +2856,6 @@ Item {
             console.log("❌ Modelo no disponible para inicialización")
             return
         }
-        
-        console.log("🚀 Inicializando datos de EnfermeriaModel...")
         
         try {
             // Configurar elementos por página

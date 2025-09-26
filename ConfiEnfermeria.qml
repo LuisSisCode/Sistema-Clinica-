@@ -822,7 +822,7 @@ Item {
     
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("🩹 Componente de configuración de procedimientos iniciado")
+        //console.log("🩹 Componente de configuración de procedimientos iniciado")
         
         // Verificar que el modelo esté disponible
         if (confiEnfermeriaModel) {

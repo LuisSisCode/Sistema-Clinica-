@@ -121,7 +121,7 @@ class TrabajadorModel(QObject):
             self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_tipos_trabajadores_desde_signal)
             self.global_signals.trabajadoresNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             
-            print("🔗 Señales globales conectadas en TrabajadorModel")
+            #print("🔗 Señales globales conectadas en TrabajadorModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales: {e}")
         

@@ -194,7 +194,7 @@ class GastoModel(QObject):
             self.global_signals.tiposGastosModificados.connect(self._actualizar_tipos_gastos_desde_signal)
             self.global_signals.configuracionGastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             self.global_signals.gastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            print("🔗 Señales globales conectadas en GastoModel")
+            #print("🔗 Señales globales conectadas en GastoModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en GastoModel: {e}")
     

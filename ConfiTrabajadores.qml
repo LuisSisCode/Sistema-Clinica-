@@ -788,7 +788,7 @@ Item {
     
     // ===== EVENTOS =====
     Component.onCompleted: {
-        console.log("👥 Componente de configuración de tipos de trabajadores iniciado")
+        //console.log("👥 Componente de configuración de tipos de trabajadores iniciado")
         
         // Cargar datos iniciales si el modelo está disponible
         if (confiTrabajadoresModel) {

@@ -178,15 +178,8 @@ Item {
         for (var i = 0; i < usuarioModel.usuarios.length; i++) {
             usuariosOriginales.push(usuarioModel.usuarios[i])
         }
-
-        
         // Aplicar filtros para actualizar la vista
         aplicarFiltros()
-        
-        // Log adicional para debugging
-        if (usuariosOriginales.length > 0) {
-            console.log("📊 Primer usuario cargado:", usuariosOriginales[0].Nombre, usuariosOriginales[0].nombre_usuario)
-        }
     }
 
     // ===== LAYOUT PRINCIPAL RESPONSIVO =====
@@ -825,8 +818,6 @@ Item {
 
     // FUNCIÓN DE FILTRADO DEL LADO DEL CLIENTE
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros en el cliente...")
-        
         usuariosFiltradosModel.clear()
         
         var textoBusqueda = campoBusqueda.text.toLowerCase()

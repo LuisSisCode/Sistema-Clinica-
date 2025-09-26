@@ -114,6 +114,178 @@ class CierreCajaModel(QObject):
         return True
     
     # ===============================
+    # 🔥 MÉTODOS DE NOTIFICACIÓN PARA TRANSACCIONES
+    # ===============================
+    
+    @Slot(int, float)
+    def notificar_nueva_venta(self, venta_id: int, monto: float):
+        """
+        Método SIMPLIFICADO para notificar nueva venta
+        ✅ FIX: Usar refresh directo en lugar de polling complejo
+        """
+        try:
+            print(f"💰 Nueva venta notificada: ID {venta_id}, Monto: Bs {monto:,.2f}")
+            
+            # ✅ MÉTODO SIMPLIFICADO: Usar refresh directo (el que funciona)
+            self._refresh_cierre_directo("venta", venta_id, monto)
+            
+        except Exception as e:
+            print(f"❌ Error notificando venta en cierre: {e}")
+            self.operacionError.emit(f"Error actualizando cierre por venta: {str(e)}")
+
+    # ✅ MÉTODO ADICIONAL PARA DIAGNÓSTICO
+    def _debug_estado_cierre_antes_despues(self, venta_id: int, monto: float):
+        """Método de diagnóstico para comparar estado antes/después"""
+        try:
+            print("=" * 50)
+            print(f"🔍 DEBUG ESTADO CIERRE - VENTA {venta_id}")
+            print("=" * 50)
+            
+            # Estado actual
+            datos_actuales = self.repository.get_datos_dia_actual(self._fecha_actual)
+            
+            total_ingresos = datos_actuales['resumen'].get('total_ingresos', 0)
+            transacciones = datos_actuales['resumen'].get('transacciones_ingresos', 0)
+            
+            print(f"📊 ESTADO ACTUAL:")
+            print(f"   Total ingresos: Bs {total_ingresos:,.2f}")
+            print(f"   Transacciones: {transacciones}")
+            
+            # Estado esperado
+            total_esperado = total_ingresos + monto
+            transacciones_esperadas = transacciones + 1
+            
+            print(f"📈 ESTADO ESPERADO DESPUÉS DE VENTA:")
+            print(f"   Total esperado: Bs {total_esperado:,.2f}")
+            print(f"   Transacciones esperadas: {transacciones_esperadas}")
+            
+            print("=" * 50)
+            
+        except Exception as e:
+            print(f"❌ Error en debug estado: {e}")
+
+    @Slot(int, float)  
+    def notificar_nueva_compra(self, compra_id: int, monto: float):
+        """
+        Método SIMPLIFICADO para notificar nueva compra
+        """
+        try:
+            print(f"💸 Nueva compra notificada: ID {compra_id}, Monto: Bs {monto:,.2f}")
+            
+            self._refresh_cierre_directo("compra", compra_id, monto)
+            
+        except Exception as e:
+            print(f"❌ Error notificando compra en cierre: {e}")
+            self.operacionError.emit(f"Error actualizando cierre por compra: {str(e)}")
+
+    @Slot(int, float)
+    def notificar_nuevo_gasto(self, gasto_id: int, monto: float):
+        """
+        Método SIMPLIFICADO para notificar nuevo gasto
+        """
+        try:
+            print(f"💳 Nuevo gasto notificado: ID {gasto_id}, Monto: Bs {monto:,.2f}")
+            
+            self._refresh_cierre_directo("gasto", gasto_id, monto)
+            
+        except Exception as e:
+            print(f"❌ Error notificando gasto en cierre: {e}")
+            self.operacionError.emit(f"Error actualizando cierre por gasto: {str(e)}")
+
+
+    @Slot(int, float)
+    def notificar_nueva_consulta(self, consulta_id: int, monto: float):
+        """
+        Método SIMPLIFICADO para notificar nueva consulta
+        """
+        try:
+            print(f"🩺 Nueva consulta notificada: ID {consulta_id}, Monto: Bs {monto:,.2f}")
+            
+            self._refresh_cierre_directo("consulta", consulta_id, monto)
+            
+        except Exception as e:
+            print(f"❌ Error notificando consulta en cierre: {e}")
+            self.operacionError.emit(f"Error actualizando cierre por consulta: {str(e)}")
+
+    @Slot(int, float)
+    def notificar_nuevo_laboratorio(self, lab_id: int, monto: float):
+        """
+        Método SIMPLIFICADO para notificar nuevo análisis de laboratorio
+        """
+        try:
+            print(f"🔬 Nuevo análisis notificado: ID {lab_id}, Monto: Bs {monto:,.2f}")
+            
+            self._refresh_cierre_directo("laboratorio", lab_id, monto)
+            
+        except Exception as e:
+            print(f"❌ Error notificando análisis en cierre: {e}")
+            self.operacionError.emit(f"Error actualizando cierre por análisis: {str(e)}")
+
+    @Slot(int, float)
+    def notificar_nueva_enfermeria(self, enf_id: int, monto: float):
+        """
+        Método SIMPLIFICADO para notificar nuevo procedimiento de enfermería
+        ✅ FIX: Corregir parámetros para recibir (int, float)
+        """
+        try:
+            print(f"💉 Nuevo procedimiento notificado: ID {enf_id}, Monto: Bs {monto:,.2f}")
+            
+            self._refresh_cierre_directo("enfermeria", enf_id, monto)
+            
+        except Exception as e:
+            print(f"❌ Error notificando procedimiento en cierre: {e}")
+            self.operacionError.emit(f"Error actualizando cierre por procedimiento: {str(e)}")
+    
+    def _refresh_cierre_directo(self, tipo_transaccion: str, transaccion_id: int, monto: float):
+        """REFRESH DIRECTO CON VERIFICACIÓN - VERSIÓN CORREGIDA"""
+        try:
+            print(f"🔄 REFRESH DIRECTO CORREGIDO: {tipo_transaccion} {transaccion_id} - Bs {monto}")
+            
+            # 1. FORZAR COMMIT EN BD PRIMERO
+            self.repository.forzar_commit_bd()
+            
+            # 2. Invalidar inmediatamente
+            self.repository.invalidar_cache_transaccion()
+            
+            # 3. AGREGAR DELAY más largo para BD
+            from PySide6.QtCore import QTimer
+            
+            def delayed_refresh_with_verification():
+                try:
+                    print(f"🔍 VERIFICANDO venta {transaccion_id} en BD...")
+                    
+                    # Verificar que la venta existe en BD
+                    fecha_actual = datetime.now().strftime("%d/%m/%Y")
+                    venta_existe = self.repository.verificar_venta_incluida_en_cierre(transaccion_id, fecha_actual)
+                    
+                    if venta_existe:
+                        print(f"✅ Venta {transaccion_id} CONFIRMADA en BD")
+                    else:
+                        print(f"❌ Venta {transaccion_id} NO ENCONTRADA en BD - Esperando más...")
+                        # Reintentar después de 1 segundo más
+                        QTimer.singleShot(1000, delayed_refresh_with_verification)
+                        return
+                    
+                    # Re-invalidar después del delay
+                    self.repository.invalidar_cache_transaccion()
+                    
+                    # Forzar refresh
+                    self.repository.refresh_cache_immediately()
+                    
+                    # Recargar datos
+                    self._cargar_datos_dia()
+                    
+                    print(f"✅ REFRESH DIRECTO COMPLETADO CON VERIFICACIÓN: {tipo_transaccion} {transaccion_id}")
+                    
+                except Exception as e:
+                    print(f"❌ Error en refresh verificado: {e}")
+            
+            # Ejecutar después de 1 segundo (más tiempo para BD)
+            QTimer.singleShot(1000, delayed_refresh_with_verification)
+            
+        except Exception as e:
+            print(f"❌ Error en refresh directo corregido: {e}")
+    # ===============================
     # PROPERTIES - Datos para QML
     # ===============================
     
@@ -357,15 +529,58 @@ class CierreCajaModel(QObject):
             print(f"❌ {error_msg}")
         finally:
             self._set_loading(False)
-    
+    @Slot(result=str)
+    def diagnosticar_estado_actual(self):
+        """Diagnóstico simplificado del estado actual"""
+        try:
+            if not self._verificar_autenticacion():
+                return "❌ Usuario no autenticado"
+            
+            # Obtener datos actuales
+            datos_actuales = self.repository.get_datos_dia_actual(self._fecha_actual)
+            
+            # Obtener datos sin cache para comparar
+            datos_sin_cache = self.repository.get_datos_dia_actual_sin_cache(self._fecha_actual)
+            
+            total_con_cache = datos_actuales['resumen'].get('total_ingresos', 0)
+            total_sin_cache = datos_sin_cache['resumen'].get('total_ingresos', 0)
+            
+            diferencia = abs(total_con_cache - total_sin_cache)
+            
+            diagnostico = f"""
+                🔍 DIAGNÓSTICO CIERRE DE CAJA - {self._fecha_actual}
+                ════════════════════════════════════════════
+                💰 Total con caché: Bs {total_con_cache:,.2f}
+                💰 Total sin caché: Bs {total_sin_cache:,.2f}
+                🔄 Diferencia: Bs {diferencia:,.2f}
+                ✅ Estado: {'CONSISTENTE' if diferencia < 0.01 else 'INCONSISTENTE'}
+                📊 Transacciones con caché: {datos_actuales['resumen'].get('transacciones_ingresos', 0)}
+                📊 Transacciones sin caché: {datos_sin_cache['resumen'].get('transacciones_ingresos', 0)}
+                🕒 Timestamp: {datetime.now().strftime('%H:%M:%S')}
+                ════════════════════════════════════════════
+                """
+            
+            print(diagnostico)
+            return diagnostico
+            
+        except Exception as e:
+            error_msg = f"❌ Error en diagnóstico: {str(e)}"
+            print(error_msg)
+            return error_msg
     @Slot()
     def actualizarDatos(self):
-        """Actualiza los datos del cierre"""
+        """Actualiza los datos del cierre - USAR MÉTODO DIRECTO"""
         if not self._verificar_autenticacion():
             return
         
-        self._cargar_datos_dia()
-        self.operacionExitosa.emit("Datos actualizados correctamente")
+        try:
+            # Usar refresh directo sin delays
+            self.repository.invalidar_cache_transaccion()
+            self._cargar_datos_dia()
+            self.operacionExitosa.emit("Datos actualizados correctamente")
+            
+        except Exception as e:
+            self.operacionError.emit(f"Error actualizando datos: {str(e)}")
     
     @Slot()
     def limpiarCierre(self):
@@ -610,10 +825,20 @@ class CierreCajaModel(QObject):
 
     @Slot()
     def forzarActualizacion(self):
-        """Fuerza actualización inmediata desde QML"""
-        print("🔄 Forzando actualización de datos...")
-        self.repository.refresh_cache()
-        self._cargar_datos_dia()
+        """Fuerza actualización inmediata desde QML - MÉTODO SIMPLIFICADO"""
+        try:
+            print("🔄 Forzando actualización de datos...")
+            
+            # Usar el método directo que funciona
+            self.repository.invalidar_cache_completo()
+            self.repository.refresh_cache_immediately()
+            self._cargar_datos_dia()
+            
+            print("✅ Actualización forzada completada")
+            
+        except Exception as e:
+            print(f"❌ Error en actualización forzada: {e}")
+            self.operacionError.emit(f"Error actualizando datos: {str(e)}")
 
     def _debug_datos_arqueo(self, datos_organizados):
         """Método de debug para inspeccionar la estructura real de datos - TEMPORAL"""

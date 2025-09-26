@@ -1132,7 +1132,7 @@ class VentaRepository(BaseRepository):
             self._force_reload_productos = True
             self._bypass_all_cache = True
             
-            print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches limpiados, flags de bypass activados")
+            #print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches limpiados, flags de bypass activados")
             
             # También invalidar ProductoRepository si está disponible
             if hasattr(self, 'producto_repo') and self.producto_repo:

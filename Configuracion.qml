@@ -1009,8 +1009,8 @@ Item {
                         
                         background: Rectangle {
                             color: parent.enabled ? 
-                                   (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
-                                   Qt.lighter(successColor, 1.5)
+                                (parent.pressed ? Qt.darker(successColor, 1.2) : successColor) :
+                                Qt.lighter(successColor, 1.5)
                             radius: radiusSmall
                         }
                         
@@ -1025,9 +1025,54 @@ Item {
                         }
                         
                         onClicked: {
-                            // ✅ USAR USUARIO_MODEL PARA CAMBIAR CONTRASEÑA
-                            if (authModel && authModel.isAuthenticated && appController && appController.usuario_model_instance) {
-                                var userId = authModel.get_user_id()
+                            // ✅ MEJORADO: Mejor manejo de errores y verificaciones
+                            try {
+                                console.log("🔐 Iniciando cambio de contraseña...")
+                                
+                                // Verificar que authModel existe y está autenticado
+                                if (!authModel) {
+                                    console.error("❌ authModel no está disponible")
+                                    showNotification("Error", "Sistema de autenticación no disponible", "error")
+                                    return
+                                }
+                                
+                                if (!authModel.isAuthenticated) {
+                                    console.error("❌ Usuario no autenticado")
+                                    showNotification("Error", "Usuario no autenticado", "error")
+                                    return
+                                }
+                                
+                                // Verificar que appController existe
+                                if (!appController) {
+                                    console.error("❌ appController no está disponible")
+                                    showNotification("Error", "Controlador de aplicación no disponible", "error")
+                                    return
+                                }
+                                
+                                // Verificar que usuario_model_instance existe
+                                if (!appController.usuario_model_instance) {
+                                    console.error("❌ usuario_model_instance no está disponible")
+                                    showNotification("Error", "Módulo de usuarios no disponible", "error")
+                                    return
+                                }
+                                
+                                // Obtener ID del usuario actual
+                                var userId = 0
+                                if (authModel.get_user_id) {
+                                    userId = authModel.get_user_id()
+                                } else if (authModel.current_user_id !== undefined) {
+                                    userId = authModel.current_user_id
+                                }
+                                
+                                if (userId <= 0) {
+                                    console.error("❌ ID de usuario inválido:", userId)
+                                    showNotification("Error", "No se pudo obtener el ID del usuario actual", "error")
+                                    return
+                                }
+                                
+                                console.log("👤 Cambiando contraseña para usuario ID:", userId)
+                                
+                                // Intentar cambiar contraseña
                                 var success = appController.usuario_model_instance.cambiarContrasena(
                                     userId,
                                     currentPasswordField.text,
@@ -1035,13 +1080,20 @@ Item {
                                 )
                                 
                                 if (success) {
+                                    console.log("✅ Contraseña cambiada exitosamente")
                                     currentPasswordField.clear()
                                     newPasswordField.clear()
                                     confirmPasswordField.clear()
                                     passwordChanged()
+                                    showNotification("Éxito", "Contraseña actualizada correctamente", "success")
+                                } else {
+                                    console.error("❌ Error cambiando contraseña - método retornó false")
+                                    showNotification("Error", "No se pudo cambiar la contraseña. Verifique su contraseña actual.", "error")
                                 }
-                            } else {
-                                showNotification("Error", "No se puede cambiar la contraseña. Usuario no autenticado.", "error")
+                                
+                            } catch (error) {
+                                console.error("❌ Excepción cambiando contraseña:", error)
+                                showNotification("Error", "Error inesperado: " + error, "error")
                             }
                         }
                     }
