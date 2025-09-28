@@ -1274,6 +1274,261 @@ class EnfermeriaModel(QObject):
         except Exception as e:
             print(f"❌ Error durante cleanup de {self.__class__.__name__}: {e}")
 
+    """
+    Slots de búsqueda de pacientes para enfermeria_model.py
+    Agregar estos métodos a la clase EnfermeriaModel
+    """
+
+    @Slot(str, int, result='QVariantList')
+    def buscar_paciente_unificado(self, termino_busqueda: str, limite: int = 5):
+        """Slot unificado para búsqueda inteligente de pacientes"""
+        try:
+            if len(termino_busqueda.strip()) < 2:
+                return []
+            
+            print(f"🔍 Búsqueda unificada: '{termino_busqueda}' (límite: {limite})")
+            
+            resultados = self.repository.buscar_paciente_unificado(termino_busqueda.strip(), limite)
+            
+            # Convertir a formato QML-friendly
+            resultados_qml = []
+            for resultado in resultados:
+                resultados_qml.append({
+                    'id': resultado['id'],
+                    'nombreCompleto': resultado['nombreCompleto'],
+                    'nombre': resultado['nombre'],
+                    'apellidoPaterno': resultado['apellidoPaterno'],
+                    'apellidoMaterno': resultado['apellidoMaterno'],
+                    'cedula': resultado['cedula'],
+                    'tipo_coincidencia': resultado.get('tipo_coincidencia', 'general'),
+                    'score': resultado.get('score', 1.0)
+                })
+            
+            print(f"📋 Encontrados {len(resultados_qml)} pacientes")
+            return resultados_qml
+            
+        except Exception as e:
+            error_msg = f"Error en búsqueda unificada: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'UNIFIED_SEARCH_ERROR')
+            return []
+
+    @Slot(str, result='QVariantMap')
+    def buscar_paciente_por_cedula(self, cedula: str):
+        """Busca un paciente específico por su cédula"""
+        try:
+            if len(cedula.strip()) < 5:
+                return {}
+            
+            print(f"🔍 Buscando paciente por cédula: {cedula}")
+            
+            paciente = self.repository.search_patient_by_cedula_exact(cedula.strip())
+            
+            if paciente:
+                print(f"👤 Paciente encontrado: {paciente.get('nombreCompleto', 'N/A')}")
+                self.pacienteEncontradoPorCedula.emit(paciente)
+                return paciente
+            else:
+                print(f"⚠️ No se encontró paciente con cédula: {cedula}")
+                self.pacienteNoEncontrado.emit(cedula)
+                return {}
+                
+        except Exception as e:
+            error_msg = f"Error buscando paciente por cédula: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
+            return {}
+
+    @Slot(str, str, str, str, result=int)
+    def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
+                                        apellido_materno: str = "", cedula: str = "") -> int:
+        """Busca paciente por cédula o crea uno nuevo"""
+        try:
+            # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
+            if not self._verificar_autenticacion():
+                return -1
+            
+            if not nombre or len(nombre.strip()) < 2:
+                self.operacionError.emit("Nombre es obligatorio")
+                return -1
+            
+            if not apellido_paterno or len(apellido_paterno.strip()) < 2:
+                self.operacionError.emit("Apellido paterno es obligatorio")
+                return -1
+            
+            # La cédula es opcional ahora
+            cedula_clean = cedula.strip() if cedula else ""
+            
+            print(f"🔄 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) gestionando paciente: {nombre} {apellido_paterno}")
+            
+            # Usar método inteligente del repository
+            paciente_id = self.repository.buscar_o_crear_paciente_simple(
+                nombre.strip(),
+                apellido_paterno.strip(),
+                apellido_materno.strip(),
+                cedula_clean
+            )
+            
+            if paciente_id and paciente_id > 0:
+                self.operacionExitosa.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
+                return paciente_id
+            else:
+                self.operacionError.emit("Error gestionando paciente")
+                return -1
+                
+        except Exception as e:
+            error_msg = f"Error gestionando paciente: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.operacionError.emit(error_msg)
+            return -1
+
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
+        """Busca pacientes por nombre completo"""
+        try:
+            if len(nombre_completo.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
+            
+            resultados = self.repository.search_patient_by_full_name(nombre_completo.strip(), limite)
+            
+            # Convertir a formato QML
+            resultados_qml = []
+            for resultado in resultados:
+                resultados_qml.append({
+                    'id': resultado['id'],
+                    'nombreCompleto': resultado['nombreCompleto'],
+                    'nombre': resultado['nombre'],
+                    'apellidoPaterno': resultado['apellidoPaterno'],
+                    'apellidoMaterno': resultado['apellidoMaterno'],
+                    'cedula': resultado['cedula'],
+                    'tipo_coincidencia': resultado.get('tipo_coincidencia', 'nombre'),
+                    'score': resultado.get('score', 1.0)
+                })
+            
+            print(f"📋 Encontrados {len(resultados_qml)} pacientes por nombre")
+            return resultados_qml
+            
+        except Exception as e:
+            error_msg = f"Error buscando por nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return []
+
+    @Slot(str, result='QVariantMap')
+    def analizar_nombre_completo(self, nombre_completo: str):
+        """Analiza un nombre completo y lo separa en componentes"""
+        try:
+            if not nombre_completo or len(nombre_completo.strip()) < 2:
+                return {
+                    'nombre': '',
+                    'apellidoPaterno': '',
+                    'apellidoMaterno': ''
+                }
+            
+            componentes = self.repository._analizar_termino_nombre(nombre_completo.strip())
+            
+            return {
+                'nombre': componentes.get('nombre', ''),
+                'apellidoPaterno': componentes.get('apellido_paterno', ''),
+                'apellidoMaterno': componentes.get('apellido_materno', '')
+            }
+            
+        except Exception as e:
+            error_msg = f"Error analizando nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            return {
+                'nombre': '',
+                'apellidoPaterno': '',
+                'apellidoMaterno': ''
+            }
+
+    @Slot(str, result=str)
+    def detectar_tipo_busqueda(self, termino: str):
+        """Detecta el tipo de búsqueda según el término ingresado"""
+        try:
+            if not termino or len(termino.strip()) < 2:
+                return "desconocido"
+            
+            tipo = self.repository._detectar_tipo_busqueda(termino.strip())
+            return tipo
+            
+        except Exception as e:
+            error_msg = f"Error detectando tipo de búsqueda: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            return "desconocido"
+
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes(self, termino_busqueda: str, limite: int = 5):
+        """Busca pacientes usando el nuevo sistema unificado"""
+        try:
+            # Usar el método unificado como método principal
+            return self.buscar_paciente_unificado(termino_busqueda, limite)
+            
+        except Exception as e:
+            error_msg = f"Error en búsqueda de pacientes: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
+            return []
+
+    # ===============================
+    # MÉTODOS AUXILIARES PARA BÚSQUEDA
+    # ===============================
+
+    def _gestionar_paciente_procedimiento_mejorado(self, datos: Dict[str, Any]) -> int:
+        """
+        Gestión mejorada de paciente para procedimiento usando búsqueda inteligente
+        Reemplaza el método _gestionar_paciente_procedimiento existente
+        """
+        try:
+            nombre_completo = datos.get('paciente', '').strip()
+            cedula = datos.get('cedula', '').strip()
+            
+            if not nombre_completo:
+                return -1
+            
+            # Analizar nombre completo
+            componentes = self.analizar_nombre_completo(nombre_completo)
+            nombre = componentes.get('nombre', '')
+            apellido_p = componentes.get('apellidoPaterno', '')
+            apellido_m = componentes.get('apellidoMaterno', '')
+            
+            # Si tenemos cédula, priorizarla para búsqueda
+            if cedula and len(cedula) >= 5:
+                # Buscar por cédula primero
+                paciente_existente = self.buscar_paciente_por_cedula(cedula)
+                if paciente_existente and paciente_existente.get('id'):
+                    print(f"👤 Paciente encontrado por cédula: {paciente_existente['nombreCompleto']}")
+                    return paciente_existente['id']
+            
+            # Si no se encuentra por cédula o no hay cédula, usar método inteligente
+            return self.buscar_o_crear_paciente_inteligente(nombre, apellido_p, apellido_m, cedula)
+            
+        except Exception as e:
+            print(f"Error gestionando paciente mejorado: {e}")
+            logger.error(f"Error gestionando paciente mejorado: {e}")
+            return -1
+
+    # ===============================
+    # SLOTS PARA COMPATIBILIDAD (mantener métodos existentes)
+    # ===============================
+
+    # Mantener el método original como fallback
+    def buscar_paciente_por_cedula_legacy(self, cedula: str):
+        """Método legacy - usar buscar_paciente_por_cedula en su lugar"""
+        return self.buscar_paciente_por_cedula(cedula)
+
+    def buscar_pacientes_por_nombre_legacy(self, nombre_completo: str, limite: int = 5):
+        """Método legacy - usar buscar_pacientes_por_nombre en su lugar"""
+        return self.buscar_pacientes_por_nombre(nombre_completo, limite)
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================
