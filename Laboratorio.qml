@@ -1850,7 +1850,7 @@ Item {
                             Rectangle {
                                 id: panelResultadosPacientes
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: mostrarResultadosBusqueda ? Math.min(250, resultadosBusquedaPacientesModel.count * 55 + 60) : 0
+                                Layout.preferredHeight: mostrarResultadosBusqueda ? Math.min(230, resultadosBusquedaPacientesModel.count * 55 + 60) : 0
                                 visible: mostrarResultadosBusqueda && !isEditMode
                                 
                                 color: whiteColor
@@ -2044,23 +2044,6 @@ Item {
                                                 font.pixelSize: fontBaseSize * 0.9
                                                 visible: resultadosBusquedaPacientesModel.count === 0 && mostrarResultadosBusqueda
                                             }
-                                        }
-                                    }
-                                    
-                                    // Footer con instrucciones
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: baseUnit * 3
-                                        color: lightGrayColor
-                                        radius: baseUnit * 0.4
-                                        visible: !isEditMode
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "💡 Use ↑↓ para navegar, Enter para seleccionar, Esc para cerrar"
-                                            color: textColorLight
-                                            font.pixelSize: fontBaseSize * 0.65
-                                            horizontalAlignment: Text.AlignHCenter
                                         }
                                     }
                                 }
