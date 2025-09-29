@@ -34,9 +34,7 @@ class EnfermeriaRepository:
     # ===============================
     
     def buscar_paciente_por_cedula_exacta(self, cedula: str) -> Optional[Dict[str, Any]]:
-        """
-        ✅ MÉTODO EXISTENTE: Busca un paciente específico por cédula exacta
-        """
+        """✅ MÉTODO EXISTENTE: Busca un paciente específico por cédula exacta - CORREGIDO"""
         try:
             if not cedula or len(cedula.strip()) < 5:
                 return None
@@ -60,12 +58,13 @@ class EnfermeriaRepository:
                 resultado = cursor.fetchone()
                 
                 if resultado:
+                    # ✅ ESTRUCTURA CONSISTENTE
                     return {
                         'id': resultado.id,
-                        'nombreCompleto': resultado.nombreCompleto,
+                        'nombreCompleto': resultado.nombreCompleto.strip(),
                         'nombre': resultado.Nombre,
-                        'apellidoPaterno': resultado.Apellido_Paterno,
-                        'apellidoMaterno': resultado.Apellido_Materno,
+                        'apellidoPaterno': resultado.Apellido_Paterno,  # ✅ camelCase
+                        'apellidoMaterno': resultado.Apellido_Materno,  # ✅ camelCase
                         'cedula': resultado.Cedula
                     }
                 
@@ -592,8 +591,34 @@ class EnfermeriaRepository:
             return None
     
     def _obtener_o_crear_paciente(self, cursor, datos: Dict[str, Any]) -> Optional[int]:
-        """✅ CORREGIDO: Obtiene o crea paciente manteniendo funcionalidad original + mejoras"""
+        """Obtiene o crea paciente con soporte para anónimos"""
         try:
+            # Verificar si es procedimiento anónimo
+            if datos.get('esAnonimo', False):
+                # Buscar paciente anónimo existente
+                cursor.execute("""
+                    SELECT id FROM Pacientes 
+                    WHERE Nombre = 'ANÓNIMO' AND Apellido_Paterno = 'SIN DATOS'
+                """)
+                resultado = cursor.fetchone()
+                
+                if resultado:
+                    logger.info(f"Usando paciente anónimo existente ID: {resultado.id}")
+                    return resultado.id
+                
+                # Crear paciente anónimo si no existe
+                cursor.execute("""
+                    INSERT INTO Pacientes (Nombre, Apellido_Paterno, Apellido_Materno, Cedula)
+                    VALUES ('ANÓNIMO', 'SIN DATOS', 'SIN DATOS', NULL)
+                """)
+                
+                cursor.execute("SELECT @@IDENTITY")
+                paciente_id = cursor.fetchone()[0]
+                
+                logger.info(f"Paciente anónimo creado con ID: {paciente_id}")
+                return int(paciente_id)
+            
+            # LÓGICA EXISTENTE para pacientes normales
             nombres = datos['nombreCompleto'].strip().split()
             
             # Extraer nombre y apellidos
@@ -681,12 +706,13 @@ class EnfermeriaRepository:
                 
                 pacientes = []
                 for row in cursor.fetchall():
+                    # ✅ ESTRUCTURA CONSISTENTE
                     pacientes.append({
                         'id': row.id,
                         'nombreCompleto': row.NombreCompleto.strip(),
                         'nombre': row.Nombre,
-                        'apellidoPaterno': row.Apellido_Paterno,
-                        'apellidoMaterno': row.Apellido_Materno,
+                        'apellidoPaterno': row.Apellido_Paterno,  # ✅ camelCase
+                        'apellidoMaterno': row.Apellido_Materno,  # ✅ camelCase
                         'cedula': row.Cedula
                     })
                 
@@ -697,7 +723,7 @@ class EnfermeriaRepository:
             return []
         
     def buscar_pacientes_por_nombre_completo(self, nombre_completo: str, limite: int = 10) -> List[Dict[str, Any]]:
-        """Busca pacientes por nombre completo con múltiples estrategias"""
+        """Busca pacientes por nombre completo con múltiples estrategias - CORREGIDO"""
         try:
             if not nombre_completo or len(nombre_completo.strip()) < 3:
                 return []
@@ -707,7 +733,6 @@ class EnfermeriaRepository:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Búsqueda con LIKE
                 cursor.execute("""
                     SELECT TOP (?)
                         id,
@@ -723,11 +748,12 @@ class EnfermeriaRepository:
                 
                 pacientes = []
                 for row in cursor.fetchall():
+                    # ✅ ESTRUCTURA CONSISTENTE
                     pacientes.append({
                         'id': row.id,
                         'nombre': row.Nombre,
-                        'apellidoPaterno': row.Apellido_Paterno,
-                        'apellidoMaterno': row.Apellido_Materno,
+                        'apellidoPaterno': row.Apellido_Paterno,  # ✅ camelCase
+                        'apellidoMaterno': row.Apellido_Materno,  # ✅ camelCase
                         'cedula': row.Cedula,
                         'nombreCompleto': row.nombreCompleto.strip()
                     })
@@ -841,94 +867,10 @@ class EnfermeriaRepository:
         except Exception as e:
             logger.error(f"Error buscando procedimientos: {e}")
             return []
-
-    # ===============================
-    # REPORTES Y ESTADÍSTICAS (sin cambios)
-    # ===============================
-    
-    def obtener_estadisticas_enfermeria(self, periodo: str = 'mes') -> Dict[str, Any]:
-        """Obtiene estadísticas de procedimientos de enfermería"""
-        try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Determinar el filtro de fecha según el periodo
-                if periodo == 'dia':
-                    filtro_fecha = "CAST(e.Fecha AS DATE) = CAST(GETDATE() AS DATE)"
-                elif periodo == 'semana':
-                    filtro_fecha = "e.Fecha >= DATEADD(day, -7, GETDATE())"
-                elif periodo == 'mes':
-                    filtro_fecha = "e.Fecha >= DATEADD(month, -1, GETDATE())"
-                elif periodo == 'año':
-                    filtro_fecha = "e.Fecha >= DATEADD(year, -1, GETDATE())"
-                else:
-                    filtro_fecha = "1=1"  # Sin filtro de fecha
-                
-                # Consulta de estadísticas
-                cursor.execute(f"""
-                    SELECT 
-                        COUNT(*) as TotalProcedimientos,
-                        COUNT(DISTINCT e.Id_Paciente) as TotalPacientes,
-                        COUNT(DISTINCT e.Id_Trabajador) as TotalTrabajadores,
-                        SUM(CASE WHEN e.Tipo = 'Normal' THEN ISNULL(tp.Precio_Normal, 0) * e.Cantidad 
-                                 ELSE ISNULL(tp.Precio_Emergencia, 0) * e.Cantidad END) as IngresoTotal,
-                        SUM(CASE WHEN e.Tipo = 'Normal' THEN e.Cantidad ELSE 0 END) as ProcedimientosNormales,
-                        SUM(CASE WHEN e.Tipo = 'Emergencia' THEN e.Cantidad ELSE 0 END) as ProcedimientosEmergencia
-                    FROM Enfermeria e
-                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-                    WHERE {filtro_fecha}
-                """)
-                
-                estadisticas = cursor.fetchone()
-                
-                # Procedimientos más realizados
-                cursor.execute(f"""
-                    SELECT TOP 5
-                        ISNULL(tp.Nombre, 'Procedimiento General') as Nombre,
-                        COUNT(*) as Cantidad,
-                        SUM(e.Cantidad) as TotalUnidades
-                    FROM Enfermeria e
-                    LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-                    WHERE {filtro_fecha}
-                    GROUP BY tp.Nombre
-                    ORDER BY COUNT(*) DESC
-                """)
-                
-                procedimientos_top = []
-                for row in cursor.fetchall():
-                    procedimientos_top.append({
-                        'nombre': row.Nombre,
-                        'cantidad': row.Cantidad,
-                        'totalUnidades': row.TotalUnidades
-                    })
-                
-                return {
-                    'totalProcedimientos': estadisticas.TotalProcedimientos or 0,
-                    'totalPacientes': estadisticas.TotalPacientes or 0,
-                    'totalTrabajadores': estadisticas.TotalTrabajadores or 0,
-                    'ingresoTotal': float(estadisticas.IngresoTotal or 0),
-                    'procedimientosNormales': estadisticas.ProcedimientosNormales or 0,
-                    'procedimientosEmergencia': estadisticas.ProcedimientosEmergencia or 0,
-                    'procedimientosTop': procedimientos_top,
-                    'periodo': periodo
-                }
-                
-        except Exception as e:
-            logger.error(f"Error obteniendo estadísticas de enfermería: {e}")
-            return {
-                'totalProcedimientos': 0,
-                'totalPacientes': 0,
-                'totalTrabajadores': 0,
-                'ingresoTotal': 0.0,
-                'procedimientosNormales': 0,
-                'procedimientosEmergencia': 0,
-                'procedimientosTop': [],
-                'periodo': periodo
-            }
         
     # Metodos nuevos 
     def buscar_paciente_unificado(self, termino_busqueda: str, limite: int = 5) -> List[Dict[str, Any]]:
-        """Búsqueda unificada que detecta automáticamente el tipo de entrada"""
+        """Búsqueda unificada que detecta automáticamente el tipo de entrada - CORREGIDO"""
         try:
             if not termino_busqueda or len(termino_busqueda.strip()) < 2:
                 return []
@@ -964,7 +906,7 @@ class EnfermeriaRepository:
             return []
 
     def search_patient_by_cedula_exact(self, cedula: str) -> Optional[Dict[str, Any]]:
-        """Busca paciente por cédula exacta"""
+        """Busca paciente por cédula exacta - CORREGIDO"""
         try:
             if not cedula or len(cedula.strip()) < 5:
                 return None
@@ -990,12 +932,13 @@ class EnfermeriaRepository:
                 resultado = cursor.fetchone()
                 
                 if resultado:
+                    # ✅ RETORNAR CON NOMBRES CONSISTENTES
                     return {
                         'id': resultado.id,
                         'nombreCompleto': resultado.nombreCompleto.strip(),
                         'nombre': resultado.Nombre,
-                        'apellidoPaterno': resultado.Apellido_Paterno,
-                        'apellidoMaterno': resultado.Apellido_Materno,
+                        'apellidoPaterno': resultado.Apellido_Paterno,  # ✅ camelCase
+                        'apellidoMaterno': resultado.Apellido_Materno,  # ✅ camelCase
                         'cedula': resultado.Cedula,
                         'tipo_coincidencia': 'cedula_exacta',
                         'score': 1.0
@@ -1008,7 +951,7 @@ class EnfermeriaRepository:
             return None
 
     def search_patients_by_cedula_partial(self, cedula: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Busca pacientes por cédula parcial"""
+        """Busca pacientes por cédula parcial - CORREGIDO"""
         try:
             if not cedula or len(cedula.strip()) < 3:
                 return []
@@ -1037,12 +980,13 @@ class EnfermeriaRepository:
                 resultados = []
                 for row in cursor.fetchall():
                     score = self._calcular_score_cedula(cedula_clean, row.Cedula)
+                    # ✅ ESTRUCTURA CONSISTENTE
                     resultados.append({
                         'id': row.id,
                         'nombreCompleto': row.nombreCompleto.strip(),
                         'nombre': row.Nombre,
-                        'apellidoPaterno': row.Apellido_Paterno,
-                        'apellidoMaterno': row.Apellido_Materno,
+                        'apellidoPaterno': row.Apellido_Paterno,  # ✅ camelCase
+                        'apellidoMaterno': row.Apellido_Materno,  # ✅ camelCase
                         'cedula': row.Cedula,
                         'tipo_coincidencia': 'cedula_parcial',
                         'score': score
@@ -1057,7 +1001,7 @@ class EnfermeriaRepository:
             return []
 
     def search_patient_by_full_name(self, nombre_completo: str, limite: int = 10) -> List[Dict[str, Any]]:
-        """Búsqueda robusta por nombre completo"""
+        """Búsqueda robusta por nombre completo - CORREGIDO"""
         try:
             if not nombre_completo or len(nombre_completo.strip()) < 3:
                 return []
@@ -1068,7 +1012,6 @@ class EnfermeriaRepository:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Búsqueda por componentes individuales
                 cursor.execute("""
                     SELECT TOP (?)
                         id,
@@ -1108,12 +1051,13 @@ class EnfermeriaRepository:
                 candidatos = []
                 for row in cursor.fetchall():
                     score = self._calcular_score_nombre(nombre_normalizado, row.nombreCompleto.strip())
+                    # ✅ ESTRUCTURA CONSISTENTE
                     candidatos.append({
                         'id': row.id,
                         'nombreCompleto': row.nombreCompleto.strip(),
                         'nombre': row.Nombre,
-                        'apellidoPaterno': row.Apellido_Paterno,
-                        'apellidoMaterno': row.Apellido_Materno,
+                        'apellidoPaterno': row.Apellido_Paterno,  # ✅ camelCase
+                        'apellidoMaterno': row.Apellido_Materno,  # ✅ camelCase
                         'cedula': row.Cedula,
                         'tipo_coincidencia': 'nombre_completo',
                         'score': score
@@ -1374,3 +1318,72 @@ class EnfermeriaRepository:
         except Exception as e:
             logger.error(f"Error calculando score nombre: {e}")
             return 0.0
+        
+    def buscar_paciente_anonimo(self) -> Optional[Dict[str, Any]]:
+        """Busca el paciente anónimo del sistema"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT 
+                        id,
+                        Nombre,
+                        Apellido_Paterno,
+                        ISNULL(Apellido_Materno, '') as Apellido_Materno,
+                        ISNULL(Cedula, '') as Cedula,
+                        CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombreCompleto
+                    FROM Pacientes
+                    WHERE Nombre = 'ANÓNIMO' AND Apellido_Paterno = 'SIN DATOS'
+                """)
+                
+                resultado = cursor.fetchone()
+                
+                if resultado:
+                    return {
+                        'id': resultado.id,
+                        'nombreCompleto': resultado.nombreCompleto.strip(),
+                        'nombre': resultado.Nombre,
+                        'apellidoPaterno': resultado.Apellido_Paterno,
+                        'apellidoMaterno': resultado.Apellido_Materno,
+                        'cedula': resultado.Cedula
+                    }
+                
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error buscando paciente anónimo: {e}")
+            return None
+
+    def crear_paciente_anonimo(self) -> int:
+        """Crea el paciente anónimo único del sistema"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Verificar si ya existe (por seguridad)
+                cursor.execute("""
+                    SELECT id FROM Pacientes 
+                    WHERE Nombre = 'ANÓNIMO' AND Apellido_Paterno = 'SIN DATOS'
+                """)
+                
+                existente = cursor.fetchone()
+                if existente:
+                    logger.info(f"Paciente anónimo ya existe con ID: {existente.id}")
+                    return existente.id
+                
+                # Crear nuevo paciente anónimo
+                cursor.execute("""
+                    INSERT INTO Pacientes (Nombre, Apellido_Paterno, Apellido_Materno, Cedula)
+                    VALUES ('ANÓNIMO', 'SIN DATOS', 'SIN DATOS', NULL)
+                """)
+                
+                cursor.execute("SELECT @@IDENTITY")
+                paciente_id = cursor.fetchone()[0]
+                
+                conn.commit()
+                logger.info(f"Paciente anónimo creado con ID: {paciente_id}")
+                return int(paciente_id)
+                
+        except Exception as e:
+            logger.error(f"Error creando paciente anónimo: {e}")
+            return -1
