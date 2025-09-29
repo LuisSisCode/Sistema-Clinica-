@@ -628,7 +628,7 @@ Item {
                                 // TABLA DE INGRESOS DETALLADOS
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 400
+                                    Layout.preferredHeight: 300
                                     color: whiteColor
                                     radius: 8
                                     border.color: "#E0E6ED"
@@ -703,7 +703,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             clip: true
-                                            wheelEnabled: true
+                                            wheelEnabled: false
                                             
                                             ColumnLayout {
                                                 width: parent.width
@@ -754,7 +754,7 @@ Item {
                                 // TABLA DE EGRESOS DETALLADOS
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 400
+                                    Layout.preferredHeight: 300
                                     color: whiteColor
                                     radius: 8
                                     border.color: "#E0E6ED"
@@ -793,7 +793,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             clip: true
-                                            wheelEnabled: true
+                                            wheelEnabled: false
                                             
                                             ColumnLayout {
                                                 width: parent.width
@@ -845,10 +845,10 @@ Item {
                                 }
                             }
                             
-                            // ARQUEO MANUAL
+                            // ARQUEO MANUAL - RECTANGLE RESPONSIVE
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 150
+                                Layout.preferredHeight: 120
                                 Layout.leftMargin: 20
                                 Layout.rightMargin: 20
                                 color: whiteColor
@@ -858,39 +858,43 @@ Item {
                                 
                                 ColumnLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 20
-                                    spacing: 15
+                                    anchors.margins: 15
+                                    spacing: 10
                                     
                                     Label {
                                         text: "📊 ARQUEO MANUAL DE EFECTIVO"
-                                        font.pixelSize: 16
+                                        font.pixelSize: 14
                                         font.bold: true
                                         color: textColor
                                     }
                                     
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: 40
+                                        spacing: 15
                                         
+                                        // EFECTIVO REAL CONTADO
                                         ColumnLayout {
-                                            spacing: 8
+                                            Layout.preferredWidth: 140
+                                            Layout.minimumWidth: 120
+                                            spacing: 4
+                                            
                                             Label {
-                                                text: "💵 Efectivo Real Contado:"
-                                                font.pixelSize: 14
+                                                text: "💵 Efectivo Real:"
+                                                font.pixelSize: 12
                                                 font.bold: true
                                                 color: textColor
                                             }
+                                            
                                             TextField {
                                                 id: efectivoRealField
-                                                Layout.preferredWidth: 200
-                                                Layout.preferredHeight: 45
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 35
                                                 placeholderText: "0.00"
-                                                font.pixelSize: 16
+                                                font.pixelSize: 14
                                                 font.bold: true
-                                                text: "" // Eliminar el binding automático
+                                                text: ""
                                                 selectByMouse: true
                                                 
-                                                // Agregar esta propiedad para controlar cuando actualizar
                                                 property bool actualizandoTexto: false
                                                 
                                                 background: Rectangle {
@@ -913,7 +917,6 @@ Item {
                                                     selectAll()
                                                 }
                                                 
-                                                // Conectar cambios del modelo al campo (opcional)
                                                 Connections {
                                                     target: cierreCajaModel
                                                     function onEfectivoRealChanged() {
@@ -931,167 +934,156 @@ Item {
                                             }
                                         }
                                         
+                                        // SEPARADOR VISUAL
                                         Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 80
-                                            color: zebraColor
-                                            radius: 8
-                                            border.color: lightGrayColor
-                                            border.width: 1
+                                            width: 1
+                                            Layout.fillHeight: true
+                                            Layout.topMargin: 5
+                                            Layout.bottomMargin: 5
+                                            color: lightGrayColor
+                                        }
+                                        
+                                        // SALDO TEÓRICO
+                                        ColumnLayout {
+                                            Layout.preferredWidth: 140
+                                            Layout.minimumWidth: 120
+                                            spacing: 4
                                             
-                                            ColumnLayout {
-                                                anchors.centerIn: parent
-                                                spacing: 8
-                                                RowLayout {
-                                                    spacing: 20
-                                                    Label {
-                                                        text: "Saldo Teórico:"
-                                                        font.pixelSize: 12
-                                                        color: textColor
-                                                    }
-                                                    Label {
-                                                        text: "Bs " + saldoTeorico.toFixed(2)
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                        color: saldoTeorico >= 0 ? successColor : dangerColor
-                                                    }
-                                                }
-                                                RowLayout {
-                                                    spacing: 20
-                                                    Label {
-                                                        text: "Efectivo Real:"
-                                                        font.pixelSize: 12
-                                                        color: textColor
-                                                    }
-                                                    Label {
-                                                        text: "Bs " + efectivoReal.toFixed(2)
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                        color: textColor
-                                                    }
+                                            Label {
+                                                text: "📊 Saldo Teórico:"
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                color: textColor
+                                            }
+                                            
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 35
+                                                color: zebraColor
+                                                radius: 4
+                                                border.color: lightGrayColor
+                                                border.width: 1
+                                                
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: "Bs " + saldoTeorico.toFixed(2)
+                                                    font.pixelSize: 14
+                                                    font.bold: true
+                                                    color: saldoTeorico >= 0 ? successColor : dangerColor
                                                 }
                                             }
                                         }
                                         
+                                        // SEPARADOR VISUAL
                                         Rectangle {
-                                            Layout.preferredWidth: 250
-                                            Layout.preferredHeight: 80
+                                            width: 1
+                                            Layout.fillHeight: true
+                                            Layout.topMargin: 5
+                                            Layout.bottomMargin: 5
+                                            color: lightGrayColor
+                                        }
+                                        
+                                        // ESTADO DE LA DIFERENCIA
+                                        Rectangle {
+                                            Layout.preferredWidth: 160
+                                            Layout.minimumWidth: 140
+                                            Layout.preferredHeight: 50
                                             color: dentroDeLimite ? "#d1fae5" : "#fee2e2"
-                                            radius: 8
+                                            radius: 6
                                             border.color: dentroDeLimite ? successColor : dangerColor
                                             border.width: 2
                                             
                                             ColumnLayout {
                                                 anchors.centerIn: parent
-                                                spacing: 4
+                                                spacing: 2
+                                                
                                                 Label {
                                                     text: tipoDiferencia === "SOBRANTE" ? "✅ SOBRANTE" : 
-                                                          tipoDiferencia === "FALTANTE" ? "❌ FALTANTE" : "⚖️ NEUTRO"
+                                                        tipoDiferencia === "FALTANTE" ? "❌ FALTANTE" : "⚖️ NEUTRO"
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    color: dentroDeLimite ? "#065f46" : "#dc2626"
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                }
+                                                
+                                                Label {
+                                                    text: "Bs " + Math.abs(diferencia).toFixed(2)
                                                     font.pixelSize: 14
                                                     font.bold: true
                                                     color: dentroDeLimite ? "#065f46" : "#dc2626"
                                                     Layout.alignment: Qt.AlignHCenter
                                                 }
-                                                Label {
-                                                    text: "Bs " + Math.abs(diferencia).toFixed(2)
-                                                    font.pixelSize: 18
-                                                    font.bold: true
-                                                    color: dentroDeLimite ? "#065f46" : "#dc2626"
-                                                    Layout.alignment: Qt.AlignHCenter
-                                                }
+                                                
                                                 Label {
                                                     text: requiereAutorizacion ? "Requiere autorización" : 
-                                                          tipoDiferencia === "NEUTRO" ? "Balanceado" : "Dentro del límite"
-                                                    font.pixelSize: 9
+                                                        tipoDiferencia === "NEUTRO" ? "Balanceado" : "Dentro del límite"
+                                                    font.pixelSize: 8
                                                     color: darkGrayColor
                                                     Layout.alignment: Qt.AlignHCenter
                                                 }
                                             }
                                         }
-                                    }
-                                }
-                            }
-                            
-                            // OBSERVACIONES Y ACCIONES FINALES
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 100
-                                Layout.leftMargin: 20
-                                Layout.rightMargin: 20
-                                color: whiteColor
-                                radius: 8
-                                border.color: "#E0E6ED"
-                                border.width: 1
-                                
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 20
-                                    spacing: 30
-                                    
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 8
-                                        Label {
-                                            text: "📝 OBSERVACIONES:"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: textColor
+                                        
+                                        // SEPARADOR VISUAL
+                                        Rectangle {
+                                            width: 1
+                                            Layout.fillHeight: true
+                                            Layout.topMargin: 5
+                                            Layout.bottomMargin: 5
+                                            color: lightGrayColor
                                         }
-                                        Label {
-                                            text: "Arqueo realizado correctamente. " + 
-                                                  (tipoDiferencia === "SOBRANTE" ? "Se registra sobrante." : 
-                                                   tipoDiferencia === "FALTANTE" ? "Se registra faltante." : "Sin diferencias.") + 
-                                                  (requiereAutorizacion ? " Requiere autorización de supervisor." : " Dentro de límites permitidos.")
-                                            font.pixelSize: 10
-                                            color: darkGrayColor
-                                            wrapMode: Text.WordWrap
+                                        
+                                        // OBSERVACIONES EDITABLES (SE EXPANDE PARA USAR ESPACIO RESTANTE)
+                                        ColumnLayout {
                                             Layout.fillWidth: true
-                                        }
-                                    }
-                                    
-                                    ColumnLayout {
-                                        spacing: 8
-                                        Button {
-                                            text: "🔄 Actualizar"
-                                            Layout.preferredHeight: 35
-                                            Layout.preferredWidth: 120
-                                            enabled: cierreCajaModel && !cierreCajaModel.loading
+                                            Layout.minimumWidth: 200
+                                            spacing: 4
                                             
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : (parent.enabled ? primaryColor : darkGrayColor)
-                                                radius: 6
-                                            }
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
+                                            Label {
+                                                text: "📝 Observaciones:"
+                                                font.pixelSize: 12
                                                 font.bold: true
-                                                font.pixelSize: 11
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
+                                                color: textColor
                                             }
-                                            onClicked: {
-                                                if (cierreCajaModel && typeof cierreCajaModel.consultarDatos === 'function') {
-                                                    try {
-                                                        cierreCajaModel.consultarDatos()
-                                                    } catch (error) {
-                                                        console.log("❌ Error en consultarDatos:", error)
-                                                        if (toastNotification) {
-                                                            toastNotification.show("Error ejecutando operación")
-                                                        }
+                                            
+                                            TextField {
+                                                id: observacionesField
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 35
+                                                placeholderText: "Ingrese observaciones del arqueo..."
+                                                text: "Arqueo realizado correctamente. " + 
+                                                    (tipoDiferencia === "SOBRANTE" ? "Se registra sobrante." : 
+                                                    tipoDiferencia === "FALTANTE" ? "Se registra faltante." : "Sin diferencias.") + 
+                                                    (requiereAutorizacion ? " Requiere autorización de supervisor." : " Dentro de límites permitidos.")
+                                                selectByMouse: true
+                                                font.pixelSize: 11
+                                                
+                                                background: Rectangle {
+                                                    color: "#F8F9FA"
+                                                    border.color: parent.activeFocus ? primaryColor : lightGrayColor
+                                                    border.width: 1
+                                                    radius: 4
+                                                }
+                                                
+                                                onTextChanged: {
+                                                    // Guardar observaciones en tiempo real si es necesario
+                                                    if (cierreCajaModel && typeof cierreCajaModel.establecerObservaciones === 'function') {
+                                                        cierreCajaModel.establecerObservaciones(text)
                                                     }
-                                                } else {
-                                                    console.log("❌ Modelo no disponible")
-                                                    if (toastNotification) {
-                                                        toastNotification.show("Módulo no disponible")
+                                                }
+                                                
+                                                onPressed: {
+                                                    if (text.includes("Arqueo realizado correctamente")) {
+                                                        selectAll()
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
+                            } 
                             
-                            // LISTA DE CIERRES DE LA SEMANA (MODIFICADA)
+                            // LISTA DE CIERRES DE LA SEMANA (CON FECHA)
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 450
@@ -1157,7 +1149,19 @@ Item {
                                             spacing: 0
                                             
                                             Label {
-                                                Layout.preferredWidth: 120
+                                                Layout.preferredWidth: 90
+                                                text: "FECHA"
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                color: whiteColor
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
+                                            
+                                            Label {
+                                                Layout.preferredWidth: 110
                                                 text: "HORARIO"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1169,7 +1173,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 130
+                                                Layout.preferredWidth: 120
                                                 text: "EFECTIVO REAL"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1181,7 +1185,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 130
+                                                Layout.preferredWidth: 120
                                                 text: "SALDO TEÓRICO"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1193,7 +1197,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 120
+                                                Layout.preferredWidth: 100
                                                 text: "DIFERENCIA"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1205,7 +1209,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 100
+                                                Layout.preferredWidth: 90
                                                 text: "ESTADO"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1217,7 +1221,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 140
+                                                Layout.preferredWidth: 130
                                                 text: "REGISTRADO POR"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1266,32 +1270,41 @@ Item {
                                                     anchors.margins: 8
                                                     spacing: 0
                                                     
-                                                    // HORARIO
+                                                    // FECHA
                                                     Rectangle {
-                                                        Layout.preferredWidth: 120
+                                                        Layout.preferredWidth: 90
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
-                                                        ColumnLayout {
+                                                        Label {
                                                             anchors.left: parent.left
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             anchors.leftMargin: 8
-                                                            spacing: 2
-                                                            
-                                                            Label {
-                                                                text: (modelData.HoraInicio || "00:00") + " - " + (modelData.HoraFin || "00:00")
-                                                                font.pixelSize: 11
-                                                                font.bold: true
-                                                                color: textColor
-                                                                horizontalAlignment: Text.AlignLeft
-                                                            }
-                                                            
-                                                            Label {
-                                                               text: "(" + calculateDuration(modelData.HoraInicio, modelData.HoraFin) + " horas)"
-                                                                font.pixelSize: 9
-                                                                color: darkGrayColor
-                                                                horizontalAlignment: Text.AlignLeft
-                                                            }
+                                                            text: formatearFecha(modelData.Fecha)
+                                                            font.pixelSize: 10
+                                                            font.bold: true
+                                                            color: textColor
+                                                            horizontalAlignment: Text.AlignLeft
+                                                        }
+                                                    }
+                                                    
+                                                    Rectangle { width: 2; Layout.fillHeight: true; color: "#E0E6ED"; opacity: 0.7 }
+                                                    
+                                                    // HORARIO
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 110
+                                                        Layout.fillHeight: true
+                                                        color: "transparent"
+                                                        
+                                                        Label {
+                                                            anchors.left: parent.left
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            anchors.leftMargin: 8
+                                                            text: formatearHorario(modelData.HoraInicio, modelData.HoraFin)
+                                                            font.pixelSize: 10
+                                                            font.bold: true
+                                                            color: textColor
+                                                            horizontalAlignment: Text.AlignLeft
                                                         }
                                                     }
                                                     
@@ -1299,7 +1312,7 @@ Item {
                                                     
                                                     // EFECTIVO REAL
                                                     Rectangle {
-                                                        Layout.preferredWidth: 130
+                                                        Layout.preferredWidth: 120
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1308,7 +1321,7 @@ Item {
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             anchors.leftMargin: 8
                                                             text: "Bs " + parseFloat(modelData.EfectivoReal || 0).toLocaleString(Qt.locale(), 'f', 2)
-                                                            font.pixelSize: 11
+                                                            font.pixelSize: 10
                                                             font.bold: true
                                                             color: successColor
                                                             horizontalAlignment: Text.AlignLeft
@@ -1319,7 +1332,7 @@ Item {
                                                     
                                                     // SALDO TEÓRICO
                                                     Rectangle {
-                                                        Layout.preferredWidth: 130
+                                                        Layout.preferredWidth: 120
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1328,7 +1341,7 @@ Item {
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             anchors.leftMargin: 8
                                                             text: "Bs " + parseFloat(modelData.SaldoTeorico || 0).toLocaleString(Qt.locale(), 'f', 2)
-                                                            font.pixelSize: 11
+                                                            font.pixelSize: 10
                                                             color: textColor
                                                             horizontalAlignment: Text.AlignLeft
                                                         }
@@ -1338,7 +1351,7 @@ Item {
                                                     
                                                     // DIFERENCIA
                                                     Rectangle {
-                                                        Layout.preferredWidth: 120
+                                                        Layout.preferredWidth: 100
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1346,11 +1359,11 @@ Item {
                                                             anchors.left: parent.left
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             anchors.leftMargin: 8
-                                                            spacing: 8
+                                                            spacing: 4
                                                             
                                                             Rectangle {
-                                                                width: 60
-                                                                height: 30
+                                                                width: 50
+                                                                height: 25
                                                                 radius: 4
                                                                 color: {
                                                                     let diff = parseFloat(modelData.Diferencia || 0)
@@ -1370,7 +1383,7 @@ Item {
                                                                     anchors.centerIn: parent
                                                                     text: (parseFloat(modelData.Diferencia || 0) >= 0 ? "+" : "") + 
                                                                         parseFloat(modelData.Diferencia || 0).toFixed(2)
-                                                                    font.pixelSize: 10
+                                                                    font.pixelSize: 9
                                                                     font.bold: true
                                                                     color: {
                                                                         let diff = parseFloat(modelData.Diferencia || 0)
@@ -1383,7 +1396,7 @@ Item {
                                                             
                                                             Label {
                                                                 text: "Bs"
-                                                                font.pixelSize: 9
+                                                                font.pixelSize: 8
                                                                 color: darkGrayColor
                                                             }
                                                         }
@@ -1393,7 +1406,7 @@ Item {
                                                     
                                                     // ESTADO
                                                     Rectangle {
-                                                        Layout.preferredWidth: 100
+                                                        Layout.preferredWidth: 90
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1401,9 +1414,9 @@ Item {
                                                             anchors.left: parent.left
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             anchors.leftMargin: 8
-                                                            width: 80
-                                                            height: 25
-                                                            radius: 12
+                                                            width: 70
+                                                            height: 22
+                                                            radius: 11
                                                             color: {
                                                                 let diff = parseFloat(modelData.Diferencia || 0)
                                                                 if (Math.abs(diff) < 1.0) return successColor
@@ -1415,11 +1428,11 @@ Item {
                                                                 anchors.centerIn: parent
                                                                 text: {
                                                                     let diff = parseFloat(modelData.Diferencia || 0)
-                                                                    if (Math.abs(diff) < 1.0) return "✓ CORRECTO"
+                                                                    if (Math.abs(diff) < 1.0) return "✓ OK"
                                                                     else if (diff > 0) return "+ SOBRA"
                                                                     else return "- FALTA"
                                                                 }
-                                                                font.pixelSize: 8
+                                                                font.pixelSize: 7
                                                                 font.bold: true
                                                                 color: whiteColor
                                                             }
@@ -1430,7 +1443,7 @@ Item {
                                                     
                                                     // REGISTRADO POR
                                                     Rectangle {
-                                                        Layout.preferredWidth: 140
+                                                        Layout.preferredWidth: 130
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1442,7 +1455,7 @@ Item {
                                                             
                                                             Label {
                                                                 text: modelData.NombreUsuario || "Usuario desconocido"
-                                                                font.pixelSize: 10
+                                                                font.pixelSize: 9
                                                                 font.bold: true
                                                                 color: textColor
                                                                 horizontalAlignment: Text.AlignLeft
@@ -1450,7 +1463,7 @@ Item {
                                                             }
                                                             
                                                             Label {
-                                                                text: "Cierre: " + (modelData.HoraCierre || "--:--")
+                                                                text: "Cierre: " + formatearHora(modelData.HoraCierre)
                                                                 font.pixelSize: 8
                                                                 color: darkGrayColor
                                                                 horizontalAlignment: Text.AlignLeft
@@ -1477,7 +1490,7 @@ Item {
                                                             
                                                             Label {
                                                                 text: modelData.Observaciones || "Sin observaciones registradas"
-                                                                font.pixelSize: 10
+                                                                font.pixelSize: 9
                                                                 color: modelData.Observaciones ? textColor : darkGrayColor
                                                                 font.italic: !modelData.Observaciones
                                                                 wrapMode: Text.WordWrap
@@ -1727,17 +1740,100 @@ Item {
     }
 
     function calculateDuration(inicio, fin) {
-        if (!inicio || !fin) return "0.0"
+            if (!inicio || !fin) return "0.0"
+            
+            try {
+                let inicioMinutos = parseInt(inicio.split(':')[0]) * 60 + parseInt(inicio.split(':')[1])
+                let finMinutos = parseInt(fin.split(':')[0]) * 60 + parseInt(fin.split(':')[1])
+                let duracion = (finMinutos - inicioMinutos) / 60
+                return duracion.toFixed(1)
+            } catch (e) {
+                return "0.0"
+            }
+        }
+        function formatearHorario(inicio, fin) {
+        if (!inicio || !fin) return "--:-- - --:--"
         
         try {
-            let inicioMinutos = parseInt(inicio.split(':')[0]) * 60 + parseInt(inicio.split(':')[1])
-            let finMinutos = parseInt(fin.split(':')[0]) * 60 + parseInt(fin.split(':')[1])
-            let duracion = (finMinutos - inicioMinutos) / 60
-            return duracion.toFixed(1)
+            function extraerHoraMinuto(hora) {
+                if (!hora) return "--:--"
+                
+                let horaStr = hora.toString().trim()
+                let partes = horaStr.split(':')
+                
+                if (partes.length >= 2) {
+                    let horas = parseInt(partes[0]) || 0
+                    let minutos = parseInt(partes[1]) || 0
+                    
+                    return String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0')
+                }
+                
+                return "--:--"
+            }
+            
+            let inicioLimpio = extraerHoraMinuto(inicio)
+            let finLimpio = extraerHoraMinuto(fin)
+            
+            return inicioLimpio + " - " + finLimpio
+            
         } catch (e) {
-            return "0.0"
+            return "--:-- - --:--"
         }
     }
+    // Agregar después de formatearHorario():
+
+    function formatearFecha(fecha) {
+        if (!fecha) return "--/--/----"
+        
+        try {
+            // Si viene como string de fecha
+            if (typeof fecha === 'string') {
+                // Si ya está en formato DD/MM/YYYY, devolverla
+                if (fecha.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                    return fecha
+                }
+                
+                // Si viene en formato YYYY-MM-DD, convertir a DD/MM/YYYY
+                if (fecha.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    let partes = fecha.split('-')
+                    return partes[2] + '/' + partes[1] + '/' + partes[0]
+                }
+            }
+            
+            // Si viene como Date object
+            if (fecha instanceof Date) {
+                let dia = String(fecha.getDate()).padStart(2, '0')
+                let mes = String(fecha.getMonth() + 1).padStart(2, '0')
+                let anio = fecha.getFullYear()
+                return dia + '/' + mes + '/' + anio
+            }
+            
+            return "--/--/----"
+        } catch (e) {
+            return "--/--/----"
+        }
+    }
+
+    function formatearHora(hora) {
+        if (!hora) return "--:--"
+        
+        try {
+            let horaStr = hora.toString().trim()
+            let partes = horaStr.split(':')
+            
+            if (partes.length >= 2) {
+                let horas = parseInt(partes[0]) || 0
+                let minutos = parseInt(partes[1]) || 0
+                
+                return String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0')
+            }
+            
+            return "--:--"
+        } catch (e) {
+            return "--:--"
+        }
+    }
+    
     function validarFormatoFecha(fecha) {
         if (!fecha || fecha.trim().length === 0) return false
         
