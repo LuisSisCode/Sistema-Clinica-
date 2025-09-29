@@ -39,6 +39,8 @@ ApplicationWindow {
     property int currentIndex: 0
     property bool farmaciaExpanded: false
     property int farmaciaSubsection: 0
+    property bool serviciosExpanded: false
+    property int serviciosSubsection: 0
 
     // ===== PROPIEDADES SEGURAS PARA EVITAR UNDEFINED =====
     property bool modelsReady: false
@@ -577,12 +579,31 @@ ApplicationWindow {
                         NavSection {
                             title: "SERVICIOS"
                             
-                            NavItem {
+                            // Reemplazar el NavItem actual de SERVICIOS BÁSICOS con:
+                            NavItemWithSubmenu {
                                 id: navItem6
                                 text: "SERVICIOS BÁSICOS"
                                 icon: "Resources/iconos/ServiciosBasicos.png"
                                 active: currentIndex === 6
-                                onClicked: switchToPage(6)
+                                expanded: serviciosExpanded
+                                
+                                onMainClicked: {
+                                    serviciosExpanded = !serviciosExpanded
+                                    if (!serviciosExpanded) {
+                                        switchToPage(6)
+                                    }
+                                }
+                                
+                                submenuItems: [
+                                    { text: "Gastos Operativos", icon: "Resources/iconos/gastos.png", subsection: 0 },
+                                    { text: "Ingresos Extras", icon: "Resources/iconos/ingresos.png", subsection: 1 },
+                                    { text: "Egresos Extras", icon: "Resources/iconos/egresos.png", subsection: 2 }
+                                ]
+                                
+                                onSubmenuClicked: function(subsection) {
+                                    serviciosSubsection = subsection
+                                    switchToPage(6)
+                                }
                             }
                                                         
                             NavItem {
@@ -707,7 +728,17 @@ ApplicationWindow {
                 visible: currentIndex === 6
                 layer.enabled: true
                 
-                // ===== NUEVA CONEXIÓN PARA ORQUESTAR NAVEGACIÓN A CONFIGURACIÓN =====
+                // AGREGAR ESTA PROPIEDAD:
+                property int currentServiciosSubsection: serviciosSubsection
+                onCurrentServiciosSubsectionChanged: {
+                    if (currentServiciosSubsection === 1) {
+                        console.log("🟢 Navegando a subsección de Ingresos Extras")
+                    } else if (currentServiciosSubsection === 2) {
+                        console.log("🔴 Navegando a subsección de Egresos Extras")
+                    }
+                }
+                
+                // Mantener la señal existente
                 onIrAConfigServiciosBasicos: {
                     console.log("🚀 Señal irAConfigServiciosBasicos recibida desde ServiciosBasicos")
                     
@@ -843,25 +874,31 @@ ApplicationWindow {
             })
         }
     }
-    
+        
     function getCurrentPageName() {
         if (currentIndex === 1) {
             const farmaciaSubsections = ["Ventas", "Productos", "Compras", "Proveedores"]
             return "Farmacia - " + farmaciaSubsections[farmaciaSubsection]
         }
         
+        // AGREGAR ESTA SECCIÓN:
+        if (currentIndex === 6) {
+            const serviciosSubsections = ["Gastos Operativos", "Ingresos Extras", "Egresos Extras"]
+            return "Servicios Básicos - " + serviciosSubsections[serviciosSubsection]
+        }
+        
         const pageNames = [
             "Dashboard",        // 0
             "Farmacia",         // 1  
-            "Cierre de Caja",   // 2 - NUEVO
-            "Consultas",        // 3 - ERA 2
-            "Laboratorio",      // 4 - ERA 3
-            "Enfermería",       // 5 - ERA 4
-            "Servicios Básicos", // 6 - ERA 5
-            "Usuarios",         // 7 - ERA 6
-            "Trabajadores",     // 8 - ERA 7
-            "Reportes",         // 9 - ERA 8
-            "Configuración"     // 10 - ERA 9
+            "Cierre de Caja",   // 2
+            "Consultas",        // 3
+            "Laboratorio",      // 4
+            "Enfermería",       // 5
+            "Servicios Básicos", // 6
+            "Usuarios",         // 7
+            "Trabajadores",     // 8
+            "Reportes",         // 9
+            "Configuración"     // 10
         ]
         return pageNames[currentIndex] || "Dashboard"
     }

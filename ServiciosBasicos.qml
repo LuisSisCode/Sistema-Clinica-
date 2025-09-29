@@ -69,6 +69,15 @@ Item {
     readonly property bool esAdministrador: usuarioActualRol === "Administrador"
     readonly property bool esMedico: usuarioActualRol === "Médico" || usuarioActualRol === "MÃ©dico"
     
+    // Agregar después de las propiedades existentes:
+    property int currentSubsection: 0
+    readonly property var subsectionTitles: ["Gastos Operativos", "Ingresos Extras", "Egresos Extras"]
+    readonly property var subsectionIcons: [
+        "Resources/iconos/ServiciosBasicos.png",
+        "Resources/iconos/ingresos.png", 
+        "Resources/iconos/egresos.png"
+    ]
+
     // FUNCIÓN HELPER MOVIDA AL NIVEL PRINCIPAL
     function obtenerAñosDisponibles() {
         var años = []
@@ -553,925 +562,946 @@ Item {
         anchors.margins: marginLarge
         spacing: marginLarge
         
-        // Contenido principal
-        Rectangle {
+        // STACKLAYOUT PARA SUBSECCIONES
+        StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: whiteColor
-            radius: 20
-            border.color: "#e0e0e0"
-            border.width: 1
+            currentIndex: currentSubsection
             
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
+            // Subsección 0: Gastos Operativos (contenido actual)
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: whiteColor
+                radius: 20
+                border.color: "#e0e0e0"
+                border.width: 1
                 
-                // HEADER RESPONSIVO ACTUALIZADO
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 5
-                    color: lightGrayColor
-                    border.color: "#e0e0e0"
-                    border.width: 1
-                    radius: baseUnit * 0.8
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
                     
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: baseUnit * 0.8
-                        spacing: baseUnit * 0.8
+                    // HEADER RESPONSIVO ACTUALIZADO
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: baseUnit * 5
+                        color: lightGrayColor
+                        border.color: "#e0e0e0"
+                        border.width: 1
+                        radius: baseUnit * 0.8
                         
-                        // SECCIÓN DEL LOGO Y TÍTULO
                         RowLayout {
-                            Layout.alignment: Qt.AlignVCenter
-                            spacing: baseUnit * 1
+                            anchors.fill: parent
+                            anchors.margins: baseUnit * 0.8
+                            spacing: baseUnit * 0.8
                             
-                            Rectangle {
-                                Layout.preferredWidth: baseUnit * 4
-                                Layout.preferredHeight: baseUnit * 4
-                                color: "transparent"
-                                
-                                Image {
-                                    id: serviciosIcon
-                                    anchors.centerIn: parent
-                                    width: Math.min(baseUnit * 3.2, parent.width * 0.9)
-                                    height: Math.min(baseUnit * 3.2, parent.height * 0.9)
-                                    source: "Resources/iconos/ServiciosBasicos.png"
-                                    fillMode: Image.PreserveAspectFit
-                                    antialiasing: true
-                                    
-                                    onStatusChanged: {
-                                        if (status === Image.Error) {
-                                            console.log("Error cargando PNG de Servicios Básicos:", source)
-                                            visible = false
-                                            fallbackLabel.visible = true
-                                        } else if (status === Image.Ready) {
-                                            console.log("PNG de Servicios Básicos cargado correctamente:", source)
-                                        }
-                                    }
-                                }
-                                
-                                Label {
-                                    id: fallbackLabel
-                                    anchors.centerIn: parent
-                                    text: "💰"
-                                    font.pixelSize: baseUnit * 2.5
-                                    color: primaryColor
-                                    visible: false
-                                }
-                            }
-                            
-                            ColumnLayout {
+                            // SECCIÓN DEL LOGO Y TÍTULO
+                            RowLayout {
                                 Layout.alignment: Qt.AlignVCenter
-                                spacing: baseUnit * 0.05
-                                
-                                Label {
-                                    text: "Gestión de Servicios Básicos"
-                                    font.pixelSize: fontMedium        // Era: fontBase * 0.85
-                                    font.bold: true
-                                    font.family: "Segoe UI, Arial, sans-serif"
-                                    color: textColor
-                                }
-                                
-                                Label {
-                                    text: "y Gastos Operativos"
-                                    font.pixelSize: fontBase          // Era: fontBase * 0.7
-                                    font.bold: false
-                                    font.family: "Segoe UI, Arial, sans-serif"
-                                    color: textColor
-                                }
-                            }
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        // BOTÓN NUEVO GASTO
-                        Button {
-                            objectName: "newGastoButton"
-                            Layout.preferredHeight: baseUnit * 2.8
-                            Layout.preferredWidth: Math.max(baseUnit * 10, implicitWidth + baseUnit * 0.8)
-                            Layout.alignment: Qt.AlignVCenter
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(primaryColor, 1.1) : 
-                                    (parent.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor)
-                                radius: baseUnit * 0.6
-                                border.width: 0
-                                
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                            
-                            contentItem: RowLayout {
-                                spacing: baseUnit * 0.4
+                                spacing: baseUnit * 1
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: baseUnit * 1.6
-                                    Layout.preferredHeight: baseUnit * 1.6
+                                    Layout.preferredWidth: baseUnit * 4
+                                    Layout.preferredHeight: baseUnit * 4
                                     color: "transparent"
                                     
                                     Image {
-                                        id: addGastoIcon
+                                        id: serviciosIcon
                                         anchors.centerIn: parent
-                                        width: baseUnit * 1.2
-                                        height: baseUnit * 1.2
-                                        source: "Resources/iconos/Nueva_Consulta.png"
+                                        width: Math.min(baseUnit * 3.2, parent.width * 0.9)
+                                        height: Math.min(baseUnit * 3.2, parent.height * 0.9)
+                                        source: "Resources/iconos/ServiciosBasicos.png"
                                         fillMode: Image.PreserveAspectFit
                                         antialiasing: true
                                         
                                         onStatusChanged: {
                                             if (status === Image.Error) {
-                                                console.log("Error cargando PNG del botón Nuevo Gasto:", source)
+                                                console.log("Error cargando PNG de Servicios Básicos:", source)
                                                 visible = false
-                                                fallbackPlusText.visible = true
+                                                fallbackLabel.visible = true
+                                            } else if (status === Image.Ready) {
+                                                console.log("PNG de Servicios Básicos cargado correctamente:", source)
                                             }
                                         }
                                     }
                                     
                                     Label {
-                                        id: fallbackPlusText
+                                        id: fallbackLabel
                                         anchors.centerIn: parent
-                                        text: "+"
-                                        color: whiteColor
-                                        font.pixelSize: fontBase * 0.8
-                                        font.bold: true
+                                        text: "💰"
+                                        font.pixelSize: baseUnit * 2.5
+                                        color: primaryColor
                                         visible: false
                                     }
                                 }
                                 
-                                Label {
-                                    text: "Nuevo Gasto"
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: fontButton        // Era: fontBase * 1.1
-                                    font.family: "Segoe UI, Arial, sans-serif"
+                                ColumnLayout {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    spacing: baseUnit * 0.05
+                                    
+                                    // En el header, cambiar el Label del título:
+                                    Label {
+                                        text: "Gestión de " + subsectionTitles[currentSubsection]
+                                        font.pixelSize: fontMedium
+                                        font.bold: true
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                    }
+                                    
+                                    Label {
+                                        text: "y Gastos Operativos"
+                                        font.pixelSize: fontBase
+                                        font.bold: false
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                        color: textColor
+                                    }
                                 }
                             }
                             
-                            onClicked: {
-                                isEditMode = false
-                                editingIndex = -1
-                                showNewGastoDialog = true
-                            }
+                            Item { Layout.fillWidth: true }
                             
-                            HoverHandler {
-                                id: buttonHover
-                                cursorShape: Qt.PointingHandCursor
+                            // BOTÓN NUEVO GASTO
+                            Button {
+                                objectName: "newGastoButton"
+                                Layout.preferredHeight: baseUnit * 2.8
+                                Layout.preferredWidth: Math.max(baseUnit * 10, implicitWidth + baseUnit * 0.8)
+                                Layout.alignment: Qt.AlignVCenter
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(primaryColor, 1.1) : 
+                                        (parent.hovered ? Qt.lighter(primaryColor, 1.1) : primaryColor)
+                                    radius: baseUnit * 0.6
+                                    border.width: 0
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                                
+                                contentItem: RowLayout {
+                                    spacing: baseUnit * 0.4
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: baseUnit * 1.6
+                                        Layout.preferredHeight: baseUnit * 1.6
+                                        color: "transparent"
+                                        
+                                        Image {
+                                            id: addGastoIcon
+                                            anchors.centerIn: parent
+                                            width: baseUnit * 1.2
+                                            height: baseUnit * 1.2
+                                            source: "Resources/iconos/Nueva_Consulta.png"
+                                            fillMode: Image.PreserveAspectFit
+                                            antialiasing: true
+                                            
+                                            onStatusChanged: {
+                                                if (status === Image.Error) {
+                                                    console.log("Error cargando PNG del botón Nuevo Gasto:", source)
+                                                    visible = false
+                                                    fallbackPlusText.visible = true
+                                                }
+                                            }
+                                        }
+                                        
+                                        Label {
+                                            id: fallbackPlusText
+                                            anchors.centerIn: parent
+                                            text: "+"
+                                            color: whiteColor
+                                            font.pixelSize: fontBase * 0.8
+                                            font.bold: true
+                                            visible: false
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        text: "Nuevo Gasto"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: fontButton
+                                        font.family: "Segoe UI, Arial, sans-serif"
+                                    }
+                                }
+                                
+                                onClicked: {
+                                    isEditMode = false
+                                    editingIndex = -1
+                                    showNewGastoDialog = true
+                                }
+                                
+                                HoverHandler {
+                                    id: buttonHover
+                                    cursorShape: Qt.PointingHandCursor
+                                }
                             }
                         }
                     }
-                }
-                
-                // PANEL DE FILTROS
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(80, screenHeight * 0.10)
-                    color: "transparent"
-                    z: 10
                     
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: marginMedium
-                        spacing: marginMedium
+                    // PANEL DE FILTROS
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(80, screenHeight * 0.10)
+                        color: "transparent"
+                        z: 10
                         
-                        // FILTRO TIPO SERVICIO
-                        Row {
-                            spacing: marginSmall
-                            Layout.alignment: Qt.AlignVCenter
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: marginMedium
+                            spacing: marginMedium
                             
-                            Label {
-                                text: "Tipo Servicio:"
-                                font.bold: true
-                                font.pixelSize: fontBase
-                                color: textColor
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            
-                            ComboBox {
-                                id: filtroTipoServicio
-                                width: Math.max(160, screenWidth * 0.15)
+                            // FILTRO TIPO SERVICIO
+                            Row {
+                                spacing: marginSmall
+                                Layout.alignment: Qt.AlignVCenter
                                 
-                                model: {
-                                    var tipos = ["Todos los servicios"]
-                                    if (tiposGastosModel.count > 0) {
-                                        for (var i = 0; i < tiposGastosModel.count; i++) {
-                                            var item = tiposGastosModel.get(i)
-                                            tipos.push(item.nombre)
+                                Label {
+                                    text: "Tipo Servicio:"
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    color: textColor
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                
+                                ComboBox {
+                                    id: filtroTipoServicio
+                                    width: Math.max(160, screenWidth * 0.15)
+                                    
+                                    model: {
+                                        var tipos = ["Todos los servicios"]
+                                        if (tiposGastosModel.count > 0) {
+                                            for (var i = 0; i < tiposGastosModel.count; i++) {
+                                                var item = tiposGastosModel.get(i)
+                                                tipos.push(item.nombre)
+                                            }
                                         }
+                                        return tipos
                                     }
-                                    return tipos
-                                }
-                                
-                                currentIndex: 0
-                                onCurrentIndexChanged: {
-                                    console.log("🔍 Filtro tipo servicio cambiado:", currentIndex)
-                                    currentPageServicios = 0
-                                    Qt.callLater(cargarPaginaDesdeBD)
-                                }
-                            }
-                        }
-
-                        // ✅ FILTRO MES CON "TODOS LOS PERÍODOS"
-                        Row {
-                            spacing: marginSmall
-                            Layout.alignment: Qt.AlignVCenter
-                            
-                            Label {
-                                text: "Mes:"
-                                font.bold: true
-                                font.pixelSize: fontBase
-                                color: textColor
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            
-                            ComboBox {
-                                id: filtroMes
-                                width: Math.max(140, screenWidth * 0.14)
-                                model: ["Todos los períodos", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-                                        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-                                currentIndex: 0  // ✅ Por defecto "Todos los períodos"
-                                onCurrentIndexChanged: {
-                                    console.log("📅 Filtro mes cambiado:", currentIndex, currentText)
-                                    currentPageServicios = 0
-                                    Qt.callLater(cargarPaginaDesdeBD)
-                                }
-                            }
-                        }
-
-                        // FILTRO AÑO
-                        Row {
-                            spacing: marginSmall
-                            Layout.alignment: Qt.AlignVCenter
-                            visible: filtroAño.model.length > 1
-                            
-                            Label {
-                                text: "Año:"
-                                font.bold: true
-                                font.pixelSize: fontBase
-                                color: textColor
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: filtroAño.visible
-                            }
-                            
-                            ComboBox {
-                                id: filtroAño
-                                width: Math.max(80, screenWidth * 0.08)
-                                
-                                model: {
-                                    var años = []
-                                    var añoActual = new Date().getFullYear()
-                                    años.push(añoActual.toString())
-                                    for (var i = 1; i <= 5; i++) {
-                                        años.push((añoActual - i).toString())
-                                    }
-                                    return años.sort(function(a, b) { return parseInt(b) - parseInt(a) })
-                                }
-                                
-                                Component.onCompleted: {
-                                    var añoActual = new Date().getFullYear().toString();
-                                    var index = find(añoActual);
-                                    if (index >= 0) {
-                                        currentIndex = index;
-                                    } else if (model.length > 0) {
-                                        currentIndex = 0;
-                                    }
-                                }
-                                
-                                onCurrentIndexChanged: {
-                                    if (visible) {
-                                        console.log("📅 Filtro año cambiado:", currentText)
+                                    
+                                    currentIndex: 0
+                                    onCurrentIndexChanged: {
+                                        console.log("🔍 Filtro tipo servicio cambiado:", currentIndex)
                                         currentPageServicios = 0
                                         Qt.callLater(cargarPaginaDesdeBD)
                                     }
                                 }
                             }
-                        }
-                        
-                        // BOTÓN LIMPIAR FILTROS
-                        Button {
-                            text: "Limpiar"
-                            Layout.preferredWidth: 80
-                            
-                            background: Rectangle {
-                                color: warningColor
-                                radius: 5
+
+                            // FILTRO MES CON "TODOS LOS PERÍODOS"
+                            Row {
+                                spacing: marginSmall
+                                Layout.alignment: Qt.AlignVCenter
+                                
+                                Label {
+                                    text: "Mes:"
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    color: textColor
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                
+                                ComboBox {
+                                    id: filtroMes
+                                    width: Math.max(140, screenWidth * 0.14)
+                                    model: ["Todos los períodos", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                                            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                                    currentIndex: 0
+                                    onCurrentIndexChanged: {
+                                        console.log("📅 Filtro mes cambiado:", currentIndex, currentText)
+                                        currentPageServicios = 0
+                                        Qt.callLater(cargarPaginaDesdeBD)
+                                    }
+                                }
+                            }
+
+                            // FILTRO AÑO
+                            Row {
+                                spacing: marginSmall
+                                Layout.alignment: Qt.AlignVCenter
+                                visible: filtroAño.model.length > 1
+                                
+                                Label {
+                                    text: "Año:"
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    color: textColor
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: filtroAño.visible
+                                }
+                                
+                                ComboBox {
+                                    id: filtroAño
+                                    width: Math.max(80, screenWidth * 0.08)
+                                    
+                                    model: {
+                                        var años = []
+                                        var añoActual = new Date().getFullYear()
+                                        años.push(añoActual.toString())
+                                        for (var i = 1; i <= 5; i++) {
+                                            años.push((añoActual - i).toString())
+                                        }
+                                        return años.sort(function(a, b) { return parseInt(b) - parseInt(a) })
+                                    }
+                                    
+                                    Component.onCompleted: {
+                                        var añoActual = new Date().getFullYear().toString();
+                                        var index = find(añoActual);
+                                        if (index >= 0) {
+                                            currentIndex = index;
+                                        } else if (model.length > 0) {
+                                            currentIndex = 0;
+                                        }
+                                    }
+                                    
+                                    onCurrentIndexChanged: {
+                                        if (visible) {
+                                            console.log("📅 Filtro año cambiado:", currentText)
+                                            currentPageServicios = 0
+                                            Qt.callLater(cargarPaginaDesdeBD)
+                                        }
+                                    }
+                                }
                             }
                             
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                            // BOTÓN LIMPIAR FILTROS
+                            Button {
+                                text: "Limpiar"
+                                Layout.preferredWidth: 80
+                                
+                                background: Rectangle {
+                                    color: warningColor
+                                    radius: 5
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: whiteColor
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: limpiarFiltros()
                             }
-                            
-                            onClicked: limpiarFiltros()
                         }
                     }
-                }
 
-                // CONTENEDOR DE TABLA
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.margins: marginMedium
-                    Layout.topMargin: 0
-                    color: "#FFFFFF"
-                    border.color: "#D5DBDB"
-                    border.width: 1
-                    radius: baseUnit * 0.2
-                    
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 0
-                        spacing: 0
+                    // CONTENEDOR DE TABLA
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.margins: marginMedium
+                        Layout.topMargin: 0
+                        color: "#FFFFFF"
+                        border.color: "#D5DBDB"
+                        border.width: 1
+                        radius: baseUnit * 0.2
                         
-                        // HEADER DE TABLA
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Math.max(40, screenHeight * 0.06)
-                            color: "#f5f5f5"
-                            border.color: "#d0d0d0"
-                            border.width: 1
-                            z: 5
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 0
+                            spacing: 0
                             
-                            RowLayout {
-                                anchors.fill: parent
-                                spacing: 0
+                            // HEADER DE TABLA
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.max(40, screenHeight * 0.06)
+                                color: "#f5f5f5"
+                                border.color: "#d0d0d0"
+                                border.width: 1
+                                z: 5
                                 
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.06
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 0
                                     
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "ID"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.16
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "TIPO DE GASTO"
-                                        font.bold: true
-                                        font.pixelSize: fontHeader        // Era: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.22
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "DESCRIPCIÓN"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.12
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "MONTO"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.12
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "FECHA"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: parent.width * 0.18
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "PROVEEDOR"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: "transparent"
-                                    border.color: "#d0d0d0"
-                                    border.width: 1
-                                    
-                                    Label { 
-                                        anchors.centerIn: parent
-                                        text: "REGISTRADO POR"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // CONTENIDO DE TABLA
-                        ScrollView {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            
-                            ListView {
-                                id: gastosListView
-                                model: gastosPaginadosModel
-                                
-                                delegate: Rectangle {
-                                    width: ListView.view.width
-                                    height: Math.max(45, screenHeight * 0.06)
-                                    color: {
-                                        if (selectedRowIndex === index) return "#e3f2fd"
-                                        return index % 2 === 0 ? "transparent" : "#fafafa"
-                                    }
-                                    border.color: selectedRowIndex === index ? primaryColor : "#e8e8e8"
-                                    border.width: selectedRowIndex === index ? 2 : 1
-                                
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        spacing: 0
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.06
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
                                         
-                                        // COLUMNA ID
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.06
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.centerIn: parent
-                                                text: model.gastoId
-                                                color: textColor
-                                                font.bold: true
-                                                font.pixelSize: fontSmall
-                                            }
-                                        }
-                                        
-                                        // COLUMNA TIPO
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.16
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: Math.min(parent.width * 0.9, baseUnit * 6)
-                                                height: Math.min(parent.height * 0.4, baseUnit * 1)
-                                                color: getColorForTipo(model.tipoGasto)
-                                                radius: height / 2
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: model.tipoGasto
-                                                    color: whiteColor
-                                                    font.pixelSize: fontSmall 
-                                                    font.bold: true
-                                                }
-                                            }
-                                        }
-                                        
-                                        // COLUMNA DESCRIPCIÓN
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.22
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.fill: parent
-                                                anchors.margins: marginSmall * 0.5
-                                                text: model.descripcion || "Sin descripción"
-                                                color: textColor
-                                                font.pixelSize: fontSmall 
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignLeft
-                                            }
-                                        }
-                                        
-                                        // COLUMNA MONTO
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.12
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.centerIn: parent
-                                                text: "Bs " + model.monto
-                                                color: {
-                                                    var monto = parseFloat(model.monto)
-                                                    if (monto > 1000) return dangerColor
-                                                    if (monto > 500) return warningColor
-                                                    return successColor
-                                                }
-                                                font.bold: true
-                                                font.pixelSize: fontSmall
-                                            }
-                                        }
-                                        
-                                        // COLUMNA FECHA
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.12
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.centerIn: parent
-                                                text: model.fechaGasto
-                                                color: textColor
-                                                font.pixelSize: fontSmall
-                                            }
-                                        }
-                                        
-                                        // COLUMNA PROVEEDOR
-                                        Rectangle {
-                                            Layout.preferredWidth: parent.width * 0.18
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.fill: parent
-                                                anchors.margins: marginSmall * 0.25
-                                                text: model.proveedor || "Sin proveedor"
-                                                color: "#7f8c8d"
-                                                font.pixelSize: fontTiny
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignLeft
-                                            }
-                                        }
-                                        
-                                        // COLUMNA REGISTRADO POR
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#d0d0d0"
-                                            border.width: 1
-                                            
-                                            Label { 
-                                                anchors.fill: parent
-                                                anchors.margins: marginSmall * 0.25
-                                                text: model.registradoPor || "Usuario desconocido"
-                                                color: "#7f8c8d"
-                                                font.pixelSize: fontTiny
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 2
-                                                verticalAlignment: Text.AlignVCenter
-                                                horizontalAlignment: Text.AlignLeft
-                                            }
-                                        }
-                                    }
-                                
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: {
-                                            selectedRowIndex = index
-                                            console.log("Seleccionado gasto ID:", model.gastoId)
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "ID"
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            color: textColor
                                         }
                                     }
                                     
-                                    // BOTONES DE ACCIÓN
-                                    RowLayout {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: marginSmall * 0.5
-                                        spacing: marginSmall * 0.25
-                                        visible: selectedRowIndex === index
-                                        z: 10
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.16
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
                                         
-                                        Button {
-                                            id: editButton
-                                            width: baseUnit * 2.2
-                                            height: baseUnit * 2.2
-                                            visible: serviciosBasicosRoot.esAdministrador || serviciosBasicosRoot.esMedico
-                                            enabled: {
-                                                if (serviciosBasicosRoot.esAdministrador) return true
-                                                if (serviciosBasicosRoot.esMedico) {
-                                                    // Verificar fecha para médicos (30 días límite)
-                                                    var fechaGasto = new Date(model.fechaGasto || "")
-                                                    var fechaActual = new Date()
-                                                    var diasDiferencia = Math.floor((fechaActual - fechaGasto) / (1000 * 60 * 60 * 24))
-                                                    return diasDiferencia <= 30
-                                                }
-                                                return false
-                                            }
-                                            background: Rectangle {
-                                                color: "transparent"
-                                            }
-                                            
-                                            Image {
-                                                id: editIcon
-                                                anchors.centerIn: parent
-                                                width: baseUnit * 1.2
-                                                height: baseUnit * 1.2
-                                                source: "Resources/iconos/editar.svg"
-                                                fillMode: Image.PreserveAspectFit
-                                            }
-                                            
-                                            onClicked: {
-                                                isEditMode = true
-                                                editingGastoData = {
-                                                    gastoId: model.gastoId,
-                                                    tipoGasto: model.tipoGasto,
-                                                    descripcion: model.descripcion,
-                                                    monto: model.monto,
-                                                    fechaGasto: model.fechaGasto,
-                                                    proveedor: model.proveedor
-                                                }
-                                                showNewGastoDialog = true
-                                            }
-                                            
-                                            onHoveredChanged: {
-                                                editIcon.opacity = hovered ? 0.7 : 1.0
-                                            }
-                                            ToolTip.text: {
-                                                if (serviciosBasicosRoot.esAdministrador) return "Editar gasto"
-                                                if (serviciosBasicosRoot.esMedico) {
-                                                    var fechaGasto = new Date(model.fechaGasto || "")
-                                                    var fechaActual = new Date()
-                                                    var diasDiferencia = Math.floor((fechaActual - fechaGasto) / (1000 * 60 * 60 * 24))
-                                                    if (diasDiferencia > 30) {
-                                                        return "No se puede editar: gasto de más de 30 días"
-                                                    }
-                                                    return "Editar gasto (máximo 30 días)"
-                                                }
-                                                return "Sin permisos"
-                                            }
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "TIPO DE GASTO"
+                                            font.bold: true
+                                            font.pixelSize: fontHeader
+                                            color: textColor
                                         }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.22
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
                                         
-                                        Button {
-                                            id: deleteButton
-                                            width: baseUnit * 2.2
-                                            height: baseUnit * 2.2
-                                            visible: serviciosBasicosRoot.esAdministrador
-
-                                            background: Rectangle {
-                                                color: "transparent"
-                                            }
-                                            
-                                            Image {
-                                                id: deleteIcon
-                                                anchors.centerIn: parent
-                                                width: baseUnit * 1.2
-                                                height: baseUnit * 1.2
-                                                source: "Resources/iconos/eliminar.svg"
-                                                fillMode: Image.PreserveAspectFit
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("🗑️ Botón eliminar presionado")
-                                                console.log("🎯 gastoId:", model.gastoId)
-                                                
-                                                if (model.gastoId && model.gastoId !== "N/A") {
-                                                    confirmDeleteDialog.gastoIdToDelete = String(model.gastoId)
-                                                    confirmDeleteDialog.open()
-                                                } else {
-                                                    console.log("❌ ID de gasto inválido")
-                                                }
-                                            }
-                                            
-                                            onHoveredChanged: {
-                                                deleteIcon.opacity = hovered ? 0.7 : 1.0
-                                            }
-                                            
-                                            ToolTip.text: "Eliminar gasto (solo administradores)"
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "DESCRIPCIÓN"
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            color: textColor
                                         }
-                                        Button {
-                                            width: baseUnit * 2.2
-                                            height: baseUnit * 2.2
-                                            visible: selectedRowIndex === index && !editButton.visible
-                                            enabled: false
-                                            
-                                            background: Rectangle {
-                                                color: "transparent"
-                                            }
-                                            
-                                            Image {
-                                                anchors.centerIn: parent
-                                                width: baseUnit * 1.2
-                                                height: baseUnit * 1.2
-                                                source: "Resources/iconos/editar.svg"
-                                                fillMode: Image.PreserveAspectFit
-                                                opacity: 0.3
-                                            }
-                                            
-                                            //ToolTip.visible: parent.hovered
-                                            ToolTip.text: {
-                                                if (gastoModelInstance && gastoModelInstance.esAdministrador()) {
-                                                    return "Sin permisos de edición"
-                                                } else {
-                                                    return "Solo puedes editar tus gastos dentro de 30 días"
-                                                }
-                                            }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.12
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
+                                        
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "MONTO"
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            color: textColor
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.12
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
+                                        
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "FECHA"
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            color: textColor
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.18
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
+                                        
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "PROVEEDOR"
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            color: textColor
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#d0d0d0"
+                                        border.width: 1
+                                        
+                                        Label { 
+                                            anchors.centerIn: parent
+                                            text: "REGISTRADO POR"
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            color: textColor
                                         }
                                     }
                                 }
                             }
                             
-                            // ESTADO VACÍO PARA TABLA SIN DATOS
-                            ColumnLayout {
+                            // CONTENIDO DE TABLA
+                            ScrollView {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                visible: gastosPaginadosModel.count === 0 && !loadingIndicator.visible
-                                spacing: marginLarge
+                                clip: true
                                 
-                                Item { Layout.fillHeight: true }
+                                ListView {
+                                    id: gastosListView
+                                    model: gastosPaginadosModel
+                                    
+                                    delegate: Rectangle {
+                                        width: ListView.view.width
+                                        height: Math.max(45, screenHeight * 0.06)
+                                        color: {
+                                            if (selectedRowIndex === index) return "#e3f2fd"
+                                            return index % 2 === 0 ? "transparent" : "#fafafa"
+                                        }
+                                        border.color: selectedRowIndex === index ? primaryColor : "#e8e8e8"
+                                        border.width: selectedRowIndex === index ? 2 : 1
+                                    
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            spacing: 0
+                                            
+                                            // COLUMNA ID
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.width * 0.06
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Label { 
+                                                    anchors.centerIn: parent
+                                                    text: model.gastoId
+                                                    color: textColor
+                                                    font.bold: true
+                                                    font.pixelSize: fontSmall
+                                                }
+                                            }
+                                            
+                                            // COLUMNA TIPO
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.width * 0.16
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: Math.min(parent.width * 0.9, baseUnit * 6)
+                                                    height: Math.min(parent.height * 0.4, baseUnit * 1)
+                                                    color: getColorForTipo(model.tipoGasto)
+                                                    radius: height / 2
+                                                    
+                                                    Label {
+                                                        anchors.centerIn: parent
+                                                        text: model.tipoGasto
+                                                        color: whiteColor
+                                                        font.pixelSize: fontSmall 
+                                                        font.bold: true
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // COLUMNA DESCRIPCIÓN
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.width * 0.22
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Label { 
+                                                    anchors.fill: parent
+                                                    anchors.margins: marginSmall * 0.5
+                                                    text: model.descripcion || "Sin descripción"
+                                                    color: textColor
+                                                    font.pixelSize: fontSmall 
+                                                    elide: Text.ElideRight
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    horizontalAlignment: Text.AlignLeft
+                                                }
+                                            }
+                                            
+                                            // COLUMNA MONTO
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.width * 0.12
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Label { 
+                                                    anchors.centerIn: parent
+                                                    text: "Bs " + model.monto
+                                                    color: {
+                                                        var monto = parseFloat(model.monto)
+                                                        if (monto > 1000) return dangerColor
+                                                        if (monto > 500) return warningColor
+                                                        return successColor
+                                                    }
+                                                    font.bold: true
+                                                    font.pixelSize: fontSmall
+                                                }
+                                            }
+                                            
+                                            // COLUMNA FECHA
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.width * 0.12
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Label { 
+                                                    anchors.centerIn: parent
+                                                    text: model.fechaGasto
+                                                    color: textColor
+                                                    font.pixelSize: fontSmall
+                                                }
+                                            }
+                                            
+                                            // COLUMNA PROVEEDOR
+                                            Rectangle {
+                                                Layout.preferredWidth: parent.width * 0.18
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Label { 
+                                                    anchors.fill: parent
+                                                    anchors.margins: marginSmall * 0.25
+                                                    text: model.proveedor || "Sin proveedor"
+                                                    color: "#7f8c8d"
+                                                    font.pixelSize: fontTiny
+                                                    elide: Text.ElideRight
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    horizontalAlignment: Text.AlignLeft
+                                                }
+                                            }
+                                            
+                                            // COLUMNA REGISTRADO POR
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                color: "transparent"
+                                                border.color: "#d0d0d0"
+                                                border.width: 1
+                                                
+                                                Label { 
+                                                    anchors.fill: parent
+                                                    anchors.margins: marginSmall * 0.25
+                                                    text: model.registradoPor || "Usuario desconocido"
+                                                    color: "#7f8c8d"
+                                                    font.pixelSize: fontTiny
+                                                    elide: Text.ElideRight
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    horizontalAlignment: Text.AlignLeft
+                                                }
+                                            }
+                                        }
+                                    
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                selectedRowIndex = index
+                                                console.log("Seleccionado gasto ID:", model.gastoId)
+                                            }
+                                        }
+                                        
+                                        // BOTONES DE ACCIÓN
+                                        RowLayout {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: marginSmall * 0.5
+                                            spacing: marginSmall * 0.25
+                                            visible: selectedRowIndex === index
+                                            z: 10
+                                            
+                                            Button {
+                                                id: editButton
+                                                width: baseUnit * 2.2
+                                                height: baseUnit * 2.2
+                                                visible: serviciosBasicosRoot.esAdministrador || serviciosBasicosRoot.esMedico
+                                                enabled: {
+                                                    if (serviciosBasicosRoot.esAdministrador) return true
+                                                    if (serviciosBasicosRoot.esMedico) {
+                                                        // Verificar fecha para médicos (30 días límite)
+                                                        var fechaGasto = new Date(model.fechaGasto || "")
+                                                        var fechaActual = new Date()
+                                                        var diasDiferencia = Math.floor((fechaActual - fechaGasto) / (1000 * 60 * 60 * 24))
+                                                        return diasDiferencia <= 30
+                                                    }
+                                                    return false
+                                                }
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                }
+                                                
+                                                Image {
+                                                    id: editIcon
+                                                    anchors.centerIn: parent
+                                                    width: baseUnit * 1.2
+                                                    height: baseUnit * 1.2
+                                                    source: "Resources/iconos/editar.svg"
+                                                    fillMode: Image.PreserveAspectFit
+                                                }
+                                                
+                                                onClicked: {
+                                                    isEditMode = true
+                                                    editingGastoData = {
+                                                        gastoId: model.gastoId,
+                                                        tipoGasto: model.tipoGasto,
+                                                        descripcion: model.descripcion,
+                                                        monto: model.monto,
+                                                        fechaGasto: model.fechaGasto,
+                                                        proveedor: model.proveedor
+                                                    }
+                                                    showNewGastoDialog = true
+                                                }
+                                                
+                                                onHoveredChanged: {
+                                                    editIcon.opacity = hovered ? 0.7 : 1.0
+                                                }
+                                                ToolTip.text: {
+                                                    if (serviciosBasicosRoot.esAdministrador) return "Editar gasto"
+                                                    if (serviciosBasicosRoot.esMedico) {
+                                                        var fechaGasto = new Date(model.fechaGasto || "")
+                                                        var fechaActual = new Date()
+                                                        var diasDiferencia = Math.floor((fechaActual - fechaGasto) / (1000 * 60 * 60 * 24))
+                                                        if (diasDiferencia > 30) {
+                                                            return "No se puede editar: gasto de más de 30 días"
+                                                        }
+                                                        return "Editar gasto (máximo 30 días)"
+                                                    }
+                                                    return "Sin permisos"
+                                                }
+                                            }
+                                            
+                                            Button {
+                                                id: deleteButton
+                                                width: baseUnit * 2.2
+                                                height: baseUnit * 2.2
+                                                visible: serviciosBasicosRoot.esAdministrador
+
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                }
+                                                
+                                                Image {
+                                                    id: deleteIcon
+                                                    anchors.centerIn: parent
+                                                    width: baseUnit * 1.2
+                                                    height: baseUnit * 1.2
+                                                    source: "Resources/iconos/eliminar.svg"
+                                                    fillMode: Image.PreserveAspectFit
+                                                }
+                                                
+                                                onClicked: {
+                                                    console.log("🗑️ Botón eliminar presionado")
+                                                    console.log("🎯 gastoId:", model.gastoId)
+                                                    
+                                                    if (model.gastoId && model.gastoId !== "N/A") {
+                                                        confirmDeleteDialog.gastoIdToDelete = String(model.gastoId)
+                                                        confirmDeleteDialog.open()
+                                                    } else {
+                                                        console.log("❌ ID de gasto inválido")
+                                                    }
+                                                }
+                                                
+                                                onHoveredChanged: {
+                                                    deleteIcon.opacity = hovered ? 0.7 : 1.0
+                                                }
+                                                
+                                                ToolTip.text: "Eliminar gasto (solo administradores)"
+                                            }
+                                            Button {
+                                                width: baseUnit * 2.2
+                                                height: baseUnit * 2.2
+                                                visible: selectedRowIndex === index && !editButton.visible
+                                                enabled: false
+                                                
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                }
+                                                
+                                                Image {
+                                                    anchors.centerIn: parent
+                                                    width: baseUnit * 1.2
+                                                    height: baseUnit * 1.2
+                                                    source: "Resources/iconos/editar.svg"
+                                                    fillMode: Image.PreserveAspectFit
+                                                    opacity: 0.3
+                                                }
+                                                
+                                                ToolTip.text: {
+                                                    if (gastoModelInstance && gastoModelInstance.esAdministrador()) {
+                                                        return "Sin permisos de edición"
+                                                    } else {
+                                                        return "Solo puedes editar tus gastos dentro de 30 días"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 
+                                // ESTADO VACÍO PARA TABLA SIN DATOS
                                 ColumnLayout {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    spacing: marginMedium
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    visible: gastosPaginadosModel.count === 0 && !loadingIndicator.visible
+                                    spacing: marginLarge
                                     
-                                    Label {
-                                        text: "💰"
-                                        font.pixelSize: fontTitle * 3
-                                        color: "#E5E7EB"
-                                        Layout.alignment: Qt.AlignHCenter
-                                    }
+                                    Item { Layout.fillHeight: true }
                                     
-                                    Label {
-                                        text: "No hay gastos registrados"
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontLarge
+                                    ColumnLayout {
                                         Layout.alignment: Qt.AlignHCenter
-                                        font.family: "Segoe UI"
+                                        spacing: marginMedium
+                                        
+                                        Label {
+                                            text: "💰"
+                                            font.pixelSize: fontTitle * 3
+                                            color: "#E5E7EB"
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        
+                                        Label {
+                                            text: "No hay gastos registrados"
+                                            color: textColor
+                                            font.bold: true
+                                            font.pixelSize: fontLarge
+                                            Layout.alignment: Qt.AlignHCenter
+                                            font.family: "Segoe UI"
+                                        }
+                                        
+                                        Label {
+                                            text: "Registra el primer gasto haciendo clic en \"➕ Nuevo Gasto\""
+                                            color: "#6B7280"
+                                            font.pixelSize: fontBase
+                                            Layout.alignment: Qt.AlignHCenter
+                                            wrapMode: Text.WordWrap
+                                            horizontalAlignment: Text.AlignHCenter
+                                            font.family: "Segoe UI"
+                                            Layout.maximumWidth: 400
+                                        }
                                     }
-                                    
-                                    Label {
-                                        text: "Registra el primer gasto haciendo clic en \"➕ Nuevo Gasto\""
-                                        color: "#6B7280"
-                                        font.pixelSize: fontBase
-                                        Layout.alignment: Qt.AlignHCenter
-                                        wrapMode: Text.WordWrap
-                                        horizontalAlignment: Text.AlignHCenter
-                                        font.family: "Segoe UI"
-                                        Layout.maximumWidth: 400
-                                    }
+                                    Item { Layout.fillHeight: true }
                                 }
-                                Item { Layout.fillHeight: true }
                             }
                         }
                     }
-                }
-                
-                // CONTROL DE PAGINACIÓN
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(50, screenHeight * 0.08)
-                    Layout.margins: marginMedium
-                    Layout.topMargin: 0
-                    color: "#F8F9FA"
-                    border.color: "#D5DBDB"
-                    border.width: 1
-                    radius: baseUnit * 0.2
                     
-                    RowLayout {
-                        anchors.centerIn: parent
-                        spacing: marginLarge
+                    // CONTROL DE PAGINACIÓN
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(50, screenHeight * 0.08)
+                        Layout.margins: marginMedium
+                        Layout.topMargin: 0
+                        color: "#F8F9FA"
+                        border.color: "#D5DBDB"
+                        border.width: 1
+                        radius: baseUnit * 0.2
                         
-                        // Botón Anterior
-                        Button {
-                            Layout.preferredWidth: Math.max(80, screenWidth * 0.08)
-                            Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
-                            text: "← Anterior"
-                            enabled: currentPageServicios > 0
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: marginLarge
                             
-                            background: Rectangle {
-                                color: parent.enabled ? 
-                                    (parent.pressed ? "#E5E7EB" : "#F3F4F6") : 
-                                    "#E5E7EB"
-                                radius: height / 2
-                                border.color: parent.enabled ? "#D1D5DB" : "#E5E7EB"
-                                border.width: 1
+                            // Botón Anterior
+                            Button {
+                                Layout.preferredWidth: Math.max(80, screenWidth * 0.08)
+                                Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
+                                text: "← Anterior"
+                                enabled: currentPageServicios > 0
                                 
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
+                                background: Rectangle {
+                                    color: parent.enabled ? 
+                                        (parent.pressed ? "#E5E7EB" : "#F3F4F6") : 
+                                        "#E5E7EB"
+                                    radius: height / 2
+                                    border.color: parent.enabled ? "#D1D5DB" : "#E5E7EB"
+                                    border.width: 1
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
                                 }
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: parent.enabled ? "#374151" : "#9CA3AF"
-                                font.bold: true
-                                font.pixelSize: fontBase
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                if (currentPageServicios > 0) {
-                                    currentPageServicios--
-                                    cargarPaginaDesdeBD()
-                                }
-                            }
-                        }
-                        
-                        // Indicador de página
-                        Label {
-                            text: "Página " + (currentPageServicios + 1) + " de " + Math.max(1, totalPagesServicios)
-                            color: "#374151"
-                            font.pixelSize: fontBase
-                            font.weight: Font.Medium
-                        }
-                        
-                        // Botón Siguiente
-                        Button {
-                            Layout.preferredWidth: Math.max(90, screenWidth * 0.09)
-                            Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
-                            text: "Siguiente →"
-                            enabled: currentPageServicios < totalPagesServicios - 1
-                            
-                            background: Rectangle {
-                                color: parent.enabled ? 
-                                    (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
-                                    "#E5E7EB"
-                                radius: height / 2
                                 
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: parent.enabled ? "#374151" : "#9CA3AF"
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    if (currentPageServicios > 0) {
+                                        currentPageServicios--
+                                        cargarPaginaDesdeBD()
+                                    }
                                 }
                             }
                             
-                            contentItem: Label {
-                                text: parent.text
-                                color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
-                                font.bold: true
+                            // Indicador de página
+                            Label {
+                                text: "Página " + (currentPageServicios + 1) + " de " + Math.max(1, totalPagesServicios)
+                                color: "#374151"
                                 font.pixelSize: fontBase
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                                font.weight: Font.Medium
                             }
                             
-                            onClicked: {
-                                if (currentPageServicios < totalPagesServicios - 1) {
-                                    currentPageServicios++
-                                    cargarPaginaDesdeBD()
+                            // Botón Siguiente
+                            Button {
+                                Layout.preferredWidth: Math.max(90, screenWidth * 0.09)
+                                Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
+                                text: "Siguiente →"
+                                enabled: currentPageServicios < totalPagesServicios - 1
+                                
+                                background: Rectangle {
+                                    color: parent.enabled ? 
+                                        (parent.pressed ? Qt.darker("#10B981", 1.1) : "#10B981") : 
+                                        "#E5E7EB"
+                                    radius: height / 2
+                                    
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
+                                    font.bold: true
+                                    font.pixelSize: fontBase
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    if (currentPageServicios < totalPagesServicios - 1) {
+                                        currentPageServicios++
+                                        cargarPaginaDesdeBD()
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+            
+            // Subsección 1: Ingresos Extras
+            Loader {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                source: "IngresosExtras.qml"
+            }
+            
+            // Subsección 2: Egresos Extras  
+            Loader {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                source: "EgresosExtras.qml"
             }
         }
     }
@@ -2291,6 +2321,21 @@ Item {
         } else {
             console.log("Esperando inicialización de GastoModel...")
             delayedInitTimer.start()
+        }
+    }
+    // Agregar después del Component.onCompleted:
+    onCurrentSubsectionChanged: {
+        console.log("📋 Cambiando a subsección:", subsectionTitles[currentSubsection])
+        // Aquí puedes cargar datos específicos según la subsección
+    }
+
+    // Conectar con la propiedad del main.qml
+    Connections {
+        target: serviciosBasicosRoot
+        function onCurrentServiciosSubsectionChanged() {
+            if (typeof currentServiciosSubsection !== 'undefined') {
+                currentSubsection = currentServiciosSubsection
+            }
         }
     }
 }
