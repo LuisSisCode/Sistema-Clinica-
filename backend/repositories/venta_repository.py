@@ -21,7 +21,6 @@ class VentaRepository(BaseRepository):
     
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene ventas del día actual - SIN CACHÉ para datos frescos"""
-        print("🛠 DEBUG: get_active() llamado para ventas del día")
         query = """
         SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
         FROM Ventas v
@@ -31,7 +30,6 @@ class VentaRepository(BaseRepository):
         """
         # ✅ CORREGIDO: Usar use_cache=False para obtener datos frescos
         resultado = self._execute_query(query, use_cache=False)
-        print(f"🛠 DEBUG: get_active() encontró {len(resultado) if resultado else 0} ventas del día")
         
         if resultado:
             print(f"🛠 DEBUG: Primera venta: {resultado[0]}")
@@ -320,7 +318,6 @@ class VentaRepository(BaseRepository):
     def get_venta_completa(self, venta_id: int) -> Dict[str, Any]:
         """Obtiene venta con detalles CONSOLIDADOS por producto"""
         
-        print(f"🛠 DEBUG: get_venta_completa llamado con venta_id: {venta_id} (tipo: {type(venta_id)})")
 
         validate_required(venta_id, "venta_id")
         
@@ -332,9 +329,7 @@ class VentaRepository(BaseRepository):
             INNER JOIN Usuario u ON v.Id_Usuario = u.id
             WHERE v.id = ?
         """
-        print(f"🛠 DEBUG: Ejecutando query con parámetro: {venta_id}")
         venta = self._execute_query(venta_query, (venta_id,), fetch_one=True, use_cache=False)
-        print(f"🛠 DEBUG: Resultado de query venta: {venta} (tipo: {type(venta)})")
         
         if not venta:
             print(f"❌ DEBUG: Venta no encontrada para ID: {venta_id}")
@@ -363,9 +358,7 @@ class VentaRepository(BaseRepository):
         ORDER BY p.Nombre ASC
         """
         
-        print(f"🛠 DEBUG: Ejecutando consulta consolidada para venta {venta_id}")
         detalles = self._execute_query(detalles_query, (venta_id,), use_cache=False)
-        print(f"🛠 DEBUG: Detalles consolidados obtenidos: {len(detalles) if detalles else 0}")
         
         if detalles:
             for i, detalle in enumerate(detalles):
@@ -421,11 +414,10 @@ class VentaRepository(BaseRepository):
         ORDER BY p.Nombre ASC
         """
         
-        print(f"🛠 DEBUG: Ejecutando consulta consolidada para venta {venta_id}")
+
         detalles = self._execute_query(detalles_query, (venta_id,), use_cache=False)
         
         if detalles:
-            print(f"🛠 DEBUG: Detalles consolidados obtenidos: {len(detalles)}")
             
             # CORREGIDO: Verificar y corregir subtotales
             total_verificacion = 0
@@ -1140,7 +1132,7 @@ class VentaRepository(BaseRepository):
             self._force_reload_productos = True
             self._bypass_all_cache = True
             
-            print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches limpiados, flags de bypass activados")
+            #print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches limpiados, flags de bypass activados")
             
             # También invalidar ProductoRepository si está disponible
             if hasattr(self, 'producto_repo') and self.producto_repo:

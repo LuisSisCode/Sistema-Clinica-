@@ -107,8 +107,6 @@ class TrabajadorModel(QObject):
         # Mantener solo últimas 10 llamadas
         if len(self._debug_calls) > 10:
             self._debug_calls.pop(0)
-        
-        print(f"📝 LOG [{self._instance_id}]: {method_name} - ID:{self._usuario_actual_id}, Rol:'{self._usuario_actual_rol}' - {extra_info}")
 
     # ===============================
     # MÉTODOS DE CONEXIÓN
@@ -123,7 +121,7 @@ class TrabajadorModel(QObject):
             self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_tipos_trabajadores_desde_signal)
             self.global_signals.trabajadoresNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             
-            print("🔗 Señales globales conectadas en TrabajadorModel")
+            #print("🔗 Señales globales conectadas en TrabajadorModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales: {e}")
         
@@ -206,35 +204,16 @@ class TrabajadorModel(QObject):
 
     def _verificar_despues_de_1_segundo(self, expected_id: int, expected_rol: str):
         """Verificación tras 1 segundo"""
-        print(f"🔍 VERIFICACIÓN 1s:")
-        print(f"  Esperado: ID={expected_id}, Rol='{expected_rol}'")
-        print(f"  Actual: ID={self._usuario_actual_id}, Rol='{self._usuario_actual_rol}'")
-        
-        if self._usuario_actual_id != expected_id or self._usuario_actual_rol != expected_rol:
-            print(f"❌ RESET DETECTADO TRAS 1 SEGUNDO!")
-            print(f"📝 Últimas llamadas:")
-            for call in self._debug_calls[-5:]:
-                print(f"   {call['method']}: ID={call['auth_id']}, Extra={call['extra']}")
+        pass
 
     def _verificar_despues_de_3_segundos(self, expected_id: int, expected_rol: str):
         """Verificación tras 3 segundos"""
-        print(f"🔍 VERIFICACIÓN 3s:")
-        print(f"  Esperado: ID={expected_id}, Rol='{expected_rol}'")
-        print(f"  Actual: ID={self._usuario_actual_id}, Rol='{self._usuario_actual_rol}'")
-        
-        if self._usuario_actual_id != expected_id or self._usuario_actual_rol != expected_rol:
-            print(f"❌ RESET DETECTADO TRAS 3 SEGUNDOS!")
-            print(f"📝 Log completo de llamadas:")
-            for i, call in enumerate(self._debug_calls):
-                print(f"   {i+1}. {call['method']}: ID={call['auth_id']}, Rol='{call['auth_role'][:10]}', Extra={call['extra']}")
+        pass
 
     def _verificar_autenticacion(self) -> bool:
         """Verificación de autenticación - DEBUG"""
         self._log_call("_verificar_autenticacion", f"ID={self._usuario_actual_id}")
         
-        print(f"🔍 _verificar_autenticacion [{self._instance_id}]:")
-        print(f"  _usuario_actual_id = {self._usuario_actual_id}")
-        print(f"  _usuario_actual_rol = '{self._usuario_actual_rol}'")
         
         if self._usuario_actual_id <= 0:
             print(f"❌ Usuario no autenticado en instancia {self._instance_id}")

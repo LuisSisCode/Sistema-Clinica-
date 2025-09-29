@@ -67,7 +67,7 @@ ApplicationWindow {
     Connections {
         target: appController
         function onModelsReady() {
-            console.log("🔗 Models listos desde AppController")
+            //console.log("🔗 Models listos desde AppController")
             modelsReady = true
             
             // Actualizar propiedades de forma segura

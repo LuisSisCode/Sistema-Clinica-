@@ -19,7 +19,7 @@ class AuthModel(QObject):
         self._is_authenticated: bool = False
         print("🔐 AuthModel inicializado - Versión Simplificada")
         
-    # Properties para QML
+    # Properties para QML - EXISTENTES
     @Property('QVariantMap', notify=currentUserChanged)
     def currentUser(self) -> Dict[str, Any]:
         return self._current_user.copy() if self._current_user else {}
@@ -53,6 +53,35 @@ class AuthModel(QObject):
                 username = self._current_user.get('nombre_usuario', '')
                 if username:
                     return f"{username}@clinica.local"
+        return ""
+    
+    # NUEVAS PROPERTIES SOLICITADAS
+    @Property(int, notify=loginSuccessful)
+    def current_user_id(self) -> int:
+        """Property para obtener el ID del usuario actual"""
+        return self.get_user_id()
+
+    @Property(str, notify=loginSuccessful) 
+    def current_user_name(self) -> str:
+        """Property para obtener el nombre del usuario actual"""
+        if hasattr(self, '_current_user') and self._current_user:
+            nombre = self._current_user.get('Nombre', '')
+            apellido = self._current_user.get('Apellido_Paterno', '')
+            return f"{nombre} {apellido}".strip()
+        return ""
+
+    @Property(str, notify=loginSuccessful)
+    def current_user_role(self) -> str:
+        """Property para obtener el rol del usuario actual"""
+        if hasattr(self, '_current_user') and self._current_user:
+            return self._current_user.get('rol_nombre', '')
+        return ""
+
+    @Property(str, notify=loginSuccessful)
+    def current_username(self) -> str:
+        """Property para obtener el username del usuario actual"""
+        if hasattr(self, '_current_user') and self._current_user:
+            return self._current_user.get('nombre_usuario', '')
         return ""
     
     # Slots para QML
@@ -202,10 +231,10 @@ class AuthModel(QObject):
     
     @Slot(result=int)
     def get_user_id(self) -> int:
-        """Obtiene solo el ID del usuario autenticado"""
-        if not self._current_user:
-            return 0
-        return self._current_user.get('id', 0)
+        """Obtiene el ID del usuario autenticado actualmente"""
+        if hasattr(self, '_current_user') and self._current_user:
+            return self._current_user.get('id', 0)
+        return 0
     
     @Slot(result=str)
     def get_user_name(self) -> str:

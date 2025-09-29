@@ -28,8 +28,8 @@ class TrabajadorRepository(BaseRepository):
     # ===============================
     
     def create_worker(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                 tipo_trabajador_id: int, especialidad: str = None, 
-                 matricula: str = None) -> int:
+             tipo_trabajador_id: int, especialidad: str = None, 
+             matricula: str = None, usuario_id: int = None) -> int:
         """
         Crea nuevo trabajador con validaciones
         
@@ -38,6 +38,9 @@ class TrabajadorRepository(BaseRepository):
             apellido_paterno: Apellido paterno
             apellido_materno: Apellido materno
             tipo_trabajador_id: ID del tipo de trabajador
+            especialidad: Especialidad del trabajador (opcional)
+            matricula: Matrícula profesional (opcional)
+            usuario_id: ID del usuario que crea el registro (opcional, para auditoría)
             
         Returns:
             ID del trabajador creado
@@ -59,12 +62,17 @@ class TrabajadorRepository(BaseRepository):
             'Apellido_Materno': normalize_name(apellido_materno),
             'Id_Tipo_Trabajador': tipo_trabajador_id
         }
-        # ✅ Agregar especialidad y matrícula si se proporcionan
+        
+        # Agregar especialidad y matrícula si se proporcionan
         if especialidad and especialidad.strip():
             worker_data['Especialidad'] = especialidad.strip()
         
         if matricula and matricula.strip():
             worker_data['Matricula'] = matricula.strip()
+        
+        # OPCIONAL: Agregar usuario_id para auditoría si se proporciona
+        if usuario_id:
+            print(f"👤 Trabajador creado por usuario ID: {usuario_id}")
         
         worker_id = self.insert(worker_data)
         print(f"👷‍♂️ Trabajador creado: {nombre} {apellido_paterno} - ID: {worker_id}")
@@ -356,8 +364,8 @@ class TrabajadorRepository(BaseRepository):
         """Obtiene asignaciones de laboratorio del trabajador"""
         query = """
         SELECT l.*, 
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
-               p.Edad as paciente_edad
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_completo,
+            p.Cedula as paciente_cedula
         FROM Laboratorio l
         INNER JOIN Pacientes p ON l.Id_Paciente = p.id
         WHERE l.Id_Trabajador = ?

@@ -18,6 +18,7 @@ class UsuarioModel(QObject):
     usuariosChanged = Signal()
     rolesChanged = Signal()
     estadisticasChanged = Signal()
+    usuarioChanged = Signal()  # ← AGREGADA: Para cambios de usuario actual
     
     # Señales para operaciones
     usuarioCreado = Signal(bool, str)  # success, message
@@ -43,7 +44,7 @@ class UsuarioModel(QObject):
         
         # ✅ AUTENTICACIÓN ESTANDARIZADA
         self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
-        print("🎯 UsuarioModel inicializado - Esperando autenticación")
+        self._usuario_actual_rol = ""  # ← AGREGADA: Rol del usuario actual
         
         # Estado interno
         self._usuarios: List[Dict[str, Any]] = []
@@ -62,7 +63,7 @@ class UsuarioModel(QObject):
         self._cargar_datos_iniciales()
     
     # ===============================
-    # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
+    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER - ACTUALIZADOS
     # ===============================
 
     def _verificar_permisos_admin(self) -> bool:
@@ -70,16 +71,11 @@ class UsuarioModel(QObject):
         if not self._verificar_autenticacion():
             return False
         
-        # ✅ NECESITAMOS OBTENER EL ROL DEL USUARIO ACTUAL
-        try:
-            usuario_actual = self.repository.get_by_id_with_role(self._usuario_actual_id)
-            if not usuario_actual or usuario_actual.get('rol_nombre') != "Administrador":
-                self.operacionError.emit("Solo administradores pueden gestionar usuarios")
-                return False
-            return True
-        except Exception as e:
-            self.operacionError.emit(f"Error verificando permisos: {str(e)}")
+        # ✅ USAMOS EL ROL ALMACENADO EN MEMORIA PARA MAYOR EFICIENCIA
+        if self._usuario_actual_rol != "Administrador":
+            self.operacionError.emit("Solo administradores pueden gestionar usuarios")
             return False
+        return True
     
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
@@ -89,6 +85,28 @@ class UsuarioModel(QObject):
                 self._usuario_actual_id = usuario_id
                 print(f"👤 Usuario autenticado establecido en UsuarioModel: {usuario_id}")
                 self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de usuarios")
+                
+                # Emitir señal de cambio de usuario para actualizar el UI
+                self.usuarioChanged.emit()
+            else:
+                print(f"⚠️ ID de usuario inválido en UsuarioModel: {usuario_id}")
+                self.operacionError.emit("ID de usuario inválido")
+        except Exception as e:
+            print(f"❌ Error estableciendo usuario en UsuarioModel: {e}")
+            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+    
+    @Slot(int, str)
+    def set_usuario_actual_con_rol(self, usuario_id: int, rol: str):
+        """Establece el usuario actual con información de rol"""
+        try:
+            if usuario_id > 0:
+                self._usuario_actual_id = usuario_id
+                self._usuario_actual_rol = rol  # ← AGREGADA: Almacenar el rol
+                print(f"👤 Usuario autenticado establecido en UsuarioModel: {usuario_id} - Rol: {rol}")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de usuarios")
+                
+                # Emitir señal de cambio de usuario para actualizar el UI
+                self.usuarioChanged.emit()
             else:
                 print(f"⚠️ ID de usuario inválido en UsuarioModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
@@ -100,6 +118,11 @@ class UsuarioModel(QObject):
     def usuario_actual_id(self):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
+    
+    @Property(str, notify=usuarioChanged)
+    def usuario_actual_rol(self):
+        """Property para obtener el rol del usuario actual"""
+        return self._usuario_actual_rol
     
     # ===============================
     # PROPIEDADES DE AUTENTICACIÓN
@@ -113,7 +136,7 @@ class UsuarioModel(QObject):
         return True
     
     # ===============================
-    # PROPERTIES - Datos para QML (SIN CAMBIOS)
+    # PROPERTIES - Datos para QML
     # ===============================
     
     @Property(list, notify=usuariosChanged)
@@ -428,7 +451,9 @@ class UsuarioModel(QObject):
         try:
             self._usuario_actual = None
             self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO AUTENTICADO
+            self._usuario_actual_rol = ""  # ← AGREGADA: Resetear rol
             self.logoutCompleted.emit(True, "Sesión cerrada correctamente")
+            self.usuarioChanged.emit()  # ← AGREGADA: Notificar cambio
             print("🚪 Logout exitoso desde QML")
         except Exception as e:
             error_msg = f"Error en logout: {str(e)}"
@@ -619,7 +644,7 @@ class UsuarioModel(QObject):
             return "Desconocido"
     
     # ===============================
-    # MÉTODOS PRIVADOS (SIN CAMBIOS)
+    # MÉTODOS PRIVADOS
     # ===============================
     
     def _cargar_datos_iniciales(self):
@@ -640,7 +665,6 @@ class UsuarioModel(QObject):
             self._usuarios = usuarios
             self._usuarios_filtrados = usuarios.copy()
             self.usuariosChanged.emit()
-            print(f"👥 Usuarios cargados: {len(usuarios)}")
         except Exception as e:
             print(f"❌ Error cargando usuarios: {e}")
             raise e
@@ -682,6 +706,7 @@ class UsuarioModel(QObject):
             # Establecer estado shutdown
             self._loading = False
             self._usuario_actual_id = 0
+            self._usuario_actual_rol = ""  # ← AGREGADA: Resetear rol
             self._usuario_actual = None
             
             # Limpiar datos

@@ -102,7 +102,7 @@ class DoctorModel(QObject):
         try:
             self.global_signals.especialidadesModificadas.connect(self._actualizar_especialidades_desde_signal)
             self.global_signals.doctoresNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            print("🔗 Señales globales conectadas en DoctorModel")
+            #print("🔗 Señales globales conectadas en DoctorModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en DoctorModel: {e}")
     

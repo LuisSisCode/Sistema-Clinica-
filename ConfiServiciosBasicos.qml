@@ -822,7 +822,7 @@ Item {
     
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("💰 Componente de configuración de tipos de gastos iniciado")
+        //console.log("💰 Componente de configuración de tipos de gastos iniciado")
         if (configuracionModel) {
             console.log("✅ ConfiguracionModel conectado correctamente")
         } else {

@@ -30,8 +30,6 @@ class BaseRepository(ABC):
         self._force_reload = False
         self._force_reload_productos = False
         self._last_cache_invalidation = None
-        
-        print(f"🗃️ Repository inicializado: {table_name} (cache: {cache_type})")
     
     # ===============================
     # MÉTODOS DE CONEXIÓN SEGUROS
@@ -260,8 +258,7 @@ class BaseRepository(ABC):
             if self.cache_type in ['ventas', 'lotes', 'compras']:
                 self._force_reload_productos = True
             
-            print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches internos limpiados, flags de bypass activados")
-            
+           
         except Exception as e:
             print(f"⚠️ Error en invalidación completa de cache: {e}")
             # No fallar por esto, es solo optimización

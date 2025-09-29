@@ -194,7 +194,7 @@ class GastoModel(QObject):
             self.global_signals.tiposGastosModificados.connect(self._actualizar_tipos_gastos_desde_signal)
             self.global_signals.configuracionGastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             self.global_signals.gastosNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            print("🔗 Señales globales conectadas en GastoModel")
+            #print("🔗 Señales globales conectadas en GastoModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en GastoModel: {e}")
     
@@ -277,12 +277,16 @@ class GastoModel(QObject):
             fecha_obj = None
             if fecha_gasto:
                 try:
-                    fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+                    # Convertir fecha desde QML
+                    fecha_solo = datetime.strptime(fecha_gasto, '%Y-%m-%d').date()
+                    # Obtener hora actual
+                    hora_actual = datetime.now().time()
+                    # Combinar fecha del usuario con hora actual
+                    fecha_obj = datetime.combine(fecha_solo, hora_actual)
                     print(f"   - fecha_obj convertida: {fecha_obj}")
                 except Exception as e:
                     print(f"   - Error convirtiendo fecha: {e}")
                     fecha_obj = None
-            
             proveedor_final = proveedor.strip() if proveedor else None
             
             # ✅ USAR usuario_actual_id EN LUGAR DE PARÁMETRO
@@ -791,8 +795,6 @@ class GastoModel(QObject):
             if limit <= 0:
                 limit = 10
             
-            print(f"📊 Obteniendo gastos paginados: offset={offset}, limit={limit}")
-            
             processed_filters = {}
             if filters:
                 if 'tipo_id' in filters:
@@ -833,7 +835,7 @@ class GastoModel(QObject):
                 
                 gastos_convertidos.append(gasto_convertido)
             
-            print(f"✅ Gastos paginados obtenidos: {len(gastos_convertidos)}")
+            #print(f"✅ Gastos paginados obtenidos: {len(gastos_convertidos)}")
             return gastos_convertidos
             
         except Exception as e:

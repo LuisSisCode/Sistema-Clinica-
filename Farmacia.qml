@@ -140,11 +140,11 @@ Item {
             mostrarNotificacion(mensaje, "error")
         }
         function onOperacionExitosa(mensaje) {
-            console.log("✅ Venta BD:", mensaje)
+            //console.log("✅ Venta BD:", mensaje)
             mostrarNotificacion(mensaje, "success")
         }
         function onVentasHoyChanged() {
-            console.log("💰 Ventas del día actualizadas desde BD")
+            //console.log("💰 Ventas del día actualizadas desde BD")
             datosActualizados()
         }
         function onCarritoCambiado() {
@@ -172,7 +172,7 @@ Item {
             mostrarNotificacion(mensaje, "success")
         }
         function onComprasRecientesChanged() {
-            console.log("📦 Compras recientes actualizadas desde BD")
+            //console.log("📦 Compras recientes actualizadas desde BD")
             datosActualizados()
         }
         function onProveedoresChanged() {
@@ -857,28 +857,10 @@ Item {
         return { total: 0, con_stock: 0, stock_bajo: 0, sin_stock: 0 }
     }
 
-    // ===== INICIALIZACIÓN =====
-    
-    Component.onCompleted: {
-        console.log("=== MÓDULO DE FARMACIA INICIALIZADO (CONECTADO A BD) ===")
-        console.log("🔄 Esperando conexión con Models BD...")
-        console.log("Subsección inicial:", currentSubSection)
-    }
     
     // Monitorear cuando los models estén listos
     onModelsReadyChanged: {
         if (modelsReady) {
-            console.log("🚀 Models BD conectados:")
-            console.log("📦 Productos disponibles BD:", productosUnicosModel.length)
-            console.log("🏢 Proveedores BD:", proveedoresModel.length) 
-            console.log("💰 Ventas del día BD:", ventasModel.length)
-            
-            // DEBUG ESPECÍFICO PARA COMPRAS BD
-            if (compraModel) {
-                console.log("🛒 CompraModel BD disponible:", !!compraModel)
-                console.log("🛒 Compras recientes BD:", compraModel.compras_recientes ? compraModel.compras_recientes.length : "undefined")
-                console.log("🛒 Total compras mes BD:", compraModel.total_compras_mes)
-            }
             
             // Configurar alertas automáticas
             if (inventarioModel) {

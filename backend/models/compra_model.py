@@ -37,6 +37,7 @@ class CompraModel(QObject):
     
     # Signals de operaciones
     compraCreada = Signal(int, float)  # compra_id, total
+    compraActualizada = Signal(int, float)  # compra_id, total - NUEVO
     proveedorCreado = Signal(int, str)  # proveedor_id, nombre
     operacionExitosa = Signal(str)     # mensaje
     operacionError = Signal(str)       # mensaje_error
@@ -45,10 +46,12 @@ class CompraModel(QObject):
     loadingChanged = Signal()
     procesandoCompraChanged = Signal()
     itemsCompraCambiado = Signal()
-    # Signal para notificar cambios en proveedores
-    proveedorCompraCompletada = Signal(int, float)  # proveedor_id, monto_compra
-    proveedorDatosActualizados = Signal()  # Para forzar refresh en ProveedorModel
-    # Signal para los filtros
+    modoEdicionChanged = Signal()  # NUEVO
+    datosOriginalesChanged = Signal()  # NUEVO
+    
+    # Signals para proveedores
+    proveedorCompraCompletada = Signal(int, float)
+    proveedorDatosActualizados = Signal()
     filtrosChanged = Signal()
     
     def __init__(self):
@@ -68,6 +71,11 @@ class CompraModel(QObject):
         self._items_compra = []
         self._loading = False
         self._procesando_compra = False
+
+        self._modo_edicion = False
+        self._compra_id_edicion = 0
+        self._datos_originales = {}
+        self._items_originales = []
         
         # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
         self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
@@ -95,9 +103,7 @@ class CompraModel(QObject):
     
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
-        """
-        Establece el usuario actual para las operaciones - MÉTODO REQUERIDO por AppController
-        """
+        """Establece el usuario actual para las operaciones"""
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
@@ -201,6 +207,30 @@ class CompraModel(QObject):
     def total_proveedores(self):
         """Total de proveedores activos"""
         return len(self._proveedores)
+    
+    # ===============================
+    # NUEVAS PROPERTIES PARA EDICIÓN
+    # ===============================
+    
+    @Property(bool, notify=modoEdicionChanged)
+    def modo_edicion(self):
+        """Indica si está en modo edición"""
+        return self._modo_edicion
+    
+    @Property(int, notify=modoEdicionChanged)
+    def compra_id_edicion(self):
+        """ID de la compra en edición"""
+        return self._compra_id_edicion
+    
+    @Property('QVariant', notify=datosOriginalesChanged)
+    def datos_originales(self):
+        """Datos originales de la compra en edición"""
+        return self._datos_originales
+    
+    @Property(list, notify=datosOriginalesChanged)
+    def items_originales(self):
+        """Items originales de la compra en edición"""
+        return self._items_originales
     
     # ===============================
     # SLOTS PARA QML - CONFIGURACIÓN (SIN VERIFICACIÓN - LECTURA)
@@ -316,9 +346,6 @@ class CompraModel(QObject):
     @Slot(str, int, float, str)
     def agregar_item_compra(self, codigo: str, cantidad_unitario: int, 
                         precio_unitario: float, fecha_vencimiento: str):
-        """
-        Agrega item a la compra actual - SIMPLIFICADO SOLO UNIDADES
-        """
         if not codigo or cantidad_unitario <= 0:
             self.operacionError.emit("Código y cantidad válida requeridos")
             return
@@ -327,29 +354,25 @@ class CompraModel(QObject):
             self.operacionError.emit("Precio unitario debe ser mayor a 0")
             return
 
-        # Validar formato de fecha
         fecha_procesada = fecha_vencimiento.strip() if fecha_vencimiento else ""
         if fecha_procesada and not self._validar_fecha_formato(fecha_procesada):
             self.operacionError.emit("Fecha debe ser formato YYYY-MM-DD o vacía")
             return
 
         try:
-            # Verificar que el producto existe
             producto = safe_execute(self.producto_repo.get_by_codigo, codigo.strip())
             if not producto:
                 raise ProductoNotFoundError(codigo=codigo)
 
-            # Verificar si ya existe en items de compra
             item_existente = None
             for item in self._items_compra:
                 if item['codigo'] == codigo.strip():
                     item_existente = item
                     break
 
-            mensaje = ""  # ✅ Inicializar la variable aquí
+            mensaje = ""
             
             if item_existente:
-                # Actualizar item existente - SIMPLIFICADO
                 item_existente['cantidad_unitario'] += cantidad_unitario
                 item_existente['cantidad_total'] = item_existente['cantidad_unitario']
                 item_existente['subtotal'] = item_existente['cantidad_total'] * precio_unitario
@@ -370,18 +393,16 @@ class CompraModel(QObject):
                 }
                 self._items_compra.append(nuevo_item)
                 
-                mensaje = f"Agregado: {cantidad_unitario}x {codigo}"  # ✅ Ahora está en el scope correcto
+                mensaje = f"Agregado: {cantidad_unitario}x {codigo}"
 
             self.itemsCompraCambiado.emit()
             self.operacionExitosa.emit(mensaje)
-            print(f"📦 Item compra agregado/actualizado - {codigo}: {cantidad_unitario} unidades @ ${precio_unitario}")
 
         except Exception as e:
             self.operacionError.emit(f"Error agregando item: {str(e)}")
     
     @Slot(str)
     def remover_item_compra(self, codigo: str):
-        """Remueve item de la compra actual - SIN VERIFICACIÓN (solo preparación)"""
         if not codigo:
             return
         
@@ -407,7 +428,7 @@ class CompraModel(QObject):
                 item['cantidad_total'] = nueva_cantidad_unitario  # Simplificado
                 item['subtotal'] = nueva_cantidad_unitario * item['precio_unitario']
                 break
-
+                
         self.itemsCompraCambiado.emit()
         print(f"📦 Cantidades actualizadas - {codigo}: {nueva_cantidad_unitario} unidades")
     
@@ -439,13 +460,14 @@ class CompraModel(QObject):
     
     @Slot(result=bool)
     def procesar_compra_actual(self) -> bool:
-        """Procesa la compra con los items actuales - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
-        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+        """
+        Procesa compra - crea nueva o actualiza existente según el modo
+        """
         if not self._verificar_autenticacion():
             return False
         
         if not self._items_compra:
-            self.operacionError.emit("No hay items para comprar")
+            self.operacionError.emit("No hay items para procesar")
             return False
         
         if self._proveedor_seleccionado <= 0:
@@ -455,7 +477,80 @@ class CompraModel(QObject):
         self._set_procesando_compra(True)
         
         try:
-            print(f"💳 Procesando compra - Usuario: {self._usuario_actual_id}, Proveedor: {self._proveedor_seleccionado}")
+            if self._modo_edicion:
+                return self._actualizar_compra_existente()
+            else:
+                return self._crear_compra_nueva()
+                
+        except Exception as e:
+            self.operacionError.emit(f"Error procesando compra: {str(e)}")
+            return False
+        finally:
+            self._set_procesando_compra(False)
+
+    def _actualizar_compra_existente(self) -> bool:
+        """
+        Actualiza una compra existente - NUEVA FUNCIONALIDAD
+        """
+        try:
+            print(f"📝 Actualizando compra existente {self._compra_id_edicion}")
+            
+            # Verificar cambios
+            cambios = self.obtener_cambios_realizados()
+            if not cambios['hay_cambios']:
+                self.operacionExitosa.emit("No hay cambios para guardar")
+                return True
+            
+            # Preparar items para actualización
+            items_compra = []
+            for item in self._items_compra:
+                items_compra.append({
+                    'codigo': item['codigo'],
+                    'cantidad_unitario': item['cantidad_unitario'],
+                    'precio_unitario': item['precio_unitario'],
+                    'fecha_vencimiento': item.get('fecha_vencimiento')
+                })
+            
+            # Actualizar compra usando repository
+            compra_actualizada = safe_execute(
+                self.compra_repo.actualizar_compra,
+                self._compra_id_edicion,
+                self._proveedor_seleccionado,
+                self._usuario_actual_id,
+                items_compra
+            )
+            
+            if compra_actualizada:
+                monto_compra = float(compra_actualizada['Total'])
+                
+                print(f"✅ Compra actualizada exitosamente - ID: {self._compra_id_edicion}, Total: ${monto_compra}")
+                
+                # Limpiar modo edición
+                compra_id = self._compra_id_edicion
+                self.cancelar_edicion()
+                
+                # Actualizar datos locales
+                QTimer.singleShot(0, self._update_all_data_after_purchase)
+                
+                # Emitir signals
+                self.compraActualizada.emit(compra_id, monto_compra)
+                self.operacionExitosa.emit(f"Compra #{compra_id} actualizada: Bs{monto_compra:.2f}")
+                
+                return True
+            else:
+                raise CompraError("Error actualizando compra")
+                
+        except Exception as e:
+            print(f"❌ Error actualizando compra: {str(e)}")
+            self.operacionError.emit(f"Error actualizando compra: {str(e)}")
+            return False
+        
+    def _crear_compra_nueva(self) -> bool:
+        """
+        Crea una compra nueva - LÓGICA EXISTENTE
+        """
+        try:
+            print(f"🛒 Creando compra nueva - Usuario: {self._usuario_actual_id}")
             
             # Preparar items para compra
             items_compra = []
@@ -464,66 +559,40 @@ class CompraModel(QObject):
                     'codigo': item['codigo'],
                     'cantidad_unitario': item['cantidad_unitario'],
                     'precio_unitario': item['precio_unitario'],
-                    'fecha_vencimiento': item['fecha_vencimiento']
+                    'fecha_vencimiento': item.get('fecha_vencimiento')
                 })
             
-            # Procesar compra
+            # Crear compra
             compra = safe_execute(
                 self.compra_repo.crear_compra,
                 self._proveedor_seleccionado,
-                self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
+                self._usuario_actual_id,
                 items_compra
             )
-            if compra:
-                # DEBUG: Verificar que se creó la compra y los lotes
-                print(f"🔍 DEBUG: Compra creada - ID: {compra.get('id')}")
-                print(f"🔍 DEBUG: Items en compra: {len(compra.get('detalles', []))}")
-                
-            # Verificar cada detalle
-            for i, detalle in enumerate(compra.get('detalles', [])):
-                print(f"  Detalle {i+1}: Producto {detalle.get('Producto_Codigo')} - Lote: {detalle.get('Id_Lote')} - Cantidad: {detalle.get('Cantidad_Unitario')}")
+            
             if compra:
                 monto_compra = float(compra['Total'])
-                proveedor_id = self._proveedor_seleccionado
                 
-                print(f"✅ Compra exitosa - Proveedor: {proveedor_id}, Monto: {monto_compra}, Usuario: {self._usuario_actual_id}")
-                
-                # Invalidar cache crítico primero
-                self._invalidate_all_provider_cache()
+                print(f"✅ Compra nueva creada - ID: {compra['id']}, Total: ${monto_compra}")
                 
                 # Limpiar items
                 self.limpiar_items_compra()
                 
-                # Actualizar datos locales con delay para BD
+                # Actualizar datos locales
                 QTimer.singleShot(0, self._update_all_data_after_purchase)
                 
-                # NUEVO: Notificar a InventarioModel para que actualice productos
-                try:
-                    if hasattr(self, '_inventario_model_ref') and self._inventario_model_ref:
-                        QTimer.singleShot(100, self._inventario_model_ref.refresh_productos)
-                        print("📦 InventarioModel será refrescado después de compra")
-                except Exception as e:
-                    print(f"❌ Error notificando a InventarioModel: {str(e)}")
-                # Notificar inmediatamente a proveedor model
-                self._notify_proveedor_updated_immediate(proveedor_id, monto_compra)
-                
-                # Establecer compra actual
-                self._compra_actual = compra
-                self.compraActualChanged.emit()
-                
-                # Emitir signals existentes
+                # Emitir signals
                 self.compraCreada.emit(compra['id'], monto_compra)
-                self.operacionExitosa.emit(f"Compra procesada: ${compra['Total']:.2f}")
+                self.operacionExitosa.emit(f"Compra creada: Bs{monto_compra:.2f}")
                 
                 return True
             else:
-                raise CompraError("Error procesando compra")
+                raise CompraError("Error creando compra")
                 
         except Exception as e:
-            self.operacionError.emit(f"Error en compra: {str(e)}")
+            print(f"❌ Error creando compra: {str(e)}")
+            self.operacionError.emit(f"Error creando compra: {str(e)}")
             return False
-        finally:
-            self._set_procesando_compra(False)
     
     @Slot(int, str, result=bool)
     def compra_rapida_json(self, proveedor_id: int, items_json: str):
@@ -691,35 +760,14 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error obteniendo compras por proveedor: {str(e)}")
             return []
         
-    @Slot(int, result='QVariant')
+    @Slot(int, result=bool)
     def cargar_compra_para_edicion(self, compra_id: int):
-        """Carga una compra existente para edición"""
-        if not self._verificar_autenticacion():
-            return False
-        
-        try:
-            compra = self.get_compra_detalle(compra_id)
-            if compra and compra.get('detalles'):
-                # Limpiar items actuales
-                self._items_compra.clear()
-                
-                # Cargar items de la compra
-                for detalle in compra['detalles']:
-                    self._items_compra.append({
-                        'codigo': detalle['codigo'],
-                        'cantidad_unitario': detalle['cantidad_unitario'], 
-                        'precio_unitario': detalle['precio_unitario'],
-                        'fecha_vencimiento': detalle['fecha_vencimiento']
-                    })
-                
-                # Establecer proveedor
-                self._proveedor_seleccionado = compra.get('proveedor_id', 0)
-                
-                self.itemsCompraCambiado.emit()
-                return True
-        except Exception as e:
-            self.operacionError.emit(f"Error cargando compra: {str(e)}")
-        return False
+        """
+        Método simplificado que solo inicia la edición
+        El componente QML maneja el resto
+        """
+        return self.iniciar_edicion_compra(compra_id)
+
     
     @Slot(result='QVariant')
     def get_reporte_gastos(self):
@@ -827,7 +875,7 @@ class CompraModel(QObject):
     @Slot()
     def force_refresh_compras(self):
         """Fuerza refresh de compras desde QML - SIN VERIFICACIÓN (solo lectura)"""
-        print("🔄 Force refresh compras desde QML")
+        #print("🔄 Force refresh compras desde QML")
         self._cargar_compras_recientes()
         self._cargar_estadisticas()
 
@@ -864,7 +912,7 @@ class CompraModel(QObject):
             self._cargar_proveedores()
             
             # 3. Verificar resultado
-            print(f"📊 Resultado: {len(self._proveedores)} proveedores cargados")
+            #print(f"📊 Resultado: {len(self._proveedores)} proveedores cargados")
             if len(self._proveedores) > 0:
                 print("✅ FORCE REFRESH EXITOSO")
                 self.operacionExitosa.emit(f"Lista actualizada: {len(self._proveedores)} proveedores")
@@ -874,54 +922,23 @@ class CompraModel(QObject):
         except Exception as e:
             print(f"❌ ERROR EN FORCE REFRESH: {str(e)}")
             self.operacionError.emit(f"Error actualizando proveedores: {str(e)}")
-
-    @Slot()
-    def debug_proveedores_info(self):
-        """Debug info de proveedores para QML - SIN VERIFICACIÓN (solo lectura)"""
-        print(f"🔍 DEBUG PROVEEDORES:")
-        print(f"  - Total en memoria: {len(self._proveedores)}")
-        print(f"  - CompraRepo disponible: {self.compra_repo is not None}")
-        
-        if len(self._proveedores) > 0:
-            print(f"  - Primer proveedor: {self._proveedores[0].get('Nombre', 'Sin nombre')}")
-            print(f"  - Último proveedor: {self._proveedores[-1].get('Nombre', 'Sin nombre')}")
-        else:
-            print("  - Lista vacía")
-            
-        # Intentar consulta directa
-        try:
-            proveedores_direct = self.compra_repo.get_proveedores_activos()
-            print(f"  - Consulta directa BD: {len(proveedores_direct) if proveedores_direct else 0} proveedores")
-        except Exception as e:
-            print(f"  - Error consulta directa: {str(e)}")
     
     # ===============================
     # MÉTODOS PRIVADOS (SIN CAMBIOS MAYORES)
     # ===============================
     
     def _cargar_compras_recientes(self):
-        """Carga compras recientes CON TRANSFORMACIÓN DE DATOS"""
         try:
             compras_raw = safe_execute(self.compra_repo.get_active)
-            
-            # TRANSFORMAR DATOS PARA QML
             compras_transformadas = []
             
             for compra_raw in compras_raw or []:
                 compra_qml = self._format_compra_for_qml(compra_raw)
-                #print(f"🔍 DEBUG COMPRA QML: {compra_qml}")
                 compras_transformadas.append(compra_qml)
             
-            # ASIGNAR Y EMITIR SIGNAL
             self._compras_recientes = compras_transformadas
-            
-            # Forzar emisión de signal múltiple
             self.comprasRecientesChanged.emit()
-            print(f"📡 Signal emitido: comprasRecientesChanged - {len(compras_transformadas)} compras")
-            
-            # Forzar emisión adicional después de un momento
             QTimer.singleShot(100, lambda: self.comprasRecientesChanged.emit())
-            print(f"✅ Compras recientes cargadas y transformadas: {len(compras_transformadas)}")
             
         except Exception as e:
             print(f"❌ Error cargando compras recientes: {e}")
@@ -929,24 +946,14 @@ class CompraModel(QObject):
             self.comprasRecientesChanged.emit()
     
     def _cargar_proveedores(self):
-        """Carga lista de proveedores - MEJORADO"""
         try:
-            # Forzar consulta sin cache
             proveedores = self.compra_repo.get_proveedores_activos()
             
-            # Validar que la consulta retornó datos
             if proveedores:
                 self._proveedores = proveedores
-                print(f"📋 Proveedores cargados: {len(proveedores)}")
-                
-                # Log detallado de proveedores
-                for proveedor in proveedores:
-                    print(f"  - {proveedor.get('Nombre', 'Sin nombre')} (ID: {proveedor.get('id', 'N/A')})")
             else:
-                print("⚠️ No se obtuvieron proveedores desde BD")
                 self._proveedores = []
             
-            # Siempre emitir signal
             self.proveedoresChanged.emit()
             
         except Exception as e:
@@ -955,7 +962,6 @@ class CompraModel(QObject):
             self.proveedoresChanged.emit()
     
     def _cargar_estadisticas(self):
-        """Carga estadísticas del mes"""
         try:
             año = datetime.now().year
             mes = datetime.now().month
@@ -1036,7 +1042,7 @@ class CompraModel(QObject):
                     productos_texto = f"{', '.join(primeros_dos)}... y {restantes} más"
                     total_productos = len(productos_raw)
                     
-                print(f"✅ Productos para compra {compra_raw.get('id')}: {productos_texto}")
+                #print(f"✅ Productos para compra {compra_raw.get('id')}: {productos_texto}")
             else:
                 productos_texto = "Sin productos"
                 total_productos = 0
@@ -1215,12 +1221,9 @@ class CompraModel(QObject):
             self._compras_recientes = []
             self._compra_actual = {}
             self._proveedores = []
-            self._historial_compras = []
-            self._estadisticas = {}
-            self._top_productos_comprados = []
             self._items_compra = []
-            self._proveedor_seleccionado = 0
-            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
+            self._datos_originales = {}  # Limpiar datos edición
+            self._items_originales = []
             
             # Anular repositories
             self.compra_repo = None
@@ -1230,6 +1233,159 @@ class CompraModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión CompraModel: {e}")
+
+    # ===============================
+    # NUEVOS SLOTS PARA EDICIÓN
+    # ===============================
+    
+    @Slot(int, result=bool)
+    def iniciar_edicion_compra(self, compra_id: int):
+        """
+        Inicia el modo edición para una compra específica
+        """
+        if not self._verificar_autenticacion():
+            return False
+            
+        if compra_id <= 0:
+            self.operacionError.emit("ID de compra inválido")
+            return False
+        
+        try:
+            print(f"📝 Iniciando edición de compra {compra_id}")
+            
+            # Cargar datos completos de la compra
+            compra_completa = self.get_compra_detalle(compra_id)
+            
+            if not compra_completa:
+                self.operacionError.emit("No se pudo cargar la compra")
+                return False
+            
+            # Establecer modo edición
+            self._modo_edicion = True
+            self._compra_id_edicion = compra_id
+            
+            # Guardar datos originales para comparación
+            self._datos_originales = {
+                'id': compra_completa['id'],
+                'proveedor': compra_completa['proveedor'],
+                'proveedor_id': compra_completa.get('proveedor_id', 0),
+                'total': compra_completa['total'],
+                'fecha': compra_completa['fecha'],
+                'usuario': compra_completa['usuario']
+            }
+            
+            # Guardar items originales
+            self._items_originales = []
+            for detalle in compra_completa.get('detalles', []):
+                self._items_originales.append({
+                    'codigo': detalle['codigo'],
+                    'nombre': detalle['nombre'],
+                    'cantidad_unitario': detalle['cantidad_unitario'],
+                    'precio_unitario': detalle['costo_total'],  # Usar costo_total como precio
+                    'fecha_vencimiento': detalle['fecha_vencimiento']
+                })
+            
+            # Cargar items en el modelo actual para edición
+            self._items_compra.clear()
+            for item in self._items_originales:
+                self._items_compra.append({
+                    'codigo': item['codigo'],
+                    'nombre': item['nombre'],
+                    'cantidad_unitario': item['cantidad_unitario'],
+                    'cantidad_total': item['cantidad_unitario'],
+                    'precio_unitario': item['precio_unitario'],
+                    'fecha_vencimiento': item['fecha_vencimiento'],
+                    'subtotal': item['precio_unitario']  # Ya es el costo total
+                })
+            
+            # Establecer proveedor seleccionado
+            self._proveedor_seleccionado = self._datos_originales['proveedor_id']
+            
+            # Emitir signals
+            self.modoEdicionChanged.emit()
+            self.datosOriginalesChanged.emit()
+            self.itemsCompraCambiado.emit()
+            
+            self.operacionExitosa.emit(f"Compra #{compra_id} cargada para edición")
+            print(f"✅ Compra {compra_id} cargada - {len(self._items_compra)} items")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error iniciando edición: {str(e)}")
+            self.operacionError.emit(f"Error cargando compra: {str(e)}")
+            return False
+    
+    @Slot()
+    def cancelar_edicion(self):
+        """Cancela el modo edición y limpia datos"""
+        print("🚫 Cancelando edición de compra")
+        
+        self._modo_edicion = False
+        self._compra_id_edicion = 0
+        self._datos_originales = {}
+        self._items_originales = []
+        self._items_compra.clear()
+        self._proveedor_seleccionado = 0
+        
+        # Emitir signals
+        self.modoEdicionChanged.emit()
+        self.datosOriginalesChanged.emit()
+        self.itemsCompraCambiado.emit()
+        
+        self.operacionExitosa.emit("Edición cancelada")
+    
+    @Slot(result='QVariant')
+    def obtener_cambios_realizados(self):
+        """
+        Compara datos actuales con originales y retorna cambios
+        """
+        if not self._modo_edicion:
+            return {'hay_cambios': False, 'cambios': []}
+        
+        cambios = []
+        
+        # Comparar proveedor
+        proveedor_actual = ""
+        for proveedor in self._proveedores:
+            if proveedor.get('id') == self._proveedor_seleccionado:
+                proveedor_actual = proveedor.get('Nombre', '')
+                break
+        
+        if proveedor_actual != self._datos_originales.get('proveedor', ''):
+            cambios.append({
+                'campo': 'Proveedor',
+                'original': self._datos_originales.get('proveedor', ''),
+                'nuevo': proveedor_actual
+            })
+        
+        # Comparar total
+        total_actual = sum(float(item.get('subtotal', 0)) for item in self._items_compra)
+        total_original = float(self._datos_originales.get('total', 0))
+        
+        if abs(total_actual - total_original) > 0.01:
+            cambios.append({
+                'campo': 'Total',
+                'original': f"Bs{total_original:.2f}",
+                'nuevo': f"Bs{total_actual:.2f}"
+            })
+        
+        # Comparar cantidad de items
+        items_actuales = len(self._items_compra)
+        items_originales = len(self._items_originales)
+        
+        if items_actuales != items_originales:
+            cambios.append({
+                'campo': 'Cantidad de productos',
+                'original': str(items_originales),
+                'nuevo': str(items_actuales)
+            })
+        
+        return {
+            'hay_cambios': len(cambios) > 0,
+            'cambios': cambios,
+            'total_cambios': len(cambios)
+        }
 
 # Registrar el tipo para QML
 def register_compra_model():

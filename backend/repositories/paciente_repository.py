@@ -16,8 +16,8 @@ class PacienteRepository(BaseRepository):
     
     def __init__(self):
         super().__init__('Pacientes', 'pacientes')
-        print("👥 PacienteRepository inicializado - SIN campo Edad")
-    
+        #print("👥 PacienteRepository inicializado - SIN campo Edad")
+        self.nose = None
     # ===============================
     # IMPLEMENTACIÓN ABSTRACTA
     # ===============================

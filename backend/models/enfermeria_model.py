@@ -238,7 +238,7 @@ class EnfermeriaModel(QObject):
         try:
             self.global_signals.tiposProcedimientosModificados.connect(self._actualizar_tipos_procedimientos_desde_signal)
             self.global_signals.enfermeriaNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            print("🔗 Señales globales conectadas en EnfermeriaModel")
+            #print("🔗 Señales globales conectadas en EnfermeriaModel")
         except Exception as e:
             print(f"❌ Error conectando señales globales en EnfermeriaModel: {e}")
     
@@ -278,7 +278,7 @@ class EnfermeriaModel(QObject):
         if self._estadoActual != nuevo_estado:
             self._estadoActual = nuevo_estado
             self.estadoCambiado.emit(nuevo_estado)
-            logger.info(f"Estado cambiado a: {nuevo_estado}")
+            #logger.info(f"Estado cambiado a: {nuevo_estado}")
     
     # Getters/setters paginación
     def _get_current_page(self) -> int:
@@ -338,13 +338,6 @@ class EnfermeriaModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔍 FILTROS RECIBIDOS EN MODELO:")
-            print(f"   - search_term: '{search_term}'")
-            print(f"   - tipo_procedimiento: '{tipo_procedimiento}'") 
-            print(f"   - tipo: '{tipo}' ← CRÍTICO")
-            print(f"   - fecha_desde: '{fecha_desde}'")
-            print(f"   - fecha_hasta: '{fecha_hasta}'")
-            
             # Resetear a página 0 siempre que cambien filtros
             self._currentPage = 0
             
@@ -371,8 +364,6 @@ class EnfermeriaModel(QObject):
             for key, value in filtros_limpios.items():
                 if value and value not in ["", "Todos", "Seleccionar procedimiento..."]:
                     filtros_aplicables[key] = value
-            
-            print(f"📋 FILTROS FINALES PARA REPOSITORIO: {filtros_aplicables}")
             
             # Actualizar filtros internos
             self._filtrosActuales = filtros_aplicables
@@ -444,9 +435,6 @@ class EnfermeriaModel(QObject):
             # Emitir señal de datos actualizados
             self.procedimientosRecientesChanged.emit()
             
-            print(f"✅ Página {page + 1} cargada: {len(self._procedimientosData)} registros de {self._totalRecords}")
-            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
-            
             self._set_estado_actual("listo")
             
             return {
@@ -487,33 +475,6 @@ class EnfermeriaModel(QObject):
     # ===============================
     # BÚSQUEDAS DE PACIENTES (LECTURA SIN VERIFICACIÓN, ESCRITURA CON VERIFICACIÓN)
     # ===============================
-    
-    @Slot(str, result='QVariantMap')
-    def buscar_paciente_por_cedula(self, cedula: str):
-        """Busca un paciente específico por su cédula - SIN VERIFICACIÓN (solo lectura)"""
-        try:
-            if len(cedula.strip()) < 5:
-                return {}
-            
-            print(f"🔍 Buscando paciente por cédula: {cedula}")
-            
-            paciente = self.repository.buscar_paciente_por_cedula_exacta(cedula.strip())
-            
-            if paciente:
-                print(f"👤 Paciente encontrado: {paciente.get('nombreCompleto', 'N/A')}")
-                self.pacienteEncontradoPorCedula.emit(paciente)
-                return paciente
-            else:
-                print(f"⚠️ No se encontró paciente con cédula: {cedula}")
-                self.pacienteNoEncontrado.emit(cedula)
-                return {}
-                
-        except Exception as e:
-            error_msg = f"Error buscando paciente por cédula: {str(e)}"
-            print(f"⚠️ {error_msg}")
-            logger.error(error_msg)
-            self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
-            return {}
     
     @Slot(str, str, str, str, result=int)
     def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
@@ -571,62 +532,15 @@ class EnfermeriaModel(QObject):
             self.operacionError.emit(error_msg)
             return -1
     
-    @Slot(str, int, result='QVariantList')
-    def buscar_pacientes(self, termino_busqueda: str, limite: int = 5):
-        """Busca pacientes por término de búsqueda - SIN VERIFICACIÓN (solo lectura)"""
-        try:
-            if len(termino_busqueda.strip()) < 2:
-                return []
-            
-            print(f"🔍 Buscando pacientes con término: {termino_busqueda}")
-            
-            resultados = self.repository.buscar_pacientes(termino_busqueda.strip())
-            
-            if limite > 0:
-                resultados = resultados[:limite]
-            
-            print(f"📋 Encontrados {len(resultados)} pacientes")
-            return resultados
-            
-        except Exception as e:
-            error_msg = f"Error en búsqueda de pacientes: {str(e)}"
-            print(f"⚠️ {error_msg}")
-            logger.error(error_msg)
-            self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
-            return []
-    
-        
-    @Slot(str, int, result='QVariantList')
-    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
-        """Busca pacientes por nombre completo"""
-        try:
-            if len(nombre_completo.strip()) < 3:
-                return []
-            
-            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
-            
-            resultados = self.repository.buscar_pacientes_por_nombre_completo(
-                nombre_completo.strip(), limite
-            )
-            
-            print(f"📋 Encontrados {len(resultados)} pacientes por nombre")
-            return resultados
-            
-        except Exception as e:
-            error_msg = f"Error buscando por nombre: {str(e)}"
-            print(f"⚠️ {error_msg}")
-            self.operacionError.emit(error_msg)
-            return []
-    
     # ===============================
     # ✅ OPERACIONES CRUD CON RESTRICCIONES DE SEGURIDAD
     # ===============================
     
     @Slot('QVariant', result=str)
     def crear_procedimiento(self, datos_procedimiento):
-        """Crea nuevo procedimiento de enfermería - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        """Crea nuevo procedimiento de enfermería - CON SOPORTE ANÓNIMO"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+            # Verificar autenticación
             if not self._verificar_autenticacion():
                 return self._crear_respuesta_json(False, "Usuario no autenticado")
             
@@ -638,18 +552,18 @@ class EnfermeriaModel(QObject):
             else:
                 datos = datos_procedimiento
             
-            # Validaciones básicas
-            if not self._validar_datos_procedimiento_mejorado(datos):
+            # Validaciones básicas (modificadas para anónimo)
+            if not self._validar_datos_procedimiento_anonimo(datos):
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "Datos incompletos o inválidos")
             
-            # Gestionar paciente
-            paciente_id = self._gestionar_paciente_procedimiento(datos)
+            # Gestionar paciente (anónimo o normal)
+            paciente_id = self._gestionar_paciente_procedimiento_anonimo(datos)
             if paciente_id <= 0:
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "Error gestionando datos del paciente")
             
-            # Preparar datos para repositorio - ✅ USAR USUARIO AUTENTICADO
+            # Preparar datos para repositorio
             datos_repo = {
                 'nombreCompleto': datos.get('paciente', '').strip(),
                 'cedula': datos.get('cedula', '').strip(),
@@ -657,11 +571,12 @@ class EnfermeriaModel(QObject):
                 'cantidad': int(datos.get('cantidad', 1)),
                 'tipo': datos.get('tipo', 'Normal'),
                 'idTrabajador': int(datos.get('idTrabajador', 0)),
-                'idRegistradoPor': self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
-                'fecha': datetime.now()
+                'idRegistradoPor': self._usuario_actual_id,
+                'fecha': datetime.now(),
+                'esAnonimo': datos.get('esAnonimo', False)
             }
             
-            print(f"💾 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando procedimiento")
+            print(f"💾 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) creando procedimiento {'ANÓNIMO' if datos_repo['esAnonimo'] else 'NORMAL'}")
             
             # Crear procedimiento
             procedimiento_id = self.repository.crear_procedimiento_enfermeria(datos_repo)
@@ -674,7 +589,9 @@ class EnfermeriaModel(QObject):
                 procedimiento_completo = self._obtener_procedimiento_completo(procedimiento_id)
                 self.procedimientoCreado.emit(self._crear_respuesta_json(True, procedimiento_completo))
                 self.procedimientoCreado_old.emit(True, f"Procedimiento creado: ID {procedimiento_id}")
-                self.operacionExitosa.emit(f"Procedimiento creado exitosamente: ID {procedimiento_id}")
+                
+                mensaje = f"Procedimiento {'anónimo' if datos_repo['esAnonimo'] else 'normal'} creado exitosamente: ID {procedimiento_id}"
+                self.operacionExitosa.emit(mensaje)
                 
                 self._set_estado_actual("listo")
                 return self._crear_respuesta_json(True, {'procedimiento_id': procedimiento_id})
@@ -688,7 +605,72 @@ class EnfermeriaModel(QObject):
             self.errorOcurrido.emit(error_msg, 'CREATE_EXCEPTION')
             self._set_estado_actual("error")
             return self._crear_respuesta_json(False, error_msg)
-    
+        
+    def _validar_datos_procedimiento_anonimo(self, datos: Dict[str, Any]) -> bool:
+        """Validación mejorada que considera modo anónimo"""
+        try:
+            # Validar procedimiento (siempre obligatorio)
+            if not datos.get('idProcedimiento') or int(datos.get('idProcedimiento', 0)) <= 0:
+                self.operacionError.emit("Debe seleccionar un procedimiento válido")
+                return False
+            
+            # Validar trabajador (siempre obligatorio)
+            if not datos.get('idTrabajador') or int(datos.get('idTrabajador', 0)) <= 0:
+                self.operacionError.emit("Debe seleccionar un trabajador válido")
+                return False
+            
+            # Validar cantidad (siempre obligatoria)
+            if int(datos.get('cantidad', 0)) <= 0:
+                self.operacionError.emit("La cantidad debe ser mayor a 0")
+                return False
+            
+            # Validar tipo (siempre obligatorio)
+            if datos.get('tipo') not in ['Normal', 'Emergencia']:
+                self.operacionError.emit("Tipo de procedimiento inválido")
+                return False
+            
+            # NUEVA LÓGICA: Si NO es anónimo, validar datos del paciente
+            if not datos.get('esAnonimo', False):
+                if not datos.get('paciente', '').strip():
+                    self.operacionError.emit("Nombre del paciente es obligatorio")
+                    return False
+            
+            print(f"✅ Validación exitosa - Modo: {'ANÓNIMO' if datos.get('esAnonimo', False) else 'NORMAL'}")
+            return True
+            
+        except (ValueError, TypeError) as e:
+            self.operacionError.emit(f"Error en validación de datos: {str(e)}")
+            return False
+
+    def _gestionar_paciente_procedimiento_anonimo(self, datos: Dict[str, Any]) -> int:
+        """Gestiona paciente considerando modo anónimo"""
+        try:
+            es_anonimo = datos.get('esAnonimo', False)
+            
+            if es_anonimo:
+                print("🎭 Gestionando paciente anónimo")
+                return self._obtener_o_crear_paciente_anonimo()
+            else:
+                # Usar método normal existente
+                nombre_completo = datos.get('paciente', '').strip()
+                cedula = datos.get('cedula', '').strip()
+                
+                if not nombre_completo:
+                    return -1
+                
+                # Dividir nombre completo
+                nombres = nombre_completo.split()
+                nombre = nombres[0] if len(nombres) > 0 else ''
+                apellido_p = nombres[1] if len(nombres) > 1 else ''
+                apellido_m = ' '.join(nombres[2:]) if len(nombres) > 2 else ''
+                
+                return self.buscar_o_crear_paciente_inteligente(nombre, apellido_p, apellido_m, cedula)
+                
+        except Exception as e:
+            print(f"Error gestionando paciente: {e}")
+            logger.error(f"Error gestionando paciente: {e}")
+            return -1
+
     @Slot('QVariant', int, result=str)
     def actualizar_procedimiento(self, datos_procedimiento, procedimiento_id: int):
         """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN (sin restricción de fecha)"""
@@ -826,13 +808,6 @@ class EnfermeriaModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔍 FILTROS RECIBIDOS EN MODELO:")
-            print(f"   - search_term: '{search_term}'")
-            print(f"   - tipo_procedimiento: '{tipo_procedimiento}'") 
-            print(f"   - tipo: '{tipo}' ← CRÍTICO")
-            print(f"   - fecha_desde: '{fecha_desde}'")
-            print(f"   - fecha_hasta: '{fecha_hasta}'")
-            
             # Resetear a página 0 siempre que cambien filtros
             self._currentPage = 0
             
@@ -859,8 +834,6 @@ class EnfermeriaModel(QObject):
             for key, value in filtros_limpios.items():
                 if value and value not in ["", "Todos", "Seleccionar procedimiento..."]:
                     filtros_aplicables[key] = value
-            
-            print(f"📋 FILTROS FINALES PARA REPOSITORIO: {filtros_aplicables}")
             
             # Actualizar filtros internos
             self._filtrosActuales = filtros_aplicables
@@ -896,9 +869,6 @@ class EnfermeriaModel(QObject):
             else:
                 filtros_dict = self._filtrosActuales
             
-            print(f"📖 Obteniendo página {page + 1} con {limit_real} elementos")
-            print(f"🔍 Filtros aplicados: {filtros_dict}")
-            
             procedimientos = self.repository.obtener_procedimientos_paginados(
                 page * limit_real, limit_real, filtros_dict
             )
@@ -927,9 +897,6 @@ class EnfermeriaModel(QObject):
                 
             # Emitir señal de datos actualizados
             self.procedimientosRecientesChanged.emit()
-            
-            print(f"✅ Página {page + 1} cargada: {len(self._procedimientosData)} registros de {self._totalRecords}")
-            print(f"📊 Paginación: Página {self._currentPage + 1} de {self._totalPages}")
             
             self._set_estado_actual("listo")
             
@@ -1016,7 +983,7 @@ class EnfermeriaModel(QObject):
         try:
             self._set_estado_actual("cargando")
             
-            print("🔄 Refrescando todos los datos del modelo...")
+            #print("🔄 Refrescando todos los datos del modelo...")
             
             # Cargar datos de referencia
             self.actualizar_tipos_procedimientos()
@@ -1077,7 +1044,6 @@ class EnfermeriaModel(QObject):
     def _inicializar_datos(self):
         """Inicialización inmediata de datos"""
         try:
-            print("🚀 Inicializando datos de EnfermeriaModel...")
             
             # Cargar datos de referencia primero
             self.actualizar_tipos_procedimientos()
@@ -1094,7 +1060,7 @@ class EnfermeriaModel(QObject):
     def _cargar_procedimientos_actuales(self):
         """Carga procedimientos usando filtros actuales"""
         try:
-            print(f"🔄 Recargando procedimientos con {self._itemsPerPage} elementos por página")
+            #print(f"🔄 Recargando procedimientos con {self._itemsPerPage} elementos por página")
             self.obtener_procedimientos_paginados(self._currentPage, self._itemsPerPage, self._filtrosActuales)
         except Exception as e:
             print(f"❌ Error recargando procedimientos: {e}")
@@ -1301,6 +1267,417 @@ class EnfermeriaModel(QObject):
             
         except Exception as e:
             print(f"❌ Error durante cleanup de {self.__class__.__name__}: {e}")
+
+    """
+    Slots de búsqueda de pacientes para enfermeria_model.py
+    Agregar estos métodos a la clase EnfermeriaModel
+    """
+
+    @Slot(str, int, result='QVariantList')
+    def buscar_paciente_unificado(self, termino_busqueda: str, limite: int = 5):
+        """Slot unificado para búsqueda inteligente de pacientes - CORREGIDO"""
+        try:
+            if len(termino_busqueda.strip()) < 2:
+                return []
+            
+            print(f"🔍 Búsqueda unificada: '{termino_busqueda}' (límite: {limite})")
+            
+            resultados = self.repository.buscar_paciente_unificado(termino_busqueda.strip(), limite)
+            
+            # ✅ CONVERTIR CON NOMBRES CONSISTENTES PARA QML
+            resultados_qml = []
+            for resultado in resultados:
+                # ✅ MAPEO CORREGIDO - Usar nombres que coincidan con QML
+                paciente_qml = {
+                    'id': resultado.get('id', 0),
+                    'nombre': resultado.get('nombre', ''),
+                    'apellidoPaterno': resultado.get('apellidoPaterno', ''),  # ✅ camelCase para Python
+                    'apellidoMaterno': resultado.get('apellidoMaterno', ''),  # ✅ camelCase para Python
+                    'nombreCompleto': resultado.get('nombreCompleto', ''),   # ✅ camelCase para Python
+                    'cedula': resultado.get('cedula', ''),
+                    'tipo_coincidencia': resultado.get('tipo_coincidencia', 'general'),
+                    'score': float(resultado.get('score', 1.0))
+                }
+                
+                resultados_qml.append(paciente_qml)
+            
+            print(f"📋 Encontrados {len(resultados_qml)} pacientes")
+            return resultados_qml
+            
+        except Exception as e:
+            error_msg = f"Error en búsqueda unificada: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'UNIFIED_SEARCH_ERROR')
+            return []
+
+    @Slot(str, result='QVariantMap')
+    def buscar_paciente_por_cedula(self, cedula: str):
+        """Busca un paciente específico por su cédula - CORREGIDO"""
+        try:
+            if len(cedula.strip()) < 5:
+                return {}
+            
+            print(f"🔍 Buscando paciente por cédula: {cedula}")
+            
+            paciente = self.repository.search_patient_by_cedula_exact(cedula.strip())
+            
+            if paciente:
+                # ✅ CONVERTIR NOMBRES A FORMATO CONSISTENTE
+                paciente_corregido = {
+                    'id': paciente.get('id', 0),
+                    'nombre': paciente.get('nombre', ''),
+                    'apellidoPaterno': paciente.get('apellidoPaterno', ''),
+                    'apellidoMaterno': paciente.get('apellidoMaterno', ''),
+                    'nombreCompleto': paciente.get('nombreCompleto', ''),
+                    'cedula': paciente.get('cedula', ''),
+                    'tipo_coincidencia': paciente.get('tipo_coincidencia', 'cedula_exacta'),
+                    'score': float(paciente.get('score', 1.0))
+                }
+                
+                print(f"👤 Paciente encontrado: {paciente_corregido.get('nombreCompleto', 'N/A')}")
+                self.pacienteEncontradoPorCedula.emit(paciente_corregido)
+                return paciente_corregido
+            else:
+                print(f"⚠️ No se encontró paciente con cédula: {cedula}")
+                self.pacienteNoEncontrado.emit(cedula)
+                return {}
+                
+        except Exception as e:
+            error_msg = f"Error buscando paciente por cédula: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'CEDULA_SEARCH_ERROR')
+            return {}
+
+    @Slot(str, str, str, str, result=int)
+    def buscar_o_crear_paciente_inteligente(self, nombre: str, apellido_paterno: str, 
+                                        apellido_materno: str = "", cedula: str = "") -> int:
+        """Busca paciente por cédula o crea uno nuevo"""
+        try:
+            # ✅ VERIFICAR AUTENTICACIÓN PARA OPERACIÓN DE ESCRITURA
+            if not self._verificar_autenticacion():
+                return -1
+            
+            if not nombre or len(nombre.strip()) < 2:
+                self.operacionError.emit("Nombre es obligatorio")
+                return -1
+            
+            if not apellido_paterno or len(apellido_paterno.strip()) < 2:
+                self.operacionError.emit("Apellido paterno es obligatorio")
+                return -1
+            
+            # La cédula es opcional ahora
+            cedula_clean = cedula.strip() if cedula else ""
+            
+            print(f"🔄 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) gestionando paciente: {nombre} {apellido_paterno}")
+            
+            # Usar método inteligente del repository
+            paciente_id = self.repository.buscar_o_crear_paciente_simple(
+                nombre.strip(),
+                apellido_paterno.strip(),
+                apellido_materno.strip(),
+                cedula_clean
+            )
+            
+            if paciente_id and paciente_id > 0:
+                self.operacionExitosa.emit(f"Paciente gestionado correctamente: ID {paciente_id}")
+                return paciente_id
+            else:
+                self.operacionError.emit("Error gestionando paciente")
+                return -1
+                
+        except Exception as e:
+            error_msg = f"Error gestionando paciente: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.operacionError.emit(error_msg)
+            return -1
+
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes_por_nombre(self, nombre_completo: str, limite: int = 5):
+        """Busca pacientes por nombre completo - CORREGIDO"""
+        try:
+            if len(nombre_completo.strip()) < 3:
+                return []
+            
+            print(f"🔍 Buscando pacientes por nombre: {nombre_completo}")
+            
+            resultados = self.repository.search_patient_by_full_name(nombre_completo.strip(), limite)
+            
+            # ✅ CONVERTIR A FORMATO QML CONSISTENTE
+            resultados_qml = []
+            for resultado in resultados:
+                paciente_qml = {
+                    'id': resultado.get('id', 0),
+                    'nombre': resultado.get('nombre', ''),
+                    'apellidoPaterno': resultado.get('apellidoPaterno', ''),
+                    'apellidoMaterno': resultado.get('apellidoMaterno', ''),
+                    'nombreCompleto': resultado.get('nombreCompleto', ''),
+                    'cedula': resultado.get('cedula', ''),
+                    'tipo_coincidencia': resultado.get('tipo_coincidencia', 'nombre'),
+                    'score': float(resultado.get('score', 1.0))
+                }
+                resultados_qml.append(paciente_qml)
+            
+            print(f"📋 Encontrados {len(resultados_qml)} pacientes por nombre")
+            return resultados_qml
+            
+        except Exception as e:
+            error_msg = f"Error buscando por nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return []
+
+    @Slot(str, result='QVariantMap')
+    def analizar_nombre_completo(self, nombre_completo: str):
+        """Analiza un nombre completo y lo separa en componentes - CORREGIDO"""
+        try:
+            if not nombre_completo or len(nombre_completo.strip()) < 2:
+                return {
+                    'nombre': '',
+                    'apellidoPaterno': '',  # ✅ camelCase consistente
+                    'apellidoMaterno': ''   # ✅ camelCase consistente
+                }
+            
+            componentes = self.repository._analizar_termino_nombre(nombre_completo.strip())
+            
+            # ✅ MAPEAR A NOMBRES CONSISTENTES
+            return {
+                'nombre': componentes.get('nombre', ''),
+                'apellidoPaterno': componentes.get('apellido_paterno', ''),  # ✅ convertir naming
+                'apellidoMaterno': componentes.get('apellido_materno', '')   # ✅ convertir naming
+            }
+            
+        except Exception as e:
+            error_msg = f"Error analizando nombre: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            return {
+                'nombre': '',
+                'apellidoPaterno': '',
+                'apellidoMaterno': ''
+            }
+
+
+    @Slot(str, result=str)
+    def detectar_tipo_busqueda(self, termino: str):
+        """Detecta el tipo de búsqueda según el término ingresado"""
+        try:
+            if not termino or len(termino.strip()) < 2:
+                return "desconocido"
+            
+            tipo = self.repository._detectar_tipo_busqueda(termino.strip())
+            return tipo
+            
+        except Exception as e:
+            error_msg = f"Error detectando tipo de búsqueda: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            return "desconocido"
+
+    @Slot(str, int, result='QVariantList')
+    def buscar_pacientes(self, termino_busqueda: str, limite: int = 5):
+        """Busca pacientes usando el nuevo sistema unificado - CORREGIDO"""
+        try:
+            # ✅ USAR EL MÉTODO UNIFICADO CORREGIDO
+            return self.buscar_paciente_unificado(termino_busqueda, limite)
+            
+        except Exception as e:
+            error_msg = f"Error en búsqueda de pacientes: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.errorOcurrido.emit(error_msg, 'PATIENT_SEARCH_ERROR')
+            return []
+
+    # ===============================
+    # MÉTODOS AUXILIARES PARA BÚSQUEDA
+    # ===============================
+
+    def _gestionar_paciente_procedimiento_mejorado(self, datos: Dict[str, Any]) -> int:
+        """
+        Gestión mejorada de paciente para procedimiento usando búsqueda inteligente
+        Reemplaza el método _gestionar_paciente_procedimiento existente
+        """
+        try:
+            nombre_completo = datos.get('paciente', '').strip()
+            cedula = datos.get('cedula', '').strip()
+            
+            if not nombre_completo:
+                return -1
+            
+            # Analizar nombre completo
+            componentes = self.analizar_nombre_completo(nombre_completo)
+            nombre = componentes.get('nombre', '')
+            apellido_p = componentes.get('apellidoPaterno', '')
+            apellido_m = componentes.get('apellidoMaterno', '')
+            
+            # Si tenemos cédula, priorizarla para búsqueda
+            if cedula and len(cedula) >= 5:
+                # Buscar por cédula primero
+                paciente_existente = self.buscar_paciente_por_cedula(cedula)
+                if paciente_existente and paciente_existente.get('id'):
+                    print(f"👤 Paciente encontrado por cédula: {paciente_existente['nombreCompleto']}")
+                    return paciente_existente['id']
+            
+            # Si no se encuentra por cédula o no hay cédula, usar método inteligente
+            return self.buscar_o_crear_paciente_inteligente(nombre, apellido_p, apellido_m, cedula)
+            
+        except Exception as e:
+            print(f"Error gestionando paciente mejorado: {e}")
+            logger.error(f"Error gestionando paciente mejorado: {e}")
+            return -1
+
+    # ===============================
+    # SLOTS PARA COMPATIBILIDAD (mantener métodos existentes)
+    # ===============================
+
+    # Mantener el método original como fallback
+    def buscar_paciente_por_cedula_legacy(self, cedula: str):
+        """Método legacy - usar buscar_paciente_por_cedula en su lugar"""
+        return self.buscar_paciente_por_cedula(cedula)
+
+    def buscar_pacientes_por_nombre_legacy(self, nombre_completo: str, limite: int = 5):
+        """Método legacy - usar buscar_pacientes_por_nombre en su lugar"""
+        return self.buscar_pacientes_por_nombre(nombre_completo, limite)
+    
+    @Slot(str, result=str)
+    def debug_busqueda_paciente(self, termino: str):
+        """Método de debugging para verificar el flujo de búsqueda"""
+        try:
+            import json
+            
+            print(f"🔍 DEBUG: Iniciando búsqueda para '{termino}'")
+            
+            # Detectar tipo
+            tipo = self.detectar_tipo_busqueda(termino)
+            print(f"🔍 DEBUG: Tipo detectado: {tipo}")
+            
+            # Realizar búsqueda
+            resultados = self.buscar_paciente_unificado(termino, 5)
+            
+            debug_info = {
+                'termino_original': termino,
+                'tipo_detectado': tipo,
+                'cantidad_resultados': len(resultados),
+                'resultados': resultados[:2] if resultados else []  # Solo primeros 2 para debug
+            }
+            
+            resultado_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
+            print(f"🔍 DEBUG: Resultado completo:\n{resultado_json}")
+            
+            return resultado_json
+            
+        except Exception as e:
+            error_msg = f"Error en debug de búsqueda: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            return json.dumps({'error': error_msg})
+        
+    # ===============================
+    # 7. MÉTODO AUXILIAR PARA VALIDAR ESTRUCTURA
+    # ===============================
+
+    def _validar_estructura_paciente(self, paciente_data: dict) -> dict:
+        """Valida y normaliza la estructura de datos de paciente"""
+        try:
+            # ✅ ESTRUCTURA ESTÁNDAR PARA QML
+            paciente_normalizado = {
+                'id': int(paciente_data.get('id', 0)),
+                'nombre': str(paciente_data.get('nombre', '')),
+                'apellidoPaterno': str(paciente_data.get('apellidoPaterno', '') or 
+                                    paciente_data.get('apellido_paterno', '')),
+                'apellidoMaterno': str(paciente_data.get('apellidoMaterno', '') or 
+                                    paciente_data.get('apellido_materno', '')),
+                'nombreCompleto': str(paciente_data.get('nombreCompleto', '') or 
+                                    paciente_data.get('nombre_completo', '')),
+                'cedula': str(paciente_data.get('cedula', '')),
+                'tipo_coincidencia': str(paciente_data.get('tipo_coincidencia', 'general')),
+                'score': float(paciente_data.get('score', 1.0))
+            }
+            
+            # ✅ GENERAR nombreCompleto si está vacío
+            if not paciente_normalizado['nombreCompleto']:
+                nombre_parts = [
+                    paciente_normalizado['nombre'],
+                    paciente_normalizado['apellidoPaterno'],
+                    paciente_normalizado['apellidoMaterno']
+                ]
+                paciente_normalizado['nombreCompleto'] = ' '.join(filter(None, nombre_parts)).strip()
+            
+            return paciente_normalizado
+            
+        except Exception as e:
+            print(f"⚠️ Error validando estructura paciente: {e}")
+            return {
+                'id': 0,
+                'nombre': '',
+                'apellidoPaterno': '',
+                'apellidoMaterno': '',
+                'nombreCompleto': '',
+                'cedula': '',
+                'tipo_coincidencia': 'error',
+                'score': 0.0
+            }
+        
+    @Slot(str, str, str, str, bool, result=int)
+    def buscar_o_crear_paciente_con_anonimo(self, nombre: str, apellido_paterno: str, 
+                                        apellido_materno: str = "", cedula: str = "", 
+                                        es_anonimo: bool = False) -> int:
+        """Busca o crea paciente, incluyendo manejo de pacientes anónimos"""
+        try:
+            # Verificar autenticación
+            if not self._verificar_autenticacion():
+                return -1
+            
+            # Si es anónimo, buscar/crear paciente anónimo
+            if es_anonimo:
+                print(f"🎭 Usuario {self._usuario_actual_id} creando procedimiento anónimo")
+                return self._obtener_o_crear_paciente_anonimo()
+            
+            # Validaciones para paciente normal
+            if not nombre or len(nombre.strip()) < 2:
+                self.operacionError.emit("Nombre es obligatorio para paciente normal")
+                return -1
+            
+            if not apellido_paterno or len(apellido_paterno.strip()) < 2:
+                self.operacionError.emit("Apellido paterno es obligatorio para paciente normal")
+                return -1
+            
+            # Usar el método existente para pacientes normales
+            return self.buscar_o_crear_paciente_inteligente(nombre, apellido_paterno, apellido_materno, cedula)
+            
+        except Exception as e:
+            error_msg = f"Error gestionando paciente: {str(e)}"
+            print(f"⚠️ {error_msg}")
+            logger.error(error_msg)
+            self.operacionError.emit(error_msg)
+            return -1
+
+    def _obtener_o_crear_paciente_anonimo(self) -> int:
+        """Obtiene o crea el paciente anónimo único del sistema"""
+        try:
+            # Buscar paciente anónimo existente
+            paciente_anonimo = self.repository.buscar_paciente_anonimo()
+            
+            if paciente_anonimo:
+                print(f"🎭 Usando paciente anónimo existente ID: {paciente_anonimo['id']}")
+                return paciente_anonimo['id']
+            
+            # Crear paciente anónimo si no existe
+            paciente_id = self.repository.crear_paciente_anonimo()
+            
+            if paciente_id > 0:
+                print(f"🎭 Paciente anónimo creado con ID: {paciente_id}")
+                self.operacionExitosa.emit(f"Paciente anónimo preparado para procedimiento")
+                return paciente_id
+            else:
+                self.operacionError.emit("Error creando paciente anónimo")
+                return -1
+                
+        except Exception as e:
+            print(f"💥 Error gestionando paciente anónimo: {e}")
+            logger.error(f"Error gestionando paciente anónimo: {e}")
+            return -1
 
 # ===============================
 # REGISTRO PARA QML

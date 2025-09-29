@@ -1124,11 +1124,6 @@ Item {
     
     // ===== INICIALIZACIÓN =====
     Component.onCompleted: {
-        console.log("🏥 Componente de configuración de consultas iniciado")
-        console.log("🔍 appController disponible:", appController ? "SÍ" : "NO")
-        console.log("🔍 confi_consulta_model_instance disponible:", appController ? (appController.confi_consulta_model_instance ? "SÍ" : "NO") : "N/A")
-        console.log("🔍 confiConsultaModel disponible:", confiConsultaModel ? "SÍ" : "NO")
-        
         // Inicializar datos si el modelo está disponible
         if (confiConsultaModel) {
             actualizarDatos()
@@ -1142,7 +1137,7 @@ Item {
     
     onConfiConsultaModelChanged: {
         if (confiConsultaModel) {
-            console.log("🔄 Modelo de consultas disponible, actualizando datos...")
+            //console.log("🔄 Modelo de consultas disponible, actualizando datos...")
             actualizarDatos()
         }
     }

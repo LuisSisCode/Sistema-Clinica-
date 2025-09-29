@@ -137,7 +137,6 @@ Item {
     
     // Función para navegar a CrearVenta
     function irACrearVenta() {
-        console.log("🚀 VentasMain: Navegando a CrearVenta")
         
         var crearVentaComponent = Qt.createComponent("CrearVenta.qml")
         
@@ -198,7 +197,6 @@ Item {
     
     // ✅ NUEVA FUNCIÓN PARA NAVEGAR A EDITAR VENTA
     function irAEditarVenta(ventaId) {
-        console.log("🚀 VentasMain: Navegando a editar venta", ventaId)
         
         var crearVentaComponent = Qt.createComponent("CrearVenta.qml")
         
@@ -263,7 +261,6 @@ Item {
     
     // Función para regresar a la lista de ventas
     function regresarAVentas() {
-        console.log("🔙 VentasMain: Regresando a lista de ventas")
         
         if (stackView.depth > 1) {
             stackView.pop()
@@ -296,13 +293,6 @@ Item {
         }
     }
     
-    // CONEXIONES CON DATOS CENTRALES
-    Connections {
-        target: ventaModel
-        function onVentasHoyChanged() {
-            console.log("🔄 VentasMain: Ventas actualizadas")
-        }
-    }
     
     // FUNCIONES DE DEPURACIÓN
     function obtenerEstadoNavegacion() {
@@ -338,10 +328,5 @@ Item {
         
         imprimirEstado()
         console.log("=== CONTAINER LISTO ===")
-    }
-    
-    // LIMPIEZA AL DESTRUIR
-    Component.onDestruction: {
-        console.log("🧹 VentasMain: Limpiando recursos...")
     }
 }

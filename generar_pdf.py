@@ -127,7 +127,6 @@ class GeneradorReportesPDF:
         for logo_path in logo_paths:
             if os.path.exists(logo_path):
                 self.logo_path = logo_path
-                print(f"✅ Logo encontrado: {logo_path}")
                 break
         
         if not self.logo_path:

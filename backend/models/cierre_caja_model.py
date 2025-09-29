@@ -3,14 +3,18 @@ from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import qmlRegisterType
 import json
 from datetime import datetime 
+from PySide6.QtCore import QObject, Signal, Slot, QUrl, QTimer, Property, QSettings, QDateTime
 
 from ..repositories.cierre_caja_repository import CierreCajaRepository
 from ..core.excepciones import ExceptionHandler, ValidationError, DatabaseQueryError
 
 class CierreCajaModel(QObject):
     """
-    Model QObject para operaciones de cierre de caja diario
-    Gestiona arqueo, validaciones y generación de reportes
+    Model INDEPENDIENTE para operaciones de cierre de caja diario
+    - Sin timers automáticos
+    - Sin dependencias de otros modelos  
+    - Consultas directas a BD bajo demanda
+    - Gestiona arqueo, validaciones y generación de reportes
     """
     
     # ===============================
@@ -33,83 +37,75 @@ class CierreCajaModel(QObject):
     # Señales para UI
     loadingChanged = Signal()
     efectivoRealChanged = Signal()
+    horaInicioChanged = Signal()
+    horaFinChanged = Signal()
+    cierresDelDiaChanged = Signal()
+    fechaActualChanged = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Repository
+        # Repository INDEPENDIENTE
         self.repository = CierreCajaRepository()
         
         # Estado interno
-        self._datos_dia: Dict[str, Any] = {}
-        self._resumen_financiero: Dict[str, Any] = {}
-        self._validacion_diferencia: Dict[str, Any] = {}
+        self._datos_cierre: Dict[str, Any] = {}
         self._loading: bool = False
         
-        # Configuración actual
+        # Configuración del cierre
         self._fecha_actual: str = datetime.now().strftime("%d/%m/%Y")
+        self._hora_inicio: str = "08:00"
+        self._hora_fin: str = "18:00"
         self._efectivo_real: float = 0.0
         self._observaciones: str = ""
-        self._cierre_completado: bool = False
-        # Verificar estado inicial
-        if self._fecha_actual == datetime.now().strftime("%d/%m/%Y"):
-            self._cierre_completado = self.repository.verificar_cierre_previo(self._fecha_actual)
-            self.cierreCompletadoChanged.emit()
-        
-        # ✅ AUTENTICACIÓN BÁSICA
-        self._usuario_actual_id = 0
-        print("💰 CierreCajaModel inicializado - Esperando autenticación")
-        
-        # Referencia al AppController (se establecerá desde main.py)
-        self._app_controller = None
 
-        # ✅ TIMER PARA AUTO-REFRESH
-        self._auto_refresh_timer = None
-        self._setup_auto_refresh()
+        self._resumen_estructurado: Dict[str, Any] = {}
         
-        # Inicialización automática
-        self._inicializar_datos()
+        # Estado del cierre
+        self._cierre_completado: bool = False
+        self._cierres_del_dia: List[Dict[str, Any]] = []
+        
+        # Autenticación
+        self._usuario_actual_id = 0
+        self._usuario_actual_rol = ""
+        
+        # Referencia al AppController para PDFs
+        self._app_controller = None
+        
+        print("💰 CierreCajaModel inicializado - Modo independiente")
     
     # ===============================
-    # ✅ MÉTODOS REQUERIDOS PARA APPCONTROLLER
+    # AUTENTICACIÓN
     # ===============================
     
     @Slot(int, str)
     def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
-        """Establece el usuario actual con rol - MÉTODO REQUERIDO por AppController"""
+        """Establece el usuario autenticado"""
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario autenticado establecido en CierreCajaModel: {usuario_id} ({usuario_rol})")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de cierre")
-                
-                # Recargar datos con nuevo usuario
-                self._cargar_datos_dia()
+                self._usuario_actual_rol = usuario_rol
+                print(f"👤 Usuario establecido en CierreCaja: {usuario_id} ({usuario_rol})")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} autenticado en módulo de cierre")
             else:
-                print(f"⚠️ ID de usuario inválido en CierreCajaModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
         except Exception as e:
-            print(f"❌ Error estableciendo usuario en CierreCajaModel: {e}")
-            self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
+            print(f"❌ Error estableciendo usuario: {e}")
+            self.operacionError.emit(f"Error de autenticación: {str(e)}")
     
     @Property(int, notify=operacionExitosa)
     def usuario_actual_id(self):
-        """Property para obtener el usuario actual"""
         return self._usuario_actual_id
     
     def set_app_controller(self, app_controller):
-        """Establece la referencia al AppController para acceso al PDF generator"""
+        """Establece referencia al AppController para generación de PDFs"""
         self._app_controller = app_controller
-        print("🔗 AppController conectado al CierreCajaModel")
-    
-    # ===============================
-    # VERIFICACIÓN DE AUTENTICACIÓN BÁSICA
-    # ===============================
+        print("🔗 AppController conectado para PDFs")
     
     def _verificar_autenticacion(self) -> bool:
-        """Verifica si el usuario está autenticado"""
+        """Verifica autenticación del usuario"""
         if self._usuario_actual_id <= 0:
-            self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
+            self.operacionError.emit("Usuario no autenticado")
             return False
         return True
     
@@ -117,116 +113,199 @@ class CierreCajaModel(QObject):
     # PROPERTIES - Datos para QML
     # ===============================
     
-    @Property(str)
+    @Property(str, notify=fechaActualChanged)
     def fechaActual(self) -> str:
-        """Fecha actual del cierre"""
         return self._fecha_actual
+    
+    @Property(str, notify=horaInicioChanged)
+    def horaInicio(self) -> str:
+        return self._hora_inicio
+    
+    @Property(str, notify=horaFinChanged) 
+    def horaFin(self) -> str:
+        return self._hora_fin
     
     @Property(float, notify=efectivoRealChanged)
     def efectivoReal(self) -> float:
-        """Efectivo real contado"""
         return self._efectivo_real
-    
-    @Property(float, notify=resumenChanged)
-    def totalIngresos(self) -> float:
-        """Total de ingresos del día"""
-        return float(self._resumen_financiero.get('total_ingresos', 0.0))
-    
-    @Property(float, notify=resumenChanged)
-    def totalEgresos(self) -> float:
-        """Total de egresos del día"""
-        return float(self._resumen_financiero.get('total_egresos', 0.0))
-    
-    @Property(float, notify=resumenChanged)
-    def saldoTeorico(self) -> float:
-        """Saldo teórico calculado"""
-        return float(self._resumen_financiero.get('saldo_teorico', 0.0))
-    
-    @Property(float, notify=validacionChanged)
-    def diferencia(self) -> float:
-        """Diferencia entre efectivo real y saldo teórico"""
-        return float(self._validacion_diferencia.get('diferencia', 0.0))
-    
-    @Property(str, notify=validacionChanged)
-    def tipoDiferencia(self) -> str:
-        """Tipo de diferencia: SOBRANTE, FALTANTE, NEUTRO"""
-        return self._validacion_diferencia.get('tipo', 'NEUTRO')
-    
-    @Property(bool, notify=validacionChanged)
-    def dentroDeLimite(self) -> bool:
-        """Si la diferencia está dentro del límite permitido"""
-        return self._validacion_diferencia.get('dentro_limite', True)
-    
-    @Property(bool, notify=validacionChanged)
-    def requiereAutorizacion(self) -> bool:
-        """Si la diferencia requiere autorización especial"""
-        return self._validacion_diferencia.get('requiere_autorizacion', False)
-    
-    @Property(list, notify=datosChanged)
-    def ingresosDetalle(self) -> List[Dict[str, Any]]:
-        """Lista detallada de ingresos"""
-        return self._datos_dia.get('ingresos', [])
-    
-    @Property(list, notify=datosChanged)
-    def egresosDetalle(self) -> List[Dict[str, Any]]:
-        """Lista detallada de egresos"""
-        return self._datos_dia.get('egresos', [])
-    
-    @Property(int, notify=resumenChanged)
-    def transaccionesIngresos(self) -> int:
-        """Número de transacciones de ingresos"""
-        return int(self._resumen_financiero.get('transacciones_ingresos', 0))
-    
-    @Property(int, notify=resumenChanged)
-    def transaccionesEgresos(self) -> int:
-        """Número de transacciones de egresos"""
-        return int(self._resumen_financiero.get('transacciones_egresos', 0))
     
     @Property(bool, notify=loadingChanged)
     def loading(self) -> bool:
-        """Estado de carga"""
         return self._loading
     
     @Property(bool, notify=cierreCompletadoChanged)
     def cierreCompletadoHoy(self) -> bool:
-        """Si el cierre ya fue completado hoy"""
         return self._cierre_completado
     
-    @Property(str)
-    def estadoFinanciero(self) -> str:
-        """Estado financiero del día"""
-        if self.saldoTeorico >= 0:
-            return "POSITIVO"
+    @Property(list, notify=cierresDelDiaChanged)
+    def cierresDelDia(self) -> List[Dict[str, Any]]:
+        return self._cierres_del_dia
+    
+    # Datos financieros calculados
+    @Property(float, notify=resumenChanged)
+    def totalIngresos(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_ingresos', 0.0))
+    
+    @Property(float, notify=resumenChanged)
+    def totalEgresos(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_egresos', 0.0))
+    
+    @Property(float, notify=resumenChanged)
+    def saldoTeorico(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('saldo_teorico', 0.0))
+    
+    @Property(float, notify=resumenChanged)
+    def totalFarmacia(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_farmacia', 0.0))
+    
+    @Property(float, notify=resumenChanged)
+    def totalConsultas(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_consultas', 0.0))
+    
+    @Property(float, notify=resumenChanged)
+    def totalLaboratorio(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_laboratorio', 0.0))
+    
+    @Property(float, notify=resumenChanged)
+    def totalEnfermeria(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_enfermeria', 0.0))
+    
+    @Property(int, notify=resumenChanged)
+    def transaccionesIngresos(self) -> int:
+        return int(self._datos_cierre.get('resumen', {}).get('transacciones_ingresos', 0))
+    
+    @Property(int, notify=resumenChanged)
+    def transaccionesEgresos(self) -> int:
+        return int(self._datos_cierre.get('resumen', {}).get('transacciones_egresos', 0))
+    
+    # Validación de diferencias
+    @Property(float, notify=validacionChanged)
+    def diferencia(self) -> float:
+        if self._efectivo_real > 0:
+            return round(self._efectivo_real - self.saldoTeorico, 2)
+        return 0.0
+    
+    @Property(str, notify=validacionChanged)
+    def tipoDiferencia(self) -> str:
+        diff = self.diferencia
+        if abs(diff) <= 1.0:
+            return "NEUTRO"
+        elif diff > 0:
+            return "SOBRANTE"
         else:
-            return "DÉFICIT"
+            return "FALTANTE"
+    
+    @Property(bool, notify=validacionChanged)
+    def dentroDeLimite(self) -> bool:
+        return abs(self.diferencia) <= 50.0
+    
+    @Property(bool, notify=validacionChanged)
+    def requiereAutorizacion(self) -> bool:
+        return abs(self.diferencia) > 50.0
+    
+    # Listas de movimientos
+    @Property(list, notify=datosChanged)
+    def ingresosDetalle(self) -> List[Dict[str, Any]]:
+        return self._datos_cierre.get('ingresos', {}).get('todos', [])
+    
+    @Property(list, notify=datosChanged)
+    def egresosDetalle(self) -> List[Dict[str, Any]]:
+        return self._datos_cierre.get('egresos', {}).get('todos', [])
     
     # ===============================
     # SLOTS - Métodos principales
     # ===============================
     
     @Slot()
-    def cargarDatosDia(self):
-        """Carga los datos financieros del día actual"""
+    def consultarDatos(self):
+        """MÉTODO PRINCIPAL - Consulta datos de cierre según parámetros configurados"""
         if not self._verificar_autenticacion():
             return
         
-        self._cargar_datos_dia()
-    
+        # ✅ NUEVO: Verificar conexión antes de proceder
+        if not self._verificar_conexion():
+            return
+        
+        try:
+            self._set_loading(True)
+            
+            print(f"🔍 Consultando datos - Fecha: {self._fecha_actual}, Hora: {self._hora_inicio}-{self._hora_fin}")
+            
+            # Consultar datos directamente desde BD
+            datos_cierre = self.repository.get_datos_cierre_completo(
+                self._fecha_actual, 
+                self._hora_inicio, 
+                self._hora_fin
+            )
+            
+            if datos_cierre:
+                self._datos_cierre = datos_cierre
+                
+                # Generar resumen estructurado para QML
+                self._resumen_estructurado = self.repository.get_resumen_por_categorias(
+                    self._fecha_actual,
+                    self._hora_inicio,
+                    self._hora_fin
+                )
+                
+                # Cargar también cierres de la semana
+                self.cargarCierresSemana()
+                
+                print(f"✅ Datos obtenidos - Ingresos: Bs {self.totalIngresos:,.2f}, Egresos: Bs {self.totalEgresos:,.2f}")
+                
+                # Emitir señales de actualización
+                self.datosChanged.emit()
+                self.resumenChanged.emit()
+                self._actualizar_validacion()
+                
+                self.operacionExitosa.emit("Datos consultados correctamente")
+            else:
+                self._datos_cierre = {}
+                self._resumen_estructurado = {}
+                self.operacionError.emit("No se encontraron datos para el rango especificado")
+                
+        except Exception as e:
+            error_msg = f"Error consultando datos: {str(e)}"
+            print(f"❌ {error_msg}")
+            
+            # ✅ NUEVO: Si hay error crítico, activar desconexión segura
+            if "connection" in str(e).lower() or "database" in str(e).lower():
+                self.emergency_disconnect()
+            else:
+                self.operacionError.emit(error_msg)
+        finally:
+            self._set_loading(False)
+        
     @Slot(str)
     def cambiarFecha(self, nueva_fecha: str):
-        """Cambia la fecha del cierre"""
-        try:
-            if not self._verificar_autenticacion():
-                return
-            
-            if self._validar_fecha(nueva_fecha):
-                self._fecha_actual = nueva_fecha
-                self._cargar_datos_dia()
-                print(f"📅 Fecha cambiada a: {nueva_fecha}")
-            else:
-                self.operacionError.emit("Formato de fecha inválido. Use DD/MM/YYYY")
-        except Exception as e:
-            self.operacionError.emit(f"Error cambiando fecha: {str(e)}")
+        """Cambia la fecha de consulta"""
+        if self._validar_fecha(nueva_fecha):
+            self._fecha_actual = nueva_fecha
+            self.fechaActualChanged.emit()
+            self._verificar_cierre_previo()
+            print(f"📅 Fecha cambiada a: {nueva_fecha}")
+        else:
+            self.operacionError.emit("Formato de fecha inválido (DD/MM/YYYY)")
+    
+    @Slot(str)
+    def establecerHoraInicio(self, hora: str):
+        """Establece hora de inicio"""
+        if self._validar_hora(hora):
+            self._hora_inicio = hora
+            self.horaInicioChanged.emit()
+            print(f"🕐 Hora inicio: {hora}")
+        else:
+            self.operacionError.emit("Formato de hora inválido (HH:MM)")
+    
+    @Slot(str) 
+    def establecerHoraFin(self, hora: str):
+        """Establece hora de fin"""
+        if self._validar_hora(hora):
+            self._hora_fin = hora
+            self.horaFinChanged.emit()
+            print(f"🕐 Hora fin: {hora}")
+        else:
+            self.operacionError.emit("Formato de hora inválido (HH:MM)")
     
     @Slot(float)
     def establecerEfectivoReal(self, monto: float):
@@ -238,66 +317,146 @@ class CierreCajaModel(QObject):
             
             self._efectivo_real = round(monto, 2)
             self.efectivoRealChanged.emit()
+            self._actualizar_validacion()
             
-            # Recalcular validación
-            self._validar_diferencia()
-            
-            print(f"💵 Efectivo real establecido: Bs {self._efectivo_real:,.2f}")
+            print(f"💵 Efectivo real: Bs {self._efectivo_real:,.2f}")
             
         except Exception as e:
             self.operacionError.emit(f"Error estableciendo efectivo: {str(e)}")
+    
+    @Slot()
+    def cargarCierresDelDia(self):
+        """Carga cierres realizados en el día actual"""
+        try:
+            if not self._verificar_autenticacion():
+                return
+            
+            cierres = self.repository.get_cierres_por_fecha(self._fecha_actual)
+            self._cierres_del_dia = cierres
+            self.cierresDelDiaChanged.emit()
+            
+            print(f"📋 Cierres del día cargados: {len(cierres)}")
+            
+        except Exception as e:
+            print(f"❌ Error cargando cierres del día: {e}")
+    
+    # ===============================
+    # VALIDACIÓN Y CIERRE
+    # ===============================
     
     @Slot(result=bool)
     def validarCierre(self) -> bool:
         """Valida si se puede realizar el cierre"""
         try:
+            print(f"🔍 VALIDACIÓN - Usuario autenticado: {self._verificar_autenticacion()}")
             if not self._verificar_autenticacion():
                 return False
             
-            # Verificar que hay efectivo ingresado
+            print(f"🔍 VALIDACIÓN - Efectivo real: {self._efectivo_real}")
             if self._efectivo_real <= 0:
                 self.operacionError.emit("Debe ingresar el efectivo real contado")
                 return False
             
-            # Verificar cierre previo
-            if self.repository.verificar_cierre_previo(self._fecha_actual):
-                self.operacionError.emit("Ya existe un cierre para esta fecha")
+            print(f"🔍 VALIDACIÓN - Datos cierre disponibles: {bool(self._datos_cierre)}")
+            if not self._datos_cierre:
+                self.operacionError.emit("Debe consultar los datos antes de cerrar")
                 return False
             
-            # Validar diferencia
-            self._validar_diferencia()
+            cierre_previo = self.repository.verificar_cierre_previo(self._fecha_actual, self._hora_inicio, self._hora_fin)
+            print(f"🔍 VALIDACIÓN - Cierre previo existe para {self._hora_inicio}-{self._hora_fin}: {cierre_previo}")
+            if cierre_previo:
+                self.operacionError.emit(f"Ya existe un cierre para el horario {self._hora_inicio}-{self._hora_fin}")
+                return False
             
+            diferencia_abs = abs(self.diferencia)
+            print(f"🔍 VALIDACIÓN - Diferencia absoluta: {diferencia_abs}")
+            if diferencia_abs > 1000.0:
+                self.operacionError.emit("Diferencia demasiado grande, verifique los datos")
+                return False
+            
+            print("✅ VALIDACIÓN EXITOSA")
             return True
-            
+                
         except Exception as e:
+            print(f"❌ Error en validación: {e}")
             self.operacionError.emit(f"Error validando cierre: {str(e)}")
             return False
     
-
+    @Slot(str)
+    def completarCierre(self, observaciones: str = ""):
+        """Completa el cierre de caja"""
+        try:
+            if not self.validarCierre():
+                return
+                
+            self._set_loading(True)
+            
+            # Preparar datos del cierre
+            datos_cierre = {
+                'Fecha': self._convertir_fecha_bd(self._fecha_actual),
+                'HoraInicio': self._hora_inicio,
+                'HoraFin': self._hora_fin,
+                'EfectivoReal': self._efectivo_real,
+                'SaldoTeorico': self.saldoTeorico,
+                'Diferencia': self.diferencia,
+                'IdUsuario': self._usuario_actual_id,
+                'FechaCierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'Observaciones': observaciones or self._generar_observaciones_automaticas()
+            }
+            
+            # Guardar en BD
+            if self.repository.guardar_cierre_caja(datos_cierre):
+                self._cierre_completado = True
+                self.cierreCompletadoChanged.emit()
+                
+                # Recargar cierres del día
+                self.cargarCierresDelDia()
+                
+                mensaje = f"Cierre completado - {self._hora_inicio} a {self._hora_fin}"
+                self.cierreCompletado.emit(True, mensaje)
+                self.operacionExitosa.emit("Cierre guardado en base de datos")
+                print(f"✅ Cierre completado - Usuario: {self._usuario_actual_id}")
+            else:
+                raise Exception("Error guardando cierre en base de datos")
+                
+        except Exception as e:
+            error_msg = f"Error completando cierre: {str(e)}"
+            self.cierreCompletado.emit(False, error_msg)
+            self.operacionError.emit(error_msg)
+            print(f"❌ {error_msg}")
+        finally:
+            self._set_loading(False)
+    
+    # ===============================
+    # GENERACIÓN DE PDF
+    # ===============================
+    
     @Slot(result=str)
-    def generarPDFArqueoCorregido(self) -> str:
-        """Genera PDF del arqueo de caja con datos CORREGIDOS (movimientos individuales)"""
+    def generarPDFArqueo(self) -> str:
+        """Genera PDF del arqueo con datos detallados"""
         try:
             if not self._verificar_autenticacion():
                 return ""
             
-            if not self.validarCierre():
+            if not self._datos_cierre:
+                self.operacionError.emit("Debe consultar los datos antes de generar PDF")
                 return ""
             
-            # Verificar AppController
             if not self._app_controller:
-                self.errorOccurred.emit("Error PDF", "AppController no disponible")
+                self.errorOccurred.emit("Error PDF", "Generador de PDF no disponible")
                 return ""
             
-            # 🔥 CAMBIO CLAVE: Usar método corregido del repository
-            datos_pdf = self.repository.generar_datos_pdf_arqueo_corregido(
+            # Generar datos estructurados para PDF
+            datos_pdf = self.repository.generar_datos_pdf_arqueo(
                 self._fecha_actual,
+                self._hora_inicio,
+                self._hora_fin,
                 self._efectivo_real,
                 self._observaciones
             )
             
             if not datos_pdf:
-                self.errorOccurred.emit("Error PDF", "No se pudieron generar los datos corregidos")
+                self.errorOccurred.emit("Error PDF", "No se pudieron estructurar los datos")
                 return ""
             
             # Convertir a JSON y generar PDF
@@ -312,107 +471,114 @@ class CierreCajaModel(QObject):
             
             if ruta_pdf:
                 self.pdfGenerado.emit(ruta_pdf)
-                self.operacionExitosa.emit("PDF de arqueo corregido generado correctamente")
-                print(f"📄 PDF arqueo CORREGIDO generado: {ruta_pdf}")
+                self.operacionExitosa.emit("PDF del arqueo generado correctamente")
+                print(f"📄 PDF generado: {ruta_pdf}")
                 return ruta_pdf
             else:
-                self.errorOccurred.emit("Error PDF", "No se pudo generar el PDF corregido")
+                self.errorOccurred.emit("Error PDF", "No se pudo generar el archivo")
                 return ""
                 
         except Exception as e:
-            error_msg = f"Error generando PDF corregido: {str(e)}"
+            error_msg = f"Error generando PDF: {str(e)}"
             self.errorOccurred.emit("Error PDF", error_msg)
             print(f"❌ {error_msg}")
             return ""
     
+    # ===============================
+    # MÉTODOS DE CONSULTA ADICIONALES
+    # ===============================
+    @Property(str, notify=fechaActualChanged)
+    def fechaSeleccionada(self) -> str:
+        """Alias para fechaActual - compatibilidad QML"""
+        return self._fecha_actual
+
+    @Property(float, notify=validacionChanged)
+    def diferenciaCaja(self) -> float:
+        """Alias para diferencia - compatibilidad QML"""
+        return self.diferencia
+
+    @Property(int, notify=resumenChanged)
+    def totalTransacciones(self) -> int:
+        """Total de transacciones (ingresos + egresos)"""
+        return self.transaccionesIngresos + self.transaccionesEgresos
+
+    @Property('QVariantMap', notify=datosChanged)
+    def resumenRango(self) -> Dict[str, Any]:
+        """Resumen estructurado para el QML"""
+        return self._resumen_estructurado
+
+    # NUEVOS MÉTODOS para compatibilidad con QML
+    @Slot()
+    def consultarMovimientosPorRango(self):
+        """Alias para consultarDatos - compatibilidad QML"""
+        self.consultarDatos()
+
     @Slot(str)
-    def completarCierre(self, observaciones: str = ""):
-        """Completa el cierre de caja"""
+    def establecerFecha(self, fecha: str):
+        """Alias para cambiarFecha - compatibilidad QML"""
+        self.cambiarFecha(fecha)
+
+    @Slot(result=str)
+    def generarPDFCierre(self) -> str:
+        """Alias para generarPDFArqueo - compatibilidad QML"""
+        return self.generarPDFArqueo()
+
+    @Slot(str)
+    def realizarCierreCompleto(self, observaciones: str = ""):
+        """Alias para completarCierre - compatibilidad QML"""
+        self.completarCierre(observaciones)
+
+    @Slot()
+    def cargarCierresSemana(self):
+        """Carga cierres de toda la semana actual"""
         try:
             if not self._verificar_autenticacion():
                 return
-                
-            if not self.validarCierre():
-                return
-                
-            self._set_loading(True)
             
-            # Establecer observaciones
-            self._observaciones = observaciones
+            print("📅 Iniciando carga de cierres de semana...")
             
-            # Por ahora solo marcamos como completado (sin BD)
-            self._cierre_completado = True
-            self.cierreCompletadoChanged.emit()
+            cierres_semana = self.repository.get_cierres_semana_actual(self._fecha_actual)
+            self._cierres_del_dia = cierres_semana
+            self.cierresDelDiaChanged.emit()
             
-            # Mensaje de éxito sin PDF
-            mensaje = "Cierre de caja completado exitosamente"
-            self.cierreCompletado.emit(True, mensaje)
-            self.operacionExitosa.emit("Cierre completado con éxito")
-            print(f"✅ Cierre completado - Usuario: {self._usuario_actual_id}")
-                
+            print(f"📅 Cierres de la semana cargados: {len(cierres_semana)}")
+            
         except Exception as e:
-            error_msg = f"Error completando cierre: {str(e)}"
-            self.cierreCompletado.emit(False, error_msg)
-            self.operacionError.emit(error_msg)
-            print(f"❌ {error_msg}")
-        finally:
-            self._set_loading(False)
-    
-    @Slot()
-    def actualizarDatos(self):
-        """Actualiza los datos del cierre"""
-        if not self._verificar_autenticacion():
-            return
-        
-        self._cargar_datos_dia()
-        self.operacionExitosa.emit("Datos actualizados correctamente")
-    
-    @Slot()
-    def limpiarCierre(self):
-        """Limpia los datos del cierre"""
-        self._efectivo_real = 0.0
-        self._observaciones = ""
-        self._cierre_completado = False
-        self._validacion_diferencia = {}
-        
-        self.efectivoRealChanged.emit()
-        self.validacionChanged.emit()
-        
-        print("🧹 Cierre limpiado")
-    
-    # ===============================
-    # MÉTODOS DE CONSULTA
-    # ===============================
-    
+            print(f"❌ ERROR CRÍTICO en cargarCierresSemana: {e}")
+            print(f"❌ Tipo de error: {type(e).__name__}")
+            # NO emitir señales si hay error
+            self._cierres_del_dia = []  # Lista vacía por seguridad
+
     @Slot(result='QVariantMap')
     def obtenerEstadisticasDia(self) -> Dict[str, Any]:
         """Obtiene estadísticas adicionales del día"""
         try:
-            if not self._datos_dia:
+            if not self._datos_cierre:
                 return {}
             
-            ingresos = self._datos_dia.get('ingresos', [])
-            egresos = self._datos_dia.get('egresos', [])
-            
-            # Calcular estadísticas
-            total_conceptos_ingresos = len([i for i in ingresos if i.get('importe', 0) > 0])
-            total_conceptos_egresos = len([e for e in egresos if e.get('importe', 0) > 0])
-            
-            concepto_mayor_ingreso = max(ingresos, key=lambda x: x.get('importe', 0)) if ingresos else {}
-            concepto_mayor_egreso = max(egresos, key=lambda x: x.get('importe', 0)) if egresos else {}
+            resumen = self._datos_cierre.get('resumen', {})
             
             return {
-                'conceptos_activos_ingresos': total_conceptos_ingresos,
-                'conceptos_activos_egresos': total_conceptos_egresos,
-                'mayor_fuente_ingreso': concepto_mayor_ingreso.get('concepto', 'N/A'),
-                'valor_mayor_ingreso': concepto_mayor_ingreso.get('importe', 0.0),
-                'mayor_concepto_egreso': concepto_mayor_egreso.get('concepto', 'N/A'),
-                'valor_mayor_egreso': concepto_mayor_egreso.get('importe', 0.0),
-                'promedio_por_transaccion_ingreso': round(
+                'promedio_transaccion_ingreso': round(
                     self.totalIngresos / max(self.transaccionesIngresos, 1), 2
                 ),
-                'promedio_por_transaccion_egreso': round(
+                'promedio_transaccion_egreso': round(
                     self.totalEgresos / max(self.transaccionesEgresos, 1), 2
+                ),
+                'porcentaje_farmacia': round(
+                    (self.totalFarmacia / max(self.totalIngresos, 1)) * 100, 1
+                ),
+                'porcentaje_consultas': round(
+                    (self.totalConsultas / max(self.totalIngresos, 1)) * 100, 1
+                ),
+                'porcentaje_laboratorio': round(
+                    (self.totalLaboratorio / max(self.totalIngresos, 1)) * 100, 1
+                ),
+                'porcentaje_enfermeria': round(
+                    (self.totalEnfermeria / max(self.totalIngresos, 1)) * 100, 1
+                ),
+                'margin_operativo': round(
+                    ((self.totalIngresos - self.totalEgresos) / max(self.totalIngresos, 1)) * 100, 1
                 )
             }
             
@@ -420,236 +586,255 @@ class CierreCajaModel(QObject):
             print(f"❌ Error obteniendo estadísticas: {e}")
             return {}
     
-    @Slot(result=str)
-    def obtenerRecomendaciones(self) -> str:
-        """Obtiene recomendaciones basadas en el estado del cierre"""
-        try:
-            recomendaciones = []
-            
-            # Recomendaciones por diferencia
-            if self.requiereAutorizacion:
-                recomendaciones.append("⚠️ La diferencia requiere autorización del supervisor")
-                recomendaciones.append("📋 Revisar detalladamente todas las transacciones del día")
-                
-            if self.tipoDiferencia == "FALTANTE":
-                recomendaciones.append("🔍 Verificar si hay transacciones no registradas")
-                recomendaciones.append("💳 Revisar pagos con tarjeta o transferencias")
-                
-            elif self.tipoDiferencia == "SOBRANTE":
-                recomendaciones.append("🧾 Verificar si hay ingresos duplicados")
-                recomendaciones.append("📝 Documentar el origen del sobrante")
-                
-            # Recomendaciones por estado financiero
-            if self.estadoFinanciero == "DÉFICIT":
-                recomendaciones.append("📈 Evaluar estrategias para incrementar ingresos")
-                recomendaciones.append("💰 Revisar gastos operativos del día")
-                
-            # Recomendación general
-            if not recomendaciones:
-                recomendaciones.append("✅ El arqueo está balanceado correctamente")
-                
-            recomendaciones.append("📄 Generar PDF del arqueo para respaldo")
-            
-            return "\n".join(recomendaciones)
-            
-        except Exception as e:
-            return "Error generando recomendaciones"
+    @Slot()
+    def limpiarDatos(self):
+        """Limpia todos los datos del cierre"""
+        self._datos_cierre = {}
+        self._efectivo_real = 0.0
+        self._observaciones = ""
+        
+        self.datosChanged.emit()
+        self.resumenChanged.emit()
+        self.efectivoRealChanged.emit()
+        self.validacionChanged.emit()
+        
+        print("🧹 Datos del cierre limpiados")
     
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
     
-    def _inicializar_datos(self):
+    def _verificar_cierre_previo(self):
+        """Verifica si ya hay un cierre para la fecha actual"""
         try:
-            print("🔄 Inicializando datos de cierre...")
-            # Cargar datos iniciales si hay usuario autenticado
-            if self._usuario_actual_id > 0:
-                self._cargar_datos_dia()
-        except Exception as e:
-            print(f"⚠️ Error en inicialización: {e}")
-    
-    def _cargar_datos_dia(self):
-        """Carga los datos financieros del día"""
-        try:
-            self._set_loading(True)
-            
-            print(f"💰 Cargando datos de cierre para: {self._fecha_actual}")
-            
-            # Obtener datos del repositorio
-            self._datos_dia = self.repository.get_datos_dia_actual(self._fecha_actual)
-            self._resumen_financiero = self._datos_dia.get('resumen', {})
-            
-            # Emitir señales
-            self.datosChanged.emit()
-            self.resumenChanged.emit()
-            
-            # Recalcular validación si hay efectivo
-            if self._efectivo_real > 0:
-                self._validar_diferencia()
-            
-            print(f"✅ Datos cargados - Ingresos: Bs {self.totalIngresos:,.2f}, Egresos: Bs {self.totalEgresos:,.2f}")
-            
-        except Exception as e:
-            print(f"❌ Error cargando datos del día: {e}")
-            self.operacionError.emit(f"Error cargando datos: {str(e)}")
-        finally:
-            self._set_loading(False)
-    
-    def _validar_diferencia(self):
-        """Valida la diferencia entre efectivo y saldo teórico"""
-        try:
-            if self._efectivo_real <= 0:
-                return
-            
-            self._validacion_diferencia = self.repository.validar_diferencia_permitida(
-                self._efectivo_real,
-                self.saldoTeorico,
-                100.0  # Límite de Bs 100
-            )
-            
-            self.validacionChanged.emit()
-            
-            print(f"🔍 Validación: {self._validacion_diferencia.get('tipo', 'N/A')} "
-                  f"Bs {self._validacion_diferencia.get('diferencia_absoluta', 0):,.2f}")
-            
-        except Exception as e:
-            print(f"❌ Error validando diferencia: {e}")
-    
-    def _validar_fecha(self, fecha: str) -> bool:
-        """Valida formato de fecha DD/MM/YYYY"""
-        try:
-            datetime.strptime(fecha, "%d/%m/%Y")
-            return True
+            self._cierre_completado = self.repository.verificar_cierre_previo(self._fecha_actual)
+            self.cierreCompletadoChanged.emit()
         except:
-            return False
+            self._cierre_completado = False
+    
+    def _actualizar_validacion(self):
+        """Actualiza validación de diferencias"""
+        if self._efectivo_real > 0:
+            self.validacionChanged.emit()
     
     def _set_loading(self, loading: bool):
         """Actualiza estado de carga"""
         if self._loading != loading:
             self._loading = loading
             self.loadingChanged.emit()
-
-    def emergency_disconnect(self):
-        """Desconexión de emergencia para CierreCajaModel"""
+    
+    def _validar_fecha(self, fecha: str) -> bool:
+        """Valida formato DD/MM/YYYY"""
         try:
-            print("🚨 CierreCajaModel: Iniciando desconexión de emergencia...")
-            # Detener auto-refresh timer
-            if self._auto_refresh_timer:
-                self._auto_refresh_timer.stop()
-                self._auto_refresh_timer.deleteLater()
-                self._auto_refresh_timer = None
-            # Limpiar referencia al AppController
-            self._app_controller = None
+            datetime.strptime(fecha, "%d/%m/%Y")
+            return True
+        except:
+            return False
+    
+    def _validar_hora(self, hora: str) -> bool:
+        """Valida formato HH:MM"""
+        try:
+            datetime.strptime(hora, "%H:%M")
+            return True
+        except:
+            return False
+    
+    def _convertir_fecha_bd(self, fecha: str) -> str:
+        """Convierte DD/MM/YYYY a YYYY-MM-DD"""
+        try:
+            partes = fecha.split('/')
+            return f"{partes[2]}-{partes[1]:0>2}-{partes[0]:0>2}"
+        except:
+            return datetime.now().strftime("%Y-%m-%d")
+    
+    def _generar_observaciones_automaticas(self) -> str:
+        """Genera observaciones automáticas"""
+        if self.tipoDiferencia == "NEUTRO":
+            return "Arqueo balanceado correctamente"
+        elif self.tipoDiferencia == "SOBRANTE":
+            return f"Sobrante de Bs {abs(self.diferencia):.2f}"
+        else:
+            return f"Faltante de Bs {abs(self.diferencia):.2f}"
+    
+    # ===============================
+    # CLEANUP PARA SHUTDOWN
+    # ===============================
+    
+    def emergency_disconnect(self):
+        """
+        Desconexión segura SIN romper la interfaz QML
+        """
+        try:
+            print("🚨 CierreCajaModel: Iniciando desconexión de emergencia SEGURA...")
             
-            # Establecer estado shutdown
-            self._loading = False
-            self._cierre_completado = False
+            # ✅ IMPORTANTE: NO anular referencias críticas inmediatamente
+            # Solo marcar como desconectado
+            self._disconnected = True
             
-            # Desconectar señales
-            signals_to_disconnect = [
-                'datosChanged', 'resumenChanged', 'validacionChanged',
-                'cierreCompletado', 'pdfGenerado', 'errorOccurred', 
-                'operacionExitosa', 'operacionError', 'loadingChanged', 
-                'efectivoRealChanged'
-            ]
+            # Detener timer inmediatamente
+            if hasattr(self, '_refresh_timer') and self._refresh_timer and self._refresh_timer.isActive():
+                self._refresh_timer.stop()
+                print("   ⏹️ Refresh timer detenido")
             
-            for signal_name in signals_to_disconnect:
-                if hasattr(self, signal_name):
-                    try:
-                        getattr(self, signal_name).disconnect()
-                    except:
-                        pass
+            # ✅ NUEVO: Emitir señal de desconexión en lugar de romper todo
+            try:
+                self.operacionError.emit("Módulo temporalmente desconectado - reconectando...")
+            except:
+                pass
             
-            # Limpiar datos
-            self._datos_dia = {}
-            self._resumen_financiero = {}
-            self._validacion_diferencia = {}
+            # ✅ IMPORTANTE: NO bloquear señales - esto rompe QML
+            # self.blockSignals(True)  # ❌ COMENTAR ESTA LÍNEA
+            
+            # Limpiar datos internos pero mantener estructura
+            self._datos_cierre = {}
             self._efectivo_real = 0.0
             self._observaciones = ""
-            self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
             
-            # Anular repository
-            self.repository = None
+            # ✅ NUEVO: Programar reconexión automática
+            QTimer.singleShot(3000, self._intentar_reconexion)
             
-            print("✅ CierreCajaModel: Desconexión de emergencia completada")
+            print("✅ CierreCajaModel: Desconexión SEGURA completada - reconexión programada")
             
         except Exception as e:
-            print(f"❌ Error en desconexión CierreCajaModel: {e}")
+            print(f"❌ Error en desconexión segura: {e}")
 
-    def _setup_auto_refresh(self):
-        """Configura timer para auto-refresh cada 30 segundos"""
-        from PySide6.QtCore import QTimer
-        
-        self._auto_refresh_timer = QTimer()
-        self._auto_refresh_timer.timeout.connect(self._auto_refresh_data)
-        self._auto_refresh_timer.setInterval(30000)  # 30 segundos
-        print("⏰ Auto-refresh configurado para Cierre de Caja")
-
-    def _auto_refresh_data(self):
-        """Auto-refresh silencioso de datos"""
+    def _intentar_reconexion(self):
+        """
+        ✅ NUEVO: Intenta reconectar automáticamente
+        """
         try:
-            if self._usuario_actual_id > 0 and not self._loading:
-                print("🔄 Auto-refresh silencioso de datos de caja...")
-                self._cargar_datos_dia()
+            print("🔄 Intentando reconexión automática...")
+            
+            # Marcar como reconectado
+            self._disconnected = False
+            
+            # Reinicializar repository si es necesario
+            if not self.repository:
+                from ..repositories.cierre_caja_repository import CierreCajaRepository
+                self.repository = CierreCajaRepository()
+            
+            # Emitir señal de reconexión exitosa
+            self.operacionExitosa.emit("Módulo reconectado correctamente")
+            
+            print("✅ Reconexión automática exitosa")
+            
         except Exception as e:
-            print(f"❌ Error en auto-refresh: {e}")
+            print(f"❌ Error en reconexión: {e}")
+            # Programar otro intento en 10 segundos
+            QTimer.singleShot(10000, self._intentar_reconexion)
 
-    @Slot()
-    def iniciarAutoRefresh(self):
-        """Inicia el auto-refresh (llamar desde QML)"""
-        if self._auto_refresh_timer and not self._auto_refresh_timer.isActive():
-            self._auto_refresh_timer.start()
-            print("▶️ Auto-refresh iniciado")
-
-    @Slot()  
-    def detenerAutoRefresh(self):
-        """Detiene el auto-refresh"""
-        if self._auto_refresh_timer and self._auto_refresh_timer.isActive():
-            self._auto_refresh_timer.stop()
-            print("⏸️ Auto-refresh detenido")
-
-    @Slot()
-    def forzarActualizacion(self):
-        """Fuerza actualización inmediata desde QML"""
-        print("🔄 Forzando actualización de datos...")
-        self.repository.refresh_cache()
-        self._cargar_datos_dia()
-
-    def _debug_datos_arqueo(self, datos_organizados):
-        """Método de debug para inspeccionar la estructura real de datos - TEMPORAL"""
+    # ✅ NUEVO: Verificar estado antes de operaciones críticas
+    def _verificar_conexion(self) -> bool:
+        """
+        Verifica si el modelo está conectado correctamente
+        """
         try:
-            print("=" * 50)
-            print("🔍 DEBUG: ESTRUCTURA DE DATOS ARQUEO")
-            print("=" * 50)
+            if hasattr(self, '_disconnected') and self._disconnected:
+                self.operacionError.emit("Módulo desconectado - reconectando...")
+                self._intentar_reconexion()
+                return False
             
-            for categoria, items in datos_organizados.items():
-                print(f"\n📊 CATEGORÍA: {categoria.upper()}")
-                print(f"📈 Total items: {len(items)}")
-                
-                if items and len(items) > 0:
-                    print("🗂️  Primer elemento:")
-                    primer_item = items[0]
-                    for key, value in primer_item.items():
-                        print(f"   {key}: {value} ({type(value).__name__})")
-                    
-                    if len(items) > 1:
-                        print(f"🗂️  Campos únicos en todos los elementos:")
-                        all_keys = set()
-                        for item in items:
-                            all_keys.update(item.keys())
-                        print(f"   {sorted(all_keys)}")
-                else:
-                    print("   ❌ Sin datos")
+            if not self.repository:
+                print("⚠️ Repository no disponible")
+                return False
             
-            print("=" * 50)
             return True
+        except:
+            return False
+
+    @Property(list, notify=datosChanged)
+    def gastosDetallados(self) -> List[Dict[str, Any]]:
+        """Lista detallada de gastos con tipos"""
+        return self._datos_cierre.get('gastos_detallados', [])
+
+    @Property(list, notify=datosChanged)
+    def resumenGastosPorTipo(self) -> List[Dict[str, Any]]:
+        """Resumen de gastos agrupados por tipo"""
+        return self._datos_cierre.get('resumen_gastos_tipo', [])
+
+    @Property(float, notify=resumenChanged)
+    def totalServiciosBasicos(self) -> float:
+        """Total de gastos en servicios básicos"""
+        try:
+            gastos_tipos = self._datos_cierre.get('resumen_gastos_tipo', [])
+            servicios = ['SERVICIOS BÁSICOS', 'ELECTRICIDAD', 'AGUA', 'INTERNET', 'TELÉFONO']
+            total = 0.0
+            for gasto in gastos_tipos:
+                if any(servicio in gasto.get('TipoGasto', '').upper() for servicio in servicios):
+                    total += float(gasto.get('TotalGastos', 0))
+            return round(total, 2)
+        except:
+            return 0.0
+
+    @Slot()
+    def cargarGastosDetallados(self):
+        """Carga gastos detallados por tipo"""
+        try:
+            if not self._verificar_autenticacion():
+                return
+            
+            # Obtener gastos detallados
+            gastos_detallados = self.repository.get_gastos_detallados(
+                self._convertir_fecha_bd(self._fecha_actual),
+                self._convertir_fecha_bd(self._fecha_actual)
+            )
+            
+            # Obtener resumen por tipo
+            resumen_tipos = self.repository.get_resumen_gastos_por_tipo(
+                self._convertir_fecha_bd(self._fecha_actual),
+                self._convertir_fecha_bd(self._fecha_actual)
+            )
+            
+            # Actualizar datos internos
+            if 'gastos_detallados' not in self._datos_cierre:
+                self._datos_cierre['gastos_detallados'] = []
+            if 'resumen_gastos_tipo' not in self._datos_cierre:
+                self._datos_cierre['resumen_gastos_tipo'] = []
+                
+            self._datos_cierre['gastos_detallados'] = gastos_detallados
+            self._datos_cierre['resumen_gastos_tipo'] = resumen_tipos
+            
+            self.datosChanged.emit()
+            self.resumenChanged.emit()
+            
+            print(f"✅ Gastos detallados cargados: {len(gastos_detallados)} gastos, {len(resumen_tipos)} tipos")
             
         except Exception as e:
-            print(f"Error en debug: {e}")
-            return False
-        
+            print(f"❌ Error cargando gastos detallados: {e}")
+            self.operacionError.emit(f"Error cargando gastos: {str(e)}")
 
-
+    @Slot(result='QVariantMap')
+    def obtenerEstadisticasGastos(self) -> Dict[str, Any]:
+        """Obtiene estadísticas de gastos del día"""
+        try:
+            resumen_tipos = self._datos_cierre.get('resumen_gastos_tipo', [])
+            
+            if not resumen_tipos:
+                return {
+                    'tipo_mayor_gasto': 'Ninguno',
+                    'cantidad_tipos_gasto': 0,
+                    'promedio_por_tipo': 0.0,
+                    'servicios_basicos': 0.0
+                }
+            
+            # Encontrar tipo con mayor gasto
+            tipo_mayor = max(resumen_tipos, key=lambda x: float(x.get('TotalGastos', 0)))
+            
+            # Calcular promedio por tipo
+            total_gastos = sum(float(item.get('TotalGastos', 0)) for item in resumen_tipos)
+            promedio = total_gastos / len(resumen_tipos) if len(resumen_tipos) > 0 else 0
+            
+            return {
+                'tipo_mayor_gasto': tipo_mayor.get('TipoGasto', 'Desconocido'),
+                'monto_mayor_gasto': float(tipo_mayor.get('TotalGastos', 0)),
+                'cantidad_tipos_gasto': len(resumen_tipos),
+                'promedio_por_tipo': round(promedio, 2),
+                'servicios_basicos': self.totalServiciosBasicos
+            }
+            
+        except Exception as e:
+            print(f"❌ Error calculando estadísticas de gastos: {e}")
+            return {}
 # ===============================
 # REGISTRO PARA QML
 # ===============================
@@ -659,5 +844,4 @@ def register_cierre_caja_model():
     qmlRegisterType(CierreCajaModel, "ClinicaModels", 1, 0, "CierreCajaModel")
     print("💰 CierreCajaModel registrado para QML")
 
-# Para facilitar la importación
 __all__ = ['CierreCajaModel', 'register_cierre_caja_model']

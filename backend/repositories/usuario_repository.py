@@ -77,27 +77,12 @@ class UsuarioRepository(BaseRepository):
         return self._execute_query(query, (usuario_id,), fetch_one=True)
     
     def create_user(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-                   nombre_usuario: str, contrasena: str, rol_id: int, estado: bool = True) -> int:
+               nombre_usuario: str, contrasena: str, rol_id: int, estado: bool = True) -> int:
         """
         Crea nuevo usuario con validaciones completas
-        
-        Args:
-            nombre: Nombre del usuario
-            apellido_paterno: Apellido paterno
-            apellido_materno: Apellido materno  
-            nombre_usuario: Nombre de usuario único
-            contrasena: Contraseña en texto plano (se hasheará)
-            rol_id: ID del rol asignado
-            estado: Estado activo/inactivo
-            
-        Returns:
-            ID del usuario creado
-            
-        Raises:
-            ValidationError: Si los datos no son válidos
-            DatabaseQueryError: Si hay errores de BD
+        CORREGIDO: Guarda contraseñas en texto plano para consistencia
         """
-        # Validaciones
+        # Validaciones (mismo código...)
         validate_required(nombre, "nombre")
         validate_required(apellido_paterno, "apellido_paterno")
         validate_required(apellido_materno, "apellido_materno")
@@ -119,8 +104,8 @@ class UsuarioRepository(BaseRepository):
         if not self._role_exists_and_active(rol_id):
             raise ValidationError("rol_id", rol_id, "Rol no existe o está inactivo")
         
-        # Hashear contraseña
-        hashed_password = self._hash_password(contrasena)
+        # CORREGIDO: NO hashear contraseña, guardar en texto plano
+        # hashed_password = self._hash_password(contrasena) # ← COMENTADO
         
         # Crear usuario
         user_data = {
@@ -128,7 +113,7 @@ class UsuarioRepository(BaseRepository):
             'Apellido_Paterno': apellido_paterno.strip(),
             'Apellido_Materno': apellido_materno.strip(),
             'nombre_usuario': nombre_usuario.lower().strip(),
-            'contrasena': hashed_password,
+            'contrasena': contrasena,  # ← TEXTO PLANO para consistencia
             'Id_Rol': rol_id,
             'Estado': estado
         }
@@ -202,6 +187,7 @@ class UsuarioRepository(BaseRepository):
     def change_password(self, usuario_id: int, current_password: str, new_password: str) -> bool:
         """
         Cambia contraseña de usuario con validación de contraseña actual
+        CORREGIDO: Maneja contraseñas en texto plano como el sistema de login
         
         Args:
             usuario_id: ID del usuario
@@ -216,8 +202,9 @@ class UsuarioRepository(BaseRepository):
         if not user:
             raise ValidationError("usuario_id", usuario_id, "Usuario no encontrado")
         
-        # Verificar contraseña actual
-        if not self._verify_password(current_password, user['contrasena']):
+        # CORREGIDO: Verificar contraseña actual (comparación directa)
+        stored_password = user.get('contrasena', '')
+        if stored_password != current_password:
             raise AuthenticationError("Contraseña actual incorrecta")
         
         # Validar nueva contraseña
@@ -225,21 +212,21 @@ class UsuarioRepository(BaseRepository):
         self._validate_password_strength(new_password)
         
         # No permitir la misma contraseña
-        if self._verify_password(new_password, user['contrasena']):
+        if stored_password == new_password:
             raise ValidationError("new_password", "***", "La nueva contraseña debe ser diferente a la actual")
         
-        # Hashear nueva contraseña y actualizar
-        hashed_new_password = self._hash_password(new_password)
-        success = self.update(usuario_id, {'contrasena': hashed_new_password})
+        # CORREGIDO: Guardar nueva contraseña en texto plano (igual que el sistema actual)
+        success = self.update(usuario_id, {'contrasena': new_password})
         
         if success:
-            print(f"🔒 Contraseña cambiada: Usuario ID {usuario_id}")
+            print(f"🔑 Contraseña cambiada: Usuario ID {usuario_id}")
         
         return success
     
     def reset_password(self, usuario_id: int, new_password: str) -> bool:
         """
         Resetea contraseña (solo para administradores)
+        CORREGIDO: Maneja contraseñas en texto plano
         
         Args:
             usuario_id: ID del usuario
@@ -255,8 +242,8 @@ class UsuarioRepository(BaseRepository):
         validate_required(new_password, "new_password")
         self._validate_password_strength(new_password)
         
-        hashed_password = self._hash_password(new_password)
-        success = self.update(usuario_id, {'contrasena': hashed_password})
+        # CORREGIDO: Guardar contraseña en texto plano
+        success = self.update(usuario_id, {'contrasena': new_password})
         
         if success:
             print(f"🔓 Contraseña reseteada: Usuario ID {usuario_id}")

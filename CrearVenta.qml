@@ -797,7 +797,7 @@ Item {
                 }
             }
             
-            // TABLA DE PRODUCTOS EN LA VENTA
+            // TABLA DE PRODUCTOS EN LA VENTA - CORREGIDA
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -840,6 +840,7 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
                                 
+                                // Columna #
                                 Rectangle {
                                     Layout.preferredWidth: 50
                                     Layout.fillHeight: true
@@ -856,6 +857,7 @@ Item {
                                     }
                                 }
                                 
+                                // Columna CÓDIGO
                                 Rectangle {
                                     Layout.preferredWidth: 100
                                     Layout.fillHeight: true
@@ -872,8 +874,9 @@ Item {
                                     }
                                 }
                                 
+                                // Columna NOMBRE
                                 Rectangle {
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 280
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#dee2e6"
@@ -888,8 +891,9 @@ Item {
                                     }
                                 }
                                 
+                                // Columna PRECIO
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: 100
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#dee2e6"
@@ -904,8 +908,9 @@ Item {
                                     }
                                 }
                                 
+                                // Columna CANTIDAD
                                 Rectangle {
-                                    Layout.preferredWidth: 70
+                                    Layout.preferredWidth: 80
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#dee2e6"
@@ -920,8 +925,9 @@ Item {
                                     }
                                 }
                                 
+                                // Columna SUBTOTAL
                                 Rectangle {
-                                    Layout.preferredWidth: 90
+                                    Layout.preferredWidth: 120
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#dee2e6"
@@ -936,8 +942,9 @@ Item {
                                     }
                                 }
                                 
+                                // Columna ACCIONES
                                 Rectangle {
-                                    Layout.preferredWidth: 80
+                                    Layout.preferredWidth: 100
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#dee2e6"
@@ -945,7 +952,7 @@ Item {
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ACCIÓN"
+                                        text: "ACCIONES"
                                         font.bold: true
                                         color: "#495057"
                                         font.pixelSize: fontSmall
@@ -980,6 +987,7 @@ Item {
                                         anchors.fill: parent
                                         spacing: 0
                                         
+                                        // Columna #
                                         Rectangle {
                                             Layout.preferredWidth: 50
                                             Layout.fillHeight: true
@@ -988,15 +996,14 @@ Item {
                                             border.width: 1
                                             
                                             Label {
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.centerIn: parent
                                                 text: (index + 1).toString()
                                                 color: "#6c757d"
                                                 font.pixelSize: fontSmall
                                             }
                                         }
                                         
+                                        // Columna CÓDIGO
                                         Rectangle {
                                             Layout.preferredWidth: 100
                                             Layout.fillHeight: true
@@ -1005,9 +1012,7 @@ Item {
                                             border.width: 1
                                             
                                             Label {
-                                                anchors.left: parent.left
-                                                anchors.leftMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.centerIn: parent
                                                 text: model.codigo || ""
                                                 color: "#007bff"
                                                 font.bold: true
@@ -1015,8 +1020,9 @@ Item {
                                             }
                                         }
                                         
+                                        // Columna NOMBRE
                                         Rectangle {
-                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: 280
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
@@ -1035,6 +1041,24 @@ Item {
                                             }
                                         }
                                         
+                                        // Columna PRECIO
+                                        Rectangle {
+                                            Layout.preferredWidth: 100
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            border.color: "#dee2e6"
+                                            border.width: 1
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: model.precio ? "Bs " + model.precio.toFixed(2) : ""
+                                                color: "#28a745"
+                                                font.bold: true
+                                                font.pixelSize: fontSmall
+                                            }
+                                        }
+                                        
+                                        // Columna CANTIDAD
                                         Rectangle {
                                             Layout.preferredWidth: 80
                                             Layout.fillHeight: true
@@ -1043,27 +1067,7 @@ Item {
                                             border.width: 1
                                             
                                             Label {
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: model.precio ? "Bs " + model.precio.toFixed(2) : ""
-                                                color: "#28a745"
-                                                font.bold: true
-                                                font.pixelSize: fontSmall
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 70
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#dee2e6"
-                                            border.width: 1
-                                            
-                                            Label {
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.centerIn: parent
                                                 text: model.cantidad ? model.cantidad.toString() : ""
                                                 color: "#fd7e14"
                                                 font.bold: true
@@ -1071,17 +1075,16 @@ Item {
                                             }
                                         }
                                         
+                                        // Columna SUBTOTAL
                                         Rectangle {
-                                            Layout.preferredWidth: 90
+                                            Layout.preferredWidth: 120
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
                                             border.width: 1
                                             
                                             Label {
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.centerIn: parent
                                                 text: model.subtotal ? "Bs " + model.subtotal.toFixed(2) : ""
                                                 color: "#007bff"
                                                 font.bold: true
@@ -1089,8 +1092,9 @@ Item {
                                             }
                                         }
                                         
+                                        // Columna ACCIONES
                                         Rectangle {
-                                            Layout.preferredWidth: 120  // Aumentar ancho para dos botones
+                                            Layout.preferredWidth: 100
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             border.color: "#dee2e6"
@@ -1098,20 +1102,21 @@ Item {
                                             
                                             RowLayout {
                                                 anchors.centerIn: parent
-                                                spacing: 4
+                                                spacing: 8
                                                 
-                                                // Botón Editar
+                                                // Botón Editar con imagen PNG
                                                 Rectangle {
-                                                    width: 28
-                                                    height: 28
+                                                    width: 32
+                                                    height: 32
                                                     color: editarMouseArea.pressed ? "#2980b9" : "#3498db"
-                                                    radius: 14
+                                                    radius: 4
                                                     
-                                                    Text {
+                                                    Image {
                                                         anchors.centerIn: parent
-                                                        text: "✏️"
-                                                        color: "#ffffff"
-                                                        font.pixelSize: fontSmall
+                                                        source: "Resources/iconos/editar.svg" // Asegúrate de tener este SVG en tu proyecto
+                                                        width: 16
+                                                        height: 16
+                                                        //color: "black"
                                                     }
                                                     
                                                     MouseArea {
@@ -1133,18 +1138,19 @@ Item {
                                                     }
                                                 }
                                                 
-                                                // Botón Eliminar (modificado)
+                                                // Botón Eliminar con imagen PNG
                                                 Rectangle {
-                                                    width: 28
-                                                    height: 28
+                                                    width: 32
+                                                    height: 32
                                                     color: eliminarMouseArea.pressed ? "#c0392b" : "#E74C3C"
-                                                    radius: 14
+                                                    radius: 4
                                                     
-                                                    Text {
+                                                    Image {
                                                         anchors.centerIn: parent
-                                                        text: "🗑️"
-                                                        color: "#ffffff"
-                                                        font.pixelSize: fontSmall
+                                                        source: "Resources/iconos/eliminar.svg" // Asegúrate de tener este SVG en tu proyecto
+                                                        width: 16
+                                                        height: 16
+                                                        //color: "black"
                                                     }
                                                     
                                                     MouseArea {
@@ -1153,7 +1159,7 @@ Item {
                                                         hoverEnabled: true
                                                         
                                                         onClicked: {
-                                                            eliminarProductoDeVenta(index)  // Usar nueva función
+                                                            eliminarProductoDeVenta(index)
                                                         }
                                                         
                                                         onHoveredChanged: {

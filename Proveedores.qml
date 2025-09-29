@@ -70,10 +70,7 @@ Item {
             })
         }
         
-        function onProveedorDatosActualizados() {
-            console.log("📢 Signal: Datos de proveedores actualizados por compra")
-            // El refresh ya se hizo automáticamente
-        }
+      
     }
 
     ColumnLayout {
@@ -2031,7 +2028,7 @@ Item {
     }
     function debugProveedoresInfo() {
         if (!proveedorModel) {
-            console.log("❌ DEBUG: ProveedorModel no disponible")
+            //console.log("❌ DEBUG: ProveedorModel no disponible")
             return
         }
         

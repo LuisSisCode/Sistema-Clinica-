@@ -907,21 +907,17 @@ Item {
     
     function cargarDatosOriginales() {
         if (!usuarioModel || !usuarioModel.usuarios) return
-        
-        console.log("📄 Cargando datos originales de usuarios...")
-        
         usuariosOriginales = []
         
         for (var i = 0; i < usuarioModel.usuarios.length; i++) {
             usuariosOriginales.push(usuarioModel.usuarios[i])
         }
-        
-        console.log("✅ Usuarios originales cargados:", usuariosOriginales.length)
+
         aplicarFiltros()
     }
     
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
+        //console.log("🔍 Aplicando filtros...")
         
         usuariosFiltradosModel.clear()
         
@@ -954,7 +950,7 @@ Item {
             }
         }
         
-        console.log("✅ Filtros aplicados. Usuarios mostrados:", usuariosFiltradosModel.count)
+        //console.log("✅ Filtros aplicados. Usuarios mostrados:", usuariosFiltradosModel.count)
     }
     
     function editarUsuario(index) {

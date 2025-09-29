@@ -73,22 +73,150 @@ Item {
         updateTimer.start()
     }
     
-    // ✅ CONEXIONES MEJORADAS CON VERIFICACIÓN DE INSTANCIA
+    // ===== PROPIEDADES PARA DIÁLOGOS =====
+    property bool showNewWorkerDialog: false
+    property bool isEditMode: false
+    property int editingIndex: -1
+    property int selectedRowIndex: -1
+    
+    // ===== SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
+    signal irAConfigPersonal()
+    
+    // Distribución de columnas responsive
+    readonly property real colId: 0.08
+    readonly property real colNombre: 0.25
+    readonly property real colTipo: 0.22
+    readonly property real colEspecialidad: 0.20
+    readonly property real colMatricula: 0.15
+    readonly property real colFecha: 0.10
+
+    // ===== FUNCIONES HELPER MEJORADAS CON VERIFICACIONES ROBUSTAS =====
+    function getTiposTrabajadoresNombres() {
+        // ✅ VERIFICACIÓN ROBUSTA: Verificar modelo, propiedad Y que tenga contenido
+        if (!trabajadorModel) {
+            console.log("🔄 TrabajadorModel aún no disponible (inicializando...)")
+            return ["Todos los tipos"]
+        }
+        
+        if (!trabajadorModel.tiposTrabajador) {
+            console.log("🔄 tiposTrabajador aún no inicializado (cargando...)")
+            return ["Todos los tipos"]
+        }
+        
+        // ✅ VERIFICAR QUE SEA ARRAY Y TENGA LONGITUD
+        var tipos = trabajadorModel.tiposTrabajador
+        if (!Array.isArray(tipos) || tipos.length === 0) {
+            console.log("🔄 tiposTrabajador vacío o no es array (esperando carga...)")
+            return ["Todos los tipos"]
+        }
+        
+        // ✅ TODO OK - CONSTRUIR LISTA
+        var nombres = ["Todos los tipos"]
+        for (var i = 0; i < tipos.length; i++) {
+            if (tipos[i] && tipos[i].Tipo) {  // ✅ Verificar que el objeto y la propiedad existan
+                nombres.push(tipos[i].Tipo)
+            }
+        }
+        
+        console.log("✅ Tipos de trabajador cargados para filtro:", nombres.length - 1, "tipos")
+        return nombres
+    }
+
+    function getTiposTrabajadoresParaCombo() {
+        // ✅ VERIFICACIÓN ROBUSTA: Verificar modelo, propiedad Y que tenga contenido
+        if (!trabajadorModel) {
+            console.log("🔄 TrabajadorModel aún no disponible para combo (inicializando...)")
+            return ["Seleccionar tipo..."]
+        }
+        
+        if (!trabajadorModel.tiposTrabajador) {
+            console.log("🔄 tiposTrabajador aún no inicializado para combo (cargando...)")
+            return ["Seleccionar tipo..."]
+        }
+        
+        // ✅ VERIFICAR QUE SEA ARRAY Y TENGA LONGITUD
+        var tipos = trabajadorModel.tiposTrabajador
+        if (!Array.isArray(tipos) || tipos.length === 0) {
+            console.log("🔄 tiposTrabajador vacío o no es array para combo (esperando carga...)")
+            return ["Seleccionar tipo..."]
+        }
+        
+        // ✅ TODO OK - CONSTRUIR LISTA
+        var nombres = ["Seleccionar tipo..."]
+        for (var i = 0; i < tipos.length; i++) {
+            if (tipos[i] && tipos[i].Tipo) {  // ✅ Verificar que el objeto y la propiedad existan
+                nombres.push(tipos[i].Tipo)
+            }
+        }
+        
+        console.log("✅ Tipos de trabajador cargados para combo:", nombres.length - 1, "tipos")
+        return nombres
+    }
+
+    // ✅ NUEVA FUNCIÓN HELPER PARA VERIFICAR SI EL MODELO ESTÁ LISTO
+    function isModeloListo() {
+        return trabajadorModel && 
+               trabajadorModel.tiposTrabajador && 
+               Array.isArray(trabajadorModel.tiposTrabajador) && 
+               trabajadorModel.tiposTrabajador.length > 0
+    }
+
+    // ✅ FUNCIÓN HELPER PARA ACTUALIZACIÓN SEGURA DE COMBOS
+    function actualizarCombosSiEsNecesario() {
+        if (!isModeloListo()) {
+            console.log("🔄 Modelo aún no listo para actualizar combos")
+            return
+        }
+        
+        // Actualizar ComboBoxes solo si están disponibles
+        try {
+            if (filtroTipo && filtroTipo.model) {
+                var newModelFiltro = getTiposTrabajadoresNombres()
+                if (JSON.stringify(filtroTipo.model) !== JSON.stringify(newModelFiltro)) {
+                    filtroTipo.model = newModelFiltro
+                    console.log("🔄 Filtro combo actualizado")
+                }
+            }
+            
+            if (tipoTrabajadorCombo && tipoTrabajadorCombo.model) {
+                var newModelCombo = getTiposTrabajadoresParaCombo()
+                if (JSON.stringify(tipoTrabajadorCombo.model) !== JSON.stringify(newModelCombo)) {
+                    tipoTrabajadorCombo.model = newModelCombo
+                    console.log("🔄 Tipo trabajador combo actualizado")
+                }
+            }
+        } catch (error) {
+            console.log("⚠️ Error actualizando combos:", error)
+        }
+    }
+
+    // MODELOS
+    ListModel {
+        id: trabajadoresListModel
+    }
+
+    // ===== CONEXIONES MEJORADAS CON VERIFICACIÓN DE INSTANCIA Y TIMING =====
     Connections {
         target: trabajadorModel
         enabled: trabajadorModel !== null
         
         function onTrabajadoresChanged() {
-            console.log("✅ Trabajadores actualizados desde BD:", trabajadorModel ? trabajadorModel.totalTrabajadores : 0)
-            // Aplicar filtros inmediatamente cuando cambien los datos
-            Qt.callLater(aplicarFiltros)
+            
+            // ✅ VERIFICAR QUE EL MODELO ESTÉ COMPLETAMENTE LISTO ANTES DE APLICAR FILTROS
+            if (isModeloListo()) {
+                Qt.callLater(aplicarFiltros)
+            } else {
+                console.log("🔄 Esperando a que el modelo esté completamente listo...")
+            }
         }
         
         function onTiposTrabajadorChanged() {
-            console.log("🏷️ Tipos de trabajador actualizados:", trabajadorModel ? trabajadorModel.tiposTrabajador.length : 0)
-            // Actualizar ComboBoxes
-            if (filtroTipo) filtroTipo.model = getTiposTrabajadoresNombres()
-            if (tipoTrabajadorCombo) tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
+            console.log("🏷️ Signal: Tipos de trabajador actualizados:", trabajadorModel ? trabajadorModel.tiposTrabajador.length : 0)
+            
+            // ✅ ACTUALIZAR COMBOS DE FORMA SEGURA CON DELAY
+            Qt.callLater(function() {
+                actualizarCombosSiEsNecesario()
+            })
         }
         
         function onTrabajadorCreado(success, message) {
@@ -144,57 +272,6 @@ Item {
         function onErrorOccurred(title, message) {
             console.error("Error en TrabajadorModel:", title, message)
         }
-    }
-        
-    // ===== PROPIEDADES PARA DIÁLOGOS =====
-    property bool showNewWorkerDialog: false
-    property bool isEditMode: false
-    property int editingIndex: -1
-    property int selectedRowIndex: -1
-    
-    // ===== SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
-    signal irAConfigPersonal()
-    
-    // Distribución de columnas responsive
-    readonly property real colId: 0.08
-    readonly property real colNombre: 0.25
-    readonly property real colTipo: 0.22
-    readonly property real colEspecialidad: 0.20
-    readonly property real colMatricula: 0.15
-    readonly property real colFecha: 0.10
-
-    // ===== FUNCIONES HELPER MEJORADAS =====
-    function getTiposTrabajadoresNombres() {
-        if (!trabajadorModel || !trabajadorModel.tiposTrabajador) {
-            console.warn("⚠️ TrabajadorModel o tiposTrabajador no disponible")
-            return ["Todos los tipos"]
-        }
-        
-        var nombres = ["Todos los tipos"]
-        var tipos = trabajadorModel.tiposTrabajador
-        for (var i = 0; i < tipos.length; i++) {
-            nombres.push(tipos[i].Tipo)
-        }
-        return nombres
-    }
-
-    function getTiposTrabajadoresParaCombo() {
-        if (!trabajadorModel || !trabajadorModel.tiposTrabajador) {
-            console.warn("⚠️ TrabajadorModel o tiposTrabajador no disponible")
-            return ["Seleccionar tipo..."]
-        }
-        
-        var nombres = ["Seleccionar tipo..."]
-        var tipos = trabajadorModel.tiposTrabajador
-        for (var i = 0; i < tipos.length; i++) {
-            nombres.push(tipos[i].Tipo)
-        }
-        return nombres
-    }
-
-    // MODELOS
-    ListModel {
-        id: trabajadoresListModel
     }
 
     // ===== LAYOUT PRINCIPAL RESPONSIVO =====
@@ -924,7 +1001,7 @@ Item {
 
     // ✅ FUNCIÓN aplicarFiltros() MEJORADA CON VERIFICACIONES
     function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
+        //console.log("🔍 Aplicando filtros...")
         
         // ✅ VERIFICAR QUE TRABAJADORMODEL ESTÉ DISPONIBLE
         if (!trabajadorModel) {
@@ -940,8 +1017,6 @@ Item {
         
         // Obtener trabajadores desde el modelo
         var trabajadores = trabajadorModel.trabajadores || []
-        
-        console.log("📊 Total trabajadores disponibles:", trabajadores.length)
         
         for (var i = 0; i < trabajadores.length; i++) {
             var trabajador = trabajadores[i]
@@ -1823,7 +1898,7 @@ Item {
         }
     }
 
-    // ===== INICIALIZACIÓN MEJORADA =====
+    // ===== INICIALIZACIÓN MEJORADA CON VERIFICACIONES DE TIMING =====
     Component.onCompleted: {
         console.log("💥 Módulo Trabajadores iniciado")
         console.log("🔗 Señal irAConfigPersonal configurada para navegación")
@@ -1836,37 +1911,83 @@ Item {
         
         console.log("✅ AppController disponible")
         
-        // Esperar a que el modelo esté listo
-        Qt.callLater(function() {
+        // ✅ FUNCIÓN DE INICIALIZACIÓN DIFERIDA CON REINTENTOS
+        function inicializarModelo(reintentos) {
+            reintentos = reintentos || 0
+            const MAX_REINTENTOS = 5
+            
             if (trabajadorModel) {
                 console.log("✅ TrabajadorModel disponible")
                 
                 // ✅ DEBUG DE AUTENTICACIÓN AL INICIO
-                console.log("🔐 Verificando autenticación inicial:")
+                console.log("🔍 Verificando autenticación inicial:")
                 console.log("   - trabajadorModel.usuario_actual_id:", trabajadorModel.usuario_actual_id || "undefined")
                 console.log("   - trabajadorModel.esAdministrador():", trabajadorModel.esAdministrador ? trabajadorModel.esAdministrador() : "undefined")
                 
-                // Recargar datos para asegurar que están actualizados
-                if (trabajadorModel.recargarDatos) {
-                    trabajadorModel.recargarDatos()
+                // ✅ VERIFICAR SI LOS DATOS YA ESTÁN LISTOS
+                if (isModeloListo()) {
+                    console.log("✅ Modelo ya está listo con", trabajadorModel.tiposTrabajador.length, "tipos")
+                    
+                    // Configurar ComboBoxes inmediatamente
+                    actualizarCombosSiEsNecesario()
+                    
+                    // Aplicar filtros inicial
+                    aplicarFiltros()
+                    
+                    console.log("🎯 Inicialización completa inmediata")
+                } else {
+                    console.log("🔄 Modelo disponible pero datos aún cargando, esperando...")
+                    
+                    // Recargar datos para asegurar que estén actualizados
+                    if (trabajadorModel.recargarDatos) {
+                        trabajadorModel.recargarDatos()
+                    }
+                    
+                    // Timer para verificar cuando estén listos los datos
+                    var checkTimer = Qt.createQmlObject(`
+                        import QtQuick 2.15
+                        Timer {
+                            interval: 200
+                            repeat: true
+                            running: true
+                            
+                            onTriggered: {
+                                if (trabajadorModel && 
+                                    trabajadorModel.tiposTrabajador && 
+                                    trabajadorModel.tiposTrabajador.length > 0) {
+                                    
+                                    console.log("✅ Datos finalmente listos -", trabajadorModel.tiposTrabajador.length, "tipos cargados")
+                                    
+                                    // Configurar ComboBoxes
+                                    actualizarCombosSiEsNecesario()
+                                    
+                                    // Aplicar filtros inicial
+                                    aplicarFiltros()
+                                    
+                                    console.log("🎯 Inicialización completa diferida")
+                                    
+                                    // Detener timer
+                                    running = false
+                                    destroy()
+                                }
+                            }
+                        }
+                    `, trabajadoresRoot)
                 }
                 
-                // Configurar ComboBoxes
-                if (filtroTipo) {
-                    filtroTipo.model = getTiposTrabajadoresNombres()
-                }
-                
-                if (tipoTrabajadorCombo) {
-                    tipoTrabajadorCombo.model = getTiposTrabajadoresParaCombo()
-                }
-                
-                // ✅ APLICAR FILTROS INICIAL
-                aplicarFiltros()
-                
-                console.log("🎯 Inicialización completa")
+            } else if (reintentos < MAX_REINTENTOS) {
+                console.log(`🔄 TrabajadorModel no disponible, reintento ${reintentos + 1}/${MAX_REINTENTOS}`)
+                Qt.callLater(function() {
+                    inicializarModelo(reintentos + 1)
+                })
             } else {
-                console.error("❌ TrabajadorModel no disponible")
+                console.error("❌ TrabajadorModel no disponible después de", MAX_REINTENTOS, "reintentos")
             }
+        }
+        
+        // ✅ INICIALIZAR CON DELAY MÍNIMO
+        Qt.callLater(function() {
+            inicializarModelo(0)
         })
     }
 }

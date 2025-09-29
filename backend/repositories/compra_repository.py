@@ -628,7 +628,7 @@ class CompraRepository(BaseRepository):
         result = self._execute_query(query, use_cache=False)
         
         if result:
-            print(f"📋 get_proveedores_activos: {len(result)} proveedores obtenidos")
+            #print(f"📋 get_proveedores_activos: {len(result)} proveedores obtenidos")
             for proveedor in result:
                 print(f"  - {proveedor.get('Nombre', 'Sin nombre')} (ID: {proveedor.get('id', 'N/A')}, Estado: {proveedor.get('Estado', 'N/A')})")
         else:
@@ -882,3 +882,234 @@ class CompraRepository(BaseRepository):
                 'Compra_Maxima': 0,
                 'Proveedores_Distintos': 0
             }
+        
+    @ExceptionHandler.handle_exception
+    def actualizar_compra(self, compra_id: int, proveedor_id: int, usuario_id: int, 
+                        items_compra: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Actualiza una compra existente - NUEVA FUNCIONALIDAD
+        
+        Args:
+            compra_id: ID de la compra a actualizar
+            proveedor_id: Nuevo ID del proveedor
+            usuario_id: ID del usuario que realiza la actualización
+            items_compra: Nueva lista de items
+            
+        Returns:
+            Información completa de la compra actualizada
+        """
+        validate_required(compra_id, "compra_id")
+        validate_required(proveedor_id, "proveedor_id")
+        validate_required(usuario_id, "usuario_id")
+        validate_required(items_compra, "items_compra")
+        
+        if not items_compra:
+            raise CompraError("No se proporcionaron items para actualizar")
+        
+        print(f"📝 ACTUALIZANDO COMPRA {compra_id} - Proveedor: {proveedor_id}, Items: {len(items_compra)}")
+        
+        try:
+            # ===== FASE 1: VALIDAR QUE LA COMPRA EXISTE =====
+            compra_actual = self.get_compra_completa(compra_id)
+            if not compra_actual:
+                raise CompraError(f"Compra {compra_id} no encontrada")
+            
+            print(f"✅ Compra encontrada - Total original: ${compra_actual['Total']}")
+            
+            # ===== FASE 2: VALIDAR Y PREPARAR NUEVOS ITEMS =====
+            items_preparados = []
+            total_compra = Decimal('0.00')
+            
+            for i, item in enumerate(items_compra):
+                try:
+                    item_preparado = self._validar_y_preparar_item(item)
+                    items_preparados.append(item_preparado)
+                    total_compra += Decimal(str(item_preparado['precio_unitario']))
+                    print(f"  ✅ Item {i+1}: {item_preparado['codigo']} - ${item_preparado['precio_unitario']}")
+                except Exception as e:
+                    raise CompraError(f"Error en item {i+1} ({item.get('codigo', 'sin código')}): {str(e)}")
+            
+            print(f"💰 Nuevo total calculado: ${total_compra}")
+            
+            # ===== FASE 3: ELIMINAR DETALLES Y LOTES ANTERIORES =====
+            print("🗑️ Eliminando detalles y lotes anteriores...")
+            
+            # Obtener lotes asociados antes de eliminar detalles
+            lotes_query = """
+            SELECT DISTINCT dc.Id_Lote
+            FROM DetalleCompra dc 
+            WHERE dc.Id_Compra = ?
+            """
+            lotes_antiguos = self._execute_query(lotes_query, (compra_id,))
+            
+            # Eliminar detalles de compra
+            delete_detalles_query = "DELETE FROM DetalleCompra WHERE Id_Compra = ?"
+            detalles_eliminados = self._execute_query(delete_detalles_query, (compra_id,), 
+                                                    fetch_all=False, use_cache=False)
+            print(f"  ✅ {detalles_eliminados} detalles eliminados")
+            
+            # Eliminar lotes antiguos (esto actualiza automáticamente el stock)
+            lotes_eliminados = 0
+            for lote_info in lotes_antiguos:
+                try:
+                    lote_id = lote_info['Id_Lote']
+                    delete_lote_query = "DELETE FROM Lote WHERE id = ?"
+                    resultado = self._execute_query(delete_lote_query, (lote_id,), 
+                                                fetch_all=False, use_cache=False)
+                    if resultado > 0:
+                        lotes_eliminados += 1
+                        print(f"    ✅ Lote {lote_id} eliminado")
+                except Exception as e:
+                    print(f"    ⚠️ Error eliminando lote {lote_id}: {str(e)}")
+            
+            print(f"  ✅ {lotes_eliminados} lotes eliminados")
+            
+            # ===== FASE 4: ACTUALIZAR DATOS PRINCIPALES DE LA COMPRA =====
+            print("📝 Actualizando datos principales...")
+            
+            update_compra_query = """
+            UPDATE Compra 
+            SET Id_Proveedor = ?, Total = ?, Fecha = GETDATE()
+            WHERE id = ?
+            """
+            
+            resultado_update = self._execute_query(
+                update_compra_query, 
+                (proveedor_id, float(total_compra), compra_id),
+                fetch_all=False, use_cache=False
+            )
+            
+            if resultado_update <= 0:
+                raise CompraError("No se pudo actualizar la compra principal")
+            
+            print(f"  ✅ Compra principal actualizada")
+            
+            # ===== FASE 5: CREAR NUEVOS LOTES Y DETALLES =====
+            print(f"📦 Creando nuevos lotes y detalles...")
+            lotes_creados = []
+            
+            for i, item in enumerate(items_preparados):
+                try:
+                    print(f"  📦 Procesando item {i+1}/{len(items_preparados)}: {item['codigo']}")
+                    lote_info = self._procesar_item_con_lote(compra_id, item)
+                    lotes_creados.append(lote_info)
+                    print(f"  ✅ Item {i+1} procesado - Lote: {lote_info['lote_id']}")
+                    
+                except Exception as item_error:
+                    print(f"  ❌ ERROR en item {i+1} ({item['codigo']}): {str(item_error)}")
+                    # ROLLBACK: eliminar lotes ya creados en esta actualización
+                    self._rollback_lotes_creados_actualizacion(lotes_creados)
+                    raise CompraError(f"Error procesando item {item['codigo']}: {str(item_error)}")
+            
+            # ===== FASE 6: VERIFICAR INTEGRIDAD FINAL =====
+            if len(lotes_creados) != len(items_preparados):
+                print(f"❌ ERROR DE INTEGRIDAD: Items esperados: {len(items_preparados)}, Lotes creados: {len(lotes_creados)}")
+                self._rollback_lotes_creados_actualizacion(lotes_creados)
+                raise CompraError("Error de integridad: No todos los items se procesaron correctamente")
+            
+            # ===== FASE 7: OBTENER RESULTADO FINAL =====
+            try:
+                compra_actualizada = self.get_compra_completa(compra_id)
+                
+                if not compra_actualizada:
+                    raise CompraError("Error obteniendo datos actualizados de la compra")
+                
+                print(f"🎉 COMPRA ACTUALIZADA EXITOSAMENTE")
+                print(f"   ID: {compra_id}")
+                print(f"   Total anterior: ${compra_actual['Total']}")
+                print(f"   Total nuevo: ${total_compra}")
+                print(f"   Items: {len(lotes_creados)}")
+                print(f"   Lotes creados: {[l['lote_id'] for l in lotes_creados]}")
+                
+                return compra_actualizada
+                
+            except Exception as final_error:
+                print(f"❌ ERROR obteniendo compra actualizada: {str(final_error)}")
+                # Retornar datos básicos si hay problemas obteniendo detalles
+                return {
+                    'id': compra_id,
+                    'Total': float(total_compra),
+                    'detalles': lotes_creados,
+                    'error_detalle': str(final_error)
+                }
+        
+        except Exception as e:
+            print(f"❌ ERROR GENERAL EN ACTUALIZAR_COMPRA: {str(e)}")
+            raise CompraError(f"Error actualizando compra: {str(e)}")
+
+    def _rollback_lotes_creados_actualizacion(self, lotes_creados: List[Dict[str, Any]]):
+        """
+        Rollback específico para actualización: elimina solo lotes recién creados
+        """
+        print(f"🔄 EJECUTANDO ROLLBACK ACTUALIZACIÓN - {len(lotes_creados)} lotes")
+        
+        try:
+            # Solo eliminar lotes creados en esta actualización
+            for lote_info in lotes_creados:
+                try:
+                    lote_id = lote_info.get('lote_id')
+                    if lote_id:
+                        # Eliminar detalle primero
+                        delete_detalle_query = "DELETE FROM DetalleCompra WHERE Id_Lote = ?"
+                        self._execute_query(delete_detalle_query, (lote_id,), fetch_all=False, use_cache=False)
+                        
+                        # Eliminar lote
+                        delete_lote_query = "DELETE FROM Lote WHERE id = ?"
+                        self._execute_query(delete_lote_query, (lote_id,), fetch_all=False, use_cache=False)
+                        print(f"  ✅ Lote {lote_id} eliminado en rollback")
+                        
+                except Exception as lote_error:
+                    print(f"  ❌ Error en rollback lote {lote_info.get('lote_id', 'N/A')}: {str(lote_error)}")
+            
+            print(f"🎯 ROLLBACK ACTUALIZACIÓN COMPLETADO")
+            
+        except Exception as rollback_error:
+            print(f"❌ ERROR CRÍTICO EN ROLLBACK ACTUALIZACIÓN: {str(rollback_error)}")
+
+    def crear_proveedor(self, nombre: str, direccion: str) -> int:
+        """Crea un nuevo proveedor - MÉTODO EXISTENTE MEJORADO"""
+        try:
+            # Verificar si ya existe
+            if self.exists_proveedor(nombre):
+                raise CompraError(f"Ya existe un proveedor con el nombre: {nombre}")
+            
+            # Crear proveedor
+            proveedor_data = {
+                'Nombre': nombre.strip(),
+                'Direccion': direccion.strip()
+            }
+            
+            proveedor_id = self.insert(proveedor_data, table_override='Proveedor')
+            
+            if proveedor_id and proveedor_id > 0:
+                print(f"🏢 Proveedor creado - ID: {proveedor_id}, Nombre: {nombre}")
+                
+                # Invalidar caché de proveedores
+                if hasattr(self, '_cache_manager'):
+                    self._cache_manager.invalidate_pattern('proveedores*')
+                
+                return proveedor_id
+            else:
+                raise CompraError("Error insertando proveedor en base de datos")
+                
+        except Exception as e:
+            print(f"❌ Error creando proveedor {nombre}: {str(e)}")
+            raise CompraError(f"Error creando proveedor: {str(e)}")
+
+    def get_proveedor_por_id(self, proveedor_id: int) -> Dict[str, Any]:
+        """Obtiene un proveedor específico por ID"""
+        if proveedor_id <= 0:
+            return {}
+        
+        query = """
+        SELECT p.*, 
+            COUNT(c.id) as Total_Compras,
+            ISNULL(SUM(c.Total), 0) as Monto_Total,
+            ISNULL(MAX(c.Fecha), NULL) as Ultima_Compra
+        FROM Proveedor p
+        LEFT JOIN Compra c ON p.id = c.Id_Proveedor
+        WHERE p.id = ?
+        GROUP BY p.id, p.Nombre, p.Direccion
+        """
+        
+        return self._execute_query(query, (proveedor_id,), fetch_one=True) or {}

@@ -301,7 +301,7 @@ class ConsultaRepository(BaseRepository):
         """
         
         result = self._execute_query(query, (limit,))
-        print(f"🔍 Query devolvió {len(result)} consultas de BD")
+        #print(f"🔍 Query devolvió {len(result)} consultas de BD")
         return result
     
     def get_consultation_by_id_complete(self, consulta_id: int) -> Optional[Dict[str, Any]]:
@@ -884,14 +884,16 @@ class ConsultaRepository(BaseRepository):
     def validate_consultation_exists(self, consulta_id: int) -> bool:
         """Valida que la consulta existe"""
         return self.exists('id', consulta_id)
+    
     def _encontrar_mejor_coincidencia_nombre(self, nombre: str, apellido_paterno: str, 
-                                      apellido_materno: str, candidatos: List[Dict]) -> Optional[Dict]:
+                                  apellido_materno: str, candidatos: List[Dict]) -> Optional[Dict]:
         """
-        ✅ NUEVO MÉTODO - Encuentra la mejor coincidencia por nombre entre los candidatos
+        ✅ MÉTODO MEJORADO - Encuentra la mejor coincidencia por nombre entre los candidatos
+        Más tolerante con coincidencias para evitar duplicados
         
         Prioridades de coincidencia:
         1. Coincidencia exacta completa
-        2. Coincidencia de nombre + apellido paterno
+        2. Coincidencia de nombre + apellido paterno (ignorando apellido materno)
         3. Coincidencia similar con tolerancia a errores menores
         """
         if not candidatos:
@@ -920,20 +922,25 @@ class ConsultaRepository(BaseRepository):
                 print(f"🎯 Coincidencia exacta completa: {candidato['nombre_completo']}")
                 return candidato
             
-            # ✅ COINCIDENCIA NOMBRE + APELLIDO PATERNO (alta prioridad)
+            # ✅ COINCIDENCIA NOMBRE + APELLIDO PATERNO (alta prioridad) - IGNORAR APELLIDO MATERNO
             if nombre_db == nombre_target and apellido_p_db == apellido_p_target:
-                score = 90
+                score = 95  # ✅ AUMENTADO para dar más prioridad
                 print(f"🎯 Coincidencia nombre + apellido paterno: {candidato['nombre_completo']} (score: {score})")
             
-            # ✅ COINCIDENCIA CON TOLERANCIA (prioridad media)
+            # ✅ COINCIDENCIA FLEXIBLE: nombre + apellido con tolerancia
             elif (self._nombres_similares(nombre_db, nombre_target) and 
                 self._nombres_similares(apellido_p_db, apellido_p_target)):
-                score = 70
+                score = 85  # ✅ AUMENTADO para ser más tolerante
                 print(f"🎯 Coincidencia similar: {candidato['nombre_completo']} (score: {score})")
+            
+            # ✅ NUEVA: Coincidencia solo por nombre completo concatenado
+            elif self._nombres_similares(f"{nombre_db} {apellido_p_db}", f"{nombre_target} {apellido_p_target}"):
+                score = 80
+                print(f"🎯 Coincidencia nombre completo: {candidato['nombre_completo']} (score: {score})")
             
             # ✅ COINCIDENCIA PARCIAL (baja prioridad)
             elif (nombre_db == nombre_target or apellido_p_db == apellido_p_target):
-                score = 50
+                score = 60  # ✅ AUMENTADO ligeramente
                 print(f"🎯 Coincidencia parcial: {candidato['nombre_completo']} (score: {score})")
             
             # Actualizar mejor candidato
@@ -941,24 +948,30 @@ class ConsultaRepository(BaseRepository):
                 mejor_score = score
                 mejor_candidato = candidato
         
-        # ✅ RETORNAR SOLO SI LA COINCIDENCIA ES SUFICIENTEMENTE BUENA
-        if mejor_score >= 70:  # Umbral mínimo de confianza
+        # ✅ UMBRAL REDUCIDO para ser más tolerante
+        if mejor_score >= 60:  # ✅ REDUCIDO de 70 a 60
             print(f"✅ Mejor candidato seleccionado: {mejor_candidato['nombre_completo']} (score: {mejor_score})")
             return mejor_candidato
         else:
             print(f"❌ Ningún candidato cumple el umbral mínimo (mejor score: {mejor_score})")
             return None
         
-    def _nombres_similares(self, nombre1: str, nombre2: str, tolerancia: float = 0.8) -> bool:
+    def _nombres_similares(self, nombre1: str, nombre2: str, tolerancia: float = 0.75) -> bool:
         """
-        ✅ NUEVO MÉTODO - Compara similaridad entre nombres con tolerancia a errores menores
-        
-        Usa ratio de similaridad simple para detectar errores de tipeo
+        ✅ MÉTODO MEJORADO - Compara similaridad entre nombres con tolerancia a errores menores
+        Más permisivo para evitar duplicados
         """
         if not nombre1 or not nombre2:
             return False
         
         if nombre1 == nombre2:
+            return True
+        
+        # ✅ TOLERANCIA MEJORADA para nombres con acentos o ligeras diferencias
+        nombre1_norm = self._normalizar_texto_completo(nombre1)
+        nombre2_norm = self._normalizar_texto_completo(nombre2)
+        
+        if nombre1_norm == nombre2_norm:
             return True
         
         # Similaridad simple basada en caracteres comunes
@@ -968,8 +981,8 @@ class ConsultaRepository(BaseRepository):
         if len_max == 0:
             return False
         
-        # Si uno es significativamente más largo que el otro, no son similares
-        if len_min / len_max < 0.6:
+        # ✅ MÁS TOLERANTE: Si uno es significativamente más largo que el otro
+        if len_min / len_max < 0.5:  # ✅ REDUCIDO de 0.6 a 0.5
             return False
         
         # Contar caracteres comunes en posiciones similares
@@ -980,6 +993,37 @@ class ConsultaRepository(BaseRepository):
         
         ratio = caracteres_comunes / len_max
         return ratio >= tolerancia
+    
+    def _normalizar_texto_completo(self, texto: str) -> str:
+        """
+        ✅ NUEVO MÉTODO - Normalización completa de texto para comparaciones
+        Elimina acentos, ñ, mayúsculas y espacios extra
+        """
+        if not texto:
+            return ""
+        
+        # Diccionario de reemplazos para caracteres especiales
+        reemplazos = {
+            'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ā': 'a', 'ă': 'a', 'ą': 'a',
+            'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e', 'ē': 'e', 'ĕ': 'e', 'ę': 'e', 
+            'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i', 'ī': 'i', 'ĭ': 'i', 'į': 'i',
+            'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'ō': 'o', 'ŏ': 'o', 'ő': 'o',
+            'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u', 'ū': 'u', 'ŭ': 'u', 'ů': 'u', 'ű': 'u', 'ų': 'u',
+            'ñ': 'n', 'ň': 'n', 'ņ': 'n',
+            'ç': 'c', 'ć': 'c', 'č': 'c', 'ĉ': 'c', 'ċ': 'c',
+            'ß': 'ss'
+        }
+        
+        texto_normalizado = texto.lower().strip()
+        
+        # Aplicar reemplazos
+        for original, reemplazo in reemplazos.items():
+            texto_normalizado = texto_normalizado.replace(original, reemplazo)
+        
+        # Limpiar espacios múltiples
+        texto_normalizado = ' '.join(texto_normalizado.split())
+        
+        return texto_normalizado
     # ===============================
     # REPORTES - CORREGIDOS
     # ===============================
@@ -1034,6 +1078,338 @@ class ConsultaRepository(BaseRepository):
             consultation['fecha_formato'] = consultation['Fecha'].strftime('%d/%m/%Y %H:%M')
         
         return consultations
+    
+    def _detectar_tipo_busqueda(self, termino: str) -> str:
+        """
+        Detecta automáticamente si el término de búsqueda es cédula o nombre
+        
+        Returns:
+            'cedula' si es número de cédula
+            'nombre' si es texto/nombre
+            'mixto' si contiene números y letras
+        """
+        if not termino or len(termino.strip()) < 2:
+            return 'invalido'
+        
+        termino_limpio = termino.strip()
+        
+        # Verificar si es solo números (posible cédula)
+        if termino_limpio.replace(' ', '').isdigit():
+            return 'cedula'
+        
+        # Verificar si contiene solo letras y espacios (nombre)
+        if all(c.isalpha() or c.isspace() for c in termino_limpio):
+            return 'nombre'
+        
+        # Si contiene números y letras
+        return 'mixto'
+    
+    def _es_cedula_valida(self, termino: str) -> bool:
+        """
+        Valida si un término tiene formato válido de cédula
+        """
+        if not termino:
+            return False
+        
+        # Limpiar espacios y caracteres especiales
+        cedula_limpia = ''.join(c for c in termino if c.isdigit())
+        
+        # Debe tener entre 6 y 12 dígitos
+        if len(cedula_limpia) < 6 or len(cedula_limpia) > 12:
+            return False
+        
+        return True
+    
+    def _normalizar_termino_busqueda(self, termino: str) -> str:
+        """
+        Normaliza término de búsqueda eliminando caracteres especiales
+        """
+        if not termino:
+            return ""
+        
+        # Convertir a minúsculas y quitar espacios extra
+        normalizado = ' '.join(termino.strip().lower().split())
+        
+        # Eliminar caracteres especiales comunes
+        caracteres_especiales = ['ñ', 'á', 'é', 'í', 'ó', 'ú']
+        reemplazos = ['n', 'a', 'e', 'i', 'o', 'u']
+        
+        for i, char in enumerate(caracteres_especiales):
+            normalizado = normalizado.replace(char, reemplazos[i])
+        
+        return normalizado
+    
+    def _analizar_termino_nombre(self, termino: str) -> Dict[str, str]:
+        """
+        Analiza un nombre completo y lo separa en componentes - VERSIÓN MEJORADA
+        Considera nombres compuestos típicos latinoamericanos
+        
+        Returns:
+            Dict con 'nombre', 'apellido_paterno', 'apellido_materno'
+        """
+        if not termino:
+            return {'nombre': '', 'apellido_paterno': '', 'apellido_materno': ''}
+        
+        # Limpiar y dividir por espacios
+        palabras = [p.strip().title() for p in termino.strip().split() if p.strip()]
+        
+        if len(palabras) == 0:
+            return {'nombre': '', 'apellido_paterno': '', 'apellido_materno': ''}
+        
+        # Palabras conectoras que suelen ser parte de apellidos
+        conectores = {'de', 'del', 'de la', 'van', 'von', 'da', 'dos', 'las', 'los', 'mc', 'mac'}
+        
+        # ✅ NOMBRES COMUNES QUE SUELEN IR JUNTOS (nombres compuestos)
+        nombres_compuestos_comunes = {
+            'ana', 'maria', 'jose', 'juan', 'luis', 'carlos', 'miguel', 'angel',
+            'pedro', 'antonio', 'francisco', 'manuel', 'rafael', 'alejandro',
+            'fernando', 'ricardo', 'roberto', 'eduardo', 'daniel', 'david',
+            'rosa', 'carmen', 'elena', 'laura', 'patricia', 'sandra', 'monica',
+            'claudia', 'gloria', 'martha', 'teresa', 'angela', 'beatriz',
+            'luz', 'esperanza', 'dolores', 'pilar', 'mercedes', 'socorro'
+        }
+        
+        # Análisis según cantidad de palabras
+        if len(palabras) == 1:
+            return {
+                'nombre': palabras[0],
+                'apellido_paterno': '',
+                'apellido_materno': ''
+            }
+        elif len(palabras) == 2:
+            return {
+                'nombre': palabras[0],
+                'apellido_paterno': palabras[1],
+                'apellido_materno': ''
+            }
+        elif len(palabras) == 3:
+            # ✅ LÓGICA MEJORADA PARA 3 PALABRAS
+            primera = palabras[0].lower()
+            segunda = palabras[1].lower()
+            
+            # Si las dos primeras son nombres comunes → nombre compuesto
+            if (primera in nombres_compuestos_comunes and 
+                segunda in nombres_compuestos_comunes):
+                return {
+                    'nombre': f"{palabras[0]} {palabras[1]}",
+                    'apellido_paterno': palabras[2],
+                    'apellido_materno': ''
+                }
+            else:
+                # Patrón normal: Nombre + Apellido Paterno + Apellido Materno
+                return {
+                    'nombre': palabras[0],
+                    'apellido_paterno': palabras[1],
+                    'apellido_materno': palabras[2]
+                }
+                
+        elif len(palabras) == 4:
+            # ✅ LÓGICA MEJORADA PARA 4 PALABRAS
+            primera = palabras[0].lower()
+            segunda = palabras[1].lower()
+            tercera = palabras[2].lower()
+            
+            # Caso 1: Dos nombres + dos apellidos (más común)
+            if (primera in nombres_compuestos_comunes and 
+                segunda in nombres_compuestos_comunes):
+                return {
+                    'nombre': f"{palabras[0]} {palabras[1]}",
+                    'apellido_paterno': palabras[2],
+                    'apellido_materno': palabras[3]
+                }
+            
+            # Caso 2: Un nombre + apellido con conector
+            if tercera in conectores:
+                return {
+                    'nombre': palabras[0],
+                    'apellido_paterno': palabras[1],
+                    'apellido_materno': f"{palabras[2]} {palabras[3]}"
+                }
+            
+            # Caso 3: Nombre + apellido compuesto + apellido simple
+            # Ejemplo: "Ana Flores Gutierrez Martinez"
+            else:
+                # Asumir que es: Nombre + Apellido_Paterno + Apellido_Materno (compuesto)
+                return {
+                    'nombre': palabras[0],
+                    'apellido_paterno': palabras[1],
+                    'apellido_materno': f"{palabras[2]} {palabras[3]}"
+                }
+        
+        else:
+            # ✅ 5 O MÁS PALABRAS - LÓGICA COMPLEJA
+            nombre_parts = []
+            apellido_parts = []
+            en_apellidos = False
+            
+            for i, palabra in enumerate(palabras):
+                palabra_lower = palabra.lower()
+                
+                # Si es un conector, probablemente estamos en apellidos
+                if palabra_lower in conectores:
+                    en_apellidos = True
+                    apellido_parts.append(palabra)
+                elif en_apellidos:
+                    apellido_parts.append(palabra)
+                else:
+                    # ✅ MEJORAR: Detectar cuándo termina el nombre
+                    if i < 2:  # Máximo 2 nombres
+                        # Si es nombre común, puede ser parte del nombre compuesto
+                        if (palabra_lower in nombres_compuestos_comunes or 
+                            (i == 1 and palabras[0].lower() in nombres_compuestos_comunes)):
+                            nombre_parts.append(palabra)
+                        else:
+                            # Ya no es nombre, empezar apellidos
+                            en_apellidos = True
+                            apellido_parts.append(palabra)
+                    else:
+                        # A partir del 3er elemento, son apellidos
+                        en_apellidos = True
+                        apellido_parts.append(palabra)
+            
+            # Si no se identificaron apellidos claramente
+            if not apellido_parts and len(palabras) >= 3:
+                # Estrategia de respaldo: últimas 2 palabras son apellidos
+                nombre_parts = palabras[:-2]
+                apellido_parts = palabras[-2:]
+            elif not apellido_parts:
+                # Solo hay nombres
+                nombre_parts = palabras[:-1]  
+                apellido_parts = [palabras[-1]]
+            
+            # Construir resultado
+            nombre = ' '.join(nombre_parts) if nombre_parts else palabras[0]
+            
+            if len(apellido_parts) >= 2:
+                apellido_paterno = apellido_parts[0]
+                apellido_materno = ' '.join(apellido_parts[1:])
+            elif len(apellido_parts) == 1:
+                apellido_paterno = apellido_parts[0]
+                apellido_materno = ''
+            else:
+                # Respaldo para casos extremos
+                apellido_paterno = palabras[1] if len(palabras) > 1 else ''
+                apellido_materno = palabras[2] if len(palabras) > 2 else ''
+            
+            return {
+                'nombre': nombre,
+                'apellido_paterno': apellido_paterno,
+                'apellido_materno': apellido_materno
+            }
+    
+    def buscar_paciente_unificado(self, termino_busqueda: str, limite: int = 5) -> List[Dict[str, Any]]:
+        """
+        Búsqueda unificada que detecta automáticamente el tipo de entrada
+        
+        Args:
+            termino_busqueda: Término a buscar (cédula o nombre)
+            limite: Máximo número de resultados
+            
+        Returns:
+            Lista de pacientes encontrados con score de relevancia
+        """
+        try:
+            if not termino_busqueda or len(termino_busqueda.strip()) < 2:
+                return []
+            
+            termino_limpio = termino_busqueda.strip()
+            tipo_busqueda = self._detectar_tipo_busqueda(termino_limpio)
+            
+            print(f"🔍 Búsqueda unificada: '{termino_limpio}' - Tipo: {tipo_busqueda}")
+            
+            resultados = []
+            
+            if tipo_busqueda == 'cedula':
+                # Búsqueda por cédula
+                resultados = self._buscar_por_cedula_mejorado(termino_limpio, limite)
+            elif tipo_busqueda == 'nombre':
+                # Búsqueda por nombre
+                resultados = self._buscar_por_nombre_mejorado(termino_limpio, limite)
+            elif tipo_busqueda == 'mixto':
+                # Búsqueda mixta - intentar ambos métodos
+                resultados_cedula = self._buscar_por_cedula_mejorado(termino_limpio, limite//2)
+                resultados_nombre = self._buscar_por_nombre_mejorado(termino_limpio, limite//2)
+                resultados = resultados_cedula + resultados_nombre
+            
+            # Ordenar por relevancia y limitar resultados
+            resultados_ordenados = sorted(resultados, key=lambda x: x.get('relevancia', 999))
+            return resultados_ordenados[:limite]
+            
+        except Exception as e:
+            print(f"❌ Error en búsqueda unificada: {e}")
+            return []
+        
+    def _buscar_por_cedula_mejorado(self, cedula: str, limite: int) -> List[Dict[str, Any]]:
+        """Búsqueda mejorada por cédula con scoring"""
+        if not self._es_cedula_valida(cedula):
+            return []
+        
+        cedula_numeros = ''.join(c for c in cedula if c.isdigit())
+        
+        # Búsqueda exacta primero
+        query_exacta = """
+        SELECT 
+            id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+            CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo,
+            1 as relevancia
+        FROM Pacientes
+        WHERE Cedula = ?
+        """
+        
+        resultados_exactos = self._execute_query(query_exacta, (cedula_numeros,))
+        
+        if resultados_exactos:
+            return resultados_exactos
+        
+        # Búsqueda parcial si no hay exacta
+        query_parcial = """
+        SELECT TOP (?)
+            id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+            CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo,
+            2 as relevancia
+        FROM Pacientes
+        WHERE Cedula LIKE ?
+        ORDER BY 
+            CASE WHEN Cedula LIKE ? THEN 1 ELSE 2 END,
+            LEN(Cedula),
+            Cedula
+        """
+        
+        patron_inicio = f"{cedula_numeros}%"
+        patron_contiene = f"%{cedula_numeros}%"
+        
+        return self._execute_query(query_parcial, (limite, patron_contiene, patron_inicio))
+    
+    def _buscar_por_nombre_mejorado(self, nombre: str, limite: int) -> List[Dict[str, Any]]:
+        """Búsqueda mejorada por nombre con scoring"""
+        termino_normalizado = self._normalizar_termino_busqueda(nombre)
+        
+        # Búsqueda por coincidencia en nombre completo
+        query = """
+        SELECT TOP (?)
+            id, Nombre, Apellido_Paterno, Apellido_Materno, Cedula,
+            CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as nombre_completo,
+            CASE 
+                WHEN LOWER(CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, ''))) LIKE ? THEN 1
+                WHEN LOWER(Nombre) LIKE ? OR LOWER(Apellido_Paterno) LIKE ? THEN 2
+                ELSE 3
+            END as relevancia
+        FROM Pacientes
+        WHERE 
+            LOWER(Nombre) LIKE ? OR 
+            LOWER(Apellido_Paterno) LIKE ? OR 
+            LOWER(Apellido_Materno) LIKE ? OR
+            LOWER(CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, ''))) LIKE ?
+        ORDER BY relevancia, Nombre, Apellido_Paterno
+        """
+        
+        patron_exacto = f"%{termino_normalizado}%"
+        patron_palabra = f"%{termino_normalizado}%"
+        
+        return self._execute_query(query, (
+            limite, patron_exacto, patron_palabra, patron_palabra,
+            patron_palabra, patron_palabra, patron_palabra, patron_exacto
+        ))
     
     # ===============================
     # CACHÉ

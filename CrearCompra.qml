@@ -3,17 +3,20 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-// Componente independiente para crear nueva compra - SIN gestión de proveedores
+// Componente para crear/editar compras - MEJORADO CON EDICIÓN
 Item {
     id: crearCompraRoot
     
-    // Propiedades de comunicación con el componente padre
-    property var inventarioModel: parent.inventarioModel || nul
+    // Propiedades de comunicación
+    property var inventarioModel: parent.inventarioModel || null
     property var ventaModel: null
     property var compraModel: null
-    property bool modoEdicion: false
-    property int compraIdEdicion: 0
-    property var datosCompraOriginal: null
+    
+    // NUEVAS PROPIEDADES PARA EDICIÓN
+    property bool modoEdicion: compraModel ? compraModel.modo_edicion : false
+    property int compraIdEdicion: compraModel ? compraModel.compra_id_edicion : 0
+    property var datosOriginales: compraModel ? compraModel.datos_originales : {}
+    
     // Señales para comunicación
     signal compraCompletada()
     signal cancelarCompra()
@@ -48,8 +51,9 @@ Item {
     readonly property real radiusMedium: 8
     readonly property real radiusLarge: 12
 
-    // Colores del tema
-    property color primaryColor: "#273746"
+    // COLORES DINÁMICOS SEGÚN MODO
+    property color primaryColor: modoEdicion ? "#2E7D32" : "#273746"  // Verde para edición
+    property color accentColor: modoEdicion ? "#FF9800" : "#3498db"   // Naranja para edición
     property color successColor: "#27ae60"
     property color warningColor: "#f39c12"
     property color dangerColor: "#e74c3c"
@@ -63,37 +67,67 @@ Item {
     property bool showSuccessMessage: false
     property string successMessage: ""
     property bool showProductDropdown: false
+    property bool showComparisonPanel: false  // NUEVO
     
-    // Datos para nueva compra
+    // Datos para compra
     property string newPurchaseProvider: ""
     property string newPurchaseUser: "Dr. Admin"
-    property string newPurchaseDate: "04/07/2025"
-    property string newPurchaseId: "C" + String((compraModel ? compraModel.total_compras_mes : 0) + 1).padStart(3, '0')
+    property string newPurchaseDate: ""
+    property string newPurchaseId: ""
     property real newPurchaseTotal: 0.0
-    property string newPurchaseDetails: ""
     
     // Campos de entrada para productos
     property string inputProductCode: ""
     property string inputProductName: ""
     property int inputStock: 0
-    property real inputPurchasePrice: 0.0  // ESTE ES EL COSTO TOTAL DEL PRODUCTO (NO UNITARIO)
+    property real inputPurchasePrice: 0.0
     property real inputSalePrice: 0.0
     property string inputExpiryDate: ""
     property bool inputNoExpiry: false
     property bool isNewProduct: true
     
-    // Lista temporal de productos para la nueva compra
+    // Lista temporal de productos
     ListModel {
         id: temporaryProductsModel
     }
     
-    // Modelo para resultados de búsqueda de productos existentes
+    // Modelo para resultados de búsqueda
     ListModel {
         id: productSearchResultsModel
     }
     
-    // PROPIEDADES PARA PROVEEDORES - SIMPLIFICADO
+    // PROPIEDADES PARA PROVEEDORES
     property var providerNames: ["Seleccionar proveedor..."]
+
+    // NUEVAS CONEXIONES PARA EDICIÓN
+    Connections {
+        target: compraModel
+        
+        function onModoEdicionChanged() {
+            console.log("📝 Modo edición cambiado:", compraModel.modo_edicion)
+            if (compraModel.modo_edicion) {
+                cargarDatosEdicion()
+            }
+        }
+        
+        function onCompraActualizada(compraId, total) {
+            console.log("✅ Compra actualizada:", compraId, "Total:", total)
+            showSuccess(`🎉 Compra #${compraId} actualizada: Bs${total.toFixed(2)}`)
+            Qt.callLater(function() {
+                compraCompletada()
+            })
+        }
+        
+        function onProveedoresChanged() {
+            updateProviderNames()
+        }
+        
+        function onOperacionExitosa(mensaje) {
+            if (mensaje.includes("proveedores") || mensaje.includes("actualizada")) {
+                Qt.callLater(updateProviderNames)
+            }
+        }
+    }
 
     // Timer para ocultar mensaje de éxito
     Timer {
@@ -102,128 +136,76 @@ Item {
         onTriggered: showSuccessMessage = false
     }
 
-    // CONEXIÓN CON DATOS CENTRALES
-    Connections {
-        target: compraModel
-        function onProveedoresChanged() {
-            console.log("🚚 CrearCompra: Signal proveedoresChanged recibido")
-            updateProviderNames()
-        }
-        
-        function onOperacionExitosa(mensaje) {
-            if (mensaje.includes("proveedores") || mensaje.includes("actualizada")) {
-                console.log("📢 Operación exitosa relacionada con proveedores:", mensaje)
-                Qt.callLater(updateProviderNames)
-            }
-        }
-    }
+    // FUNCIONES DE NEGOCIO MEJORADAS
+    
+    function cargarDatosEdicion() {
 
-    // FUNCIONES DE NEGOCIO
-    function updateProviderNames() {
-        var names = ["Seleccionar proveedor..."]
+        if (!modoEdicion || !compraModel) return
         
-        if (compraModel && compraModel.proveedores) {
-            var proveedores = compraModel.proveedores
-            console.log("📝 Proveedores disponibles:", proveedores.length)
+        console.log("📋 Cargando datos para edición - Compra:", compraIdEdicion)
+        
+        // Configurar ID y fecha
+        newPurchaseId = `C${String(compraIdEdicion).padStart(3, '0')}`
+        
+        // Configurar proveedor
+        var datosOrig = datosOriginales
+        if (datosOrig && datosOrig.proveedor) {
+            newPurchaseProvider = datosOrig.proveedor
             
-            for (var i = 0; i < proveedores.length; i++) {
-                var provider = proveedores[i]
-                if (provider && (provider.Nombre || provider.nombre)) {
-                    var nombreProveedor = provider.Nombre || provider.nombre
-                    names.push(nombreProveedor)
-                    console.log("✅ Proveedor agregado:", nombreProveedor)
-                }
-            }
-            
-            console.log("📋 Lista final de proveedores:", names)
-        } else {
-            console.log("❌ CompraModel o proveedores no disponibles")
-            
-            if (compraModel) {
-                console.log("🔄 Intentando force refresh como fallback...")
-                compraModel.force_refresh_proveedores()
-            }
-        }
-        
-        providerNames = names
-    }
-    // FUNCIÓN PARA CARGAR DATOS DE COMPRA EN EDICIÓN
-    function cargarDatosCompraEdicion() {
-        if (!modoEdicion || compraIdEdicion <= 0 || !compraModel) {
-            return
-        }
-        
-        console.log("📝 Cargando datos para editar compra:", compraIdEdicion)
-        
-        // Obtener datos completos de la compra
-        var datosCompra = compraModel.get_compra_detalle(compraIdEdicion)
-        
-        if (datosCompra && datosCompra.detalles) {
-            // Establecer proveedor
-            newPurchaseProvider = datosCompra.proveedor || ""
-            
-            // Buscar y establecer el proveedor en el combo
+            // Buscar índice del proveedor en el combo
             for (var i = 0; i < providerNames.length; i++) {
-                if (providerNames[i] === newPurchaseProvider) {
+                if (providerNames[i] === datosOrig.proveedor) {
                     if (providerCombo) {
                         providerCombo.currentIndex = i
                     }
                     break
                 }
             }
-            
-            // Limpiar productos temporales
-            temporaryProductsModel.clear()
-            
-            // Cargar productos de la compra
-            for (var j = 0; j < datosCompra.detalles.length; j++) {
-                var detalle = datosCompra.detalles[j]
-                
-                temporaryProductsModel.append({
-                    "codigo": detalle.codigo || "",
-                    "nombre": detalle.nombre || "",
-                    "stock": detalle.cantidad_unitario || 0,
-                    "costoTotalProducto": detalle.costo_total || 0,
-                    "fechaVencimiento": detalle.fecha_vencimiento || ""
-                })
-            }
-            
-            updatePurchaseTotal()
-            console.log("✅ Datos de compra cargados - Productos:", temporaryProductsModel.count)
-            showSuccess("📝 Compra cargada para edición")
-        } else {
-            console.log("❌ No se pudieron cargar los datos de la compra")
-            showSuccess("⚠ Error cargando datos de la compra")
         }
-    }
         
-    Timer {
-        id: autoRefreshTimer
-        interval: 30000
-        running: false
-        repeat: true
-        onTriggered: {
-            console.log("⏰ Auto-refresh de proveedores")
-            if (compraModel) {
-                compraModel.refresh_proveedores()
-            }
+        // Configurar fecha
+        if (datosOrig && datosOrig.fecha) {
+            newPurchaseDate = datosOrig.fecha
         }
+        
+        // Los productos ya fueron cargados por el modelo
+        updatePurchaseTotal()
+        
+        console.log("✅ Datos de edición cargados")
+        showSuccess("📝 Compra cargada para edición")
     }
     
-    // FUNCIÓN CORREGIDA: Solo suma los precios SIN multiplicar por cantidad
+    function updateProviderNames() {
+        var names = ["Seleccionar proveedor..."]
+        
+        if (compraModel && compraModel.proveedores) {
+            var proveedores = compraModel.proveedores
+            
+            for (var i = 0; i < proveedores.length; i++) {
+                var provider = proveedores[i]
+                if (provider && (provider.Nombre || provider.nombre)) {
+                    var nombreProveedor = provider.Nombre || provider.nombre
+                    names.push(nombreProveedor)
+                }
+            }
+        }
+        
+        providerNames = names
+    }
+    
     function updatePurchaseTotal() {
         var total = 0.0
-        for (var i = 0; i < temporaryProductsModel.count; i++) {
-            var item = temporaryProductsModel.get(i)
-            // CORRECCIÓN: Solo sumamos el precio ingresado (que ya es el costo total)
-            total += item.costoTotalProducto
+        if (compraModel && compraModel.items_compra) {
+            var items = compraModel.items_compra
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i]
+                total += parseFloat(item.subtotal || 0)
+            }
         }
         newPurchaseTotal = total
-        console.log("💰 Total de compra actualizado:", total, "- Productos:", temporaryProductsModel.count)
     }
 
     function buscarProductosExistentes(texto) {
-        console.log("🔍 CrearCompra: Buscando productos existentes:", texto)
         productSearchResultsModel.clear()
         
         if (!inventarioModel || texto.length < 2) {
@@ -239,7 +221,6 @@ Item {
         
         Qt.callLater(function() {
             var resultados = inventarioModel.search_results || []
-            console.log("🔍 Resultados obtenidos:", resultados.length)
             
             if (resultados.length > 0) {
                 for (var i = 0; i < resultados.length; i++) {
@@ -261,20 +242,15 @@ Item {
                 isNewProduct = true
                 inputProductName = ""
             }
-            
-            console.log("📦 CrearCompra: Productos en dropdown:", productSearchResultsModel.count)
         })
     }
 
     function seleccionarProductoExistente(codigo, nombre) {
-        console.log("✅ Seleccionando producto existente:", codigo, nombre)
-        
         inputProductCode = codigo
         inputProductName = nombre
         isNewProduct = false
         
         showProductDropdown = false
-        
         productCodeField.text = nombre
         
         Qt.callLater(function() {
@@ -283,62 +259,52 @@ Item {
             }
         })
         
-        showSuccess("📦 Producto seleccionado: " + nombre + " (stock se agregará al existente)")
+        showSuccess("📦 Producto seleccionado: " + nombre)
     }
     
-    // FUNCIÓN CORREGIDA: Sin multiplicación, precio es el costo total
     function addProductToPurchase() {
         if (inputProductCode.length === 0) {
-            showSuccess("⚠ Error: Ingrese el código del producto")
+            showSuccess("⚠️ Error: Ingrese el código del producto")
             return false
         }
         
         if (inputProductName.length === 0) {
-            showSuccess("⚠ Error: Ingrese el nombre del producto")
+            showSuccess("⚠️ Error: Ingrese el nombre del producto")
             return false
         }
         
-        if (inputStock <= 0) {  // CAMBIAR: solo validar stock
-            showSuccess("⚠ Error: Ingrese cantidad de stock")
+        if (inputStock <= 0) {
+            showSuccess("⚠️ Error: Ingrese cantidad de stock")
             return false
         }
         
         if (inputPurchasePrice <= 0) {
-            showSuccess("⚠ Error: El precio debe ser mayor a 0")
+            showSuccess("⚠️ Error: El precio debe ser mayor a 0")
             return false
         }
         
         if (!inputNoExpiry) {
-            // Si NO es sin vencimiento, entonces SÍ requiere fecha válida
             if (inputExpiryDate.length === 0) {
-                showSuccess("⚠ Error: Ingrese fecha de vencimiento o marque 'Sin vencimiento'")
+                showSuccess("⚠️ Error: Ingrese fecha de vencimiento o marque 'Sin vencimiento'")
                 return false
             }
             if (!validateExpiryDate(inputExpiryDate)) {
-                showSuccess("⚠ Error: Fecha de vencimiento inválida (YYYY-MM-DD)")
+                showSuccess("⚠️ Error: Fecha de vencimiento inválida (YYYY-MM-DD)")
                 return false
             }
         }
         
-        for (var i = 0; i < temporaryProductsModel.count; i++) {
-            var item = temporaryProductsModel.get(i)
-            if (item.codigo === inputProductCode) {
-                showSuccess("⚠ Error: El producto ya está agregado a esta compra")
-                return false
-            }
+        // Usar el modelo para agregar
+        if (compraModel) {
+            compraModel.agregar_item_compra(
+                inputProductCode,
+                inputStock,
+                inputPurchasePrice,
+                inputNoExpiry ? "" : inputExpiryDate
+            )
         }
-        
-        // CORRECCIÓN: El precio ingresado ES el costo total, no se multiplica
-        temporaryProductsModel.append({
-            "codigo": inputProductCode,
-            "nombre": inputProductName,
-            "stock": inputStock,
-            "costoTotalProducto": inputPurchasePrice,  // COSTO TOTAL DEL PRODUCTO (lo que realmente pagamos)
-            'fechaVencimiento': inputNoExpiry ? "" : inputExpiryDate
-        })
         
         updatePurchaseTotal()
-        showSuccess("Producto agregado: " + inputProductName + " - Stock: " + inputStock)
         clearProductFields()
         return true
     }
@@ -360,54 +326,9 @@ Item {
         if (expiryField) expiryField.text = ""
     }
 
-    function autoFormatDate(input) {
-        // Permitir solo números y guiones
-        var cleaned = input.replace(/[^\d\-]/g, '')
-        
-        // Si está vacío, permitirlo
-        if (cleaned.length === 0) {
-            return ""
-        }
-        
-        // Auto-agregar guiones para YYYY-MM-DD
-        if (cleaned.length === 4 && !cleaned.includes('-')) {
-            return cleaned + '-'
-        }
-        if (cleaned.length === 7 && cleaned.indexOf('-') === 4 && cleaned.lastIndexOf('-') === 4) {
-            return cleaned + '-'
-        }
-        
-        // Si ya tiene formato YYYY-MM-DD válido, mantenerlo
-        if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
-            return cleaned
-        }
-        
-        // Permitir entrada progresiva con auto-guiones
-        var result = cleaned
-        
-        // Agregar primer guión después de año (4 dígitos)
-        if (result.length > 4 && result.charAt(4) !== '-') {
-            result = result.substring(0, 4) + '-' + result.substring(4)
-        }
-        
-        // Agregar segundo guión después de mes (7 caracteres = YYYY-MM)
-        if (result.length > 7 && result.charAt(7) !== '-') {
-            result = result.substring(0, 7) + '-' + result.substring(7)
-        }
-        
-        // Limitar a 10 caracteres máximo (YYYY-MM-DD)
-        if (result.length > 10) {
-            result = result.substring(0, 10)
-        }
-        
-        return result
-    }
-
     function validateExpiryDate(dateStr) {
-        // Permitir vacío (productos sin vencimiento)
         if (dateStr === "" || dateStr === "Sin vencimiento") return true;
         
-        // Validar formato YYYY-MM-DD
         var regex = /^\d{4}-\d{2}-\d{2}$/;
         if (!regex.test(dateStr)) return false;
         
@@ -418,9 +339,8 @@ Item {
         
         if (month < 1 || month > 12) return false;
         if (day < 1 || day > 31) return false;
-        if (year < 2020 || year > 2050) return false; // Rango razonable
+        if (year < 2020 || year > 2050) return false;
         
-        // Validar días por mes
         var daysInMonth = new Date(year, month, 0).getDate();
         if (day > daysInMonth) return false;
         
@@ -428,118 +348,46 @@ Item {
     }
 
     function completarCompra() {
-        console.log("🚚 Iniciando proceso de completar compra...")
+        console.log("🚛 Iniciando proceso de completar/actualizar compra...")
         
         if (!compraModel) {
-            showSuccess("⚠ Error: Sistema de compras no disponible")
+            showSuccess("⚠️ Error: Sistema de compras no disponible")
             return false
         }
         
         if (newPurchaseProvider === "") {
-            showSuccess("⚠ Error: Seleccione un proveedor")
+            showSuccess("⚠️ Error: Seleccione un proveedor")
             return false
         }
         
-        if (temporaryProductsModel.count === 0) {
-            showSuccess("⚠ Error: Agregue al menos un producto")
+        if (!compraModel.items_compra || compraModel.items_compra.length === 0) {
+            showSuccess("⚠️ Error: Agregue al menos un producto")
             return false
         }
         
-        var productosArray = []
-        var totalCalculado = 0
-        
-        for (var i = 0; i < temporaryProductsModel.count; i++) {
-            var item = temporaryProductsModel.get(i)
-            var productoCompra = {
-                "codigo": item.codigo,
-                "nombre": item.nombre,
-                "cantidad_unitario": item.stock,
-                "costoTotal": item.costoTotalProducto,  // COSTO TOTAL (no unitario)
-               'fechaVencimiento': item.fechaVencimiento || ""  
+        // NUEVA LÓGICA: Mostrar resumen de cambios en modo edición
+        if (modoEdicion) {
+            var cambios = compraModel.obtener_cambios_realizados()
+            if (cambios && cambios.hay_cambios) {
+                var mensaje = `Cambios detectados: ${cambios.total_cambios} modificaciones`
+                showSuccess("📝 " + mensaje)
+            } else if (cambios && !cambios.hay_cambios) {
+                showSuccess("ℹ️ No hay cambios para guardar")
+                return true
             }
-            productosArray.push(productoCompra)
-            
-            // CORRECCIÓN: Solo sumamos el costo total, sin multiplicar
-            totalCalculado += item.costoTotalProducto
-            
-            console.log("🚚 Producto a comprar:", item.codigo, 
-                       "- Stock:", item.stock, 
-                       "- Costo total:", item.costoTotalProducto)
         }
         
-        console.log("🚚 Total calculado:", totalCalculado)
-        
-        var compraId = null
-        try {
-            console.log("🚚 Procesando compra con CompraModel...")
-
-            var proveedorId = 0
-            var proveedores = compraModel.proveedores || []
-            for (var p = 0; p < proveedores.length; p++) {
-                var proveedor = proveedores[p]
-                var nombreProveedor = proveedor.Nombre || proveedor.nombre
-                if (nombreProveedor === newPurchaseProvider) {
-                    proveedorId = proveedor.id
-                    break
-                }
-            }
-
-            if (proveedorId === 0) {
-                showSuccess("⚠ Error: Proveedor no válido")
-                return false
-            }
-
-            compraModel.set_proveedor_seleccionado(proveedorId)
-            compraModel.limpiar_items_compra()
-
-            for (var j = 0; j < productosArray.length; j++) {
-                var prod = productosArray[j]
-                compraModel.agregar_item_compra(
-                    prod.codigo,
-                    prod.cantidad_unitario,
-                    prod.costoTotal,
-                    prod.fechaVencimiento === null ? "" : prod.fechaVencimiento
-                )
-            }
-        } catch (e) {
-            console.log("❌ Error al procesar compra:", e)
-            showSuccess("⚠ Error inesperado al procesar la compra")
-            return false
-        }
-        
+        // Procesar compra (crear o actualizar según modo)
         var exito = compraModel.procesar_compra_actual()
-        compraId = exito ? "PROCESSED" : null
-
-        if (compraId) {
-            console.log("✅ Compra completada en sistema central:", compraId)
-            
-            clearPurchase()
-            clearProductFields()
-            
-            newPurchaseId = "C" + String((compraModel ? compraModel.total_compras_mes : 0) + 1).padStart(3, '0')
-            
-            showSuccess("✅ Compra " + compraId + " completada exitosamente")
-            if (compraModel) {
-                actualizarPaginacionCompras()
-                
-            }
-            Qt.callLater(function() {
-                console.log("🔙 Compra completada, regresando a lista...")
-                compraCompletada()
-            })
-            
+        
+        if (exito) {
+            var accion = modoEdicion ? "actualizada" : "creada"
+            showSuccess(`✅ Compra ${accion} exitosamente`)
             return true
         } else {
-            showSuccess("⚠ Error: No se pudo completar la compra")
+            showSuccess(`⚠️ Error: No se pudo ${modoEdicion ? "actualizar" : "crear"} la compra`)
             return false
         }
-    }
-
-    function clearPurchase() {
-        temporaryProductsModel.clear()
-        newPurchaseTotal = 0.0
-        newPurchaseProvider = ""
-        newPurchaseDetails = ""
     }
 
     function showSuccess(message) {
@@ -548,30 +396,15 @@ Item {
         successTimer.restart()
     }
 
-    function refreshProveedoresManual() {
-        console.log("🔄 Refrescando proveedores...")
-        if (compraModel) {
-            compraModel.force_refresh_proveedores()
-            compraModel.debug_proveedores_info()
-            
-            Qt.callLater(function() {
-                updateProviderNames()
-                console.log("📋 Proveedores después de refresh:", providerNames.length)
-            })
-        } else {
-            console.log("❌ CompraModel no disponible")
-        }
-    }
-
     // ============================================================================
-    // INTERFAZ CON CONTENEDORES SEPARADOS - LAYOUT COMPACTO
+    // INTERFAZ MEJORADA CON DETECCIÓN DE MODO
     // ============================================================================
     
     Rectangle {
         anchors.fill: parent
         color: "#f8f9fa"
         
-        // HEADER FIJO
+        // HEADER MEJORADO CON MODO EDICIÓN
         Rectangle {
             id: fixedHeader
             anchors.top: parent.top
@@ -580,9 +413,20 @@ Item {
             height: headerHeight
             color: whiteColor
             radius: radiusLarge
-            border.color: "#e9ecef"
-            border.width: 1
+            border.color: modoEdicion ? "#FF9800" : "#e9ecef"
+            border.width: modoEdicion ? 2 : 1
             z: 10
+            
+            // Indicador visual de modo edición
+            Rectangle {
+                visible: modoEdicion
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 4
+                color: "#FF9800"
+                radius: radiusLarge
+            }
             
             RowLayout {
                 anchors.fill: parent
@@ -594,7 +438,7 @@ Item {
                     Layout.preferredHeight: 40
                     
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                        color: parent.pressed ? Qt.darker(accentColor, 1.2) : accentColor
                         radius: 20
                     }
                     
@@ -607,7 +451,12 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: cancelarCompra()
+                    onClicked: {
+                        if (modoEdicion && compraModel) {
+                            compraModel.cancelar_edicion()
+                        }
+                        cancelarCompra()
+                    }
                 }
                 
                 RowLayout {
@@ -616,12 +465,12 @@ Item {
                     Rectangle {
                         width: 32
                         height: 32
-                        color: blueColor
+                        color: modoEdicion ? "#FF9800" : blueColor
                         radius: radiusMedium
                         
                         Label {
                             anchors.centerIn: parent
-                            text: "🚚"
+                            text: modoEdicion ? "📝" : "🚛"
                             font.pixelSize: 16
                         }
                     }
@@ -630,41 +479,153 @@ Item {
                         spacing: 2
                         
                         Label {
-                           text: modoEdicion ? "Editar Compra #" + compraIdEdicion : "Nueva Compra" 
+                           text: modoEdicion ? `EDITANDO Compra #${compraIdEdicion}` : "Nueva Compra"
                             font.pixelSize: fontLarge
                             font.bold: true
-                            color: textColor
+                            color: modoEdicion ? "#E65100" : textColor
                         }
                         
-                        Label {
-                            text: (function() {
-                                var fechaActual = new Date()
-                                var dia = fechaActual.getDate().toString().padStart(2, '0')
-                                var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
-                                var año = fechaActual.getFullYear()
-                                return "Usuario: Dr. Admin - " + dia + "/" + mes + "/" + año
-                            })()
-                            color: darkGrayColor
-                            font.pixelSize: fontSmall
+                        RowLayout {
+                            spacing: spacing12
+                            
+                            Label {
+                                text: (function() {
+                                    var fechaActual = new Date()
+                                    var dia = fechaActual.getDate().toString().padStart(2, '0')
+                                    var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
+                                    var año = fechaActual.getFullYear()
+                                    return "Usuario: Dr. Admin - " + dia + "/" + mes + "/" + año
+                                })()
+                                color: darkGrayColor
+                                font.pixelSize: fontSmall
+                            }
+                            
+                            // NUEVO: Mostrar cambios en modo edición
+                            Rectangle {
+                                visible: modoEdicion
+                                Layout.preferredWidth: 80
+                                Layout.preferredHeight: 20
+                                color: "#FFF3E0"
+                                radius: 10
+                                border.color: "#FF9800"
+                                border.width: 1
+                                
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "MODO EDICIÓN"
+                                    color: "#E65100"
+                                    font.pixelSize: 8
+                                    font.bold: true
+                                }
+                            }
                         }
                     }
                 }
                 
                 Item { Layout.fillWidth: true }
                 
+                // NUEVO: Panel de comparación
+                Button {
+                    visible: modoEdicion
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 30
+                    text: showComparisonPanel ? "🔼 Ocultar Original" : "🔽 Ver Original"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? "#FFF3E0" : "#FFECB3"
+                        radius: radiusSmall
+                        border.color: "#FF9800"
+                        border.width: 1
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: "#E65100"
+                        font.pixelSize: fontSmall
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        showComparisonPanel = !showComparisonPanel
+                    }
+                }
+                
                 Label {
-                    text: "No. Compra: " + newPurchaseId
-                    color: blueColor
+                    text: modoEdicion ? `Editando: ${newPurchaseId}` : `No. Compra: ${newPurchaseId}`
+                    color: modoEdicion ? "#E65100" : blueColor
                     font.pixelSize: fontMedium
                     font.bold: true
                 }
             }
         }
         
-        // SECCIÓN 1: PROVEEDOR - Rectangle separado
+        // NUEVO: Panel de comparación colapsible
+        Rectangle {
+            id: comparisonPanel
+            visible: modoEdicion && showComparisonPanel
+            anchors.top: fixedHeader.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: spacing8
+            anchors.topMargin: spacing4
+            height: visible ? 80 : 0
+            color: "#FFF3E0"
+            radius: radiusMedium
+            border.color: "#FF9800"
+            border.width: 1
+            
+            Behavior on height {
+                NumberAnimation { duration: 200 }
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: spacing8
+                spacing: spacing4
+                
+                Label {
+                    text: "📋 DATOS ORIGINALES DE LA COMPRA"
+                    font.bold: true
+                    font.pixelSize: fontSmall
+                    color: "#E65100"
+                }
+                
+                RowLayout {
+                    spacing: spacing20
+                    
+                    Label {
+                        text: `Proveedor: ${datosOriginales.proveedor || "N/A"}`
+                        font.pixelSize: fontSmall
+                        color: "#BF360C"
+                    }
+                    
+                    Label {
+                        text: `Total: Bs${(datosOriginales.total || 0).toFixed(2)}`
+                        font.pixelSize: fontSmall
+                        color: "#BF360C"
+                    }
+                    
+                    Label {
+                        text: `Fecha: ${datosOriginales.fecha || "N/A"}`
+                        font.pixelSize: fontSmall
+                        color: "#BF360C"
+                    }
+                    
+                    Label {
+                        text: `Productos: ${compraModel ? compraModel.items_originales.length : 0}`
+                        font.pixelSize: fontSmall
+                        color: "#BF360C"
+                    }
+                }
+            }
+        }
+        
+        // SECCIÓN PROVEEDOR (ajustada para panel)
         Rectangle {
             id: providerSection
-            anchors.top: fixedHeader.bottom
+            anchors.top: comparisonPanel.visible ? comparisonPanel.bottom : fixedHeader.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.margins: spacing8
@@ -694,10 +655,11 @@ Item {
                     model: crearCompraRoot.providerNames
                     font.pixelSize: fontSmall
                     
+                    // NUEVO: Estilo diferente en modo edición
                     background: Rectangle {
                         color: whiteColor
-                        border.color: darkGrayColor
-                        border.width: 1
+                        border.color: modoEdicion ? "#FF9800" : darkGrayColor
+                        border.width: modoEdicion ? 2 : 1
                         radius: radiusSmall
                     }
                     
@@ -707,12 +669,17 @@ Item {
                         } else {
                             newPurchaseProvider = ""
                         }
-                    }
-                    
-                    Connections {
-                        target: crearCompraRoot
-                        function onProviderNamesChanged() {
-                            providerCombo.model = crearCompraRoot.providerNames
+                        
+                        // Actualizar modelo
+                        if (compraModel) {
+                            var proveedores = compraModel.proveedores
+                            for (var i = 0; i < proveedores.length; i++) {
+                                var proveedor = proveedores[i]
+                                if ((proveedor.Nombre || proveedor.nombre) === currentText) {
+                                    compraModel.set_proveedor_seleccionado(proveedor.id)
+                                    break
+                                }
+                            }
                         }
                     }
                 }
@@ -734,7 +701,11 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                     }
                     
-                    onClicked: refreshProveedoresManual()
+                    onClicked: {
+                        if (compraModel) {
+                            compraModel.force_refresh_proveedores()
+                        }
+                    }
                 }
                 
                 Label {
@@ -747,7 +718,7 @@ Item {
             }
         }
         
-        // SECCIÓN 2: BÚSQUEDA Y CAMPOS UNIFICADOS - Rectangle único con dos mitades
+        // SECCIÓN BÚSQUEDA Y CAMPOS (igual que antes)
         Rectangle {
             id: unifiedInputSection
             anchors.top: providerSection.bottom
@@ -797,7 +768,7 @@ Item {
                                 spacing: spacing4
                                 
                                 Label {
-                                    text: "🔍"
+                                    text: "🔎"
                                     color: darkGrayColor
                                     font.pixelSize: 14
                                 }
@@ -887,7 +858,6 @@ Item {
                             }
                         }
                         
-                        // COSTO TOTAL (mantener)
                         Column {
                             spacing: 2
                             
@@ -924,6 +894,7 @@ Item {
                                 }
                             }
                         }
+                        
                         // Fecha Vencimiento
                         Column {
                             spacing: 2
@@ -944,7 +915,7 @@ Item {
                                     Layout.preferredHeight: inputHeight
                                     placeholderText: "YYYY-MM-DD"
                                     text: inputExpiryDate
-                                    enabled: !inputNoExpiry  // ✅ CORRECTO: Habilitado cuando NO es sin vencimiento
+                                    enabled: !inputNoExpiry
                                     
                                     background: Rectangle {
                                         color: enabled ? whiteColor : "#F5F5F5"
@@ -962,16 +933,8 @@ Item {
                                     
                                     onTextChanged: {
                                         if (!inputNoExpiry) {
-                                            var formatted = autoFormatDate(text)
-                                            if (formatted !== text) {
-                                                text = formatted
-                                            }
-                                            inputExpiryDate = formatted
+                                            inputExpiryDate = text
                                         }
-                                    }
-                                    
-                                    validator: RegularExpressionValidator {
-                                        regularExpression: /^[0-9\-]*$/
                                     }
                                 }
 
@@ -979,7 +942,7 @@ Item {
                                     id: noExpiryCheckbox
                                     Layout.preferredWidth: 15
                                     Layout.preferredHeight: inputHeight
-                                    checked: !inputNoExpiry  // ✅ CORRECTO: Checked cuando SÍ tiene vencimiento
+                                    checked: !inputNoExpiry
                                     
                                     indicator: Rectangle {
                                         width: 14
@@ -1002,9 +965,8 @@ Item {
                                     contentItem: Item {}
                                     
                                     onCheckedChanged: {
-                                        inputNoExpiry = !checked  // ✅ CORRECTO: Sin vencimiento cuando NO está checked
+                                        inputNoExpiry = !checked
                                         if (!checked) {
-                                            // Si no está checked = sin vencimiento, limpiar fecha
                                             inputExpiryDate = ""
                                             expiryField.text = ""
                                         }
@@ -1030,9 +992,7 @@ Item {
                                     inputProductName.length > 0 && 
                                     inputStock > 0 &&
                                     inputPurchasePrice > 0 &&
-                                    // CORRECCIÓN: Lógica corregida para fecha de vencimiento
                                     (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
-                                    //    ↑ CORRECTO: Si es sin vencimiento O tiene fecha válida
                                     
                             background: Rectangle {
                                 color: enabled ? successColor : darkGrayColor
@@ -1055,7 +1015,7 @@ Item {
             }
         }
         
-        // SECCIÓN 3: LISTA DE PRODUCTOS (CORREGIDA)
+        // SECCIÓN LISTA DE PRODUCTOS (conectada con modelo)
         Rectangle {
             id: productListSection
             anchors.top: unifiedInputSection.bottom
@@ -1084,10 +1044,29 @@ Item {
                     }
                     
                     Label {
-                        text: "Productos en la compra: " + temporaryProductsModel.count
+                        text: `Productos en la compra: ${compraModel ? compraModel.items_en_compra : 0}`
                         color: textColor
                         font.bold: true
                         font.pixelSize: fontMedium
+                    }
+                    
+                    // NUEVO: Indicador de cambios
+                    Rectangle {
+                        visible: modoEdicion
+                        Layout.preferredWidth: 100
+                        Layout.preferredHeight: 20
+                        color: "#E8F5E8"
+                        radius: 10
+                        border.color: "#4CAF50"
+                        border.width: 1
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: `📝 ${compraModel ? compraModel.items_en_compra : 0} items actuales`
+                            color: "#2E7D32"
+                            font.pixelSize: 8
+                            font.bold: true
+                        }
                     }
                 }
 
@@ -1103,6 +1082,7 @@ Item {
                         anchors.fill: parent
                         spacing: 0
                         
+                        // Header de tabla
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 35
@@ -1147,8 +1127,6 @@ Item {
                                     }
                                 }
                                 
-                                
-                                
                                 Rectangle {
                                     Layout.preferredWidth: 80
                                     Layout.fillHeight: true
@@ -1174,7 +1152,7 @@ Item {
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "COSTO TOTAL"  // ENCABEZADO CORREGIDO
+                                        text: "COSTO TOTAL"
                                         color: textColor
                                         font.bold: true
                                         font.pixelSize: fontSmall
@@ -1183,6 +1161,7 @@ Item {
                             }
                         }
                         
+                        // Lista conectada con modelo
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -1190,11 +1169,18 @@ Item {
                             
                             ListView {
                                 anchors.fill: parent
-                                model: temporaryProductsModel
+                                model: compraModel ? compraModel.items_compra : null
                                 
                                 delegate: Item {
                                     width: ListView.view.width
                                     height: 40
+                                    
+                                    // NUEVO: Indicador de cambio
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        color: modoEdicion ? "#FFF3E0" : "transparent"
+                                        opacity: modoEdicion ? 0.3 : 0
+                                    }
                                     
                                     RowLayout {
                                         anchors.fill: parent
@@ -1209,7 +1195,7 @@ Item {
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: model.codigo
+                                                text: modelData.codigo || ""
                                                 color: textColor
                                                 font.bold: true
                                                 font.pixelSize: fontSmall
@@ -1230,7 +1216,7 @@ Item {
                                                 spacing: spacing4
                                                 
                                                 Label {
-                                                    text: model.nombre
+                                                    text: modelData.nombre || ""
                                                     color: textColor
                                                     font.bold: true
                                                     font.pixelSize: fontSmall
@@ -1254,12 +1240,15 @@ Item {
                                                         verticalAlignment: Text.AlignVCenter
                                                     }
                                                     onClicked: {
-                                                        temporaryProductsModel.remove(index)
+                                                        if (compraModel) {
+                                                            compraModel.remover_item_compra(modelData.codigo)
+                                                        }
                                                         updatePurchaseTotal()
                                                     }
                                                 }
                                             }
                                         }
+                                        
                                         Rectangle {
                                             Layout.preferredWidth: 80
                                             Layout.fillHeight: true
@@ -1276,14 +1265,13 @@ Item {
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: model.stock  // SOLO ESTE VALOR
+                                                    text: modelData.cantidad_unitario || 0
                                                     color: whiteColor
                                                     font.bold: true
                                                     font.pixelSize: 8
                                                 }
                                             }
                                         }
-                                        
                                         
                                         Rectangle {
                                             Layout.preferredWidth: 100
@@ -1294,7 +1282,7 @@ Item {
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: "Bs" + model.costoTotalProducto.toFixed(2)  // VALOR CORREGIDO
+                                                text: `Bs${(modelData.subtotal || 0).toFixed(2)}`
                                                 color: successColor
                                                 font.bold: true
                                                 font.pixelSize: fontSmall
@@ -1305,11 +1293,12 @@ Item {
                             }
                         }
                         
+                        // Estado vacío
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: "transparent"
-                            visible: temporaryProductsModel.count === 0
+                            visible: !compraModel || compraModel.items_en_compra === 0
                             
                             Label {
                                 anchors.centerIn: parent
@@ -1325,7 +1314,7 @@ Item {
             }
         }
         
-        // SECCIÓN 4: ACCIONES - Rectangle separado
+        // SECCIÓN ACCIONES MEJORADA
         Rectangle {
             id: actionsSection
             anchors.bottom: parent.bottom
@@ -1335,8 +1324,8 @@ Item {
             height: 50
             color: whiteColor
             radius: radiusMedium
-            border.color: lightGrayColor
-            border.width: 1
+            border.color: modoEdicion ? "#FF9800" : lightGrayColor
+            border.width: modoEdicion ? 2 : 1
             
             RowLayout {
                 anchors.fill: parent
@@ -1362,7 +1351,7 @@ Item {
                         }
                         
                         Label {
-                            text: "TOTAL: Bs" + newPurchaseTotal.toFixed(2)
+                            text: `TOTAL: Bs${(compraModel ? compraModel.total_compra_actual : 0).toFixed(2)}`
                             color: whiteColor
                             font.bold: true
                             font.pixelSize: fontSmall
@@ -1371,7 +1360,7 @@ Item {
                 }
                 
                 Button {
-                    text: "✖ Cancelar"
+                    text: "❌ Cancelar"
                     Layout.preferredHeight: buttonHeight
                     background: Rectangle {
                         color: dangerColor
@@ -1386,22 +1375,30 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
-                        clearPurchase()
-                        clearProductFields()
-                        if (providerCombo) providerCombo.currentIndex = 0
+                        if (modoEdicion && compraModel) {
+                            compraModel.cancelar_edicion()
+                        }
                         cancelarCompra()
                     }
                 }
                 
                 Button {
                     id: completarCompraButton
-                    text: "💾 Completar Compra"
+                    text: modoEdicion ? "💾 Guardar Cambios" : "🚛 Completar Compra"
                     Layout.preferredHeight: buttonHeight
-                    enabled: (providerCombo ? providerCombo.currentIndex > 0 : false) && temporaryProductsModel.count > 0
+                    enabled: (providerCombo ? providerCombo.currentIndex > 0 : false) && 
+                            (compraModel ? compraModel.items_en_compra > 0 : false)
+                    
+                    // NUEVO: Estilo diferente para modo edición
                     background: Rectangle {
-                        color: enabled ? successColor : darkGrayColor
+                        color: {
+                            if (!enabled) return darkGrayColor
+                            if (modoEdicion) return "#FF9800"
+                            return successColor
+                        }
                         radius: radiusSmall
                     }
+                    
                     contentItem: Label {
                         text: parent.text
                         color: whiteColor
@@ -1410,11 +1407,13 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
+                    
                     onClicked: {
                         if (completarCompra()) {
-                            completarCompraButton.text = "✅ ¡Completado!"
+                            var textoExito = modoEdicion ? "✅ ¡Actualizado!" : "✅ ¡Completado!"
+                            completarCompraButton.text = textoExito
                             Qt.callLater(function() {
-                                completarCompraButton.text = "💾 Completar Compra"
+                                completarCompraButton.text = modoEdicion ? "💾 Guardar Cambios" : "🚛 Completar Compra"
                             })
                         }
                     }
@@ -1422,14 +1421,14 @@ Item {
             }
         }
         
-        // NOTIFICACIÓN DE ÉXITO
+        // NOTIFICACIÓN DE ÉXITO MEJORADA
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.margins: spacing8
             height: 40
-            color: successColor
+            color: modoEdicion ? "#FF9800" : successColor
             radius: radiusSmall
             visible: showSuccessMessage
             opacity: showSuccessMessage ? 1.0 : 0.0
@@ -1451,8 +1450,8 @@ Item {
                     
                     Label {
                         anchors.centerIn: parent
-                        text: "✅"
-                        color: successColor
+                        text: modoEdicion ? "📝" : "✅"
+                        color: modoEdicion ? "#FF9800" : successColor
                         font.pixelSize: 12
                     }
                 }
@@ -1466,7 +1465,7 @@ Item {
             }
         }
 
-        // DROPDOWN FLOTANTE
+        // DROPDOWN FLOTANTE (igual que antes)
         Rectangle {
             id: floatingDropdown
             anchors.top: unifiedInputSection.bottom
@@ -1541,8 +1540,17 @@ Item {
         }
     }
 
+    // CONNECTIONS Y COMPONENT.ONCOMPLETED MEJORADOS
+    
+    Connections {
+        target: compraModel
+        function onItemsCombraCambiado() {
+            updatePurchaseTotal()
+        }
+    }
+
     Component.onCompleted: {
-        console.log("✅ CrearCompra.qml inicializado con layout compacto - SIN MULTIPLICACIÓN DE PRECIOS")
+        console.log("✅ CrearCompra.qml inicializado con edición mejorada")
         
         if (!compraModel || !inventarioModel) {
             console.log("⚠️ Models no disponibles aún")
@@ -1552,22 +1560,35 @@ Item {
                     console.log("✅ CompraModel disponible en retry")
                     updateProviderNames()
                     
-                    // AGREGAR ESTA LÍNEA PARA CARGAR DATOS DE EDICIÓN
-                    if (modoEdicion) {
-                        Qt.callLater(cargarDatosCompraEdicion)
+                    // Verificar si está en modo edición
+                    if (compraModel.modo_edicion) {
+                        cargarDatosEdicion()
                     }
                 }
             })
         } else {
             console.log("✅ Models conectados correctamente")
             
-            compraModel.force_refresh_proveedores()
-            Qt.callLater(updateProviderNames)
-            
-            // AGREGAR ESTA LÍNEA PARA CARGAR DATOS DE EDICIÓN
-            if (modoEdicion) {
-                Qt.callLater(cargarDatosCompraEdicion)
+            if (compraModel) {
+                compraModel.force_refresh_proveedores()
+                Qt.callLater(updateProviderNames)
+                
+                // Verificar si está en modo edición al inicializar
+                if (compraModel.modo_edicion) {
+                    Qt.callLater(cargarDatosEdicion)
+                }
             }
+        }
+        
+        // Configurar fecha y ID
+        var fechaActual = new Date()
+        var dia = fechaActual.getDate().toString().padStart(2, '0')
+        var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
+        var año = fechaActual.getFullYear()
+        newPurchaseDate = dia + "/" + mes + "/" + año
+        
+        if (!modoEdicion) {
+            newPurchaseId = "C" + String((compraModel ? compraModel.total_compras_mes : 0) + 1).padStart(3, '0')
         }
         
         Qt.callLater(function() {
