@@ -2045,10 +2045,206 @@ Item {
                                 Rectangle {
                                     id: panelResultadosPacientes
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: mostrarResultadosBusqueda ? Math.min(250, resultadosBusquedaPacientesModel.count * 55 + 60) : 0
-                                    visible: mostrarResultadosBusqueda && !isEditMode && !modoAnonimo
+                                    Layout.preferredHeight: mostrarResultadosBusqueda && !isEditMode ? Math.min(230, resultadosBusquedaPacientesModel.count * 55 + 60) : 0
+                                    visible: mostrarResultadosBusqueda && !isEditMode  // ✅ OCULTAR EN MODO EDICIÓN
                                     
-                                    // ... resto del código del panel igual que antes
+                                    color: whiteColor
+                                    border.color: primaryColor
+                                    border.width: 1
+                                    radius: baseUnit * 0.6
+                                    
+                                    Behavior on Layout.preferredHeight {
+                                        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                                    }
+                                    
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: baseUnit * 0.75
+                                        spacing: baseUnit * 0.5
+                                        
+                                        // Header del panel
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: baseUnit
+                                            
+                                            Label {
+                                                text: "👥"
+                                                font.pixelSize: fontBaseSize * 0.9
+                                            }
+                                            
+                                            Label {
+                                                text: resultadosBusquedaPacientesModel.count + " pacientes encontrados"
+                                                font.pixelSize: fontBaseSize * 0.85
+                                                color: textColor
+                                                font.bold: true
+                                                Layout.fillWidth: true
+                                            }
+                                            
+                                            Label {
+                                                text: "Tipo: " + campoBusquedaPaciente.tipoDetectado
+                                                font.pixelSize: fontBaseSize * 0.75
+                                                color: primaryColor
+                                                font.bold: true
+                                            }
+                                            
+                                            Button {
+                                                width: baseUnit * 2.5
+                                                height: baseUnit * 2.5
+                                                
+                                                background: Rectangle {
+                                                    color: parent.hovered ? "#f0f0f0" : "transparent"
+                                                    radius: width / 2
+                                                }
+                                                
+                                                contentItem: Text {
+                                                    text: "×"
+                                                    color: textColor
+                                                    font.pixelSize: fontBaseSize
+                                                    font.bold: true
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                onClicked: limpiarResultadosBusqueda()
+                                            }
+                                        }
+                                        
+                                        // Línea separadora
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 1
+                                            color: borderColor
+                                        }
+                                        
+                                        // Lista de resultados
+                                        ScrollView {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            
+                                            ListView {
+                                                id: listaResultadosPacientes
+                                                anchors.fill: parent
+                                                model: resultadosBusquedaPacientesModel
+                                                currentIndex: -1
+                                                
+                                                delegate: Rectangle {
+                                                    width: ListView.view ? ListView.view.width : 0
+                                                    height: 50
+                                                    color: {
+                                                        if (mouseArea.containsMouse) return "#E3F2FD"
+                                                        if (ListView.isCurrentItem) return "#BBDEFB"
+                                                        return "transparent"
+                                                    }
+                                                    radius: baseUnit * 0.4
+                                                    
+                                                    RowLayout {
+                                                        anchors.fill: parent
+                                                        anchors.margins: baseUnit * 0.75
+                                                        spacing: baseUnit * 0.75
+                                                        
+                                                        // Indicador de tipo de coincidencia
+                                                        Rectangle {
+                                                            Layout.preferredWidth: baseUnit * 3.5
+                                                            Layout.preferredHeight: baseUnit * 3.5
+                                                            color: {
+                                                                var tipo = model.tipo_coincidencia || ""
+                                                                if (tipo.includes("cedula_exacta")) return successColor
+                                                                if (tipo.includes("cedula")) return warningColor
+                                                                if (tipo.includes("nombre")) return primaryColor
+                                                                return lightGrayColor
+                                                            }
+                                                            radius: width / 2
+                                                            
+                                                            Label {
+                                                                anchors.centerIn: parent
+                                                                text: {
+                                                                    var tipo = model.tipo_coincidencia || ""
+                                                                    if (tipo.includes("cedula")) return "🆔"
+                                                                    if (tipo.includes("nombre")) return "👤"
+                                                                    return "?"
+                                                                }
+                                                                color: whiteColor
+                                                                font.pixelSize: fontBaseSize * 0.7
+                                                                font.bold: true
+                                                            }
+                                                        }
+                                                        
+                                                        // Información del paciente
+                                                        ColumnLayout {
+                                                            Layout.fillWidth: true
+                                                            spacing: 1
+                                                            
+                                                            Label {
+                                                                text: model.nombre_completo || "Sin nombre"
+                                                                color: textColor
+                                                                font.bold: true
+                                                                font.pixelSize: fontBaseSize * 0.85
+                                                                Layout.fillWidth: true
+                                                                elide: Text.ElideRight
+                                                            }
+                                                            
+                                                            Label {
+                                                                text: "CI: " + (model.cedula || "Sin cédula")
+                                                                color: textColorLight
+                                                                font.pixelSize: fontBaseSize * 0.7
+                                                            }
+                                                        }
+                                                        
+                                                        // Botón seleccionar
+                                                        Rectangle {
+                                                            Layout.preferredWidth: baseUnit * 7
+                                                            Layout.preferredHeight: baseUnit * 2.5
+                                                            color: primaryColor
+                                                            radius: baseUnit * 0.4
+                                                            
+                                                            Label {
+                                                                anchors.centerIn: parent
+                                                                text: "Seleccionar"
+                                                                color: whiteColor
+                                                                font.bold: true
+                                                                font.pixelSize: fontBaseSize * 0.75
+                                                            }
+                                                            
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: {
+                                                                    seleccionarPacienteEncontrado(index)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    MouseArea {
+                                                        id: mouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        acceptedButtons: Qt.LeftButton
+                                                        
+                                                        onClicked: {
+                                                            seleccionarPacienteEncontrado(index)
+                                                        }
+                                                        
+                                                        onDoubleClicked: {
+                                                            seleccionarPacienteEncontrado(index)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Estado vacío
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: "No se encontraron pacientes"
+                                                    color: textColorLight
+                                                    font.pixelSize: fontBaseSize * 0.9
+                                                    visible: resultadosBusquedaPacientesModel.count === 0 && mostrarResultadosBusqueda
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Footer con instrucciones
+                                        
+                                    }
                                 }
                             }
                             
