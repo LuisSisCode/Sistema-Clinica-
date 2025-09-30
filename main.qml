@@ -596,8 +596,8 @@ ApplicationWindow {
                                 
                                 submenuItems: [
                                     { text: "Gastos Operativos", icon: "Resources/iconos/gastos.png", subsection: 0 },
-                                    { text: "Ingresos Extras", icon: "Resources/iconos/ingresos.png", subsection: 1 },
-                                    { text: "Egresos Extras", icon: "Resources/iconos/egresos.png", subsection: 2 }
+                                    { text: "Ingresos Extras", icon: "Resources/iconos/ingresos.png", subsection: 1 }
+                                   
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {
@@ -733,8 +733,6 @@ ApplicationWindow {
                 onCurrentServiciosSubsectionChanged: {
                     if (currentServiciosSubsection === 1) {
                         console.log("🟢 Navegando a subsección de Ingresos Extras")
-                    } else if (currentServiciosSubsection === 2) {
-                        console.log("🔴 Navegando a subsección de Egresos Extras")
                     }
                 }
                 
@@ -883,7 +881,7 @@ ApplicationWindow {
         
         // AGREGAR ESTA SECCIÓN:
         if (currentIndex === 6) {
-            const serviciosSubsections = ["Gastos Operativos", "Ingresos Extras", "Egresos Extras"]
+            const serviciosSubsections = ["Gastos Operativos", "Ingresos Extras"]
             return "Servicios Básicos - " + serviciosSubsections[serviciosSubsection]
         }
         
