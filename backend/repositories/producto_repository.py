@@ -707,3 +707,49 @@ class ProductoRepository(BaseRepository):
         ) stock_calculado ON p.id = stock_calculado.Id_Producto
         """
         return self._execute_query(query, fetch_one=True) or {}
+    
+    @ExceptionHandler.handle_exception
+    def crear_producto(self, datos_producto: dict) -> int:
+        """Crea un producto sin lote inicial (para productos con stock 0)"""
+        validate_required(datos_producto.get('Codigo'), "Codigo")
+        validate_required(datos_producto.get('Nombre'), "Nombre")
+        
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Insertar producto sin lote
+            cursor.execute("""
+                INSERT INTO Productos (Codigo, Nombre, Detalles, Precio_compra, Precio_venta, 
+                                    Stock_Unitario, Unidad_Medida, ID_Marca)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+            """, (
+                datos_producto['Codigo'],
+                datos_producto['Nombre'],
+                datos_producto.get('Detalles', ''),
+                datos_producto['Precio_compra'],
+                datos_producto['Precio_venta'],
+                datos_producto.get('Unidad_Medida', 'Tabletas'),
+                datos_producto.get('ID_Marca', 1)
+            ))
+            
+            # Obtener ID del producto insertado
+            cursor.execute("SELECT @@IDENTITY as id")
+            resultado = cursor.fetchone()
+            if not resultado:
+                raise Exception("No se pudo crear el producto")
+            
+            producto_id = resultado[0]
+            conn.commit()
+            self._invalidate_cache_after_modification()
+            
+            return producto_id
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise Exception(f"Error creando producto: {str(e)}")
+        finally:
+            if conn:
+                conn.close()

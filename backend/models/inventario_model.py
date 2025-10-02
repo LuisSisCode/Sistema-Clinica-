@@ -441,7 +441,7 @@ class InventarioModel(QObject):
     @Slot(str, result=bool)
     def crear_producto(self, producto_json: str):
         """
-        Crea un nuevo producto desde QML CON PRIMER LOTE - CORREGIDO - CON VERIFICACIÓN DE AUTENTICACIÓN
+        Crea un nuevo producto desde QML CON PRIMER LOTE (opcional si stock > 0)
         
         Args:
             producto_json: JSON string con datos del producto + primer lote
@@ -465,10 +465,10 @@ class InventarioModel(QObject):
             if not self._validar_datos_producto(datos):
                 return False
             
-            # Validar stock inicial
+            # Validar stock inicial (AHORA PERMITE 0)
             stock_inicial = int(datos.get('stock_unitario', 0))
-            if stock_inicial <= 0:
-                raise ValueError("Debe especificar stock inicial unitario mayor a 0")
+            if stock_inicial < 0:
+                raise ValueError("El stock no puede ser negativo")
             
             # Validar fecha de vencimiento
             fecha_vencimiento = datos.get('fecha_vencimiento', '')
@@ -476,16 +476,16 @@ class InventarioModel(QObject):
                 raise ValueError("Formato de fecha de vencimiento inválido")
             
             # Verificar que el código no exista
-            codigo_producto = datos['codigo'] if datos.get('codigo') else self._generar_codigo_automatico()
+            codigo_producto = datos.get('codigo', '').strip() or self._generar_codigo_automatico()
             
             producto_existente = safe_execute(self.producto_repo.get_by_codigo, codigo_producto)
             if producto_existente:
                 raise ValueError(f"El código {codigo_producto} ya existe")
             
             # Obtener ID de marca
-            id_marca = self._obtener_id_marca(datos.get('marca', ''))
+            id_marca = self._obtener_id_marca(datos.get('id_marca') or datos.get('marca', ''))
             
-            # Preparar datos del producto - SIN STOCK INICIAL (se calcula desde lotes)
+            # Preparar datos del producto
             datos_producto = {
                 'Codigo': codigo_producto,
                 'Nombre': datos['nombre'],
@@ -497,29 +497,44 @@ class InventarioModel(QObject):
                 'Fecha_Venc': self._procesar_fecha_vencimiento(fecha_vencimiento)
             }
             
-            # Preparar datos del primer lote
-            datos_lote = {
-                'cantidad_unitario': stock_inicial,
-                'fecha_vencimiento': self._procesar_fecha_vencimiento(fecha_vencimiento)
-            }
-            
-            # CREAR PRODUCTO CON LOTE EN UNA SOLA TRANSACCIÓN - MÉTODO CORREGIDO
-            producto_id = safe_execute(
-                self.producto_repo.crear_producto_con_lote_inicial,
-                datos_producto,
-                datos_lote
-            )
-            
-            if not producto_id:
-                raise Exception("Error creando producto en base de datos")
-            
-            print(f"✅ Producto y lote creados - ID: {producto_id}, Código: {codigo_producto}, Usuario: {self._usuario_actual_id}")
+            # ✅ LÓGICA CONDICIONAL: Solo crear lote si hay stock > 0
+            if stock_inicial > 0:
+                # Preparar datos del primer lote
+                datos_lote = {
+                    'cantidad_unitario': stock_inicial,
+                    'fecha_vencimiento': self._procesar_fecha_vencimiento(fecha_vencimiento)
+                }
+                
+                # Crear producto con lote inicial
+                producto_id = safe_execute(
+                    self.producto_repo.crear_producto_con_lote_inicial,
+                    datos_producto,
+                    datos_lote
+                )
+                
+                if not producto_id:
+                    raise Exception("Error creando producto en base de datos")
+                
+                print(f"✅ Producto y lote creados - ID: {producto_id}, Código: {codigo_producto}, Stock: {stock_inicial}")
+                mensaje = f"Producto creado: {codigo_producto} con stock inicial de {stock_inicial}"
+            else:
+                # ✅ Crear solo el producto sin lote
+                producto_id = safe_execute(
+                    self.producto_repo.crear_producto,
+                    datos_producto
+                )
+                
+                if not producto_id:
+                    raise Exception("Error creando producto en base de datos")
+                
+                print(f"✅ Producto creado sin stock - ID: {producto_id}, Código: {codigo_producto}")
+                mensaje = f"Producto creado: {codigo_producto} (sin stock inicial)"
             
             # Refrescar datos
             self.refresh_productos()
             self._cargar_lotes_activos()
             
-            self.operacionExitosa.emit(f"Producto creado: {codigo_producto} con stock inicial de {stock_inicial}")
+            self.operacionExitosa.emit(mensaje)
             self.productoCreado.emit(codigo_producto)
             
             return True
@@ -571,10 +586,16 @@ class InventarioModel(QObject):
                 datos_mapeados['Precio_venta'] = datos['precio_venta']
             if 'unidad_medida' in datos:
                 datos_mapeados['Unidad_Medida'] = datos['unidad_medida']
-            # Obtener ID de marca si cambió
-            if 'marca' in datos:
-                datos['ID_Marca'] = self._obtener_id_marca(datos['marca'])
-                del datos['marca']  # Remover campo temporal
+            
+            # ✅ AGREGAR MAPEO DE MARCA - CORREGIDO
+            if 'id_marca' in datos and datos['id_marca'] > 0:
+                datos_mapeados['ID_Marca'] = datos['id_marca']
+                print(f"🏷️ Actualizando marca a ID: {datos['id_marca']}")
+            elif 'marca' in datos:
+                # Fallback si viene el nombre
+                id_marca = self._obtener_id_marca(datos['marca'])
+                datos_mapeados['ID_Marca'] = id_marca
+                print(f"🏷️ Actualizando marca por nombre: {datos['marca']} -> ID: {id_marca}")
             
             # Actualizar producto
             exito = safe_execute(

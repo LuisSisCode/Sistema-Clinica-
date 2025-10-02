@@ -66,27 +66,11 @@ Dialog {
     property bool inputNoExpiry: false
     property int inputStockUnit: 0  // Solo stock unitario
     property string inputSupplier: ""
+
+    // AGREGAR estas propiedades:
+    property int marcaIdSeleccionada: 0
+    property string marcaSeleccionadaNombre: ""
     
-    property bool isFormValid: {
-        // Validaciones básicas requeridas
-        var basicValidation = inputProductName.length > 0 &&
-                            inputPurchasePrice > 0 &&
-                            inputSalePrice > 0 &&
-                            inputMarca.length > 0
-        
-        if (modoEdicion) {
-            // ✅ EN MODO EDICIÓN SOLO VALIDACIÓN BÁSICA
-            console.log("Modo edición - solo validación básica:", basicValidation)
-            return basicValidation
-        } else {
-            // En modo creación: stock unitario > 0 y fecha válida
-            var stockValidation = inputStockUnit > 0
-            var fechaValidation = inputNoExpiry || 
-                                (inputExpirationDate.length > 0 && validateExpiryDate(inputExpirationDate))
-            
-            return basicValidation && stockValidation && fechaValidation
-        }
-    }
     onClosed: {
         try {
             showSuccessMessage = false
@@ -205,7 +189,7 @@ Dialog {
             }
         }
         
-        if (!isFormValid) {
+        if (!calcularValidacion()) {  // ← Cambiar aquí también
             showMessage("Complete todos los campos obligatorios")
             return false
         }
@@ -221,7 +205,8 @@ Dialog {
             codigo: inputProductCode.trim(),
             nombre: inputProductName.trim(),
             detalles: inputProductDetails.trim(),
-            marca: inputMarca.trim(),
+            id_marca: marcaIdSeleccionada,  // ✅ Enviar ID numérico
+            marca: marcaSeleccionadaNombre.trim(),  // Nombre para logging
             precio_compra: inputPurchasePrice,
             precio_venta: inputSalePrice,
             unidad_medida: inputMeasureUnit,
@@ -308,6 +293,9 @@ Dialog {
             inputNoExpiry = false
             inputStockUnit = 0
             inputSupplier = ""
+
+            marcaIdSeleccionada = 0
+            marcaSeleccionadaNombre = ""
             
             // Limpiar campos UI con verificación individual
             if (typeof codigoField !== 'undefined' && codigoField) {
@@ -325,8 +313,8 @@ Dialog {
             if (typeof precioVentaField !== 'undefined' && precioVentaField) {
                 precioVentaField.text = ""
             }
-            if (typeof marcaField !== 'undefined' && marcaField) {
-                marcaField.text = ""
+            if (typeof marcaComboBox !== 'undefined' && marcaComboBox) {
+                marcaComboBox.reset()
             }
             if (typeof fechaVencimientoField !== 'undefined' && fechaVencimientoField) {
                 fechaVencimientoField.text = ""
@@ -367,20 +355,60 @@ Dialog {
             console.log("⚠️ Error mostrando mensaje:", error)
         }
     }
+
+    function crearNuevaMarcaEnBackend(nombreMarca) {
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            showMessage("Error: Sistema no disponible")
+            return
+        }
+        
+        console.log("🏷️ Creando marca:", nombreMarca)
+        
+        // Llamar método Python
+        var marcaId = inventarioModel.crear_marca_rapida(nombreMarca)
+        
+        if (marcaId > 0) {
+            console.log("✅ Marca creada con ID:", marcaId)
+            
+            // Recargar marcas
+            cargarMarcasDisponibles()
+            
+            // Esperar un momento para que se actualice el modelo
+            Qt.callLater(function() {
+                // Seleccionar la nueva marca automáticamente en el ComboBox
+                if (marcaComboBox) {
+                    marcaComboBox.setMarcaById(marcaId)
+                }
+            })
+            
+            showMessage("Marca creada: " + nombreMarca)
+        } else {
+            console.log("❌ Error creando marca")
+            showMessage("Error al crear la marca")
+        }
+    }
     
     function abrirCrearProducto(modo = false, datos = null) {
         console.log("🚀 Abriendo CrearProducto - Modo edición:", modo)
         
         modoEdicion = modo
         productoData = datos
+        
+        // ✅ CARGAR MARCAS Y ESPERAR A QUE SE COMPLETE
         cargarMarcasDisponibles()
+        
+        // ✅ FORZAR marcasCargadas a true si hay marcas disponibles
+        if (marcasModel && marcasModel.length > 0) {
+            marcasCargadas = true
+            console.log("✅ Marcas disponibles confirmadas:", marcasModel.length)
+        }
         
         // Limpiar formulario de forma segura
         limpiarFormularioSeguro()
         
         if (modoEdicion && productoData) {
             console.log("📝 Modo edición detectado, cargando datos...")
-            // Usar múltiples Qt.callLater para asegurar que los campos estén listos
             Qt.callLater(function() {
                 Qt.callLater(function() {
                     if (crearProductoDialog && crearProductoDialog.visible) {
@@ -391,6 +419,9 @@ Dialog {
         }
         
         open()
+        
+        // ✅ VERIFICAR ESTADO FINAL
+        console.log("🔍 Estado al abrir: marcasCargadas =", marcasCargadas)
     }
     
     function cargarDatosProducto() {
@@ -399,7 +430,7 @@ Dialog {
             return
         }
         
-        console.log("📝 Cargando datos del producto:", JSON.stringify(productoData))
+        console.log("📋 Cargando datos del producto:", JSON.stringify(productoData))
         
         // ✅ ASIGNAR VALORES A LAS PROPIEDADES
         inputProductCode = productoData.codigo || ""
@@ -407,22 +438,57 @@ Dialog {
         inputProductDetails = productoData.detalles || ""
         inputPurchasePrice = productoData.precio_compra || 0
         inputSalePrice = productoData.precio_venta || 0
-        inputMarca = productoData.marca || ""
         inputMeasureUnit = productoData.unidad_medida || "Tabletas"
         
-        // ✅ ASIGNAR VALORES A LOS CAMPOS DE TEXTO
+        // ✅ ASIGNAR VALORES A LOS CAMPOS DE TEXTO (sin marca todavía)
         if (codigoField) codigoField.text = inputProductCode
         if (nombreField) nombreField.text = inputProductName
         if (detallesField) detallesField.text = inputProductDetails
         if (precioCompraField) precioCompraField.text = inputPurchasePrice.toString()
         if (precioVentaField) precioVentaField.text = inputSalePrice.toString()
-        if (marcaField) marcaField.text = inputMarca
         
         // ✅ ESTABLECER COMBOBOX DE UNIDAD
         if (unidadCombo) {
             var unidadIndex = unidadCombo.model.indexOf(inputMeasureUnit)
             if (unidadIndex >= 0) {
                 unidadCombo.currentIndex = unidadIndex
+            }
+        }
+        
+        // ✅ CARGAR MARCA AL FINAL, DESHABILITANDO TEMPORALMENTE LAS SEÑALES
+        if (productoData.ID_Marca || productoData.id_marca) {
+            var marcaId = productoData.ID_Marca || productoData.id_marca
+            marcaIdSeleccionada = marcaId
+            
+            // Desconectar temporalmente la señal para evitar activación
+            if (marcaComboBox) {
+                // Bloquear señales temporalmente
+                var signalBlocked = true
+                
+                // Establecer marca sin disparar señales
+                marcaComboBox.setMarcaById(marcaId)
+                
+                // Forzar la asignación después de un breve delay
+                Qt.callLater(function() {
+                    marcaIdSeleccionada = marcaId
+                    console.log("✅ Marca establecida en modo edición: ID", marcaId)
+                })
+            }
+        } else if (productoData.marca) {
+            // Fallback: si solo viene el nombre de marca, buscarla
+            inputMarca = productoData.marca
+            console.log("⚠️ Solo nombre de marca disponible, buscando ID...")
+            
+            // Buscar ID de marca por nombre
+            for (var i = 0; i < marcasModel.length; i++) {
+                var marca = marcasModel[i]
+                if ((marca.Nombre || marca.nombre) === productoData.marca) {
+                    marcaIdSeleccionada = marca.id
+                    if (marcaComboBox) {
+                        marcaComboBox.setMarcaById(marca.id)
+                    }
+                    break
+                }
             }
         }
         
@@ -639,8 +705,9 @@ Dialog {
                         }
                         
                         // Marca
+                        // Marca con ComboBox Inteligente
                         ColumnLayout {
-                            Layout.preferredWidth: 160
+                            Layout.preferredWidth: 200
                             spacing: 4
                             
                             Text {
@@ -650,32 +717,55 @@ Dialog {
                                 color: grayDark
                             }
                             
-                            Rectangle {
+                            // Importar MarcaComboBox (asegúrate de tener el archivo en la misma carpeta)
+                            MarcaComboBox {
+                                id: marcaComboBox
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: marcaField.activeFocus ? primaryBlue : borderColor
-                                border.width: 1
-                                radius: 6
                                 
-                                TextEdit {
-                                    id: marcaField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextEdit.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    
-                                    onTextChanged: inputMarca = text
-                                    
-                                    Text {
-                                        text: "GSK, Roche..."
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
+                                // Pasar modelo de marcas
+                                marcasModel: {
+                                    var marcasFormateadas = []
+                                    for (var i = 0; i < crearProductoDialog.marcasModel.length; i++) {
+                                        var marca = crearProductoDialog.marcasModel[i]
+                                        marcasFormateadas.push({
+                                            id: marca.id,
+                                            nombre: marca.Nombre || marca.nombre,
+                                            detalles: marca.Detalles || marca.detalles || ""
+                                        })
                                     }
+                                    return marcasFormateadas
+                                }
+                                
+                                placeholderText: "Buscar o crear marca..."
+                                required: true
+                                
+                                // Colores adaptados al diseño
+                                primaryColor: crearProductoDialog.primaryBlue
+                                successColor: crearProductoDialog.successGreen
+                                dangerColor: crearProductoDialog.dangerRed
+                                lightGray: crearProductoDialog.grayLight
+                                darkGray: crearProductoDialog.grayMedium
+                                
+                                // Cuando se selecciona una marca existente
+                                onMarcaCambiada: function(marca, marcaId) {
+                                    console.log("🏷️ MARCA CAMBIADA - Nombre:", marca, "ID:", marcaId)
+                                    
+                                    // ✅ ASIGNACIÓN DIRECTA E INMEDIATA
+                                    crearProductoDialog.marcaIdSeleccionada = marcaId
+                                    crearProductoDialog.marcaSeleccionadaNombre = marca
+                                    crearProductoDialog.inputMarca = marca
+                                    
+                                    // Verificación inmediata
+                                    console.log("🔍 Verificación inmediata:")
+                                    console.log("  - marcaIdSeleccionada:", crearProductoDialog.marcaIdSeleccionada)
+                                    console.log("  - Validación:", crearProductoDialog.calcularValidacion())
+                                }
+                                
+                                // Cuando se solicita crear una nueva marca
+                                onNuevaMarcaCreada: function(nombreMarca) {
+                                    console.log("➕ Solicitando crear nueva marca:", nombreMarca)
+                                    crearNuevaMarcaEnBackend(nombreMarca)
                                 }
                             }
                         }
@@ -1114,7 +1204,7 @@ Dialog {
                             }
                             
                             onClicked: {
-                                limpiarFormulario()
+                                limpiarFormularioSeguro()
                                 cancelarCreacion()
                                 volverALista() 
                                 close()
@@ -1124,15 +1214,22 @@ Dialog {
                         Button {
                             Layout.preferredWidth: modoEdicion ? 180 : 200
                             Layout.preferredHeight: buttonHeight
-                            enabled: isFormValid && marcasCargadas
+                            
+                            // ✅ BINDING MÁS EXPLÍCITO
+                            enabled: {
+                                var validacion = calcularValidacion()
+                                var marcasOk = marcasCargadas || (marcasModel && marcasModel.length > 0)
+                                return validacion && marcasOk
+                            }
                             
                             background: Rectangle {
                                 color: parent.enabled ? (parent.pressed ? "#1D4ED8" : primaryBlue) : "#E5E7EB"
                                 radius: 8
                             }
+                            
                             onEnabledChanged: {
                                 console.log("🔘 Botón Guardar enabled:", enabled)
-                                console.log("  - isFormValid:", isFormValid)
+                                console.log("  - calcularValidacion():", calcularValidacion())  // ✅ CORREGIDO
                                 console.log("  - marcasCargadas:", marcasCargadas)
                             }
                             
@@ -1203,5 +1300,39 @@ Dialog {
                 nombreField.forceActiveFocus()
             }
         })
+    }
+
+    function calcularValidacion() {
+        var nombreValido = inputProductName.length > 0
+        var precioCompraValido = inputPurchasePrice > 0
+        var precioVentaValido = inputSalePrice > 0
+        var marcaValida = marcaIdSeleccionada > 0
+        
+        var basicValidation = nombreValido && precioCompraValido && precioVentaValido && marcaValida
+        
+        console.log("🔍 VALIDACIÓN DETALLADA:")
+        console.log("  - nombreValido:", nombreValido, "(", inputProductName, ")")
+        console.log("  - precioCompraValido:", precioCompraValido, "(", inputPurchasePrice, ")")
+        console.log("  - precioVentaValido:", precioVentaValido, "(", inputSalePrice, ")")
+        console.log("  - marcaValida:", marcaValida, "(ID:", marcaIdSeleccionada, ")")
+        
+        if (modoEdicion) {
+            console.log("  - MODO EDICIÓN: retorna", basicValidation)
+            return basicValidation
+        } else {
+            var stockValido = inputStockUnit >= 0
+            var fechaValida = inputNoExpiry || 
+                            (inputExpirationDate.length > 0 && validateExpiryDate(inputExpirationDate))
+            
+            console.log("  - stockValido:", stockValido, "(", inputStockUnit, ")")
+            console.log("  - inputNoExpiry:", inputNoExpiry)
+            console.log("  - inputExpirationDate:", inputExpirationDate)
+            console.log("  - fechaValida:", fechaValida)
+            
+            var resultado = basicValidation && stockValido && fechaValida
+            console.log("  - RESULTADO FINAL:", resultado)
+            
+            return resultado
+        }
     }
 }

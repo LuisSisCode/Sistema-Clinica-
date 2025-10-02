@@ -95,12 +95,13 @@ Item {
                                 anchors.fill: parent
                                 compraModel: comprasWrapper.compraModel
                                 
-                                // Conexión de señales
-                                onNavegarACrearCompra: {
+                                // ✅ CORRECCIÓN: Usar función JavaScript con parámetros formales
+                                onNavegarACrearCompra: function() {
                                     console.log("📱 Señal recibida: Navegar a CrearCompra")
                                     comprasMainRoot.irACrearCompra()
                                 }
-                                onNavegarAEditarCompra: {
+                                
+                                onNavegarAEditarCompra: function(compraId) {
                                     console.log("📝 Señal recibida: Navegar a Editar Compra", compraId)
                                     comprasMainRoot.irAEditarCompra(compraId)
                                 }
