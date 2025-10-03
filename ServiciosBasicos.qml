@@ -11,25 +11,25 @@ Item {
     readonly property real screenWidth: width
     readonly property real screenHeight: height
     readonly property real baseUnit: Math.min(screenWidth, screenHeight) / 40
-    readonly property real fontScale: Math.max(1.0, screenHeight / 700) // Mejorado: escala mínima de 1.0
+    readonly property real fontScale: Math.max(0.8, screenHeight / 900) // Reducido de 1.0 a 0.8
 
     // Márgenes escalables (sin cambio)
     readonly property real marginSmall: baseUnit * 0.5
     readonly property real marginMedium: baseUnit * 1
     readonly property real marginLarge: baseUnit * 1.5
 
-    // ✅ TAMAÑOS DE FUENTE MEJORADOS - MÁS GRANDES Y LEGIBLES
-    readonly property real fontTiny: Math.max(11, 13 * fontScale)      // Era: (8, 10 * fontScale)
-    readonly property real fontSmall: Math.max(13, 15 * fontScale)     // Era: (10, 12 * fontScale)  
-    readonly property real fontBase: Math.max(15, 17 * fontScale)      // Era: (12, 14 * fontScale)
-    readonly property real fontMedium: Math.max(17, 19 * fontScale)    // Era: (14, 16 * fontScale)
-    readonly property real fontLarge: Math.max(19, 21 * fontScale)     // Era: (16, 18 * fontScale)
-    readonly property real fontTitle: Math.max(22, 28 * fontScale)     // Era: (18, 24 * fontScale)
+    // ✅ TAMAÑOS DE FUENTE AJUSTADOS - MÁS PEQUEÑOS COMO USUARIOS.QML
+    readonly property real fontTiny: Math.max(10, 11 * fontScale)      // Reducido
+    readonly property real fontSmall: Math.max(11, 13 * fontScale)     // Reducido
+    readonly property real fontBase: Math.max(13, 15 * fontScale)      // Reducido
+    readonly property real fontMedium: Math.max(15, 17 * fontScale)    // Reducido
+    readonly property real fontLarge: Math.max(17, 19 * fontScale)     // Reducido
+    readonly property real fontTitle: Math.max(20, 25 * fontScale)     // Reducido
 
-    // ✅ NUEVOS TAMAÑOS PARA ELEMENTOS ESPECÍFICOS
-    readonly property real fontHeader: Math.max(16, 18 * fontScale)    // Para headers de tabla
-    readonly property real fontButton: Math.max(14, 16 * fontScale)    // Para botones
-    readonly property real fontInput: Math.max(14, 16 * fontScale)
+    // ✅ TAMAÑOS AJUSTADOS PARA ELEMENTOS ESPECÍFICOS
+    readonly property real fontHeader: Math.max(14, 16 * fontScale)    // Reducido
+    readonly property real fontButton: Math.max(12, 14 * fontScale)    // Reducido
+    readonly property real fontInput: Math.max(12, 14 * fontScale)     // Reducido
     
     // NUEVA SEÑAL PARA NAVEGACIÓN A CONFIGURACIÓN
     signal irAConfigServiciosBasicos()
@@ -77,6 +77,10 @@ Item {
         "Resources/iconos/ingresos.png", 
         "Resources/iconos/egresos.png"
     ]
+
+    property var proveedoresGastosModel: ListModel {}
+    property bool showNewProveedorDialog: false
+    property string nuevoProveedorNombre: ""
 
     // FUNCIÓN HELPER MOVIDA AL NIVEL PRINCIPAL
     function obtenerAñosDisponibles() {
@@ -195,13 +199,12 @@ Item {
         target: appController
         
         function onModelsReady() {
-            //console.log("🚀 Models listos desde AppController")
             if (appController && appController.gasto_model_instance) {
                 gastoModelInstance = appController.gasto_model_instance
-                //console.log("✅ GastoModel disponible")
                 Qt.callLater(function() {
                     loadTiposGastosFromModel()
                     loadProveedoresFromModel()
+                    loadProveedoresGastosFromModel()  // ✅ AGREGAR ESTA LÍNEA
                     cargarPaginaDesdeBD()
                 })
             } else {
@@ -221,6 +224,7 @@ Item {
                 gastoModelInstance = appController.gasto_model_instance
                 loadTiposGastosFromModel()
                 loadProveedoresFromModel()
+                loadProveedoresGastosFromModel()  // ✅ AGREGAR ESTA LÍNEA
                 cargarPaginaDesdeBD()
             } else {
                 console.log("⚠ GastoModel aún no disponible")
@@ -299,15 +303,16 @@ Item {
     }
     
     // ✅ FUNCIÓN PARA CREAR GASTO - LLAMADA DIRECTA AL MODEL
-    function crearGastoDirecto(gastoData) {
+    function crearGastoDirecto(gastoData, proveedorId) {
         if (!gastoModelInstance) {
-            console.log("⚠ GastoModel no disponible para crear gasto")
+            console.log("⚠️ GastoModel no disponible para crear gasto")
             showErrorMessage("Error", "Sistema no disponible")
             return false
         }
         
         console.log("💰 Creando gasto con modelo real...")
         console.log("📊 Datos recibidos:", JSON.stringify(gastoData))
+        console.log("🏢 Proveedor ID:", proveedorId)
         
         // Obtener ID del tipo de gasto seleccionado
         var tipoGastoId = 0
@@ -317,33 +322,30 @@ Item {
             console.log("🏷️ Tipo de gasto seleccionado:", tipoSeleccionado.nombre, "ID:", tipoGastoId)
         }
         
-        // ID de usuario por defecto (debe obtenerse del contexto de sesión)
-        var usuarioId = 10  // Cambiar por usuario actual
-        
-        // LLAMADA DIRECTA AL MÉTODO DEL MODEL
-        // ✅ CORRECTO
+        // LLAMADA ACTUALIZADA CON proveedor_id
         var success = gastoModelInstance.crearGasto(
             tipoGastoId,                    // tipo_gasto_id
             parseFloat(gastoData.monto),    // monto
             gastoData.descripcion,          // descripcion
             gastoData.fechaGasto,          // fecha_gasto
-            gastoData.proveedor            // proveedor
+            proveedorId                     // proveedor_id (puede ser 0)
         )
         
-        console.log("🔍 Resultado creación:", success)
+        console.log("📝 Resultado creación:", success)
         return success
     }
 
     // ✅ FUNCIÓN PARA ACTUALIZAR GASTO - LLAMADA DIRECTA AL MODEL
-    function actualizarGastoDirecto(gastoId, gastoData) {
+    function actualizarGastoDirecto(gastoId, gastoData, proveedorId) {
         if (!gastoModelInstance) {
-            console.log("⚠ GastoModel no disponible para actualizar gasto")
+            console.log("⚠️ GastoModel no disponible para actualizar gasto")
             showErrorMessage("Error", "Sistema no disponible")
             return false
         }
         
         console.log("✏️ Actualizando gasto con modelo real...")
         console.log("📊 Datos recibidos:", JSON.stringify(gastoData))
+        console.log("🏢 Proveedor ID:", proveedorId)
         
         // Obtener ID del tipo de gasto seleccionado
         var tipoGastoId = 0
@@ -353,14 +355,14 @@ Item {
             console.log("🏷️ Tipo de gasto seleccionado:", tipoSeleccionado.nombre, "ID:", tipoGastoId)
         }
         
-        // ✅ LLAMADA ACTUALIZADA CON FECHA
+        // LLAMADA ACTUALIZADA CON proveedor_id
         var success = gastoModelInstance.actualizarGasto(
             parseInt(gastoId),              // gasto_id
             parseFloat(gastoData.monto),    // monto
             tipoGastoId,                    // tipo_gasto_id
             gastoData.descripcion,          // descripcion
-            gastoData.proveedor,            // proveedor
-            gastoData.fechaGasto            // ← NUEVO: fecha_gasto
+            proveedorId,                    // proveedor_id (0 para quitar, -1 para no cambiar)
+            gastoData.fechaGasto            // fecha_gasto
         )
         
         console.log("✏️ Resultado actualización:", success)
@@ -642,7 +644,7 @@ Item {
                                     // En el header, cambiar el Label del título:
                                     Label {
                                         text: "Gestión de " + subsectionTitles[currentSubsection]
-                                        font.pixelSize: fontMedium
+                                        font.pixelSize: fontMedium // Reducido de fontLarge
                                         font.bold: true
                                         font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
@@ -650,7 +652,7 @@ Item {
                                     
                                     Label {
                                         text: "y Gastos Operativos"
-                                        font.pixelSize: fontBase
+                                        font.pixelSize: fontBase // Reducido de fontMedium
                                         font.bold: false
                                         font.family: "Segoe UI, Arial, sans-serif"
                                         color: textColor
@@ -719,7 +721,7 @@ Item {
                                         text: "Nuevo Gasto"
                                         color: whiteColor
                                         font.bold: true
-                                        font.pixelSize: fontButton
+                                        font.pixelSize: fontButton // Reducido
                                         font.family: "Segoe UI, Arial, sans-serif"
                                     }
                                 }
@@ -758,7 +760,7 @@ Item {
                                 Label {
                                     text: "Tipo Servicio:"
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     color: textColor
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
@@ -766,6 +768,7 @@ Item {
                                 ComboBox {
                                     id: filtroTipoServicio
                                     width: Math.max(160, screenWidth * 0.15)
+                                    font.pixelSize: fontBase // Reducido
                                     
                                     model: {
                                         var tipos = ["Todos los servicios"]
@@ -795,7 +798,7 @@ Item {
                                 Label {
                                     text: "Mes:"
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     color: textColor
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
@@ -803,6 +806,7 @@ Item {
                                 ComboBox {
                                     id: filtroMes
                                     width: Math.max(140, screenWidth * 0.14)
+                                    font.pixelSize: fontBase // Reducido
                                     model: ["Todos los períodos", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                                             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                                     currentIndex: 0
@@ -823,7 +827,7 @@ Item {
                                 Label {
                                     text: "Año:"
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     color: textColor
                                     anchors.verticalCenter: parent.verticalCenter
                                     visible: filtroAño.visible
@@ -832,6 +836,7 @@ Item {
                                 ComboBox {
                                     id: filtroAño
                                     width: Math.max(80, screenWidth * 0.08)
+                                    font.pixelSize: fontBase // Reducido
                                     
                                     model: {
                                         var años = []
@@ -867,6 +872,7 @@ Item {
                             Button {
                                 text: "Limpiar"
                                 Layout.preferredWidth: 80
+                                font.pixelSize: fontButton // Reducido
                                 
                                 background: Rectangle {
                                     color: warningColor
@@ -877,6 +883,7 @@ Item {
                                     text: parent.text
                                     color: whiteColor
                                     font.bold: true
+                                    font.pixelSize: fontButton // Reducido
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -926,7 +933,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "ID"
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontSmall // Reducido
                                             color: textColor
                                         }
                                     }
@@ -942,7 +949,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "TIPO DE GASTO"
                                             font.bold: true
-                                            font.pixelSize: fontHeader
+                                            font.pixelSize: fontHeader // Reducido
                                             color: textColor
                                         }
                                     }
@@ -958,7 +965,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "DESCRIPCIÓN"
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontSmall // Reducido
                                             color: textColor
                                         }
                                     }
@@ -974,7 +981,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "MONTO"
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontSmall // Reducido
                                             color: textColor
                                         }
                                     }
@@ -990,7 +997,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "FECHA"
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontSmall // Reducido
                                             color: textColor
                                         }
                                     }
@@ -1006,7 +1013,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "PROVEEDOR"
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontSmall // Reducido
                                             color: textColor
                                         }
                                     }
@@ -1022,7 +1029,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "REGISTRADO POR"
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontSmall // Reducido
                                             color: textColor
                                         }
                                     }
@@ -1066,11 +1073,11 @@ Item {
                                                     text: model.gastoId
                                                     color: textColor
                                                     font.bold: true
-                                                    font.pixelSize: fontSmall
+                                                    font.pixelSize: fontSmall // Reducido
                                                 }
                                             }
                                             
-                                            // COLUMNA TIPO
+                                            // COLUMNA TIPO - AUMENTADO EL TAMAÑO
                                             Rectangle {
                                                 Layout.preferredWidth: parent.width * 0.16
                                                 Layout.fillHeight: true
@@ -1080,8 +1087,8 @@ Item {
                                                 
                                                 Rectangle {
                                                     anchors.centerIn: parent
-                                                    width: Math.min(parent.width * 0.9, baseUnit * 6)
-                                                    height: Math.min(parent.height * 0.4, baseUnit * 1)
+                                                    width: Math.min(parent.width * 0.9, baseUnit * 8) // Aumentado de 6 a 8
+                                                    height: Math.min(parent.height * 0.6, baseUnit * 2) // Aumentado de 1 a 2
                                                     color: getColorForTipo(model.tipoGasto)
                                                     radius: height / 2
                                                     
@@ -1089,8 +1096,9 @@ Item {
                                                         anchors.centerIn: parent
                                                         text: model.tipoGasto
                                                         color: whiteColor
-                                                        font.pixelSize: fontSmall 
+                                                        font.pixelSize: fontSmall // Reducido pero más visible por el tamaño aumentado
                                                         font.bold: true
+                                                        padding: 4
                                                     }
                                                 }
                                             }
@@ -1108,7 +1116,7 @@ Item {
                                                     anchors.margins: marginSmall * 0.5
                                                     text: model.descripcion || "Sin descripción"
                                                     color: textColor
-                                                    font.pixelSize: fontSmall 
+                                                    font.pixelSize: fontSmall // Reducido
                                                     elide: Text.ElideRight
                                                     wrapMode: Text.WordWrap
                                                     maximumLineCount: 2
@@ -1135,7 +1143,7 @@ Item {
                                                         return successColor
                                                     }
                                                     font.bold: true
-                                                    font.pixelSize: fontSmall
+                                                    font.pixelSize: fontSmall // Reducido
                                                 }
                                             }
                                             
@@ -1151,7 +1159,7 @@ Item {
                                                     anchors.centerIn: parent
                                                     text: model.fechaGasto
                                                     color: textColor
-                                                    font.pixelSize: fontSmall
+                                                    font.pixelSize: fontSmall // Reducido
                                                 }
                                             }
                                             
@@ -1166,9 +1174,11 @@ Item {
                                                 Label { 
                                                     anchors.fill: parent
                                                     anchors.margins: marginSmall * 0.25
+                                                    // CORRECCIÓN: Cambiar 'proveedor_nombre' por 'proveedor'
                                                     text: model.proveedor || "Sin proveedor"
-                                                    color: "#7f8c8d"
+                                                    color: model.proveedor ? textColor : "#95a5a6"
                                                     font.pixelSize: fontTiny
+                                                    font.italic: !model.proveedor
                                                     elide: Text.ElideRight
                                                     wrapMode: Text.WordWrap
                                                     maximumLineCount: 2
@@ -1190,7 +1200,7 @@ Item {
                                                     anchors.margins: marginSmall * 0.25
                                                     text: model.registradoPor || "Usuario desconocido"
                                                     color: "#7f8c8d"
-                                                    font.pixelSize: fontTiny
+                                                    font.pixelSize: fontTiny // Reducido
                                                     elide: Text.ElideRight
                                                     wrapMode: Text.WordWrap
                                                     maximumLineCount: 2
@@ -1369,7 +1379,7 @@ Item {
                                             text: "No hay gastos registrados"
                                             color: textColor
                                             font.bold: true
-                                            font.pixelSize: fontLarge
+                                            font.pixelSize: fontLarge // Reducido
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: "Segoe UI"
                                         }
@@ -1377,7 +1387,7 @@ Item {
                                         Label {
                                             text: "Registra el primer gasto haciendo clic en \"➕ Nuevo Gasto\""
                                             color: "#6B7280"
-                                            font.pixelSize: fontBase
+                                            font.pixelSize: fontBase // Reducido
                                             Layout.alignment: Qt.AlignHCenter
                                             wrapMode: Text.WordWrap
                                             horizontalAlignment: Text.AlignHCenter
@@ -1412,6 +1422,7 @@ Item {
                                 Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
                                 text: "← Anterior"
                                 enabled: currentPageServicios > 0
+                                font.pixelSize: fontBase // Reducido
                                 
                                 background: Rectangle {
                                     color: parent.enabled ? 
@@ -1430,7 +1441,7 @@ Item {
                                     text: parent.text
                                     color: parent.enabled ? "#374151" : "#9CA3AF"
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -1447,7 +1458,7 @@ Item {
                             Label {
                                 text: "Página " + (currentPageServicios + 1) + " de " + Math.max(1, totalPagesServicios)
                                 color: "#374151"
-                                font.pixelSize: fontBase
+                                font.pixelSize: fontBase // Reducido
                                 font.weight: Font.Medium
                             }
                             
@@ -1457,6 +1468,7 @@ Item {
                                 Layout.preferredHeight: Math.max(32, screenHeight * 0.05)
                                 text: "Siguiente →"
                                 enabled: currentPageServicios < totalPagesServicios - 1
+                                font.pixelSize: fontBase // Reducido
                                 
                                 background: Rectangle {
                                     color: parent.enabled ? 
@@ -1473,7 +1485,7 @@ Item {
                                     text: parent.text
                                     color: parent.enabled ? "#FFFFFF" : "#9CA3AF"
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -1624,13 +1636,14 @@ Item {
                                 text: "Tipo de Gasto:"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: fontInput
+                                font.pixelSize: fontInput // Reducido
                             }
                             
                             ComboBox {
                                 id: tipoGastoCombo
                                 width: parent.width
                                 height: 40
+                                font.pixelSize: fontInput // Reducido
                                 model: getTiposGastosParaCombo()
                                 onCurrentIndexChanged: {
                                     if (currentIndex > 0) {
@@ -1651,7 +1664,7 @@ Item {
                                 text: "Monto (Bs):"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: 14
+                                font.pixelSize: fontInput // Reducido
                             }
                             
                             TextField {
@@ -1659,7 +1672,7 @@ Item {
                                 width: parent.width
                                 height: 40
                                 placeholderText: "0.00"
-                                font.pixelSize: fontInput 
+                                font.pixelSize: fontInput // Reducido
                                 validator: DoubleValidator { bottom: 0.0; decimals: 2 }
                             }
                         }
@@ -1673,7 +1686,7 @@ Item {
                                 text: "Fecha del Gasto:"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: 14
+                                font.pixelSize: fontInput // Reducido
                             }
                             
                             TextField {
@@ -1683,6 +1696,7 @@ Item {
                                 placeholderText: "YYYY-MM-DD"
                                 text: Qt.formatDate(new Date(), "yyyy-MM-dd")
                                 inputMethodHints: Qt.ImhDate  
+                                font.pixelSize: fontInput // Reducido
 
                                 onTextChanged: {
                                     var datePattern = /^\d{4}-\d{2}-\d{2}$/
@@ -1700,24 +1714,77 @@ Item {
                             width: parent.width
                             spacing: 5
                             
-                            Label {
-                                text: "Proveedor/Empresa:"
-                                font.bold: true
-                                color: textColor
-                                font.pixelSize: 14
+                            RowLayout {
+                                width: parent.width
+                                spacing: 8
+                                
+                                Label {
+                                    text: "Proveedor:"
+                                    font.bold: true
+                                    color: textColor
+                                    font.pixelSize: fontInput
+                                }
+                                
+                                Label {
+                                    text: "(opcional)"
+                                    font.pixelSize: fontTiny
+                                    color: "#7f8c8d"
+                                    font.italic: true
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                // ✅ BOTÓN PARA CREAR NUEVO PROVEEDOR
+                                Button {
+                                    Layout.preferredWidth: 120
+                                    Layout.preferredHeight: 28
+                                    
+                                    background: Rectangle {
+                                        color: parent.pressed ? Qt.darker(successColor, 1.1) : successColor
+                                        radius: 6
+                                    }
+                                    
+                                    contentItem: RowLayout {
+                                        spacing: 6
+                                        
+                                        Label {
+                                            text: "+"
+                                            color: "white"
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+                                        
+                                        Label {
+                                            text: "Nuevo"
+                                            color: "white"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+                                    }
+                                    
+                                    onClicked: {
+                                        dialogoNuevoProveedor.open()
+                                    }
+                                }
                             }
                             
-                            ComboBox {
-                                id: proveedorCombo
+                            // ComboBox simplificado
+                            ProveedorComboBox {
+                                id: proveedorComboBox
                                 width: parent.width
                                 height: 40
-                                model: getProveedoresParaCombo()
-                                onCurrentIndexChanged: {
-                                    if (currentIndex > 0) {
-                                        gastoForm.selectedProveedorIndex = currentIndex - 1
-                                    } else {
-                                        gastoForm.selectedProveedorIndex = -1
+                                
+                                proveedoresModel: {
+                                    var lista = []
+                                    for (var i = 0; i < proveedoresGastosModel.count; i++) {
+                                        lista.push(proveedoresGastosModel.get(i))
                                     }
+                                    return lista
+                                }
+                                
+                                onProveedorCambiado: function(id, nombre) {
+                                    gastoForm.selectedProveedorIndex = id
+                                    console.log("🏢 Proveedor seleccionado:", nombre, "ID:", id)
                                 }
                             }
                         }
@@ -1731,14 +1798,14 @@ Item {
                                 text: "Descripción:"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: 14
+                                font.pixelSize: fontInput // Reducido
                             }
                             
                             TextArea {
                                 id: descripcionField
                                 width: parent.width
                                 height: 100
-                                font.pixelSize: fontInput
+                                font.pixelSize: fontInput // Reducido
                                 placeholderText: "Descripción detallada del gasto..."
                                 wrapMode: TextArea.Wrap
                             }
@@ -1763,6 +1830,7 @@ Item {
                         width: 120
                         height: 40
                         text: "Cancelar"
+                        font.pixelSize: fontButton // Reducido
                         
                         background: Rectangle {
                             color: cancelButton.pressed ? "#e0e0e0" : "#f8f9fa"
@@ -1773,7 +1841,7 @@ Item {
                         
                         contentItem: Label {
                             text: parent.text
-                            font.pixelSize: fontButton 
+                            font.pixelSize: fontButton // Reducido
                             color: textColor
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1792,17 +1860,31 @@ Item {
                         width: 120
                         height: 40
                         text: isEditMode ? "Actualizar" : "Guardar"
-                        enabled: gastoForm.selectedTipoGastoIndex >= 0 && 
-                            descripcionField.text.length > 0 &&
-                            montoField.text.length > 0 &&
-                            gastoForm.selectedProveedorIndex >= 0 &&
-                            fechaGastoField.text.length > 0 
-                                
+                        font.pixelSize: fontButton
+                        
+                        enabled: {
+                            // Validaciones base
+                            var tipoValido = gastoForm.selectedTipoGastoIndex >= 0
+                            var montoValido = montoField.text.length > 0 && parseFloat(montoField.text) > 0
+                            var fechaValida = fechaGastoField.text.length >= 10
+                            
+                            // Validación condicional de descripción
+                            var tieneProveedor = proveedorComboBox.selectedId > 0
+                            var descripcionValida = tieneProveedor ? 
+                                descripcionField.text.trim().length > 0 :
+                                descripcionField.text.trim().length >= 10
+                            
+                            return tipoValido && montoValido && fechaValida && descripcionValida
+                        }
                         
                         background: Rectangle {
                             color: !saveButton.enabled ? "#bdc3c7" : 
                                 (saveButton.pressed ? Qt.darker(primaryColor, 1.1) : primaryColor)
                             radius: 5
+                            
+                            Behavior on color {
+                                ColorAnimation { duration: 150 }
+                            }
                         }
                         
                         contentItem: Label {
@@ -1821,38 +1903,43 @@ Item {
                                 return
                             }
                             
-                            if (gastoForm.selectedProveedorIndex < 0) {
-                                showErrorMessage("Error de validación", "Selecciona un proveedor")
-                                return
-                            }
-                            
                             if (parseFloat(montoField.text) <= 0) {
                                 showErrorMessage("Error de validación", "El monto debe ser mayor a 0")
                                 return
                             }
+                            
                             if (!fechaGastoField.text || fechaGastoField.text.length < 10) {
                                 showErrorMessage("Error de validación", "Ingresa una fecha válida (YYYY-MM-DD)")
                                 return
                             }
                             
-                            var proveedorSeleccionado = proveedoresModel.get(gastoForm.selectedProveedorIndex)
-                            var proveedorNombre = proveedorSeleccionado.nombre
+                            // Obtener ID del proveedor seleccionado
+                            var proveedorId = proveedorComboBox.selectedId || 0
+                            
+                            // Validación condicional de descripción
+                            if (proveedorId === 0 && descripcionField.text.trim().length < 10) {
+                                showErrorMessage(
+                                    "Validación requerida", 
+                                    "Si no hay proveedor, la descripción debe tener al menos 10 caracteres"
+                                )
+                                return
+                            }
                             
                             var gastoData = {
                                 descripcion: descripcionField.text.trim(),
                                 monto: parseFloat(montoField.text).toFixed(2),
-                                fechaGasto: fechaGastoField.text,
-                                proveedor: proveedorNombre
+                                fechaGasto: fechaGastoField.text
                             }
                             
-                            console.log("Enviando datos del formulario:", JSON.stringify(gastoData))
+                            console.log("📝 Enviando datos del formulario:", JSON.stringify(gastoData))
+                            console.log("🏢 Proveedor ID:", proveedorId)
                             
                             var success = false
                             
                             if (isEditMode && editingGastoData) {
-                                success = actualizarGastoDirecto(editingGastoData.gastoId, gastoData)
+                                success = actualizarGastoDirecto(editingGastoData.gastoId, gastoData, proveedorId)
                             } else {
-                                success = crearGastoDirecto(gastoData)
+                                success = crearGastoDirecto(gastoData, proveedorId)
                             }
                             
                             if (!success) {
@@ -1866,8 +1953,8 @@ Item {
         
         // CARGAR DATOS EN MODO EDICIÓN
         onVisibleChanged: {
-            if (visible && isEditMode) {
-                // Buscar el tipo de gasto correspondiente
+            if (visible && isEditMode && editingGastoData) {
+                // Cargar tipo de gasto
                 var tipoGastoNombre = editingGastoData.tipoGasto
                 for (var i = 0; i < tiposGastosModel.count; i++) {
                     if (tiposGastosModel.get(i).nombre === tipoGastoNombre) {
@@ -1877,29 +1964,36 @@ Item {
                     }
                 }
                 
-                // Buscar el proveedor correspondiente
-                var proveedorNombre = editingGastoData.proveedor
-                for (var j = 0; j < proveedoresModel.count; j++) {
-                    if (proveedoresModel.get(j).nombre === proveedorNombre) {
-                        proveedorCombo.currentIndex = j + 1
-                        gastoForm.selectedProveedorIndex = j
-                        break
+                // CORRECCIÓN: Cargar proveedor usando el nombre del proveedor
+                if (editingGastoData.proveedor && editingGastoData.proveedor !== "Sin proveedor") {
+                    // Buscar el proveedor por nombre
+                    for (var j = 0; j < proveedoresGastosModel.count; j++) {
+                        var prov = proveedoresGastosModel.get(j)
+                        if (prov.nombre === editingGastoData.proveedor) {
+                            proveedorComboBox.currentIndex = j
+                            gastoForm.selectedProveedorIndex = j
+                            break
+                        }
                     }
+                } else {
+                    proveedorComboBox.reset() // "Sin proveedor"
+                    gastoForm.selectedProveedorIndex = 0
                 }
                 
-                // Cargar el resto de campos
+                // Cargar resto de campos
                 descripcionField.text = editingGastoData.descripcion
                 montoField.text = editingGastoData.monto
                 fechaGastoField.text = editingGastoData.fechaGasto
+                
             } else if (visible && !isEditMode) {
-                // Limpiar formulario para nuevo gasto
+                // Limpiar formulario
                 tipoGastoCombo.currentIndex = 0
-                proveedorCombo.currentIndex = 0
+                proveedorComboBox.reset()
                 descripcionField.text = ""
                 montoField.text = ""
                 fechaGastoField.text = Qt.formatDate(new Date(), "yyyy-MM-dd")
                 gastoForm.selectedTipoGastoIndex = -1
-                gastoForm.selectedProveedorIndex = -1
+                gastoForm.selectedProveedorIndex = 0
             }
         }
     }
@@ -1971,7 +2065,7 @@ Item {
                         Label {
                             anchors.centerIn: parent
                             text: "⚠️"
-                            font.pixelSize: fontLarge
+                            font.pixelSize: fontLarge // Reducido
                         }
                     }
                     
@@ -1980,7 +2074,7 @@ Item {
                         
                         Label {
                             text: "Confirmar Eliminación"
-                            font.pixelSize: fontLarge
+                            font.pixelSize: fontLarge // Reducido
                             font.bold: true
                             color: "#dc2626"
                             Layout.alignment: Qt.AlignLeft
@@ -1988,7 +2082,7 @@ Item {
                         
                         Label {
                             text: "Acción irreversible"
-                            font.pixelSize: fontSmall
+                            font.pixelSize: fontSmall // Reducido
                             color: "#7f8c8d"
                             Layout.alignment: Qt.AlignLeft
                         }
@@ -2011,7 +2105,7 @@ Item {
                     
                     Label {
                         text: "¿Estás seguro de eliminar este gasto?"
-                        font.pixelSize: fontMedium
+                        font.pixelSize: fontMedium // Reducido
                         font.bold: true
                         color: textColor
                         Layout.alignment: Qt.AlignHCenter
@@ -2021,7 +2115,7 @@ Item {
                     
                     Label {
                         text: "Esta acción no se puede deshacer y el registro se eliminará permanentemente."
-                        font.pixelSize: fontBase
+                        font.pixelSize: fontBase // Reducido
                         color: "#6b7280"
                         Layout.alignment: Qt.AlignHCenter
                         wrapMode: Text.WordWrap
@@ -2041,6 +2135,7 @@ Item {
                         Button {
                             Layout.preferredWidth: 130
                             Layout.preferredHeight: 45
+                            font.pixelSize: fontBase // Reducido
                             
                             background: Rectangle {
                                 color: parent.pressed ? "#e5e7eb" : 
@@ -2060,7 +2155,7 @@ Item {
                                 Label {
                                     text: "✕"
                                     color: "#6b7280"
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontSmall // Reducido
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                                 
@@ -2068,7 +2163,7 @@ Item {
                                     text: "Cancelar"
                                     color: "#374151"
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                             }
@@ -2083,6 +2178,7 @@ Item {
                         Button {
                             Layout.preferredWidth: 130
                             Layout.preferredHeight: 45
+                            font.pixelSize: fontBase // Reducido
                             
                             background: Rectangle {
                                 color: parent.pressed ? "#dc2626" : 
@@ -2101,7 +2197,7 @@ Item {
                                 Label {
                                     text: "🗑️"
                                     color: whiteColor
-                                    font.pixelSize: fontSmall
+                                    font.pixelSize: fontSmall // Reducido
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                                 
@@ -2109,7 +2205,7 @@ Item {
                                     text: "Eliminar"
                                     color: whiteColor
                                     font.bold: true
-                                    font.pixelSize: fontBase
+                                    font.pixelSize: fontBase // Reducido
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                             }
@@ -2163,7 +2259,7 @@ Item {
             Label {
                 text: "Cargando..."
                 color: whiteColor
-                font.pixelSize: fontLarge
+                font.pixelSize: fontLarge // Reducido
                 Layout.alignment: Qt.AlignHCenter
             }
         }
@@ -2190,7 +2286,7 @@ Item {
             anchors.centerIn: parent
             color: whiteColor
             font.bold: true
-            font.pixelSize: fontBase
+            font.pixelSize: fontBase // Reducido
         }
         
         Timer {
@@ -2228,7 +2324,7 @@ Item {
             
             Label {
                 text: "⚠ " + errorDialog.title
-                font.pixelSize: fontLarge
+                font.pixelSize: fontLarge // Reducido
                 font.bold: true
                 color: dangerColor
                 Layout.alignment: Qt.AlignHCenter
@@ -2242,7 +2338,7 @@ Item {
                     id: errorText
                     width: parent.width
                     wrapMode: Text.WordWrap
-                    font.pixelSize: fontBase
+                    font.pixelSize: fontBase // Reducido
                     color: textColor
                 }
             }
@@ -2250,6 +2346,7 @@ Item {
             Button {
                 text: "Cerrar"
                 Layout.alignment: Qt.AlignHCenter
+                font.pixelSize: fontBase // Reducido
                 onClicked: errorDialog.close()
                 
                 background: Rectangle {
@@ -2266,6 +2363,227 @@ Item {
             }
         }
     }
+
+    // ✅ DIÁLOGO SIMPLE PARA CREAR PROVEEDOR
+    Dialog {
+        id: dialogoNuevoProveedor
+        anchors.centerIn: parent
+        width: Math.min(400, parent.width * 0.9)
+        height: Math.min(280, parent.height * 0.6)
+        modal: true
+        title: ""
+        
+        background: Rectangle {
+            color: whiteColor
+            radius: 10
+            border.color: "#DDD"
+            border.width: 1
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+            
+            // Header
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 50
+                color: successColor
+                radius: 10
+                
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 10
+                    color: parent.color
+                }
+                
+                Label {
+                    anchors.centerIn: parent
+                    text: "NUEVO PROVEEDOR"
+                    font.pixelSize: 14
+                    font.bold: true
+                    color: whiteColor
+                }
+                
+                Button {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 28
+                    height: 28
+                    text: "×"
+                    
+                    background: Rectangle {
+                        color: "transparent"
+                        radius: 14
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.pixelSize: 18
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: dialogoNuevoProveedor.close()
+                }
+            }
+            
+            // Contenido
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.margins: 20
+                spacing: 15
+                
+                // Campo Nombre (obligatorio)
+                Column {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    
+                    Label {
+                        text: "Nombre del Proveedor: *"
+                        font.bold: true
+                        font.pixelSize: 12
+                        color: textColor
+                    }
+                    
+                    TextField {
+                        id: nuevoProvNombre
+                        width: parent.width
+                        height: 36
+                        placeholderText: "Ej: Empresa Eléctrica"
+                        font.pixelSize: 12
+                    }
+                }
+                
+                // Campo Teléfono (opcional)
+                Column {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    
+                    RowLayout {
+                        Label {
+                            text: "Teléfono:"
+                            font.bold: true
+                            font.pixelSize: 12
+                            color: textColor
+                        }
+                        
+                        Label {
+                            text: "(opcional)"
+                            font.pixelSize: 10
+                            color: "#7f8c8d"
+                            font.italic: true
+                        }
+                    }
+                    
+                    TextField {
+                        id: nuevoProvTelefono
+                        width: parent.width
+                        height: 36
+                        placeholderText: "Ej: 77123456"
+                        font.pixelSize: 12
+                    }
+                }
+                
+                Item { Layout.fillHeight: true }
+                
+                // Mensaje de validación
+                Label {
+                    text: "⚠️ El nombre es obligatorio"
+                    font.pixelSize: 11
+                    color: dangerColor
+                    visible: nuevoProvNombre.text.trim().length < 3
+                }
+            }
+            
+            // Botones
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 60
+                color: "transparent"
+                
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 12
+                    
+                    Button {
+                        width: 100
+                        height: 36
+                        text: "Cancelar"
+                        
+                        background: Rectangle {
+                            color: "#F3F4F6"
+                            radius: 6
+                            border.color: "#D1D5DB"
+                            border.width: 1
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: textColor
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            nuevoProvNombre.text = ""
+                            nuevoProvTelefono.text = ""
+                            dialogoNuevoProveedor.close()
+                        }
+                    }
+                    
+                    Button {
+                        width: 100
+                        height: 36
+                        text: "Crear"
+                        enabled: nuevoProvNombre.text.trim().length >= 3
+                        
+                        background: Rectangle {
+                            color: parent.enabled ? 
+                                (parent.pressed ? Qt.darker(successColor, 1.1) : successColor) : 
+                                "#bdc3c7"
+                            radius: 6
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.pixelSize: 12
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            var nombre = nuevoProvNombre.text.trim()
+                            var telefono = nuevoProvTelefono.text.trim()
+                            
+                            if (nombre.length < 3) {
+                                showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
+                                return
+                            }
+                            
+                            // Crear proveedor con solo nombre y teléfono
+                            if (crearNuevoProveedorGasto(nombre, telefono)) {
+                                showSuccessMessage("Proveedor creado: " + nombre)
+                                nuevoProvNombre.text = ""
+                                nuevoProvTelefono.text = ""
+                                dialogoNuevoProveedor.close()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     function eliminarGasto(gastoId) {
         try {
             console.log("🗑️ Iniciando eliminación de gasto ID:", gastoId)
@@ -2309,13 +2627,12 @@ Item {
     Component.onCompleted: {
         console.log("Módulo Servicios Básicos iniciado")
         
-        // Verificar si ya tenemos el modelo disponible
         if (appController && appController.gasto_model_instance) {
             gastoModelInstance = appController.gasto_model_instance
-            //console.log("GastoModel disponible inmediatamente")
             Qt.callLater(function() {
                 loadTiposGastosFromModel()
-                loadProveedoresFromModel()  // ✅ NUEVA CARGA
+                loadProveedoresFromModel()
+                loadProveedoresGastosFromModel()  // ← AGREGAR ESTA LÍNEA
                 cargarPaginaDesdeBD()
             })
         } else {
@@ -2327,6 +2644,87 @@ Item {
     onCurrentSubsectionChanged: {
         console.log("📋 Cambiando a subsección:", subsectionTitles[currentSubsection])
         // Aquí puedes cargar datos específicos según la subsección
+    }
+
+    function loadProveedoresGastosFromModel() {
+        if (!gastoModelInstance) {
+            console.log("⚠️ GastoModel no disponible")
+            return
+        }
+        
+        // ✅ EVITAR BUCLE: Solo cargar si el modelo está vacío o si es una recarga forzada
+        if (proveedoresGastosModel.count > 0) {
+            console.log("📊 Proveedores ya cargados:", proveedoresGastosModel.count)
+            return
+        }
+        
+        console.log("🏢 Cargando proveedores de gastos...")
+        
+        var proveedores = gastoModelInstance.obtenerProveedoresGastosParaComboBox()
+        
+        for (var i = 0; i < proveedores.length; i++) {
+            var prov = proveedores[i]
+            proveedoresGastosModel.append({
+                id: parseInt(prov.id || 0),
+                nombre: String(prov.nombre || "Sin proveedor"),
+                displayText: String(prov.display_text || prov.nombre)
+            })
+        }
+        
+        console.log("✅ Proveedores cargados:", proveedoresGastosModel.count)
+    }
+
+    function buscarProveedorGasto(termino) {
+        if (!gastoModelInstance) return
+        
+        if (!termino || termino.length < 2) {
+            loadProveedoresGastosFromModel()
+            return
+        }
+        
+        var resultados = gastoModelInstance.buscarProveedorGasto(termino)
+        
+        proveedoresGastosModel.clear()
+        for (var i = 0; i < resultados.length; i++) {
+            var prov = resultados[i]
+            proveedoresGastosModel.append({
+                id: prov.id,
+                nombre: prov.nombre,
+                displayText: prov.display_text,
+                usoFrecuencia: prov.uso_frecuencia
+            })
+        }
+    }
+
+    function crearNuevoProveedorGasto(nombre) {
+        if (!gastoModelInstance) {
+            showErrorMessage("Error", "Sistema no disponible")
+            return false
+        }
+        
+        if (!nombre || nombre.trim().length < 3) {
+            showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
+            return false
+        }
+        
+        console.log("🏢 Creando nuevo proveedor:", nombre)
+        
+        var proveedorId = gastoModelInstance.crearProveedorGasto(nombre.trim(), "", "", "")
+        
+        if (proveedorId > 0) {
+            console.log("✅ Proveedor creado con ID:", proveedorId)
+            loadProveedoresGastosFromModel()
+            
+            // Seleccionar el proveedor recién creado en el ComboBox
+            Qt.callLater(function() {
+                proveedorComboBox.setSelectedById(proveedorId)
+                gastoForm.selectedProveedorIndex = proveedorComboBox.currentIndex
+            })
+            
+            return true
+        }
+        
+        return false
     }
 
     // Conectar con la propiedad del main.qml

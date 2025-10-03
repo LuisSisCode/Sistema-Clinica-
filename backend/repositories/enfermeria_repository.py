@@ -502,16 +502,31 @@ class EnfermeriaRepository:
             return None
     
     def actualizar_procedimiento_enfermeria(self, id_procedimiento: int, datos: Dict[str, Any]) -> bool:
-        """Actualiza un procedimiento de enfermería existente"""
+        """Actualiza un procedimiento de enfermería existente - CON SOPORTE ANÓNIMO"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Actualizar datos del paciente si es necesario
-                id_paciente = self._obtener_o_crear_paciente(cursor, datos)
-                if not id_paciente:
-                    raise Exception("No se pudo actualizar el paciente")
+                # ✅ SI ES ANÓNIMO, NO ACTUALIZAR PACIENTE
+                if datos.get('esAnonimo', False):
+                    # Obtener el ID del paciente anónimo
+                    cursor.execute("""
+                        SELECT Id_Paciente FROM Enfermeria WHERE id = ?
+                    """, (id_procedimiento,))
+                    resultado = cursor.fetchone()
+                    
+                    if not resultado:
+                        raise Exception(f"No se encontró el procedimiento {id_procedimiento}")
+                    
+                    id_paciente = resultado.Id_Paciente
+                    logger.info(f"🎭 Manteniendo paciente anónimo ID: {id_paciente}")
+                else:
+                    # Actualizar datos del paciente si es necesario
+                    id_paciente = self._obtener_o_crear_paciente(cursor, datos)
+                    if not id_paciente:
+                        raise Exception("No se pudo actualizar el paciente")
                 
+                # Actualizar el procedimiento
                 cursor.execute("""
                     UPDATE Enfermeria 
                     SET Id_Paciente = ?, 

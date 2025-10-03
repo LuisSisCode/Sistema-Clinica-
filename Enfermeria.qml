@@ -1464,57 +1464,87 @@ Item {
             console.log("Cargando datos para edición:", JSON.stringify(proc))
             
             try {
-                // CONFIGURACIÓN INICIAL PARA MODO EDICIÓN
-                pacienteAutocompletado = true
+                // ✅ DETECTAR SI ES PROCEDIMIENTO ANÓNIMO
+                var esAnonimo = proc.paciente && 
+                            (proc.paciente.includes("ANÓNIMO") || 
+                                proc.paciente.includes("SIN DATOS") ||
+                                proc.pacienteNombre === "ANÓNIMO")
                 
-                // ESTABLECER PROPIEDADES DEL SISTEMA UNIFICADO
-                if (proc.pacienteId && proc.pacienteId > 0) {
-                    pacienteSeleccionadoId = proc.pacienteId
-                } else {
-                    pacienteSeleccionadoId = -1
-                }
-                esPacienteExistente = true
-                
-                // GESTIÓN DE DATOS DEL PACIENTE
-                var tieneCedula = proc.cedula && 
-                                proc.cedula !== "Sin cedula" && 
-                                proc.cedula !== "Sin cédula" &&
-                                proc.cedula !== "NULL" && 
-                                proc.cedula !== null &&
-                                proc.cedula.trim() !== ""
-                
-                if (tieneCedula) {
-                    campoBusquedaPaciente.text = proc.cedula || ""
-                    cedulaPaciente.text = proc.cedula || ""
-                } else {
-                    var nombreCompleto = ""
-                    if (proc.pacienteNombre) {
-                        nombreCompleto = (proc.pacienteNombre || "") + " " + 
-                                    (proc.pacienteApellidoP || "") + " " + 
-                                    (proc.pacienteApellidoM || "")
-                    } else {
-                        nombreCompleto = proc.paciente || ""
-                    }
-                    campoBusquedaPaciente.text = nombreCompleto.trim()
+                if (esAnonimo) {
+                    console.log("🎭 Procedimiento ANÓNIMO detectado - Configurando modo anónimo")
+                    modoAnonimo = true
+                    modoAnonimoRadio.checked = true
+                    modoNormalRadio.checked = false
+                    
+                    // ✅ NO cargar datos de paciente en modo anónimo
+                    campoBusquedaPaciente.text = ""
                     cedulaPaciente.text = ""
-                }
-                
-                // COMPLETAR CAMPOS INDIVIDUALES DEL PACIENTE
-                if (proc.pacienteNombre) {
-                    nombrePaciente.text = proc.pacienteNombre || ""
-                    apellidoPaterno.text = proc.pacienteApellidoP || ""
-                    apellidoMaterno.text = proc.pacienteApellidoM || ""
+                    nombrePaciente.text = ""
+                    apellidoPaterno.text = ""
+                    apellidoMaterno.text = ""
+                    
+                    pacienteAutocompletado = false
+                    esPacienteExistente = false
+                    pacienteSeleccionadoId = -1
                 } else {
-                    var nombrePartes = (proc.paciente || "").split(" ")
-                    nombrePaciente.text = nombrePartes[0] || ""
-                    apellidoPaterno.text = nombrePartes[1] || ""
-                    apellidoMaterno.text = nombrePartes.slice(2).join(" ") || ""
+                    console.log("👤 Procedimiento NORMAL detectado")
+                    modoAnonimo = false
+                    modoNormalRadio.checked = true
+                    modoAnonimoRadio.checked = false
+                    
+                    // CONFIGURACIÓN PARA PACIENTE NORMAL
+                    pacienteAutocompletado = true
+                    
+                    if (proc.pacienteId && proc.pacienteId > 0) {
+                        pacienteSeleccionadoId = proc.pacienteId
+                    } else {
+                        pacienteSeleccionadoId = -1
+                    }
+                    esPacienteExistente = true
+                    
+                    // GESTIÓN DE DATOS DEL PACIENTE NORMAL
+                    var tieneCedula = proc.cedula && 
+                                    proc.cedula !== "Sin cedula" && 
+                                    proc.cedula !== "Sin cédula" &&
+                                    proc.cedula !== "NULL" && 
+                                    proc.cedula !== null &&
+                                    proc.cedula.trim() !== ""
+                    
+                    if (tieneCedula) {
+                        campoBusquedaPaciente.text = proc.cedula || ""
+                        cedulaPaciente.text = proc.cedula || ""
+                    } else {
+                        var nombreCompleto = ""
+                        if (proc.pacienteNombre) {
+                            nombreCompleto = (proc.pacienteNombre || "") + " " + 
+                                        (proc.pacienteApellidoP || "") + " " + 
+                                        (proc.pacienteApellidoM || "")
+                        } else {
+                            nombreCompleto = proc.paciente || ""
+                        }
+                        campoBusquedaPaciente.text = nombreCompleto.trim()
+                        cedulaPaciente.text = ""
+                    }
+                    
+                    // COMPLETAR CAMPOS INDIVIDUALES DEL PACIENTE
+                    if (proc.pacienteNombre) {
+                        nombrePaciente.text = proc.pacienteNombre || ""
+                        apellidoPaterno.text = proc.pacienteApellidoP || ""
+                        apellidoMaterno.text = proc.pacienteApellidoM || ""
+                    } else {
+                        var nombrePartes = (proc.paciente || "").split(" ")
+                        nombrePaciente.text = nombrePartes[0] || ""
+                        apellidoPaterno.text = nombrePartes[1] || ""
+                        apellidoMaterno.text = nombrePartes.slice(2).join(" ") || ""
+                    }
+                    
+                    // CONFIGURAR ESTADOS DEL CAMPO DE BÚSQUEDA
+                    campoBusquedaPaciente.pacienteAutocompletado = true
+                    campoBusquedaPaciente.pacienteNoEncontrado = false
+                    campoBusquedaPaciente.tipoDetectado = ""
                 }
                 
-                // CONFIGURAR ESTADOS DEL CAMPO DE BÚSQUEDA
-                campoBusquedaPaciente.pacienteAutocompletado = true
-                campoBusquedaPaciente.pacienteNoEncontrado = false
-                campoBusquedaPaciente.tipoDetectado = ""
+                // ✅ CARGAR DATOS DEL PROCEDIMIENTO (COMÚN PARA AMBOS MODOS)
                 
                 // CARGAR TIPO DE PROCEDIMIENTO
                 if (proc.tipoProcedimiento) {
@@ -1563,6 +1593,8 @@ Item {
                 
                 cantidadTextField.text = (parseInt(proc.cantidad) || 1).toString()
                 procedureFormDialog.updatePrices()
+                
+                console.log("✅ Datos cargados - Modo:", modoAnonimo ? "ANÓNIMO" : "NORMAL")
                 
             } catch (e) {
                 console.log("Error cargando datos de edición:", e)
