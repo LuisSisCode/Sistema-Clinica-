@@ -718,8 +718,7 @@ class GastoRepository(BaseRepository):
     def get_all_provider_gastos(self) -> List[Dict[str, Any]]:
         """Obtiene todos los proveedores de gastos activos"""
         query = """
-        SELECT id, Nombre, Telefono, Direccion, 
-               Frecuencia_Uso, Estado, Fecha_Creacion, Notas
+        SELECT id, Nombre, Frecuencia_Uso, Estado, Fecha_Creacion
         FROM Proveedor_Gastos
         WHERE Estado = 1
         ORDER BY Frecuencia_Uso DESC, Nombre
@@ -745,8 +744,6 @@ class GastoRepository(BaseRepository):
                     'id': proveedor['id'],
                     'nombre': proveedor['Nombre'],
                     'display_text': f"{proveedor['Nombre']} ({proveedor['Frecuencia_Uso']} usos)",
-                    'telefono': proveedor.get('Telefono', ''),
-                    'direccion': proveedor.get('Direccion', ''),
                     'uso_frecuencia': proveedor['Frecuencia_Uso']
                 })
             
@@ -762,11 +759,10 @@ class GastoRepository(BaseRepository):
             return self.get_all_provider_gastos()
         
         query = """
-        SELECT id, Nombre, Telefono, Direccion, 
-               Frecuencia_Uso, Estado, Fecha_Creacion, Notas
+        SELECT id, Nombre, Frecuencia_Uso, Estado, Fecha_Creacion
         FROM Proveedor_Gastos
         WHERE Estado = 1 
-          AND Nombre LIKE ?
+        AND Nombre LIKE ?
         ORDER BY Frecuencia_Uso DESC, Nombre
         """
         
@@ -777,8 +773,7 @@ class GastoRepository(BaseRepository):
     def get_provider_gasto_by_name(self, nombre: str) -> Optional[Dict[str, Any]]:
         """Busca proveedor de gasto por nombre exacto"""
         query = """
-        SELECT id, Nombre, Telefono, Direccion, 
-               Frecuencia_Uso, Estado, Fecha_Creacion, Notas
+        SELECT id, Nombre, Frecuencia_Uso, Estado, Fecha_Creacion
         FROM Proveedor_Gastos 
         WHERE Nombre = ? AND Estado = 1
         """
@@ -791,8 +786,7 @@ class GastoRepository(BaseRepository):
         result = self._execute_query(query, (nombre.strip(),), fetch_one=True)
         return result['count'] > 0 if result else False
 
-    def create_provider_gasto(self, nombre: str, telefono: str = None, 
-                             direccion: str = None, notas: str = None) -> int:
+    def create_provider_gasto(self, nombre: str) -> int:
         """Crea nuevo proveedor de gastos"""
         nombre = validate_required_string(nombre, "nombre", 3)
         
@@ -800,14 +794,14 @@ class GastoRepository(BaseRepository):
             raise ValidationError("nombre", nombre, "Proveedor ya existe")
         
         query = """
-        INSERT INTO Proveedor_Gastos (Nombre, Telefono, Direccion, Notas, Fecha_Creacion, Estado)
+        INSERT INTO Proveedor_Gastos (Nombre, Fecha_Creacion, Estado)
         OUTPUT INSERTED.id
-        VALUES (?, ?, ?, ?, GETDATE(), 1)
+        VALUES (?, GETDATE(), 1)
         """
         
         result = self._execute_query(
             query, 
-            (nombre.strip(), telefono, direccion, notas),
+            (nombre.strip(),),
             fetch_one=True
         )
         
@@ -819,9 +813,7 @@ class GastoRepository(BaseRepository):
         
         return proveedor_id
 
-    def update_provider_gasto(self, proveedor_id: int, nombre: str = None,
-                             telefono: str = None, direccion: str = None, 
-                             notas: str = None) -> bool:
+    def update_provider_gasto(self, proveedor_id: int, nombre: str = None) -> bool:
         """Actualiza proveedor de gasto"""
         query_check = "SELECT id FROM Proveedor_Gastos WHERE id = ?"
         if not self._execute_query(query_check, (proveedor_id,), fetch_one=True):
@@ -838,18 +830,6 @@ class GastoRepository(BaseRepository):
                 raise ValidationError("nombre", nombre, "Ya existe otro proveedor con ese nombre")
             update_fields.append("Nombre = ?")
             params.append(nombre.strip())
-        
-        if telefono is not None:
-            update_fields.append("Telefono = ?")
-            params.append(telefono.strip() if telefono else None)
-        
-        if direccion is not None:
-            update_fields.append("Direccion = ?")
-            params.append(direccion.strip() if direccion else None)
-        
-        if notas is not None:
-            update_fields.append("Notas = ?")
-            params.append(notas.strip() if notas else None)
         
         if not update_fields:
             return True

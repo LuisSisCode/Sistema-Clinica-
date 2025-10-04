@@ -1529,7 +1529,7 @@ Item {
         visible: showNewGastoDialog
         
         property int selectedTipoGastoIndex: -1
-        property int selectedProveedorIndex: -1
+        property string selectedProveedorId: "0"
         
         // Remover el título por defecto para usar nuestro diseño personalizado
         title: ""
@@ -1783,8 +1783,8 @@ Item {
                                 }
                                 
                                 onProveedorCambiado: function(id, nombre) {
-                                    gastoForm.selectedProveedorIndex = id
-                                    console.log("🏢 Proveedor seleccionado:", nombre, "ID:", id)
+                                    gastoForm.selectedProveedorId = String(id)  // Asegurar que sea string
+                                    console.log("🏢 Proveedor seleccionado:", nombre, "ID:", id, "Tipo:", typeof id)
                                 }
                             }
                         }
@@ -1914,7 +1914,7 @@ Item {
                             }
                             
                             // Obtener ID del proveedor seleccionado
-                            var proveedorId = proveedorComboBox.selectedId || 0
+                            var proveedorId = parseInt(gastoForm.selectedProveedorId || "0")
                             
                             // Validación condicional de descripción
                             if (proveedorId === 0 && descripcionField.text.trim().length < 10) {
@@ -1971,13 +1971,13 @@ Item {
                         var prov = proveedoresGastosModel.get(j)
                         if (prov.nombre === editingGastoData.proveedor) {
                             proveedorComboBox.currentIndex = j
-                            gastoForm.selectedProveedorIndex = j
+                            gastoForm.selectedProveedorId = String(prov.id)  // ← CORREGIDO
                             break
                         }
                     }
                 } else {
                     proveedorComboBox.reset() // "Sin proveedor"
-                    gastoForm.selectedProveedorIndex = 0
+                    gastoForm.selectedProveedorId = "0"  // ← CORREGIDO
                 }
                 
                 // Cargar resto de campos
@@ -1993,7 +1993,7 @@ Item {
                 montoField.text = ""
                 fechaGastoField.text = Qt.formatDate(new Date(), "yyyy-MM-dd")
                 gastoForm.selectedTipoGastoIndex = -1
-                gastoForm.selectedProveedorIndex = 0
+                gastoForm.selectedProveedorId = "0"
             }
         }
     }
@@ -2368,8 +2368,8 @@ Item {
     Dialog {
         id: dialogoNuevoProveedor
         anchors.centerIn: parent
-        width: Math.min(400, parent.width * 0.9)
-        height: Math.min(280, parent.height * 0.6)
+        width: Math.min(500, parent.width * 0.9)
+        height: Math.min(320, parent.height * 0.5) // Reducida la altura
         modal: true
         title: ""
         
@@ -2433,17 +2433,17 @@ Item {
                 }
             }
             
-            // Contenido
+            // Contenido - SIMPLIFICADO
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.margins: 20
                 spacing: 15
                 
-                // Campo Nombre (obligatorio)
+                // Solo campo Nombre (obligatorio)
                 Column {
                     Layout.fillWidth: true
-                    spacing: 5
+                    spacing: 8
                     
                     Label {
                         text: "Nombre del Proveedor: *"
@@ -2455,51 +2455,38 @@ Item {
                     TextField {
                         id: nuevoProvNombre
                         width: parent.width
-                        height: 36
-                        placeholderText: "Ej: Empresa Eléctrica"
+                        height: 40
+                        placeholderText: "Ej: Empresa Eléctrica, Agua Potable, etc."
                         font.pixelSize: 12
-                    }
-                }
-                
-                // Campo Teléfono (opcional)
-                Column {
-                    Layout.fillWidth: true
-                    spacing: 5
-                    
-                    RowLayout {
-                        Label {
-                            text: "Teléfono:"
-                            font.bold: true
-                            font.pixelSize: 12
-                            color: textColor
+                        
+                        // Validación en tiempo real
+                        onTextChanged: {
+                            if (text.length > 0 && text.length < 3) {
+                                validationMessage.visible = true
+                            } else {
+                                validationMessage.visible = false
+                            }
                         }
                         
-                        Label {
-                            text: "(opcional)"
-                            font.pixelSize: 10
-                            color: "#7f8c8d"
-                            font.italic: true
+                        // Enter para crear
+                        Keys.onReturnPressed: {
+                            if (nuevoProvNombre.text.trim().length >= 3) {
+                                crearProveedorAction()
+                            }
                         }
                     }
-                    
-                    TextField {
-                        id: nuevoProvTelefono
-                        width: parent.width
-                        height: 36
-                        placeholderText: "Ej: 77123456"
-                        font.pixelSize: 12
-                    }
                 }
-                
-                Item { Layout.fillHeight: true }
                 
                 // Mensaje de validación
                 Label {
-                    text: "⚠️ El nombre es obligatorio"
+                    id: validationMessage
+                    text: "⚠️ El nombre debe tener al menos 3 caracteres"
                     font.pixelSize: 11
                     color: dangerColor
-                    visible: nuevoProvNombre.text.trim().length < 3
+                    visible: false
                 }
+                
+                Item { Layout.fillHeight: true }
             }
             
             // Botones
@@ -2534,12 +2521,12 @@ Item {
                         
                         onClicked: {
                             nuevoProvNombre.text = ""
-                            nuevoProvTelefono.text = ""
                             dialogoNuevoProveedor.close()
                         }
                     }
                     
                     Button {
+                        id: crearProvButton
                         width: 100
                         height: 36
                         text: "Crear"
@@ -2561,26 +2548,33 @@ Item {
                             verticalAlignment: Text.AlignVCenter
                         }
                         
-                        onClicked: {
-                            var nombre = nuevoProvNombre.text.trim()
-                            var telefono = nuevoProvTelefono.text.trim()
-                            
-                            if (nombre.length < 3) {
-                                showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
-                                return
-                            }
-                            
-                            // Crear proveedor con solo nombre y teléfono
-                            if (crearNuevoProveedorGasto(nombre, telefono)) {
-                                showSuccessMessage("Proveedor creado: " + nombre)
-                                nuevoProvNombre.text = ""
-                                nuevoProvTelefono.text = ""
-                                dialogoNuevoProveedor.close()
-                            }
-                        }
+                        onClicked: crearProveedorAction()
                     }
                 }
             }
+        }
+        
+        // Función para crear proveedor
+        function crearProveedorAction() {
+            var nombre = nuevoProvNombre.text.trim()
+            
+            if (nombre.length < 3) {
+                showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
+                return
+            }
+            
+            // Crear proveedor solo con nombre
+            if (crearNuevoProveedorGasto(nombre)) {
+                showSuccessMessage("Proveedor creado: " + nombre)
+                nuevoProvNombre.text = ""
+                dialogoNuevoProveedor.close()
+            }
+        }
+        
+        // Al abrir el diálogo, enfocar el campo de nombre
+        onOpened: {
+            nuevoProvNombre.focus = true
+            nuevoProvNombre.text = ""
         }
     }
 
@@ -2668,6 +2662,7 @@ Item {
                 id: parseInt(prov.id || 0),
                 nombre: String(prov.nombre || "Sin proveedor"),
                 displayText: String(prov.display_text || prov.nombre)
+                // ✅ ELIMINADOS: telefono, direccion, notas
             })
         }
         
@@ -2692,6 +2687,7 @@ Item {
                 nombre: prov.nombre,
                 displayText: prov.display_text,
                 usoFrecuencia: prov.uso_frecuencia
+                // ✅ ELIMINADOS: telefono, direccion
             })
         }
     }
@@ -2709,7 +2705,8 @@ Item {
         
         console.log("🏢 Creando nuevo proveedor:", nombre)
         
-        var proveedorId = gastoModelInstance.crearProveedorGasto(nombre.trim(), "", "", "")
+        // ✅ LLAMADA ACTUALIZADA - solo nombre
+        var proveedorId = gastoModelInstance.crearProveedorGasto(nombre.trim())
         
         if (proveedorId > 0) {
             console.log("✅ Proveedor creado con ID:", proveedorId)

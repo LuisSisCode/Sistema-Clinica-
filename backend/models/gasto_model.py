@@ -970,8 +970,6 @@ class GastoModel(QObject):
                     'id': prov['id'],
                     'nombre': prov['Nombre'],
                     'display_text': f"{prov['Nombre']} ({prov['Frecuencia_Uso']} usos)",
-                    'telefono': prov.get('Telefono', ''),
-                    'direccion': prov.get('Direccion', ''),
                     'uso_frecuencia': prov['Frecuencia_Uso']
                 })
             
@@ -1000,17 +998,13 @@ class GastoModel(QObject):
             self.errorOccurred.emit("Error", f"Error verificando proveedor: {str(e)}")
             return False
     
-    @Slot(str, str, str, str, result=int)
-    def crearProveedorGasto(self, nombre: str, telefono: str = "", 
-                           direccion: str = "", notas: str = "") -> int:
+    @Slot(str, result=int)
+    def crearProveedorGasto(self, nombre: str) -> int:
         """
         Crea nuevo proveedor de gastos
         
         Args:
             nombre: Nombre del proveedor (obligatorio)
-            telefono: Teléfono (opcional)
-            direccion: Dirección (opcional)
-            notas: Notas adicionales (opcional)
             
         Returns:
             ID del proveedor creado, 0 si falló
@@ -1024,16 +1018,8 @@ class GastoModel(QObject):
             
             print(f"🏢 Creando proveedor de gasto: {nombre}")
             
-            # Preparar valores opcionales
-            tel = telefono.strip() if telefono else None
-            dir = direccion.strip() if direccion else None
-            nota = notas.strip() if notas else None
-            
             proveedor_id = self.repository.create_provider_gasto(
-                nombre=nombre.strip(),
-                telefono=tel,
-                direccion=dir,
-                notas=nota
+                nombre=nombre.strip()
             )
             
             if proveedor_id:
