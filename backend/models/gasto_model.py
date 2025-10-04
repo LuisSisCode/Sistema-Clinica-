@@ -21,6 +21,7 @@ class GastoModel(QObject):
     tiposGastosChanged = Signal()
     proveedoresChanged = Signal()
     estadisticasChanged = Signal()
+    proveedoresGastosChanged = Signal()
     
     # Señales para operaciones
     gastoCreado = Signal(bool, str)  # success, message
@@ -51,6 +52,7 @@ class GastoModel(QObject):
     
         # ✅ AUTENTICACIÓN ESTANDARIZADA
         self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
+        self._usuario_actual_rol = ""  # Inicializar el atributo de rol
         print("💸 GastoModel inicializado - Esperando autenticación")
         
         # Estado interno
@@ -60,6 +62,7 @@ class GastoModel(QObject):
         self._proveedores: List[Dict[str, Any]] = []
         self._estadisticas: Dict[str, Any] = {}
         self._loading: bool = False
+        self._proveedores_gastos: List[Dict[str, Any]] = []
         
         # Filtros activos
         self._filtro_tipo: int = 0
@@ -68,7 +71,7 @@ class GastoModel(QObject):
         self._filtro_monto_min: float = 0.0
         self._filtro_monto_max: float = 0.0
         self._filtro_busqueda: str = ""
-        
+
         # Configuración inicial
         self._cargar_datos_iniciales()
     
@@ -96,7 +99,7 @@ class GastoModel(QObject):
         """Establece usuario actual CON ROL"""
         try:
             self._usuario_actual_id = usuario_id
-            self._usuario_actual_rol = usuario_rol.strip()  # ✅ Agregar esta línea
+            self._usuario_actual_rol = usuario_rol.strip()
             print(f"👤 Usuario {usuario_id} con rol '{usuario_rol}' establecido en GastoModel")
             self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido")
         except Exception as e:
@@ -107,6 +110,11 @@ class GastoModel(QObject):
     def usuario_actual_id(self):
         """Property para obtener el usuario actual"""
         return self._usuario_actual_id
+    
+    @Property(list, notify=proveedoresGastosChanged)
+    def proveedoresGastos(self) -> List[Dict[str, Any]]:
+        """Lista de proveedores de gastos para mostrar en QML"""
+        return self._convert_dates_for_qml(self._proveedores_gastos)
 
     @Slot(int, result=bool)
     def puedeEditarGasto(self, gasto_id: int) -> bool:
@@ -256,79 +264,12 @@ class GastoModel(QObject):
     # ✅ OPERACIONES CRUD GASTOS - CON VERIFICACIÓN DE AUTENTICACIÓN
     # ===============================
     
-    @Slot(int, float, str, str, str, result=bool)
-    def crearGasto(self, tipo_gasto_id: int, monto: float, descripcion: str = "", 
-                   fecha_gasto: str = "", proveedor: str = "") -> bool:
-        """Crea nuevo gasto - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
-        try:
-            # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
-            if not self._verificar_autenticacion():
-                return False
-            
-            self._set_loading(True)
-            
-            print(f"💰 Creando gasto - Usuario: {self._usuario_actual_id}")
-            print(f"   - tipo_gasto_id: {tipo_gasto_id}")
-            print(f"   - monto: {monto}")
-            print(f"   - descripcion: '{descripcion}'")
-            print(f"   - fecha_gasto: '{fecha_gasto}'")
-            print(f"   - proveedor: '{proveedor}'")
-            
-            fecha_obj = None
-            if fecha_gasto:
-                try:
-                    # Convertir fecha desde QML
-                    fecha_solo = datetime.strptime(fecha_gasto, '%Y-%m-%d').date()
-                    # Obtener hora actual
-                    hora_actual = datetime.now().time()
-                    # Combinar fecha del usuario con hora actual
-                    fecha_obj = datetime.combine(fecha_solo, hora_actual)
-                    print(f"   - fecha_obj convertida: {fecha_obj}")
-                except Exception as e:
-                    print(f"   - Error convirtiendo fecha: {e}")
-                    fecha_obj = None
-            proveedor_final = proveedor.strip() if proveedor else None
-            
-            # ✅ USAR usuario_actual_id EN LUGAR DE PARÁMETRO
-            gasto_id = self.repository.create_expense(
-                tipo_gasto_id=tipo_gasto_id,
-                monto=monto,
-                usuario_id=self._usuario_actual_id,  # ✅ USAR USUARIO AUTENTICADO
-                fecha=fecha_obj,
-                descripcion=descripcion if descripcion else None,
-                proveedor=proveedor_final
-            )
-            
-            if gasto_id:
-                self._cargar_gastos()
-                self._cargar_estadisticas()
-                
-                mensaje = f"Gasto creado exitosamente - ID: {gasto_id}"
-                self.gastoCreado.emit(True, mensaje)
-                self.successMessage.emit(mensaje)
-                
-                print(f"✅ Gasto creado por usuario {self._usuario_actual_id}: {monto}")
-                return True
-            else:
-                error_msg = "Error creando gasto"
-                self.gastoCreado.emit(False, error_msg)
-                return False
-                
-        except Exception as e:
-            error_msg = f"Error inesperado: {str(e)}"
-            print(f"⚠ Exception en crearGasto: {error_msg}")
-            self.gastoCreado.emit(False, error_msg)
-            self.errorOccurred.emit("Error crítico", error_msg)
-            return False
-        finally:
-            self._set_loading(False)
-    
-    @Slot(int, float, int, str, str, str, result=bool) 
+    @Slot(int, float, int, str, int, str, result=bool) 
     def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0, 
-                descripcion: str = "", proveedor: str = "", fecha_gasto: str = "") -> bool:
-        """Actualiza gasto existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
+                descripcion: str = "", proveedor_id: int = -1, fecha_gasto: str = "") -> bool:
+        """Actualiza gasto existente - ACTUALIZADO CON proveedor_id"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
+            # Verificar autenticación
             if not self._verificar_autenticacion():
                 return False
             
@@ -350,8 +291,10 @@ class GastoModel(QObject):
                 kwargs['tipo_gasto_id'] = tipo_gasto_id
             if descripcion:  
                 kwargs['descripcion'] = descripcion
-            if proveedor:
-                kwargs['proveedor'] = proveedor.strip()
+            
+            # Manejar proveedor_id (-1 significa no cambiar, 0 significa quitar proveedor)
+            if proveedor_id != -1:
+                kwargs['proveedor_id'] = proveedor_id if proveedor_id > 0 else None
             
             if fecha_gasto:
                 try:
@@ -383,34 +326,6 @@ class GastoModel(QObject):
             return False
         finally:
             self._set_loading(False)
-    
-    @Slot(int, result=bool)
-    def eliminarGasto(self, gasto_id: int) -> bool:
-        """Elimina un gasto (solo administradores)"""
-        try:
-            print(f"🗑️ Eliminando gasto ID: {gasto_id}")
-            print(f"🔐 Verificando permisos de admin...")
-            
-            es_admin = self._es_administrador()
-            print(f"🔐 Es administrador: {es_admin}")
-            
-            if not es_admin:
-                print("❌ No es administrador")
-                return False
-            
-            print(f"🗑️ Llamando repository.delete_expense({gasto_id})")    
-            resultado = self.repository.delete_expense(gasto_id)
-            print(f"🗑️ Resultado repository: {resultado}")
-            
-            if resultado:
-                print("✅ Emitiendo señal gastosChanged")
-                self.gastosChanged.emit()  # ← Cambio aquí
-                return True
-            return False
-            
-        except Exception as e:
-            print(f"❌ Error eliminando gasto: {e}")
-            return False
     
     # ===============================
     # ✅ OPERACIONES CRUD TIPOS GASTOS - CON VERIFICACIÓN DE AUTENTICACIÓN
@@ -530,7 +445,8 @@ class GastoModel(QObject):
     def obtenerProveedoresParaComboBox(self) -> List[Dict[str, Any]]:
         """Obtiene proveedores formateados para ComboBox"""
         try:
-            proveedores_combo = self.repository.get_providers_for_combobox()
+            # CORREGIDO: Cambiado a get_providers_gastos_for_combobox
+            proveedores_combo = self.repository.get_providers_gastos_for_combobox()
             return self._convert_dates_for_qml(proveedores_combo)
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo proveedores: {str(e)}")
@@ -540,7 +456,8 @@ class GastoModel(QObject):
     def obtenerProveedorPorNombre(self, nombre: str) -> Dict[str, Any]:
         """Busca proveedor por nombre exacto"""
         try:
-            proveedor = self.repository.get_provider_by_name(nombre)
+            # CORREGIDO: Cambiado a get_provider_gasto_by_name
+            proveedor = self.repository.get_provider_gasto_by_name(nombre)
             return self._convert_dates_for_qml(proveedor) if proveedor else {}
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error buscando proveedor: {str(e)}")
@@ -550,7 +467,8 @@ class GastoModel(QObject):
     def proveedorExiste(self, nombre: str) -> bool:
         """Verifica si existe un proveedor con el nombre dado"""
         try:
-            return self.repository.provider_exists(nombre)
+            # CORREGIDO: Cambiado a provider_gasto_exists
+            return self.repository.provider_gasto_exists(nombre)
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error verificando proveedor: {str(e)}")
             return False
@@ -905,8 +823,9 @@ class GastoModel(QObject):
             self._cargar_gastos()
             self._cargar_tipos_gastos()
             self._cargar_proveedores()
+            self._cargar_proveedores_gastos()
             self._cargar_estadisticas()
-            print("📊 Datos iniciales de gastos cargados (incluyendo proveedores)")
+            print("📊 Datos iniciales de gastos cargados (incluyendo proveedores de gastos)")
         except Exception as e:
             print(f"⚠ Error cargando datos iniciales de gastos: {e}")
             self.errorOccurred.emit("Error inicial", f"Error cargando datos: {str(e)}")
@@ -938,7 +857,8 @@ class GastoModel(QObject):
     def _cargar_proveedores(self):
         """Carga lista de proveedores"""
         try:
-            proveedores = self.repository.get_all_providers()
+            # CORREGIDO: Cambiado a get_all_provider_gastos
+            proveedores = self.repository.get_all_provider_gastos()
             self._proveedores = proveedores
             self.proveedoresChanged.emit()
             print(f"🏢 Proveedores cargados: {len(proveedores)}")
@@ -1018,6 +938,185 @@ class GastoModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión GastoModel: {e}")
+
+    # ===============================
+    # MÉTODOS Y SEÑALES PARA PROVEEDORES GASTOS
+    # ===============================
+    
+    @Slot(result=list)
+    def obtenerProveedoresGastosParaComboBox(self) -> List[Dict[str, Any]]:
+        """Obtiene proveedores de gastos formateados para ComboBox"""
+        try:
+            proveedores_combo = self.repository.get_providers_gastos_for_combobox()
+            return self._convert_dates_for_qml(proveedores_combo)
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error obteniendo proveedores: {str(e)}")
+            return [{'id': 0, 'nombre': 'Sin proveedor', 'display_text': 'Sin proveedor'}]
+    
+    @Slot(str, result=list)
+    def buscarProveedorGasto(self, termino: str) -> List[Dict[str, Any]]:
+        """Busca proveedores de gastos por nombre"""
+        try:
+            if not termino or len(termino.strip()) < 2:
+                return self.obtenerProveedoresGastosParaComboBox()
+            
+            proveedores = self.repository.search_provider_gastos(termino.strip())
+            
+            # Formatear para ComboBox
+            formatted = [{'id': 0, 'nombre': 'Sin proveedor', 'display_text': 'Sin proveedor'}]
+            
+            for prov in proveedores:
+                formatted.append({
+                    'id': prov['id'],
+                    'nombre': prov['Nombre'],
+                    'display_text': f"{prov['Nombre']} ({prov['Frecuencia_Uso']} usos)",
+                    'uso_frecuencia': prov['Frecuencia_Uso']
+                })
+            
+            return self._convert_dates_for_qml(formatted)
+            
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error buscando proveedor: {str(e)}")
+            return [{'id': 0, 'nombre': 'Sin proveedor', 'display_text': 'Sin proveedor'}]
+    
+    @Slot(str, result='QVariantMap')
+    def obtenerProveedorGastoPorNombre(self, nombre: str) -> Dict[str, Any]:
+        """Busca proveedor de gasto por nombre exacto"""
+        try:
+            proveedor = self.repository.get_provider_gasto_by_name(nombre)
+            return self._convert_dates_for_qml(proveedor) if proveedor else {}
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error buscando proveedor: {str(e)}")
+            return {}
+    
+    @Slot(str, result=bool)
+    def proveedorGastoExiste(self, nombre: str) -> bool:
+        """Verifica si existe un proveedor de gasto con el nombre dado"""
+        try:
+            return self.repository.provider_gasto_exists(nombre)
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error verificando proveedor: {str(e)}")
+            return False
+    
+    @Slot(str, result=int)
+    def crearProveedorGasto(self, nombre: str) -> int:
+        """
+        Crea nuevo proveedor de gastos
+        
+        Args:
+            nombre: Nombre del proveedor (obligatorio)
+            
+        Returns:
+            ID del proveedor creado, 0 si falló
+        """
+        try:
+            # Verificar autenticación
+            if not self._verificar_autenticacion():
+                return 0
+            
+            self._set_loading(True)
+            
+            print(f"🏢 Creando proveedor de gasto: {nombre}")
+            
+            proveedor_id = self.repository.create_provider_gasto(
+                nombre=nombre.strip()
+            )
+            
+            if proveedor_id:
+                self._cargar_proveedores_gastos()
+                
+                mensaje = f"Proveedor '{nombre}' creado exitosamente"
+                self.successMessage.emit(mensaje)
+                
+                print(f"✅ Proveedor de gasto creado: {nombre} - ID: {proveedor_id}")
+                return proveedor_id
+            else:
+                error_msg = "Error creando proveedor"
+                self.errorOccurred.emit("Error", error_msg)
+                return 0
+                
+        except ValidationError as ve:
+            error_msg = f"Error de validación: {ve.message}"
+            self.errorOccurred.emit("Error de validación", error_msg)
+            return 0
+        except Exception as e:
+            error_msg = f"Error inesperado: {str(e)}"
+            self.errorOccurred.emit("Error crítico", error_msg)
+            return 0
+        finally:
+            self._set_loading(False)
+    
+    @Slot()
+    def recargarProveedoresGastos(self):
+        """Recarga lista de proveedores de gastos"""
+        try:
+            self._cargar_proveedores_gastos()
+            self.successMessage.emit("Proveedores recargados exitosamente")
+            print("🔄 Proveedores de gastos recargados desde QML")
+        except Exception as e:
+            self.errorOccurred.emit("Error", f"Error recargando proveedores: {str(e)}")
+
+    def _cargar_proveedores_gastos(self):
+        """Carga lista de proveedores de gastos"""
+        try:
+            proveedores = self.repository.get_all_provider_gastos()
+            self._proveedores_gastos = proveedores
+            self.proveedoresGastosChanged.emit()
+            print(f"🏢 Proveedores de gastos cargados: {len(proveedores)}")
+        except Exception as e:
+            print(f"⚠ Error cargando proveedores de gastos: {e}")
+            self._proveedores_gastos = []
+
+    @Slot(int, float, str, str, int, result=bool)
+    def crearGasto(self, tipo_gasto_id: int, monto: float, descripcion: str,
+                fecha_gasto: str = "", proveedor_id: int = 0) -> bool:
+        """Crea nuevo gasto - CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        try:
+            # Verificar autenticación
+            if not self._verificar_autenticacion():
+                return False
+            
+            self._set_loading(True)
+            
+            print(f"💸 Creando gasto por usuario: {self._usuario_actual_id}")
+            
+            # Preparar fecha
+            if fecha_gasto:
+                fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+            else:
+                fecha_obj = datetime.now()
+            
+            # Crear gasto (proveedor_id=0 significa sin proveedor)
+            gasto_id = self.repository.create_expense(
+                tipo_gasto_id=tipo_gasto_id,
+                monto=monto,
+                usuario_id=self._usuario_actual_id,
+                fecha=fecha_obj,
+                descripcion=descripcion or "Sin descripción",
+                proveedor_id=proveedor_id if proveedor_id > 0 else None
+            )
+            
+            if gasto_id:
+                self._cargar_gastos()
+                
+                mensaje = f"Gasto creado exitosamente - ID: {gasto_id}"
+                self.gastoCreado.emit(True, mensaje)
+                self.successMessage.emit(mensaje)
+                
+                print(f"✅ Gasto creado: ID {gasto_id}")
+                return True
+            else:
+                error_msg = "Error creando gasto"
+                self.gastoCreado.emit(False, error_msg)
+                return False
+                
+        except Exception as e:
+            error_msg = f"Error inesperado: {str(e)}"
+            self.gastoCreado.emit(False, error_msg)
+            self.errorOccurred.emit("Error crítico", error_msg)
+            return False
+        finally:
+            self._set_loading(False)
 
 # ===============================
 # REGISTRO PARA QML

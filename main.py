@@ -774,20 +774,38 @@ class AppController(QObject):
         if success:
             self.showNotification("Trabajador Eliminado", message)
 
-    @Slot(bool, str)
-    def _on_procedimiento_creado(self, success: bool, message: str):
-        if success:
-            self.showNotification("Procedimiento Creado", message)
+    @Slot(str)
+    def _on_procedimiento_creado(self, message: str):
+        """Handler para procedimiento creado - Solo recibe mensaje JSON"""
+        try:
+            import json
+            data = json.loads(message)
+            if data.get('exito', False):
+                self.showNotification("Procedimiento Creado", "Procedimiento creado exitosamente")
+        except Exception as e:
+            print(f"Error en handler procedimiento creado: {e}")
 
-    @Slot(bool, str)
-    def _on_procedimiento_actualizado(self, success: bool, message: str):
-        if success:
-            self.showNotification("Procedimiento Actualizado", message)
+    @Slot(str)
+    def _on_procedimiento_actualizado(self, message: str):
+        """Handler para procedimiento actualizado - Solo recibe mensaje JSON"""
+        try:
+            import json
+            data = json.loads(message)
+            if data.get('exito', False):
+                self.showNotification("Procedimiento Actualizado", "Procedimiento actualizado exitosamente")
+        except Exception as e:
+            print(f"Error en handler procedimiento actualizado: {e}")
 
-    @Slot(bool, str)
-    def _on_procedimiento_eliminado(self, success: bool, message: str):
-        if success:
-            self.showNotification("Procedimiento Eliminado", message)
+    @Slot(str)
+    def _on_procedimiento_eliminado(self, message: str):
+        """Handler para procedimiento eliminado - Solo recibe mensaje JSON"""
+        try:
+            import json
+            data = json.loads(message)
+            if data.get('exito', False):
+                self.showNotification("Procedimiento Eliminado", "Procedimiento eliminado exitosamente")
+        except Exception as e:
+            print(f"Error en handler procedimiento eliminado: {e}")
 
     @Slot(bool, str)
     def _on_tipo_gasto_creado(self, success: bool, message: str):

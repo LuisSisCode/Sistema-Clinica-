@@ -203,28 +203,55 @@ CREATE TABLE DetallesVentas (
 CREATE TABLE Tipo_Gastos (
     id INT IDENTITY(1,1) PRIMARY KEY,
     Nombre VARCHAR(150) NOT NULL,
-    fecha DATETIME NOT NULL DEFAULT GETDATE()
-);
 
--- Tabla Gastos
-CREATE TABLE Gastos (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    ID_Tipo INT NOT NULL,
-    Descripcion VARCHAR(500) NOT NULL,
-    Monto DECIMAL(12,2) NOT NULL CHECK (Monto >= 0),
-    Fecha DATETIME NOT NULL DEFAULT GETDATE(),
-    Proveedor VARCHAR(200),
-    Id_RegistradoPor INT NOT NULL,
-    FOREIGN KEY (ID_Tipo) REFERENCES Tipo_Gastos(id),
-    FOREIGN KEY (Id_RegistradoPor) REFERENCES Usuario(id)
-);
+    );
 
-CREATE TABLE [dbo].[Tipos_Analisis](
+    -- Tabla Gastos actualizada
+    CREATE TABLE Gastos (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        ID_Tipo INT NOT NULL,
+        Descripcion VARCHAR(500) NOT NULL,
+        Monto DECIMAL(12,2) NOT NULL CHECK (Monto >= 0),
+        Fecha DATETIME NOT NULL DEFAULT GETDATE(),
+        Id_RegistradoPor INT NOT NULL,
+        ID_Proveedor INT NULL,
+        FOREIGN KEY (ID_Tipo) REFERENCES Tipo_Gastos(id),
+        FOREIGN KEY (Id_RegistradoPor) REFERENCES Usuario(id),
+        FOREIGN KEY (ID_Proveedor) REFERENCES Proveedor_Gastos(id)
+    );
+
+    CREATE TABLE [dbo].[Tipos_Analisis](
     [id] INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
     [Nombre] VARCHAR(100) NOT NULL,
     [Descripcion] VARCHAR(300) NULL,
     [Precio_Normal] DECIMAL(10,2) NOT NULL,
     [Precio_Emergencia] DECIMAL(10,2) NOT NULL
+);
+
+-- Tabla de Cierre de caja
+CREATE TABLE CierreCaja (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    Fecha DATE NOT NULL,
+    HoraInicio TIME NOT NULL,
+    HoraFin TIME NOT NULL,
+    EfectivoReal DECIMAL(12,2) NOT NULL CHECK (EfectivoReal >= 0),
+    SaldoTeorico DECIMAL(12,2) NOT NULL CHECK (SaldoTeorico >= 0),
+    Diferencia DECIMAL(12,2) NOT NULL,
+    IdUsuario INT NOT NULL,
+    FechaCierre DATETIME NOT NULL DEFAULT GETDATE(),
+    Observaciones VARCHAR(500),
+    FOREIGN KEY (IdUsuario) REFERENCES Usuario(id)
+);
+
+CREATE TABLE Proveedor_Gastos (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    Nombre NVARCHAR(200) NOT NULL UNIQUE,
+    Telefono NVARCHAR(50) NULL,
+    Direccion NVARCHAR(300) NULL,
+    Frecuencia_Uso INT DEFAULT 0,
+    Estado BIT DEFAULT 1,
+    Fecha_Creacion DATETIME DEFAULT GETDATE(),
+    Notas NVARCHAR(500) NULL
 );
 
 -- Índices para control interno y consultas rápidas

@@ -27,8 +27,8 @@ class EnfermeriaModel(QObject):
     # ===============================
     
     # Operaciones CRUD con datos detallados
-    procedimientoCreado = Signal(str, arguments=['datos'])
-    procedimientoActualizado = Signal(str, arguments=['datos'])
+    procedimientoCreado = Signal(str, arguments=['message'])
+    procedimientoActualizado = Signal(str, arguments=['message'])
     procedimientoEliminado = Signal(int, arguments=['procedimientoId'])
     
     # Búsquedas por cédula
@@ -673,9 +673,9 @@ class EnfermeriaModel(QObject):
 
     @Slot('QVariant', int, result=str)
     def actualizar_procedimiento(self, datos_procedimiento, procedimiento_id: int):
-        """Actualiza procedimiento de enfermería existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN (sin restricción de fecha)"""
+        """Actualiza procedimiento de enfermería existente - CON SOPORTE ANÓNIMO"""
         try:
-            # ✅ VERIFICAR AUTENTICACIÓN
+            # Verificar autenticación
             if not self._verificar_autenticacion():
                 return self._crear_respuesta_json(False, "Usuario no autenticado")
 
@@ -685,21 +685,19 @@ class EnfermeriaModel(QObject):
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "ID de procedimiento inválido")
 
-            # Ya no se valida la fecha para edición
-
             # Convertir datos
             if hasattr(datos_procedimiento, 'toVariant'):
                 datos = datos_procedimiento.toVariant()
             else:
                 datos = datos_procedimiento
 
-            # Validaciones
-            if not self._validar_datos_procedimiento_mejorado(datos):
+            # ✅ USAR VALIDACIÓN PARA ANÓNIMOS
+            if not self._validar_datos_procedimiento_anonimo(datos):
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "Datos incompletos o inválidos")
 
-            # Gestionar paciente
-            paciente_id = self._gestionar_paciente_procedimiento(datos)
+            # ✅ GESTIONAR PACIENTE CON SOPORTE ANÓNIMO
+            paciente_id = self._gestionar_paciente_procedimiento_anonimo(datos)
             if paciente_id <= 0:
                 self._set_estado_actual("error")
                 return self._crear_respuesta_json(False, "Error gestionando datos del paciente")
@@ -711,10 +709,12 @@ class EnfermeriaModel(QObject):
                 'idProcedimiento': int(datos.get('idProcedimiento', 0)),
                 'cantidad': int(datos.get('cantidad', 1)),
                 'tipo': datos.get('tipo', 'Normal'),
-                'idTrabajador': int(datos.get('idTrabajador', 0))
+                'idTrabajador': int(datos.get('idTrabajador', 0)),
+                'esAnonimo': datos.get('esAnonimo', False)  # ✅ AGREGAR FLAG
             }
 
-            print(f"📝 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando procedimiento ID: {procedimiento_id}")
+            es_anonimo = datos_repo['esAnonimo']
+            print(f"📝 Usuario {self._usuario_actual_id} ({self._usuario_actual_rol}) actualizando procedimiento ID: {procedimiento_id} ({'ANÓNIMO' if es_anonimo else 'NORMAL'})")
 
             # Actualizar procedimiento
             exito = self.repository.actualizar_procedimiento_enfermeria(procedimiento_id, datos_repo)
