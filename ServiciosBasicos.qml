@@ -1674,62 +1674,89 @@ Item {
                                 placeholderText: "0.00"
                                 font.pixelSize: fontInput
                                 
-                                // ✅ Validador mejorado con locale específico
-                                validator: DoubleValidator {
-                                    bottom: 0.0
-                                    decimals: 2
-                                    notation: DoubleValidator.StandardNotation
-                                    locale: "en_US"  // Fuerza punto como decimal
+                                // ✅ VALIDADOR MEJORADO - ACEPTA PUNTOS Y COMAS
+                                validator: RegularExpressionValidator {
+                                    regularExpression: /^(\d+)([.,](\d{0,2}))?$/
                                 }
                                 
-                                // ✅ Normalizar entrada: convertir coma a punto
+                                // ✅ NORMALIZACIÓN MEJORADA
                                 onTextChanged: {
-                                    var cursorPos = cursorPosition
-                                    var newText = text.replace(/,/g, '.')
-                                    
-                                    // Solo actualizar si hay cambios (evitar bucle)
-                                    if (newText !== text) {
-                                        text = newText
-                                        cursorPosition = cursorPos
-                                    }
-                                    
-                                    // Feedback visual
-                                    if (text.length > 0) {
-                                        var valor = parseFloat(text)
-                                        if (isNaN(valor) || valor <= 0) {
-                                            montoField.color = dangerColor
-                                            montoValidationLabel.visible = true
-                                        } else {
-                                            montoField.color = textColor
-                                            montoValidationLabel.visible = false
-                                        }
-                                    } else {
+                                    if (text.length === 0) {
                                         montoField.color = textColor
                                         montoValidationLabel.visible = false
+                                        return
+                                    }
+                                    
+                                    // Permitir solo números, punto y coma
+                                    var cleanedText = text.replace(/[^\d,.]/g, '')
+                                    
+                                    // Reemplazar coma por punto para cálculo interno
+                                    var normalizedText = cleanedText.replace(/,/g, '.')
+                                    
+                                    // Validar formato decimal
+                                    var decimalPattern = /^(\d+)(\.(\d{0,2}))?$/
+                                    var isValid = decimalPattern.test(normalizedText)
+                                    
+                                    // Feedback visual
+                                    if (isValid) {
+                                        montoField.color = textColor
+                                        montoValidationLabel.visible = false
+                                        
+                                        // Si hay más de 2 decimales, truncar
+                                        if (normalizedText.includes('.')) {
+                                            var parts = normalizedText.split('.')
+                                            if (parts[1].length > 2) {
+                                                normalizedText = parts[0] + '.' + parts[1].substring(0, 2)
+                                            }
+                                        }
+                                    } else {
+                                        montoField.color = dangerColor
+                                        montoValidationLabel.visible = true
+                                    }
+                                    
+                                    // Actualizar solo si hay cambios
+                                    if (cleanedText !== text) {
+                                        var cursorPos = cursorPosition
+                                        text = cleanedText
+                                        cursorPosition = Math.min(cursorPos, text.length)
                                     }
                                 }
                                 
-                                // ✅ Formatear al perder foco
+                                // ✅ FORMATEO AL PERDER FOCO - CORREGIDO
                                 onEditingFinished: {
                                     if (text.length > 0) {
-                                        var valor = parseFloat(text)
+                                        var normalizedText = text.replace(/,/g, '.')
+                                        var valor = parseFloat(normalizedText)
+                                        
                                         if (!isNaN(valor) && valor > 0) {
+                                            // Formatear a 2 decimales
                                             text = valor.toFixed(2)
+                                            montoField.color = textColor
+                                            montoValidationLabel.visible = false
+                                        } else {
+                                            montoField.color = dangerColor
+                                            montoValidationLabel.visible = true
                                         }
                                     }
                                 }
                                 
-                                // ✅ Filtrar caracteres no válidos
+                                // ✅ FILTRO DE TECLAS MEJORADO
                                 Keys.onPressed: function(event) {
                                     var allowedKeys = [
                                         Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4,
                                         Qt.Key_5, Qt.Key_6, Qt.Key_7, Qt.Key_8, Qt.Key_9,
                                         Qt.Key_Period, Qt.Key_Comma, Qt.Key_Backspace, 
-                                        Qt.Key_Delete, Qt.Key_Left, Qt.Key_Right, Qt.Key_Tab
+                                        Qt.Key_Delete, Qt.Key_Left, Qt.Key_Right, Qt.Key_Tab,
+                                        Qt.Key_Home, Qt.Key_End
                                     ]
                                     
                                     if (!allowedKeys.includes(event.key)) {
                                         event.accepted = false
+                                    } else {
+                                        // Permitir solo un separador decimal
+                                        if ((event.key === Qt.Key_Period || event.key === Qt.Key_Comma) && text.includes('.')) {
+                                            event.accepted = false
+                                        }
                                     }
                                 }
                             }
@@ -1970,8 +1997,8 @@ Item {
                                 return
                             }
 
-                            // ✅ PARSEO MEJORADO DEL MONTO
-                            var montoTexto = montoField.text.replace(/,/g, '.')  // Normalizar
+                            // ✅ PARSEO MEJORADO - USAR TEXTO NORMALIZADO
+                            var montoTexto = montoField.text.replace(/,/g, '.')
                             var montoNumero = parseFloat(montoTexto)
 
                             if (isNaN(montoNumero) || montoNumero <= 0) {
@@ -1979,6 +2006,7 @@ Item {
                                 return
                             }
 
+                            // Resto del código sin cambios...
                             if (!fechaGastoField.text || fechaGastoField.text.length < 10) {
                                 showErrorMessage("Error de validación", "Ingresa una fecha válida (YYYY-MM-DD)")
                                 return
@@ -2003,6 +2031,7 @@ Item {
                             }
 
                             console.log("📝 Enviando datos del formulario:", JSON.stringify(gastoData))
+                            console.log("💰 Monto procesado:", montoNumero.toFixed(2))
                             console.log("🏢 Proveedor ID:", proveedorId)
 
                             var success = false

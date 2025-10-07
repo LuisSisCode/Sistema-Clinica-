@@ -102,11 +102,21 @@ ApplicationWindow {
     // Conexión con AuthModel si está disponible
     Connections {
         target: typeof authModel !== 'undefined' ? authModel : null
+        
         function onCurrentUserChanged() {
-            console.log("Usuario autenticado cambiado")
+            console.log("✅ Usuario autenticado cambiado")
+            
+            // Forzar actualización de visibilidad de menús
+            navItem7.visible = Qt.binding(function() { return isAdministrador() })
+            navItem8.visible = Qt.binding(function() { return isAdministrador() })
         }
+        
         function onLogoutCompleted() {
-            console.log("Logout completado")
+            console.log("👋 Logout completado")
+            
+            // Resetear visibilidad al cerrar sesión
+            navItem7.visible = false
+            navItem8.visible = false
         }
     }
     
@@ -597,7 +607,6 @@ ApplicationWindow {
                                 submenuItems: [
                                     { text: "Gastos Operativos", icon: "Resources/iconos/gasto.png", subsection: 0 },
                                     { text: "Ingresos Extras", icon: "Resources/iconos/ingresos_extra.png", subsection: 1 }
-                                   
                                 ]
                                 
                                 onSubmenuClicked: function(subsection) {
@@ -611,6 +620,8 @@ ApplicationWindow {
                                 text: "USUARIOS"
                                 icon: "Resources/iconos/usuario.png"
                                 active: currentIndex === 7
+                                visible: isAdministrador()  // ✅ RESTRICCIÓN APLICADA
+                                Layout.preferredHeight: visible ? baseUnit * 6 : 0
                                 onClicked: switchToPage(7)
                             }
                             
@@ -619,6 +630,8 @@ ApplicationWindow {
                                 text: "PERSONAL"
                                 icon: "Resources/iconos/Trabajadores.png"
                                 active: currentIndex === 8
+                                visible: isAdministrador()  // ✅ RESTRICCIÓN APLICADA
+                                Layout.preferredHeight: visible ? baseUnit * 6 : 0
                                 onClicked: switchToPage(8)
                             }
                             
@@ -1338,5 +1351,17 @@ ApplicationWindow {
         onClicked: {
             userProfileContainer.state = ""
         }
+    }
+
+    function isAdministrador() {
+        try {
+            if (typeof authModel !== "undefined" && authModel && authModel.isAuthenticated) {
+                const role = authModel.userRole || ""
+                return role.toLowerCase() === "administrador"
+            }
+        } catch (error) {
+            console.log("⚠️ Error verificando rol de administrador:", error)
+        }
+        return false
     }
 }
