@@ -1664,7 +1664,7 @@ Item {
                                 text: "Monto (Bs):"
                                 font.bold: true
                                 color: textColor
-                                font.pixelSize: fontInput // Reducido
+                                font.pixelSize: fontInput
                             }
                             
                             TextField {
@@ -1672,8 +1672,75 @@ Item {
                                 width: parent.width
                                 height: 40
                                 placeholderText: "0.00"
-                                font.pixelSize: fontInput // Reducido
-                                validator: DoubleValidator { bottom: 0.0; decimals: 2 }
+                                font.pixelSize: fontInput
+                                
+                                // ✅ Validador mejorado con locale específico
+                                validator: DoubleValidator {
+                                    bottom: 0.0
+                                    decimals: 2
+                                    notation: DoubleValidator.StandardNotation
+                                    locale: "en_US"  // Fuerza punto como decimal
+                                }
+                                
+                                // ✅ Normalizar entrada: convertir coma a punto
+                                onTextChanged: {
+                                    var cursorPos = cursorPosition
+                                    var newText = text.replace(/,/g, '.')
+                                    
+                                    // Solo actualizar si hay cambios (evitar bucle)
+                                    if (newText !== text) {
+                                        text = newText
+                                        cursorPosition = cursorPos
+                                    }
+                                    
+                                    // Feedback visual
+                                    if (text.length > 0) {
+                                        var valor = parseFloat(text)
+                                        if (isNaN(valor) || valor <= 0) {
+                                            montoField.color = dangerColor
+                                            montoValidationLabel.visible = true
+                                        } else {
+                                            montoField.color = textColor
+                                            montoValidationLabel.visible = false
+                                        }
+                                    } else {
+                                        montoField.color = textColor
+                                        montoValidationLabel.visible = false
+                                    }
+                                }
+                                
+                                // ✅ Formatear al perder foco
+                                onEditingFinished: {
+                                    if (text.length > 0) {
+                                        var valor = parseFloat(text)
+                                        if (!isNaN(valor) && valor > 0) {
+                                            text = valor.toFixed(2)
+                                        }
+                                    }
+                                }
+                                
+                                // ✅ Filtrar caracteres no válidos
+                                Keys.onPressed: function(event) {
+                                    var allowedKeys = [
+                                        Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4,
+                                        Qt.Key_5, Qt.Key_6, Qt.Key_7, Qt.Key_8, Qt.Key_9,
+                                        Qt.Key_Period, Qt.Key_Comma, Qt.Key_Backspace, 
+                                        Qt.Key_Delete, Qt.Key_Left, Qt.Key_Right, Qt.Key_Tab
+                                    ]
+                                    
+                                    if (!allowedKeys.includes(event.key)) {
+                                        event.accepted = false
+                                    }
+                                }
+                            }
+                            
+                            // ✅ Label de validación
+                            Label {
+                                id: montoValidationLabel
+                                text: "⚠️ Ingresa un monto válido mayor a 0"
+                                font.pixelSize: fontTiny
+                                color: dangerColor
+                                visible: false
                             }
                         }
                         
@@ -1902,46 +1969,50 @@ Item {
                                 showErrorMessage("Error de validación", "Selecciona un tipo de gasto")
                                 return
                             }
-                            
-                            if (parseFloat(montoField.text) <= 0) {
-                                showErrorMessage("Error de validación", "El monto debe ser mayor a 0")
+
+                            // ✅ PARSEO MEJORADO DEL MONTO
+                            var montoTexto = montoField.text.replace(/,/g, '.')  // Normalizar
+                            var montoNumero = parseFloat(montoTexto)
+
+                            if (isNaN(montoNumero) || montoNumero <= 0) {
+                                showErrorMessage("Error de validación", "El monto debe ser un número válido mayor a 0")
                                 return
                             }
-                            
+
                             if (!fechaGastoField.text || fechaGastoField.text.length < 10) {
                                 showErrorMessage("Error de validación", "Ingresa una fecha válida (YYYY-MM-DD)")
                                 return
                             }
-                            
+
                             // Obtener ID del proveedor seleccionado
                             var proveedorId = parseInt(gastoForm.selectedProveedorId || "0")
-                            
+
                             // Validación condicional de descripción
                             if (proveedorId === 0 && descripcionField.text.trim().length < 10) {
                                 showErrorMessage(
-                                    "Validación requerida", 
+                                    "Validación requerida",
                                     "Si no hay proveedor, la descripción debe tener al menos 10 caracteres"
                                 )
                                 return
                             }
-                            
+
                             var gastoData = {
                                 descripcion: descripcionField.text.trim(),
-                                monto: parseFloat(montoField.text).toFixed(2),
+                                monto: montoNumero.toFixed(2),  // ✅ Usar el valor parseado y formateado
                                 fechaGasto: fechaGastoField.text
                             }
-                            
+
                             console.log("📝 Enviando datos del formulario:", JSON.stringify(gastoData))
                             console.log("🏢 Proveedor ID:", proveedorId)
-                            
+
                             var success = false
-                            
+
                             if (isEditMode && editingGastoData) {
                                 success = actualizarGastoDirecto(editingGastoData.gastoId, gastoData, proveedorId)
                             } else {
                                 success = crearGastoDirecto(gastoData, proveedorId)
                             }
-                            
+
                             if (!success) {
                                 showErrorMessage("Error", "No se pudo guardar el gasto. Revisa los datos.")
                             }

@@ -108,6 +108,7 @@ clinica_app/
 ├── Reportes.qml
 ├── CierreCaja.qml
 ├── MarcaComboBox.qml
+├── ProveedorComboBox.qml
 ├── login.qml
 ├── main.qml
 │     

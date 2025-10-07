@@ -1,5 +1,4 @@
 # main.py - VERSIÓN FUSIONADA Y COMPLETA
-
 import sys
 import os
 import gc
@@ -30,6 +29,7 @@ from backend.models.ConfiguracionModel.ConfiConsulta_model import ConfiConsultaM
 from backend.models.ConfiguracionModel.ConfiTrabajadores_model import ConfiTrabajadoresModel, register_confi_trabajadores_model
 from backend.models.auth_model import AuthModel, register_auth_model
 from backend.models.cierre_caja_model import CierreCajaModel, register_cierre_caja_model
+from backend.models.ingreso_extra_model import IngresoExtraModel, register_ingreso_extra_model
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -75,6 +75,7 @@ class AppController(QObject):
         self.dashboard_model = None
         self.auth_model = None
         self.cierre_caja_model = None
+        self.ingreso_extra_model = None
         
         # Usuario autenticado - SIMPLIFICADO
         self._usuario_autenticado_id = 0
@@ -120,6 +121,8 @@ class AppController(QObject):
             self.dashboard_model = DashboardModel()
             self.venta_model.stockModificado.connect(self.inventario_model.actualizar_por_venta)
             self.cierre_caja_model = CierreCajaModel()
+            self.ingreso_extra_model = IngresoExtraModel()
+
 
             print("🔗 Conectando signals entre modelos...")
             # Conectar signals entre models
@@ -177,7 +180,7 @@ class AppController(QObject):
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
                 self.reportes_model, self.dashboard_model, self.auth_model,
-                self.cierre_caja_model
+                self.cierre_caja_model, self.ingreso_extra_model
             ]
             
             timer_count = 0
@@ -266,7 +269,8 @@ class AppController(QObject):
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
-                self.reportes_model, self.dashboard_model, self.auth_model
+                self.reportes_model, self.dashboard_model, self.auth_model,
+                self.cierre_caja_model, self.ingreso_extra_model
             ]
             
             for model in models:
@@ -295,6 +299,7 @@ class AppController(QObject):
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.consulta_model, self.gasto_model,
                 self.laboratorio_model, self.trabajador_model, self.enfermeria_model
+                , self.ingreso_extra_model
             ]
             
             for model in models_with_repos:
@@ -317,7 +322,7 @@ class AppController(QObject):
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
                 self.reportes_model, self.dashboard_model, self.auth_model,
-                self.cierre_caja_model
+                self.cierre_caja_model, self.ingreso_extra_model
             ]
             
             for model in all_models:
@@ -435,7 +440,7 @@ class AppController(QObject):
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model,
                 self.reportes_model, self.dashboard_model,
-                self.cierre_caja_model
+                self.cierre_caja_model, self.ingreso_extra_model
             ]
             
             for model in all_models:
@@ -502,7 +507,10 @@ class AppController(QObject):
                 # Solo establecer referencia para PDFs
                 self.cierre_caja_model.set_app_controller(self)
                 print("   ✅ AppController conectado al CierreCajaModel para PDFs")
-            
+            if self.ingreso_extra_model:
+                if hasattr(self.ingreso_extra_model, 'errorOcurrido'):
+                    self.ingreso_extra_model.errorOcurrido.connect(self._on_model_error)
+                print("   ✅ IngresoExtraModel conectado")
             # ===== CONEXIONES DE ERRORES Y ÉXITOS =====
             models_with_errors = [
                 self.inventario_model, self.venta_model, self.compra_model,
@@ -613,7 +621,7 @@ class AppController(QObject):
                 (self.usuario_model, 'set_usuario_actual_con_rol'),
                 (self.venta_model, 'set_usuario_actual_con_rol'),
                 (self.compra_model, 'set_usuario_actual'),
-                (self.proveedor_model, 'set_usuario_actual_con_rol'),  # ✅ AGREGADO
+                (self.proveedor_model, 'set_usuario_actual_con_rol'),  
                 (self.consulta_model, 'set_usuario_actual_con_rol'),
                 (self.enfermeria_model, 'set_usuario_actual_con_rol'),
                 (self.laboratorio_model, 'set_usuario_actual_con_rol'),
@@ -622,6 +630,7 @@ class AppController(QObject):
                 (self.reportes_model, 'set_usuario_actual'),
                 (self.dashboard_model, 'set_usuario_actual_con_rol'),
                 (self.cierre_caja_model, 'set_usuario_actual_con_rol'),
+                (self.ingreso_extra_model, 'set_usuario_actual_con_rol'),
             ]
             
             # Establecer usuario en cada modelo
@@ -973,6 +982,10 @@ class AppController(QObject):
     @Property(QObject, notify=modelsReady)
     def auth_model_instance(self):
         return self.auth_model
+    
+    @Property(QObject, notify=modelsReady)
+    def ingreso_extra_model_instance(self):
+        return self.ingreso_extra_model
 
     # ===============================
     # MÉTODOS DE NAVEGACIÓN Y NOTIFICACIONES
@@ -1688,6 +1701,7 @@ def register_qml_types():
     register_dashboard_model()
     register_auth_model()
     register_cierre_caja_model()
+    register_ingreso_extra_model()
 
 def setup_qml_context(engine, controller):
     root_context = engine.rootContext()

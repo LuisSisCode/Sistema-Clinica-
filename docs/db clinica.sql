@@ -243,6 +243,16 @@ CREATE TABLE CierreCaja (
     FOREIGN KEY (IdUsuario) REFERENCES Usuario(id)
 );
 
+-- Tabla de Ingresos Extras
+CREATE TABLE IngresosExtras (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    descripcion VARCHAR(500) NOT NULL,
+    monto DECIMAL(12,2) NOT NULL CHECK (monto >= 0),
+    fecha DATETIME NOT NULL DEFAULT GETDATE(),
+    id_registradoPor INT NOT NULL,
+    FOREIGN KEY (id_registradoPor) REFERENCES Usuario(id)
+);
+
 CREATE TABLE Proveedor_Gastos (
     id INT PRIMARY KEY IDENTITY(1,1),
     Nombre NVARCHAR(200) NOT NULL UNIQUE,

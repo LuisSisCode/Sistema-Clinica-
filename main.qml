@@ -595,8 +595,8 @@ ApplicationWindow {
                                 }
                                 
                                 submenuItems: [
-                                    { text: "Gastos Operativos", icon: "Resources/iconos/gastos.png", subsection: 0 },
-                                    { text: "Ingresos Extras", icon: "Resources/iconos/ingresos.png", subsection: 1 }
+                                    { text: "Gastos Operativos", icon: "Resources/iconos/gasto.png", subsection: 0 },
+                                    { text: "Ingresos Extras", icon: "Resources/iconos/ingresos_extra.png", subsection: 1 }
                                    
                                 ]
                                 

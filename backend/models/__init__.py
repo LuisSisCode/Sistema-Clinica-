@@ -23,6 +23,7 @@ from .usuario_model import UsuarioModel, register_usuario_model                 
 from .venta_model import VentaModel, register_venta_model 
 from .proveedor_model import ProveedorModel, register_proveedor_model   
 from .cierre_caja_model import CierreCajaModel, register_cierre_caja_model                        # 12
+from .ingreso_extra_model import IngresoExtraModel, register_ingreso_extra_model
 
 
 __all__ = [
@@ -39,7 +40,8 @@ __all__ = [
     'UsuarioModel', 'register_usuario_model',
     'VentaModel', 'register_venta_model',
     'ProveedorModel','register_proveedor_model',
-    'CierreCajaModel', 'register_cierre_caja_model'
+    'CierreCajaModel', 'register_cierre_caja_model',
+    'IngresoExtraModel','register_ingreso_extra_model'
     
 ]
 

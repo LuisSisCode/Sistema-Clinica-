@@ -350,14 +350,35 @@ Item {
             return false
         }
         
-        var productoOriginal = items[productoEditandoIndex]
+        // ✅ CORRECCIÓN: Leer valores directamente de los campos de texto antes de actualizar
+        var stockFinal = stockField && stockField.text.length > 0 ? parseInt(stockField.text) : inputStock
+        var precioFinal = purchasePriceField && purchasePriceField.text.length > 0 ? parseFloat(purchasePriceField.text) : inputPurchasePrice
+        var fechaFinal = expiryField && expiryField.text.length > 0 ? expiryField.text : inputExpiryDate
+        
+        // Validaciones
+        if (stockFinal <= 0) {
+            showSuccess("Error: Cantidad debe ser mayor a 0")
+            return false
+        }
+        
+        if (precioFinal <= 0) {
+            showSuccess("Error: Precio debe ser mayor a 0")
+            return false
+        }
+        
+        if (!inputNoExpiry && fechaFinal.length > 0 && !validateExpiryDate(fechaFinal)) {
+            showSuccess("Error: Fecha de vencimiento inválida")
+            return false
+        }
+        
+        console.log("📝 Actualizando con valores:", stockFinal, precioFinal, fechaFinal)
         
         // Actualizar en el modelo
         compraModel.actualizar_item_compra(
             productoEditandoIndex,
-            inputStock,
-            inputPurchasePrice,
-            inputNoExpiry ? "" : inputExpiryDate
+            stockFinal,
+            precioFinal,
+            inputNoExpiry ? "" : fechaFinal
         )
         
         showSuccess("Producto actualizado: " + inputProductName)

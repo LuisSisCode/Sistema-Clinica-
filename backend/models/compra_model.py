@@ -1315,6 +1315,58 @@ class CompraModel(QObject):
             print(f"❌ Error iniciando edición: {str(e)}")
             self.operacionError.emit(f"Error cargando compra: {str(e)}")
             return False
+        
+    @Slot(int, int, float, str)
+    def actualizar_item_compra(self, index: int, cantidad_unitario: int, 
+                            precio_unitario: float, fecha_vencimiento: str):
+        """
+        Actualiza un item existente en la compra actual
+        
+        Args:
+            index: Índice del item en _items_compra
+            cantidad_unitario: Nueva cantidad
+            precio_unitario: Nuevo precio (costo total)
+            fecha_vencimiento: Nueva fecha de vencimiento (puede ser vacío)
+        """
+        if index < 0 or index >= len(self._items_compra):
+            self.operacionError.emit(f"Índice inválido: {index}")
+            return
+        
+        if cantidad_unitario <= 0:
+            self.operacionError.emit("Cantidad debe ser mayor a 0")
+            return
+        
+        if precio_unitario <= 0:
+            self.operacionError.emit("Precio debe ser mayor a 0")
+            return
+        
+        # Validar fecha si se proporciona
+        fecha_procesada = fecha_vencimiento.strip() if fecha_vencimiento else ""
+        if fecha_procesada and not self._validar_fecha_formato(fecha_procesada):
+            self.operacionError.emit("Fecha debe ser formato YYYY-MM-DD o vacía")
+            return
+        
+        try:
+            # Actualizar item en el índice especificado
+            item = self._items_compra[index]
+            
+            item['cantidad_unitario'] = cantidad_unitario
+            item['cantidad_total'] = cantidad_unitario
+            item['precio_unitario'] = precio_unitario
+            item['fecha_vencimiento'] = fecha_procesada if fecha_procesada else None
+            item['subtotal'] = precio_unitario  # El precio ya es el costo total
+            
+            # Emitir señal de cambio
+            self.itemsCompraCambiado.emit()
+            
+            mensaje = f"Actualizado: {item['codigo']} - {cantidad_unitario} unidades a Bs{precio_unitario}"
+            self.operacionExitosa.emit(mensaje)
+            
+            print(f"✅ Item actualizado en índice {index}: {item['codigo']}")
+            
+        except Exception as e:
+            self.operacionError.emit(f"Error actualizando item: {str(e)}")
+            print(f"❌ Error actualizando item en índice {index}: {str(e)}")
     
     @Slot()
     def cancelar_edicion(self):

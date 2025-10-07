@@ -1,275 +1,395 @@
-import pyodbc
-from typing import List, Optional
+from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
-from decimal import Decimal
-from models.ingreso_extra_model import IngresoExtra
 
+from ..core.base_repository import BaseRepository
+from ..core.database_conexion import DatabaseConnection
 
-class IngresoExtraRepository:
-    """
-    Repositorio para gestionar operaciones CRUD de Ingresos Extras
-    """
+class IngresoExtraRepository(BaseRepository):
+    """Repository para gestión de Ingresos Extras"""
     
-    def __init__(self, connection_string: str):
-        """
-        Inicializa el repositorio con la cadena de conexión
-        Args:
-            connection_string: Cadena de conexión a SQL Server
-        """
-        self.connection_string = connection_string
+    def __init__(self):
+        # ✅ Pasar table_name y cache_type al constructor base
+        super().__init__("IngresosExtras", "ingresos_extras")
+        self.db = DatabaseConnection()
+        print("💰 IngresoExtraRepository inicializado")
     
-    def _get_connection(self):
-        """Obtiene una conexión a la base de datos"""
-        return pyodbc.connect(self.connection_string)
-    
-    def obtener_todos(self) -> List[IngresoExtra]:
-        """
-        Obtiene todos los ingresos extras con informaciÃ³n del usuario registrador
-        Returns: Lista de objetos IngresoExtra
-        """
-        query = """
-            SELECT 
-                ie.id,
-                ie.Descripcion,
-                ie.Monto,
-                ie.Fecha,
-                ie.Id_RegistradoPor,
-                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as NombreCompleto
-            FROM [ClinicaMariaInmaculada].[dbo].[IngresosExtras] ie
-            LEFT JOIN [ClinicaMariaInmaculada].[dbo].[Usuario] u 
-                ON ie.Id_RegistradoPor = u.id
-            ORDER BY ie.Fecha DESC, ie.id DESC
-        """
-        
-        ingresos = []
+    def agregar_ingreso_extra(self, descripcion: str, monto: float, fecha: str, id_usuario: int) -> Tuple[bool, Any]:
+        """Agrega un nuevo ingreso extra a la base de datos"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
+            query = """
+                INSERT INTO IngresosExtras (descripcion, monto, fecha, id_registradoPor)
+                VALUES (?, ?, ?, ?)
+            """
+            params = (descripcion, monto, fecha, id_usuario)
+            
+            print(f"🔍 Ejecutando INSERT con params: {params}")
+            
+            # ✅ CORREGIDO: Usar get_connection() en lugar de get_cursor()
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Ingreso extra agregado exitosamente")
+            return True, "Ingreso extra agregado correctamente"
+                
+        except Exception as e:
+            print(f"❌ Error inesperado al agregar ingreso extra: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, f"Error inesperado: {str(e)}"
+    
+    def actualizar_ingreso_extra(self, id_ingreso: int, descripcion: str, monto: float, fecha: str) -> Tuple[bool, Any]:
+        """Actualiza un ingreso extra existente"""
+        try:
+            query = """
+                UPDATE IngresosExtras 
+                SET descripcion = ?, monto = ?, fecha = ?
+                WHERE id = ?
+            """
+            params = (descripcion, monto, fecha, id_ingreso)
+            
+            print(f"🔍 Ejecutando UPDATE para ID {id_ingreso}")
+            
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Ingreso extra actualizado ID: {id_ingreso}")
+            return True, "Ingreso extra actualizado correctamente"
+                
+        except Exception as e:
+            print(f"❌ Error inesperado al actualizar ingreso extra: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, f"Error inesperado: {str(e)}"
+    
+    def eliminar_ingreso_extra(self, id_ingreso: int) -> Tuple[bool, Any]:
+        """Elimina un ingreso extra"""
+        try:
+            query = "DELETE FROM IngresosExtras WHERE id = ?"
+            params = (id_ingreso,)
+            
+            print(f"🔍 Ejecutando DELETE para ID {id_ingreso}")
+            
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Ingreso extra eliminado ID: {id_ingreso}")
+            return True, "Ingreso extra eliminado correctamente"
+                
+        except Exception as e:
+            print(f"❌ Error inesperado al eliminar ingreso extra: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, f"Error inesperado: {str(e)}"
+    
+    def obtener_todos_ingresos_extras(self) -> Tuple[bool, List[Dict[str, Any]]]:
+        """Obtiene todos los ingresos extras con información del usuario"""
+        try:
+            query = """
+                SELECT 
+                    ie.id,
+                    ie.descripcion,
+                    ie.monto,
+                    CONVERT(VARCHAR, ie.fecha, 23) as fecha,
+                    u.nombre + ' ' + u.Apellido_Paterno as registradoPor
+                FROM IngresosExtras ie
+                INNER JOIN Usuario u ON ie.id_registradoPor = u.id
+                ORDER BY ie.fecha DESC, ie.id DESC
+            """
+            
+            # ✅ CORREGIDO: NO usar get_all() - usar conexión directa
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query)
+            
+            # Convertir resultados a lista de diccionarios con tipos correctos
+            columns = [column[0] for column in cursor.description]
+            result = []
+            for row in cursor.fetchall():
+                row_dict = dict(zip(columns, row))
+                # ✅ Asegurar que monto sea float
+                if 'monto' in row_dict and row_dict['monto'] is not None:
+                    row_dict['monto'] = float(row_dict['monto'])
+                result.append(row_dict)
+            
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Obtenidos {len(result)} ingresos extras")
+            
+            # Debug de los primeros registros
+            if len(result) > 0:
+                print(f"📊 Primer ingreso:")
+                first = result[0]
+                print(f"   ID: {first.get('id')}, Descripción: {first.get('descripcion')}, Monto: {first.get('monto')} ({type(first.get('monto')).__name__})")
+            
+            return True, result
+                
+        except Exception as e:
+            print(f"❌ Error inesperado al obtener ingresos extras: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, []
+    
+    def obtener_ingresos_extras_paginados(self, pagina: int, items_por_pagina: int) -> Tuple[bool, List[Dict[str, Any]]]:
+        """Obtiene ingresos extras paginados"""
+        try:
+            offset = pagina * items_por_pagina
+            
+            query = """
+                SELECT 
+                    ie.id,
+                    ie.descripcion,
+                    ie.monto,
+                    CONVERT(VARCHAR, ie.fecha, 23) as fecha,
+                    u.nombre + ' ' + u.Apellido_Paterno as registradoPor
+                FROM IngresosExtras ie
+                INNER JOIN Usuario u ON ie.id_registradoPor = u.id
+                ORDER BY ie.fecha DESC, ie.id DESC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+            """
+            
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, (offset, items_por_pagina))
+            
+            # Convertir resultados a lista de diccionarios con tipos correctos
+            columns = [column[0] for column in cursor.description]
+            result = []
+            for row in cursor.fetchall():
+                row_dict = dict(zip(columns, row))
+                # ✅ Asegurar que monto sea float
+                if 'monto' in row_dict and row_dict['monto'] is not None:
+                    row_dict['monto'] = float(row_dict['monto'])
+                result.append(row_dict)
+            
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Obtenidos {len(result)} ingresos (página {pagina + 1})")
+            return True, result
+                
+        except Exception as e:
+            print(f"❌ Error inesperado al obtener ingresos paginados: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, []
+    
+    def contar_ingresos_extras(self, mes: int = 0, anio: int = 0) -> Tuple[bool, int]:
+        """Cuenta el total de ingresos extras, opcionalmente filtrados por mes y año"""
+        try:
+            query = "SELECT COUNT(*) as total FROM IngresosExtras"
+            
+            # ✅ CORREGIDO: Construir WHERE dinámicamente
+            where_conditions = []
+            params = []
+            
+            if mes > 0:
+                where_conditions.append("MONTH(fecha) = ?")
+                params.append(mes)
+            
+            if anio > 0:
+                where_conditions.append("YEAR(fecha) = ?")
+                params.append(anio)
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            
+            print(f"🔍 Contando ingresos - Mes: {mes}, Año: {anio}")
+            
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            if params:
+                cursor.execute(query, tuple(params))
+            else:
                 cursor.execute(query)
+            
+            row = cursor.fetchone()
+            total = row[0] if row else 0
+            
+            cursor.close()
+            conn.close()
+            
+            filtro_texto = []
+            if mes > 0:
+                filtro_texto.append(f"Mes {mes}")
+            if anio > 0:
+                filtro_texto.append(f"Año {anio}")
+            
+            print(f"📊 Total ingresos contados: {total} ({', '.join(filtro_texto) if filtro_texto else 'Sin filtros'})")
+            return True, total
                 
-                for row in cursor.fetchall():
-                    ingreso = IngresoExtra(
-                        id=row.id,
-                        descripcion=row.Descripcion,
-                        monto=Decimal(str(row.Monto)),
-                        fecha=row.Fecha,
-                        id_registrado_por=row.Id_RegistradoPor,
-                        nombre_registrado_por=row.NombreCompleto
-                    )
-                    ingresos.append(ingreso)
         except Exception as e:
-            print(f"Error al obtener ingresos extras: {e}")
-            raise
-        
-        return ingresos
+            print(f"❌ Error inesperado al contar ingresos: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, 0
     
-    def obtener_por_id(self, id: int) -> Optional[IngresoExtra]:
-        """
-        Obtiene un ingreso extra por su ID
-        Args:
-            id: ID del ingreso extra
-        Returns: Objeto IngresoExtra o None si no existe
-        """
-        query = """
-            SELECT 
-                ie.id,
-                ie.Descripcion,
-                ie.Monto,
-                ie.Fecha,
-                ie.Id_RegistradoPor,
-                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as NombreCompleto
-            FROM [ClinicaMariaInmaculada].[dbo].[IngresosExtras] ie
-            LEFT JOIN [ClinicaMariaInmaculada].[dbo].[Usuario] u 
-                ON ie.Id_RegistradoPor = u.id
-            WHERE ie.id = ?
-        """
-        
+    def obtener_ingresos_extras_filtrados(self, mes: int, anio: int, pagina: int, items_por_pagina: int) -> Tuple[bool, List[Dict[str, Any]]]:
+        """Obtiene ingresos extras filtrados por mes y/o año"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, (id,))
-                row = cursor.fetchone()
+            offset = pagina * items_por_pagina
+            
+            # ✅ CORREGIDO: Construir query dinámicamente según filtros activos
+            query = """
+                SELECT 
+                    ie.id,
+                    ie.descripcion,
+                    ie.monto,
+                    CONVERT(VARCHAR, ie.fecha, 23) as fecha,
+                    u.nombre + ' ' + u.Apellido_Paterno as registradoPor
+                FROM IngresosExtras ie
+                INNER JOIN Usuario u ON ie.id_registradoPor = u.id
+            """
+            
+            # Construir WHERE dinámicamente
+            where_conditions = []
+            params = []
+            
+            if mes > 0:
+                where_conditions.append("MONTH(ie.fecha) = ?")
+                params.append(mes)
+            
+            if anio > 0:
+                where_conditions.append("YEAR(ie.fecha) = ?")
+                params.append(anio)
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            
+            query += """
+                ORDER BY ie.fecha DESC, ie.id DESC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+            """
+            
+            # Agregar offset y limit
+            params.append(offset)
+            params.append(items_por_pagina)
+            
+            print(f"🔍 Query filtros: Mes={mes}, Año={anio}, Página={pagina + 1}")
+            print(f"   Condiciones WHERE: {where_conditions}")
+            
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            
+            # Convertir resultados a lista de diccionarios con tipos correctos
+            columns = [column[0] for column in cursor.description]
+            result = []
+            for row in cursor.fetchall():
+                row_dict = dict(zip(columns, row))
+                # Asegurar que monto sea float
+                if 'monto' in row_dict and row_dict['monto'] is not None:
+                    row_dict['monto'] = float(row_dict['monto'])
+                result.append(row_dict)
+            
+            cursor.close()
+            conn.close()
+            
+            filtro_texto = []
+            if mes > 0:
+                filtro_texto.append(f"Mes: {mes}")
+            if anio > 0:
+                filtro_texto.append(f"Año: {anio}")
+            
+            print(f"✅ Obtenidos {len(result)} ingresos con filtros: {', '.join(filtro_texto) if filtro_texto else 'Sin filtros'}")
+            return True, result
                 
-                if row:
-                    return IngresoExtra(
-                        id=row.id,
-                        descripcion=row.Descripcion,
-                        monto=Decimal(str(row.Monto)),
-                        fecha=row.Fecha,
-                        id_registrado_por=row.Id_RegistradoPor,
-                        nombre_registrado_por=row.NombreCompleto
-                    )
         except Exception as e:
-            print(f"Error al obtener ingreso extra por ID: {e}")
-            raise
-        
-        return None
+            print(f"❌ Error inesperado al obtener ingresos filtrados: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, []
     
-    def insertar(self, ingreso: IngresoExtra) -> int:
-        """
-        Inserta un nuevo ingreso extra
-        Args:
-            ingreso: Objeto IngresoExtra a insertar
-        Returns: ID del ingreso insertado
-        """
-        # Validar antes de insertar
-        es_valido, mensaje = ingreso.validate()
-        if not es_valido:
-            raise ValueError(mensaje)
-        
-        query = """
-            INSERT INTO [ClinicaMariaInmaculada].[dbo].[IngresosExtras]
-            (Descripcion, Monto, Fecha, Id_RegistradoPor)
-            VALUES (?, ?, ?, ?);
-            SELECT SCOPE_IDENTITY();
-        """
-        
+    def obtener_total_ingresos_mes(self, mes: int, anio: int) -> Tuple[bool, float]:
+        """Obtiene el total de ingresos extras de un mes específico o año"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, (
-                    ingreso.descripcion,
-                    float(ingreso.monto),
-                    ingreso.fecha,
-                    ingreso.id_registrado_por
-                ))
+            query = "SELECT COALESCE(SUM(monto), 0) as total FROM IngresosExtras"
+            
+            # ✅ CORREGIDO: Construir WHERE dinámicamente
+            where_conditions = []
+            params = []
+            
+            if mes > 0:
+                where_conditions.append("MONTH(fecha) = ?")
+                params.append(mes)
+            
+            if anio > 0:
+                where_conditions.append("YEAR(fecha) = ?")
+                params.append(anio)
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            if params:
+                cursor.execute(query, tuple(params))
+            else:
+                cursor.execute(query)
+            
+            row = cursor.fetchone()
+            total = float(row[0]) if row else 0.0
+            
+            cursor.close()
+            conn.close()
+            
+            filtro_texto = []
+            if mes > 0:
+                filtro_texto.append(f"Mes {mes}")
+            if anio > 0:
+                filtro_texto.append(f"Año {anio}")
+            
+            print(f"💰 Total ingresos: Bs {total:.2f} ({', '.join(filtro_texto) if filtro_texto else 'Sin filtros'})")
+            return True, total
                 
-                # Obtener el ID generado
-                nuevo_id = cursor.fetchone()[0]
-                conn.commit()
-                return int(nuevo_id)
         except Exception as e:
-            print(f"Error al insertar ingreso extra: {e}")
-            raise
+            print(f"❌ Error inesperado al obtener total de ingresos: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False, 0.0
     
-    def actualizar(self, ingreso: IngresoExtra) -> bool:
+    def get_active(self) -> Tuple[bool, List[Dict[str, Any]]]:
         """
-        Actualiza un ingreso extra existente
-        Args:
-            ingreso: Objeto IngresoExtra con los datos actualizados
-        Returns: True si se actualizÃ³ correctamente
+        Método requerido por BaseRepository.
+        Obtiene todos los ingresos extras (no hay concepto de activo/inactivo).
         """
-        if not ingreso.id:
-            raise ValueError("El ID del ingreso es requerido para actualizar")
-        
-        # Validar antes de actualizar
-        es_valido, mensaje = ingreso.validate()
-        if not es_valido:
-            raise ValueError(mensaje)
-        
-        query = """
-            UPDATE [ClinicaMariaInmaculada].[dbo].[IngresosExtras]
-            SET Descripcion = ?,
-                Monto = ?,
-                Fecha = ?,
-                Id_RegistradoPor = ?
-            WHERE id = ?
-        """
-        
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, (
-                    ingreso.descripcion,
-                    float(ingreso.monto),
-                    ingreso.fecha,
-                    ingreso.id_registrado_por,
-                    ingreso.id
-                ))
-                conn.commit()
-                return cursor.rowcount > 0
-        except Exception as e:
-            print(f"Error al actualizar ingreso extra: {e}")
-            raise
-    
-    def eliminar(self, id: int) -> bool:
-        """
-        Elimina un ingreso extra por su ID
-        Args:
-            id: ID del ingreso a eliminar
-        Returns: True si se elimina correctamente
-        """
-        query = """
-            DELETE FROM [ClinicaMariaInmaculada].[dbo].[IngresosExtras]
-            WHERE id = ?
-        """
-        
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, (id,))
-                conn.commit()
-                return cursor.rowcount > 0
-        except Exception as e:
-            print(f"Error al eliminar ingreso extra: {e}")
-            raise
-    
-    def obtener_por_fecha(self, fecha_inicio: datetime, fecha_fin: datetime) -> List[IngresoExtra]:
-        """
-        Obtiene ingresos extras en un rango de fechas
-        Args:
-            fecha_inicio: Fecha inicial del rango
-            fecha_fin: Fecha final del rango
-        Returns: Lista de objetos IngresoExtra
-        """
-        query = """
-            SELECT 
-                ie.id,
-                ie.Descripcion,
-                ie.Monto,
-                ie.Fecha,
-                ie.Id_RegistradoPor,
-                CONCAT(u.Nombre, ' ', u.Apellido_Paterno, ' ', u.Apellido_Materno) as NombreCompleto
-            FROM [ClinicaMariaInmaculada].[dbo].[IngresosExtras] ie
-            LEFT JOIN [ClinicaMariaInmaculada].[dbo].[Usuario] u 
-                ON ie.Id_RegistradoPor = u.id
-            WHERE ie.Fecha BETWEEN ? AND ?
-            ORDER BY ie.Fecha DESC
-        """
-        
-        ingresos = []
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, (fecha_inicio, fecha_fin))
-                
-                for row in cursor.fetchall():
-                    ingreso = IngresoExtra(
-                        id=row.id,
-                        descripcion=row.Descripcion,
-                        monto=Decimal(str(row.Monto)),
-                        fecha=row.Fecha,
-                        id_registrado_por=row.Id_RegistradoPor,
-                        nombre_registrado_por=row.NombreCompleto
-                    )
-                    ingresos.append(ingreso)
-        except Exception as e:
-            print(f"Error al obtener ingresos por fecha: {e}")
-            raise
-        
-        return ingresos
-    
-    def obtener_total_por_periodo(self, fecha_inicio: datetime, fecha_fin: datetime) -> Decimal:
-        """
-        Calcula el total de ingresos extras en un periodo
-        Args:
-            fecha_inicio: Fecha inicial del periodo
-            fecha_fin: Fecha final del periodo
-        Returns: Total como Decimal
-        """
-        query = """
-            SELECT ISNULL(SUM(Monto), 0) as Total
-            FROM [ClinicaMariaInmaculada].[dbo].[IngresosExtras]
-            WHERE Fecha BETWEEN ? AND ?
-        """
-        
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, (fecha_inicio, fecha_fin))
-                row = cursor.fetchone()
-                return Decimal(str(row.Total)) if row else Decimal('0.00')
-        except Exception as e:
-            print(f"Error al calcular total: {e}")
-            raise
+        return self.obtener_todos_ingresos_extras()
 
+    def verificar_conexion(self) -> bool:
+        """Verifica la conexión con la base de datos"""
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 as conexion")
+            cursor.close()
+            conn.close()
+            
+            print("✅ Conexión a BD verificada (IngresoExtra)")
+            return True
+                
+        except Exception as e:
+            print(f"❌ Error verificando conexión: {e}")
+            return False
+    
+    def limpiar_cache(self):
+        """Limpia la caché del repositorio"""
+        try:
+            if hasattr(self, '_cache_manager'):
+                self._cache_manager.clear()
+            print("✅ Cache de ingresos extras limpiado")
+        except Exception as e:
+            print(f"❌ Error limpiando cache: {e}")
