@@ -13,7 +13,7 @@ class IngresoExtraModel(QObject):
     ingresoExtraEliminado = Signal()
     errorOcurrido = Signal(str)
     datosCambiados = Signal()
-    ingresosActualizados = Signal()  # ✅ NUEVA señal para QML
+    ingresosActualizados = Signal() 
     
     def __init__(self, parent=None):
         super().__init__(parent)

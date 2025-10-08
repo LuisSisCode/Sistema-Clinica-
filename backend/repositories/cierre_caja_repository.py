@@ -51,12 +51,13 @@ class CierreCajaRepository(BaseRepository):
             ingresos_consultas = self._get_ingresos_consultas(timestamp_inicio, timestamp_fin)
             ingresos_laboratorio = self._get_ingresos_laboratorio(timestamp_inicio, timestamp_fin)
             ingresos_enfermeria = self._get_ingresos_enfermeria(timestamp_inicio, timestamp_fin)
+            ingresos_extras = self._get_ingresos_extras(timestamp_inicio, timestamp_fin) 
             egresos_gastos = self._get_egresos_gastos(timestamp_inicio, timestamp_fin)
             
             # Procesar y estructurar datos
             datos_procesados = self._procesar_datos_cierre(
                 ingresos_farmacia, ingresos_consultas, ingresos_laboratorio,
-                ingresos_enfermeria, egresos_gastos
+                ingresos_enfermeria, ingresos_extras, egresos_gastos  # ✅ ORDEN CORRECTO
             )
             
             print(f"✅ Datos procesados - Ingresos: Bs {datos_procesados['resumen']['total_ingresos']:,.2f}")
@@ -170,25 +171,49 @@ class CierreCajaRepository(BaseRepository):
         ORDER BY e.Fecha
         """
         return self._execute_query(query, (inicio, fin), use_cache=False)
-    def _procesar_datos_cierre(self, farmacia: List, consultas: List, laboratorio: List, 
-                              enfermeria: List, gastos: List) -> Dict[str, Any]:
-        """Procesa y estructura todos los datos para el cierre"""
+    
+    def _get_ingresos_extras(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
+        """Obtiene ingresos extras"""
+        # Extraer solo la fecha del timestamp inicio
+        fecha_sql = inicio.split(' ')[0]  # "2025-10-07 08:00:00.000" → "2025-10-07"
         
-        # Combinar todos los ingresos
+        query = """
+        SELECT 
+            ie.id,
+            ie.fecha as Fecha,
+            ie.monto as Total,
+            0 as Descuento,
+            ie.id_registradoPor as Id_Usuario,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
+            'INGRESO EXTRA' as TipoIngreso,
+            ie.descripcion as Descripcion
+        FROM IngresosExtras ie
+        LEFT JOIN Usuario u ON ie.id_registradoPor = u.id
+        WHERE CAST(ie.fecha AS DATE) = ?
+        ORDER BY ie.fecha
+        """
+        return self._execute_query(query, (fecha_sql,), use_cache=False)
+    
+    def _procesar_datos_cierre(self, farmacia: List, consultas: List, laboratorio: List, 
+                            enfermeria: List, ingresos_extras: List, gastos: List) -> Dict[str, Any]: 
+        
+        # Combinar todos los ingresos (AGREGAR INGRESOS EXTRAS)
         ingresos = []
         ingresos.extend(farmacia)
         ingresos.extend(consultas)
         ingresos.extend(laboratorio)
         ingresos.extend(enfermeria)
+        ingresos.extend(ingresos_extras)  # NUEVO
         
-        # Calcular totales
+        # Calcular totales (AGREGAR TOTAL INGRESOS EXTRAS)
         total_farmacia = sum(float(item.get('Total', 0)) for item in farmacia)
         total_consultas = sum(float(item.get('Total', 0)) for item in consultas)
         total_laboratorio = sum(float(item.get('Total', 0)) for item in laboratorio)
         total_enfermeria = sum(float(item.get('Total', 0)) for item in enfermeria)
+        total_ingresos_extras = sum(float(item.get('Total', 0)) for item in ingresos_extras)  # NUEVO
         total_gastos = sum(float(item.get('Total', 0)) for item in gastos)
         
-        total_ingresos = total_farmacia + total_consultas + total_laboratorio + total_enfermeria
+        total_ingresos = total_farmacia + total_consultas + total_laboratorio + total_enfermeria + total_ingresos_extras  
         total_egresos = total_gastos
         saldo_teorico = total_ingresos - total_egresos
         
@@ -199,6 +224,7 @@ class CierreCajaRepository(BaseRepository):
                 'consultas': consultas,
                 'laboratorio': laboratorio,
                 'enfermeria': enfermeria,
+                'ingresos_extras': ingresos_extras,  # NUEVO
                 'todos': ingresos
             },
             'egresos': {
@@ -210,6 +236,7 @@ class CierreCajaRepository(BaseRepository):
                 'total_consultas': round(total_consultas, 2),
                 'total_laboratorio': round(total_laboratorio, 2),
                 'total_enfermeria': round(total_enfermeria, 2),
+                'total_ingresos_extras': round(total_ingresos_extras, 2),  
                 'total_ingresos': round(total_ingresos, 2),
                 'total_egresos': round(total_egresos, 2),
                 'saldo_teorico': round(saldo_teorico, 2),
@@ -218,11 +245,12 @@ class CierreCajaRepository(BaseRepository):
                 'transacciones_farmacia': len(farmacia),
                 'transacciones_consultas': len(consultas),
                 'transacciones_laboratorio': len(laboratorio),
-                'transacciones_enfermeria': len(enfermeria)
+                'transacciones_enfermeria': len(enfermeria),
+                'transacciones_ingresos_extras': len(ingresos_extras)  
             },
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
-    
+        
     # ===============================
     # GESTIÓN DE CIERRES GUARDADOS
     # ===============================
@@ -551,6 +579,11 @@ class CierreCajaRepository(BaseRepository):
                     'concepto': 'ENFERMERÍA',
                     'transacciones': datos_completos['resumen']['transacciones_enfermeria'],
                     'importe': datos_completos['resumen']['total_enfermeria']
+                },
+                {
+                    'concepto': 'INGRESOS EXTRAS',
+                    'transacciones': datos_completos['resumen']['transacciones_ingresos_extras'],
+                    'importe': datos_completos['resumen']['total_ingresos_extras']
                 }
             ]
             

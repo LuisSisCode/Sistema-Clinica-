@@ -384,7 +384,7 @@ Item {
     function limpiarFormulario() {
         txtDescripcion.text = ""
         txtMonto.text = ""
-        txtFecha.text = Qt.formatDate(new Date(), "yyyy-MM-dd")
+        txtFecha.text = Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
         isEditMode = false
         editingId = -1
         editingIndex = -1
@@ -1408,7 +1408,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
                         font.pixelSize: fontInput
-                        text: Qt.formatDate(new Date(), "yyyy-MM-dd")
+                        text: Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
                         background: Rectangle {
                             color: whiteColor
                             border.color: txtFecha.activeFocus ? successColor : borderColor

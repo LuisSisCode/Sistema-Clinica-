@@ -1,7 +1,9 @@
-from typing import List, Dict, Any, Optional
+from ast import Str
+from typing import List, Dict, Any, Optional, Tuple
 from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import qmlRegisterType
 import json
+import os
 from datetime import datetime 
 from PySide6.QtCore import QObject, Signal, Slot, QUrl, QTimer, Property, QSettings, QDateTime
 
@@ -141,7 +143,19 @@ class CierreCajaModel(QObject):
     def cierresDelDia(self) -> List[Dict[str, Any]]:
         return self._cierres_del_dia
     
+    Property(float, notify=resumenChanged)  # Si da error, usa notify="resumenChanged"
+    def totalIngresosExtras(self) -> float:
+        return float(self._datos_cierre.get('resumen', {}).get('total_ingresos_extras', 0.0))
+
+    @Property(int, notify=resumenChanged)  # Si da error, usa notify="resumenChanged"  
+    def transaccionesIngresosExtras(self) -> int:
+        return int(self._datos_cierre.get('resumen', {}).get('transacciones_ingresos_extras', 0))
+
+    @Property(list, notify=datosChanged)  # Si da error, usa notify="datosChanged"
+    def ingresosExtrasDetalle(self) -> List[Dict[str, Any]]:
+        return self._datos_cierre.get('ingresos', {}).get('ingresos_extras', [])
     # Datos financieros calculados
+    
     @Property(float, notify=resumenChanged)
     def totalIngresos(self) -> float:
         return float(self._datos_cierre.get('resumen', {}).get('total_ingresos', 0.0))
@@ -215,14 +229,12 @@ class CierreCajaModel(QObject):
     # ===============================
     # SLOTS - Métodos principales
     # ===============================
-    
     @Slot()
     def consultarDatos(self):
         """MÉTODO PRINCIPAL - Consulta datos de cierre según parámetros configurados"""
         if not self._verificar_autenticacion():
             return
         
-        # ✅ NUEVO: Verificar conexión antes de proceder
         if not self._verificar_conexion():
             return
         
@@ -258,7 +270,20 @@ class CierreCajaModel(QObject):
                 self.resumenChanged.emit()
                 self._actualizar_validacion()
                 
-                self.operacionExitosa.emit("Datos consultados correctamente")
+                # ✅ NUEVO: GENERAR PDF AUTOMÁTICAMENTE
+                print("📄 Generando PDF del arqueo...")
+                success, resultado = self._generar_pdf_arqueo_desde_datos(datos_cierre)
+                
+                if success:
+                    print(f"✅ PDF generado exitosamente: {resultado}")
+                    self.pdfGenerado.emit(resultado)
+                    self.operacionExitosa.emit("Datos consultados y PDF generado correctamente")
+                    
+                    # Abrir PDF automáticamente
+                    self._abrir_pdf_automaticamente(resultado)
+                else:
+                    print(f"⚠️ Error generando PDF: {resultado}")
+                    self.operacionExitosa.emit("Datos consultados correctamente (PDF no generado)")
             else:
                 self._datos_cierre = {}
                 self._resumen_estructurado = {}
@@ -268,11 +293,230 @@ class CierreCajaModel(QObject):
             error_msg = f"Error consultando datos: {str(e)}"
             print(f"❌ {error_msg}")
             
-            # ✅ NUEVO: Si hay error crítico, activar desconexión segura
             if "connection" in str(e).lower() or "database" in str(e).lower():
                 self.emergency_disconnect()
             else:
                 self.operacionError.emit(error_msg)
+        finally:
+            self._set_loading(False)
+    ############# MÉTODOS AUXILIARES PARA PDF #############
+
+    def _generar_pdf_arqueo_desde_datos(self, datos_cierre: Dict) -> Tuple[bool, str]:
+        """Genera PDF del arqueo usando datos ya consultados"""
+        try:
+            # Preparar movimientos para el PDF
+            movimientos_pdf = self._preparar_movimientos_para_pdf(datos_cierre)
+            
+            # Generar el PDF
+            return self._generar_pdf_arqueo(movimientos_pdf, datos_cierre)
+            
+        except Exception as e:
+            error_msg = f"Error en _generar_pdf_arqueo_desde_datos: {str(e)}"
+            print(f"❌ {error_msg}")
+            return False, error_msg
+
+    def _preparar_movimientos_para_pdf(self, datos_cierre: Dict) -> List[Dict]:
+        """Convierte datos del repository al formato que espera el PDF"""
+        movimientos = []
+        
+        try:
+            # PROCESAR INGRESOS POR CATEGORÍA
+            if 'ingresos' in datos_cierre:
+                for categoria, items in datos_cierre['ingresos'].items():
+                    if categoria == 'todos':
+                        continue
+                    
+                    for item in items:
+                        movimiento = {
+                            'id': item.get('id'),
+                            'fecha': item.get('Fecha', ''),
+                            'tipo': 'INGRESO',
+                            'categoria': categoria.upper(),
+                            'descripcion': item.get('Descripcion', item.get('TipoIngreso', '')),
+                            'cantidad': item.get('Cantidad', 1),
+                            'valor': float(item.get('Total', 0))
+                        }
+                        
+                        # Campos específicos según categoría
+                        if categoria == 'farmacia':
+                            movimiento['id_venta'] = item.get('id')
+                            movimiento['descripcion'] = item.get('Descripcion', 'Venta de medicamentos')
+                        
+                        elif categoria == 'consultas':
+                            movimiento['id_consulta'] = item.get('id')
+                            movimiento['especialidad'] = item.get('Descripcion', '').replace('Consulta - ', '')
+                            movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
+                            movimiento['doctor_nombre'] = item.get('NombreUsuario', '')
+                        
+                        elif categoria == 'laboratorio':
+                            movimiento['id_laboratorio'] = item.get('id')
+                            movimiento['analisis'] = item.get('Descripcion', '').replace('Análisis - ', '')
+                            movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
+                            movimiento['laboratorista'] = item.get('NombreUsuario', '')
+                        
+                        elif categoria == 'enfermeria':
+                            movimiento['id_enfermeria'] = item.get('id')
+                            movimiento['procedimiento'] = item.get('Descripcion', '').replace('Procedimiento - ', '')
+                            movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
+                            movimiento['enfermero'] = item.get('NombreUsuario', '')
+                        
+                        elif categoria == 'ingresos_extras':
+                            movimiento['descripcion'] = item.get('Descripcion', 'Ingreso extra')
+                        
+                        movimientos.append(movimiento)
+            
+            # PROCESAR EGRESOS
+            if 'egresos' in datos_cierre and 'todos' in datos_cierre['egresos']:
+                for item in datos_cierre['egresos']['todos']:
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'EGRESO',
+                        'categoria': 'GASTOS',
+                        'descripcion': item.get('Descripcion', ''),
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0)),
+                        'tipo_gasto': item.get('TipoEgreso', 'Gasto'),
+                        'proveedor': item.get('Proveedor', 'N/A')
+                    }
+                    movimientos.append(movimiento)
+            
+            print(f"✅ Movimientos preparados: {len(movimientos)} registros")
+            return movimientos
+            
+        except Exception as e:
+            print(f"❌ Error preparando movimientos: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def _generar_pdf_arqueo(self, movimientos: List[Dict], datos_cierre: Dict) -> Tuple[bool, str]:
+        """Genera el PDF del arqueo de caja"""
+        try:
+            # ✅ IMPORTAR CORRECTAMENTE (ajustar path si es necesario)
+            import sys
+            import os
+            
+            # Agregar directorio raíz al path si no está
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            if root_dir not in sys.path:
+                sys.path.insert(0, root_dir)
+            
+            from generar_pdf import GeneradorReportesPDF
+            import json
+            
+            print("✅ GeneradorReportesPDF importado correctamente")
+            
+            # Crear instancia del generador
+            generador = GeneradorReportesPDF()
+            
+            # ✅ Calcular diferencia explícitamente
+            saldo_teorico = datos_cierre.get('resumen', {}).get('saldo_teorico', 0)
+            diferencia_calculada = round(self._efectivo_real - saldo_teorico, 2)
+            
+            # Preparar datos completos para el PDF (incluyendo resumen)
+            datos_pdf = {
+                'movimientos_completos': movimientos,
+                'fecha': self._fecha_actual,
+                'hora_inicio': self._hora_inicio,
+                'hora_fin': self._hora_fin,
+                'hora_generacion': datetime.now().strftime("%H:%M:%S"),
+                'responsable': 'Sistema',
+                'numero_arqueo': f"ARQ-{datetime.now().strftime('%Y%m%d-%H%M')}",
+                'estado': 'COMPLETADO',
+                
+                # Resumen financiero
+                'total_ingresos': datos_cierre.get('resumen', {}).get('total_ingresos', 0),
+                'total_egresos': datos_cierre.get('resumen', {}).get('total_egresos', 0),
+                'saldo_teorico': saldo_teorico,
+                'efectivo_real': self._efectivo_real,
+                'diferencia': diferencia_calculada
+            }
+            
+            # Convertir a JSON
+            datos_json = json.dumps(datos_pdf, ensure_ascii=False, default=str)
+            
+            print(f"📄 Llamando a generar_reporte_pdf con tipo 9 (Arqueo)")
+            
+            # ✅ LLAMAR AL MÉTODO CORRECTO CON PARÁMETROS CORRECTOS
+            filepath = generador.generar_reporte_pdf(
+                datos_json,
+                "9",
+                self._fecha_actual,
+                self._fecha_actual
+            )
+            
+            if filepath and os.path.exists(filepath):
+                print(f"✅ PDF generado exitosamente: {filepath}")
+                return True, filepath
+            else:
+                print("⚠️ PDF no generado o archivo no existe")
+                return False, "No se pudo generar el archivo PDF"
+                
+        except ImportError as e:
+            error_msg = f"Error importando generador PDF: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return False, error_msg
+            
+        except Exception as e:
+            error_msg = f"Error generando PDF: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return False, error_msg
+    def _abrir_pdf_automaticamente(self, filepath: str):
+        """Abre el PDF generado automáticamente en el navegador"""
+        try:
+            import webbrowser
+            import platform
+            
+            # Convertir ruta a formato URL
+            if platform.system() == 'Windows':
+                url = 'file:///' + filepath.replace('\\', '/')
+            else:
+                url = 'file://' + filepath
+            
+            webbrowser.open(url)
+            print(f"🌐 PDF abierto en navegador: {url}")
+            
+        except Exception as e:
+            print(f"⚠️ No se pudo abrir PDF automáticamente: {e}")
+    
+    @Slot(str, str, str)
+    def generarPDFCierreEspecifico(self, fecha: str, hora_inicio: str, hora_fin: str):
+        """Genera PDF de un cierre específico ya guardado (para botón Ver Cierre)"""
+        try:
+            print(f"📄 Generando PDF específico - Fecha: {fecha}, Horario: {hora_inicio}-{hora_fin}")
+            
+            self._set_loading(True)
+            
+            # Obtener datos del cierre específico
+            datos_cierre = self.repository.get_datos_cierre_completo(
+                fecha, hora_inicio, hora_fin
+            )
+            
+            if not datos_cierre:
+                self.operacionError.emit("No se encontraron datos para este cierre")
+                return
+            
+            # Preparar y generar PDF
+            movimientos = self._preparar_movimientos_para_pdf(datos_cierre)
+            success, filepath = self._generar_pdf_arqueo(movimientos, datos_cierre)
+            
+            if success:
+                print(f"✅ PDF generado: {filepath}")
+                self.pdfGenerado.emit(filepath)
+                self._abrir_pdf_automaticamente(filepath)
+                self.operacionExitosa.emit("PDF generado correctamente")
+            else:
+                self.operacionError.emit(f"Error generando PDF: {filepath}")
+                
+        except Exception as e:
+            error_msg = f"Error en generarPDFCierreEspecifico: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
         finally:
             self._set_loading(False)
         
@@ -551,7 +795,6 @@ class CierreCajaModel(QObject):
 
     @Slot(result='QVariantMap')
     def obtenerEstadisticasDia(self) -> Dict[str, Any]:
-        """Obtiene estadísticas adicionales del día"""
         try:
             if not self._datos_cierre:
                 return {}
@@ -577,6 +820,9 @@ class CierreCajaModel(QObject):
                 'porcentaje_enfermeria': round(
                     (self.totalEnfermeria / max(self.totalIngresos, 1)) * 100, 1
                 ),
+                'porcentaje_ingresos_extras': round(  # NUEVO
+                    (self.totalIngresosExtras / max(self.totalIngresos, 1)) * 100, 1
+                ),
                 'margin_operativo': round(
                     ((self.totalIngresos - self.totalEgresos) / max(self.totalIngresos, 1)) * 100, 1
                 )
@@ -585,7 +831,7 @@ class CierreCajaModel(QObject):
         except Exception as e:
             print(f"❌ Error obteniendo estadísticas: {e}")
             return {}
-    
+        
     @Slot()
     def limpiarDatos(self):
         """Limpia todos los datos del cierre"""

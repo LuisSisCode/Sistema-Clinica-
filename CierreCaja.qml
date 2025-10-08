@@ -49,7 +49,9 @@ Item {
     property real diferencia: cierreCajaModel ? cierreCajaModel.diferencia : 0.0
 
     property int totalTransacciones: cierreCajaModel ? cierreCajaModel.totalTransacciones : 0
-
+    // En las propiedades dinámicas, agrega:
+    property real totalIngresosExtras: (cierreCajaModel && cierreCajaModel.totalIngresosExtras !== undefined) ? cierreCajaModel.totalIngresosExtras : 0.0
+    property int transaccionesIngresosExtras: cierreCajaModel ? cierreCajaModel.transaccionesIngresosExtras : 0
     // Propiedades calculadas para el arqueo
     readonly property string tipoDiferencia: {
         if (Math.abs(diferencia) < 1.0) return "NEUTRO"
@@ -96,8 +98,29 @@ Item {
             // Forzar actualización de propiedades calculadas
             cierreCajaRoot.diferencia = cierreCajaModel ? cierreCajaModel.diferencia : 0.0
         }
-    }
    
+        
+        function onPdfGenerado(filepath) {
+            console.log("✅ PDF generado exitosamente:", filepath)
+            mostrarNotificacion("Éxito", "PDF generado correctamente")
+            
+            // Abrir PDF automáticamente (se abre desde el model)
+            // Solo mostrar notificación
+        }
+        
+        function onOperacionExitosa(mensaje) {
+            console.log("✅", mensaje)
+            if (mensaje.includes("PDF") || mensaje.includes("Datos consultados")) {
+                toastNotification.show(mensaje)
+            }
+        }
+        
+        function onOperacionError(mensaje) {
+            console.log("❌", mensaje)
+            mostrarNotificacion("Error", mensaje)
+        }
+    }
+    
     Timer {
         id: modelHealthTimer
         interval: 15000  // Reducir frecuencia
@@ -209,7 +232,13 @@ Item {
                                 text: "📄 Generar PDF"
                                 Layout.preferredHeight: 40
                                 Layout.preferredWidth: 150
-                                enabled: cierreCajaModel && !cierreCajaModel.loading && efectivoReal > 0
+                                enabled: {
+                                    return cierreCajaModel && 
+                                        !cierreCajaModel.loading && 
+                                        fechaField.text.trim().length > 0 &&
+                                        horaInicioField.text.trim().length > 0 &&
+                                        horaFinField.text.trim().length > 0
+                                }
                                 
                                 background: Rectangle {
                                     color: parent.pressed ? Qt.darker(successColor, 1.2) : (parent.enabled ? successColor : darkGrayColor)
@@ -227,20 +256,31 @@ Item {
                                 }
                                 
                                 onClicked: {
-                                    if (cierreCajaModel && typeof cierreCajaModel.consultarDatos === 'function') {
-                                        try {
+                                    console.log("📄 Generando PDF del arqueo...")
+                                    
+                                    if (!cierreCajaModel) {
+                                        mostrarNotificacion("Error", "Modelo no disponible")
+                                        return
+                                    }
+                                    
+                                    // Validar que tenga datos consultados
+                                    if (totalIngresos === 0 && totalEgresos === 0) {
+                                        mostrarNotificacion("Advertencia", "Primero consulte los datos presionando 'Consultar'")
+                                        return
+                                    }
+                                    
+                                    try {
+                                        // El PDF se genera automáticamente en consultarDatos()
+                                        // Solo llamamos a consultarDatos que ya genera el PDF
+                                        if (typeof cierreCajaModel.consultarDatos === 'function') {
                                             cierreCajaModel.consultarDatos()
-                                        } catch (error) {
-                                            console.log("❌ Error en consultarDatos:", error)
-                                            if (toastNotification) {
-                                                toastNotification.show("Error ejecutando operación")
-                                            }
+                                        } else {
+                                            console.log("❌ Método consultarDatos no existe")
+                                            mostrarNotificacion("Error", "Función no disponible")
                                         }
-                                    } else {
-                                        console.log("❌ Modelo no disponible")
-                                        if (toastNotification) {
-                                            toastNotification.show("Módulo no disponible")
-                                        }
+                                    } catch (error) {
+                                        console.log("❌ Error:", error)
+                                        mostrarNotificacion("Error", error.toString())
                                     }
                                 }
                             }
@@ -628,7 +668,7 @@ Item {
                                 // TABLA DE INGRESOS DETALLADOS
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 300
+                                    Layout.preferredHeight: 330
                                     color: whiteColor
                                     radius: 8
                                     border.color: "#E0E6ED"
@@ -754,7 +794,7 @@ Item {
                                 // TABLA DE EGRESOS DETALLADOS
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 300
+                                    Layout.preferredHeight: 330
                                     color: whiteColor
                                     radius: 8
                                     border.color: "#E0E6ED"
@@ -905,10 +945,28 @@ Item {
                                                 }
                                                 
                                                 onTextChanged: {
-                                                    if (!actualizandoTexto && text.trim().length > 0) {
-                                                        var monto = parseFloat(text) || 0
+                                                    if (!actualizandoTexto) {
+                                                        // ✅ CALCULAR MONTO (incluso si está vacío)
+                                                        var texto = text.trim()
+                                                        var monto = 0
+                                                        
+                                                        if (texto.length > 0) {
+                                                            monto = parseFloat(texto) || 0
+                                                        }
+                                                        
+                                                        // ✅ SIEMPRE actualizar el modelo (incluso con 0)
                                                         if (cierreCajaModel) {
+                                                            console.log("💵 Actualizando efectivo real a:", monto)
                                                             cierreCajaModel.establecerEfectivoReal(monto)
+                                                        }
+                                                    }
+                                                }
+                                                onFocusChanged: {
+                                                    if (!focus && text.trim().length === 0) {
+                                                        // ✅ Si pierde el foco y está vacío, establecer a 0
+                                                        if (cierreCajaModel) {
+                                                            console.log("💵 Campo vacío, estableciendo a 0")
+                                                            cierreCajaModel.establecerEfectivoReal(0)
                                                         }
                                                     }
                                                 }
@@ -1173,7 +1231,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 120
+                                                Layout.preferredWidth: 110
                                                 text: "EFECTIVO REAL"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1185,7 +1243,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 120
+                                                Layout.preferredWidth: 110
                                                 text: "SALDO TEÓRICO"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1197,7 +1255,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 100
+                                                Layout.preferredWidth: 90
                                                 text: "DIFERENCIA"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1209,7 +1267,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 90
+                                                Layout.preferredWidth: 80
                                                 text: "ESTADO"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1221,7 +1279,7 @@ Item {
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
                                             Label {
-                                                Layout.preferredWidth: 130
+                                                Layout.preferredWidth: 120
                                                 text: "REGISTRADO POR"
                                                 font.bold: true
                                                 font.pixelSize: 11
@@ -1234,7 +1292,21 @@ Item {
                                             
                                             Label {
                                                 Layout.fillWidth: true
+                                                Layout.minimumWidth: 150
                                                 text: "OBSERVACIONES"
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                color: whiteColor
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
+                                            
+                                            // ✅ NUEVA COLUMNA
+                                            Label {
+                                                Layout.preferredWidth: 100
+                                                text: "ACCIONES"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1312,7 +1384,7 @@ Item {
                                                     
                                                     // EFECTIVO REAL
                                                     Rectangle {
-                                                        Layout.preferredWidth: 120
+                                                        Layout.preferredWidth: 110
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1332,7 +1404,7 @@ Item {
                                                     
                                                     // SALDO TEÓRICO
                                                     Rectangle {
-                                                        Layout.preferredWidth: 120
+                                                        Layout.preferredWidth: 110
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1351,7 +1423,7 @@ Item {
                                                     
                                                     // DIFERENCIA
                                                     Rectangle {
-                                                        Layout.preferredWidth: 100
+                                                        Layout.preferredWidth: 90
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1406,7 +1478,7 @@ Item {
                                                     
                                                     // ESTADO
                                                     Rectangle {
-                                                        Layout.preferredWidth: 90
+                                                        Layout.preferredWidth: 80
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1414,7 +1486,7 @@ Item {
                                                             anchors.left: parent.left
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             anchors.leftMargin: 8
-                                                            width: 70
+                                                            width: 60
                                                             height: 22
                                                             radius: 11
                                                             color: {
@@ -1443,7 +1515,7 @@ Item {
                                                     
                                                     // REGISTRADO POR
                                                     Rectangle {
-                                                        Layout.preferredWidth: 130
+                                                        Layout.preferredWidth: 120
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1460,6 +1532,7 @@ Item {
                                                                 color: textColor
                                                                 horizontalAlignment: Text.AlignLeft
                                                                 elide: Text.ElideRight
+                                                                Layout.maximumWidth: 110
                                                             }
                                                             
                                                             Label {
@@ -1476,6 +1549,7 @@ Item {
                                                     // OBSERVACIONES
                                                     Rectangle {
                                                         Layout.fillWidth: true
+                                                        Layout.minimumWidth: 150
                                                         Layout.fillHeight: true
                                                         color: "transparent"
                                                         
@@ -1498,6 +1572,59 @@ Item {
                                                                 horizontalAlignment: Text.AlignLeft
                                                                 verticalAlignment: Text.AlignTop
                                                             }
+                                                        }
+                                                    }
+                                                    
+                                                    Rectangle { width: 2; Layout.fillHeight: true; color: "#E0E6ED"; opacity: 0.7 }
+                                                    
+                                                    // ✅ NUEVA COLUMNA - ACCIONES
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 100
+                                                        Layout.fillHeight: true
+                                                        color: "transparent"
+                                                        
+                                                        Button {
+                                                            anchors.centerIn: parent
+                                                            width: 80
+                                                            height: 35
+                                                            text: "📄 Ver"
+                                                            
+                                                            background: Rectangle {
+                                                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
+                                                                radius: 6
+                                                                border.color: primaryDarkColor
+                                                                border.width: 1
+                                                                
+                                                                // Efecto hover
+                                                                Rectangle {
+                                                                    anchors.fill: parent
+                                                                    radius: 6
+                                                                    color: parent.parent.hovered ? "#20FFFFFF" : "transparent"
+                                                                }
+                                                            }
+                                                            
+                                                            contentItem: Label {
+                                                                text: parent.text
+                                                                color: whiteColor
+                                                                font.bold: true
+                                                                font.pixelSize: 10
+                                                                horizontalAlignment: Text.AlignHCenter
+                                                                verticalAlignment: Text.AlignVCenter
+                                                            }
+                                                            
+                                                            onClicked: {
+                                                                console.log("🔍 Ver cierre - ID:", modelData.id)
+                                                                generarPDFCierreEspecifico(
+                                                                    modelData.Fecha,
+                                                                    modelData.HoraInicio,
+                                                                    modelData.HoraFin
+                                                                )
+                                                            }
+                                                            
+                                                            // Tooltip
+                                                            ToolTip.visible: hovered
+                                                            ToolTip.text: "Ver PDF de este cierre"
+                                                            ToolTip.delay: 500
                                                         }
                                                     }
                                                 }
@@ -1867,7 +1994,89 @@ Item {
         return horas >= 0 && horas <= 23 && 
             minutos >= 0 && minutos <= 59
     }
-    
+    function generarPDFCierreEspecifico(fecha, horaInicio, horaFin) {
+        console.log("📄 Generando PDF de cierre específico")
+        console.log("   📅 Fecha:", fecha)
+        console.log("   🕐 Horario:", horaInicio, "-", horaFin)
+        
+        if (!cierreCajaModel) {
+            console.log("❌ Modelo no disponible")
+            mostrarNotificacion("Error", "Modelo no disponible")
+            return
+        }
+        
+        try {
+            // ✅ LIMPIAR FORMATOS antes de enviar al model
+            let fechaLimpia = formatearFechaParaModel(fecha)
+            let horaInicioLimpia = limpiarFormatoHora(horaInicio)
+            let horaFinLimpia = limpiarFormatoHora(horaFin)
+            
+            console.log("🔧 Datos limpiados:")
+            console.log("   Fecha:", fechaLimpia)
+            console.log("   Hora inicio:", horaInicioLimpia)
+            console.log("   Hora fin:", horaFinLimpia)
+            
+            // Llamar al método del model con datos limpios
+            if (typeof cierreCajaModel.generarPDFCierreEspecifico === 'function') {
+                cierreCajaModel.generarPDFCierreEspecifico(
+                    fechaLimpia, 
+                    horaInicioLimpia, 
+                    horaFinLimpia
+                )
+                
+                mostrarNotificacion("Procesando", "Generando PDF del cierre...")
+            } else {
+                console.log("❌ Método generarPDFCierreEspecifico no existe en el modelo")
+                mostrarNotificacion("Error", "Función no disponible en el modelo")
+            }
+            
+        } catch (error) {
+            console.log("❌ Error en generarPDFCierreEspecifico:", error.toString())
+            mostrarNotificacion("Error", "Error al generar PDF: " + error.toString())
+        }
+    }
+    function formatearFechaParaModel(fecha) {
+        if (!fecha) return ""
+        
+        let fechaStr = fecha.toString().trim()
+        
+        // Si ya está en DD/MM/YYYY, devolverla
+        if (fechaStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+            return fechaStr
+        }
+        
+        // Si viene en YYYY-MM-DD, convertir a DD/MM/YYYY
+        if (fechaStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+            let partes = fechaStr.split('-')
+            return partes[2] + '/' + partes[1] + '/' + partes[0]
+        }
+        
+        // Si tiene timestamp, extraer solo la fecha
+        if (fechaStr.indexOf(' ') > 0) {
+            let soloFecha = fechaStr.split(' ')[0]
+            return formatearFechaParaModel(soloFecha)
+        }
+        
+        return fechaStr
+    }
+    function limpiarFormatoHora(hora) {
+        if (!hora) return "00:00"
+        
+        let horaStr = hora.toString().trim()
+        
+        // Extraer solo HH:MM de cualquier formato
+        if (horaStr.indexOf(':') > 0) {
+            let partes = horaStr.split(':')
+            if (partes.length >= 2) {
+                let horas = partes[0].padStart(2, '0')
+                let minutos = partes[1].padStart(2, '0')
+                return horas + ':' + minutos
+            }
+        }
+        
+        return horaStr
+    }
+        
     // INICIALIZACIÓN
     Component.onCompleted: {
         console.log("💰 Inicializando módulo CierreCaja")

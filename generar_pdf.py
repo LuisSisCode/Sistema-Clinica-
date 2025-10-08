@@ -5,6 +5,7 @@ Versión 4.2 - Reporte Financiero Mejorado y Comprensible
 """
 
 import os
+from typing import List, Dict, Any
 import json
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
@@ -857,22 +858,47 @@ class GeneradorReportesPDF:
             return False
 
     def _crear_arqueo_caja_completo(self, datos, fecha_desde, fecha_hasta):
-        """Crea arqueo de caja detallado con todas las transacciones individuales - CORREGIDO"""
+        """Crea arqueo de caja con estructura mejorada desde repository"""
         elementos = []
         
         try:
-            # 1. TÍTULO E INFORMACIÓN DEL CIERRE
+            print("📄 Iniciando creación de arqueo completo...")
+            
+            # 1. TÍTULO
             elementos.extend(self._crear_titulo_arqueo_caja(fecha_desde))
-            elementos.extend(self._crear_info_cierre_arqueo(datos))
+            
+            # 2. EXTRAER DATOS SEGÚN ESTRUCTURA
+            if isinstance(datos, dict):
+                # Datos vienen estructurados desde el model
+                movimientos = datos.get('movimientos_completos', [])
+                resumen = {
+                    'total_ingresos': datos.get('total_ingresos', 0),
+                    'total_egresos': datos.get('total_egresos', 0),
+                    'saldo_teorico': datos.get('saldo_teorico', 0),
+                    'efectivo_real': datos.get('efectivo_real', 0),
+                    'diferencia': datos.get('diferencia', 0)
+                }
+                hora_inicio = datos.get('hora_inicio', '08:00')
+                hora_fin = datos.get('hora_fin', '18:00')
+            else:
+                # Datos vienen como lista simple (fallback)
+                movimientos = datos if isinstance(datos, list) else []
+                resumen = self._calcular_resumen_desde_movimientos(movimientos)
+                hora_inicio = '08:00'
+                hora_fin = '18:00'
+            
+            print(f"📊 Movimientos a procesar: {len(movimientos)}")
+            
+            # 3. INFO DEL CIERRE
+            elementos.extend(self._crear_info_cierre_arqueo_mejorada(
+                fecha_desde, hora_inicio, hora_fin, resumen
+            ))
             elementos.append(Spacer(1, 6*mm))
             
-            # 2. PROCESAR DATOS PARA OBTENER ESTRUCTURA CORRECTA
-            datos_organizados = self._organizar_datos_por_modulos(datos)
+            # 4. ORGANIZAR POR MÓDULOS
+            datos_organizados = self._organizar_movimientos_por_categoria(movimientos)
             
-            # 🔍 DEBUG: Activar solo durante desarrollo
-            self._debug_datos_arqueo(datos_organizados)
-            
-            # 3. DETALLE DE INGRESOS POR SECCIÓN
+            # 5. DETALLE DE INGRESOS POR SECCIÓN
             elementos.extend(self._crear_detalle_ventas_farmacia(datos_organizados))
             elementos.append(Spacer(1, 4*mm))
             
@@ -885,19 +911,167 @@ class GeneradorReportesPDF:
             elementos.extend(self._crear_detalle_enfermeria(datos_organizados))
             elementos.append(Spacer(1, 8*mm))
             
-            # 4. DETALLE DE EGRESOS
+            # 6. DETALLE DE EGRESOS
             elementos.extend(self._crear_detalle_egresos_completo(datos_organizados))
             elementos.append(Spacer(1, 8*mm))
             
-            # 5. RESUMEN FINAL Y ARQUEO FÍSICO
-            elementos.extend(self._crear_resumen_arqueo_fisico(datos))
+            # 7. RESUMEN FINAL
+            elementos.extend(self._crear_resumen_arqueo_fisico_mejorado(resumen))
             
+            print("✅ Arqueo completo creado exitosamente")
             return elementos
             
         except Exception as e:
-            print(f"Error creando arqueo: {e}")
+            print(f"❌ Error creando arqueo: {e}")
+            import traceback
+            traceback.print_exc()
             return [self._crear_mensaje_error()]
-        
+    
+    def _organizar_movimientos_por_categoria(self, movimientos: List[Dict]) -> Dict:
+        """Organiza movimientos por categoría para el arqueo"""
+        try:
+            datos_org = {
+                'farmacia': [],
+                'consultas': [],
+                'laboratorio': [],
+                'enfermeria': [],
+                'ingresos_extras': [],
+                'egresos': []
+            }
+            
+            for mov in movimientos:
+                tipo = mov.get('tipo', '').upper()
+                categoria = mov.get('categoria', '').lower()
+                
+                if tipo == 'EGRESO':
+                    datos_org['egresos'].append(mov)
+                
+                elif 'farmacia' in categoria:
+                    datos_org['farmacia'].append(mov)
+                
+                elif 'consulta' in categoria:
+                    datos_org['consultas'].append(mov)
+                
+                elif 'laboratorio' in categoria:
+                    datos_org['laboratorio'].append(mov)
+                
+                elif 'enfermeria' in categoria or 'enfermería' in categoria:
+                    datos_org['enfermeria'].append(mov)
+                
+                elif 'extra' in categoria or 'ingreso' in categoria:
+                    datos_org['ingresos_extras'].append(mov)
+            
+            print(f"📊 Datos organizados:")
+            print(f"   Farmacia: {len(datos_org['farmacia'])}")
+            print(f"   Consultas: {len(datos_org['consultas'])}")
+            print(f"   Laboratorio: {len(datos_org['laboratorio'])}")
+            print(f"   Enfermería: {len(datos_org['enfermeria'])}")
+            print(f"   Ingresos Extras: {len(datos_org['ingresos_extras'])}")
+            print(f"   Egresos: {len(datos_org['egresos'])}")
+            
+            return datos_org
+            
+        except Exception as e:
+            print(f"❌ Error organizando movimientos: {e}")
+            return {'farmacia': [], 'consultas': [], 'laboratorio': [], 
+                    'enfermeria': [], 'ingresos_extras': [], 'egresos': []}      
+    def _calcular_resumen_desde_movimientos(self, movimientos: List[Dict]) -> Dict:
+        """Calcula resumen financiero desde movimientos cuando no viene del model"""
+        try:
+            total_ingresos = sum(
+                float(mov.get('valor', 0)) 
+                for mov in movimientos 
+                if mov.get('tipo', '').upper() == 'INGRESO'
+            )
+            
+            total_egresos = abs(sum(
+                float(mov.get('valor', 0)) 
+                for mov in movimientos 
+                if mov.get('tipo', '').upper() == 'EGRESO'
+            ))
+            
+            saldo_teorico = total_ingresos - total_egresos
+            
+            return {
+                'total_ingresos': total_ingresos,
+                'total_egresos': total_egresos,
+                'saldo_teorico': saldo_teorico,
+                'efectivo_real': 0,
+                'diferencia': 0
+            }
+        except Exception as e:
+            print(f"❌ Error calculando resumen: {e}")
+            return {
+                'total_ingresos': 0,
+                'total_egresos': 0,
+                'saldo_teorico': 0,
+                'efectivo_real': 0,
+                'diferencia': 0
+            }
+    
+    def _calcular_resumen_desde_movimientos(self, movimientos: List[Dict]) -> Dict:
+        """Calcula resumen financiero desde movimientos cuando no viene del model"""
+        try:
+            total_ingresos = sum(
+                float(mov.get('valor', 0)) 
+                for mov in movimientos 
+                if mov.get('tipo', '').upper() == 'INGRESO'
+            )
+            
+            total_egresos = abs(sum(
+                float(mov.get('valor', 0)) 
+                for mov in movimientos 
+                if mov.get('tipo', '').upper() == 'EGRESO'
+            ))
+            
+            saldo_teorico = total_ingresos - total_egresos
+            
+            return {
+                'total_ingresos': total_ingresos,
+                'total_egresos': total_egresos,
+                'saldo_teorico': saldo_teorico,
+                'efectivo_real': 0,
+                'diferencia': 0
+            }
+        except Exception as e:
+            print(f"❌ Error calculando resumen: {e}")
+            return {
+                'total_ingresos': 0,
+                'total_egresos': 0,
+                'saldo_teorico': 0,
+                'efectivo_real': 0,
+                'diferencia': 0
+            }
+    def _crear_info_cierre_arqueo_mejorada(self, fecha: str, hora_inicio: str, 
+                                       hora_fin: str, resumen: Dict) -> List:
+        """Info del cierre con datos del resumen"""
+        try:
+            info_data = [
+                ["Fecha:", fecha, "Hora Inicio:", hora_inicio],
+                ["Responsable:", "Sistema CMI", "Hora Fin:", hora_fin],
+                ["Total Ingresos:", f"Bs {resumen.get('total_ingresos', 0):,.2f}", 
+                "Total Egresos:", f"Bs {resumen.get('total_egresos', 0):,.2f}"]
+            ]
+            
+            tabla = Table(info_data, colWidths=[30*mm, 35*mm, 30*mm, 35*mm])
+            
+            estilos = [
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_GRIS_CLARO),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]
+            
+            tabla.setStyle(TableStyle(estilos))
+            return [tabla]
+            
+        except Exception as e:
+            print(f"Error info cierre: {e}")
+            return []
     def _organizar_datos_por_modulos(self, datos):
         """Organiza los datos por módulos para el arqueo de caja - NUEVO MÉTODO"""
         try:
@@ -1003,17 +1177,15 @@ class GeneradorReportesPDF:
             return []
 
     def _crear_detalle_ventas_farmacia(self, datos_organizados):
-        """Detalle individual de todas las ventas de farmacia - CORREGIDO"""
+        """Detalle de ventas con estructura mejorada"""
         try:
             ventas = datos_organizados.get('farmacia', [])
             
             if not ventas:
                 return [self._crear_seccion_vacia("FARMACIA - VENTAS")]
             
-            # Crear tabla detallada
             elementos = []
             
-            # Título de sección
             titulo_style = ParagraphStyle(
                 'TituloSeccion',
                 fontSize=12,
@@ -1024,29 +1196,33 @@ class GeneradorReportesPDF:
             )
             elementos.append(Paragraph("💊 FARMACIA - DETALLE DE VENTAS", titulo_style))
             
-            # Encabezados de la tabla
+            # Encabezados
             encabezados = ["HORA", "VENTA N°", "PRODUCTO", "CANT.", "P.UNIT", "SUBTOTAL"]
             tabla_datos = [encabezados]
             
             total_ventas = 0
-            numero_venta = 1
             
             for venta in ventas:
-                # Extraer datos REALES
+                # Extraer hora de la fecha
                 fecha_completa = venta.get('fecha', '')
                 hora = self._extraer_hora_de_fecha(fecha_completa)
                 
-                # ✅ USAR ID REAL DE VENTA
-                id_venta = venta.get('id_venta') or venta.get('IdVenta') or venta.get('id') or numero_venta
+                # ID de venta
+                id_venta = venta.get('id_venta') or venta.get('id') or '-'
                 
-                producto = self._limpiar_descripcion_farmacia(venta.get('descripcion', 'Producto'))
+                # Descripción
+                producto = venta.get('descripcion', 'Producto')
+                if producto.startswith('Venta de medicamentos'):
+                    producto = 'Medicamentos varios'
+                
+                # Cantidad y valores
                 cantidad = int(venta.get('cantidad', 1))
                 valor_total = float(venta.get('valor', 0))
                 precio_unitario = valor_total / cantidad if cantidad > 0 else 0
                 
                 fila = [
                     hora,
-                    f"V{id_venta:03d}" if isinstance(id_venta, int) else str(id_venta),
+                    f"V{id_venta}" if isinstance(id_venta, int) else str(id_venta),
                     producto[:30] + "..." if len(producto) > 30 else producto,
                     str(cantidad),
                     f"Bs {precio_unitario:.2f}",
@@ -1054,14 +1230,13 @@ class GeneradorReportesPDF:
                 ]
                 tabla_datos.append(fila)
                 total_ventas += valor_total
-                numero_venta += 1
             
             # Fila de total
             fila_total = ["", "", "TOTAL VENTAS FARMACIA", 
                         f"{len(ventas)}", "", f"Bs {total_ventas:,.2f}"]
             tabla_datos.append(fila_total)
             
-            # Crear tabla con formato profesional
+            # Crear tabla
             tabla = Table(
                 tabla_datos,
                 colWidths=[20*mm, 20*mm, 50*mm, 15*mm, 20*mm, 25*mm],
@@ -1076,6 +1251,8 @@ class GeneradorReportesPDF:
             
         except Exception as e:
             print(f"Error detalle ventas: {e}")
+            import traceback
+            traceback.print_exc()
             return [self._crear_seccion_vacia("FARMACIA - VENTAS")]
 
     def _crear_detalle_consultas_medicas(self, datos_organizados):
@@ -1472,19 +1649,25 @@ class GeneradorReportesPDF:
         )
         
         return Paragraph(f"📋 {nombre_seccion}: Sin registros en el período", style)
-    def _crear_resumen_arqueo_fisico(self, datos):
-        """Resumen final y arqueo físico de efectivo"""
+    def _crear_resumen_arqueo_fisico_mejorado(self, resumen: Dict) -> List:
+        """Resumen final con datos estructurados"""
         elementos = []
         
         try:
-            # Resumen financiero
+            total_ingresos = resumen.get('total_ingresos', 0)
+            total_egresos = resumen.get('total_egresos', 0)
+            saldo_teorico = resumen.get('saldo_teorico', 0)
+            efectivo_real = resumen.get('efectivo_real', 0)
+            diferencia = resumen.get('diferencia', 0)
+            
+            # Tabla de resumen
             resumen_data = [
                 ["CONCEPTO", "IMPORTE"],
-                ["Total Ingresos", f"Bs {datos.get('total_ingresos', 0):,.2f}"],
-                ["Total Egresos", f"Bs {datos.get('total_egresos', 0):,.2f}"],
-                ["Saldo Teórico", f"Bs {datos.get('saldo_teorico', 0):,.2f}"],
-                ["Efectivo Real", f"Bs {datos.get('efectivo_real', 0):,.2f}"],
-                ["Diferencia", f"Bs {datos.get('diferencia', 0):,.2f}"]
+                ["Total Ingresos", f"Bs {total_ingresos:,.2f}"],
+                ["Total Egresos", f"Bs {total_egresos:,.2f}"],
+                ["Saldo Teórico", f"Bs {saldo_teorico:,.2f}"],
+                ["Efectivo Real", f"Bs {efectivo_real:,.2f}"],
+                ["Diferencia", f"Bs {diferencia:,.2f}"]
             ]
             
             tabla_resumen = Table(resumen_data, colWidths=[60*mm, 40*mm])
@@ -1502,27 +1685,33 @@ class GeneradorReportesPDF:
             
             tabla_resumen.setStyle(TableStyle(estilos_resumen))
             
-            elementos.append(Paragraph("📊 RESUMEN FINANCIERO Y ARQUEO", 
-                                    ParagraphStyle('ResumenTitulo', fontSize=14, fontName='Helvetica-Bold',
-                                                textColor=COLOR_AZUL_PRINCIPAL, spaceAfter=8)))
+            titulo_style = ParagraphStyle(
+                'ResumenTitulo',
+                fontSize=14,
+                fontName='Helvetica-Bold',
+                textColor=COLOR_AZUL_PRINCIPAL,
+                spaceAfter=8
+            )
+            
+            elementos.append(Paragraph("📊 RESUMEN FINANCIERO Y ARQUEO", titulo_style))
             elementos.append(tabla_resumen)
             
             # Resultado final
-            diferencia = datos.get('diferencia', 0)
             tipo_diff = "SOBRANTE" if diferencia >= 0 else "FALTANTE"
+            color_diff = COLOR_VERDE_POSITIVO if diferencia >= 0 else COLOR_ROJO_ACENTO
             
             resultado_style = ParagraphStyle(
                 'ResultadoArqueo',
                 fontSize=12,
                 fontName='Helvetica-Bold',
-                textColor=COLOR_VERDE_POSITIVO if diferencia >= 0 else COLOR_ROJO_ACENTO,
+                textColor=color_diff,
                 alignment=TA_CENTER,
                 spaceAfter=12,
                 spaceBefore=12
             )
             
             elementos.append(Paragraph(
-                f"✅ {tipo_diff} EN CAJA: Bs {abs(diferencia):,.2f}", 
+                f"{'✅' if abs(diferencia) < 50 else '⚠️'} {tipo_diff} EN CAJA: Bs {abs(diferencia):,.2f}", 
                 resultado_style
             ))
             
