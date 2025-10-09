@@ -73,12 +73,47 @@ class CierreCajaModel(QObject):
         
         # Referencia al AppController para PDFs
         self._app_controller = None
+
+        self._operation_lock = False
+        self._pending_operations = 0
+
+        
         
         print("💰 CierreCajaModel inicializado - Modo independiente")
     
     # ===============================
     # AUTENTICACIÓN
     # ===============================
+
+    def _safe_operation(self, operation_name: str = "Operación"):
+        """Protege contra operaciones concurrentes - VERSIÓN MEJORADA"""
+        if self._operation_lock:
+            print(f"⏳ {operation_name} en curso, ignorando solicitud duplicada")
+            return False
+        
+        if self._pending_operations > 2:
+            print(f"🚨 Demasiadas operaciones pendientes ({self._pending_operations}), ignorando {operation_name}")
+            return False
+        
+        self._operation_lock = True
+        self._pending_operations += 1
+        print(f"🔒 OPERATION LOCK: {operation_name} - Pendientes: {self._pending_operations}")
+        return True
+
+    def _release_operation(self):
+        """Libera el lock de operación - VERSIÓN MEJORADA CON PROTECCIÓN"""
+        try:
+            if self._operation_lock:
+                self._operation_lock = False
+                self._pending_operations = max(0, self._pending_operations - 1)
+                print(f"🔓 OPERATION UNLOCK - Pendientes: {self._pending_operations}")
+            else:
+                print("⚠️ Intento de liberar lock no activo")
+        except Exception as e:
+            print(f"❌ Error liberando lock: {e}")
+            # Forzar reset en caso de error
+            self._operation_lock = False
+            self._pending_operations = 0
     
     @Slot(int, str)
     def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
@@ -94,6 +129,15 @@ class CierreCajaModel(QObject):
         except Exception as e:
             print(f"❌ Error estableciendo usuario: {e}")
             self.operacionError.emit(f"Error de autenticación: {str(e)}")
+
+    @Slot()
+    def resetOperationLock(self):
+        """Método de emergencia para resetear el sistema de bloqueo"""
+        print("🆘 RESETEO DE EMERGENCIA DEL SISTEMA DE BLOQUEO")
+        self._operation_lock = False
+        self._pending_operations = 0
+        self._set_loading(False)
+        print("✅ Sistema de bloqueo reseteado")
     
     @Property(int, notify=operacionExitosa)
     def usuario_actual_id(self):
@@ -231,11 +275,19 @@ class CierreCajaModel(QObject):
     # ===============================
     @Slot()
     def consultarDatos(self):
-        """MÉTODO PRINCIPAL - Consulta datos de cierre según parámetros configurados"""
+        """MÉTODO PRINCIPAL - Consulta datos de cierre - VERSIÓN MEJORADA"""
+        
+        # ✅ PROTECCIÓN CON TIMEOUT
+        if not self._safe_operation_with_timeout("Consulta de datos", timeout_ms=10000):
+            self.operacionError.emit("El sistema está ocupado. Espere...")
+            return
+
         if not self._verificar_autenticacion():
+            self._release_operation()  # Liberar lock si falla autenticación
             return
         
         if not self._verificar_conexion():
+            self._release_operation()  # Liberar lock si falla conexión
             return
         
         try:
@@ -269,21 +321,8 @@ class CierreCajaModel(QObject):
                 self.datosChanged.emit()
                 self.resumenChanged.emit()
                 self._actualizar_validacion()
-                
-                # ✅ NUEVO: GENERAR PDF AUTOMÁTICAMENTE
-                print("📄 Generando PDF del arqueo...")
-                success, resultado = self._generar_pdf_arqueo_desde_datos(datos_cierre)
-                
-                if success:
-                    print(f"✅ PDF generado exitosamente: {resultado}")
-                    self.pdfGenerado.emit(resultado)
-                    self.operacionExitosa.emit("Datos consultados y PDF generado correctamente")
-                    
-                    # Abrir PDF automáticamente
-                    self._abrir_pdf_automaticamente(resultado)
-                else:
-                    print(f"⚠️ Error generando PDF: {resultado}")
-                    self.operacionExitosa.emit("Datos consultados correctamente (PDF no generado)")
+                self.operacionExitosa.emit("Datos consultados correctamente")
+            
             else:
                 self._datos_cierre = {}
                 self._resumen_estructurado = {}
@@ -294,11 +333,14 @@ class CierreCajaModel(QObject):
             print(f"❌ {error_msg}")
             
             if "connection" in str(e).lower() or "database" in str(e).lower():
-                self.emergency_disconnect()
+                self.operacionError.emit("Error de conexión a la base de datos")
             else:
                 self.operacionError.emit(error_msg)
         finally:
             self._set_loading(False)
+            self._release_operation()  # ✅ GARANTIZAR liberación
+            print("🔓 Lock liberado en consultarDatos")
+
     ############# MÉTODOS AUXILIARES PARA PDF #############
 
     def _generar_pdf_arqueo_desde_datos(self, datos_cierre: Dict) -> Tuple[bool, str]:
@@ -389,6 +431,82 @@ class CierreCajaModel(QObject):
             import traceback
             traceback.print_exc()
             return []
+        
+    @Slot()
+    def generarPDFConsulta(self):
+        """MÉTODO SEPARADO para generar PDF de la consulta actual - VERSIÓN MEJORADA"""
+        try:
+            print("📄 INICIANDO Generación de PDF (método separado)...")
+            
+            # ✅ VERIFICACIÓN BÁSICA PRIMERO
+            if not self._datos_cierre:
+                self.operacionError.emit("Debe consultar datos primero antes de generar PDF")
+                print("❌ No hay datos consultados para generar PDF")
+                return
+            
+            # ✅ PROTECCIÓN CONTRA CONCURRENCIA CON TIMEOUT
+            if not self._safe_operation_with_timeout("Generación de PDF", timeout_ms=5000):
+                self.operacionError.emit("El sistema está ocupado. Espere...")
+                return
+                
+            try:
+                print("🔄 Generando PDF desde datos existentes...")
+                
+                # Generar PDF usando datos ya cargados
+                success, resultado = self._generar_pdf_arqueo_desde_datos(self._datos_cierre)
+                
+                if success:
+                    print(f"✅ PDF generado exitosamente: {resultado}")
+                    self.pdfGenerado.emit(resultado)
+                    self.operacionExitosa.emit("PDF generado correctamente")
+                    
+                    # ✅ OPCIONAL: Solo notificar, NO abrir automáticamente
+                    print("📄 PDF listo para visualización")
+                    
+                else:
+                    error_msg = f"Error generando PDF: {resultado}"
+                    print(f"❌ {error_msg}")
+                    self.operacionError.emit(error_msg)
+                    
+            except Exception as e:
+                error_msg = f"Error durante generación de PDF: {str(e)}"
+                print(f"❌ {error_msg}")
+                self.operacionError.emit(error_msg)
+                import traceback
+                traceback.print_exc()
+                
+        except Exception as e:
+            error_msg = f"Error inicializando generación de PDF: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+        finally:
+            # ✅ GARANTIZAR que siempre se libere el lock
+            self._release_operation()
+            print("🔓 Lock liberado en generarPDFConsulta")
+
+    def _safe_operation_with_timeout(self, operation_name: str = "Operación", timeout_ms: int = 3000):
+        """Protege contra operaciones concurrentes CON TIMEOUT"""
+        import time
+        
+        start_time = time.time()
+        
+        while self._operation_lock and (time.time() - start_time) * 1000 < timeout_ms:
+            print(f"⏳ Esperando {operation_name}... {int((time.time() - start_time) * 1000)}ms")
+            QGuiApplication.processEvents()  # Permitir que la UI responde
+            time.sleep(0.1)  # Pequeña pausa
+        
+        if self._operation_lock:
+            print(f"🚨 TIMEOUT en {operation_name} después de {timeout_ms}ms")
+            return False
+        
+        if self._pending_operations > 2:
+            print(f"🚨 Demasiadas operaciones pendientes ({self._pending_operations}), ignorando {operation_name}")
+            return False
+        
+        self._operation_lock = True
+        self._pending_operations += 1
+        print(f"🔒 OPERATION LOCK CON TIMEOUT: {operation_name} - Pendientes: {self._pending_operations}")
+        return True
 
     def _generar_pdf_arqueo(self, movimientos: List[Dict], datos_cierre: Dict) -> Tuple[bool, str]:
         """Genera el PDF del arqueo de caja"""
@@ -508,7 +626,7 @@ class CierreCajaModel(QObject):
             if success:
                 print(f"✅ PDF generado: {filepath}")
                 self.pdfGenerado.emit(filepath)
-                self._abrir_pdf_automaticamente(filepath)
+                #self._abrir_pdf_automaticamente(filepath)
                 self.operacionExitosa.emit("PDF generado correctamente")
             else:
                 self.operacionError.emit(f"Error generando PDF: {filepath}")

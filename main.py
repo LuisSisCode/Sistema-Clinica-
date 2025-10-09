@@ -1471,7 +1471,7 @@ class AuthAppController(QObject):
             if self.main_engine:
                 try:
                     print("🗑️ Destruyendo main_engine...")
-                    self.main_engine.deleteLater()
+                    #self.main_engine.deleteLater()
                     self.main_engine = None
                     print("✅ main_engine destruido")
                 except Exception as e:
