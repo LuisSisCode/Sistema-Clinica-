@@ -1,4 +1,4 @@
-# main.py - VERSIÓN FUSIONADA Y COMPLETA
+# main.py - VERSIÃ“N FUSIONADA Y COMPLETA
 import sys
 import os
 import gc
@@ -54,7 +54,7 @@ class AppController(QObject):
         # INICIALIZAR GENERADOR DE PDF
         self.pdf_generator = GeneradorReportesPDF()
         
-        # MODELS QOBJECT - Se inicializarán después
+        # MODELS QOBJECT - Se inicializarÃ¡n despuÃ©s
         self.inventario_model = None
         self.venta_model = None
         self.compra_model = None
@@ -98,7 +98,7 @@ class AppController(QObject):
     def initialize_models(self):
         """Inicializa todos los models QObject"""
         try:
-            print("🗂️ Creando instancias de modelos...")
+            print("ðŸ—‚ï¸ Creando instancias de modelos...")
             
             # Crear instancias de models
             self.auth_model = AuthModel() 
@@ -125,15 +125,15 @@ class AppController(QObject):
             self.ingreso_extra_model = IngresoExtraModel()
 
 
-            print("🔗 Conectando signals entre modelos...")
+            print("ðŸ”— Conectando signals entre modelos...")
             # Conectar signals entre models
             self._connect_models()
             
-            print("✅ Modelos inicializados correctamente")
+            print("âœ… Modelos inicializados correctamente")
             self.modelsReady.emit()
             
         except Exception as e:
-            print(f"❌ Error inicializando models: {e}")
+            print(f"âŒ Error inicializando models: {e}")
             import traceback
             traceback.print_exc()
 
@@ -145,41 +145,41 @@ class AppController(QObject):
     @Slot()
     def emergency_shutdown(self):
         """
-        Sistema de shutdown de emergencia - VERSIÓN SEGURA
-        NO destruye modelos si están en operación activa
+        Sistema de shutdown de emergencia - VERSIÃ“N SEGURA
+        NO destruye modelos si estÃ¡n en operaciÃ³n activa
         """
         try:
-            print("🔴 EMERGENCY SHUTDOWN INICIADO")
+            print("ðŸ”´ EMERGENCY SHUTDOWN INICIADO")
             
-            # ✅ MARCAR QUE ESTAMOS EN SHUTDOWN INMEDIATAMENTE
+            # âœ… MARCAR QUE ESTAMOS EN SHUTDOWN INMEDIATAMENTE
             self._is_shutting_down = True
             
-            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
+            # âœ… VALIDAR QUE NO HAY OPERACIONES ACTIVAS
             if self._hay_operaciones_activas():
-                print("⏸️ Operaciones activas detectadas - Shutdown pospuesto")
-                # Reintentar después de 500ms
+                print("â¸ï¸ Operaciones activas detectadas - Shutdown pospuesto")
+                # Reintentar despuÃ©s de 500ms
                 QTimer.singleShot(500, self.emergency_shutdown)
                 return
             
-            print("✅ No hay operaciones activas - Procediendo con shutdown")
+            print("âœ… No hay operaciones activas - Procediendo con shutdown")
             
             # FASE 1: DETENER TODOS LOS TIMERS INMEDIATAMENTE
             self._stop_all_timers_immediately()
             
-            # FASE 2: DESCONECTAR SEÑALES ORDENADAMENTE  
+            # FASE 2: DESCONECTAR SEÃ‘ALES ORDENADAMENTE  
             self._disconnect_all_signals_ordered()
             
             # FASE 3: LIMPIEZA SINCRONIZADA DE RECURSOS
             self._cleanup_resources_synchronously()
             
-            print("✅ EMERGENCY SHUTDOWN COMPLETADO")
+            print("âœ… EMERGENCY SHUTDOWN COMPLETADO")
             
         except Exception as e:
-            print(f"⚠️ Error en emergency shutdown: {e}")
-            # Forzar limpieza básica aunque falle
+            print(f"âš ï¸ Error en emergency shutdown: {e}")
+            # Forzar limpieza bÃ¡sica aunque falle
             self._force_basic_cleanup()
     def _hay_operaciones_activas(self) -> bool:
-        """✅ NUEVO: Verifica si hay operaciones activas en algún modelo"""
+        """âœ… NUEVO: Verifica si hay operaciones activas en algÃºn modelo"""
         try:
             # Lista de modelos a verificar
             models_to_check = [
@@ -197,24 +197,24 @@ class AppController(QObject):
                 if model:
                     # Verificar si tiene flag de loading activo
                     if hasattr(model, '_loading') and model._loading:
-                        print(f"⚠️ {type(model).__name__} está en operación")
+                        print(f"âš ï¸ {type(model).__name__} estÃ¡ en operaciÃ³n")
                         return True
                     
                     # Verificar si tiene lock activo
                     if hasattr(model, '_operation_lock') and model._operation_lock:
-                        print(f"⚠️ {type(model).__name__} tiene lock activo")
+                        print(f"âš ï¸ {type(model).__name__} tiene lock activo")
                         return True
             
             return False
             
         except Exception as e:
-            print(f"⚠️ Error verificando operaciones activas: {e}")
-            # En caso de error, asumir que NO hay operaciones (más seguro)
+            print(f"âš ï¸ Error verificando operaciones activas: {e}")
+            # En caso de error, asumir que NO hay operaciones (mÃ¡s seguro)
             return False
     def _stop_all_timers_immediately(self):
-        """FASE 1: Detiene TODOS los timers sin excepción"""
+        """FASE 1: Detiene TODOS los timers sin excepciÃ³n"""
         try:
-            print("⏹️ FASE 1: Deteniendo todos los timers...")
+            print("â¹ï¸ FASE 1: Deteniendo todos los timers...")
             
             # Lista de todos los modelos
             models = [
@@ -246,9 +246,9 @@ class AppController(QObject):
                                 if timer and hasattr(timer, 'isActive') and timer.isActive():
                                     timer.stop()
                                     timer_count += 1
-                                    print(f"   ⏹️ Timer detenido: {type(model).__name__}.{timer_name}")
+                                    print(f"   â¹ï¸ Timer detenido: {type(model).__name__}.{timer_name}")
                         
-                        # Buscar timers por inspección de atributos
+                        # Buscar timers por inspecciÃ³n de atributos
                         for attr_name in dir(model):
                             if not attr_name.startswith('__'):
                                 try:
@@ -259,29 +259,29 @@ class AppController(QObject):
                                         attr.isActive()):
                                         attr.stop()
                                         timer_count += 1
-                                        print(f"   ⏹️ Timer detectado detenido: {type(model).__name__}.{attr_name}")
+                                        print(f"   â¹ï¸ Timer detectado detenido: {type(model).__name__}.{attr_name}")
                                 except:
                                     pass
                                     
                     except Exception as e:
-                        print(f"⚠️ Error deteniendo timers en {type(model).__name__}: {e}")
+                        print(f"âš ï¸ Error deteniendo timers en {type(model).__name__}: {e}")
             
-            print(f"✅ FASE 1 COMPLETA: {timer_count} timers detenidos")
+            print(f"âœ… FASE 1 COMPLETA: {timer_count} timers detenidos")
             
         except Exception as e:
-            print(f"❌ Error en FASE 1: {e}")
+            print(f"âŒ Error en FASE 1: {e}")
 
     def _disconnect_all_signals_ordered(self):
-        """FASE 2: Desconecta señales en orden específico"""
+        """FASE 2: Desconecta seÃ±ales en orden especÃ­fico"""
         try:
-            print("🔌 FASE 2: Desconectando señales...")
+            print("ðŸ”Œ FASE 2: Desconectando seÃ±ales...")
             
-            # 2.1: Desconectar señales globales primero
+            # 2.1: Desconectar seÃ±ales globales primero
             try:
-                # Intentar desconectar señales globales si existen
+                # Intentar desconectar seÃ±ales globales si existen
                 app = QGuiApplication.instance()
                 if app:
-                    # Desconectar todas las señales de la aplicación
+                    # Desconectar todas las seÃ±ales de la aplicaciÃ³n
                     for signal_name in dir(app):
                         if not signal_name.startswith('__'):
                             try:
@@ -290,9 +290,9 @@ class AppController(QObject):
                                     signal.disconnect()
                             except:
                                 pass
-                    print("   🔌 Señales globales desconectadas")
+                    print("   ðŸ”Œ SeÃ±ales globales desconectadas")
             except Exception as e:
-                print(f"   ⚠️ Error desconectando señales globales: {e}")
+                print(f"   âš ï¸ Error desconectando seÃ±ales globales: {e}")
             
             # 2.2: Desconectar referencias bidireccionales
             try:
@@ -302,11 +302,11 @@ class AppController(QObject):
                         self.compra_model._proveedor_model_ref = None
                     if hasattr(self.proveedor_model, '_compra_model_ref'):
                         self.proveedor_model._compra_model_ref = None
-                    print("   🔌 Referencias bidireccionales rotas")
+                    print("   ðŸ”Œ Referencias bidireccionales rotas")
             except Exception as e:
-                print(f"   ⚠️ Error rompiendo referencias: {e}")
+                print(f"   âš ï¸ Error rompiendo referencias: {e}")
             
-            # 2.3: Desconectar señales internas de cada modelo
+            # 2.3: Desconectar seÃ±ales internas de cada modelo
             models = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.consulta_model, self.paciente_model,
@@ -321,23 +321,23 @@ class AppController(QObject):
             for model in models:
                 if model:
                     try:
-                        # Llamar método cleanup específico si existe
+                        # Llamar mÃ©todo cleanup especÃ­fico si existe
                         if hasattr(model, 'emergency_disconnect'):
                             model.emergency_disconnect()
                         elif hasattr(model, 'cleanup'):
                             model.cleanup()
                     except Exception as e:
-                        print(f"   ⚠️ Error cleanup {type(model).__name__}: {e}")
+                        print(f"   âš ï¸ Error cleanup {type(model).__name__}: {e}")
             
-            print("✅ FASE 2 COMPLETA: Señales desconectadas")
+            print("âœ… FASE 2 COMPLETA: SeÃ±ales desconectadas")
             
         except Exception as e:
-            print(f"❌ Error en FASE 2: {e}")
+            print(f"âŒ Error en FASE 2: {e}")
 
     def _cleanup_resources_synchronously(self):
         """FASE 3: Limpieza sincronizada de recursos"""
         try:
-            print("🧹 FASE 3: Limpieza sincronizada...")
+            print("ðŸ§¹ FASE 3: Limpieza sincronizada...")
             
             # 3.1: Invalidar todos los caches
             models_with_repos = [
@@ -356,7 +356,7 @@ class AppController(QObject):
                         if hasattr(repo, 'invalidate_all_caches'):
                             repo.invalidate_all_caches()
                     except Exception as e:
-                        print(f"   ⚠️ Error limpiando cache {type(model).__name__}: {e}")
+                        print(f"   âš ï¸ Error limpiando cache {type(model).__name__}: {e}")
             
             # 3.2: Establecer estados de shutdown
             all_models = [
@@ -378,13 +378,13 @@ class AppController(QObject):
                             model._estadoActual = "shutdown"
                         if hasattr(model, '_loading'):
                             model._loading = False
-                        # ✅ RESETEAR USUARIO EN TODOS LOS MODELOS
+                        # âœ… RESETEAR USUARIO EN TODOS LOS MODELOS
                         if hasattr(model, '_usuario_actual_id'):
                             model._usuario_actual_id = 0
                         # Limpiar datos en memoria
                         self._clear_model_data(model)
                     except Exception as e:
-                        print(f"   ⚠️ Error estableciendo shutdown {type(model).__name__}: {e}")
+                        print(f"   âš ï¸ Error estableciendo shutdown {type(model).__name__}: {e}")
             
             # 3.3: Usar destroy() en lugar de deleteLater()
             for model in all_models:
@@ -392,10 +392,10 @@ class AppController(QObject):
                     try:
                         # Disconnect all signals before destroying
                         model.blockSignals(True)
-                        # Forzar destrucción inmediata
+                        # Forzar destrucciÃ³n inmediata
                         model.setParent(None)
                     except Exception as e:
-                        print(f"   ⚠️ Error destruyendo {type(model).__name__}: {e}")
+                        print(f"   âš ï¸ Error destruyendo {type(model).__name__}: {e}")
             
             # 3.4: Limpiar referencias
             self.inventario_model = None
@@ -419,20 +419,20 @@ class AppController(QObject):
             self.auth_model = None
             self.cierre_caja_model = None
             
-            # ✅ RESETEAR USUARIO AUTENTICADO
+            # âœ… RESETEAR USUARIO AUTENTICADO
             self._usuario_autenticado_id = 0
             self._usuario_autenticado_nombre = ""
             self._usuario_autenticado_rol = ""
             
-            print("✅ FASE 3 COMPLETA: Recursos limpiados")
+            print("âœ… FASE 3 COMPLETA: Recursos limpiados")
             
         except Exception as e:
-            print(f"❌ Error en FASE 3: {e}")
+            print(f"âŒ Error en FASE 3: {e}")
 
     def _force_basic_cleanup(self):
-        """Limpieza básica de emergencia si falla el shutdown normal"""
+        """Limpieza bÃ¡sica de emergencia si falla el shutdown normal"""
         try:
-            print("🆘 FORZANDO LIMPIEZA BÁSICA...")
+            print("ðŸ†˜ FORZANDO LIMPIEZA BÃSICA...")
             
             # Forzar parada de todos los QTimer activos
             # No hay una forma directa de obtener todos los QTimer, 
@@ -447,16 +447,16 @@ class AppController(QObject):
                     except:
                         pass
             
-            print("✅ Limpieza básica completada")
+            print("âœ… Limpieza bÃ¡sica completada")
             
         except Exception as e:
-            print(f"❌ Error en limpieza básica: {e}")
+            print(f"âŒ Error en limpieza bÃ¡sica: {e}")
 
     @Slot()
     def gradual_cleanup(self):
         """Sistema de cleanup gradual - preserva la estructura para transiciones"""
         try:
-            print("🧹 CLEANUP GRADUAL INICIADO")
+            print("ðŸ§¹ CLEANUP GRADUAL INICIADO")
             
             # RESETEAR USUARIO AUTENTICADO INMEDIATAMENTE
             self._usuario_autenticado_id = 0
@@ -467,15 +467,15 @@ class AppController(QObject):
             # LIMPIAR DATOS EN MEMORIA SIN DESTRUIR OBJETOS
             self._clear_model_data_only()
             
-            print("✅ CLEANUP GRADUAL COMPLETADO")
+            print("âœ… CLEANUP GRADUAL COMPLETADO")
             
         except Exception as e:
-            print(f"⚠️ Error en cleanup gradual: {e}")
+            print(f"âš ï¸ Error en cleanup gradual: {e}")
 
     def _clear_model_data_only(self):
         """Limpia datos sin destruir objetos"""
         try:
-            print("🧹 Limpiando datos...")
+            print("ðŸ§¹ Limpiando datos...")
             
             all_models = [
                 self.inventario_model, self.venta_model, self.compra_model,
@@ -501,15 +501,15 @@ class AppController(QObject):
                         self._clear_model_data(model)
                         
                     except Exception as e:
-                        print(f"⚠️ Error limpiando datos {type(model).__name__}: {e}")
+                        print(f"âš ï¸ Error limpiando datos {type(model).__name__}: {e}")
             
-            print("✅ Datos limpiados")
+            print("âœ… Datos limpiados")
             
         except Exception as e:
-            print(f"❌ Error en limpieza de datos: {e}")
+            print(f"âŒ Error en limpieza de datos: {e}")
 
     def _clear_model_data(self, model):
-        """Limpia datos específicos de un modelo"""
+        """Limpia datos especÃ­ficos de un modelo"""
         try:
             # Limpiar listas comunes
             data_attrs = [
@@ -532,31 +532,31 @@ class AppController(QObject):
                     setattr(model, attr_name, {})
                     
         except Exception as e:
-            print(f"   ⚠️ Error limpiando datos de modelo: {e}")
+            print(f"   âš ï¸ Error limpiando datos de modelo: {e}")
 
     def _connect_models(self):
-        """Conecta signals entre models para sincronización - VERSIÓN CORREGIDA"""
+        """Conecta signals entre models para sincronizaciÃ³n - VERSIÃ“N CORREGIDA"""
         try:
-            print("🔗 Configurando conexiones entre modelos...")
+            print("ðŸ”— Configurando conexiones entre modelos...")
             
-            # ===== CONEXIONES BÁSICAS =====
+            # ===== CONEXIONES BÃSICAS =====
             if self.venta_model:
                 self.venta_model.ventaCreada.connect(self._on_venta_creada)
-                print("   ✅ VERIFICADO: Ventas → Cierre de Caja conectado")
+                print("   âœ… VERIFICADO: Ventas â†’ Cierre de Caja conectado")
                 
             if self.compra_model:
                 self.compra_model.compraCreada.connect(self._on_compra_creada)
             
-            # ===== CONEXIONES ESPECÍFICAS PARA CIERRE DE CAJA =====
+            # ===== CONEXIONES ESPECÃFICAS PARA CIERRE DE CAJA =====
             if self.cierre_caja_model:
                 # Solo establecer referencia para PDFs
                 self.cierre_caja_model.set_app_controller(self)
-                print("   ✅ AppController conectado al CierreCajaModel para PDFs")
+                print("   âœ… AppController conectado al CierreCajaModel para PDFs")
             if self.ingreso_extra_model:
                 if hasattr(self.ingreso_extra_model, 'errorOcurrido'):
                     self.ingreso_extra_model.errorOcurrido.connect(self._on_model_error)
-                print("   ✅ IngresoExtraModel conectado")
-            # ===== CONEXIONES DE ERRORES Y ÉXITOS - VERSIÓN SEGURA =====
+                print("   âœ… IngresoExtraModel conectado")
+            # ===== CONEXIONES DE ERRORES Y Ã‰XITOS - VERSIÃ“N SEGURA =====
             models_with_errors = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.usuario_model, self.gasto_model,
@@ -570,7 +570,7 @@ class AppController(QObject):
             for model in models_with_errors:
                 if model:
                     try:
-                        # ✅ CONECTAR SEÑALES CON TRY-CATCH
+                        # âœ… CONECTAR SEÃ‘ALES CON TRY-CATCH
                         if hasattr(model, 'operacionError'):
                             model.operacionError.connect(self._on_model_error)
                         if hasattr(model, 'errorOccurred'):
@@ -580,7 +580,7 @@ class AppController(QObject):
                         if hasattr(model, 'successMessage'):
                             model.successMessage.connect(self._on_model_success)
                     except Exception as e:
-                        print(f"⚠️ Error conectando señales de {type(model).__name__}: {e}")
+                        print(f"âš ï¸ Error conectando seÃ±ales de {type(model).__name__}: {e}")
             
             for model in models_with_errors:
                 if model:
@@ -593,7 +593,7 @@ class AppController(QObject):
                     if hasattr(model, 'successMessage'):
                         model.successMessage.connect(self._on_model_success)
 
-            # ===== CONEXIONES ESPECÍFICAS PARA MODELOS =====
+            # ===== CONEXIONES ESPECÃFICAS PARA MODELOS =====
             if self.proveedor_model:
                 self.proveedor_model.proveedorCreado.connect(self._on_proveedor_creado)
                 self.proveedor_model.proveedorActualizado.connect(self._on_proveedor_actualizado)
@@ -647,10 +647,10 @@ class AppController(QObject):
             if self.cierre_caja_model:
                 # Solo establecer referencia para PDFs
                 self.cierre_caja_model.set_app_controller(self)
-                print("   ✅ AppController conectado al CierreCajaModel para PDFs")
+                print("   âœ… AppController conectado al CierreCajaModel para PDFs")
 
         except Exception as e:
-            print(f"❌ Error conectando models: {e}")
+            print(f"âŒ Error conectando models: {e}")
             import traceback
             traceback.print_exc()
 
@@ -663,20 +663,20 @@ class AppController(QObject):
         self._usuario_autenticado_nombre = usuario_nombre
         self._usuario_autenticado_rol = usuario_rol
         
-        # Emitir señal de cambio
+        # Emitir seÃ±al de cambio
         self.usuarioChanged.emit()
         
         # Establecer usuario en todos los modelos
         self._establecer_usuario_en_modelos()
         
-        print(f"✅ Usuario autenticado establecido correctamente")
+        print(f"âœ… Usuario autenticado establecido correctamente")
 
     def _establecer_usuario_en_modelos(self):
         """Establece el usuario autenticado en todos los modelos que lo necesiten"""
         if self._usuario_autenticado_id > 0:
-            print(f"👤 Estableciendo usuario {self._usuario_autenticado_id} en modelos...")
+            print(f"ðŸ‘¤ Estableciendo usuario {self._usuario_autenticado_id} en modelos...")
             
-            # Lista de modelos y sus métodos de autenticación
+            # Lista de modelos y sus mÃ©todos de autenticaciÃ³n
             models_to_set = [
                 (self.usuario_model, 'set_usuario_actual_con_rol'),
                 (self.venta_model, 'set_usuario_actual_con_rol'),
@@ -699,39 +699,39 @@ class AppController(QObject):
                     try:
                         if method_name == 'set_usuario_actual_con_rol':
                             getattr(model, method_name)(self._usuario_autenticado_id, self._usuario_autenticado_rol)
-                            print(f"  ✅ Usuario establecido en {type(model).__name__} con rol")
+                            print(f"  âœ… Usuario establecido en {type(model).__name__} con rol")
                         else:
                             getattr(model, method_name)(self._usuario_autenticado_id)
-                            print(f"  ✅ Usuario establecido en {type(model).__name__}")
+                            print(f"  âœ… Usuario establecido en {type(model).__name__}")
                     except Exception as e:
-                        print(f"  ❌ Error estableciendo usuario en {type(model).__name__}: {e}")
+                        print(f"  âŒ Error estableciendo usuario en {type(model).__name__}: {e}")
 
-    # Handlers para eventos específicos de modelos
+    # Handlers para eventos especÃ­ficos de modelos
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
         """Handler SIMPLIFICADO para ventas creadas"""
         try:
-            print(f"🛒 Venta creada - ID: {venta_id}, Total: Bs {total:,.2f}")
+            print(f"ðŸ›’ Venta creada - ID: {venta_id}, Total: Bs {total:,.2f}")
             
-            # Actualizar inventario únicamente
+            # Actualizar inventario Ãºnicamente
             if self.inventario_model:
                 QTimer.singleShot(1000, self.inventario_model.refresh_productos)
                 
         except Exception as e:
-            print(f"❌ Error procesando venta creada: {e}")
+            print(f"âŒ Error procesando venta creada: {e}")
 
     @Slot(int, float)
     def _on_compra_creada(self, compra_id: int, total: float):
         """Handler SIMPLIFICADO para compras creadas"""
         try:
-            print(f"🛍️ Compra creada - ID: {compra_id}, Total: Bs {total:,.2f}")
+            print(f"ðŸ›ï¸ Compra creada - ID: {compra_id}, Total: Bs {total:,.2f}")
             
-            # Actualizar inventario únicamente
+            # Actualizar inventario Ãºnicamente
             if self.inventario_model:
                 QTimer.singleShot(1000, self.inventario_model.refresh_productos)
                 
         except Exception as e:
-            print(f"❌ Error procesando compra creada: {e}")
+            print(f"âŒ Error procesando compra creada: {e}")
     @Slot(int, str)
     def _on_proveedor_creado(self, proveedor_id: int, nombre: str):
         self.showNotification("Proveedor Creado", f"Proveedor '{nombre}' agregado exitosamente")
@@ -753,41 +753,41 @@ class AppController(QObject):
 
     @Slot(int, float)
     def _on_transaccion_financiera(self, transaccion_id: int, monto: float):
-        """Handler genérico para transacciones financieras - MEJORADO"""
+        """Handler genÃ©rico para transacciones financieras - MEJORADO"""
         try:
             if self.cierre_caja_model:
-                print(f"💰 Transacción registrada - ID: {transaccion_id}, Monto: {monto}")
+                print(f"ðŸ’° TransacciÃ³n registrada - ID: {transaccion_id}, Monto: {monto}")
                 
                 # Refresh inmediato sin delay
                 self.cierre_caja_model.repository.refresh_cache_immediately()
-                # Delay mínimo para que la BD se actualice
-                QTimer.singleShot(200, lambda: self._refresh_cierre_caja("Transacción general"))
+                # Delay mÃ­nimo para que la BD se actualice
+                QTimer.singleShot(200, lambda: self._refresh_cierre_caja("TransacciÃ³n general"))
         except Exception as e:
-            print(f"❌ Error procesando transacción: {e}")
+            print(f"âŒ Error procesando transacciÃ³n: {e}")
 
     def _refresh_cierre_directo(self, tipo_transaccion: str, transaccion_id: int, monto: float):
         """
-        Método UNIFICADO de refresh directo - USA LA LÓGICA QUE FUNCIONA
+        MÃ©todo UNIFICADO de refresh directo - USA LA LÃ“GICA QUE FUNCIONA
         """
         try:
-            # 1. Invalidar caché inmediatamente
+            # 1. Invalidar cachÃ© inmediatamente
             self.repository.invalidar_cache_transaccion()
             
-            # 2. Log de la transacción (sin polling complejo)
+            # 2. Log de la transacciÃ³n (sin polling complejo)
             if hasattr(self.repository, 'notificar_transaccion_nueva'):
                 self.repository.notificar_transaccion_nueva(tipo_transaccion, monto, transaccion_id)
             
-            # 3. Refresh inmediato usando el método que funciona
+            # 3. Refresh inmediato usando el mÃ©todo que funciona
             self.repository.refresh_cache_immediately()
             
-            # 4. Forzar actualización del modelo
+            # 4. Forzar actualizaciÃ³n del modelo
             self._cargar_datos_dia()
             
-            print(f"✅ Cierre de caja actualizado por {tipo_transaccion} {transaccion_id}")
+            print(f"âœ… Cierre de caja actualizado por {tipo_transaccion} {transaccion_id}")
             
         except Exception as e:
-            print(f"❌ Error en refresh directo: {e}")
-            # Fallback: al menos invalidar y recargar básico
+            print(f"âŒ Error en refresh directo: {e}")
+            # Fallback: al menos invalidar y recargar bÃ¡sico
             try:
                 self.repository.invalidar_cache_completo()
                 self._cargar_datos_dia()
@@ -796,22 +796,22 @@ class AppController(QObject):
 
     @Slot(str)
     def _refresh_cierre_caja(self, mensaje: str = ""):
-        """Refresca los datos del cierre de caja - MÉTODO MEJORADO"""
+        """Refresca los datos del cierre de caja - MÃ‰TODO MEJORADO"""
         try:
             if self.cierre_caja_model:
-                print(f"🔄 Refrescando datos de Cierre de Caja... ({mensaje})")
+                print(f"ðŸ”„ Refrescando datos de Cierre de Caja... ({mensaje})")
                 
-                # 1. Invalidar caché inmediatamente
+                # 1. Invalidar cachÃ© inmediatamente
                 if hasattr(self.cierre_caja_model.repository, 'refresh_cache_immediately'):
                     self.cierre_caja_model.repository.refresh_cache_immediately()
                 
-                # 2. Forzar actualización del modelo
+                # 2. Forzar actualizaciÃ³n del modelo
                 self.cierre_caja_model.forzarActualizacion()
                 
-                print(f"✅ Cierre de caja actualizado: {mensaje}")
+                print(f"âœ… Cierre de caja actualizado: {mensaje}")
                 
         except Exception as e:
-            print(f"❌ Error refrescando cierre de caja: {e}")
+            print(f"âŒ Error refrescando cierre de caja: {e}")
 
     @Slot(bool, str)
     def _on_gasto_creado(self, success: bool, message: str):
@@ -894,17 +894,17 @@ class AppController(QObject):
     @Slot(bool, str)
     def _on_tipo_analisis_creado(self, success: bool, message: str):
         if success:
-            self.showNotification("Análisis Creado", message)
+            self.showNotification("AnÃ¡lisis Creado", message)
 
     @Slot(bool, str)
     def _on_tipo_analisis_actualizado(self, success: bool, message: str):
         if success:
-            self.showNotification("Análisis Actualizado", message)
+            self.showNotification("AnÃ¡lisis Actualizado", message)
 
     @Slot(bool, str)
     def _on_tipo_analisis_eliminado(self, success: bool, message: str):
         if success:
-            self.showNotification("Análisis Eliminado", message)
+            self.showNotification("AnÃ¡lisis Eliminado", message)
 
     @Slot(bool, str)
     def _on_tipo_procedimiento_creado(self, success: bool, message: str):
@@ -953,38 +953,38 @@ class AppController(QObject):
 
     @Slot(str)
     def _on_model_error(self, mensaje: str):
-        """Handler de errores de modelos - VERSIÓN SEGURA"""
+        """Handler de errores de modelos - VERSIÃ“N SEGURA"""
         try:
-            # ✅ NO PROCESAR DURANTE SHUTDOWN
+            # âœ… NO PROCESAR DURANTE SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
-                print(f"⏸️ Error de modelo ignorado durante shutdown: {mensaje}")
+                print(f"â¸ï¸ Error de modelo ignorado durante shutdown: {mensaje}")
                 return
             
-            # ✅ LOG DEL ERROR
-            print(f"❌ Error de modelo: {mensaje}")
+            # âœ… LOG DEL ERROR
+            print(f"âŒ Error de modelo: {mensaje}")
             
-            # ✅ MOSTRAR NOTIFICACIÓN DE FORMA SEGURA
+            # âœ… MOSTRAR NOTIFICACIÃ“N DE FORMA SEGURA
             self.showNotification("Error", mensaje)
             
         except Exception as e:
-            print(f"⚠️ Error en handler de errores: {e}")
+            print(f"âš ï¸ Error en handler de errores: {e}")
 
     @Slot(str)
     def _on_model_success(self, mensaje: str):
-        """Handler de éxitos de modelos - VERSIÓN SEGURA"""
+        """Handler de Ã©xitos de modelos - VERSIÃ“N SEGURA"""
         try:
-            # ✅ NO PROCESAR DURANTE SHUTDOWN
+            # âœ… NO PROCESAR DURANTE SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
                 return
             
-            # ✅ LOG OPCIONAL (comentado para no saturar)
-            # print(f"✅ Éxito de modelo: {mensaje}")
+            # âœ… LOG OPCIONAL (comentado para no saturar)
+            # print(f"âœ… Ã‰xito de modelo: {mensaje}")
             
-            # Opcional: mostrar notificación
-            # self.showNotification("Éxito", mensaje)
+            # Opcional: mostrar notificaciÃ³n
+            # self.showNotification("Ã‰xito", mensaje)
             
         except Exception as e:
-            print(f"⚠️ Error en handler de éxitos: {e}")
+            print(f"âš ï¸ Error en handler de Ã©xitos: {e}")
 
     # ===============================
     # GETTERS PARA MODELS (ACCESO DESDE QML)
@@ -1075,35 +1075,35 @@ class AppController(QObject):
         return self.ingreso_extra_model
 
     # ===============================
-    # MÉTODOS DE NAVEGACIÓN Y NOTIFICACIONES
+    # MÃ‰TODOS DE NAVEGACIÃ“N Y NOTIFICACIONES
     # ===============================
     
     @Slot(str, str)
     def showNotification(self, title, message):
-        """Muestra notificación de forma segura - VERSIÓN MEJORADA"""
+        """Muestra notificaciÃ³n de forma segura - VERSIÃ“N MEJORADA"""
         try:
-            # ✅ VALIDAR QUE NO ESTEMOS EN SHUTDOWN
+            # âœ… VALIDAR QUE NO ESTEMOS EN SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
-                print(f"⏸️ Notificación bloqueada durante shutdown: {title}")
+                print(f"â¸ï¸ NotificaciÃ³n bloqueada durante shutdown: {title}")
                 return
             
-            # ✅ VALIDAR QUE notification_worker EXISTA
+            # âœ… VALIDAR QUE notification_worker EXISTA
             if not hasattr(self, 'notification_worker') or not self.notification_worker:
-                print(f"⚠️ notification_worker no disponible: {title} - {message}")
+                print(f"âš ï¸ notification_worker no disponible: {title} - {message}")
                 return
             
-            # ✅ EMITIR DIRECTAMENTE SIN QTimer (más seguro)
+            # âœ… EMITIR DIRECTAMENTE SIN QTimer (mÃ¡s seguro)
             self.notification_worker.process_notification(title, message)
             
         except Exception as e:
-            print(f"⚠️ Error en showNotification: {e}")
+            print(f"âš ï¸ Error en showNotification: {e}")
     
     @Slot(str)
     def navigateToModule(self, module_name):
-        pass  # Implementación en QML
+        pass  # ImplementaciÃ³n en QML
 
     # ===============================
-    # MÉTODOS DE GENERACIÓN DE PDF (COMPLETOS)
+    # MÃ‰TODOS DE GENERACIÃ“N DE PDF (COMPLETOS)
     # ===============================
     
     @Slot(str, result=str)
@@ -1351,7 +1351,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuración: {e}")
+            print(f"Error generando reporte de configuraciÃ³n: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1386,7 +1386,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuración de laboratorio: {e}")
+            print(f"Error generando reporte de configuraciÃ³n de laboratorio: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1421,7 +1421,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuración de enfermería: {e}")
+            print(f"Error generando reporte de configuraciÃ³n de enfermerÃ­a: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1456,7 +1456,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuración de consultas: {e}")
+            print(f"Error generando reporte de configuraciÃ³n de consultas: {e}")
             return ""
 
     @Slot(str, str, str, str, result=str)
@@ -1480,7 +1480,7 @@ class AppController(QObject):
             return ""
 
     # ===============================
-    # MÉTODOS AUXILIARES PARA PDFs
+    # MÃ‰TODOS AUXILIARES PARA PDFs
     # ===============================
     
     @Slot(result=str)
@@ -1494,8 +1494,9 @@ class AppController(QObject):
         except:
             return False
     
-    @Slot(str, result=bool)
-    def abrirCarpetaReportes(self, archivo_path=""):
+    @Slot(result=bool)  # ← SIN declarar tipo de argumento
+    def abrirCarpetaReportes(self, archivo_path=None):
+        """Abrir carpeta de reportes en el explorador del sistema"""
         try:
             if archivo_path:
                 carpeta = os.path.dirname(archivo_path)
@@ -1542,58 +1543,58 @@ class AuthAppController(QObject):
         if success:
             self.authenticated = True
             
-            # Delay para mostrar animación y asegurar destrucción completa
+            # Delay para mostrar animaciÃ³n y asegurar destrucciÃ³n completa
             QTimer.singleShot(1500, lambda: self.initializeMainApp(userData))
         
     @Slot(str)
     def handleLoginFailed(self, message: str):
         """Manejo de login fallido"""
-        print(f"❌ Login fallido: {message}")
+        print(f"âŒ Login fallido: {message}")
     
     @Slot()
     def handleLogout(self):
-        """LOGOUT MANUAL - VERSIÓN SEGURA CON VALIDACIÓN"""
+        """LOGOUT MANUAL - VERSIÃ“N SEGURA CON VALIDACIÃ“N"""
         try:
-            print("🚪 Cierre de sesión manual solicitado...")
+            print("ðŸšª Cierre de sesiÃ³n manual solicitado...")
             
-            # ✅ VALIDAR QUE EL CONTROLADOR EXISTA
+            # âœ… VALIDAR QUE EL CONTROLADOR EXISTA
             if not self.main_controller:
-                print("⚠️ main_controller ya es None - Creando login directo")
+                print("âš ï¸ main_controller ya es None - Creando login directo")
                 self.authenticated = False
                 QTimer.singleShot(100, self.createAndShowLogin)
                 return
             
-            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
+            # âœ… VALIDAR QUE NO HAY OPERACIONES ACTIVAS
             if hasattr(self.main_controller, '_hay_operaciones_activas'):
                 if self.main_controller._hay_operaciones_activas():
-                    print("⏸️ Operaciones activas - Logout pospuesto")
+                    print("â¸ï¸ Operaciones activas - Logout pospuesto")
                     QTimer.singleShot(1000, self.handleLogout)
                     return
             
-            print("✅ No hay operaciones activas - Procediendo con logout")
+            print("âœ… No hay operaciones activas - Procediendo con logout")
             
             self.authenticated = False
             
-            # PASO 1: Cleanup del controlador principal CON VALIDACIÓN
+            # PASO 1: Cleanup del controlador principal CON VALIDACIÃ“N
             try:
-                print("🧹 Limpiando main_controller...")
+                print("ðŸ§¹ Limpiando main_controller...")
                 # Usar gradual_cleanup en lugar de emergency_shutdown
                 self.main_controller.gradual_cleanup()
                 self.main_controller = None
-                print("✅ main_controller limpiado")
+                print("âœ… main_controller limpiado")
             except Exception as e:
-                print(f"⚠️ Error en cleanup del controlador: {e}")
+                print(f"âš ï¸ Error en cleanup del controlador: {e}")
                 self.main_controller = None
             
             # PASO 2: Destruir motor principal con delay
             if self.main_engine:
                 try:
-                    print("🗑️ Destruyendo main_engine...")
+                    print("ðŸ—‘ï¸ Destruyendo main_engine...")
                     self.main_engine.deleteLater()
                     self.main_engine = None
-                    print("✅ main_engine destruido")
+                    print("âœ… main_engine destruido")
                 except Exception as e:
-                    print(f"⚠️ Error destruyendo motor principal: {e}")
+                    print(f"âš ï¸ Error destruyendo motor principal: {e}")
                     self.main_engine = None
             
             # PASO 3: Forzar garbage collection
@@ -1603,10 +1604,10 @@ class AuthAppController(QObject):
             # PASO 4: Crear y mostrar nuevo login con delay
             QTimer.singleShot(500, self.createAndShowLogin)
             
-            print("✅ Logout manual completado")
+            print("âœ… Logout manual completado")
             
         except Exception as e:
-            print(f"❌ Error durante logout manual: {e}")
+            print(f"âŒ Error durante logout manual: {e}")
             import traceback
             traceback.print_exc()
             
@@ -1618,9 +1619,9 @@ class AuthAppController(QObject):
     def createAndShowLogin(self):
         """Crea y muestra una nueva instancia de login - MEJORADO"""
         try:
-            print("🔐 Creando nueva instancia de login...")
+            print("ðŸ” Creando nueva instancia de login...")
             
-            # Asegurar que login anterior esté destruido
+            # Asegurar que login anterior estÃ© destruido
             if self.login_engine:
                 try:
                     self.login_engine.deleteLater()
@@ -1640,37 +1641,37 @@ class AuthAppController(QObject):
             login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
             self.login_engine.load(QUrl.fromLocalFile(login_qml))
             
-            # Verificar que se cargó correctamente
+            # Verificar que se cargÃ³ correctamente
             if not self.login_engine.rootObjects():
-                print("❌ Error: login.qml no se cargó correctamente")
+                print("âŒ Error: login.qml no se cargÃ³ correctamente")
                 return
             
             self.authenticationRequired.emit()
-            print("✅ Login creado y mostrado exitosamente")
+            print("âœ… Login creado y mostrado exitosamente")
             
         except Exception as e:
-            print(f"❌ Error creando login: {e}")
+            print(f"âŒ Error creando login: {e}")
             import traceback
             traceback.print_exc()
 
     def initializeMainApp(self, userData):
-        """Inicializa la aplicación principal - CORREGIDO para recrear siempre"""
+        """Inicializa la aplicaciÃ³n principal - CORREGIDO para recrear siempre"""
         try:
             # PASO 1: Destruir login engine si existe
             if self.login_engine:
                 try:
-                    print("🗑️ Destruyendo login_engine...")
+                    print("ðŸ—‘ï¸ Destruyendo login_engine...")
                     self.login_engine.deleteLater()
                     self.login_engine = None
-                    print("✅ login_engine destruido")
+                    print("âœ… login_engine destruido")
                 except Exception as e:
-                    print(f"⚠️ Error destruyendo login engine: {e}")
+                    print(f"âš ï¸ Error destruyendo login engine: {e}")
                     self.login_engine = None
             
             # PASO 2: SIEMPRE crear nuevo controller (no reutilizar)
-            print("🗂️ Creando nuevo AppController...")
+            print("ðŸ—‚ï¸ Creando nuevo AppController...")
             self.main_controller = AppController()
-            print("✅ Nuevo AppController creado")
+            print("âœ… Nuevo AppController creado")
             
             # PASO 3: Crear nueva engine para main app
             self.main_engine = QQmlApplicationEngine()
@@ -1685,25 +1686,54 @@ class AuthAppController(QObject):
             main_qml = os.path.join(os.path.dirname(__file__), "main.qml")
             self.main_engine.load(QUrl.fromLocalFile(main_qml))
             
-            # PASO 6: Verificar que se cargó correctamente
+            # PASO 6: Verificar que se cargÃ³ correctamente
             if not self.main_engine.rootObjects():
-                print("❌ Error: main.qml no se cargó correctamente")
+                print("âŒ Error: main.qml no se cargÃ³ correctamente")
                 return
             
-            print("✅ main.qml cargado exitosamente")
+            print("âœ… main.qml cargado exitosamente")
+            
+            # ===== AGREGAR ICONO A LA VENTANA PRINCIPAL =====
+            try:
+                # Obtener la ventana principal
+                window = self.main_engine.rootObjects()[0]
+                
+                # Buscar el icono en diferentes ubicaciones
+                possible_icon_paths = [
+                    os.path.join(os.path.dirname(__file__), "icono.ico"),
+                    os.path.join(os.path.dirname(__file__), "Resources/iconos/logo_CMI.ico"),
+                    os.path.join(os.path.dirname(__file__), "Resources/iconos/logo_CMI.png"),
+                    os.path.join(os.path.dirname(__file__), "Resources/iconos/logo_CMI.svg"),
+                ]
+                
+                icon_loaded = False
+                for icon_path in possible_icon_paths:
+                    if os.path.exists(icon_path):
+                        from PySide6.QtGui import QIcon
+                        window.setIcon(QIcon(icon_path))
+                        print(f"Ã¢Å“â€¦ Icono de ventana establecido: {icon_path}")
+                        icon_loaded = True
+                        break
+                
+                if not icon_loaded:
+                    print("Ã¢Å¡ Ã¯Â¸Â No se encontrÃƒÂ³ ningÃƒÂºn archivo de icono para la ventana")
+                    
+            except Exception as e:
+                print(f"Ã¢Å¡ Ã¯Â¸Â Error estableciendo icono de ventana: {e}")
+            # ===== FIN ICONO =====
             
             # PASO 7: Inicializar modelos
-            print("🔧 Inicializando modelos...")
+            print("ðŸ”§ Inicializando modelos...")
             self.main_controller.initialize_models()
             
-            # PASO 8: Establecer autenticación con delay
+            # PASO 8: Establecer autenticaciÃ³n con delay
             QTimer.singleShot(800, lambda: self._set_user_authentication(userData))
             
             self.authenticationSuccess.emit()
-            print("🎉 Aplicación principal inicializada exitosamente")
+            print("ðŸŽ‰ AplicaciÃ³n principal inicializada exitosamente")
             
         except Exception as e:
-            print(f"❌ Error inicializando app principal: {e}")
+            print(f"âŒ Error inicializando app principal: {e}")
             import traceback
             traceback.print_exc()
             
@@ -1711,66 +1741,66 @@ class AuthAppController(QObject):
             QTimer.singleShot(2000, self.createAndShowLogin)
 
     def _set_user_authentication(self, userData):
-        """Establece la autenticación del usuario - MEJORADO con verificaciones"""
+        """Establece la autenticaciÃ³n del usuario - MEJORADO con verificaciones"""
         try:
             if not self.main_controller:
-                print("❌ Error: main_controller es None al establecer autenticación")
+                print("âŒ Error: main_controller es None al establecer autenticaciÃ³n")
                 return
             
             if not userData:
-                print("❌ Error: userData es None al establecer autenticación")
+                print("âŒ Error: userData es None al establecer autenticaciÃ³n")
                 return
             
             user_id = userData.get('id', 0)
             user_name = f"{userData.get('Nombre', '')} {userData.get('Apellido_Paterno', '')}"
             user_role = userData.get('rol_nombre', 'Usuario')
-            # Verificar que los datos son válidos
+            # Verificar que los datos son vÃ¡lidos
             if user_id <= 0:
-                print("❌ Error: ID de usuario inválido")
+                print("âŒ Error: ID de usuario invÃ¡lido")
                 return
             
             if not user_role:
-                print("❌ Error: Rol de usuario vacío")
+                print("âŒ Error: Rol de usuario vacÃ­o")
                 return
             
-            # Establecer autenticación
+            # Establecer autenticaciÃ³n
             self.main_controller.set_usuario_autenticado(user_id, user_name, user_role)
             
-            print("✅ Autenticación establecida exitosamente")
+            print("âœ… AutenticaciÃ³n establecida exitosamente")
             
-            # Verificación adicional con delay
+            # VerificaciÃ³n adicional con delay
             QTimer.singleShot(1000, lambda: self._verify_authentication(user_id, user_role))
             
         except Exception as e:
-            print(f"❌ Error estableciendo autenticación: {e}")
+            print(f"âŒ Error estableciendo autenticaciÃ³n: {e}")
             import traceback
             traceback.print_exc()
     
     def _verify_authentication(self, expected_id, expected_role):
-        """Verifica que la autenticación se estableció correctamente"""
+        """Verifica que la autenticaciÃ³n se estableciÃ³ correctamente"""
         try:
             if self.main_controller:
                 actual_id = self.main_controller.usuario_actual_id
                 actual_role = self.main_controller.usuario_actual_rol
                 
-                print(f"🔍 VERIFICACIÓN DE AUTENTICACIÓN:")
+                print(f"ðŸ” VERIFICACIÃ“N DE AUTENTICACIÃ“N:")
                 print(f"   Esperado: ID={expected_id}, Rol='{expected_role}'")
                 print(f"   Actual: ID={actual_id}, Rol='{actual_role}'")
                 
                 if actual_id == expected_id and actual_role == expected_role:
                     pass
                 else:
-                    print("⚠️ Autenticación no coincide - reintentando...")
-                    # Reintentar establecer autenticación
+                    print("âš ï¸ AutenticaciÃ³n no coincide - reintentando...")
+                    # Reintentar establecer autenticaciÃ³n
                     user_name = f"Usuario {expected_id}"
                     self.main_controller.set_usuario_autenticado(expected_id, user_name, expected_role)
             else:
-                print("❌ main_controller es None durante verificación")
+                print("âŒ main_controller es None durante verificaciÃ³n")
                 
         except Exception as e:
-            print(f"❌ Error verificando autenticación: {e}")
+            print(f"âŒ Error verificando autenticaciÃ³n: {e}")
     
-    # Métodos públicos para QML
+    # MÃ©todos pÃºblicos para QML
     @Slot()
     def showLogin(self):
         """Muestra login (para uso desde QML)"""
@@ -1778,13 +1808,13 @@ class AuthAppController(QObject):
     
     @Slot()
     def exitApp(self):
-        """Sale de la aplicación"""
+        """Sale de la aplicaciÃ³n"""
         QGuiApplication.quit()
     
     @Slot()
     def forceRestart(self):
         """Fuerza un reinicio completo (para debug)"""
-        print("🔄 FORZANDO REINICIO COMPLETO...")
+        print("ðŸ”„ FORZANDO REINICIO COMPLETO...")
         
         # Limpiar todo
         self.main_controller = None
@@ -1796,10 +1826,10 @@ class AuthAppController(QObject):
         import gc
         gc.collect()
         
-        # Recrear login después de un delay
+        # Recrear login despuÃ©s de un delay
         QTimer.singleShot(1000, self.createAndShowLogin)
         
-        print("✅ Reinicio completo ejecutado")
+        print("âœ… Reinicio completo ejecutado")
 
 def register_qml_types():
     register_inventario_model()
@@ -1831,10 +1861,24 @@ def setup_qml_context(engine, controller):
 
 def main():
     app = QGuiApplication(sys.argv)
-    app.setApplicationName("Sistema de Gestión Médica")
+    app.setApplicationName("Sistema de GestiÃ³n MÃ©dica")
     app.setApplicationVersion("1.0.0")
-    app.setOrganizationName("Clínica Maria Inmaculada")
+    app.setOrganizationName("ClÃ­nica Maria Inmaculada")
     
+    try:
+        # Ruta al archivo de icono (puede ser .ico, .png, .svg)
+        icon_path = os.path.join(os.path.dirname(__file__), "Resources/iconos/Logo_de_Emergencia_MÃƒÂ©dica_RGL-removebg-preview.ico")
+        
+        # Si el archivo existe, establecerlo como icono
+        if os.path.exists(icon_path):
+            from PySide6.QtGui import QIcon
+            app.setWindowIcon(QIcon(icon_path))
+            print(f"Ã¢Å“â€¦ Icono de aplicaciÃƒÂ³n cargado: {icon_path}")
+        else:
+            print(f"Ã¢Å¡ Ã¯Â¸Â Icono no encontrado en: {icon_path}")
+    except Exception as e:
+        print(f"Ã¢Å¡ Ã¯Â¸Â Error cargando icono: {e}")
+    # ===== FIN ICONO =====
     try:
         register_qml_types()
         
@@ -1846,20 +1890,20 @@ def main():
         
         login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
         if not os.path.exists(login_qml):
-            print(f"❌ Archivo login.qml no encontrado: {login_qml}")
+            print(f"âŒ Archivo login.qml no encontrado: {login_qml}")
             return -1
         
         login_engine.load(QUrl.fromLocalFile(login_qml))
         
         if not login_engine.rootObjects():
-            print("❌ Error cargando login.qml")
+            print("âŒ Error cargando login.qml")
             return -1
         
-        print("✅ Aplicación iniciada correctamente")
+        print("âœ… AplicaciÃ³n iniciada correctamente")
         return app.exec()
         
     except Exception as e:
-        print(f"❌ Error crítico iniciando aplicación: {e}")
+        print(f"âŒ Error crÃ­tico iniciando aplicaciÃ³n: {e}")
         import traceback
         traceback.print_exc()
         return -1

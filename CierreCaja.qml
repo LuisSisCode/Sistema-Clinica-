@@ -9,23 +9,34 @@ Item {
     objectName: "cierreCajaRoot"
     
     Component.onDestruction: {
-        console.log("🚨🚨🚨 CIERRE DE CAJA SIENDO DESTRUIDO 🚨🚨🚨")
-        console.log("🔍 Momento de destrucción:", new Date().toISOString())
+        console.log("🨨🨨🨨 CIERRE DE CAJA SIENDO DESTRUIDO 🨨🨨🨨")
+        console.log("📍 Momento de destrucción:", new Date().toISOString())
         try {
             var error = new Error()
-            console.log("🔍 Stack trace:")
+            console.log("📍 Stack trace:")
             console.log(error.stack)
         } catch (e) {
             console.log("No se pudo obtener stack trace")
         }
     }
     
+    // ✅ FUNCIONALIDAD #1: AUTO-ACTUALIZACIÓN AL ENTRAR
     onVisibleChanged: {
         console.log("👁️ CierreCaja visibility cambió a:", visible)
         if (!visible) {
             console.log("⚠️ CierreCaja ocultado (no destruido)")
         } else {
             console.log("✅ CierreCaja mostrado")
+            
+            // ✅ EJECUTAR INICIALIZACIÓN AUTOMÁTICA
+            Qt.callLater(function() {
+                if (cierreCajaModel && typeof cierreCajaModel.inicializarCamposAutomaticamente === 'function') {
+                    console.log("🕐 Ejecutando inicialización automática de horarios...")
+                    cierreCajaModel.inicializarCamposAutomaticamente()
+                } else {
+                    console.log("⚠️ Función inicializarCamposAutomaticamente no disponible")
+                }
+            })
         }
     }
 
@@ -104,6 +115,7 @@ Item {
             console.log("⚠️ Error sincronizando propiedades:", error)
         }
     }
+    
     // Propiedades calculadas para el arqueo
     readonly property string tipoDiferencia: {
         if (Math.abs(diferencia) < 1.0) return "NEUTRO"
@@ -113,7 +125,6 @@ Item {
 
     readonly property bool dentroDeLimite: Math.abs(diferencia) <= 50.0
     readonly property bool requiereAutorizacion: Math.abs(diferencia) > 50.0
-    // Propiedades calculadas para el arqueo
     
     onCierreCajaModelChanged: {
         if (cierreCajaModel) {
@@ -122,8 +133,7 @@ Item {
             if (cierreCajaModel.horaInicio) horaInicio = cierreCajaModel.horaInicio
             if (cierreCajaModel.fechaActual) fechaActual = cierreCajaModel.fechaActual
         }
-    }    
-    
+    }
 
     Connections {
         target: cierreCajaModel
@@ -145,19 +155,11 @@ Item {
         }
         
         function onValidacionChanged() {
-            console.log("✓ Validación cambió")
+            console.log("✔ Validación cambió")
             Qt.callLater(function() {
                 if (cierreCajaModel) {
                     diferencia = cierreCajaModel.diferencia || 0.0
                 }
-            })
-        }
-        
-        function onPdfGenerado(filepath) {
-            console.log("✅ PDF generado exitosamente:", filepath)
-            // ✅ NO MOSTRAR TOAST INMEDIATAMENTE
-            Qt.callLater(function() {
-                mostrarNotificacionSegura("Éxito", "PDF generado correctamente")
             })
         }
         
@@ -183,6 +185,17 @@ Item {
             console.log("❌", mensaje)
             Qt.callLater(function() {
                 mostrarNotificacion("Error", mensaje)
+            })
+        }
+
+        function onPdfGenerado(filepath) {
+            console.log("✅ PDF generado exitosamente:", filepath)
+            
+            // ✅ ABRIR PDF AUTOMÁTICAMENTE CON DELAY
+            Qt.callLater(function() {
+                if (filepath && filepath.length > 0) {
+                    abrirPDFAutomaticamente(filepath)
+                }
             })
         }
     }
@@ -211,6 +224,7 @@ Item {
             console.log("⚠️ modelHealthTimer deshabilitado por estabilidad")
         }
     }
+    
     Timer {
         id: initializationTimer
         interval: 1000
@@ -239,6 +253,7 @@ Item {
             }
         }
     }
+    
     function verificarModelo() {
         if (!cierreCajaModel && appController) {
             try {
@@ -251,6 +266,41 @@ Item {
             }
         }
     }
+    
+    // ✅ FUNCIONALIDAD #3: VALIDACIÓN DE RANGO DE HORAS
+    function validarRangoHoras(inicio, fin) {
+        try {
+            if (!inicio || !fin) {
+                console.log("❌ Parámetros de hora vacíos")
+                return false
+            }
+            
+            // Convertir horas a minutos para comparación
+            var inicioPartes = inicio.split(':')
+            var finPartes = fin.split(':')
+            
+            if (inicioPartes.length < 2 || finPartes.length < 2) {
+                console.log("❌ Formato de hora inválido")
+                return false
+            }
+            
+            var inicioMinutos = parseInt(inicioPartes[0]) * 60 + parseInt(inicioPartes[1])
+            var finMinutos = parseInt(finPartes[0]) * 60 + parseInt(finPartes[1])
+            
+            if (inicioMinutos >= finMinutos) {
+                console.log("❌ Rango inválido: Hora inicio (" + inicio + ") >= Hora fin (" + fin + ")")
+                return false
+            }
+            
+            console.log("✅ Rango válido:", inicio, "-", fin)
+            return true
+            
+        } catch (e) {
+            console.log("❌ Error validando rango:", e)
+            return false
+        }
+    }
+    
     StackLayout {
         anchors.fill: parent
         currentIndex: vistaActual
@@ -304,17 +354,17 @@ Item {
                         RowLayout {
                             spacing: 12
                             
+                            // ✅ CORRECCIÓN #1: Botón de PDF - ELIMINAR return
                             Button {
                                 text: "📄 Generar PDF"
                                 Layout.preferredHeight: 40
                                 Layout.preferredWidth: 150
-                                enabled: {
-                                    return cierreCajaModel && 
+                                // ✅ SIN return en enabled
+                                enabled: cierreCajaModel && 
                                         !cierreCajaModel.loading && 
                                         fechaField.text.trim().length > 0 &&
                                         horaInicioField.text.trim().length > 0 &&
                                         horaFinField.text.trim().length > 0
-                                }
                                 
                                 background: Rectangle {
                                     color: parent.pressed ? Qt.darker(successColor, 1.2) : (parent.enabled ? successColor : darkGrayColor)
@@ -370,12 +420,70 @@ Item {
                                 }
                             }
                             
+                            // Botón de abrir carpeta
+                            Button {
+                                text: "📁 Carpeta"
+                                Layout.preferredHeight: 40
+                                Layout.preferredWidth: 120
+                                enabled: true
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(primaryDarkColor, 1.2) : primaryDarkColor
+                                    radius: 6
+                                    border.color: primaryColor
+                                    border.width: 1
+                                    
+                                    // Efecto hover
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 6
+                                        color: parent.parent.hovered ? "#20FFFFFF" : "transparent"
+                                    }
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: whiteColor
+                                    font.bold: true
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    console.log("📁 Abriendo carpeta de PDFs...")
+                                    
+                                    try {
+                                        if (appController && typeof appController.abrirCarpetaReportes === 'function') {
+                                            var resultado = appController.abrirCarpetaReportes()
+                                            
+                                            if (resultado) {
+                                                mostrarNotificacionSegura("Carpeta Abierta", "Carpeta de reportes abierta correctamente")
+                                            } else {
+                                                mostrarNotificacion("Advertencia", "No se pudo abrir la carpeta")
+                                            }
+                                        } else {
+                                            console.log("❌ Función abrirCarpetaReportes no disponible")
+                                            mostrarNotificacion("Error", "Función no disponible en el sistema")
+                                        }
+                                    } catch (error) {
+                                        console.log("❌ Error:", error)
+                                        mostrarNotificacion("Error", "Error abriendo carpeta: " + error.toString())
+                                    }
+                                }
+                                
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Abrir carpeta donde se guardan los PDFs"
+                                ToolTip.delay: 500
+                            }
+                            
+                            // ✅ CORRECCIÓN #2: Botón de Cerrar Caja - ELIMINAR return
                             Button {
                                 text: "✅ Cerrar Caja"
                                 Layout.preferredHeight: 40
                                 Layout.preferredWidth: 130
+                                // ✅ SIN return en enabled
                                 enabled: {
-                                    // Verificar que tenga modelo, no esté cargando, tenga efectivo y campos completos
                                     var habilitado = cierreCajaModel && 
                                                     !cierreCajaModel.loading && 
                                                     efectivoReal > 0 && 
@@ -383,13 +491,11 @@ Item {
                                                     horaInicioField.text.trim().length > 0 &&
                                                     horaFinField.text.trim().length > 0
                                     
-                                    // Debug simplificado
                                     if (!habilitado) {
-                                        console.log("🔍 Botón deshabilitado - Efectivo:", efectivoReal, "Campos completos:", 
-                                                fechaField.text.length > 0 && horaInicioField.text.length > 0 && horaFinField.text.length > 0)
+                                        console.log("🔒 Botón deshabilitado - Efectivo:", efectivoReal)
                                     }
                                     
-                                    return habilitado
+                                    habilitado  // ← SIN return
                                 }
                                 
                                 background: Rectangle {
@@ -408,7 +514,7 @@ Item {
                                 }
                                 
                                 onClicked: {
-                                    console.log("🖱️ Botón Cerrar Caja presionado")
+                                    console.log("🔱️ Botón Cerrar Caja presionado")
                                     
                                     // ✅ VALIDACIÓN ADICIONAL ANTES DE CERRAR
                                     if (!cierreCajaModel) {
@@ -605,16 +711,17 @@ Item {
                                         }
                                     }
                                     
+                                    // ✅ CORRECCIÓN #3: Botón Consultar - ELIMINAR return + AGREGAR VALIDACIÓN + ACTUALIZAR HORA FIN
                                     Button {
                                         text: "🔄 Consultar"
                                         Layout.preferredHeight: 35
                                         Layout.preferredWidth: 120
-                                        enabled: {return cierreCajaModel && 
-                                                    !cierreCajaModel.loading && 
-                                                    fechaField.text.trim().length > 0 && 
-                                                    horaInicioField.text.trim().length > 0 && 
-                                                    horaFinField.text.trim().length > 0
-                                            }
+                                        // ✅ SIN return en enabled
+                                        enabled: cierreCajaModel && 
+                                                !cierreCajaModel.loading && 
+                                                fechaField.text.trim().length > 0 && 
+                                                horaInicioField.text.trim().length > 0 && 
+                                                horaFinField.text.trim().length > 0
                                         
                                         background: Rectangle {
                                             color: parent.pressed ? Qt.darker(primaryColor, 1.2) : (parent.enabled ? primaryColor : darkGrayColor)
@@ -632,6 +739,11 @@ Item {
                                         
                                         onClicked: {
                                             console.log("🔄 Botón Consultar presionado")
+                                            
+                                            // ✅ FUNCIONALIDAD #2: Actualizar hora fin a la hora actual ANTES de consultar
+                                            var horaActualSistema = Qt.formatTime(new Date(), "HH:mm")
+                                            horaFinField.text = horaActualSistema
+                                            console.log("🕐 Hora fin actualizada automáticamente:", horaActualSistema)
                                             
                                             // ✅ VALIDACIONES MEJORADAS
                                             if (!cierreCajaModel) {
@@ -664,6 +776,12 @@ Item {
                                             // ✅ Validar formato de horas
                                             if (!validarFormatoHora(horaInicioField.text) || !validarFormatoHora(horaFinField.text)) {
                                                 mostrarNotificacion("Error", "Formato de hora inválido (HH:MM)")
+                                                return
+                                            }
+                                            
+                                            // ✅ FUNCIONALIDAD #3: Validar rango de horas
+                                            if (!validarRangoHoras(horaInicioField.text, horaFinField.text)) {
+                                                mostrarNotificacion("Error", "Hora inicio debe ser menor que hora fin. Por favor corrija los horarios.")
                                                 return
                                             }
                                             
@@ -1141,6 +1259,7 @@ Item {
                                                         }
                                                     }
                                                 }
+                                                
                                                 onFocusChanged: {
                                                     if (!focus && text.trim().length === 0) {
                                                         // ✅ Si pierde el foco y está vacío, establecer a 0
@@ -1483,7 +1602,6 @@ Item {
                                             
                                             Rectangle { width: 2; Layout.fillHeight: true; color: "#1a202c" }
                                             
-                                            // ✅ NUEVA COLUMNA
                                             Label {
                                                 Layout.preferredWidth: 100
                                                 text: "ACCIONES"
@@ -1680,7 +1798,7 @@ Item {
                                                                 anchors.centerIn: parent
                                                                 text: {
                                                                     let diff = parseFloat(modelData.Diferencia || 0)
-                                                                    if (Math.abs(diff) < 1.0) return "✓ OK"
+                                                                    if (Math.abs(diff) < 1.0) return "✔ OK"
                                                                     else if (diff > 0) return "+ SOBRA"
                                                                     else return "- FALTA"
                                                                 }
@@ -1757,7 +1875,7 @@ Item {
                                                     
                                                     Rectangle { width: 2; Layout.fillHeight: true; color: "#E0E6ED"; opacity: 0.7 }
                                                     
-                                                    // ✅ NUEVA COLUMNA - ACCIONES
+                                                    // NUEVA COLUMNA - ACCIONES
                                                     Rectangle {
                                                         Layout.preferredWidth: 100
                                                         Layout.fillHeight: true
@@ -1775,7 +1893,6 @@ Item {
                                                                 border.color: primaryDarkColor
                                                                 border.width: 1
                                                                 
-                                                                // Efecto hover
                                                                 Rectangle {
                                                                     anchors.fill: parent
                                                                     radius: 6
@@ -1793,7 +1910,7 @@ Item {
                                                             }
                                                             
                                                             onClicked: {
-                                                                console.log("🔍 Ver cierre presionado")
+                                                                console.log("📄 Ver cierre presionado")
                                                                 
                                                                 // ✅ VALIDACIONES COMPLETAS
                                                                 if (!cierreCajaModel) {
@@ -1806,7 +1923,7 @@ Item {
                                                                     return
                                                                 }
                                                                 
-                                                                // ✅ Validar que modelData tenga los campos necesarios
+                                                                // ✅ VALIDAR DATOS DEL CIERRE
                                                                 if (!modelData || !modelData.Fecha || !modelData.HoraInicio || !modelData.HoraFin) {
                                                                     console.log("❌ Datos del cierre incompletos")
                                                                     mostrarNotificacion("Error", "Datos del cierre incompletos")
@@ -1814,21 +1931,31 @@ Item {
                                                                 }
                                                                 
                                                                 try {
-                                                                    console.log("🔍 Ver cierre - Fecha:", modelData.Fecha, 
-                                                                            "Horario:", modelData.HoraInicio, "-", modelData.HoraFin)
+                                                                    console.log("📄 Generando PDF del cierre histórico:")
+                                                                    console.log("   Fecha:", modelData.Fecha)
+                                                                    console.log("   Horario:", modelData.HoraInicio, "-", modelData.HoraFin)
                                                                     
-                                                                    generarPDFCierreEspecifico(
-                                                                        modelData.Fecha,
-                                                                        modelData.HoraInicio,
-                                                                        modelData.HoraFin
-                                                                    )
+                                                                    // ✅ LLAMAR AL MÉTODO CORRECTO DEL MODELO
+                                                                    if (typeof cierreCajaModel.generarPDFCierreEspecifico === 'function') {
+                                                                        cierreCajaModel.generarPDFCierreEspecifico(
+                                                                            formatearFechaParaModel(modelData.Fecha),
+                                                                            limpiarFormatoHora(modelData.HoraInicio),
+                                                                            limpiarFormatoHora(modelData.HoraFin)
+                                                                        )
+                                                                        
+                                                                        // Notificar que está procesando
+                                                                        mostrarNotificacionSegura("Procesando", "Generando PDF del cierre...")
+                                                                    } else {
+                                                                        console.log("❌ Método no existe")
+                                                                        mostrarNotificacion("Error", "Función no disponible")
+                                                                    }
+                                                                    
                                                                 } catch (error) {
-                                                                    console.log("❌ Error generando PDF de cierre:", error)
+                                                                    console.log("❌ Error:", error)
                                                                     mostrarNotificacion("Error", "Error generando PDF: " + error.toString())
                                                                 }
                                                             }
                                                             
-                                                            // Tooltip
                                                             ToolTip.visible: hovered
                                                             ToolTip.text: "Ver PDF de este cierre"
                                                             ToolTip.delay: 500
@@ -1972,7 +2099,7 @@ Item {
     // FUNCIONES JAVASCRIPT
     function abrirPDFEnNavegador(rutaArchivo) {
         try {
-            console.log("🌐 Abriendo PDF en navegador: " + rutaArchivo)
+            console.log("🖥 Abriendo PDF en navegador: " + rutaArchivo)
             var urlArchivo = "file:///" + rutaArchivo.replace(/\\/g, "/")
             Qt.openUrlExternally(urlArchivo)
             var nombreArchivo = rutaArchivo.split("/").pop().split("\\").pop()
@@ -2046,7 +2173,7 @@ Item {
                 
                 if (typeof cierreCajaModel.completarCierre === 'function') {
                     var resultado = cierreCajaModel.completarCierre(observaciones)
-                    console.log("🔒 Resultado completarCierre:", resultado)
+                    console.log("🏁 Resultado completarCierre:", resultado)
                     
                     // Mostrar notificación de éxito
                     mostrarNotificacion("Éxito", "Caja cerrada correctamente")
@@ -2093,18 +2220,19 @@ Item {
     }
 
     function calculateDuration(inicio, fin) {
-            if (!inicio || !fin) return "0.0"
-            
-            try {
-                let inicioMinutos = parseInt(inicio.split(':')[0]) * 60 + parseInt(inicio.split(':')[1])
-                let finMinutos = parseInt(fin.split(':')[0]) * 60 + parseInt(fin.split(':')[1])
-                let duracion = (finMinutos - inicioMinutos) / 60
-                return duracion.toFixed(1)
-            } catch (e) {
-                return "0.0"
-            }
+        if (!inicio || !fin) return "0.0"
+        
+        try {
+            let inicioMinutos = parseInt(inicio.split(':')[0]) * 60 + parseInt(inicio.split(':')[1])
+            let finMinutos = parseInt(fin.split(':')[0]) * 60 + parseInt(fin.split(':')[1])
+            let duracion = (finMinutos - inicioMinutos) / 60
+            return duracion.toFixed(1)
+        } catch (e) {
+            return "0.0"
         }
-        function formatearHorario(inicio, fin) {
+    }
+    
+    function formatearHorario(inicio, fin) {
         if (!inicio || !fin) return "--:-- - --:--"
         
         try {
@@ -2133,7 +2261,6 @@ Item {
             return "--:-- - --:--"
         }
     }
-    // Agregar después de formatearHorario():
 
     function formatearFecha(fecha) {
         if (!fecha) return "--/--/----"
@@ -2220,6 +2347,7 @@ Item {
         return horas >= 0 && horas <= 23 && 
             minutos >= 0 && minutos <= 59
     }
+    
     function generarPDFCierreEspecifico(fecha, horaInicio, horaFin) {
         console.log("📄 Generando PDF de cierre específico")
         
@@ -2295,6 +2423,7 @@ Item {
             mostrarNotificacion("Error", "Error al generar PDF: " + error.toString())
         }
     }
+    
     function formatearFechaParaModel(fecha) {
         if (!fecha) return ""
         
@@ -2319,6 +2448,7 @@ Item {
         
         return fechaStr
     }
+    
     function limpiarFormatoHora(hora) {
         if (!hora) return "00:00"
         
@@ -2336,6 +2466,7 @@ Item {
         
         return horaStr
     }
+    
     // ✅ NUEVA: Función segura para notificaciones (sin timers problemáticos)
     function mostrarNotificacionSegura(titulo, mensaje) {
         console.log("📢", titulo, ":", mensaje)
@@ -2352,10 +2483,38 @@ Item {
             }
         }
     }
+
+    // ✅ FUNCIONALIDAD #2: ABRIR PDF AUTOMÁTICAMENTE
+    function abrirPDFAutomaticamente(filepath) {
+        try {
+            console.log("🖥 Intentando abrir PDF:", filepath)
+            
+            // Convertir ruta a formato URL
+            var urlPath = "file:///" + filepath.replace(/\\/g, "/")
+            
+            console.log("🖥 URL formateada:", urlPath)
+            
+            // Abrir con el visor del sistema
+            Qt.openUrlExternally(urlPath)
+            
+            // Extraer nombre del archivo para la notificación
+            var nombreArchivo = filepath.split("\\").pop().split("/").pop()
+            
+            // Notificación de éxito
+            mostrarNotificacionSegura("PDF Abierto", "Archivo: " + nombreArchivo)
+            
+            console.log("✅ PDF abierto exitosamente")
+            
+        } catch (error) {
+            console.log("❌ Error abriendo PDF:", error)
+            mostrarNotificacion("Error", "No se pudo abrir el PDF automáticamente")
+        }
+    }
+
     // INICIALIZACIÓN MEJORADA
     Component.onCompleted: {
-        console.log("💰 Inicializando módulo CierreCaja")
-        console.log("🔧 Versión: Con sincronización manual (más estable)")
+        console.log("🏁 Inicializando módulo CierreCaja")
+        console.log("🔧 Versión: Con auto-gestión de horarios y PDFs funcionales")
         
         // Verificar AppController primero
         if (!appController) {
@@ -2363,11 +2522,19 @@ Item {
             return
         }
         
-        // ✅ INICIALIZAR CON DELAY MAYOR PARA ESTABILIDAD
+        // ✅ INICIALIZAR CON DELAY PARA ESTABILIDAD
         Qt.callLater(function() {
             if (appController && appController.cierre_caja_model_instance) {
                 cierreCajaModel = appController.cierre_caja_model_instance
                 console.log("✅ Modelo conectado")
+                
+                // ✅ FUNCIONALIDAD #1: INICIALIZAR CAMPOS AUTOMÁTICAMENTE
+                Qt.callLater(function() {
+                    if (cierreCajaModel && typeof cierreCajaModel.inicializarCamposAutomaticamente === 'function') {
+                        console.log("🕐 Llamando a inicialización automática de horarios...")
+                        cierreCajaModel.inicializarCamposAutomaticamente()
+                    }
+                })
                 
                 // ✅ SINCRONIZAR PROPIEDADES DESPUÉS DE CONECTAR
                 Qt.callLater(function() {

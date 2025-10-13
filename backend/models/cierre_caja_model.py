@@ -13,22 +13,22 @@ from ..core.excepciones import ExceptionHandler, ValidationError, DatabaseQueryE
 class CierreCajaModel(QObject):
     """
     Model INDEPENDIENTE para operaciones de cierre de caja diario
-    - Sin timers automáticos
+    - Sin timers automÃ¡ticos
     - Sin dependencias de otros modelos  
     - Consultas directas a BD bajo demanda
-    - Gestiona arqueo, validaciones y generación de reportes
+    - Gestiona arqueo, validaciones y generaciÃ³n de reportes
     """
     
     # ===============================
     # SIGNALS - Notificaciones a QML
     # ===============================
     
-    # Señales para cambios en datos
+    # SeÃ±ales para cambios en datos
     datosChanged = Signal()
     resumenChanged = Signal()
     validacionChanged = Signal()
     
-    # Señales para operaciones
+    # SeÃ±ales para operaciones
     cierreCompletado = Signal(bool, str)  # success, message
     pdfGenerado = Signal(str)  # ruta_archivo
     errorOccurred = Signal(str, str)  # title, message
@@ -36,7 +36,7 @@ class CierreCajaModel(QObject):
     operacionError = Signal(str)
     cierreCompletadoChanged = Signal()
     
-    # Señales para UI
+    # SeÃ±ales para UI
     loadingChanged = Signal()
     efectivoRealChanged = Signal()
     horaInicioChanged = Signal()
@@ -54,7 +54,7 @@ class CierreCajaModel(QObject):
         self._datos_cierre: Dict[str, Any] = {}
         self._loading: bool = False
         
-        # Configuración del cierre
+        # ConfiguraciÃ³n del cierre
         self._fecha_actual: str = datetime.now().strftime("%d/%m/%Y")
         self._hora_inicio: str = "08:00"
         self._hora_fin: str = "18:00"
@@ -67,7 +67,7 @@ class CierreCajaModel(QObject):
         self._cierre_completado: bool = False
         self._cierres_del_dia: List[Dict[str, Any]] = []
         
-        # Autenticación
+        # AutenticaciÃ³n
         self._usuario_actual_id = 0
         self._usuario_actual_rol = ""
         
@@ -79,38 +79,38 @@ class CierreCajaModel(QObject):
 
         
         
-        print("💰 CierreCajaModel inicializado - Modo independiente")
+        print("ðŸ’° CierreCajaModel inicializado - Modo independiente")
     
     # ===============================
-    # AUTENTICACIÓN
+    # AUTENTICACIÃ“N
     # ===============================
 
-    def _safe_operation(self, operation_name: str = "Operación"):
-        """Protege contra operaciones concurrentes - VERSIÓN MEJORADA"""
+    def _safe_operation(self, operation_name: str = "OperaciÃ³n"):
+        """Protege contra operaciones concurrentes - VERSIÃ“N MEJORADA"""
         if self._operation_lock:
-            print(f"⏳ {operation_name} en curso, ignorando solicitud duplicada")
+            print(f"â³ {operation_name} en curso, ignorando solicitud duplicada")
             return False
         
         if self._pending_operations > 2:
-            print(f"🚨 Demasiadas operaciones pendientes ({self._pending_operations}), ignorando {operation_name}")
+            print(f"ðŸš¨ Demasiadas operaciones pendientes ({self._pending_operations}), ignorando {operation_name}")
             return False
         
         self._operation_lock = True
         self._pending_operations += 1
-        print(f"🔒 OPERATION LOCK: {operation_name} - Pendientes: {self._pending_operations}")
+        print(f"ðŸ”’ OPERATION LOCK: {operation_name} - Pendientes: {self._pending_operations}")
         return True
 
     def _release_operation(self):
-        """Libera el lock de operación - VERSIÓN MEJORADA CON PROTECCIÓN"""
+        """Libera el lock de operaciÃ³n - VERSIÃ“N MEJORADA CON PROTECCIÃ“N"""
         try:
             if self._operation_lock:
                 self._operation_lock = False
                 self._pending_operations = max(0, self._pending_operations - 1)
-                print(f"🔓 OPERATION UNLOCK - Pendientes: {self._pending_operations}")
+                print(f"ðŸ”“ OPERATION UNLOCK - Pendientes: {self._pending_operations}")
             else:
-                print("⚠️ Intento de liberar lock no activo")
+                print("âš ï¸ Intento de liberar lock no activo")
         except Exception as e:
-            print(f"❌ Error liberando lock: {e}")
+            print(f"âŒ Error liberando lock: {e}")
             # Forzar reset en caso de error
             self._operation_lock = False
             self._pending_operations = 0
@@ -122,34 +122,132 @@ class CierreCajaModel(QObject):
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
                 self._usuario_actual_rol = usuario_rol
-                print(f"👤 Usuario establecido en CierreCaja: {usuario_id} ({usuario_rol})")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} autenticado en módulo de cierre")
+                print(f"ðŸ‘¤ Usuario establecido en CierreCaja: {usuario_id} ({usuario_rol})")
+                self.operacionExitosa.emit(f"Usuario {usuario_id} autenticado en mÃ³dulo de cierre")
             else:
-                self.operacionError.emit("ID de usuario inválido")
+                self.operacionError.emit("ID de usuario invÃ¡lido")
         except Exception as e:
-            print(f"❌ Error estableciendo usuario: {e}")
-            self.operacionError.emit(f"Error de autenticación: {str(e)}")
+            print(f"âŒ Error estableciendo usuario: {e}")
+            self.operacionError.emit(f"Error de autenticaciÃ³n: {str(e)}")
 
     @Slot()
     def resetOperationLock(self):
-        """Método de emergencia para resetear el sistema de bloqueo"""
-        print("🆘 RESETEO DE EMERGENCIA DEL SISTEMA DE BLOQUEO")
+        """MÃ©todo de emergencia para resetear el sistema de bloqueo"""
+        print("ðŸ†˜ RESETEO DE EMERGENCIA DEL SISTEMA DE BLOQUEO")
         self._operation_lock = False
         self._pending_operations = 0
         self._set_loading(False)
-        print("✅ Sistema de bloqueo reseteado")
+        print("âœ… Sistema de bloqueo reseteado")
     
     @Property(int, notify=operacionExitosa)
     def usuario_actual_id(self):
         return self._usuario_actual_id
     
     def set_app_controller(self, app_controller):
-        """Establece referencia al AppController para generación de PDFs"""
+        """Establece referencia al AppController para generaciÃ³n de PDFs"""
         self._app_controller = app_controller
-        print("🔗 AppController conectado para PDFs")
+        print("ðŸ”— AppController conectado para PDFs")
+
+    @Slot()
+    def inicializarCamposAutomaticamente(self):
+        """
+        âœ… FUNCIONALIDAD #1: Auto-gestiÃ³n inteligente de horarios
+        Inicializa fecha y horas automÃ¡ticamente al abrir el mÃ³dulo
+        """
+        try:
+            print("ðŸ• Inicializando campos automÃ¡ticamente...")
+            
+            # 1. FECHA ACTUAL (siempre HOY)
+            fecha_hoy = datetime.now().strftime("%d/%m/%Y")
+            self._fecha_actual = fecha_hoy
+            self.fechaActualChanged.emit()
+            print(f"   ðŸ“… Fecha establecida: {fecha_hoy}")
+            
+            # 2. HORA FIN (hora actual del sistema)
+            hora_actual = datetime.now().strftime("%H:%M")
+            self._hora_fin = hora_actual
+            self.horaFinChanged.emit()
+            print(f"   ðŸ• Hora fin establecida: {hora_actual}")
+            
+            # 3. HORA INICIO (inteligente: buscar Ãºltimo cierre del dÃ­a)
+            ultimo_cierre = self.repository.get_ultimo_cierre_del_dia(fecha_hoy)
+            
+            if ultimo_cierre and ultimo_cierre.get('HoraFin'):
+                # Usar la hora fin del Ãºltimo cierre como hora inicio del nuevo
+                hora_inicio_auto = self._formatear_hora_limpia(ultimo_cierre['HoraFin'])
+                self._hora_inicio = hora_inicio_auto
+                print(f"   âœ… Hora inicio auto-detectada del Ãºltimo cierre: {hora_inicio_auto}")
+            else:
+                # No hay cierre previo hoy, usar hora por defecto
+                self._hora_inicio = "08:00"
+                print(f"   â„¹ï¸ Hora inicio por defecto (sin cierre previo): 08:00")
+            
+            self.horaInicioChanged.emit()
+            
+            # Emitir seÃ±al de Ã©xito
+            self.operacionExitosa.emit("Campos inicializados automÃ¡ticamente")
+            print("âœ… InicializaciÃ³n automÃ¡tica completada")
+            
+        except Exception as e:
+            error_msg = f"Error inicializando campos: {str(e)}"
+            print(f"âŒ {error_msg}")
+            self.operacionError.emit(error_msg)
+            
+            # Establecer valores por defecto en caso de error
+            self._fecha_actual = datetime.now().strftime("%d/%m/%Y")
+            self._hora_inicio = "08:00"
+            self._hora_fin = datetime.now().strftime("%H:%M")
+            
+            self.fechaActualChanged.emit()
+            self.horaInicioChanged.emit()
+            self.horaFinChanged.emit()
+
+    def _formatear_hora_limpia(self, hora_raw) -> str:
+        """
+        âœ… HELPER: Limpia y formatea hora a formato HH:MM
+        Maneja mÃºltiples formatos de entrada
+        """
+        try:
+            if not hora_raw:
+                return "08:00"
+            
+            hora_str = str(hora_raw).strip()
+            
+            # Si ya estÃ¡ en formato HH:MM, devolverla
+            if ':' in hora_str and len(hora_str.split(':')[0]) <= 2:
+                partes = hora_str.split(':')
+                hh = int(partes[0])
+                mm = int(partes[1][:2])  # Tomar solo primeros 2 dÃ­gitos de minutos
+                return f"{hh:02d}:{mm:02d}"
+            
+            # Si tiene timestamp completo, extraer solo hora
+            if ' ' in hora_str:
+                hora_parte = hora_str.split(' ')[-1]
+                return self._formatear_hora_limpia(hora_parte)
+            
+            # Fallback
+            return "08:00"
+            
+        except Exception as e:
+            print(f"âš ï¸ Error formateando hora: {e}")
+            return "08:00"
+
+    @Slot()
+    def actualizarHoraFin(self):
+        """
+        âœ… FUNCIONALIDAD #1: Actualiza hora fin a la hora actual
+        Llamar cuando el campo recibe focus
+        """
+        try:
+            hora_actual = datetime.now().strftime("%H:%M")
+            self._hora_fin = hora_actual
+            self.horaFinChanged.emit()
+            print(f"ðŸ• Hora fin actualizada: {hora_actual}")
+        except Exception as e:
+            print(f"âŒ Error actualizando hora fin: {e}")
     
     def _verificar_autenticacion(self) -> bool:
-        """Verifica autenticación del usuario"""
+        """Verifica autenticaciÃ³n del usuario"""
         if self._usuario_actual_id <= 0:
             self.operacionError.emit("Usuario no autenticado")
             return False
@@ -236,7 +334,7 @@ class CierreCajaModel(QObject):
     def transaccionesEgresos(self) -> int:
         return int(self._datos_cierre.get('resumen', {}).get('transacciones_egresos', 0))
     
-    # Validación de diferencias
+    # ValidaciÃ³n de diferencias
     @Property(float, notify=validacionChanged)
     def diferencia(self) -> float:
         if self._efectivo_real > 0:
@@ -271,38 +369,38 @@ class CierreCajaModel(QObject):
         return self._datos_cierre.get('egresos', {}).get('todos', [])
     
     # ===============================
-    # SLOTS - Métodos principales
+    # SLOTS - MÃ©todos principales
     # ===============================
     @Slot()
     def consultarDatos(self):
-        """MÉTODO PRINCIPAL - Consulta datos de cierre - VERSIÓN CORREGIDA"""
+        """MÃ‰TODO PRINCIPAL - Consulta datos de cierre - VERSIÃ“N CORREGIDA"""
         
-        # ✅ PROTECCIÓN MEJORADA
+        # âœ… PROTECCIÃ“N MEJORADA
         if not self._safe_operation("Consulta de datos"):
-            self.operacionError.emit("El sistema está ocupado. Espere un momento...")
+            self.operacionError.emit("El sistema estÃ¡ ocupado. Espere un momento...")
             return
 
         try:
-            # Validar autenticación
+            # Validar autenticaciÃ³n
             if not self._verificar_autenticacion():
                 return
             
-            # Validar conexión
+            # Validar conexiÃ³n
             if not self._verificar_conexion():
                 return
             
             self._set_loading(True)
             
-            print(f"🔍 Consultando datos - Fecha: {self._fecha_actual}, Hora: {self._hora_inicio}-{self._hora_fin}")
+            print(f"ðŸ” Consultando datos - Fecha: {self._fecha_actual}, Hora: {self._hora_inicio}-{self._hora_fin}")
             
-            # ✅ CONSULTAR DATOS CON VALIDACIÓN
+            # âœ… CONSULTAR DATOS CON VALIDACIÃ“N
             datos_cierre = self.repository.get_datos_cierre_completo(
                 self._fecha_actual, 
                 self._hora_inicio, 
                 self._hora_fin
             )
             
-            # ✅ VALIDAR ESTRUCTURA DE DATOS ANTES DE USAR
+            # âœ… VALIDAR ESTRUCTURA DE DATOS ANTES DE USAR
             if datos_cierre and self._validar_estructura_datos(datos_cierre):
                 self._datos_cierre = datos_cierre
                 
@@ -313,16 +411,16 @@ class CierreCajaModel(QObject):
                     self._hora_fin
                 )
                 
-                # ✅ CARGAR CIERRES CON MANEJO DE ERRORES
+                # âœ… CARGAR CIERRES CON MANEJO DE ERRORES
                 try:
                     self.cargarCierresSemana()
                 except Exception as e:
-                    print(f"⚠️ Error cargando cierres de semana (no crítico): {e}")
-                    # NO romper la operación principal
+                    print(f"âš ï¸ Error cargando cierres de semana (no crÃ­tico): {e}")
+                    # NO romper la operaciÃ³n principal
                 
-                print(f"✅ Datos obtenidos - Ingresos: Bs {self.totalIngresos:,.2f}, Egresos: Bs {self.totalEgresos:,.2f}")
+                print(f"âœ… Datos obtenidos - Ingresos: Bs {self.totalIngresos:,.2f}, Egresos: Bs {self.totalEgresos:,.2f}")
                 
-                # Emitir señales de actualización
+                # Emitir seÃ±ales de actualizaciÃ³n
                 self.datosChanged.emit()
                 self.resumenChanged.emit()
                 self._actualizar_validacion()
@@ -335,57 +433,57 @@ class CierreCajaModel(QObject):
                 
         except Exception as e:
             error_msg = f"Error consultando datos: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
             
             if "connection" in str(e).lower() or "database" in str(e).lower():
-                self.operacionError.emit("Error de conexión a la base de datos")
+                self.operacionError.emit("Error de conexiÃ³n a la base de datos")
             else:
                 self.operacionError.emit(error_msg)
                 
         finally:
-            # ✅ GARANTIZAR LIBERACIÓN DEL LOCK
+            # âœ… GARANTIZAR LIBERACIÃ“N DEL LOCK
             self._set_loading(False)
             self._release_operation()
-            print("🔓 Lock liberado en consultarDatos")
+            print("ðŸ”“ Lock liberado en consultarDatos")
 
     
     def _validar_estructura_datos(self, datos: Dict) -> bool:
-        """✅ NUEVO: Valida que los datos tengan la estructura correcta"""
+        """âœ… NUEVO: Valida que los datos tengan la estructura correcta"""
         try:
             # Validar que existan las claves principales
             if not isinstance(datos, dict):
-                print("❌ Datos no son un diccionario")
+                print("âŒ Datos no son un diccionario")
                 return False
             
             # Validar que tenga 'ingresos', 'egresos', 'resumen'
             claves_requeridas = ['ingresos', 'egresos', 'resumen']
             for clave in claves_requeridas:
                 if clave not in datos:
-                    print(f"❌ Falta clave requerida: {clave}")
+                    print(f"âŒ Falta clave requerida: {clave}")
                     return False
             
             # Validar que 'ingresos' sea un diccionario
             if not isinstance(datos['ingresos'], dict):
-                print("❌ 'ingresos' no es un diccionario")
+                print("âŒ 'ingresos' no es un diccionario")
                 return False
             
             # Validar que 'egresos' sea un diccionario
             if not isinstance(datos['egresos'], dict):
-                print("❌ 'egresos' no es un diccionario")
+                print("âŒ 'egresos' no es un diccionario")
                 return False
             
             # Validar que 'resumen' sea un diccionario
             if not isinstance(datos['resumen'], dict):
-                print("❌ 'resumen' no es un diccionario")
+                print("âŒ 'resumen' no es un diccionario")
                 return False
             
-            print("✅ Estructura de datos validada correctamente")
+            print("âœ… Estructura de datos validada correctamente")
             return True
             
         except Exception as e:
-            print(f"❌ Error validando estructura de datos: {e}")
+            print(f"âŒ Error validando estructura de datos: {e}")
             return False
-    ############# MÉTODOS AUXILIARES PARA PDF #############
+    ############# MÃ‰TODOS AUXILIARES PARA PDF #############
 
     def _generar_pdf_arqueo_desde_datos(self, datos_cierre: Dict) -> Tuple[bool, str]:
         """Genera PDF del arqueo usando datos ya consultados"""
@@ -398,43 +496,43 @@ class CierreCajaModel(QObject):
             
         except Exception as e:
             error_msg = f"Error en _generar_pdf_arqueo_desde_datos: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
             return False, error_msg
 
     def _preparar_movimientos_para_pdf(self, datos_cierre: Dict) -> List[Dict]:
-        """Convierte datos del repository al formato PDF - VERSIÓN VALIDADA"""
+        """Convierte datos del repository al formato PDF - VERSIÃ“N VALIDADA"""
         movimientos = []
         
         try:
-            # ✅ VALIDAR ESTRUCTURA PRIMERO
+            # âœ… VALIDAR ESTRUCTURA PRIMERO
             if not isinstance(datos_cierre, dict):
-                print("❌ datos_cierre no es un diccionario")
+                print("âŒ datos_cierre no es un diccionario")
                 return []
             
             if 'ingresos' not in datos_cierre:
-                print("❌ Falta clave 'ingresos' en datos_cierre")
+                print("âŒ Falta clave 'ingresos' en datos_cierre")
                 return []
             
-            # ✅ PROCESAR INGRESOS CON VALIDACIÓN
+            # âœ… PROCESAR INGRESOS CON VALIDACIÃ“N
             ingresos = datos_cierre.get('ingresos', {})
             
             if not isinstance(ingresos, dict):
-                print("❌ 'ingresos' no es un diccionario")
+                print("âŒ 'ingresos' no es un diccionario")
                 return []
             
             for categoria, items in ingresos.items():
                 if categoria == 'todos':
                     continue
                 
-                # ✅ VALIDAR QUE items SEA UNA LISTA
+                # âœ… VALIDAR QUE items SEA UNA LISTA
                 if not isinstance(items, list):
-                    print(f"⚠️ items de categoría '{categoria}' no es lista, omitiendo")
+                    print(f"âš ï¸ items de categorÃ­a '{categoria}' no es lista, omitiendo")
                     continue
                 
                 for item in items:
-                    # ✅ VALIDAR QUE item SEA UN DICT
+                    # âœ… VALIDAR QUE item SEA UN DICT
                     if not isinstance(item, dict):
-                        print(f"⚠️ item en '{categoria}' no es dict, omitiendo")
+                        print(f"âš ï¸ item en '{categoria}' no es dict, omitiendo")
                         continue
                     
                     movimiento = {
@@ -447,7 +545,7 @@ class CierreCajaModel(QObject):
                         'valor': float(item.get('Total', 0))
                     }
                     
-                    # Campos específicos según categoría
+                    # Campos especÃ­ficos segÃºn categorÃ­a
                     if categoria == 'farmacia':
                         movimiento['id_venta'] = item.get('id')
                         movimiento['descripcion'] = item.get('Descripcion', 'Venta de medicamentos')
@@ -460,7 +558,7 @@ class CierreCajaModel(QObject):
                     
                     elif categoria == 'laboratorio':
                         movimiento['id_laboratorio'] = item.get('id')
-                        movimiento['analisis'] = item.get('Descripcion', '').replace('Análisis - ', '')
+                        movimiento['analisis'] = item.get('Descripcion', '').replace('AnÃ¡lisis - ', '')
                         movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
                         movimiento['laboratorista'] = item.get('NombreUsuario', '')
                     
@@ -475,7 +573,7 @@ class CierreCajaModel(QObject):
                     
                     movimientos.append(movimiento)
             
-            # ✅ PROCESAR EGRESOS CON VALIDACIÓN
+            # âœ… PROCESAR EGRESOS CON VALIDACIÃ“N
             egresos = datos_cierre.get('egresos', {})
             
             if isinstance(egresos, dict) and 'todos' in egresos:
@@ -499,33 +597,33 @@ class CierreCajaModel(QObject):
                         }
                         movimientos.append(movimiento)
             
-            print(f"✅ Movimientos preparados: {len(movimientos)} registros")
+            print(f"âœ… Movimientos preparados: {len(movimientos)} registros")
             return movimientos
             
         except Exception as e:
-            print(f"❌ Error preparando movimientos: {e}")
+            print(f"âŒ Error preparando movimientos: {e}")
             import traceback
             traceback.print_exc()
             return []
     @Slot()
     def generarPDFConsulta(self):
-        """Genera PDF de la consulta actual - VERSIÓN SIMPLIFICADA"""
+        """Genera PDF de la consulta actual - VERSIÃ“N SIMPLIFICADA"""
         
-        # ✅ VALIDACIÓN TEMPRANA
+        # âœ… VALIDACIÃ“N TEMPRANA
         if not self._datos_cierre:
             self.operacionError.emit("Debe consultar datos primero antes de generar PDF")
-            print("❌ No hay datos consultados para generar PDF")
+            print("âŒ No hay datos consultados para generar PDF")
             return
         
-        # ✅ PROTECCIÓN CONTRA CONCURRENCIA
-        if not self._safe_operation("Generación de PDF"):
-            self.operacionError.emit("El sistema está ocupado. Espere un momento...")
+        # âœ… PROTECCIÃ“N CONTRA CONCURRENCIA
+        if not self._safe_operation("GeneraciÃ³n de PDF"):
+            self.operacionError.emit("El sistema estÃ¡ ocupado. Espere un momento...")
             return
             
         try:
-            print("🔄 Generando PDF desde datos existentes...")
+            print("ðŸ”„ Generando PDF desde datos existentes...")
             
-            # ✅ PREPARAR MOVIMIENTOS VALIDANDO ESTRUCTURA
+            # âœ… PREPARAR MOVIMIENTOS VALIDANDO ESTRUCTURA
             movimientos = self._preparar_movimientos_para_pdf(self._datos_cierre)
             
             if not movimientos or len(movimientos) == 0:
@@ -536,78 +634,78 @@ class CierreCajaModel(QObject):
             success, resultado = self._generar_pdf_arqueo(movimientos, self._datos_cierre)
             
             if success:
-                print(f"✅ PDF generado exitosamente: {resultado}")
+                print(f"âœ… PDF generado exitosamente: {resultado}")
                 self.pdfGenerado.emit(resultado)
                 self.operacionExitosa.emit("PDF generado correctamente")
             else:
                 error_msg = f"Error generando PDF: {resultado}"
-                print(f"❌ {error_msg}")
+                print(f"âŒ {error_msg}")
                 self.operacionError.emit(error_msg)
                 
         except Exception as e:
-            error_msg = f"Error durante generación de PDF: {str(e)}"
-            print(f"❌ {error_msg}")
+            error_msg = f"Error durante generaciÃ³n de PDF: {str(e)}"
+            print(f"âŒ {error_msg}")
             self.operacionError.emit(error_msg)
             import traceback
             traceback.print_exc()
             
         finally:
-            # ✅ GARANTIZAR LIBERACIÓN DEL LOCK
+            # âœ… GARANTIZAR LIBERACIÃ“N DEL LOCK
             self._release_operation()
-            print("🔓 Lock liberado en generarPDFConsulta")
+            print("ðŸ”“ Lock liberado en generarPDFConsulta")
 
-    def _safe_operation_with_timeout(self, operation_name: str = "Operación", timeout_ms: int = 3000):
+    def _safe_operation_with_timeout(self, operation_name: str = "OperaciÃ³n", timeout_ms: int = 3000):
         """Protege contra operaciones concurrentes CON TIMEOUT"""
         import time
         
         start_time = time.time()
         
         while self._operation_lock and (time.time() - start_time) * 1000 < timeout_ms:
-            print(f"⏳ Esperando {operation_name}... {int((time.time() - start_time) * 1000)}ms")
+            print(f"â³ Esperando {operation_name}... {int((time.time() - start_time) * 1000)}ms")
             QGuiApplication.processEvents()  # Permitir que la UI responde
-            time.sleep(0.1)  # Pequeña pausa
+            time.sleep(0.1)  # PequeÃ±a pausa
         
         if self._operation_lock:
-            print(f"🚨 TIMEOUT en {operation_name} después de {timeout_ms}ms")
+            print(f"ðŸš¨ TIMEOUT en {operation_name} despuÃ©s de {timeout_ms}ms")
             return False
         
         if self._pending_operations > 2:
-            print(f"🚨 Demasiadas operaciones pendientes ({self._pending_operations}), ignorando {operation_name}")
+            print(f"ðŸš¨ Demasiadas operaciones pendientes ({self._pending_operations}), ignorando {operation_name}")
             return False
         
         self._operation_lock = True
         self._pending_operations += 1
-        print(f"🔒 OPERATION LOCK CON TIMEOUT: {operation_name} - Pendientes: {self._pending_operations}")
+        print(f"ðŸ”’ OPERATION LOCK CON TIMEOUT: {operation_name} - Pendientes: {self._pending_operations}")
         return True
 
     def _generar_pdf_arqueo(self, movimientos: List[Dict], datos_cierre: Dict) -> Tuple[bool, str]:
-        """Genera el PDF del arqueo de caja - VERSIÓN CORREGIDA SIN sys.path"""
+        """Genera el PDF del arqueo de caja - VERSIÃ“N CORREGIDA SIN sys.path"""
         try:
-            # ✅ IMPORT CORRECTO SIN MODIFICAR sys.path
+            # âœ… IMPORT CORRECTO SIN MODIFICAR sys.path
             try:
                 from generar_pdf import GeneradorReportesPDF
             except ImportError:
-                # ✅ Si falla, intentar ruta relativa
+                # âœ… Si falla, intentar ruta relativa
                 try:
                     from ..generar_pdf import GeneradorReportesPDF
                 except ImportError:
                     error_msg = "No se pudo importar GeneradorReportesPDF"
-                    print(f"❌ {error_msg}")
+                    print(f"âŒ {error_msg}")
                     return False, error_msg
             
             import json
             
-            print("✅ GeneradorReportesPDF importado correctamente")
+            print("âœ… GeneradorReportesPDF importado correctamente")
             
             # Crear instancia del generador
             generador = GeneradorReportesPDF()
             
-            # ✅ Validar que movimientos no esté vacío
+            # âœ… Validar que movimientos no estÃ© vacÃ­o
             if not movimientos or len(movimientos) == 0:
-                print("⚠️ No hay movimientos para generar PDF")
+                print("âš ï¸ No hay movimientos para generar PDF")
                 return False, "No hay datos de movimientos para generar el PDF"
             
-            # ✅ Calcular diferencia explícitamente
+            # âœ… Calcular diferencia explÃ­citamente
             saldo_teorico = datos_cierre.get('resumen', {}).get('saldo_teorico', 0)
             diferencia_calculada = round(self._efectivo_real - saldo_teorico, 2)
             
@@ -633,9 +731,9 @@ class CierreCajaModel(QObject):
             # Convertir a JSON
             datos_json = json.dumps(datos_pdf, ensure_ascii=False, default=str)
             
-            print(f"📄 Llamando a generar_reporte_pdf con tipo 9 (Arqueo)")
+            print(f"ðŸ“„ Llamando a generar_reporte_pdf con tipo 9 (Arqueo)")
             
-            # ✅ LLAMAR AL GENERADOR
+            # âœ… LLAMAR AL GENERADOR
             filepath = generador.generar_reporte_pdf(
                 datos_json,
                 "9",
@@ -643,30 +741,30 @@ class CierreCajaModel(QObject):
                 self._fecha_actual
             )
             
-            # ✅ VALIDAR RESULTADO
+            # âœ… VALIDAR RESULTADO
             if filepath and os.path.exists(filepath):
-                print(f"✅ PDF generado exitosamente: {filepath}")
+                print(f"âœ… PDF generado exitosamente: {filepath}")
                 return True, filepath
             else:
-                print("⚠️ PDF no generado o archivo no existe")
+                print("âš ï¸ PDF no generado o archivo no existe")
                 return False, "No se pudo generar el archivo PDF"
                 
         except ImportError as e:
             error_msg = f"Error importando generador PDF: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
             import traceback
             traceback.print_exc()
             return False, error_msg
             
         except Exception as e:
             error_msg = f"Error generando PDF: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
             import traceback
             traceback.print_exc()
             return False, error_msg
         
     def _abrir_pdf_automaticamente(self, filepath: str):
-        """Abre el PDF generado automáticamente en el navegador"""
+        """Abre el PDF generado automÃ¡ticamente en el navegador"""
         try:
             import webbrowser
             import platform
@@ -678,20 +776,20 @@ class CierreCajaModel(QObject):
                 url = 'file://' + filepath
             
             webbrowser.open(url)
-            print(f"🌐 PDF abierto en navegador: {url}")
+            print(f"ðŸŒ PDF abierto en navegador: {url}")
             
         except Exception as e:
-            print(f"⚠️ No se pudo abrir PDF automáticamente: {e}")
+            print(f"âš ï¸ No se pudo abrir PDF automÃ¡ticamente: {e}")
     
     @Slot(str, str, str)
     def generarPDFCierreEspecifico(self, fecha: str, hora_inicio: str, hora_fin: str):
-        """Genera PDF de un cierre específico ya guardado (para botón Ver Cierre)"""
+        """Genera PDF de un cierre especÃ­fico ya guardado (para botÃ³n Ver Cierre)"""
         try:
-            print(f"📄 Generando PDF específico - Fecha: {fecha}, Horario: {hora_inicio}-{hora_fin}")
+            print(f"ðŸ“„ Generando PDF especÃ­fico - Fecha: {fecha}, Horario: {hora_inicio}-{hora_fin}")
             
             self._set_loading(True)
             
-            # Obtener datos del cierre específico
+            # Obtener datos del cierre especÃ­fico
             datos_cierre = self.repository.get_datos_cierre_completo(
                 fecha, hora_inicio, hora_fin
             )
@@ -705,7 +803,7 @@ class CierreCajaModel(QObject):
             success, filepath = self._generar_pdf_arqueo(movimientos, datos_cierre)
             
             if success:
-                print(f"✅ PDF generado: {filepath}")
+                print(f"âœ… PDF generado: {filepath}")
                 self.pdfGenerado.emit(filepath)
                 #self._abrir_pdf_automaticamente(filepath)
                 self.operacionExitosa.emit("PDF generado correctamente")
@@ -714,7 +812,7 @@ class CierreCajaModel(QObject):
                 
         except Exception as e:
             error_msg = f"Error en generarPDFCierreEspecifico: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
             self.operacionError.emit(error_msg)
         finally:
             self._set_loading(False)
@@ -726,9 +824,9 @@ class CierreCajaModel(QObject):
             self._fecha_actual = nueva_fecha
             self.fechaActualChanged.emit()
             self._verificar_cierre_previo()
-            print(f"📅 Fecha cambiada a: {nueva_fecha}")
+            print(f"ðŸ“… Fecha cambiada a: {nueva_fecha}")
         else:
-            self.operacionError.emit("Formato de fecha inválido (DD/MM/YYYY)")
+            self.operacionError.emit("Formato de fecha invÃ¡lido (DD/MM/YYYY)")
     
     @Slot(str)
     def establecerHoraInicio(self, hora: str):
@@ -736,9 +834,9 @@ class CierreCajaModel(QObject):
         if self._validar_hora(hora):
             self._hora_inicio = hora
             self.horaInicioChanged.emit()
-            print(f"🕐 Hora inicio: {hora}")
+            print(f"ðŸ• Hora inicio: {hora}")
         else:
-            self.operacionError.emit("Formato de hora inválido (HH:MM)")
+            self.operacionError.emit("Formato de hora invÃ¡lido (HH:MM)")
     
     @Slot(str) 
     def establecerHoraFin(self, hora: str):
@@ -746,9 +844,9 @@ class CierreCajaModel(QObject):
         if self._validar_hora(hora):
             self._hora_fin = hora
             self.horaFinChanged.emit()
-            print(f"🕐 Hora fin: {hora}")
+            print(f"ðŸ• Hora fin: {hora}")
         else:
-            self.operacionError.emit("Formato de hora inválido (HH:MM)")
+            self.operacionError.emit("Formato de hora invÃ¡lido (HH:MM)")
     
     @Slot(float)
     def establecerEfectivoReal(self, monto: float):
@@ -762,14 +860,14 @@ class CierreCajaModel(QObject):
             self.efectivoRealChanged.emit()
             self._actualizar_validacion()
             
-            print(f"💵 Efectivo real: Bs {self._efectivo_real:,.2f}")
+            print(f"ðŸ’µ Efectivo real: Bs {self._efectivo_real:,.2f}")
             
         except Exception as e:
             self.operacionError.emit(f"Error estableciendo efectivo: {str(e)}")
     
     @Slot()
     def cargarCierresDelDia(self):
-        """Carga cierres realizados en el día actual"""
+        """Carga cierres realizados en el dÃ­a actual"""
         try:
             if not self._verificar_autenticacion():
                 return
@@ -778,50 +876,50 @@ class CierreCajaModel(QObject):
             self._cierres_del_dia = cierres
             self.cierresDelDiaChanged.emit()
             
-            print(f"📋 Cierres del día cargados: {len(cierres)}")
+            print(f"ðŸ“‹ Cierres del dÃ­a cargados: {len(cierres)}")
             
         except Exception as e:
-            print(f"❌ Error cargando cierres del día: {e}")
+            print(f"âŒ Error cargando cierres del dÃ­a: {e}")
     
     # ===============================
-    # VALIDACIÓN Y CIERRE
+    # VALIDACIÃ“N Y CIERRE
     # ===============================
     
     @Slot(result=bool)
     def validarCierre(self) -> bool:
         """Valida si se puede realizar el cierre"""
         try:
-            print(f"🔍 VALIDACIÓN - Usuario autenticado: {self._verificar_autenticacion()}")
+            print(f"ðŸ” VALIDACIÃ“N - Usuario autenticado: {self._verificar_autenticacion()}")
             if not self._verificar_autenticacion():
                 return False
             
-            print(f"🔍 VALIDACIÓN - Efectivo real: {self._efectivo_real}")
+            print(f"ðŸ” VALIDACIÃ“N - Efectivo real: {self._efectivo_real}")
             if self._efectivo_real <= 0:
                 self.operacionError.emit("Debe ingresar el efectivo real contado")
                 return False
             
-            print(f"🔍 VALIDACIÓN - Datos cierre disponibles: {bool(self._datos_cierre)}")
+            print(f"ðŸ” VALIDACIÃ“N - Datos cierre disponibles: {bool(self._datos_cierre)}")
             if not self._datos_cierre:
                 self.operacionError.emit("Debe consultar los datos antes de cerrar")
                 return False
             
             cierre_previo = self.repository.verificar_cierre_previo(self._fecha_actual, self._hora_inicio, self._hora_fin)
-            print(f"🔍 VALIDACIÓN - Cierre previo existe para {self._hora_inicio}-{self._hora_fin}: {cierre_previo}")
+            print(f"ðŸ” VALIDACIÃ“N - Cierre previo existe para {self._hora_inicio}-{self._hora_fin}: {cierre_previo}")
             if cierre_previo:
                 self.operacionError.emit(f"Ya existe un cierre para el horario {self._hora_inicio}-{self._hora_fin}")
                 return False
             
             diferencia_abs = abs(self.diferencia)
-            print(f"🔍 VALIDACIÓN - Diferencia absoluta: {diferencia_abs}")
+            print(f"ðŸ” VALIDACIÃ“N - Diferencia absoluta: {diferencia_abs}")
             if diferencia_abs > 1000.0:
                 self.operacionError.emit("Diferencia demasiado grande, verifique los datos")
                 return False
             
-            print("✅ VALIDACIÓN EXITOSA")
+            print("âœ… VALIDACIÃ“N EXITOSA")
             return True
                 
         except Exception as e:
-            print(f"❌ Error en validación: {e}")
+            print(f"âŒ Error en validaciÃ³n: {e}")
             self.operacionError.emit(f"Error validando cierre: {str(e)}")
             return False
     
@@ -852,13 +950,13 @@ class CierreCajaModel(QObject):
                 self._cierre_completado = True
                 self.cierreCompletadoChanged.emit()
                 
-                # Recargar cierres del día
+                # Recargar cierres del dÃ­a
                 self.cargarCierresDelDia()
                 
                 mensaje = f"Cierre completado - {self._hora_inicio} a {self._hora_fin}"
                 self.cierreCompletado.emit(True, mensaje)
                 self.operacionExitosa.emit("Cierre guardado en base de datos")
-                print(f"✅ Cierre completado - Usuario: {self._usuario_actual_id}")
+                print(f"âœ… Cierre completado - Usuario: {self._usuario_actual_id}")
             else:
                 raise Exception("Error guardando cierre en base de datos")
                 
@@ -866,12 +964,12 @@ class CierreCajaModel(QObject):
             error_msg = f"Error completando cierre: {str(e)}"
             self.cierreCompletado.emit(False, error_msg)
             self.operacionError.emit(error_msg)
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
         finally:
             self._set_loading(False)
     
     # ===============================
-    # GENERACIÓN DE PDF
+    # GENERACIÃ“N DE PDF
     # ===============================
     
     @Slot(result=str)
@@ -915,7 +1013,7 @@ class CierreCajaModel(QObject):
             if ruta_pdf:
                 self.pdfGenerado.emit(ruta_pdf)
                 self.operacionExitosa.emit("PDF del arqueo generado correctamente")
-                print(f"📄 PDF generado: {ruta_pdf}")
+                print(f"ðŸ“„ PDF generado: {ruta_pdf}")
                 return ruta_pdf
             else:
                 self.errorOccurred.emit("Error PDF", "No se pudo generar el archivo")
@@ -924,11 +1022,11 @@ class CierreCajaModel(QObject):
         except Exception as e:
             error_msg = f"Error generando PDF: {str(e)}"
             self.errorOccurred.emit("Error PDF", error_msg)
-            print(f"❌ {error_msg}")
+            print(f"âŒ {error_msg}")
             return ""
     
     # ===============================
-    # MÉTODOS DE CONSULTA ADICIONALES
+    # MÃ‰TODOS DE CONSULTA ADICIONALES
     # ===============================
     @Property(str, notify=fechaActualChanged)
     def fechaSeleccionada(self) -> str:
@@ -950,7 +1048,7 @@ class CierreCajaModel(QObject):
         """Resumen estructurado para el QML"""
         return self._resumen_estructurado
 
-    # NUEVOS MÉTODOS para compatibilidad con QML
+    # NUEVOS MÃ‰TODOS para compatibilidad con QML
     @Slot()
     def consultarMovimientosPorRango(self):
         """Alias para consultarDatos - compatibilidad QML"""
@@ -973,32 +1071,32 @@ class CierreCajaModel(QObject):
 
     @Slot()
     def cargarCierresSemana(self):
-        """Carga cierres de toda la semana actual - VERSIÓN MEJORADA"""
+        """Carga cierres de toda la semana actual - VERSIÃ“N MEJORADA"""
         try:
             if not self._verificar_autenticacion():
                 return
             
-            print("📅 Iniciando carga de cierres de semana...")
+            print("ðŸ“… Iniciando carga de cierres de semana...")
             
             cierres_semana = self.repository.get_cierres_semana_actual(self._fecha_actual)
             
-            # ✅ VALIDAR RESULTADO
+            # âœ… VALIDAR RESULTADO
             if cierres_semana is not None:
                 self._cierres_del_dia = cierres_semana
                 self.cierresDelDiaChanged.emit()
-                print(f"📅 Cierres de la semana cargados: {len(cierres_semana)}")
+                print(f"ðŸ“… Cierres de la semana cargados: {len(cierres_semana)}")
             else:
-                # ✅ SI FALLA, LISTA VACÍA (NO ROMPER)
+                # âœ… SI FALLA, LISTA VACÃA (NO ROMPER)
                 self._cierres_del_dia = []
                 self.cierresDelDiaChanged.emit()
-                print("⚠️ No se pudieron cargar cierres de semana")
+                print("âš ï¸ No se pudieron cargar cierres de semana")
             
         except Exception as e:
-            print(f"❌ ERROR en cargarCierresSemana: {e}")
-            # ✅ EMITIR SEÑAL PERO NO ROMPER LA APLICACIÓN
+            print(f"âŒ ERROR en cargarCierresSemana: {e}")
+            # âœ… EMITIR SEÃ‘AL PERO NO ROMPER LA APLICACIÃ“N
             self._cierres_del_dia = []
             self.cierresDelDiaChanged.emit()
-            # NO emitir operacionError aquí porque es secundario
+            # NO emitir operacionError aquÃ­ porque es secundario
 
     @Slot(result='QVariantMap')
     def obtenerEstadisticasDia(self) -> Dict[str, Any]:
@@ -1036,7 +1134,7 @@ class CierreCajaModel(QObject):
             }
             
         except Exception as e:
-            print(f"❌ Error obteniendo estadísticas: {e}")
+            print(f"âŒ Error obteniendo estadÃ­sticas: {e}")
             return {}
         
     @Slot()
@@ -1051,10 +1149,10 @@ class CierreCajaModel(QObject):
         self.efectivoRealChanged.emit()
         self.validacionChanged.emit()
         
-        print("🧹 Datos del cierre limpiados")
+        print("ðŸ§¹ Datos del cierre limpiados")
     
     # ===============================
-    # MÉTODOS PRIVADOS
+    # MÃ‰TODOS PRIVADOS
     # ===============================
     
     def _verificar_cierre_previo(self):
@@ -1066,7 +1164,7 @@ class CierreCajaModel(QObject):
             self._cierre_completado = False
     
     def _actualizar_validacion(self):
-        """Actualiza validación de diferencias"""
+        """Actualiza validaciÃ³n de diferencias"""
         if self._efectivo_real > 0:
             self.validacionChanged.emit()
     
@@ -1101,7 +1199,7 @@ class CierreCajaModel(QObject):
             return datetime.now().strftime("%Y-%m-%d")
     
     def _generar_observaciones_automaticas(self) -> str:
-        """Genera observaciones automáticas"""
+        """Genera observaciones automÃ¡ticas"""
         if self.tipoDiferencia == "NEUTRO":
             return "Arqueo balanceado correctamente"
         elif self.tipoDiferencia == "SOBRANTE":
@@ -1115,48 +1213,48 @@ class CierreCajaModel(QObject):
     
     def emergency_disconnect(self):
         """
-        Desconexión segura SIN romper la interfaz QML
+        DesconexiÃ³n segura SIN romper la interfaz QML
         """
         try:
-            print("🚨 CierreCajaModel: Iniciando desconexión de emergencia SEGURA...")
+            print("ðŸš¨ CierreCajaModel: Iniciando desconexiÃ³n de emergencia SEGURA...")
             
-            # ✅ IMPORTANTE: NO anular referencias críticas inmediatamente
+            # âœ… IMPORTANTE: NO anular referencias crÃ­ticas inmediatamente
             # Solo marcar como desconectado
             self._disconnected = True
             
             # Detener timer inmediatamente
             if hasattr(self, '_refresh_timer') and self._refresh_timer and self._refresh_timer.isActive():
                 self._refresh_timer.stop()
-                print("   ⏹️ Refresh timer detenido")
+                print("   â¹ï¸ Refresh timer detenido")
             
-            # ✅ NUEVO: Emitir señal de desconexión en lugar de romper todo
+            # âœ… NUEVO: Emitir seÃ±al de desconexiÃ³n en lugar de romper todo
             try:
-                self.operacionError.emit("Módulo temporalmente desconectado - reconectando...")
+                self.operacionError.emit("MÃ³dulo temporalmente desconectado - reconectando...")
             except:
                 pass
             
-            # ✅ IMPORTANTE: NO bloquear señales - esto rompe QML
-            # self.blockSignals(True)  # ❌ COMENTAR ESTA LÍNEA
+            # âœ… IMPORTANTE: NO bloquear seÃ±ales - esto rompe QML
+            # self.blockSignals(True)  # âŒ COMENTAR ESTA LÃNEA
             
             # Limpiar datos internos pero mantener estructura
             self._datos_cierre = {}
             self._efectivo_real = 0.0
             self._observaciones = ""
             
-            # ✅ NUEVO: Programar reconexión automática
+            # âœ… NUEVO: Programar reconexiÃ³n automÃ¡tica
             QTimer.singleShot(3000, self._intentar_reconexion)
             
-            print("✅ CierreCajaModel: Desconexión SEGURA completada - reconexión programada")
+            print("âœ… CierreCajaModel: DesconexiÃ³n SEGURA completada - reconexiÃ³n programada")
             
         except Exception as e:
-            print(f"❌ Error en desconexión segura: {e}")
+            print(f"âŒ Error en desconexiÃ³n segura: {e}")
 
     def _intentar_reconexion(self):
         """
-        ✅ NUEVO: Intenta reconectar automáticamente
+        âœ… NUEVO: Intenta reconectar automÃ¡ticamente
         """
         try:
-            print("🔄 Intentando reconexión automática...")
+            print("ðŸ”„ Intentando reconexiÃ³n automÃ¡tica...")
             
             # Marcar como reconectado
             self._disconnected = False
@@ -1166,29 +1264,29 @@ class CierreCajaModel(QObject):
                 from ..repositories.cierre_caja_repository import CierreCajaRepository
                 self.repository = CierreCajaRepository()
             
-            # Emitir señal de reconexión exitosa
-            self.operacionExitosa.emit("Módulo reconectado correctamente")
+            # Emitir seÃ±al de reconexiÃ³n exitosa
+            self.operacionExitosa.emit("MÃ³dulo reconectado correctamente")
             
-            print("✅ Reconexión automática exitosa")
+            print("âœ… ReconexiÃ³n automÃ¡tica exitosa")
             
         except Exception as e:
-            print(f"❌ Error en reconexión: {e}")
+            print(f"âŒ Error en reconexiÃ³n: {e}")
             # Programar otro intento en 10 segundos
             QTimer.singleShot(10000, self._intentar_reconexion)
 
-    # ✅ NUEVO: Verificar estado antes de operaciones críticas
+    # âœ… NUEVO: Verificar estado antes de operaciones crÃ­ticas
     def _verificar_conexion(self) -> bool:
         """
-        Verifica si el modelo está conectado correctamente
+        Verifica si el modelo estÃ¡ conectado correctamente
         """
         try:
             if hasattr(self, '_disconnected') and self._disconnected:
-                self.operacionError.emit("Módulo desconectado - reconectando...")
+                self.operacionError.emit("MÃ³dulo desconectado - reconectando...")
                 self._intentar_reconexion()
                 return False
             
             if not self.repository:
-                print("⚠️ Repository no disponible")
+                print("âš ï¸ Repository no disponible")
                 return False
             
             return True
@@ -1207,10 +1305,10 @@ class CierreCajaModel(QObject):
 
     @Property(float, notify=resumenChanged)
     def totalServiciosBasicos(self) -> float:
-        """Total de gastos en servicios básicos"""
+        """Total de gastos en servicios bÃ¡sicos"""
         try:
             gastos_tipos = self._datos_cierre.get('resumen_gastos_tipo', [])
-            servicios = ['SERVICIOS BÁSICOS', 'ELECTRICIDAD', 'AGUA', 'INTERNET', 'TELÉFONO']
+            servicios = ['SERVICIOS BÃSICOS', 'ELECTRICIDAD', 'AGUA', 'INTERNET', 'TELÃ‰FONO']
             total = 0.0
             for gasto in gastos_tipos:
                 if any(servicio in gasto.get('TipoGasto', '').upper() for servicio in servicios):
@@ -1250,15 +1348,15 @@ class CierreCajaModel(QObject):
             self.datosChanged.emit()
             self.resumenChanged.emit()
             
-            print(f"✅ Gastos detallados cargados: {len(gastos_detallados)} gastos, {len(resumen_tipos)} tipos")
+            print(f"âœ… Gastos detallados cargados: {len(gastos_detallados)} gastos, {len(resumen_tipos)} tipos")
             
         except Exception as e:
-            print(f"❌ Error cargando gastos detallados: {e}")
+            print(f"âŒ Error cargando gastos detallados: {e}")
             self.operacionError.emit(f"Error cargando gastos: {str(e)}")
 
     @Slot(result='QVariantMap')
     def obtenerEstadisticasGastos(self) -> Dict[str, Any]:
-        """Obtiene estadísticas de gastos del día"""
+        """Obtiene estadÃ­sticas de gastos del dÃ­a"""
         try:
             resumen_tipos = self._datos_cierre.get('resumen_gastos_tipo', [])
             
@@ -1286,7 +1384,7 @@ class CierreCajaModel(QObject):
             }
             
         except Exception as e:
-            print(f"❌ Error calculando estadísticas de gastos: {e}")
+            print(f"âŒ Error calculando estadÃ­sticas de gastos: {e}")
             return {}
 # ===============================
 # REGISTRO PARA QML
@@ -1295,6 +1393,6 @@ class CierreCajaModel(QObject):
 def register_cierre_caja_model():
     """Registra el CierreCajaModel para uso en QML"""
     qmlRegisterType(CierreCajaModel, "ClinicaModels", 1, 0, "CierreCajaModel")
-    print("💰 CierreCajaModel registrado para QML")
+    print("ðŸ’° CierreCajaModel registrado para QML")
 
 __all__ = ['CierreCajaModel', 'register_cierre_caja_model']
