@@ -81,6 +81,7 @@ class AppController(QObject):
         self._usuario_autenticado_id = 0
         self._usuario_autenticado_nombre = ""
         self._usuario_autenticado_rol = ""
+        self._is_shutting_down = False
 
     # Propiedades para usuario autenticado
     usuarioChanged = Signal()
@@ -144,11 +145,23 @@ class AppController(QObject):
     @Slot()
     def emergency_shutdown(self):
         """
-        Sistema de shutdown de emergencia - detiene TODO inmediatamente
-        Proceso sincronizado en 3 fases para evitar retención de procesos
+        Sistema de shutdown de emergencia - VERSIÓN SEGURA
+        NO destruye modelos si están en operación activa
         """
         try:
             print("🔴 EMERGENCY SHUTDOWN INICIADO")
+            
+            # ✅ MARCAR QUE ESTAMOS EN SHUTDOWN INMEDIATAMENTE
+            self._is_shutting_down = True
+            
+            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
+            if self._hay_operaciones_activas():
+                print("⏸️ Operaciones activas detectadas - Shutdown pospuesto")
+                # Reintentar después de 500ms
+                QTimer.singleShot(500, self.emergency_shutdown)
+                return
+            
+            print("✅ No hay operaciones activas - Procediendo con shutdown")
             
             # FASE 1: DETENER TODOS LOS TIMERS INMEDIATAMENTE
             self._stop_all_timers_immediately()
@@ -165,7 +178,39 @@ class AppController(QObject):
             print(f"⚠️ Error en emergency shutdown: {e}")
             # Forzar limpieza básica aunque falle
             self._force_basic_cleanup()
-
+    def _hay_operaciones_activas(self) -> bool:
+        """✅ NUEVO: Verifica si hay operaciones activas en algún modelo"""
+        try:
+            # Lista de modelos a verificar
+            models_to_check = [
+                self.cierre_caja_model,
+                self.venta_model,
+                self.compra_model,
+                self.inventario_model,
+                self.consulta_model,
+                self.laboratorio_model,
+                self.enfermeria_model,
+                self.gasto_model
+            ]
+            
+            for model in models_to_check:
+                if model:
+                    # Verificar si tiene flag de loading activo
+                    if hasattr(model, '_loading') and model._loading:
+                        print(f"⚠️ {type(model).__name__} está en operación")
+                        return True
+                    
+                    # Verificar si tiene lock activo
+                    if hasattr(model, '_operation_lock') and model._operation_lock:
+                        print(f"⚠️ {type(model).__name__} tiene lock activo")
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando operaciones activas: {e}")
+            # En caso de error, asumir que NO hay operaciones (más seguro)
+            return False
     def _stop_all_timers_immediately(self):
         """FASE 1: Detiene TODOS los timers sin excepción"""
         try:
@@ -511,7 +556,7 @@ class AppController(QObject):
                 if hasattr(self.ingreso_extra_model, 'errorOcurrido'):
                     self.ingreso_extra_model.errorOcurrido.connect(self._on_model_error)
                 print("   ✅ IngresoExtraModel conectado")
-            # ===== CONEXIONES DE ERRORES Y ÉXITOS =====
+            # ===== CONEXIONES DE ERRORES Y ÉXITOS - VERSIÓN SEGURA =====
             models_with_errors = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.usuario_model, self.gasto_model,
@@ -519,8 +564,23 @@ class AppController(QObject):
                 self.trabajador_model, self.enfermeria_model, self.configuracion_model,
                 self.confi_laboratorio_model, self.confi_enfermeria_model,
                 self.confi_consulta_model, self.confi_trabajadores_model, 
-                self.cierre_caja_model
+                self.cierre_caja_model, self.ingreso_extra_model
             ]
+
+            for model in models_with_errors:
+                if model:
+                    try:
+                        # ✅ CONECTAR SEÑALES CON TRY-CATCH
+                        if hasattr(model, 'operacionError'):
+                            model.operacionError.connect(self._on_model_error)
+                        if hasattr(model, 'errorOccurred'):
+                            model.errorOccurred.connect(self._on_model_error)
+                        if hasattr(model, 'operacionExitosa'):
+                            model.operacionExitosa.connect(self._on_model_success)
+                        if hasattr(model, 'successMessage'):
+                            model.successMessage.connect(self._on_model_success)
+                    except Exception as e:
+                        print(f"⚠️ Error conectando señales de {type(model).__name__}: {e}")
             
             for model in models_with_errors:
                 if model:
@@ -893,11 +953,38 @@ class AppController(QObject):
 
     @Slot(str)
     def _on_model_error(self, mensaje: str):
-        self.showNotification("Error", mensaje)
+        """Handler de errores de modelos - VERSIÓN SEGURA"""
+        try:
+            # ✅ NO PROCESAR DURANTE SHUTDOWN
+            if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
+                print(f"⏸️ Error de modelo ignorado durante shutdown: {mensaje}")
+                return
+            
+            # ✅ LOG DEL ERROR
+            print(f"❌ Error de modelo: {mensaje}")
+            
+            # ✅ MOSTRAR NOTIFICACIÓN DE FORMA SEGURA
+            self.showNotification("Error", mensaje)
+            
+        except Exception as e:
+            print(f"⚠️ Error en handler de errores: {e}")
 
     @Slot(str)
     def _on_model_success(self, mensaje: str):
-        pass  # Opcional: mostrar notificación de éxito
+        """Handler de éxitos de modelos - VERSIÓN SEGURA"""
+        try:
+            # ✅ NO PROCESAR DURANTE SHUTDOWN
+            if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
+                return
+            
+            # ✅ LOG OPCIONAL (comentado para no saturar)
+            # print(f"✅ Éxito de modelo: {mensaje}")
+            
+            # Opcional: mostrar notificación
+            # self.showNotification("Éxito", mensaje)
+            
+        except Exception as e:
+            print(f"⚠️ Error en handler de éxitos: {e}")
 
     # ===============================
     # GETTERS PARA MODELS (ACCESO DESDE QML)
@@ -993,7 +1080,23 @@ class AppController(QObject):
     
     @Slot(str, str)
     def showNotification(self, title, message):
-        QTimer.singleShot(0, lambda: self.notification_worker.process_notification(title, message))
+        """Muestra notificación de forma segura - VERSIÓN MEJORADA"""
+        try:
+            # ✅ VALIDAR QUE NO ESTEMOS EN SHUTDOWN
+            if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
+                print(f"⏸️ Notificación bloqueada durante shutdown: {title}")
+                return
+            
+            # ✅ VALIDAR QUE notification_worker EXISTA
+            if not hasattr(self, 'notification_worker') or not self.notification_worker:
+                print(f"⚠️ notification_worker no disponible: {title} - {message}")
+                return
+            
+            # ✅ EMITIR DIRECTAMENTE SIN QTimer (más seguro)
+            self.notification_worker.process_notification(title, message)
+            
+        except Exception as e:
+            print(f"⚠️ Error en showNotification: {e}")
     
     @Slot(str)
     def navigateToModule(self, module_name):
@@ -1449,51 +1552,69 @@ class AuthAppController(QObject):
     
     @Slot()
     def handleLogout(self):
-        """LOGOUT MANUAL - CORREGIDO para limpiar completamente"""
+        """LOGOUT MANUAL - VERSIÓN SEGURA CON VALIDACIÓN"""
         try:
-            print("🚪 Cierre de sesión manual - INICIANDO LIMPIEZA COMPLETA...")
+            print("🚪 Cierre de sesión manual solicitado...")
+            
+            # ✅ VALIDAR QUE EL CONTROLADOR EXISTA
+            if not self.main_controller:
+                print("⚠️ main_controller ya es None - Creando login directo")
+                self.authenticated = False
+                QTimer.singleShot(100, self.createAndShowLogin)
+                return
+            
+            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
+            if hasattr(self.main_controller, '_hay_operaciones_activas'):
+                if self.main_controller._hay_operaciones_activas():
+                    print("⏸️ Operaciones activas - Logout pospuesto")
+                    QTimer.singleShot(1000, self.handleLogout)
+                    return
+            
+            print("✅ No hay operaciones activas - Procediendo con logout")
             
             self.authenticated = False
             
-            # PASO 1: Cleanup del controlador principal
-            if self.main_controller:
-                try:
-                    print("🧹 Limpiando main_controller...")
-                    self.main_controller.emergency_shutdown()  # Usar shutdown de emergencia
-                    # IMPORTANTE: Resetear la referencia
-                    self.main_controller = None
-                    print("✅ main_controller limpiado y reseteado")
-                except Exception as e:
-                    print(f"⚠️ Error en cleanup del controlador: {e}")
-                    self.main_controller = None  # Forzar reset
+            # PASO 1: Cleanup del controlador principal CON VALIDACIÓN
+            try:
+                print("🧹 Limpiando main_controller...")
+                # Usar gradual_cleanup en lugar de emergency_shutdown
+                self.main_controller.gradual_cleanup()
+                self.main_controller = None
+                print("✅ main_controller limpiado")
+            except Exception as e:
+                print(f"⚠️ Error en cleanup del controlador: {e}")
+                self.main_controller = None
             
-            # PASO 2: Destruir motor principal y esperar
+            # PASO 2: Destruir motor principal con delay
             if self.main_engine:
                 try:
                     print("🗑️ Destruyendo main_engine...")
-                    #self.main_engine.deleteLater()
+                    self.main_engine.deleteLater()
                     self.main_engine = None
                     print("✅ main_engine destruido")
                 except Exception as e:
                     print(f"⚠️ Error destruyendo motor principal: {e}")
-                    self.main_engine = None  # Forzar reset
+                    self.main_engine = None
             
             # PASO 3: Forzar garbage collection
             import gc
             gc.collect()
             
-            # PASO 4: Crear y mostrar nuevo login con delay para asegurar limpieza
+            # PASO 4: Crear y mostrar nuevo login con delay
             QTimer.singleShot(500, self.createAndShowLogin)
             
-            print("✅ Logout manual completado - Limpieza completa")
+            print("✅ Logout manual completado")
             
         except Exception as e:
             print(f"❌ Error durante logout manual: {e}")
+            import traceback
+            traceback.print_exc()
+            
             # Forzar reset completo en caso de error
             self.main_controller = None
             self.main_engine = None
+            self.authenticated = False
             QTimer.singleShot(1000, self.createAndShowLogin)
-
     def createAndShowLogin(self):
         """Crea y muestra una nueva instancia de login - MEJORADO"""
         try:

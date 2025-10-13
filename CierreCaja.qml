@@ -7,6 +7,27 @@ import Qt.labs.platform 1.1
 Item {
     id: cierreCajaRoot
     objectName: "cierreCajaRoot"
+    
+    Component.onDestruction: {
+        console.log("🚨🚨🚨 CIERRE DE CAJA SIENDO DESTRUIDO 🚨🚨🚨")
+        console.log("🔍 Momento de destrucción:", new Date().toISOString())
+        try {
+            var error = new Error()
+            console.log("🔍 Stack trace:")
+            console.log(error.stack)
+        } catch (e) {
+            console.log("No se pudo obtener stack trace")
+        }
+    }
+    
+    onVisibleChanged: {
+        console.log("👁️ CierreCaja visibility cambió a:", visible)
+        if (!visible) {
+            console.log("⚠️ CierreCaja ocultado (no destruido)")
+        } else {
+            console.log("✅ CierreCaja mostrado")
+        }
+    }
 
     // PROPIEDADES DEL MODELO
     property var cierreCajaModel: null
@@ -31,27 +52,58 @@ Item {
     property var resumenFinanciero: ({})
     
     // PROPIEDADES DINÁMICAS DESDE EL MODEL CORREGIDAS
-// PROPIEDADES DINÁMICAS SIMPLIFICADAS
-    property string fechaActual: cierreCajaModel ? cierreCajaModel.fechaActual : Qt.formatDate(new Date(), "dd/MM/yyyy")
+    property string fechaActual: Qt.formatDate(new Date(), "dd/MM/yyyy")
+    property string horaInicio: "08:00"
+    property string horaFin: Qt.formatTime(new Date(), "HH:mm")
+    property real efectivoReal: 0.0
+    property real totalIngresos: 0.0
+    property real totalEgresos: 0.0
+    property real saldoTeorico: 0.0
+    property real diferencia: 0.0
+    property int totalTransacciones: 0
+    property real totalIngresosExtras: 0.0
+    property int transaccionesIngresosExtras: 0
 
-    property string horaInicio: cierreCajaModel ? cierreCajaModel.horaInicio : "08:00"
-
-    property string horaFin: cierreCajaModel ? cierreCajaModel.horaFin : Qt.formatTime(new Date(), "HH:mm")
-
-    property real efectivoReal: cierreCajaModel ? cierreCajaModel.efectivoReal : 0.0
-
-    property real totalIngresos: cierreCajaModel ? cierreCajaModel.totalIngresos : 0.0
-
-    property real totalEgresos: cierreCajaModel ? cierreCajaModel.totalEgresos : 0.0
-
-    property real saldoTeorico: cierreCajaModel ? cierreCajaModel.saldoTeorico : 0.0
-
-    property real diferencia: cierreCajaModel ? cierreCajaModel.diferencia : 0.0
-
-    property int totalTransacciones: cierreCajaModel ? cierreCajaModel.totalTransacciones : 0
-    // En las propiedades dinámicas, agrega:
-    property real totalIngresosExtras: (cierreCajaModel && cierreCajaModel.totalIngresosExtras !== undefined) ? cierreCajaModel.totalIngresosExtras : 0.0
-    property int transaccionesIngresosExtras: cierreCajaModel ? cierreCajaModel.transaccionesIngresosExtras : 0
+    // ✅ Función para sincronizar propiedades MANUALMENTE (menos reactivo)
+    function sincronizarConModelo() {
+        if (!cierreCajaModel) return
+        
+        try {
+            // Sincronizar en lote con delay entre cada propiedad
+            fechaActual = cierreCajaModel.fechaActual || fechaActual
+            
+            Qt.callLater(function() {
+                if (!cierreCajaModel) return
+                horaInicio = cierreCajaModel.horaInicio || horaInicio
+                horaFin = cierreCajaModel.horaFin || horaFin
+            })
+            
+            Qt.callLater(function() {
+                if (!cierreCajaModel) return
+                efectivoReal = cierreCajaModel.efectivoReal || 0.0
+                totalIngresos = cierreCajaModel.totalIngresos || 0.0
+                totalEgresos = cierreCajaModel.totalEgresos || 0.0
+            })
+            
+            Qt.callLater(function() {
+                if (!cierreCajaModel) return
+                saldoTeorico = cierreCajaModel.saldoTeorico || 0.0
+                diferencia = cierreCajaModel.diferencia || 0.0
+                totalTransacciones = cierreCajaModel.totalTransacciones || 0
+            })
+            
+            Qt.callLater(function() {
+                if (!cierreCajaModel) return
+                totalIngresosExtras = cierreCajaModel.totalIngresosExtras || 0.0
+                transaccionesIngresosExtras = cierreCajaModel.transaccionesIngresosExtras || 0
+            })
+            
+            console.log("✅ Propiedades sincronizadas con modelo")
+            
+        } catch (error) {
+            console.log("⚠️ Error sincronizando propiedades:", error)
+        }
+    }
     // Propiedades calculadas para el arqueo
     readonly property string tipoDiferencia: {
         if (Math.abs(diferencia) < 1.0) return "NEUTRO"
@@ -71,68 +123,92 @@ Item {
             if (cierreCajaModel.fechaActual) fechaActual = cierreCajaModel.fechaActual
         }
     }    
-    onVisibleChanged: {
-        if (visible) {
-            console.log("💰 Módulo visible")
-            // Cargar datos con delay para evitar crashes
-            Qt.callLater(function() {
-                if (cierreCajaModel && typeof cierreCajaModel.cargarCierresSemana === 'function') {
-                    try {
-                        cierreCajaModel.cargarCierresSemana()
-                    } catch (error) {
-                        console.log("❌ Error cargando datos:", error)
-                    }
-                }
-            })
-        }
-    }
+    
 
     Connections {
         target: cierreCajaModel
+        
+        // ✅ SINCRONIZACIÓN MANUAL RETRASADA (evita sobrecarga)
+        function onDatosChanged() {
+            console.log("📊 Datos del modelo cambiaron - sincronizando...")
+            // Usar timer para evitar actualizaciones simultáneas
+            sincronizacionTimer.restart()
+        }
+        
         function onEfectivoRealChanged() {
-            if (cierreCajaModel) {
-                efectivoReal = cierreCajaModel.efectivoReal
-            }
+            console.log("💵 Efectivo real cambió")
+            Qt.callLater(function() {
+                if (cierreCajaModel) {
+                    efectivoReal = cierreCajaModel.efectivoReal || 0.0
+                }
+            })
         }
+        
         function onValidacionChanged() {
-            // Forzar actualización de propiedades calculadas
-            cierreCajaRoot.diferencia = cierreCajaModel ? cierreCajaModel.diferencia : 0.0
+            console.log("✓ Validación cambió")
+            Qt.callLater(function() {
+                if (cierreCajaModel) {
+                    diferencia = cierreCajaModel.diferencia || 0.0
+                }
+            })
         }
-   
         
         function onPdfGenerado(filepath) {
             console.log("✅ PDF generado exitosamente:", filepath)
-            mostrarNotificacion("Éxito", "PDF generado correctamente")
-            
-            // Abrir PDF automáticamente (se abre desde el model)
-            // Solo mostrar notificación
+            // ✅ NO MOSTRAR TOAST INMEDIATAMENTE
+            Qt.callLater(function() {
+                mostrarNotificacionSegura("Éxito", "PDF generado correctamente")
+            })
         }
         
         function onOperacionExitosa(mensaje) {
             console.log("✅", mensaje)
+            // ✅ SINCRONIZAR DESPUÉS DE OPERACIÓN EXITOSA
+            if (mensaje.includes("Datos consultados")) {
+                // Sincronizar con delay de 500ms
+                Qt.callLater(function() {
+                    sincronizacionTimer.restart()
+                })
+            }
+            
+            // ✅ NO MOSTRAR TOAST INMEDIATAMENTE
             if (mensaje.includes("PDF") || mensaje.includes("Datos consultados")) {
-                toastNotification.show(mensaje)
+                Qt.callLater(function() {
+                    mostrarNotificacionSegura("Éxito", mensaje)
+                })
             }
         }
         
         function onOperacionError(mensaje) {
             console.log("❌", mensaje)
-            mostrarNotificacion("Error", mensaje)
+            Qt.callLater(function() {
+                mostrarNotificacion("Error", mensaje)
+            })
+        }
+    }
+
+    // ✅ NUEVO: Timer para sincronización retrasada
+    Timer {
+        id: sincronizacionTimer
+        interval: 500  // Esperar 500ms antes de sincronizar
+        repeat: false
+        running: false
+        
+        onTriggered: {
+            console.log("⏰ Ejecutando sincronización retrasada...")
+            sincronizarConModelo()
         }
     }
     
     Timer {
         id: modelHealthTimer
-        interval: 15000  // Reducir frecuencia
-        running: false   // NO iniciar automáticamente
-        repeat: true
+        interval: 15000
+        running: false  // ✅ NUNCA INICIAR (eliminar complejidad)
+        repeat: false   // ✅ NO REPETIR
         
         onTriggered: {
-            // Solo verificar, NO reconectar automáticamente
-            if (!cierreCajaModel) {
-                console.log("⚠️ CierreCajaModel no disponible")
-                running = false  // Detener el timer
-            }
+            // ✅ DESHABILITADO POR ESTABILIDAD
+            console.log("⚠️ modelHealthTimer deshabilitado por estabilidad")
         }
     }
     Timer {
@@ -258,24 +334,33 @@ Item {
                                 onClicked: {
                                     console.log("📄 Generando PDF del arqueo...")
                                     
+                                    // ✅ VALIDACIONES MEJORADAS
                                     if (!cierreCajaModel) {
                                         mostrarNotificacion("Error", "Modelo no disponible")
                                         return
                                     }
                                     
-                                    // Validar que tenga datos consultados
+                                    // ✅ Validar que tenga datos consultados
                                     if (totalIngresos === 0 && totalEgresos === 0) {
                                         mostrarNotificacion("Advertencia", "Primero consulte los datos presionando 'Consultar'")
                                         return
                                     }
                                     
+                                    // ✅ Validar campos completos
+                                    if (fechaField.text.trim().length === 0 || 
+                                        horaInicioField.text.trim().length === 0 || 
+                                        horaFinField.text.trim().length === 0) {
+                                        mostrarNotificacion("Error", "Complete todos los campos de fecha y hora")
+                                        return
+                                    }
+                                    
                                     try {
-                                        // El PDF se genera automáticamente en consultarDatos()
-                                        // Solo llamamos a consultarDatos que ya genera el PDF
-                                        if (typeof cierreCajaModel.consultarDatos === 'function') {
-                                            cierreCajaModel.consultarDatos()
+                                        // ✅ MÉTODO CORRECTO: generarPDFConsulta
+                                        if (typeof cierreCajaModel.generarPDFConsulta === 'function') {
+                                            console.log("✅ Llamando a generarPDFConsulta()")
+                                            cierreCajaModel.generarPDFConsulta()
                                         } else {
-                                            console.log("❌ Método consultarDatos no existe")
+                                            console.log("❌ Método generarPDFConsulta no existe")
                                             mostrarNotificacion("Error", "Función no disponible")
                                         }
                                     } catch (error) {
@@ -324,7 +409,38 @@ Item {
                                 
                                 onClicked: {
                                     console.log("🖱️ Botón Cerrar Caja presionado")
-                                    cerrarCaja()
+                                    
+                                    // ✅ VALIDACIÓN ADICIONAL ANTES DE CERRAR
+                                    if (!cierreCajaModel) {
+                                        mostrarNotificacion("Error", "Modelo no disponible")
+                                        return
+                                    }
+                                    
+                                    // ✅ Validar que no esté ocupado (doble verificación)
+                                    if (cierreCajaModel.loading) {
+                                        console.log("⏳ Modelo ocupado, ignorando clic")
+                                        mostrarNotificacion("Espere", "El sistema está procesando otra operación")
+                                        return
+                                    }
+                                    
+                                    // ✅ Validar efectivo real
+                                    if (efectivoReal <= 0) {
+                                        mostrarNotificacion("Error", "Debe ingresar el efectivo real contado")
+                                        return
+                                    }
+                                    
+                                    // ✅ Validar que tenga datos consultados
+                                    if (totalIngresos === 0 && totalEgresos === 0) {
+                                        mostrarNotificacion("Error", "Primero consulte los datos del día")
+                                        return
+                                    }
+                                    
+                                    try {
+                                        cerrarCaja()
+                                    } catch (error) {
+                                        console.log("❌ Error en cerrarCaja:", error)
+                                        mostrarNotificacion("Error", "Error cerrando caja: " + error.toString())
+                                    }
                                 }
                             }
                         }
@@ -515,20 +631,53 @@ Item {
                                         }
                                         
                                         onClicked: {
-                                            if (cierreCajaModel && typeof cierreCajaModel.consultarDatos === 'function') {
-                                                try {
-                                                    cierreCajaModel.consultarDatos()
-                                                } catch (error) {
-                                                    console.log("❌ Error en consultarDatos:", error)
-                                                    if (toastNotification) {
-                                                        toastNotification.show("Error ejecutando operación")
-                                                    }
-                                                }
-                                            } else {
+                                            console.log("🔄 Botón Consultar presionado")
+                                            
+                                            // ✅ VALIDACIONES MEJORADAS
+                                            if (!cierreCajaModel) {
                                                 console.log("❌ Modelo no disponible")
-                                                if (toastNotification) {
-                                                    toastNotification.show("Módulo no disponible")
+                                                mostrarNotificacion("Error", "Modelo no disponible")
+                                                return
+                                            }
+                                            
+                                            // ✅ Validar que no esté ocupado
+                                            if (cierreCajaModel.loading) {
+                                                console.log("⏳ Modelo ocupado, ignorando clic")
+                                                mostrarNotificacion("Espere", "El sistema está procesando otra operación")
+                                                return
+                                            }
+                                            
+                                            // ✅ Validar campos
+                                            if (fechaField.text.trim().length === 0 || 
+                                                horaInicioField.text.trim().length === 0 || 
+                                                horaFinField.text.trim().length === 0) {
+                                                mostrarNotificacion("Error", "Complete todos los campos de fecha y hora")
+                                                return
+                                            }
+                                            
+                                            // ✅ Validar formato de fecha
+                                            if (!validarFormatoFecha(fechaField.text)) {
+                                                mostrarNotificacion("Error", "Formato de fecha inválido (DD/MM/YYYY)")
+                                                return
+                                            }
+                                            
+                                            // ✅ Validar formato de horas
+                                            if (!validarFormatoHora(horaInicioField.text) || !validarFormatoHora(horaFinField.text)) {
+                                                mostrarNotificacion("Error", "Formato de hora inválido (HH:MM)")
+                                                return
+                                            }
+                                            
+                                            try {
+                                                if (typeof cierreCajaModel.consultarDatos === 'function') {
+                                                    console.log("✅ Llamando a consultarDatos()")
+                                                    cierreCajaModel.consultarDatos()
+                                                } else {
+                                                    console.log("❌ Método consultarDatos no existe")
+                                                    mostrarNotificacion("Error", "Función no disponible")
                                                 }
+                                            } catch (error) {
+                                                console.log("❌ Error en consultarDatos:", error)
+                                                mostrarNotificacion("Error", "Error ejecutando operación: " + error.toString())
                                             }
                                         }
                                     }
@@ -946,18 +1095,49 @@ Item {
                                                 
                                                 onTextChanged: {
                                                     if (!actualizandoTexto) {
-                                                        // ✅ CALCULAR MONTO (incluso si está vacío)
+                                                        // ✅ VALIDACIÓN MEJORADA
+                                                        if (!cierreCajaModel) {
+                                                            console.log("⚠️ Modelo no disponible en onTextChanged")
+                                                            return
+                                                        }
+                                                        
                                                         var texto = text.trim()
                                                         var monto = 0
                                                         
+                                                        // ✅ Parsear monto con validación
                                                         if (texto.length > 0) {
-                                                            monto = parseFloat(texto) || 0
+                                                            try {
+                                                                monto = parseFloat(texto)
+                                                                
+                                                                // ✅ Validar que sea número válido
+                                                                if (isNaN(monto) || !isFinite(monto)) {
+                                                                    console.log("⚠️ Valor no numérico:", texto)
+                                                                    monto = 0
+                                                                }
+                                                                
+                                                                // ✅ Validar rango razonable
+                                                                if (monto < 0) {
+                                                                    console.log("⚠️ Valor negativo, corrigiendo a 0")
+                                                                    monto = 0
+                                                                }
+                                                                
+                                                                if (monto > 999999) {
+                                                                    console.log("⚠️ Valor muy alto, limitando")
+                                                                    monto = 999999
+                                                                }
+                                                                
+                                                            } catch (error) {
+                                                                console.log("❌ Error parseando efectivo:", error)
+                                                                monto = 0
+                                                            }
                                                         }
                                                         
-                                                        // ✅ SIEMPRE actualizar el modelo (incluso con 0)
-                                                        if (cierreCajaModel) {
+                                                        // ✅ ACTUALIZAR MODELO CON VALIDACIÓN
+                                                        try {
                                                             console.log("💵 Actualizando efectivo real a:", monto)
                                                             cierreCajaModel.establecerEfectivoReal(monto)
+                                                        } catch (error) {
+                                                            console.log("❌ Error actualizando efectivo real:", error)
                                                         }
                                                     }
                                                 }
@@ -1613,12 +1793,39 @@ Item {
                                                             }
                                                             
                                                             onClicked: {
-                                                                console.log("🔍 Ver cierre - ID:", modelData.id)
-                                                                generarPDFCierreEspecifico(
-                                                                    modelData.Fecha,
-                                                                    modelData.HoraInicio,
-                                                                    modelData.HoraFin
-                                                                )
+                                                                console.log("🔍 Ver cierre presionado")
+                                                                
+                                                                // ✅ VALIDACIONES COMPLETAS
+                                                                if (!cierreCajaModel) {
+                                                                    mostrarNotificacion("Error", "Modelo no disponible")
+                                                                    return
+                                                                }
+                                                                
+                                                                if (cierreCajaModel.loading) {
+                                                                    mostrarNotificacion("Espere", "El sistema está ocupado")
+                                                                    return
+                                                                }
+                                                                
+                                                                // ✅ Validar que modelData tenga los campos necesarios
+                                                                if (!modelData || !modelData.Fecha || !modelData.HoraInicio || !modelData.HoraFin) {
+                                                                    console.log("❌ Datos del cierre incompletos")
+                                                                    mostrarNotificacion("Error", "Datos del cierre incompletos")
+                                                                    return
+                                                                }
+                                                                
+                                                                try {
+                                                                    console.log("🔍 Ver cierre - Fecha:", modelData.Fecha, 
+                                                                            "Horario:", modelData.HoraInicio, "-", modelData.HoraFin)
+                                                                    
+                                                                    generarPDFCierreEspecifico(
+                                                                        modelData.Fecha,
+                                                                        modelData.HoraInicio,
+                                                                        modelData.HoraFin
+                                                                    )
+                                                                } catch (error) {
+                                                                    console.log("❌ Error generando PDF de cierre:", error)
+                                                                    mostrarNotificacion("Error", "Error generando PDF: " + error.toString())
+                                                                }
                                                             }
                                                             
                                                             // Tooltip
@@ -1739,10 +1946,15 @@ Item {
         }
         
         function show(message) {
+            // ✅ NO HACER NADA SI NO ES CRÍTICO
+            console.log("📢 Toast solicitado (ignorado por estabilidad):", message)
+            // Comentar todo el código de mostrar para eliminar timers
+            /*
             toastMessage.text = message
             visible = true
             opacity = 1
             toastTimer.restart()
+            */
         }
         
         function hide() {
@@ -1774,10 +1986,24 @@ Item {
     function cerrarCaja() {
         console.log("✅ Iniciando cierre de caja...")
         
-        // Validaciones previas
+        // ✅ VALIDACIONES INICIALES MEJORADAS
         if (!cierreCajaModel) {
             console.log("❌ Modelo no disponible")
             mostrarNotificacion("Error", "Modelo no disponible")
+            return
+        }
+        
+        // ✅ NUEVO: Validar que no esté ocupado
+        if (cierreCajaModel.loading) {
+            console.log("⏳ Modelo ocupado, cancelando cierre")
+            mostrarNotificacion("Espere", "El sistema está procesando otra operación")
+            return
+        }
+        
+        // ✅ NUEVO: Validar que tenga datos consultados
+        if (totalIngresos === 0 && totalEgresos === 0) {
+            console.log("❌ Sin datos consultados")
+            mostrarNotificacion("Error", "Primero consulte los datos del día")
             return
         }
         
@@ -1996,8 +2222,13 @@ Item {
     }
     function generarPDFCierreEspecifico(fecha, horaInicio, horaFin) {
         console.log("📄 Generando PDF de cierre específico")
-        console.log("   📅 Fecha:", fecha)
-        console.log("   🕐 Horario:", horaInicio, "-", horaFin)
+        
+        // ✅ VALIDACIONES DE ENTRADA
+        if (!fecha || !horaInicio || !horaFin) {
+            console.log("❌ Parámetros incompletos")
+            mostrarNotificacion("Error", "Parámetros incompletos para generar PDF")
+            return
+        }
         
         if (!cierreCajaModel) {
             console.log("❌ Modelo no disponible")
@@ -2005,18 +2236,47 @@ Item {
             return
         }
         
+        // ✅ Validar que el modelo no esté ocupado
+        if (cierreCajaModel.loading) {
+            console.log("⏳ Modelo ocupado")
+            mostrarNotificacion("Espere", "El sistema está procesando otra operación")
+            return
+        }
+        
         try {
+            console.log("   📅 Fecha original:", fecha)
+            console.log("   🕐 Horario original:", horaInicio, "-", horaFin)
+            
             // ✅ LIMPIAR FORMATOS antes de enviar al model
             let fechaLimpia = formatearFechaParaModel(fecha)
             let horaInicioLimpia = limpiarFormatoHora(horaInicio)
             let horaFinLimpia = limpiarFormatoHora(horaFin)
+            
+            // ✅ VALIDAR FORMATOS LIMPIOS
+            if (!fechaLimpia || fechaLimpia === "" || fechaLimpia === "--/--/----") {
+                console.log("❌ Fecha limpia inválida:", fechaLimpia)
+                mostrarNotificacion("Error", "Formato de fecha inválido")
+                return
+            }
+            
+            if (!horaInicioLimpia || horaInicioLimpia === "--:--" || horaInicioLimpia === "00:00") {
+                console.log("❌ Hora inicio limpia inválida:", horaInicioLimpia)
+                mostrarNotificacion("Error", "Formato de hora inicio inválido")
+                return
+            }
+            
+            if (!horaFinLimpia || horaFinLimpia === "--:--" || horaFinLimpia === "00:00") {
+                console.log("❌ Hora fin limpia inválida:", horaFinLimpia)
+                mostrarNotificacion("Error", "Formato de hora fin inválido")
+                return
+            }
             
             console.log("🔧 Datos limpiados:")
             console.log("   Fecha:", fechaLimpia)
             console.log("   Hora inicio:", horaInicioLimpia)
             console.log("   Hora fin:", horaFinLimpia)
             
-            // Llamar al método del model con datos limpios
+            // ✅ Llamar al método del model CON VALIDACIÓN
             if (typeof cierreCajaModel.generarPDFCierreEspecifico === 'function') {
                 cierreCajaModel.generarPDFCierreEspecifico(
                     fechaLimpia, 
@@ -2076,10 +2336,26 @@ Item {
         
         return horaStr
     }
+    // ✅ NUEVA: Función segura para notificaciones (sin timers problemáticos)
+    function mostrarNotificacionSegura(titulo, mensaje) {
+        console.log("📢", titulo, ":", mensaje)
         
-    // INICIALIZACIÓN
+        // Solo usar console, sin toast que active timers
+        // Si realmente necesitas feedback visual, usar alternativa más simple
+        
+        // Alternativa segura: cambiar texto de un Label por 3 segundos
+        if (typeof appController !== 'undefined' && appController) {
+            try {
+                appController.showNotification(titulo, mensaje)
+            } catch (e) {
+                console.log("⚠️ No se pudo mostrar notificación:", e)
+            }
+        }
+    }
+    // INICIALIZACIÓN MEJORADA
     Component.onCompleted: {
         console.log("💰 Inicializando módulo CierreCaja")
+        console.log("🔧 Versión: Con sincronización manual (más estable)")
         
         // Verificar AppController primero
         if (!appController) {
@@ -2087,7 +2363,28 @@ Item {
             return
         }
         
-        // Inicializar modelo con delay
-        initializationTimer.start()
+        // ✅ INICIALIZAR CON DELAY MAYOR PARA ESTABILIDAD
+        Qt.callLater(function() {
+            if (appController && appController.cierre_caja_model_instance) {
+                cierreCajaModel = appController.cierre_caja_model_instance
+                console.log("✅ Modelo conectado")
+                
+                // ✅ SINCRONIZAR PROPIEDADES DESPUÉS DE CONECTAR
+                Qt.callLater(function() {
+                    sincronizarConModelo()
+                })
+                
+                // ✅ CARGAR DATOS CON DELAY ADICIONAL
+                if (cierreCajaModel && cierreCajaModel.usuario_actual_id > 0) {
+                    Qt.callLater(function() {
+                        if (typeof cierreCajaModel.cargarCierresSemana === 'function') {
+                            cierreCajaModel.cargarCierresSemana()
+                        }
+                    })
+                }
+            } else {
+                console.log("❌ Modelo no disponible en AppController")
+            }
+        })
     }
 }
