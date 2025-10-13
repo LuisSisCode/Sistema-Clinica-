@@ -43,36 +43,58 @@ class BaseRepository(ABC):
             raise DatabaseConnectionError(f"Error obteniendo conexión: {str(e)}")
     
     def _execute_query(self, query: str, params: tuple = (), fetch_one: bool = False, 
-                      fetch_all: bool = True, use_cache: bool = True) -> Union[List[Dict], Dict, int]:
+                  fetch_all: bool = True, use_cache: bool = True) -> Union[List[Dict], Dict, int]:
         """
-        ✅ CORREGIDO: Ejecuta consulta SQL con manejo mejorado de cache bypass
+        ✅ VERSIÓN MEJORADA: Ejecuta consulta SQL con manejo robusto de errores
+        NUNCA lanza excepciones sin control, SIEMPRE retorna valores seguros
         """
+        
+        # ✅ VALIDAR QUERY NO VACÍA
+        if not query or query.strip() == "":
+            print(f"❌ Query vacía en {self.table_name}")
+            if fetch_one:
+                return None
+            return [] if query.strip().upper().startswith('SELECT') else 0
+        
         # ✅ VERIFICAR FLAGS DE BYPASS PRIMERO
         if hasattr(self, '_bypass_all_cache') and self._bypass_all_cache:
             use_cache = False
-            #print(f"🚫 Cache bypassed por flag _bypass_all_cache en {self.table_name}")
         
         if hasattr(self, '_force_reload') and self._force_reload:
             use_cache = False
-            #print(f"🚫 Cache bypassed por flag _force_reload en {self.table_name}")
         
         # Flag específico para productos después de ventas
         if (hasattr(self, '_force_reload_productos') and self._force_reload_productos 
             and ('Productos' in query or 'productos' in query.lower())):
             use_cache = False
-            #print(f"🚫 Cache bypassed para consulta de productos en {self.table_name}")
         
         # Verificar caché para SELECT queries (solo si use_cache es True)
         if use_cache and query.strip().upper().startswith('SELECT'):
             cached_result = self.cache.get(query, params, self.cache_type)
             if cached_result is not None:
-                #print(f"📋 Cache hit para {self.table_name}")
                 return cached_result
         
         with self._lock:
             conn = None
+            cursor = None
+            
             try:
-                conn = self._get_connection()
+                # ✅ OBTENER CONEXIÓN CON VALIDACIÓN
+                try:
+                    conn = self._get_connection()
+                except Exception as conn_error:
+                    print(f"❌ Error obteniendo conexión en {self.table_name}: {conn_error}")
+                    if fetch_one:
+                        return None
+                    return [] if query.strip().upper().startswith('SELECT') else 0
+                
+                # ✅ VALIDAR QUE LA CONEXIÓN SEA VÁLIDA
+                if not conn:
+                    print(f"❌ Conexión None en {self.table_name}")
+                    if fetch_one:
+                        return None
+                    return [] if query.strip().upper().startswith('SELECT') else 0
+                
                 cursor = conn.cursor()
                 
                 # Debug: Mostrar análisis de la query
@@ -81,33 +103,55 @@ class BaseRepository(ABC):
                 has_output = 'OUTPUT INSERTED' in query_upper
                 has_insert = 'INSERT' in query_upper
                 
-                cursor.execute(query, params)
+                # ✅ EJECUTAR QUERY CON VALIDACIÓN
+                try:
+                    cursor.execute(query, params)
+                except Exception as exec_error:
+                    print(f"❌ Error ejecutando query en {self.table_name}: {exec_error}")
+                    print(f"🔍 Query: {query[:100]}...")
+                    print(f"🔍 Params: {params}")
+                    if conn:
+                        conn.rollback()
+                    
+                    # ✅ RETORNAR VALOR SEGURO SEGÚN TIPO DE QUERY
+                    if fetch_one:
+                        return None
+                    return [] if is_select else 0
                 
+                # ✅ PROCESAR RESULTADOS SEGÚN TIPO DE QUERY
                 if query_upper.startswith('SELECT'):
                     # SELECT queries
-                    if fetch_one:
-                        row = cursor.fetchone()
-                        result = self._row_to_dict(cursor, row) if row else None
-                    else:
-                        rows = cursor.fetchall()
-                        result = [self._row_to_dict(cursor, row) for row in rows]
-                    
-                    # Cachear resultado SOLO SI use_cache es True
-                    if use_cache and result is not None:
-                        self.cache.set(query, result, params, self.cache_type)
-                        #→print(f"💾 Resultado cacheado para {self.table_name}")
-                    elif not use_cache:
-                        #print(f"🚫 Resultado NO cacheado (bypass activo) para {self.table_name}")
-                        pass
-                    return result
-                    
+                    try:
+                        if fetch_one:
+                            row = cursor.fetchone()
+                            result = self._row_to_dict(cursor, row) if row else None
+                        else:
+                            rows = cursor.fetchall()
+                            # ✅ VALIDAR QUE rows SEA UNA LISTA
+                            if not isinstance(rows, list):
+                                print(f"⚠️ fetchall() no retornó lista en {self.table_name}")
+                                result = []
+                            else:
+                                result = [self._row_to_dict(cursor, row) for row in rows]
+                        
+                        # Cachear resultado SOLO SI use_cache es True
+                        if use_cache and result is not None:
+                            self.cache.set(query, result, params, self.cache_type)
+                        
+                        return result
+                        
+                    except Exception as fetch_error:
+                        print(f"❌ Error procesando resultados SELECT en {self.table_name}: {fetch_error}")
+                        if fetch_one:
+                            return None
+                        return []
+                        
                 elif has_output and has_insert:
                     # INSERT con OUTPUT - MANEJO ESPECÍFICO PARA SQL SERVER
-                    print(f"🔍 DEBUG: Procesando INSERT con OUTPUT en {self.table_name}...")
+                    print(f"🔍 Procesando INSERT con OUTPUT en {self.table_name}...")
                     
                     try:
                         row = cursor.fetchone()
-                        print(f"🔍 DEBUG: Row obtenida: {row} (tipo: {type(row)})")
                         
                         if row is not None:
                             # Convertir la fila a diccionario
@@ -116,57 +160,99 @@ class BaseRepository(ABC):
                             
                             for column, value in zip(columns, row):
                                 result[column] = value
-                                
-                            #print(f"🔍 DEBUG: Resultado convertido: {result}")
                             
                             # Verificar que tenemos el ID
                             if 'id' in result and result['id'] is not None:
                                 conn.commit()
                                 # ✅ INVALIDACIÓN MEJORADA DESPUÉS DE INSERT
                                 self._invalidate_cache_after_modification()
-                                #print(f"✅ INSERT con OUTPUT exitoso en {self.table_name} - ID: {result['id']}")
+                                print(f"✅ INSERT con OUTPUT exitoso en {self.table_name} - ID: {result['id']}")
                                 return result
                             else:
-                                #print(f"❌ ERROR: ID no encontrado en resultado: {result}")
+                                print(f"❌ ERROR: ID no encontrado en resultado INSERT")
                                 conn.rollback()
                                 return None
                         else:
-                            print(f"❌ ERROR: cursor.fetchone() retornó None")
+                            print(f"❌ ERROR: cursor.fetchone() retornó None en INSERT")
                             conn.rollback()
                             return None
                             
                     except Exception as fetch_error:
-                        print(f"❌ ERROR en fetchone(): {fetch_error}")
-                        conn.rollback()
+                        print(f"❌ ERROR en fetchone() INSERT: {fetch_error}")
+                        if conn:
+                            conn.rollback()
                         return None
                         
                 else:
                     # UPDATE, DELETE queries normales
-                    #print(f"🔍 DEBUG: Procesando query normal (UPDATE/DELETE) en {self.table_name}...")
-                    affected_rows = cursor.rowcount
-                    conn.commit()
-                    
-                    # ✅ INVALIDAR caché después de operaciones CUD
-                    self._invalidate_cache_after_modification()
-                    
-                    print(f"✅ {query.split()[0]} completado en {self.table_name} - Filas afectadas: {affected_rows}")
-                    return affected_rows
-                    
+                    try:
+                        affected_rows = cursor.rowcount
+                        
+                        # ✅ VALIDAR QUE affected_rows SEA NUMÉRICO
+                        if not isinstance(affected_rows, int):
+                            print(f"⚠️ rowcount no es int: {type(affected_rows)}")
+                            affected_rows = 0
+                        
+                        conn.commit()
+                        
+                        # ✅ INVALIDAR caché después de operaciones CUD
+                        self._invalidate_cache_after_modification()
+                        
+                        print(f"✅ {query.split()[0]} completado en {self.table_name} - Filas: {affected_rows}")
+                        return affected_rows
+                        
+                    except Exception as update_error:
+                        print(f"❌ Error en UPDATE/DELETE en {self.table_name}: {update_error}")
+                        if conn:
+                            conn.rollback()
+                        return 0
+                        
             except pyodbc.Error as e:
                 if conn:
-                    conn.rollback()
+                    try:
+                        conn.rollback()
+                    except:
+                        pass
+                
                 print(f"❌ ERROR SQL en {self.table_name}: {str(e)}")
-                print(f"🔍 Query problemática: {query}")
-                print(f"🔍 Parámetros: {params}")
-                raise DatabaseQueryError(f"Error SQL: {str(e)}", query, params)
+                print(f"🔍 Query: {query[:200]}...")
+                print(f"🔍 Params: {params}")
+                
+                # ✅ NO LANZAR EXCEPCIÓN, RETORNAR VALOR SEGURO
+                if fetch_one:
+                    return None
+                return [] if query.strip().upper().startswith('SELECT') else 0
+                
             except Exception as e:
                 if conn:
-                    conn.rollback()
+                    try:
+                        conn.rollback()
+                    except:
+                        pass
+                
                 print(f"❌ ERROR INESPERADO en {self.table_name}: {str(e)}")
-                raise DatabaseQueryError(f"Error inesperado: {str(e)}", query, params)
+                import traceback
+                traceback.print_exc()
+                
+                # ✅ NO LANZAR EXCEPCIÓN, RETORNAR VALOR SEGURO
+                if fetch_one:
+                    return None
+                return [] if query.strip().upper().startswith('SELECT') else 0
+                
             finally:
+                # ✅ CERRAR CURSOR PRIMERO
+                if cursor:
+                    try:
+                        cursor.close()
+                    except:
+                        pass
+                
+                # ✅ CERRAR CONEXIÓN
                 if conn:
-                    conn.close()
+                    try:
+                        conn.close()
+                    except Exception as close_error:
+                        print(f"⚠️ Error cerrando conexión: {close_error}")
 
     
     def _row_to_dict(self, cursor: pyodbc.Cursor, row: pyodbc.Row) -> Dict[str, Any]:

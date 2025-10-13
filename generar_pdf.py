@@ -134,19 +134,52 @@ class GeneradorReportesPDF:
             print("⚠️ Logo no encontrado, usando logo profesional")
     
     def generar_reporte_pdf(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
-        """Método principal para generar un PDF del reporte"""
+        """Método principal para generar un PDF del reporte - VERSIÓN MEJORADA"""
         try:
             print(f"📄 Iniciando generación de PDF profesional mejorado - Tipo: {tipo_reporte}")
             
-            datos = json.loads(datos_json)
-            tipo_reporte_int = int(tipo_reporte)
+            # ✅ VALIDAR ENTRADA JSON
+            if not datos_json or datos_json.strip() == "":
+                print("❌ datos_json vacío")
+                return ""
+            
+            # ✅ PARSEAR JSON CON VALIDACIÓN
+            try:
+                datos = json.loads(datos_json)
+            except json.JSONDecodeError as json_error:
+                print(f"❌ Error parseando JSON: {json_error}")
+                return ""
+            
+            # ✅ VALIDAR QUE datos NO SEA None
+            if datos is None:
+                print("❌ Datos parseados son None")
+                return ""
+            
+            # ✅ VALIDAR tipo_reporte
+            try:
+                tipo_reporte_int = int(tipo_reporte)
+            except (ValueError, TypeError):
+                print(f"❌ tipo_reporte inválido: {tipo_reporte}")
+                return ""
+            
+            # ✅ VALIDAR FECHAS
+            if not fecha_desde or not fecha_hasta:
+                print("❌ Fechas vacías")
+                return ""
             
             filename = self._generar_nombre_archivo(tipo_reporte_int, fecha_desde, fecha_hasta)
             filepath = os.path.join(self.pdf_dir, filename)
             
-            success = self._crear_pdf_profesional_mejorado(
-                filepath, datos, tipo_reporte_int, fecha_desde, fecha_hasta
-            )
+            # ✅ CREAR PDF CON MANEJO DE ERRORES
+            try:
+                success = self._crear_pdf_profesional_mejorado(
+                    filepath, datos, tipo_reporte_int, fecha_desde, fecha_hasta
+                )
+            except Exception as pdf_error:
+                print(f"❌ Error creando PDF: {pdf_error}")
+                import traceback
+                traceback.print_exc()
+                return ""
             
             if success:
                 print(f"✅ PDF profesional mejorado generado: {filepath}")
@@ -159,7 +192,7 @@ class GeneradorReportesPDF:
             print(f"⚠️ Error en generar_reporte_pdf: {e}")
             import traceback
             traceback.print_exc()
-            return ""
+            return ""  # ✅ SIEMPRE RETORNAR STRING (vacío en error)
     
     def _generar_nombre_archivo(self, tipo_reporte, fecha_desde, fecha_hasta):
         """Genera nombre único para el archivo PDF"""
@@ -858,65 +891,119 @@ class GeneradorReportesPDF:
             return False
 
     def _crear_arqueo_caja_completo(self, datos, fecha_desde, fecha_hasta):
-        """Crea arqueo de caja con estructura mejorada desde repository"""
+        """Crea arqueo de caja con estructura mejorada - VERSIÓN VALIDADA"""
         elementos = []
         
         try:
             print("📄 Iniciando creación de arqueo completo...")
             
+            # ✅ VALIDAR QUE datos NO SEA None O VACÍO
+            if not datos:
+                print("❌ Datos de arqueo vacíos o None")
+                return [self._crear_mensaje_error()]
+            
             # 1. TÍTULO
             elementos.extend(self._crear_titulo_arqueo_caja(fecha_desde))
             
-            # 2. EXTRAER DATOS SEGÚN ESTRUCTURA
+            # 2. EXTRAER DATOS SEGÚN ESTRUCTURA CON VALIDACIÓN
             if isinstance(datos, dict):
-                # Datos vienen estructurados desde el model
+                # ✅ VALIDAR CLAVES ANTES DE ACCEDER
                 movimientos = datos.get('movimientos_completos', [])
+                
+                # ✅ VALIDAR QUE movimientos SEA LISTA
+                if not isinstance(movimientos, list):
+                    print(f"⚠️ movimientos_completos no es lista: {type(movimientos)}")
+                    movimientos = []
+                
+                # ✅ EXTRAER RESUMEN CON VALORES POR DEFECTO
                 resumen = {
-                    'total_ingresos': datos.get('total_ingresos', 0),
-                    'total_egresos': datos.get('total_egresos', 0),
-                    'saldo_teorico': datos.get('saldo_teorico', 0),
-                    'efectivo_real': datos.get('efectivo_real', 0),
-                    'diferencia': datos.get('diferencia', 0)
+                    'total_ingresos': float(datos.get('total_ingresos', 0)),
+                    'total_egresos': float(datos.get('total_egresos', 0)),
+                    'saldo_teorico': float(datos.get('saldo_teorico', 0)),
+                    'efectivo_real': float(datos.get('efectivo_real', 0)),
+                    'diferencia': float(datos.get('diferencia', 0))
                 }
-                hora_inicio = datos.get('hora_inicio', '08:00')
-                hora_fin = datos.get('hora_fin', '18:00')
-            else:
+                
+                hora_inicio = str(datos.get('hora_inicio', '08:00'))
+                hora_fin = str(datos.get('hora_fin', '18:00'))
+                
+            elif isinstance(datos, list):
                 # Datos vienen como lista simple (fallback)
-                movimientos = datos if isinstance(datos, list) else []
+                movimientos = datos
                 resumen = self._calcular_resumen_desde_movimientos(movimientos)
                 hora_inicio = '08:00'
                 hora_fin = '18:00'
+            else:
+                print(f"❌ Tipo de datos inesperado: {type(datos)}")
+                return [self._crear_mensaje_error()]
             
             print(f"📊 Movimientos a procesar: {len(movimientos)}")
             
+            # ✅ VALIDAR QUE HAYA MOVIMIENTOS
+            if len(movimientos) == 0:
+                print("⚠️ No hay movimientos para procesar")
+                elementos.append(self._crear_mensaje_sin_movimientos())
+                return elementos
+            
             # 3. INFO DEL CIERRE
-            elementos.extend(self._crear_info_cierre_arqueo_mejorada(
-                fecha_desde, hora_inicio, hora_fin, resumen
-            ))
-            elementos.append(Spacer(1, 6*mm))
+            try:
+                elementos.extend(self._crear_info_cierre_arqueo_mejorada(
+                    fecha_desde, hora_inicio, hora_fin, resumen
+                ))
+                elementos.append(Spacer(1, 6*mm))
+            except Exception as info_error:
+                print(f"⚠️ Error creando info cierre: {info_error}")
+                # Continuar sin info cierre
             
-            # 4. ORGANIZAR POR MÓDULOS
-            datos_organizados = self._organizar_movimientos_por_categoria(movimientos)
+            # 4. ORGANIZAR POR MÓDULOS CON VALIDACIÓN
+            try:
+                datos_organizados = self._organizar_movimientos_por_categoria(movimientos)
+            except Exception as org_error:
+                print(f"❌ Error organizando movimientos: {org_error}")
+                return [self._crear_mensaje_error()]
             
-            # 5. DETALLE DE INGRESOS POR SECCIÓN
-            elementos.extend(self._crear_detalle_ventas_farmacia(datos_organizados))
-            elementos.append(Spacer(1, 4*mm))
+            # 5. DETALLE DE INGRESOS POR SECCIÓN (con manejo de errores individual)
+            try:
+                elementos.extend(self._crear_detalle_ventas_farmacia(datos_organizados))
+                elementos.append(Spacer(1, 4*mm))
+            except Exception as e:
+                print(f"⚠️ Error detalle farmacia: {e}")
             
-            elementos.extend(self._crear_detalle_consultas_medicas(datos_organizados))
-            elementos.append(Spacer(1, 4*mm))
+            try:
+                elementos.extend(self._crear_detalle_consultas_medicas(datos_organizados))
+                elementos.append(Spacer(1, 4*mm))
+            except Exception as e:
+                print(f"⚠️ Error detalle consultas: {e}")
             
-            elementos.extend(self._crear_detalle_laboratorio(datos_organizados))
-            elementos.append(Spacer(1, 4*mm))
+            try:
+                elementos.extend(self._crear_detalle_laboratorio(datos_organizados))
+                elementos.append(Spacer(1, 4*mm))
+            except Exception as e:
+                print(f"⚠️ Error detalle laboratorio: {e}")
             
-            elementos.extend(self._crear_detalle_enfermeria(datos_organizados))
-            elementos.append(Spacer(1, 8*mm))
+            try:
+                elementos.extend(self._crear_detalle_enfermeria(datos_organizados))
+                elementos.append(Spacer(1, 8*mm))
+            except Exception as e:
+                print(f"⚠️ Error detalle enfermería: {e}")
             
             # 6. DETALLE DE EGRESOS
-            elementos.extend(self._crear_detalle_egresos_completo(datos_organizados))
-            elementos.append(Spacer(1, 8*mm))
+            try:
+                elementos.extend(self._crear_detalle_egresos_completo(datos_organizados))
+                elementos.append(Spacer(1, 8*mm))
+            except Exception as e:
+                print(f"⚠️ Error detalle egresos: {e}")
             
             # 7. RESUMEN FINAL
-            elementos.extend(self._crear_resumen_arqueo_fisico_mejorado(resumen))
+            try:
+                elementos.extend(self._crear_resumen_arqueo_fisico_mejorado(resumen))
+            except Exception as e:
+                print(f"⚠️ Error resumen final: {e}")
+            
+            # ✅ VALIDAR QUE HAYA ELEMENTOS PARA EL PDF
+            if len(elementos) == 0:
+                print("❌ No se crearon elementos para el PDF")
+                return [self._crear_mensaje_error()]
             
             print("✅ Arqueo completo creado exitosamente")
             return elementos
@@ -926,10 +1013,11 @@ class GeneradorReportesPDF:
             import traceback
             traceback.print_exc()
             return [self._crear_mensaje_error()]
-    
+        
     def _organizar_movimientos_por_categoria(self, movimientos: List[Dict]) -> Dict:
-        """Organiza movimientos por categoría para el arqueo"""
+        """Organiza movimientos por categoría - VERSIÓN VALIDADA"""
         try:
+            # ✅ ESTRUCTURA BASE GARANTIZADA
             datos_org = {
                 'farmacia': [],
                 'consultas': [],
@@ -939,27 +1027,44 @@ class GeneradorReportesPDF:
                 'egresos': []
             }
             
+            # ✅ VALIDAR QUE movimientos SEA LISTA
+            if not isinstance(movimientos, list):
+                print(f"❌ movimientos no es lista: {type(movimientos)}")
+                return datos_org
+            
+            # ✅ VALIDAR CADA MOVIMIENTO
             for mov in movimientos:
-                tipo = mov.get('tipo', '').upper()
-                categoria = mov.get('categoria', '').lower()
+                # ✅ VALIDAR QUE mov SEA DICT
+                if not isinstance(mov, dict):
+                    print(f"⚠️ Movimiento no es dict: {type(mov)}, omitiendo")
+                    continue
                 
-                if tipo == 'EGRESO':
-                    datos_org['egresos'].append(mov)
-                
-                elif 'farmacia' in categoria:
-                    datos_org['farmacia'].append(mov)
-                
-                elif 'consulta' in categoria:
-                    datos_org['consultas'].append(mov)
-                
-                elif 'laboratorio' in categoria:
-                    datos_org['laboratorio'].append(mov)
-                
-                elif 'enfermeria' in categoria or 'enfermería' in categoria:
-                    datos_org['enfermeria'].append(mov)
-                
-                elif 'extra' in categoria or 'ingreso' in categoria:
-                    datos_org['ingresos_extras'].append(mov)
+                try:
+                    tipo = str(mov.get('tipo', '')).upper()
+                    categoria = str(mov.get('categoria', '')).lower()
+                    
+                    # Clasificar por tipo y categoría
+                    if tipo == 'EGRESO':
+                        datos_org['egresos'].append(mov)
+                    
+                    elif 'farmacia' in categoria:
+                        datos_org['farmacia'].append(mov)
+                    
+                    elif 'consulta' in categoria:
+                        datos_org['consultas'].append(mov)
+                    
+                    elif 'laboratorio' in categoria:
+                        datos_org['laboratorio'].append(mov)
+                    
+                    elif 'enfermeria' in categoria or 'enfermería' in categoria:
+                        datos_org['enfermeria'].append(mov)
+                    
+                    elif 'extra' in categoria or 'ingreso' in categoria:
+                        datos_org['ingresos_extras'].append(mov)
+                    
+                except Exception as mov_error:
+                    print(f"⚠️ Error procesando movimiento individual: {mov_error}")
+                    continue  # ✅ CONTINUAR CON EL SIGUIENTE
             
             print(f"📊 Datos organizados:")
             print(f"   Farmacia: {len(datos_org['farmacia'])}")
@@ -973,75 +1078,79 @@ class GeneradorReportesPDF:
             
         except Exception as e:
             print(f"❌ Error organizando movimientos: {e}")
-            return {'farmacia': [], 'consultas': [], 'laboratorio': [], 
-                    'enfermeria': [], 'ingresos_extras': [], 'egresos': []}      
+            import traceback
+            traceback.print_exc()
+            # ✅ RETORNAR ESTRUCTURA VACÍA PERO VÁLIDA
+            return {
+                'farmacia': [],
+                'consultas': [],
+                'laboratorio': [],
+                'enfermeria': [],
+                'ingresos_extras': [],
+                'egresos': []
+            }     
     def _calcular_resumen_desde_movimientos(self, movimientos: List[Dict]) -> Dict:
-        """Calcula resumen financiero desde movimientos cuando no viene del model"""
+        """Calcula resumen financiero - VERSIÓN VALIDADA"""
         try:
-            total_ingresos = sum(
-                float(mov.get('valor', 0)) 
-                for mov in movimientos 
-                if mov.get('tipo', '').upper() == 'INGRESO'
-            )
+            # ✅ VALIDAR QUE movimientos SEA LISTA
+            if not isinstance(movimientos, list):
+                print(f"❌ movimientos no es lista: {type(movimientos)}")
+                return {
+                    'total_ingresos': 0.0,
+                    'total_egresos': 0.0,
+                    'saldo_teorico': 0.0,
+                    'efectivo_real': 0.0,
+                    'diferencia': 0.0
+                }
             
-            total_egresos = abs(sum(
-                float(mov.get('valor', 0)) 
-                for mov in movimientos 
-                if mov.get('tipo', '').upper() == 'EGRESO'
-            ))
+            total_ingresos = 0.0
+            total_egresos = 0.0
+            
+            for mov in movimientos:
+                # ✅ VALIDAR QUE mov SEA DICT
+                if not isinstance(mov, dict):
+                    continue
+                
+                try:
+                    tipo = str(mov.get('tipo', '')).upper()
+                    
+                    # ✅ CONVERTIR valor CON VALIDACIÓN
+                    try:
+                        valor = float(mov.get('valor', 0))
+                    except (ValueError, TypeError):
+                        print(f"⚠️ Valor no numérico: {mov.get('valor')}")
+                        valor = 0.0
+                    
+                    if tipo == 'INGRESO':
+                        total_ingresos += abs(valor)
+                    elif tipo == 'EGRESO':
+                        total_egresos += abs(valor)
+                        
+                except Exception as mov_error:
+                    print(f"⚠️ Error procesando movimiento: {mov_error}")
+                    continue
             
             saldo_teorico = total_ingresos - total_egresos
             
             return {
-                'total_ingresos': total_ingresos,
-                'total_egresos': total_egresos,
-                'saldo_teorico': saldo_teorico,
-                'efectivo_real': 0,
-                'diferencia': 0
+                'total_ingresos': round(total_ingresos, 2),
+                'total_egresos': round(total_egresos, 2),
+                'saldo_teorico': round(saldo_teorico, 2),
+                'efectivo_real': 0.0,
+                'diferencia': 0.0
             }
+            
         except Exception as e:
             print(f"❌ Error calculando resumen: {e}")
             return {
-                'total_ingresos': 0,
-                'total_egresos': 0,
-                'saldo_teorico': 0,
-                'efectivo_real': 0,
-                'diferencia': 0
+                'total_ingresos': 0.0,
+                'total_egresos': 0.0,
+                'saldo_teorico': 0.0,
+                'efectivo_real': 0.0,
+                'diferencia': 0.0
             }
     
-    def _calcular_resumen_desde_movimientos(self, movimientos: List[Dict]) -> Dict:
-        """Calcula resumen financiero desde movimientos cuando no viene del model"""
-        try:
-            total_ingresos = sum(
-                float(mov.get('valor', 0)) 
-                for mov in movimientos 
-                if mov.get('tipo', '').upper() == 'INGRESO'
-            )
-            
-            total_egresos = abs(sum(
-                float(mov.get('valor', 0)) 
-                for mov in movimientos 
-                if mov.get('tipo', '').upper() == 'EGRESO'
-            ))
-            
-            saldo_teorico = total_ingresos - total_egresos
-            
-            return {
-                'total_ingresos': total_ingresos,
-                'total_egresos': total_egresos,
-                'saldo_teorico': saldo_teorico,
-                'efectivo_real': 0,
-                'diferencia': 0
-            }
-        except Exception as e:
-            print(f"❌ Error calculando resumen: {e}")
-            return {
-                'total_ingresos': 0,
-                'total_egresos': 0,
-                'saldo_teorico': 0,
-                'efectivo_real': 0,
-                'diferencia': 0
-            }
+    
     def _crear_info_cierre_arqueo_mejorada(self, fecha: str, hora_inicio: str, 
                                        hora_fin: str, resumen: Dict) -> List:
         """Info del cierre con datos del resumen"""
@@ -1600,26 +1709,47 @@ class GeneradorReportesPDF:
         ]
     
     def _extraer_hora_de_fecha(self, fecha_completa):
-        """Extrae la hora de una fecha completa"""
+        """Extrae la hora de una fecha completa - VERSIÓN ROBUSTA"""
         try:
-            if not fecha_completa or fecha_completa == '':
+            # ✅ VALIDAR QUE NO SEA None O VACÍO
+            if not fecha_completa or fecha_completa == "" or str(fecha_completa) == "None":
                 return "N/A"
             
+            fecha_str = str(fecha_completa).strip()
+            
             # Si tiene espacio, tomar la parte después del espacio como hora
-            if ' ' in str(fecha_completa):
-                hora_parte = str(fecha_completa).split(' ')[-1]
+            if ' ' in fecha_str:
+                hora_parte = fecha_str.split(' ')[-1]
                 # Si parece una hora (tiene :), devolverla
                 if ':' in hora_parte:
-                    return hora_parte[:5]  # HH:MM
+                    # Tomar solo HH:MM
+                    partes_hora = hora_parte.split(':')
+                    if len(partes_hora) >= 2:
+                        try:
+                            hh = int(partes_hora[0])
+                            mm = int(partes_hora[1])
+                            return f"{hh:02d}:{mm:02d}"
+                        except (ValueError, TypeError):
+                            pass
             
-            # Generar hora ficticia basada en la posición
-            import random
-            random.seed(hash(str(fecha_completa)))
-            hora = random.randint(8, 17)  # Entre 8 AM y 5 PM
-            minuto = random.randint(0, 59)
-            return f"{hora:02d}:{minuto:02d}"
+            # Si tiene formato ISO (T en medio)
+            if 'T' in fecha_str:
+                try:
+                    hora_parte = fecha_str.split('T')[1]
+                    if ':' in hora_parte:
+                        partes_hora = hora_parte.split(':')
+                        if len(partes_hora) >= 2:
+                            hh = int(partes_hora[0])
+                            mm = int(partes_hora[1])
+                            return f"{hh:02d}:{mm:02d}"
+                except (ValueError, IndexError, TypeError):
+                    pass
             
-        except:
+            # Si todo falla, retornar N/A
+            return "N/A"
+            
+        except Exception as e:
+            print(f"⚠️ Error extrayendo hora de fecha: {e}")
             return "N/A"
 
     def _limpiar_descripcion_farmacia(self, descripcion):
@@ -1790,6 +1920,31 @@ class GeneradorReportesPDF:
         )
         
         return Paragraph("Error generando reporte de ingresos y egresos", error_style)
+    
+    def _crear_mensaje_sin_movimientos(self):
+        """✅ NUEVO: Crea mensaje cuando no hay movimientos"""
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import Paragraph
+        from reportlab.lib.enums import TA_CENTER
+        
+        styles = getSampleStyleSheet()
+        mensaje_style = ParagraphStyle(
+            'SinMovimientos',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=COLOR_GRIS_OSCURO,
+            alignment=TA_CENTER,
+            spaceAfter=20*mm,
+            spaceBefore=20*mm
+        )
+        
+        mensaje = """
+        <b>📋 NO HAY MOVIMIENTOS PARA ESTE PERÍODO</b><br/><br/>
+        No se registraron transacciones en el rango de fecha y hora especificado.<br/>
+        Verifique los parámetros de consulta.
+        """
+        
+        return Paragraph(mensaje, mensaje_style)
     
     # ===== MÉTODOS EXISTENTES (MANTENER FUNCIONALIDAD ANTERIOR) =====
     
