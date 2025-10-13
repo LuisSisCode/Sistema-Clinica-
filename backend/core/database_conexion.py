@@ -1,92 +1,118 @@
+"""
+Gestor de conexión a SQL Server
+"""
+
 import pyodbc
 import logging
+from .config import Config
 
-# Configurar logging
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('db_connection')
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('database_conexion')
 
 class DatabaseConnection:
     """
-    Clase para manejar la conexión a la base de datos SQL Server.
+    Clase Singleton para manejar la conexión a SQL Server.
     """
     _instance = None
     
-    def __new__(cls, *args, **kwargs):
-        """
-        Implementación del patrón Singleton para asegurar una única instancia
-        de la conexión a la base de datos.
-        """
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super(DatabaseConnection, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self, server="PC\SQLEXPRESS", database="ClinicaMariaInmaculada", trusted_connection=False):
+    def __init__(self):
         """
-        Inicializa la conexión a la base de datos SQL Server.
-        
-        Args:
-            server (str): Nombre del servidor SQL Server.
-            database (str): Nombre de la base de datos.
-            trusted_connection (bool): Usar autenticación de Windows (True) o SQL Server (False).
+        Inicializa la conexión usando Config centralizado.
         """
-        # Evitar reinicialización si ya está inicializado (parte del patrón Singleton)
         if self._initialized:
             return
-            
-        self.server = server
-        self.database = database
-        self.trusted_connection = trusted_connection
         
         try:
-            self.connection_string = f"DRIVER={{SQL Server}};SERVER={server};DATABASE={database};"
+            # Usar configuración centralizada
+            self.connection_string = Config.get_db_connection_string()
+            self.server = Config.DB_SERVER
+            self.database = Config.DB_DATABASE
             
-            if trusted_connection:
-                self.connection_string += "Trusted_Connection=yes;"
-            else:
-                # Si necesitas usar autenticación de SQL Server, añade usuario y contraseña
-                #self.connection_string += "UID=ADMIN;PWD=admin;"
-                pass
-                
-            # Probar la conexión al iniciar
-            self.test_connection()
-            logger.info("Conexión a la base de datos establecida correctamente.")
+            logger.info(f"📡 Configurando conexión a: {self.server}/{self.database}")
             self._initialized = True
+            
         except Exception as e:
-            logger.error(f"Error al establecer la conexión a la base de datos: {str(e)}")
+            logger.error(f"❌ Error configurando conexión: {e}")
             raise
 
     def test_connection(self):
-        """Prueba la conexión a la base de datos."""
+        """
+        Prueba la conexión a la base de datos.
+        
+        Returns:
+            bool: True si conecta exitosamente, False si falla.
+        """
         try:
-            with pyodbc.connect(self.connection_string) as conn:
-                pass
+            with pyodbc.connect(self.connection_string, timeout=5) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            logger.info("✅ Conexión a BD exitosa")
+            return True
         except Exception as e:
-            logger.error(f"Error al probar la conexión: {str(e)}")
-            raise
+            logger.error(f"❌ Error al conectar a BD: {e}")
+            return False
     
     def get_connection(self):
         """
-        Obtiene una conexión a la base de datos.
+        Obtiene una nueva conexión a la base de datos.
         
         Returns:
-            Connection: Objeto de conexión pyodbc.
+            pyodbc.Connection: Objeto de conexión.
+        
+        Raises:
+            Exception: Si no puede establecer conexión.
         """
         try:
             return pyodbc.connect(self.connection_string)
         except Exception as e:
-            logger.error(f"Error al obtener conexión: {str(e)}")
+            logger.error(f"❌ Error obteniendo conexión: {e}")
             raise
-            
+    
     def get_connection_string(self):
         """
         Obtiene la cadena de conexión.
         
         Returns:
-            str: Cadena de conexión a la base de datos.
+            str: Connection string.
         """
         return self.connection_string
+    
+    def database_exists(self):
+        """
+        Verifica si la base de datos existe.
+        
+        Returns:
+            bool: True si existe, False si no.
+        """
+        try:
+            # Conectar a master para verificar si DB existe
+            master_conn_str = self.connection_string.replace(
+                f"DATABASE={self.database}",
+                "DATABASE=master"
+            )
+            
+            with pyodbc.connect(master_conn_str) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM sys.databases WHERE name = ?",
+                    (self.database,)
+                )
+                result = cursor.fetchone()
+                return result is not None
+                
+        except Exception as e:
+            logger.error(f"❌ Error verificando existencia de BD: {e}")
+            return False
 
-x = DatabaseConnection()
-x.test_connection()
+# NO ejecutar nada al importar - solo definir la clase
+# Esto permite que el código decida cuándo conectar

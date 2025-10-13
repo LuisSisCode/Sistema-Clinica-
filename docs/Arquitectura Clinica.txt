@@ -1,154 +1,184 @@
-# Estructura del Proyecto Clínica App
-# CLINICAAPP - ARQUITECTURA CON SIGNALS/SLOTS/PROPERTIES
-clinica_app/
-├── backend/
-│   ├── core/                                    # 🆕 Núcleo del sistema
+Sistema-Clinica-/
+│
+├── 📂 backend/                                  # Backend Python
+│   ├── 📂 core/                                 # Núcleo del sistema
 │   │   ├── __init__.py
-│   │   ├── config.py                            # Configuración centralizada
-│   │   ├── database_conexion.py               # Conexión SQL Server
-│   │   ├── excepciones.py                        # Excepciones personalizadas
+│   │   ├── config.py                            # Configuración centralizada (.env)
+│   │   ├── database_conexion.py                 # Conexión SQL Server (pyodbc)
+│   │   ├── excepciones.py                       # Excepciones personalizadas
 │   │   ├── cache_system.py                      # Sistema de caché completo
-│   │   ├── base_repository.py                   # Repositorio base
-│   │   ├── Signals_manager.py
+│   │   ├── base_repository.py                   # Repositorio base con CRUD
+│   │   ├── Signals_manager.py                   # Gestor de señales globales
 │   │   └── utils.py                             # Utilidades generales
 │   │
-│   ├── models/                                  # 🎯 QObject Models para QML
-│   │   ├── ConfiguracionModel/
+│   ├── 📂 models/                               # QObject Models para QML
+│   │   ├── 📂 ConfiguracionModel/               # Modelos de configuración
 │   │   │   ├── __init__.py
-│   │   │   ├── ConfiEnfermeria_model.py
-│   │   │   ├── ConfiLaboratorio_model.py
-│   │   │   ├── ConfiServiciosbasicos_model.py
-│   │   │   └── ConfiTrabajadores_model.py
-│   │   │   
-│   │   ├── usuario_model.py                     # Usuario + Roles (QObject)
-│   │   ├── enfermeria_model.py                     # Usuario + Roles (QObject)
-│   │   ├── paciente_model.py                    # Pacientes (QObject)
-│   │   ├── doctor_model.py                      # Doctores + Especialidades (QObject)
-│   │   ├── trabajador_model.py                  # Trabajadores + Tipos (QObject)
-│   │   ├── consulta_model.py                    # Consultas médicas (QObject)
-│   │   ├── laboratorio_model.py                 # Laboratorio (QObject)
-│   │   ├── inventario_model.py                  # Productos + Marcas + Lotes (QObject)
-│   │   ├── compra_model.py                      # Compras + Proveedores (QObject)
-│   │   ├── venta_model.py                       # Ventas + Detalles (QObject)
-│   │   ├── gasto_model.py                       # Gastos + Tipos (QObject)
-│   │   ├── auth_model.py                        # Autenticación (QObject)
-│   │   ├── proveedor_model.py
-│   │   ├── reportes_model.py
-│   │   ├── cierre_caja_model.py
-│   │   └── dashboard_model.py                   # Estadísticas generales (QObject)
+│   │   │   ├── ConfiConsulta_model.py           # Config especialidades médicas
+│   │   │   ├── ConfiEnfermeria_model.py         # Config tipos de procedimientos
+│   │   │   ├── ConfiLaboratorio_model.py        # Config tipos de análisis
+│   │   │   ├── ConfiServiciosbasicos_model.py   # Config tipos de gastos
+│   │   │   └── ConfiTrabajadores_model.py       # Config tipos de trabajadores
+│   │   │
+│   │   ├── auth_model.py                        # Autenticación y sesiones
+│   │   ├── usuario_model.py                     # Gestión de usuarios y roles
+│   │   ├── paciente_model.py                    # Gestión de pacientes
+│   │   ├── trabajador_model.py                  # Trabajadores (enfermeras, técnicos)
+│   │   ├── consulta_model.py                    # Consultas médicas
+│   │   ├── enfermeria_model.py                  # Procedimientos de enfermería
+│   │   ├── laboratorio_model.py                 # Análisis de laboratorio
+│   │   ├── inventario_model.py                  # Productos, marcas y lotes
+│   │   ├── proveedor_model.py                   # Proveedores
+│   │   ├── compra_model.py                      # Compras e ingresos de stock
+│   │   ├── venta_model.py                       # Ventas y detalles
+│   │   ├── gasto_model.py                       # Gastos operativos
+│   │   ├── cierre_caja_model.py                 # Cierre de caja diario
+│   │   ├── ingreso_extra_model.py               # Ingresos extras
+│   │   ├── reportes_model.py                    # Generación de reportes
+│   │   └── dashboard_model.py                   # Estadísticas y KPIs
 │   │
-│   ├── repositories/                            # 📊 Acceso a datos
-│   │   ├── ConfiguracionRepositor/
-│   │   │   ├── __init__.py
-│   │   │   ├── ConfiEnfermeria_repository.py
-│   │   │   ├── ConfiLaboratorio_repository.py
-│   │   │   ├── ConfiServiciosbasicos_repository.py
-│   │   │   └── ConfiTrabajadores_repository.py
-│   │   │   
-│   │   ├── __init__.py
-│   │   ├── usuario_repository.py                # Usuario + Roles
-│   │   ├── auth_repository.py   
-│   │   ├── reportes_repository.py
-│   │   ├── cierre_caja_repository.py               
-│   │   ├── enfermeria_repository.py             
-│   │   ├── paciente_repository.py               # Pacientes
-│   │   ├── doctor_repository.py                 # Doctores + Especialidades
-│   │   ├── trabajador_repository.py             # Trabajadores + Tipos
-│   │   ├── consulta_repository.py               # Consultas médicas
-│   │   ├── laboratorio_repository.py            # Laboratorio
-│   │   ├── producto_repository.py               # Productos + Marcas + Lotes
-│   │   ├── compra_repository.py                 # Compras + Proveedores
-│   │   ├── venta_repository.py                  # Ventas + Detalles
-│   │   ├── gasto_repository.py                  # Gastos + Tipos
-│   │   └── proveedor_repository.py                  # Gastos + Tipos
-│   │   
+│   └── 📂 repositories/                         # Acceso a datos (SQL Server)
+│       ├── 📂 ConfiguracionRepositor/           # Repositorios de configuración
+│       │   ├── __init__.py
+│       │   ├── ConfiConsulta_repository.py
+│       │   ├── ConfiEnfermeria_repository.py
+│       │   ├── ConfiLaboratorio_repository.py
+│       │   ├── ConfiServiciosbasicos_repository.py
+│       │   └── ConfiTrabajadores_repository.py
+│       │
+│       ├── __init__.py
+│       ├── auth_repository.py                   # Autenticación y sesiones
+│       ├── usuario_repository.py                # CRUD usuarios y roles
+│       ├── paciente_repository.py               # CRUD pacientes
+│       ├── trabajador_repository.py             # CRUD trabajadores
+│       ├── consulta_repository.py               # CRUD consultas médicas
+│       ├── enfermeria_repository.py             # CRUD procedimientos
+│       ├── laboratorio_repository.py            # CRUD análisis de lab
+│       ├── producto_repository.py               # CRUD productos/marcas/lotes
+│       ├── proveedor_repository.py              # CRUD proveedores
+│       ├── compra_repository.py                 # CRUD compras
+│       ├── venta_repository.py                  # CRUD ventas
+│       ├── gasto_repository.py                  # CRUD gastos
+│       ├── cierre_caja_repository.py            # CRUD cierre de caja
+│       ├── ingreso_extra_repository.py          # CRUD ingresos extras
+│       └── reportes_repository.py               # Consultas para reportes
+│
+├── 📂 Resources/                                # Recursos estáticos
+│   └── 📂 iconos/                               # Iconos de la aplicación
+│
+├── 📂 database_scripts/                         # 🆕 Scripts SQL para instalación
+│   ├── 01_schema.sql                            # Estructura de tablas
+│   └── 02_datos_iniciales.sql                   # Datos base (roles, tipos, etc)
+│                     
+│
+├── 📂 docs/                                     # Documentación
+│   ├── Arquitectura_clinica.txt                 # Este archivo
+│   └── database_schema.md                       # (Opcional) Esquema de BD
+│
+├── 📂 logs/                                     # Logs de la aplicación
+│   └── login.log                                  # Log principal
+│
+├── 📂 reportes/                                 # PDFs generados
+│   └── (archivos PDF de reportes)
+│
+├── 📂 temp/                                     # Archivos temporales
+│
+├── 📂 venv/                                     # Entorno virtual Python
+│   ├── Lib/
+│   ├── Scripts/
+│   └── ...
+│
+├── 📂 __pycache__/                              # Cache de Python (ignorar)
+│
+├── 📂 ClinicaApp_Portable/                                # Carpeta para enviar a otras pc para ver el funcionamiento del programa
+│   ├── 📂 database_script/                               
+│   │   ├── 01_schema.sql                            # Estructura de tablas
+│   │   └── 02_datos_iniciales.sql                   # Datos base (roles, tipos, etc)
+│   ├── 📂 logs/                               
+│   ├── 📂 reportes/                             
+│   ├── 📂 temp/                             
+│   ├── ClinicaApp.exe                               
+│   └── INSTRUCCIONES.txt
+│
+├── 📂 dist/                               
+│   └── ClinicaApp.exe                       # App en archivo .exe
+├── 📂 build/                                    # Archivos generados por PyInstaller
+│   ├── 📂 clinica/                              # Carpeta principal de build
+│   │   ├── Analysis-00.toc
+│   │   ├── base_library.zip
+│   │   ├── ClinicaApp.pkg
+│   │   ├── EXE-00.toc
+│   │   ├── PKG-00.toc
+│   │   ├── PYZ-00.pyz
+│   │   ├── PYZ-00.toc
+│   │   ├── war-clinica.txt
+│   │   ├── xref-clinica.html
+│   │   └── 📂 localpycs/
+│   │        ├── pyimod01_archive.pyc
+│   │        ├── pyimod02_importers.pyc
+│   │        ├── pyimod03_ctypes.pyc
+│   │        ├── pyimod04_pywin32.pyc
+│   │        └── struct.pyc
+│
+├── 📄 Archivos QML (Frontend)                   # Interfaz gráfica Qt Quick
+│   ├── main.qml                                 # Ventana principal
+│   ├── login.qml                                # Pantalla de login
+│   ├── Dashboard.qml                            # Dashboard principal
 │   │
-│   └── main.py                                  # Punto de entrada principal
-│                             
-├── resources/
-│       ├── icons/
-│       └── fonts/
+│   ├── 📋 Módulo Farmacia
+│   ├── Productos.qml                            # Lista de productos
+│   ├── CrearProducto.qml                        # Formulario producto
+│   ├── DetalleProducto.qml 
+│   ├── Farmacia.qml                             # Gestión farmacia
+│   ├── MarcaComboBox.qml                        # Componente combo marcas
+│   │
+│   ├── 📋 Módulo Compras
+│   ├── Compras.qml                              # Lista de compras
+│   ├── CrearCompra.qml                          # Formulario compra
+│   ├── CompraMain.qml                           # Vista principal compras
+│   │
+│   ├── 📋 Módulo Ventas
+│   ├── Ventas.qml                               # Lista de ventas
+│   ├── CrearVenta.qml                           # Formulario venta
+│   ├── VentasMain.qml                           # Vista principal ventas
+│   │
+│   ├── 📋 Módulo Proveedores
+│   ├── Proveedores.qml                          # Lista de proveedores
+│   ├── CrearProveedor.qml                       # Formulario proveedor
+│   ├── ProveedorComboBox.qml                    # Componente combo proveedores
+│   │
+│   ├── 📋 Módulo Médico
+│   ├── Consultas.qml                            # Consultas médicas
+│   ├── Enfermeria.qml                           # Procedimientos enfermería
+│   ├── Laboratorio.qml                          # Análisis de laboratorio
+│   │
+│   ├── 📋 Módulo Administrativo
+│   ├── ServiciosBasicos.qml                     # Servicios básicos
+│   ├── Trabajadores.qml                         # Gestión trabajadores
+│   ├── Usuario.qml                              # Gestión usuarios
+│   ├── CierreCaja.qml                           # Cierre de caja
+│   ├── IngresosExtras.qml                       # 🆕 Ingresos extras
+│   │
+│   ├── 📋 Módulo Configuración
+│   ├── Configuracion.qml                        # Menú configuración
+│   ├── ConfiConsultas.qml                       # Config especialidades
+│   ├── ConfiEnfermeria.qml                      # Config procedimientos
+│   ├── ConfiLaboratorio.qml                     # Config análisis
+│   ├── ConfiServiciosBasicos.qml                # Config tipos de gastos
+│   ├── ConfiTrabajadores.qml                    # Config tipos trabajadores
+│   ├── ConfiUsuarios.qml                        # Config usuarios
+│   │
+│   ├── 📋 Módulo Reportes
+│   └──Reportes.qml                             # Generación de reportes
+│   
+├── 📄 Archivos Python principales
+│   ├── main.py                                  # Punto de entrada de la aplicación
+│   └── generar_pdf.py                           # Generador de reportes PDF
 │
-├── database/                                    # 📄 Scripts SQL
-│   ├── clinica_db.sql                           # Tu script actual
-│   ├── indexes.sql                              # Índices optimización
-│   └── stored_procedures.sql                    # Procedimientos almacenados
-│
-├── docs/                                        # 📚 Documentación
-│   ├── Arquitectura_clinica.txt                          # Documentación arquitectura
-│   └── database_schema.md                       # Esquema BD
-│
-├── Dashboard.qml
-├── Compras.qml
-├── CrearCompra.qml
-├── CompraMain.qml
-├── Ventas.qml
-├── CrearVenta.qml
-├── VentasMain.qml
-├── Proveedores.qml
-├── CrearProveedor.qml
-├── Productos.qml
-├── CrearProducto.qml
-├── Farmacia.qml
-├── Consultas.qml
-├───Laboratorio.qml              
-├── Enfermeria.qml
-├── ServiciosBasicos.qml
-├── Trabajadores.qml
-├── GLobalDataCenter.qml
-├── login.qml
-├── Usuario.qml
-├── Configuracion.qml
-├── ConfiColsultas.qml
-├── ConfiEnfermeria.qml
-├── ConfiLaboratorio.qml
-├── ConfiServiciosBasicos.qml
-├── ConfiTrabajadores.qml
-├── ConfiUsuarios.qml
-├── Reportes.qml
-├── CierreCaja.qml
-├── MarcaComboBox.qml
-├── ProveedorComboBox.qml
-├── login.qml
-├── main.qml
-│     
-├── generar_pdf.py	                        
-├── main.py						# Script ejecucion con login
-└── .env                                 			# Variables entorno
-
-## CAMBIOS PRINCIPALES VS ARQUITECTURA API
-
-### ✅ MODIFICADO:
-- `backend/api/` → `backend/models/` (QObject con Signals/Slots/Properties)
-- Servicios son OPCIONALES (pueden usarse desde Models)
-- main.py registra Models directamente en QML
-
-## FLUJO DE DATOS SIMPLIFICADO:
-
-QML → Model (QObject) → [Service] → Repository → SQL Server
-  ↑         ↓
-Properties Signals
-
-## ESTRUCTURA DE CARPETAS PRINCIPALES:
-
-### backend/core/ (FUNDAMENTAL)
-Sistema base compartido - configuración, caché, excepciones
-
-### backend/models/ (PRINCIPAL)
-QObject classes con @Slot, @Signal, @Property para conectar con QML
-
-### backend/repositories/ (ACCESO DATOS)  
-Clases CRUD con sistema de caché integrado
-
-## Descripción de la Arquitectura
-
-**Backend**: Arquitectura por capas con patrón Repository
-- **Database**: Conexión SQL Server, modelos ORM y repositorios por dominio
-- **Core**: Configuración global y utilidades
-
-**Frontend**: Interfaz Qt QML con componentes reutilizables
-- **Components**: Elementos UI comunes (Header, SideMenu, Notifications)
-- **Views**: Pantallas específicas para cada módulo clínico
-- **Resources**: Iconos y tipografías personalizadas
-
-Esta estructura implementa una arquitectura limpia, mantenible y escalable para gestión clínica integral.
+├── 📄 Archivos de configuración
+│   ├── .env                                     # Variables de entorno (NO incluir en repo)
+│   ├── config_template.txt                      # 🆕 Template de configuración
+│   ├── requirements.txt                         # Dependencias Python
+│   ├── .gitignore                               # Archivos ignorados por Git
+│   ├── clinica.spec
+│   └── README.md                                # Documentación del proyecto

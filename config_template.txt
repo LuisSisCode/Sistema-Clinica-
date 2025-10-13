@@ -1,0 +1,43 @@
+# ============================================
+# CONFIGURACIÓN - Sistema Clínica
+# Este archivo será renombrado a config.env
+# ============================================
+
+[DATABASE]
+# Configuración de SQL Server
+# Ejemplos de servidores:
+#   - Instancia local: localhost\SQLEXPRESS
+#   - Servidor específico: DESKTOP-HOE6AHT\SQLEXPRESS
+#   - Servidor remoto: 192.168.1.100\SQLEXPRESS
+#   - Puerto específico: localhost,1433
+DB_SERVER=localhost\SQLEXPRESS
+DB_DATABASE=ClinicaMariaInmaculada
+
+# Autenticación de Windows (recomendado para desarrollo)
+# Valores: yes, no
+DB_TRUSTED_CONNECTION=yes
+
+# Si DB_TRUSTED_CONNECTION=no, configurar:
+DB_USER=
+DB_PASSWORD=
+
+# Timeout de conexión (segundos)
+DB_TIMEOUT=30
+
+[APPLICATION]
+# Nombre de la clínica
+CLINIC_NAME=Clínica María Inmaculada
+
+# Primera instalación
+# Cambiar a False después del setup inicial
+FIRST_TIME_SETUP=True
+
+# Directorio de reportes PDF (relativo al ejecutable)
+REPORTS_DIR=reportes
+
+# Nivel de logging: DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL=INFO
+
+[SECURITY]
+# Clave secreta para sesiones (cambiar en producción)
+SECRET_KEY=clinica-secret-key-2025
