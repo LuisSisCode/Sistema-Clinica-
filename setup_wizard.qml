@@ -29,6 +29,18 @@ ApplicationWindow {
     property bool setupInProgress: false
     property var credenciales: ({})
     
+    // Timer para cerrar la ventana
+    Timer {
+        id: closeTimer
+        interval: 500
+        repeat: false
+        onTriggered: {
+            console.log("🔒 Cerrando Setup Wizard...")
+            wizardWindow.close()
+            wizardWindow.destroy()
+        }
+    }
+    
     // Permite mover la ventana
     MouseArea {
         id: dragArea
@@ -56,9 +68,8 @@ ApplicationWindow {
         anchors.fill: parent
         radius: 15
         color: "#ffffff"
-        border.color: primaryColor  // ✅ Azul oscuro visible
+        border.color: primaryColor
         border.width: 2
-        
         
         ColumnLayout {
             anchors.fill: parent
@@ -190,6 +201,7 @@ ApplicationWindow {
                             }
                             
                             Rectangle {
+                                Layout.alignment: Qt.AlignHCenter
                                 width: 250
                                 height: 60
                                 radius: 30
@@ -246,7 +258,7 @@ ApplicationWindow {
                                 // ===== OPCIÓN 1: SETUP AUTOMÁTICO =====
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 350
+                                    Layout.preferredHeight: 400
                                     radius: 15
                                     color: whiteColor
                                     border.color: autoMouseArea.containsMouse ? accentColor : lightGray
@@ -289,7 +301,7 @@ ApplicationWindow {
                                         
                                         ColumnLayout {
                                             Layout.fillWidth: true
-                                            spacing: 10
+                                            spacing: 12
                                             
                                             Text {
                                                 text: "✅ Configuración en 1 click"
@@ -349,7 +361,7 @@ ApplicationWindow {
                                 // ===== OPCIÓN 2: CONFIGURACIÓN MANUAL =====
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 350
+                                    Layout.preferredHeight: 400
                                     radius: 15
                                     color: whiteColor
                                     border.color: manualMouseArea.containsMouse ? accentColor : lightGray
@@ -392,7 +404,7 @@ ApplicationWindow {
                                         
                                         ColumnLayout {
                                             Layout.fillWidth: true
-                                            spacing: 10
+                                            spacing: 12
                                             
                                             Text {
                                                 text: "🔧 Configuración personalizada"
@@ -424,11 +436,10 @@ ApplicationWindow {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        enabled: false  // Deshabilitar por ahora
+                                        enabled: false
                                         
                                         onClicked: {
                                             console.log("⚙️ Setup Manual seleccionado")
-                                            // TODO: Implementar setup manual
                                         }
                                     }
                                     
@@ -449,7 +460,7 @@ ApplicationWindow {
                                 }
                             }
                             
-                            Item { Layout.preferredHeight: 20 }
+                            Item { Layout.preferredHeight: 30 }
                             
                             Button {
                                 Layout.alignment: Qt.AlignHCenter
@@ -636,13 +647,14 @@ ApplicationWindow {
                                     
                                     RowLayout {
                                         Layout.fillWidth: true
+                                        spacing: 10
                                         
                                         Text {
                                             text: "👤 Usuario:"
                                             font.pixelSize: 16
                                             font.bold: true
                                             color: primaryColor
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: 120
                                         }
                                         
                                         Text {
@@ -657,13 +669,14 @@ ApplicationWindow {
                                     
                                     RowLayout {
                                         Layout.fillWidth: true
+                                        spacing: 10
                                         
                                         Text {
                                             text: "🔑 Contraseña:"
                                             font.pixelSize: 16
                                             font.bold: true
                                             color: primaryColor
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: 120
                                         }
                                         
                                         Text {
@@ -689,6 +702,7 @@ ApplicationWindow {
                                         color: warningColor
                                         horizontalAlignment: Text.AlignHCenter
                                         wrapMode: Text.WordWrap
+                                        lineHeight: 1.4
                                     }
                                 }
                             }
@@ -716,8 +730,7 @@ ApplicationWindow {
                                     
                                     onClicked: {
                                         var texto = "Usuario: " + usernameText.text + "\nContraseña: " + passwordText.text
-                                        // TODO: Copiar al portapapeles
-                                        console.log("📋 Credenciales copiadas")
+                                        console.log("📋 Credenciales copiadas:", texto)
                                     }
                                 }
                                 
@@ -741,10 +754,13 @@ ApplicationWindow {
                                     
                                     onClicked: {
                                         console.log("✅ Setup completado - Abriendo login")
-                                        wizardWindow.close()
-                                        // Señal para abrir login
+                                        
                                         if (typeof authController !== "undefined") {
+                                            console.log("📞 Llamando a authController.showLogin()")
                                             authController.showLogin()
+                                            closeTimer.start()
+                                        } else {
+                                            console.log("❌ authController no disponible")
                                         }
                                     }
                                 }
@@ -764,12 +780,18 @@ ApplicationWindow {
         console.log("🚀 Iniciando setup automático...")
         progressMessage.text = "Iniciando configuración automática..."
         
-        // Simular progreso de pasos
+        // Resetear pasos
         step1.completed = false
         step2.completed = false
         step3.completed = false
         step4.completed = false
         step5.completed = false
+        
+        step1.inProgress = false
+        step2.inProgress = false
+        step3.inProgress = false
+        step4.inProgress = false
+        step5.inProgress = false
         
         // Llamar al handler de Python
         if (typeof setupHandler !== "undefined") {
@@ -894,19 +916,35 @@ ApplicationWindow {
                 color: accentColor
             }
             
-            Text {
-                id: errorText
+            ScrollView {
                 Layout.fillWidth: true
-                font.pixelSize: 14
-                color: darkGray
-                wrapMode: Text.WordWrap
+                Layout.fillHeight: true
+                
+                Text {
+                    id: errorText
+                    width: parent.width
+                    font.pixelSize: 14
+                    color: darkGray
+                    wrapMode: Text.WordWrap
+                }
             }
-            
-            Item { Layout.fillHeight: true }
             
             Button {
                 Layout.alignment: Qt.AlignHCenter
                 text: "CERRAR"
+                
+                background: Rectangle {
+                    color: parent.pressed ? Qt.darker(accentColor, 1.2) : 
+                           parent.hovered ? Qt.lighter(accentColor, 1.1) : accentColor
+                    radius: 5
+                }
+                
+                contentItem: Text {
+                    text: parent.text
+                    font.pixelSize: 14
+                    color: whiteColor
+                    horizontalAlignment: Text.AlignHCenter
+                }
                 
                 onClicked: {
                     errorDialog.visible = false
@@ -916,69 +954,12 @@ ApplicationWindow {
         }
     }
     
-    // Componente de paso de progreso
-    Component {
-        id: progressStepComponent
-        
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 15
-            
-            property alias stepText: stepLabel.text
-            property bool completed: false
-            property bool inProgress: false
-            
-            Rectangle {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 30
-                radius: 15
-                color: parent.completed ? successColor : 
-                       parent.inProgress ? accentColor : lightGray
-                border.color: parent.completed || parent.inProgress ? "transparent" : darkGray
-                border.width: 2
-                
-                Behavior on color { ColorAnimation { duration: 300 } }
-                
-                Text {
-                    anchors.centerIn: parent
-                    text: parent.parent.completed ? "✓" : 
-                          parent.parent.inProgress ? "⏳" : ""
-                    color: whiteColor
-                    font.pixelSize: 16
-                    font.bold: true
-                }
-                
-                RotationAnimation on rotation {
-                    from: 0
-                    to: 360
-                    duration: 2000
-                    loops: Animation.Infinite
-                    running: parent.parent.inProgress
-                }
-            }
-            
-            Text {
-                id: stepLabel
-                Layout.fillWidth: true
-                font.pixelSize: 15
-                color: parent.completed ? successColor :
-                       parent.inProgress ? primaryColor : darkGray
-                font.bold: parent.inProgress || parent.completed
-                
-                Behavior on color { ColorAnimation { duration: 300 } }
-            }
-        }
-    }
-
-
-    // Componente de paso reutilizable
     // ==================== COMPONENTE DE PASO DE PROGRESO ====================
     component ProgressStep: RowLayout {
         id: progressStepRoot
         Layout.fillWidth: true
         spacing: 15
         
-        // ✅ NO usar alias, usar propiedades directas
         property string stepText: ""
         property bool completed: false
         property bool inProgress: false
@@ -987,9 +968,9 @@ ApplicationWindow {
             Layout.preferredWidth: 30
             Layout.preferredHeight: 30
             radius: 15
-            color: progressStepRoot.completed ? "#27ae60" : 
-                   progressStepRoot.inProgress ? "#e30909" : "#ecf0f1"
-            border.color: progressStepRoot.completed || progressStepRoot.inProgress ? "transparent" : "#7f8c8d"
+            color: progressStepRoot.completed ? successColor : 
+                   progressStepRoot.inProgress ? accentColor : lightGray
+            border.color: progressStepRoot.completed || progressStepRoot.inProgress ? "transparent" : darkGray
             border.width: 2
             
             Behavior on color { ColorAnimation { duration: 300 } }
@@ -998,7 +979,7 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 text: progressStepRoot.completed ? "✓" : 
                       progressStepRoot.inProgress ? "⏳" : ""
-                color: "#ffffff"
+                color: whiteColor
                 font.pixelSize: 16
                 font.bold: true
             }
@@ -1016,8 +997,8 @@ ApplicationWindow {
             Layout.fillWidth: true
             text: progressStepRoot.stepText
             font.pixelSize: 15
-            color: progressStepRoot.completed ? "#27ae60" :
-                   progressStepRoot.inProgress ? "#273746" : "#7f8c8d"
+            color: progressStepRoot.completed ? successColor :
+                   progressStepRoot.inProgress ? primaryColor : darkGray
             font.bold: progressStepRoot.inProgress || progressStepRoot.completed
             
             Behavior on color { ColorAnimation { duration: 300 } }

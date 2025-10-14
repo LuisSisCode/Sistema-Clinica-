@@ -1703,7 +1703,6 @@ class AuthAppController(QObject):
             import traceback
             traceback.print_exc()
     
-    # 🆕 NUEVO MÉTODO: Manejar completación del setup
     @Slot(bool, str, 'QVariantMap')
     def handleSetupCompleted(self, success: bool, message: str, credenciales: dict):
         """Maneja la completación del setup wizard"""
@@ -1715,18 +1714,9 @@ class AuthAppController(QObject):
                 print(f"   Usuario: {credenciales.get('username', 'N/A')}")
                 print(f"   Base de datos: {credenciales.get('database', 'N/A')}")
                 
-                # Destruir setup wizard
-                if self.setup_engine:
-                    try:
-                        self.setup_engine.deleteLater()
-                        self.setup_engine = None
-                        print("✅ Setup engine destruido")
-                    except Exception as e:
-                        print(f"⚠️ Error destruyendo setup engine: {e}")
-                
-                # NO abrir login automáticamente
-                # El usuario debe hacer click en "IR AL LOGIN" en el wizard
-                print("ℹ️ Usuario debe hacer click en 'IR AL LOGIN' para continuar")
+                # ❌ NO DESTRUIR setup_engine aquí
+                # El wizard sigue vivo hasta que el usuario haga click en "IR AL LOGIN"
+                print("ℹ️ Esperando que el usuario haga click en 'IR AL LOGIN'...")
                 
             else:
                 print(f"❌ Setup falló: {message}")
@@ -1887,7 +1877,21 @@ class AuthAppController(QObject):
     @Slot()
     def showLogin(self):
         """Muestra login (para uso desde QML)"""
-        self.createAndShowLogin()
+        print("📞 showLogin() llamado desde QML")
+        
+        # Destruir setup engine si existe
+        if self.setup_engine:
+            try:
+                print("🗑️ Destruyendo setup_engine antes de crear login...")
+                self.setup_engine.deleteLater()
+                self.setup_engine = None
+                print("✅ Setup engine destruido")
+            except Exception as e:
+                print(f"⚠️ Error destruyendo setup engine: {e}")
+                self.setup_engine = None
+        
+        # Usar un timer para crear el login después de un pequeño delay
+        QTimer.singleShot(300, self.createAndShowLogin)
     
     @Slot()
     def exitApp(self):

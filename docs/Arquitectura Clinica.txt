@@ -1,184 +1,553 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   ARQUITECTURA DEL SISTEMA                                  ║
+║              Sistema Clínica María Inmaculada v1.0                         ║
+║                    Actualizado: Octubre 2025                                ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+================================================================================
+                            ESTRUCTURA DEL PROYECTO
+================================================================================
+
 Sistema-Clinica-/
 │
-├── 📂 backend/                                  # Backend Python
-│   ├── 📂 core/                                 # Núcleo del sistema
+├── 📁 backend/                          # Backend Python
+│   ├── 📁 core/                         # Módulos centrales
 │   │   ├── __init__.py
-│   │   ├── config.py                            # Configuración centralizada (.env)
-│   │   ├── database_conexion.py                 # Conexión SQL Server (pyodbc)
-│   │   ├── excepciones.py                       # Excepciones personalizadas
-│   │   ├── cache_system.py                      # Sistema de caché completo
-│   │   ├── base_repository.py                   # Repositorio base con CRUD
-│   │   ├── Signals_manager.py                   # Gestor de señales globales
-│   │   └── utils.py                             # Utilidades generales
+│   │   ├── config.py                    # Configuración del sistema
+│   │   ├── database_conexion.py        # Conexión a SQL Server
+│   │   ├── cache_system.py             # Sistema de caché
+│   │   ├── excepciones.py              # Excepciones personalizadas
+│   │   ├── base_repository.py          # Repositorio base
+│   │   ├── utils.py                     # Utilidades generales
+│   │   ├── db_installer.py             # ✅ NUEVO - Instalador de BD
+│   │   └── config_manager.py           # ✅ NUEVO - Gestor de configuración
 │   │
-│   ├── 📂 models/                               # QObject Models para QML
-│   │   ├── 📂 ConfiguracionModel/               # Modelos de configuración
-│   │   │   ├── __init__.py
-│   │   │   ├── ConfiConsulta_model.py           # Config especialidades médicas
-│   │   │   ├── ConfiEnfermeria_model.py         # Config tipos de procedimientos
-│   │   │   ├── ConfiLaboratorio_model.py        # Config tipos de análisis
-│   │   │   ├── ConfiServiciosbasicos_model.py   # Config tipos de gastos
-│   │   │   └── ConfiTrabajadores_model.py       # Config tipos de trabajadores
+│   ├── 📁 models/                       # Modelos QObject (Qt)
+│   │   ├── __init__.py
+│   │   ├── auth_model.py                # Autenticación
+│   │   ├── usuario_model.py             # Usuarios
+│   │   ├── paciente_model.py            # Pacientes
+│   │   ├── trabajador_model.py          # Trabajadores
+│   │   ├── consulta_model.py            # Consultas médicas
+│   │   ├── enfermeria_model.py          # Enfermería
+│   │   ├── laboratorio_model.py         # Laboratorio
+│   │   ├── inventario_model.py          # Inventario (FIFO)
+│   │   ├── proveedor_model.py           # Proveedores
+│   │   ├── compra_model.py              # Compras
+│   │   ├── venta_model.py               # Ventas
+│   │   ├── gasto_model.py               # Gastos
+│   │   ├── cierre_caja_model.py         # Cierre de caja
+│   │   ├── ingreso_extra_model.py       # Ingresos extras
+│   │   ├── reportes_model.py            # Reportes
+│   │   ├── dashboard_model.py           # Dashboard
 │   │   │
-│   │   ├── auth_model.py                        # Autenticación y sesiones
-│   │   ├── usuario_model.py                     # Gestión de usuarios y roles
-│   │   ├── paciente_model.py                    # Gestión de pacientes
-│   │   ├── trabajador_model.py                  # Trabajadores (enfermeras, técnicos)
-│   │   ├── consulta_model.py                    # Consultas médicas
-│   │   ├── enfermeria_model.py                  # Procedimientos de enfermería
-│   │   ├── laboratorio_model.py                 # Análisis de laboratorio
-│   │   ├── inventario_model.py                  # Productos, marcas y lotes
-│   │   ├── proveedor_model.py                   # Proveedores
-│   │   ├── compra_model.py                      # Compras e ingresos de stock
-│   │   ├── venta_model.py                       # Ventas y detalles
-│   │   ├── gasto_model.py                       # Gastos operativos
-│   │   ├── cierre_caja_model.py                 # Cierre de caja diario
-│   │   ├── ingreso_extra_model.py               # Ingresos extras
-│   │   ├── reportes_model.py                    # Generación de reportes
-│   │   └── dashboard_model.py                   # Estadísticas y KPIs
+│   │   └── 📁 ConfiguracionModel/       # Configuración
+│   │       ├── __init__.py
+│   │       ├── ConfiConsulta_model.py
+│   │       ├── ConfiEnfermeria_model.py
+│   │       ├── ConfiLaboratorio_model.py
+│   │       ├── ConfiServiciosbasicos_model.py
+│   │       └── ConfiTrabajadores_model.py
 │   │
-│   └── 📂 repositories/                         # Acceso a datos (SQL Server)
-│       ├── 📂 ConfiguracionRepositor/           # Repositorios de configuración
-│       │   ├── __init__.py
-│       │   ├── ConfiConsulta_repository.py
-│       │   ├── ConfiEnfermeria_repository.py
-│       │   ├── ConfiLaboratorio_repository.py
-│       │   ├── ConfiServiciosbasicos_repository.py
-│       │   └── ConfiTrabajadores_repository.py
-│       │
+│   └── 📁 repositories/                 # Repositorios (Acceso a datos)
 │       ├── __init__.py
-│       ├── auth_repository.py                   # Autenticación y sesiones
-│       ├── usuario_repository.py                # CRUD usuarios y roles
-│       ├── paciente_repository.py               # CRUD pacientes
-│       ├── trabajador_repository.py             # CRUD trabajadores
-│       ├── consulta_repository.py               # CRUD consultas médicas
-│       ├── enfermeria_repository.py             # CRUD procedimientos
-│       ├── laboratorio_repository.py            # CRUD análisis de lab
-│       ├── producto_repository.py               # CRUD productos/marcas/lotes
-│       ├── proveedor_repository.py              # CRUD proveedores
-│       ├── compra_repository.py                 # CRUD compras
-│       ├── venta_repository.py                  # CRUD ventas
-│       ├── gasto_repository.py                  # CRUD gastos
-│       ├── cierre_caja_repository.py            # CRUD cierre de caja
-│       ├── ingreso_extra_repository.py          # CRUD ingresos extras
-│       └── reportes_repository.py               # Consultas para reportes
+│       ├── auth_repository.py
+│       ├── usuario_repository.py
+│       ├── paciente_repository.py
+│       ├── trabajador_repository.py
+│       ├── consulta_repository.py
+│       ├── enfermeria_repository.py
+│       ├── laboratorio_repository.py
+│       ├── producto_repository.py
+│       ├── proveedor_repository.py
+│       ├── compra_repository.py
+│       ├── venta_repository.py
+│       ├── gasto_repository.py
+│       ├── cierre_caja_repository.py
+│       ├── ingreso_extra_repository.py
+│       ├── reportes_repository.py
+│       │
+│       └── 📁 ConfiguracionRepositor/   # Configuración
+│           ├── __init__.py
+│           ├── ConfiConsulta_repository.py
+│           ├── ConfiEnfermeria_repository.py
+│           ├── ConfiLaboratorio_repository.py
+│           ├── ConfiServiciosbasicos_repository.py
+│           └── ConfiTrabajadores_repository.py
 │
-├── 📂 Resources/                                # Recursos estáticos
-│   └── 📂 iconos/                               # Iconos de la aplicación
+├── 📁 database_scripts/                 # ✅ Scripts SQL
+│   ├── 01_schema.sql                    # Estructura de BD
+│   └── 02_datos_iniciales.sql          # ✅ NUEVO - Datos iniciales
 │
-├── 📂 database_scripts/                         # 🆕 Scripts SQL para instalación
-│   ├── 01_schema.sql                            # Estructura de tablas
-│   └── 02_datos_iniciales.sql                   # Datos base (roles, tipos, etc)
-│                     
+├── 📁 Resources/                        # Recursos
+│   ├── 📁 iconos/                       # Iconos del sistema
+│   │   ├── logo_CMI.svg
+│   │   ├── logo_CMI.ico
+│   │   └── [otros iconos...]
+│   └── 📁 fonts/                        # Fuentes (opcional)
 │
-├── 📂 docs/                                     # Documentación
-│   ├── Arquitectura_clinica.txt                 # Este archivo
-│   └── database_schema.md                       # (Opcional) Esquema de BD
+├── 📁 assets/                           # Assets adicionales
+│   └── [recursos adicionales]
 │
-├── 📂 logs/                                     # Logs de la aplicación
-│   └── login.log                                  # Log principal
+├── 📁 reportes/                         # ✅ Reportes generados
+│   └── [PDFs generados automáticamente]
 │
-├── 📂 reportes/                                 # PDFs generados
-│   └── (archivos PDF de reportes)
+├── 📁 logs/                             # ✅ Logs del sistema
+│   └── [archivos .log]
 │
-├── 📂 temp/                                     # Archivos temporales
+├── 📁 temp/                             # ✅ Archivos temporales
+│   └── [archivos temporales]
 │
-├── 📂 venv/                                     # Entorno virtual Python
-│   ├── Lib/
-│   ├── Scripts/
-│   └── ...
+├── 📄 main.py                           # ✅ MODIFICADO - Punto de entrada
+├── 📄 setup_handler.py                  # ✅ NUEVO - Handler del wizard
+├── 📄 generar_pdf.py                    # Generador de PDFs
 │
-├── 📂 __pycache__/                              # Cache de Python (ignorar)
+├── 📄 main.qml                          # Ventana principal
+├── 📄 login.qml                         # Pantalla de login
+├── 📄 setup_wizard.qml                  # ✅ NUEVO - Wizard de configuración
+├── 📄 Dashboard.qml                     # Dashboard principal
 │
-├── 📂 ClinicaApp_Portable/                                # Carpeta para enviar a otras pc para ver el funcionamiento del programa
-│   ├── 📂 database_script/                               
-│   │   ├── 01_schema.sql                            # Estructura de tablas
-│   │   └── 02_datos_iniciales.sql                   # Datos base (roles, tipos, etc)
-│   ├── 📂 logs/                               
-│   ├── 📂 reportes/                             
-│   ├── 📂 temp/                             
-│   ├── ClinicaApp.exe                               
-│   └── INSTRUCCIONES.txt
+├── 📄 Farmacia.qml                      # Módulo Farmacia
+├── 📄 Productos.qml                     # Gestión de productos
+├── 📄 CrearProducto.qml                 # Crear producto
+├── 📄 DetalleProducto.qml               # Detalle de producto
 │
-├── 📂 dist/                               
-│   └── ClinicaApp.exe                       # App en archivo .exe
-├── 📂 build/                                    # Archivos generados por PyInstaller
-│   ├── 📂 clinica/                              # Carpeta principal de build
-│   │   ├── Analysis-00.toc
-│   │   ├── base_library.zip
-│   │   ├── ClinicaApp.pkg
-│   │   ├── EXE-00.toc
-│   │   ├── PKG-00.toc
-│   │   ├── PYZ-00.pyz
-│   │   ├── PYZ-00.toc
-│   │   ├── war-clinica.txt
-│   │   ├── xref-clinica.html
-│   │   └── 📂 localpycs/
-│   │        ├── pyimod01_archive.pyc
-│   │        ├── pyimod02_importers.pyc
-│   │        ├── pyimod03_ctypes.pyc
-│   │        ├── pyimod04_pywin32.pyc
-│   │        └── struct.pyc
+├── 📄 Ventas.qml                        # Módulo Ventas
+├── 📄 VentasMain.qml                    # Main de ventas
+├── 📄 CrearVenta.qml                    # Crear venta
 │
-├── 📄 Archivos QML (Frontend)                   # Interfaz gráfica Qt Quick
-│   ├── main.qml                                 # Ventana principal
-│   ├── login.qml                                # Pantalla de login
-│   ├── Dashboard.qml                            # Dashboard principal
-│   │
-│   ├── 📋 Módulo Farmacia
-│   ├── Productos.qml                            # Lista de productos
-│   ├── CrearProducto.qml                        # Formulario producto
-│   ├── DetalleProducto.qml 
-│   ├── Farmacia.qml                             # Gestión farmacia
-│   ├── MarcaComboBox.qml                        # Componente combo marcas
-│   │
-│   ├── 📋 Módulo Compras
-│   ├── Compras.qml                              # Lista de compras
-│   ├── CrearCompra.qml                          # Formulario compra
-│   ├── CompraMain.qml                           # Vista principal compras
-│   │
-│   ├── 📋 Módulo Ventas
-│   ├── Ventas.qml                               # Lista de ventas
-│   ├── CrearVenta.qml                           # Formulario venta
-│   ├── VentasMain.qml                           # Vista principal ventas
-│   │
-│   ├── 📋 Módulo Proveedores
-│   ├── Proveedores.qml                          # Lista de proveedores
-│   ├── CrearProveedor.qml                       # Formulario proveedor
-│   ├── ProveedorComboBox.qml                    # Componente combo proveedores
-│   │
-│   ├── 📋 Módulo Médico
-│   ├── Consultas.qml                            # Consultas médicas
-│   ├── Enfermeria.qml                           # Procedimientos enfermería
-│   ├── Laboratorio.qml                          # Análisis de laboratorio
-│   │
-│   ├── 📋 Módulo Administrativo
-│   ├── ServiciosBasicos.qml                     # Servicios básicos
-│   ├── Trabajadores.qml                         # Gestión trabajadores
-│   ├── Usuario.qml                              # Gestión usuarios
-│   ├── CierreCaja.qml                           # Cierre de caja
-│   ├── IngresosExtras.qml                       # 🆕 Ingresos extras
-│   │
-│   ├── 📋 Módulo Configuración
-│   ├── Configuracion.qml                        # Menú configuración
-│   ├── ConfiConsultas.qml                       # Config especialidades
-│   ├── ConfiEnfermeria.qml                      # Config procedimientos
-│   ├── ConfiLaboratorio.qml                     # Config análisis
-│   ├── ConfiServiciosBasicos.qml                # Config tipos de gastos
-│   ├── ConfiTrabajadores.qml                    # Config tipos trabajadores
-│   ├── ConfiUsuarios.qml                        # Config usuarios
-│   │
-│   ├── 📋 Módulo Reportes
-│   └──Reportes.qml                             # Generación de reportes
-│   
-├── 📄 Archivos Python principales
-│   ├── main.py                                  # Punto de entrada de la aplicación
-│   └── generar_pdf.py                           # Generador de reportes PDF
+├── 📄 Compras.qml                       # Módulo Compras
+├── 📄 ComprasMain.qml                   # Main de compras
+├── 📄 CrearCompra.qml                   # Crear compra
 │
-├── 📄 Archivos de configuración
-│   ├── .env                                     # Variables de entorno (NO incluir en repo)
-│   ├── config_template.txt                      # 🆕 Template de configuración
-│   ├── requirements.txt                         # Dependencias Python
-│   ├── .gitignore                               # Archivos ignorados por Git
-│   ├── clinica.spec
-│   └── README.md                                # Documentación del proyecto
+├── 📄 Proveedores.qml                   # Gestión de proveedores
+├── 📄 CrearProveedor.qml                # Crear proveedor
+│
+├── 📄 Consultas.qml                     # Módulo Consultas
+├── 📄 Laboratorio.qml                   # Módulo Laboratorio
+├── 📄 Enfermeria.qml                    # Módulo Enfermería
+│
+├── 📄 ServiciosBasicos.qml              # Módulo Gastos
+├── 📄 Trabajadores.qml                  # Gestión de trabajadores
+├── 📄 Usuario.qml                       # Gestión de usuarios
+│
+├── 📄 Configuracion.qml                 # Configuración general
+├── 📄 ConfiConsultas.qml                # Config. Consultas
+├── 📄 ConfiEnfermeria.qml               # Config. Enfermería
+├── 📄 ConfiLaboratorio.qml              # Config. Laboratorio
+├── 📄 ConfiServiciosBasicos.qml         # Config. Gastos
+├── 📄 ConfiTrabajadores.qml             # Config. Trabajadores
+├── 📄 ConfiUsuarios.qml                 # Config. Usuarios
+│
+├── 📄 Reportes.qml                      # Módulo Reportes
+├── 📄 CierreCaja.qml                    # Cierre de caja
+├── 📄 IngresosExtras.qml                # Ingresos extras
+│
+├── 📄 MarcaComboBox.qml                 # Componente ComboBox
+├── 📄 ProveedorComboBox.qml             # Componente ComboBox
+├── 📄 GlobalDataCenter.qml              # Centro de datos global
+│
+├── 📄 .env                              # ✅ Configuración local (NO subir a Git)
+├── 📄 .gitignore                        # ✅ Archivos ignorados por Git
+├── 📄 requirements.txt                  # Dependencias Python
+├── 📄 clinica.spec                      # ✅ ACTUALIZADO - Config PyInstaller
+├── 📄 dependencias_actuales.txt         # Documentación de dependencias
+├── 📄 README.md                         # ✅ Documentación principal
+└── 📄 LEEME.txt                         # ✅ Instrucciones para usuarios
+
+================================================================================
+                            MÓDULOS PRINCIPALES
+================================================================================
+
+1. 🔐 AUTENTICACIÓN Y USUARIOS
+   ├── Login con validación
+   ├── Gestión de usuarios
+   ├── Roles y permisos (Administrador, Médico)
+   └── ✅ Setup Wizard para primera configuración
+
+2. 💊 FARMACIA
+   ├── Inventario con sistema FIFO
+   ├── Gestión de productos
+   ├── Gestión de marcas
+   ├── Control de lotes con fechas de vencimiento
+   ├── Alertas de productos próximos a vencer
+   └── Alertas de stock bajo
+
+3. 🏪 VENTAS Y COMPRAS
+   ├── Registro de ventas (FIFO automático)
+   ├── Registro de compras por lote
+   ├── Gestión de proveedores
+   ├── Historial de transacciones
+   └── Control de stock automatizado
+
+4. 🩺 CONSULTAS MÉDICAS
+   ├── Registro de pacientes (con/sin cédula)
+   ├── Gestión de consultas
+   ├── Especialidades médicas
+   ├── Precios normal/emergencia
+   └── Historial clínico
+
+5. 🔬 LABORATORIO
+   ├── Tipos de análisis clínicos
+   ├── Registro de exámenes
+   ├── Asignación de trabajadores
+   ├── Precios normal/emergencia
+   └── Historial de análisis
+
+6. 💉 ENFERMERÍA
+   ├── Tipos de procedimientos
+   ├── Registro de procedimientos
+   ├── Asignación de personal
+   ├── Precios normal/emergencia
+   └── Historial de procedimientos
+
+7. 💰 GESTIÓN FINANCIERA
+   ├── Registro de gastos
+   ├── Tipos de gastos
+   ├── Proveedores de gastos
+   ├── Ingresos extras
+   ├── Cierre de caja diario
+   └── Control de efectivo
+
+8. 📊 DASHBOARD Y REPORTES
+   ├── Dashboard con estadísticas en tiempo real
+   ├── Ingresos por módulo (Farmacia, Consultas, Lab, Enfermería)
+   ├── Egresos (Servicios básicos)
+   ├── Alertas de inventario
+   ├── Generación de reportes PDF
+   │   ├── Reporte de ventas
+   │   ├── Reporte de compras
+   │   ├── Reporte de consultas
+   │   ├── Reporte de laboratorio
+   │   ├── Reporte de enfermería
+   │   ├── Reporte de gastos
+   │   ├── Reporte de ingresos/egresos
+   │   └── Arqueo de caja
+   └── Filtros por fecha y tipo
+
+9. ⚙️ CONFIGURACIÓN
+   ├── Configuración de consultas
+   ├── Configuración de enfermería
+   ├── Configuración de laboratorio
+   ├── Configuración de gastos
+   ├── Configuración de trabajadores
+   └── Gestión de usuarios
+
+================================================================================
+                         TECNOLOGÍAS UTILIZADAS
+================================================================================
+
+Frontend:
+  • PySide6 (Qt for Python) 6.9.1
+  • QML (Qt Quick)
+  • Qt Quick Controls 2
+
+Backend:
+  • Python 3.11+
+  • Arquitectura MVC (Model-View-Controller)
+  • Patrón Repository para acceso a datos
+  • Sistema de caché para optimización
+
+Base de Datos:
+  • SQL Server Express
+  • pyodbc 5.2.0
+  • ✅ Scripts SQL automatizados
+  • ✅ Instalador automático de BD
+
+Reportes:
+  • ReportLab 4.4.3
+  • Pillow 11.3.0 (procesamiento de imágenes)
+
+Gestión de Configuración:
+  • python-dotenv 1.1.1
+  • ✅ ConfigManager para gestión de .env
+
+Empaquetado:
+  • PyInstaller 6.16.0
+  • ✅ clinica.spec optimizado
+
+Otras Dependencias:
+  • Flask 3.1.1 (opcional, para futuras APIs)
+  • flask-cors 6.0.1
+
+================================================================================
+                         FLUJO DE TRABAJO
+================================================================================
+
+📌 PRIMERA EJECUCIÓN (Setup Automático):
+   1. Usuario ejecuta ClinicaApp.exe
+   2. Sistema detecta que no existe .env
+   3. Muestra Setup Wizard automáticamente
+   4. Usuario hace click en "Setup Automático"
+   5. Sistema:
+      ├── Verifica SQL Server instalado
+      ├── Crea base de datos ClinicaMariaInmaculada
+      ├── Ejecuta 01_schema.sql (estructura)
+      ├── Ejecuta 02_datos_iniciales.sql (datos base)
+      ├── Crea usuario admin (admin/admin123)
+      ├── Genera archivo .env con configuración
+      └── Muestra credenciales al usuario
+   6. Usuario hace click en "IR AL LOGIN"
+   7. Sistema muestra pantalla de login
+   8. Usuario inicia sesión con admin/admin123
+
+📌 EJECUCIONES POSTERIORES (Login Normal):
+   1. Usuario ejecuta ClinicaApp.exe
+   2. Sistema detecta que existe .env
+   3. Muestra pantalla de login directamente
+   4. Usuario inicia sesión
+   5. Sistema carga dashboard y módulos
+
+📌 FLUJO DE VENTA:
+   1. Usuario selecciona productos
+   2. Sistema aplica FIFO automáticamente
+   3. Descuenta del lote más antiguo primero
+   4. Actualiza stock en tiempo real
+   5. Genera reporte PDF (opcional)
+
+📌 FLUJO DE COMPRA:
+   1. Usuario crea nuevo lote
+   2. Ingresa datos (producto, cantidad, vencimiento)
+   3. Sistema registra compra
+   4. Actualiza inventario
+   5. Stock disponible = suma de lotes
+
+📌 FLUJO DE CONSULTA:
+   1. Buscar/crear paciente (por cédula o nombre)
+   2. Seleccionar especialidad
+   3. Registrar consulta
+   4. Sistema calcula precio (normal/emergencia)
+   5. Genera registro en BD
+
+📌 CIERRE DE CAJA:
+   1. Usuario ingresa rango horario
+   2. Sistema calcula automáticamente:
+      ├── Ingresos (Farmacia + Consultas + Lab + Enfermería + Extras)
+      ├── Egresos (Gastos)
+      └── Saldo teórico
+   3. Usuario ingresa efectivo real
+   4. Sistema calcula diferencia
+   5. Genera PDF de arqueo
+
+================================================================================
+                       BASE DE DATOS (SQL SERVER)
+================================================================================
+
+📊 TABLAS PRINCIPALES:
+
+Sistema:
+  • Roles (Administrador, Médico)
+  • Usuario (Credenciales y permisos)
+
+Clínica:
+  • Pacientes (Con/sin cédula)
+  • Doctores
+  • Especialidad
+  • Consultas
+
+Farmacia:
+  • Productos (Código único)
+  • Marca
+  • Lote (Control FIFO)
+  • Proveedor
+
+Transacciones:
+  • Ventas
+  • DetallesVentas (FIFO)
+  • Compra
+  • DetalleCompra
+
+Laboratorio:
+  • Tipos_Analisis
+  • Laboratorio (Registros)
+
+Enfermería:
+  • Tipos_Procedimientos
+  • Enfermeria (Registros)
+
+Recursos Humanos:
+  • Trabajadores
+  • Tipo_Trabajadores
+
+Finanzas:
+  • Gastos
+  • Tipo_Gastos
+  • Proveedor_Gastos
+  • IngresosExtras
+  • CierreCaja
+
+✅ DATOS INICIALES PRECARGADOS:
+  • 2 Roles (Administrador, Médico)
+  • 6 Tipos de Trabajadores
+  • 6 Tipos de Gastos
+  • 5 Especialidades médicas
+  • 10 Tipos de análisis de laboratorio
+  • 10 Tipos de procedimientos de enfermería
+  • 8 Marcas de productos
+  • 1 Doctor del sistema
+  • 1 Proveedor de gastos base
+
+================================================================================
+                       CARACTERÍSTICAS TÉCNICAS
+================================================================================
+
+✅ Sistema FIFO Completo:
+   • Control de lotes con fechas
+   • Venta automática del lote más antiguo
+   • Alertas de vencimiento (60 días)
+   • Trazabilidad completa
+
+✅ Sistema de Caché:
+   • Caché por tipo (consultas, laboratorio, etc.)
+   • Invalidación automática
+   • Reducción de consultas a BD
+   • Mejor rendimiento
+
+✅ Sistema de Permisos:
+   • Rol Administrador: Acceso total
+   • Rol Médico: Acceso a módulos clínicos
+   • Validación en backend y frontend
+   • Seguridad por capas
+
+✅ Generación de Reportes PDF:
+   • Encabezado con logo y datos
+   • Tablas formateadas
+   • Resúmenes automáticos
+   • Filtros por fecha
+   • Guardado automático en carpeta reportes/
+
+✅ Setup Wizard (Primera Vez):
+   • Detección automática de primera ejecución
+   • Instalación automática de base de datos
+   • Creación de usuario admin
+   • Configuración sin intervención manual
+   • Validación de SQL Server
+
+✅ Interfaz Responsive:
+   • Diseño adaptable
+   • Componentes reutilizables
+   • Navegación fluida
+   • Feedback visual
+
+================================================================================
+                       COMPILACIÓN Y DISTRIBUCIÓN
+================================================================================
+
+📦 COMPILAR EJECUTABLE:
+   
+   1. Activar entorno virtual:
+      .\venv\Scripts\Activate.ps1
+
+   2. Limpiar compilaciones previas:
+      Remove-Item -Recurse -Force build, dist
+
+   3. Compilar con PyInstaller:
+      pyinstaller clinica.spec --clean
+
+   4. Ejecutable generado en:
+      dist\ClinicaApp\ClinicaApp.exe
+
+📦 CREAR ZIP PORTABLE:
+   
+   1. Verificar que NO exista .env en dist\ClinicaApp\
+   2. Eliminar archivos temporales (*.log, *.tmp)
+   3. Copiar LEEME.txt a dist\ClinicaApp\
+   4. Comprimir:
+      Compress-Archive -Path "dist\ClinicaApp" -DestinationPath "ClinicaApp_v1.0.zip"
+
+📦 ESTRUCTURA DEL EJECUTABLE:
+
+   ClinicaApp/
+   ├── ClinicaApp.exe              (Ejecutable principal)
+   ├── database_scripts/           (Scripts SQL - CRÍTICO)
+   │   ├── 01_schema.sql
+   │   └── 02_datos_iniciales.sql
+   ├── Resources/                  (Recursos)
+   ├── _internal/                  (Librerías internas)
+   ├── *.qml                       (Archivos de interfaz)
+   ├── setup_wizard.qml            ✅ NUEVO
+   ├── LEEME.txt                   (Instrucciones)
+   ├── reportes/                   (Se crea automáticamente)
+   ├── logs/                       (Se crea automáticamente)
+   └── temp/                       (Se crea automáticamente)
+
+================================================================================
+                       CREDENCIALES POR DEFECTO
+================================================================================
+
+🔑 Usuario Administrador:
+   Usuario: admin
+   Contraseña: admin123
+
+⚠️ IMPORTANTE: 
+   - Cambiar contraseña después del primer inicio
+   - Acceso desde: Configuración > Usuarios > Cambiar Contraseña
+
+================================================================================
+                       ARCHIVOS DE CONFIGURACIÓN
+================================================================================
+
+📄 .env (Generado automáticamente por Setup Wizard):
+   DB_SERVER=localhost\SQLEXPRESS
+   DB_DATABASE=ClinicaMariaInmaculada
+   DB_TRUSTED_CONNECTION=yes
+   DB_TIMEOUT=30
+   FIRST_TIME_SETUP=False
+   
+   ⚠️ Este archivo NO debe incluirse en Git
+   ⚠️ NO debe incluirse en el ZIP de distribución
+
+📄 .gitignore (Control de versiones):
+   • Excluye venv/, dist/, build/
+   • Excluye .env y archivos de configuración local
+   • Excluye reportes generados
+   • Excluye logs y temporales
+
+📄 requirements.txt (Dependencias):
+   PySide6==6.9.1
+   pyodbc==5.2.0
+   reportlab==4.4.3
+   python-dotenv==1.1.1
+   pillow==11.3.0
+   pyinstaller==6.16.0
+   flask==3.1.1
+   flask-cors==6.0.1
+
+================================================================================
+                       NOTAS DE VERSIÓN
+================================================================================
+
+v1.0 (Octubre 2025):
+  ✅ Sistema completo de gestión clínica
+  ✅ Setup Wizard automático (primera ejecución)
+  ✅ Instalador de base de datos automatizado
+  ✅ Módulos: Farmacia, Consultas, Laboratorio, Enfermería
+  ✅ Sistema FIFO completo
+  ✅ Reportes PDF personalizados
+  ✅ Dashboard con estadísticas en tiempo real
+  ✅ Cierre de caja con arqueo automático
+  ✅ Gestión de usuarios y permisos
+  ✅ Compilación a ejecutable standalone
+  ✅ Sistema portable (ZIP)
+
+Próximas Mejoras Sugeridas:
+  • Sistema de backup automático
+  • Exportación de datos a Excel
+  • Gráficos estadísticos avanzados
+  • Notificaciones por correo
+  • API REST para integraciones
+  • Aplicación móvil (opcional)
+
+================================================================================
+                       SOPORTE Y CONTACTO
+================================================================================
+
+Para soporte técnico o consultas sobre el sistema,
+contactar al administrador del proyecto.
+
+Documentación completa: README.md
+Instrucciones de usuario: LEEME.txt
+
+================================================================================
+           © 2025 Clínica María Inmaculada - Todos los derechos reservados
+================================================================================

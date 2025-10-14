@@ -169,4 +169,5 @@ if __name__ == "__main__":
     handler.validationCompleted.connect(lambda ok, msg: print(f"Validación: {ok} - {msg}"))
     handler.validar_sql_server()
     
-    sys.exit(app.exec())
+    sys.exit(app.exec()) 
+    
