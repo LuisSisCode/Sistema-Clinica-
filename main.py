@@ -31,6 +31,8 @@ from backend.models.auth_model import AuthModel, register_auth_model
 from backend.models.cierre_caja_model import CierreCajaModel, register_cierre_caja_model
 from backend.models.ingreso_extra_model import IngresoExtraModel, register_ingreso_extra_model
 
+from setup_handler import SetupHandler
+from backend.core.config_manager import ConfigManager
 class NotificationWorker(QObject):
     finished = Signal(str, str)
     
@@ -1517,25 +1519,35 @@ class AppController(QObject):
             return False
 
 class AuthAppController(QObject):
-    """Controller principal SIMPLIFICADO - CORREGIDO para cambios de usuario"""
+    """Controller principal SIMPLIFICADO - CORREGIDO para cambios de usuario y SETUP WIZARD"""
     
     # Signals
     authenticationRequired = Signal()
     authenticationSuccess = Signal()
     loadMainApp = Signal()
+    setupRequired = Signal()  # 🆕 Nueva señal para setup
     
     def __init__(self):
         super().__init__()
+        
+        # 🆕 AGREGAR: Gestor de configuración y setup
+        self.config_manager = ConfigManager()
+        self.setup_handler = SetupHandler()
+        
         self.auth_model = AuthModel()
         self.main_controller = None
         self.authenticated = False
         self.main_engine = None
         self.login_engine = None
+        self.setup_engine = None  # 🆕 Engine para setup wizard
         
         # Conectar signals del AuthModel
         self.auth_model.loginSuccessful.connect(self.handleLoginSuccess)
         self.auth_model.loginFailed.connect(self.handleLoginFailed)
         self.auth_model.logoutCompleted.connect(self.handleLogout)
+        
+        # 🆕 Conectar signals del SetupHandler
+        self.setup_handler.setupCompleted.connect(self.handleSetupCompleted)
     
     @Slot(bool, str, 'QVariantMap')
     def handleLoginSuccess(self, success: bool, message: str, userData: dict):
@@ -1543,58 +1555,58 @@ class AuthAppController(QObject):
         if success:
             self.authenticated = True
             
-            # Delay para mostrar animaciÃ³n y asegurar destrucciÃ³n completa
+            # Delay para mostrar animación y asegurar destrucción completa
             QTimer.singleShot(1500, lambda: self.initializeMainApp(userData))
         
     @Slot(str)
     def handleLoginFailed(self, message: str):
         """Manejo de login fallido"""
-        print(f"âŒ Login fallido: {message}")
+        print(f"❌ Login fallido: {message}")
     
     @Slot()
     def handleLogout(self):
-        """LOGOUT MANUAL - VERSIÃ“N SEGURA CON VALIDACIÃ“N"""
+        """LOGOUT MANUAL - VERSIÓN SEGURA CON VALIDACIÓN"""
         try:
-            print("ðŸšª Cierre de sesiÃ³n manual solicitado...")
+            print("🚪 Cierre de sesión manual solicitado...")
             
-            # âœ… VALIDAR QUE EL CONTROLADOR EXISTA
+            # ✅ VALIDAR QUE EL CONTROLADOR EXISTA
             if not self.main_controller:
-                print("âš ï¸ main_controller ya es None - Creando login directo")
+                print("⚠️ main_controller ya es None - Creando login directo")
                 self.authenticated = False
                 QTimer.singleShot(100, self.createAndShowLogin)
                 return
             
-            # âœ… VALIDAR QUE NO HAY OPERACIONES ACTIVAS
+            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
             if hasattr(self.main_controller, '_hay_operaciones_activas'):
                 if self.main_controller._hay_operaciones_activas():
-                    print("â¸ï¸ Operaciones activas - Logout pospuesto")
+                    print("⏸️ Operaciones activas - Logout pospuesto")
                     QTimer.singleShot(1000, self.handleLogout)
                     return
             
-            print("âœ… No hay operaciones activas - Procediendo con logout")
+            print("✅ No hay operaciones activas - Procediendo con logout")
             
             self.authenticated = False
             
-            # PASO 1: Cleanup del controlador principal CON VALIDACIÃ“N
+            # PASO 1: Cleanup del controlador principal CON VALIDACIÓN
             try:
-                print("ðŸ§¹ Limpiando main_controller...")
+                print("🧹 Limpiando main_controller...")
                 # Usar gradual_cleanup en lugar de emergency_shutdown
                 self.main_controller.gradual_cleanup()
                 self.main_controller = None
-                print("âœ… main_controller limpiado")
+                print("✅ main_controller limpiado")
             except Exception as e:
-                print(f"âš ï¸ Error en cleanup del controlador: {e}")
+                print(f"⚠️ Error en cleanup del controlador: {e}")
                 self.main_controller = None
             
             # PASO 2: Destruir motor principal con delay
             if self.main_engine:
                 try:
-                    print("ðŸ—‘ï¸ Destruyendo main_engine...")
+                    print("🗑️ Destruyendo main_engine...")
                     self.main_engine.deleteLater()
                     self.main_engine = None
-                    print("âœ… main_engine destruido")
+                    print("✅ main_engine destruido")
                 except Exception as e:
-                    print(f"âš ï¸ Error destruyendo motor principal: {e}")
+                    print(f"⚠️ Error destruyendo motor principal: {e}")
                     self.main_engine = None
             
             # PASO 3: Forzar garbage collection
@@ -1604,10 +1616,10 @@ class AuthAppController(QObject):
             # PASO 4: Crear y mostrar nuevo login con delay
             QTimer.singleShot(500, self.createAndShowLogin)
             
-            print("âœ… Logout manual completado")
+            print("✅ Logout manual completado")
             
         except Exception as e:
-            print(f"âŒ Error durante logout manual: {e}")
+            print(f"❌ Error durante logout manual: {e}")
             import traceback
             traceback.print_exc()
             
@@ -1616,12 +1628,13 @@ class AuthAppController(QObject):
             self.main_engine = None
             self.authenticated = False
             QTimer.singleShot(1000, self.createAndShowLogin)
+
     def createAndShowLogin(self):
         """Crea y muestra una nueva instancia de login - MEJORADO"""
         try:
-            print("ðŸ” Creando nueva instancia de login...")
+            print("🔐 Creando nueva instancia de login...")
             
-            # Asegurar que login anterior estÃ© destruido
+            # Asegurar que login anterior esté destruido
             if self.login_engine:
                 try:
                     self.login_engine.deleteLater()
@@ -1641,37 +1654,107 @@ class AuthAppController(QObject):
             login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
             self.login_engine.load(QUrl.fromLocalFile(login_qml))
             
-            # Verificar que se cargÃ³ correctamente
+            # Verificar que se cargó correctamente
             if not self.login_engine.rootObjects():
-                print("âŒ Error: login.qml no se cargÃ³ correctamente")
+                print("❌ Error: login.qml no se cargó correctamente")
                 return
             
             self.authenticationRequired.emit()
-            print("âœ… Login creado y mostrado exitosamente")
+            print("✅ Login creado y mostrado exitosamente")
             
         except Exception as e:
-            print(f"âŒ Error creando login: {e}")
+            print(f"❌ Error creando login: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # 🆕 NUEVO MÉTODO: Crear y mostrar Setup Wizard
+    def createAndShowSetupWizard(self):
+        """Crea y muestra el Setup Wizard para primera configuración"""
+        try:
+            print("🚀 Creando Setup Wizard...")
+            
+            # Crear nueva engine para setup
+            self.setup_engine = QQmlApplicationEngine()
+            
+            # Configurar contexto para setup
+            root_context = self.setup_engine.rootContext()
+            root_context.setContextProperty("setupHandler", self.setup_handler)
+            root_context.setContextProperty("authController", self)
+            
+            # Cargar setup_wizard.qml
+            setup_qml = os.path.join(os.path.dirname(__file__), "setup_wizard.qml")
+            
+            if not os.path.exists(setup_qml):
+                print(f"❌ Error: setup_wizard.qml no encontrado: {setup_qml}")
+                return
+            
+            self.setup_engine.load(QUrl.fromLocalFile(setup_qml))
+            
+            # Verificar que se cargó correctamente
+            if not self.setup_engine.rootObjects():
+                print("❌ Error: setup_wizard.qml no se cargó correctamente")
+                return
+            
+            self.setupRequired.emit()
+            print("✅ Setup Wizard creado y mostrado exitosamente")
+            
+        except Exception as e:
+            print(f"❌ Error creando Setup Wizard: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # 🆕 NUEVO MÉTODO: Manejar completación del setup
+    @Slot(bool, str, 'QVariantMap')
+    def handleSetupCompleted(self, success: bool, message: str, credenciales: dict):
+        """Maneja la completación del setup wizard"""
+        try:
+            print(f"📊 Setup completado: {success} - {message}")
+            
+            if success:
+                print("✅ Setup exitoso - Las credenciales se mostraron en el wizard")
+                print(f"   Usuario: {credenciales.get('username', 'N/A')}")
+                print(f"   Base de datos: {credenciales.get('database', 'N/A')}")
+                
+                # Destruir setup wizard
+                if self.setup_engine:
+                    try:
+                        self.setup_engine.deleteLater()
+                        self.setup_engine = None
+                        print("✅ Setup engine destruido")
+                    except Exception as e:
+                        print(f"⚠️ Error destruyendo setup engine: {e}")
+                
+                # NO abrir login automáticamente
+                # El usuario debe hacer click en "IR AL LOGIN" en el wizard
+                print("ℹ️ Usuario debe hacer click en 'IR AL LOGIN' para continuar")
+                
+            else:
+                print(f"❌ Setup falló: {message}")
+                # El wizard mostrará el error internamente
+                
+        except Exception as e:
+            print(f"❌ Error manejando setup completado: {e}")
             import traceback
             traceback.print_exc()
 
     def initializeMainApp(self, userData):
-        """Inicializa la aplicaciÃ³n principal - CORREGIDO para recrear siempre"""
+        """Inicializa la aplicación principal - CORREGIDO para recrear siempre"""
         try:
             # PASO 1: Destruir login engine si existe
             if self.login_engine:
                 try:
-                    print("ðŸ—‘ï¸ Destruyendo login_engine...")
+                    print("🗑️ Destruyendo login_engine...")
                     self.login_engine.deleteLater()
                     self.login_engine = None
-                    print("âœ… login_engine destruido")
+                    print("✅ login_engine destruido")
                 except Exception as e:
-                    print(f"âš ï¸ Error destruyendo login engine: {e}")
+                    print(f"⚠️ Error destruyendo login engine: {e}")
                     self.login_engine = None
             
             # PASO 2: SIEMPRE crear nuevo controller (no reutilizar)
-            print("ðŸ—‚ï¸ Creando nuevo AppController...")
+            print("🔧 Creando nuevo AppController...")
             self.main_controller = AppController()
-            print("âœ… Nuevo AppController creado")
+            print("✅ Nuevo AppController creado")
             
             # PASO 3: Crear nueva engine para main app
             self.main_engine = QQmlApplicationEngine()
@@ -1686,12 +1769,12 @@ class AuthAppController(QObject):
             main_qml = os.path.join(os.path.dirname(__file__), "main.qml")
             self.main_engine.load(QUrl.fromLocalFile(main_qml))
             
-            # PASO 6: Verificar que se cargÃ³ correctamente
+            # PASO 6: Verificar que se cargó correctamente
             if not self.main_engine.rootObjects():
-                print("âŒ Error: main.qml no se cargÃ³ correctamente")
+                print("❌ Error: main.qml no se cargó correctamente")
                 return
             
-            print("âœ… main.qml cargado exitosamente")
+            print("✅ main.qml cargado exitosamente")
             
             # ===== AGREGAR ICONO A LA VENTANA PRINCIPAL =====
             try:
@@ -1711,29 +1794,29 @@ class AuthAppController(QObject):
                     if os.path.exists(icon_path):
                         from PySide6.QtGui import QIcon
                         window.setIcon(QIcon(icon_path))
-                        print(f"Ã¢Å“â€¦ Icono de ventana establecido: {icon_path}")
+                        print(f"✅ Icono de ventana establecido: {icon_path}")
                         icon_loaded = True
                         break
                 
                 if not icon_loaded:
-                    print("Ã¢Å¡ Ã¯Â¸Â No se encontrÃƒÂ³ ningÃƒÂºn archivo de icono para la ventana")
+                    print("⚠️ No se encontró ningún archivo de icono para la ventana")
                     
             except Exception as e:
-                print(f"Ã¢Å¡ Ã¯Â¸Â Error estableciendo icono de ventana: {e}")
+                print(f"⚠️ Error estableciendo icono de ventana: {e}")
             # ===== FIN ICONO =====
             
             # PASO 7: Inicializar modelos
-            print("ðŸ”§ Inicializando modelos...")
+            print("🔧 Inicializando modelos...")
             self.main_controller.initialize_models()
             
-            # PASO 8: Establecer autenticaciÃ³n con delay
+            # PASO 8: Establecer autenticación con delay
             QTimer.singleShot(800, lambda: self._set_user_authentication(userData))
             
             self.authenticationSuccess.emit()
-            print("ðŸŽ‰ AplicaciÃ³n principal inicializada exitosamente")
+            print("🎉 Aplicación principal inicializada exitosamente")
             
         except Exception as e:
-            print(f"âŒ Error inicializando app principal: {e}")
+            print(f"❌ Error inicializando app principal: {e}")
             import traceback
             traceback.print_exc()
             
@@ -1741,66 +1824,66 @@ class AuthAppController(QObject):
             QTimer.singleShot(2000, self.createAndShowLogin)
 
     def _set_user_authentication(self, userData):
-        """Establece la autenticaciÃ³n del usuario - MEJORADO con verificaciones"""
+        """Establece la autenticación del usuario - MEJORADO con verificaciones"""
         try:
             if not self.main_controller:
-                print("âŒ Error: main_controller es None al establecer autenticaciÃ³n")
+                print("❌ Error: main_controller es None al establecer autenticación")
                 return
             
             if not userData:
-                print("âŒ Error: userData es None al establecer autenticaciÃ³n")
+                print("❌ Error: userData es None al establecer autenticación")
                 return
             
             user_id = userData.get('id', 0)
             user_name = f"{userData.get('Nombre', '')} {userData.get('Apellido_Paterno', '')}"
             user_role = userData.get('rol_nombre', 'Usuario')
-            # Verificar que los datos son vÃ¡lidos
+            # Verificar que los datos son válidos
             if user_id <= 0:
-                print("âŒ Error: ID de usuario invÃ¡lido")
+                print("❌ Error: ID de usuario inválido")
                 return
             
             if not user_role:
-                print("âŒ Error: Rol de usuario vacÃ­o")
+                print("❌ Error: Rol de usuario vacío")
                 return
             
-            # Establecer autenticaciÃ³n
+            # Establecer autenticación
             self.main_controller.set_usuario_autenticado(user_id, user_name, user_role)
             
-            print("âœ… AutenticaciÃ³n establecida exitosamente")
+            print("✅ Autenticación establecida exitosamente")
             
-            # VerificaciÃ³n adicional con delay
+            # Verificación adicional con delay
             QTimer.singleShot(1000, lambda: self._verify_authentication(user_id, user_role))
             
         except Exception as e:
-            print(f"âŒ Error estableciendo autenticaciÃ³n: {e}")
+            print(f"❌ Error estableciendo autenticación: {e}")
             import traceback
             traceback.print_exc()
     
     def _verify_authentication(self, expected_id, expected_role):
-        """Verifica que la autenticaciÃ³n se estableciÃ³ correctamente"""
+        """Verifica que la autenticación se estableció correctamente"""
         try:
             if self.main_controller:
                 actual_id = self.main_controller.usuario_actual_id
                 actual_role = self.main_controller.usuario_actual_rol
                 
-                print(f"ðŸ” VERIFICACIÃ“N DE AUTENTICACIÃ“N:")
+                print(f"🔍 VERIFICACIÓN DE AUTENTICACIÓN:")
                 print(f"   Esperado: ID={expected_id}, Rol='{expected_role}'")
                 print(f"   Actual: ID={actual_id}, Rol='{actual_role}'")
                 
                 if actual_id == expected_id and actual_role == expected_role:
                     pass
                 else:
-                    print("âš ï¸ AutenticaciÃ³n no coincide - reintentando...")
-                    # Reintentar establecer autenticaciÃ³n
+                    print("⚠️ Autenticación no coincide - reintentando...")
+                    # Reintentar establecer autenticación
                     user_name = f"Usuario {expected_id}"
                     self.main_controller.set_usuario_autenticado(expected_id, user_name, expected_role)
             else:
-                print("âŒ main_controller es None durante verificaciÃ³n")
+                print("❌ main_controller es None durante verificación")
                 
         except Exception as e:
-            print(f"âŒ Error verificando autenticaciÃ³n: {e}")
+            print(f"❌ Error verificando autenticación: {e}")
     
-    # MÃ©todos pÃºblicos para QML
+    # Métodos públicos para QML
     @Slot()
     def showLogin(self):
         """Muestra login (para uso desde QML)"""
@@ -1808,29 +1891,29 @@ class AuthAppController(QObject):
     
     @Slot()
     def exitApp(self):
-        """Sale de la aplicaciÃ³n"""
+        """Sale de la aplicación"""
         QGuiApplication.quit()
     
     @Slot()
     def forceRestart(self):
         """Fuerza un reinicio completo (para debug)"""
-        print("ðŸ”„ FORZANDO REINICIO COMPLETO...")
+        print("🔄 FORZANDO REINICIO COMPLETO...")
         
         # Limpiar todo
         self.main_controller = None
         self.main_engine = None
         self.login_engine = None
+        self.setup_engine = None  # 🆕
         self.authenticated = False
         
         # Forzar garbage collection
         import gc
         gc.collect()
         
-        # Recrear login despuÃ©s de un delay
+        # Recrear login después de un delay
         QTimer.singleShot(1000, self.createAndShowLogin)
         
-        print("âœ… Reinicio completo ejecutado")
-
+        print("✅ Reinicio completo ejecutado")
 def register_qml_types():
     register_inventario_model()
     register_venta_model() 
@@ -1860,10 +1943,12 @@ def setup_qml_context(engine, controller):
     root_context.setContextProperty("authModel", controller.auth_model)
 
 def main():
+    # 🆕 CONFIGURAR ESTILO ANTES DE CREAR LA APP
+    os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Sistema de GestiÃ³n MÃ©dica")
     app.setApplicationVersion("1.0.0")
-    app.setOrganizationName("ClÃ­nica Maria Inmaculada")
+    app.setOrganizationName("Clínica Maria Inmaculada")
     
     try:
         # Ruta al archivo de icono (puede ser .ico, .png, .svg)
@@ -1884,26 +1969,47 @@ def main():
         
         auth_controller = AuthAppController()
         
-        # Mostrar login directamente (sin persistencia)
-        login_engine = QQmlApplicationEngine()
-        setup_qml_context(login_engine, auth_controller)
+        # 🆕 VERIFICAR SI ES PRIMERA VEZ
+        print("\n" + "="*60)
+        print("🔍 VERIFICANDO CONFIGURACIÓN INICIAL")
+        print("="*60 + "\n")
         
-        login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
-        if not os.path.exists(login_qml):
-            print(f"âŒ Archivo login.qml no encontrado: {login_qml}")
-            return -1
+        config_manager = ConfigManager()
+        es_primera_vez = config_manager.es_primera_vez()
         
-        login_engine.load(QUrl.fromLocalFile(login_qml))
+        if es_primera_vez:
+            print("🆕 PRIMERA EJECUCIÓN DETECTADA")
+            print("   → Mostrando Setup Wizard\n")
+            
+            # Mostrar Setup Wizard
+            auth_controller.createAndShowSetupWizard()
+        else:
+            print("✅ CONFIGURACIÓN EXISTENTE ENCONTRADA")
+            print("   → Mostrando Login Normal\n")
+            
+            # Mostrar Login Normal
+            login_engine = QQmlApplicationEngine()
+            setup_qml_context(login_engine, auth_controller)
+            
+            login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
+            if not os.path.exists(login_qml):
+                print(f"❌ Archivo login.qml no encontrado: {login_qml}")
+                return -1
+            
+            login_engine.load(QUrl.fromLocalFile(login_qml))
+            
+            if not login_engine.rootObjects():
+                print("❌ Error cargando login.qml")
+                return -1
         
-        if not login_engine.rootObjects():
-            print("âŒ Error cargando login.qml")
-            return -1
+        print("="*60)
+        print("✅ Aplicación iniciada correctamente")
+        print("="*60 + "\n")
         
-        print("âœ… AplicaciÃ³n iniciada correctamente")
         return app.exec()
         
     except Exception as e:
-        print(f"âŒ Error crÃ­tico iniciando aplicaciÃ³n: {e}")
+        print(f"❌ Error crítico iniciando aplicación: {e}")
         import traceback
         traceback.print_exc()
         return -1

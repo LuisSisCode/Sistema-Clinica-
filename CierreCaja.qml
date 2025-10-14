@@ -37,6 +37,16 @@ Item {
                     console.log("⚠️ Función inicializarCamposAutomaticamente no disponible")
                 }
             })
+            
+            // ✅ NUEVO: CARGAR HISTORIAL DE CIERRES DE LA SEMANA
+            Qt.callLater(function() {
+                if (cierreCajaModel && typeof cierreCajaModel.cargarCierresSemana === 'function') {
+                    console.log("📋 Cargando historial de cierres de la semana...")
+                    cierreCajaModel.cargarCierresSemana()
+                } else {
+                    console.log("⚠️ Función cargarCierresSemana no disponible")
+                }
+            })
         }
     }
 
@@ -361,10 +371,10 @@ Item {
                                 Layout.preferredWidth: 150
                                 // ✅ SIN return en enabled
                                 enabled: cierreCajaModel && 
-                                        !cierreCajaModel.loading && 
-                                        fechaField.text.trim().length > 0 &&
-                                        horaInicioField.text.trim().length > 0 &&
-                                        horaFinField.text.trim().length > 0
+                                    !cierreCajaModel.loading && 
+                                    fechaField.text.trim().length > 0 &&
+                                    horaInicioField.text.trim().length > 0 &&
+                                    horaFinField.text.trim().length > 0
                                 
                                 background: Rectangle {
                                     color: parent.pressed ? Qt.darker(successColor, 1.2) : (parent.enabled ? successColor : darkGrayColor)
@@ -482,7 +492,6 @@ Item {
                                 text: "✅ Cerrar Caja"
                                 Layout.preferredHeight: 40
                                 Layout.preferredWidth: 130
-                                // ✅ SIN return en enabled
                                 enabled: {
                                     var habilitado = cierreCajaModel && 
                                                     !cierreCajaModel.loading && 
