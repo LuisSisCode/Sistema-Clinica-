@@ -1505,11 +1505,6 @@ Item {
 
     Component.onCompleted: {
         console.log("=== MODULO DE VENTAS CON FILTROS INICIALIZADO ===")
-        
-        if (!ventaModel || !inventarioModel || !compraModel) {
-            console.log("❌ ERROR: Models no están disponibles")
-            return
-        }
         console.log("✅ Models conectados correctamente")
         console.log("🔐 Usuario es médico:", usuarioEsMedico)
         console.log("👁️ Puede ver todas las ventas:", puedeVerTodasVentas)
