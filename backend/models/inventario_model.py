@@ -226,6 +226,12 @@ class InventarioModel(QObject):
     def total_alertas(self):
         """Total de alertas"""
         return len(self._alertas)
+
+    @Property(list, notify=marcasChanged)
+    def marcasDisponibles(self):
+        """Property para marcas disponibles - REQUERIDA por QML"""
+        return self._marcas
+
     
     # ===============================
     # SLOTS PARA QML - CONSULTAS (SIN VERIFICACIÓN - LECTURA)
@@ -276,11 +282,13 @@ class InventarioModel(QObject):
 
     # ================== DESPUÉS DE refresh_productos() ==================
 
-    @Slot(str, result=bool)
-    def crear_marca_desde_qml(self, nombre_marca: str) -> bool:
+    @Slot(str, result=int)
+    def crear_marca_desde_qml(self, nombre_marca: str) -> int:
         """
-        Crea una nueva marca desde QML
-        Llamado por MarcaComboBox cuando el usuario crea una marca
+        Crea una nueva marca desde QML - CORREGIDO - Retorna ID
+        
+        Returns:
+            int: ID de la marca creada, 0 si ya existe, -1 si error
         """
         try:
             print(f"🏷️ Creando marca desde QML: '{nombre_marca}'")
@@ -289,32 +297,81 @@ class InventarioModel(QObject):
             if not nombre_marca or len(nombre_marca.strip()) < 2:
                 print("❌ Nombre de marca inválido")
                 self.operacionError.emit("El nombre debe tener al menos 2 caracteres")
-                return False
+                return -1
             
-            # Crear marca en BD
-            exito = self.repository.crear_marca(nombre_marca.strip())
+            nombre_limpio = nombre_marca.strip()
             
-            if exito:
-                print(f"✅ Marca '{nombre_marca}' creada exitosamente")
+            # Verificar si ya existe (búsqueda case-insensitive)
+            for marca in self._marcas:
+                if marca['Nombre'].lower() == nombre_limpio.lower():
+                    print(f"⚠️ Marca '{nombre_limpio}' ya existe con ID: {marca['id']}")
+                    self.operacionError.emit(f"La marca '{nombre_limpio}' ya existe")
+                    return 0
+            
+            # ✅ CORRECCIÓN: Usar producto_repo para crear la marca
+            if not self.producto_repo:
+                print("❌ ProductoRepository no disponible")
+                self.operacionError.emit("Error: Sistema no disponible")
+                return -1
+            
+            # Crear marca en BD - Ahora retorna ID
+            marca_id = self.producto_repo.crear_marca(nombre_limpio)
+            
+            if marca_id > 0:
+                print(f"✅ Marca '{nombre_limpio}' creada exitosamente con ID: {marca_id}")
                 
                 # Refrescar lista de marcas
-                self.refresh_marcas()
+                self._marcas = self._cargar_marcas() or []
+                self.marcasChanged.emit()
                 
                 # Emitir señal de éxito
-                self.operacionExitosa.emit(f"Marca '{nombre_marca}' creada")
+                self.operacionExitosa.emit(f"Marca '{nombre_limpio}' creada")
                 
-                return True
+                return marca_id
+            elif marca_id == 0:
+                # Ya existe
+                print(f"⚠️ Marca '{nombre_limpio}' ya existe")
+                self.operacionError.emit(f"La marca '{nombre_limpio}' ya existe")
+                return 0
             else:
-                print(f"❌ Error creando marca '{nombre_marca}'")
+                print(f"❌ Error creando marca '{nombre_limpio}'")
                 self.operacionError.emit("Error al crear la marca en la base de datos")
-                return False
+                return -1
                 
         except Exception as e:
             print(f"❌ Error en crear_marca_desde_qml: {e}")
             import traceback
             traceback.print_exc()
             self.operacionError.emit(f"Error inesperado: {str(e)}")
-            return False
+            return -1
+
+    @Slot()
+    def refresh_marcas(self):
+        """Refresca la lista de marcas disponibles - FORZADO SIN CACHE"""
+        try:
+            print("🔄 Refrescando marcas (forzado sin cache)...")
+            
+            # Invalidar cache antes de cargar
+            if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
+                self.producto_repo._invalidate_cache_after_modification()
+            
+            # Cargar marcas frescas desde BD
+            self._marcas = self._cargar_marcas() or []
+            
+            # Emitir señal de cambio
+            self.marcasChanged.emit()
+            
+            print(f"✅ Marcas refrescadas: {len(self._marcas)}")
+            
+            # Debug: Mostrar primeras marcas
+            if self._marcas:
+                for i, marca in enumerate(self._marcas[:3]):
+                    print(f"   {i+1}. {marca.get('nombre', 'Sin nombre')} (ID: {marca.get('id', 0)})")
+            
+        except Exception as e:
+            print(f"❌ Error refrescando marcas: {e}")
+            import traceback
+            traceback.print_exc()
         
     @Slot(str)
     def buscar_productos(self, termino: str):
@@ -525,8 +582,22 @@ class InventarioModel(QObject):
             if producto_existente:
                 raise ValueError(f"El código {codigo_producto} ya existe")
             
-            # Obtener ID de marca
-            id_marca = self._obtener_id_marca(datos.get('id_marca') or datos.get('marca', ''))
+            # Obtener ID de marca - CORREGIDO
+            id_marca = datos.get('id_marca')
+            marca_nombre = datos.get('marca', '')
+            
+            print(f"🏷️ Procesando marca - ID: {id_marca}, Nombre: {marca_nombre}")
+            
+            # ✅ CORRECCIÓN: Si tenemos ID de marca, usarlo directamente
+            # Si no, intentar obtener por nombre
+            if not id_marca or id_marca <= 0:
+                if marca_nombre:
+                    id_marca = self._obtener_id_marca(marca_nombre)
+                else:
+                    id_marca = 1  # Marca por defecto
+                    print("⚠️ Usando marca por defecto (GENÉRICO)")
+            
+            print(f"✅ Usando marca ID: {id_marca}")
             
             # Preparar datos del producto
             datos_producto = {
@@ -536,7 +607,7 @@ class InventarioModel(QObject):
                 'Precio_compra': float(datos['precio_compra']),
                 'Precio_venta': float(datos['precio_venta']),
                 'Unidad_Medida': datos.get('unidad_medida', 'Tabletas'),
-                'ID_Marca': id_marca,
+                'ID_Marca': id_marca,  # ✅ Usar ID directamente
                 'Fecha_Venc': self._procesar_fecha_vencimiento(fecha_vencimiento)
             }
             
@@ -1123,18 +1194,21 @@ class InventarioModel(QObject):
     
     @Slot(result='QVariant')
     def get_marcas_disponibles(self):
-        """Obtiene lista de marcas disponibles para productos - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene lista de marcas disponibles - CORREGIDO"""
         try:
-            # Asegurar que las marcas estén actualizadas
-            marcas = self._cargar_marcas() or []
+            # Si ya tenemos marcas cargadas, devolverlas
+            if self._marcas and len(self._marcas) > 0:
+                print(f"🏷️ Marcas disponibles desde cache: {len(self._marcas)}")
+                return self._marcas
             
-            # Actualizar marcas internas si es necesario
-            if marcas:
-                self._marcas = marcas
-                self.marcasChanged.emit()
+            # Si no, cargarlas
+            print("🔄 Cargando marcas desde BD...")
+            self._marcas = self._cargar_marcas() or []
+            self.marcasChanged.emit()
             
-            print(f"🏷️ Marcas disponibles: {len(marcas)}")
-            return marcas
+            print(f"🏷️ Marcas cargadas: {len(self._marcas)}")
+            return self._marcas
+            
         except Exception as e:
             print(f"❌ Error obteniendo marcas: {e}")
             self.operacionError.emit(f"Error obteniendo marcas: {str(e)}")
@@ -1370,28 +1444,48 @@ class InventarioModel(QObject):
             self._set_loading(False)
     
     def _cargar_marcas(self):
-        """Carga lista de marcas"""
+        """Carga lista de marcas - CORREGIDO - Normalización consistente"""
         try:
-            query = "SELECT * FROM Marca ORDER BY Nombre"
-            marcas_raw = self.producto_repo._execute_query(query) or []
+            query = "SELECT id, Nombre, Detalles FROM Marca ORDER BY Nombre"
+            marcas_raw = self.producto_repo._execute_query(query, use_cache=False) or []
             
-            # Normalizar marcas para QML
+            # ✅ Normalizar marcas con AMBAS nomenclaturas (mayúscula y minúscula)
             marcas_normalizadas = []
             for marca in marcas_raw:
-                marca_normalizada = {
-                    'id': marca.get('id', 0),
-                    'Nombre': marca.get('Nombre', ''),
-                    'nombre': marca.get('Nombre', ''),  # Compatibilidad
-                    'Detalles': marca.get('Detalles', ''),
-                    'detalles': marca.get('Detalles', '')  # Compatibilidad
-                }
-                marcas_normalizadas.append(marca_normalizada)
+                # Obtener valores con fallbacks
+                marca_id = marca.get('id', 0)
+                marca_nombre = marca.get('Nombre', '')
+                marca_detalles = marca.get('Detalles', '')
+                
+                # Validar que tenga ID y nombre
+                if marca_id > 0 and marca_nombre:
+                    marca_normalizada = {
+                        # ID
+                        'id': marca_id,
+                        
+                        # Nombre - AMBAS nomenclaturas
+                        'Nombre': marca_nombre,  # Para backend
+                        'nombre': marca_nombre,  # Para QML
+                        
+                        # Detalles - AMBAS nomenclaturas
+                        'Detalles': marca_detalles,  # Para backend
+                        'detalles': marca_detalles   # Para QML
+                    }
+                    marcas_normalizadas.append(marca_normalizada)
             
             print(f"🏷️ Marcas cargadas desde BD: {len(marcas_normalizadas)}")
+            
+            # Debug: Mostrar primeras 3 marcas
+            if marcas_normalizadas:
+                for i, marca in enumerate(marcas_normalizadas[:3]):
+                    print(f"   {i+1}. ID: {marca['id']}, Nombre: {marca['nombre']}")
+            
             return marcas_normalizadas
             
         except Exception as e:
             print(f"❌ Error cargando marcas: {e}")
+            import traceback
+            traceback.print_exc()
             return []
         
     def _cargar_lotes_activos(self):
@@ -1652,34 +1746,45 @@ class InventarioModel(QObject):
         return f"PROD{int(time.time() * 1000) % 1000000}"
     
     def _obtener_id_marca(self, nombre_marca: str) -> int:
-        """Obtiene ID de marca por nombre, crea si no existe"""
-        if not nombre_marca:
+        """Obtiene ID de marca por nombre, crea si no existe - CORREGIDO"""
+        if not nombre_marca or not isinstance(nombre_marca, str):
+            print(f"⚠️ Nombre de marca inválido: {nombre_marca}")
             return 1  # Marca por defecto
+        
+        nombre_limpio = nombre_marca.strip()
+        if len(nombre_limpio) < 2:
+            return 1
+        
+        print(f"🔍 Buscando marca por nombre: '{nombre_limpio}'")
         
         try:
             # Buscar marca existente
             for marca in self._marcas:
-                if marca['Nombre'].lower() == nombre_marca.lower():
+                marca_nombre = marca.get('Nombre') or marca.get('nombre', '')
+                if marca_nombre and marca_nombre.lower() == nombre_limpio.lower():
+                    print(f"✅ Marca encontrada: {marca_nombre} (ID: {marca['id']})")
                     return marca['id']
             
             # Si no existe, crear nueva marca
+            print(f"🏷️ Creando nueva marca: '{nombre_limpio}'")
             query = "INSERT INTO Marca (Nombre, Detalles) OUTPUT INSERTED.id VALUES (?, ?)"
             resultado = self.producto_repo._execute_query(
                 query, 
-                (nombre_marca, f"Marca creada automáticamente"), 
+                (nombre_limpio, f"Marca creada automáticamente"), 
                 fetch_one=True
             )
             
-            if resultado:
+            if resultado and 'id' in resultado:
                 nueva_marca_id = resultado['id']
                 # Actualizar lista de marcas
-                self._cargar_marcas()
+                self._marcas = self._cargar_marcas() or []
+                print(f"✅ Nueva marca creada: '{nombre_limpio}' (ID: {nueva_marca_id})")
                 return nueva_marca_id
             
             return 1  # Fallback a marca por defecto
             
         except Exception as e:
-            print(f"❌ Error obteniendo/creando marca: {e}")
+            print(f"❌ Error obteniendo/creando marca '{nombre_limpio}': {e}")
             return 1
     
     def _procesar_fecha_vencimiento(self, fecha_str: str) -> str:

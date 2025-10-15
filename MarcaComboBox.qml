@@ -2,7 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-// ComboBox inteligente para selección/creación de marcas
+// ComboBox inteligente para selección/creación de marcas - VERSIÓN CORREGIDA
 Item {
     id: root
     
@@ -39,7 +39,7 @@ Item {
             color: "white"
             border.color: {
                 if (searchField.activeFocus) return primaryColor
-                if (required && marcaIdSeleccionada === 0) return dangerColor  // ✅ Rojo si falta
+                if (required && marcaIdSeleccionada === 0) return dangerColor
                 return lightGray
             }
             border.width: 2
@@ -81,7 +81,6 @@ Item {
                     }
                     
                     onActiveFocusChanged: {
-                        // ✅ TAMBIÉN VERIFICAR AQUÍ
                         if (activeFocus && text.length > 0 && !cargandoProgramaticamente) {
                             dropdownPopup.open()
                         }
@@ -176,7 +175,6 @@ Item {
             border.color: lightGray
             border.width: 1
             
-            // Sombra
             Rectangle {
                 anchors.fill: parent
                 anchors.topMargin: 2
@@ -191,7 +189,6 @@ Item {
             id: dropdownContent
             spacing: 0
             
-            // Lista de marcas filtradas
             ListView {
                 id: dropdownListView
                 Layout.fillWidth: true
@@ -228,7 +225,7 @@ Item {
                             spacing: 2
                             
                             Label {
-                                text: modelData.nombre
+                                text: modelData.nombre || ""
                                 font.pixelSize: 12
                                 font.bold: true
                                 color: "#2c3e50"
@@ -238,7 +235,7 @@ Item {
                             
                             Label {
                                 visible: modelData.detalles && modelData.detalles.length > 0
-                                text: modelData.detalles
+                                text: modelData.detalles || ""
                                 font.pixelSize: 9
                                 color: darkGray
                                 elide: Text.ElideRight
@@ -258,7 +255,6 @@ Item {
                     }
                 }
                 
-                // Estado vacío
                 Item {
                     anchors.centerIn: parent
                     visible: dropdownListView.count === 0 && searchField.text.length === 0
@@ -288,7 +284,6 @@ Item {
                 }
             }
             
-            // Separador
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
@@ -296,7 +291,6 @@ Item {
                 visible: searchField.text.trim().length > 0
             }
             
-            // Opción crear nueva marca
             Rectangle {
                 visible: searchField.text.trim().length > 0
                 Layout.fillWidth: true
@@ -340,82 +334,199 @@ Item {
         }
     }
     
-    // Modelo de marcas filtradas
     property var marcasFiltradas: []
     
-    // Funciones
+    // ========== FUNCIONES CORREGIDAS CON VALIDACIONES ==========
+    
     function filtrarMarcas() {
+        // Validación robusta
+        if (!marcasModel) {
+            console.log("⚠️ marcasModel es null")
+            marcasFiltradas = []
+            return
+        }
+        
+        if (typeof marcasModel.length === 'undefined') {
+            console.log("⚠️ marcasModel no es un array")
+            marcasFiltradas = []
+            return
+        }
+        
+        if (marcasModel.length === 0) {
+            console.log("⚠️ marcasModel está vacío")
+            marcasFiltradas = []
+            return
+        }
+        
         var texto = searchField.text.toLowerCase().trim()
         
         if (texto.length === 0) {
-            marcasFiltradas = marcasModel
+            // Mostrar todas las marcas
+            marcasFiltradas = marcasModel.slice() // Copia para evitar mutación
+            console.log("🔍 Mostrando todas las marcas:", marcasFiltradas.length)
         } else {
+            // Filtrar por texto
             var filtradas = []
             for (var i = 0; i < marcasModel.length; i++) {
                 var marca = marcasModel[i]
-                if (marca.nombre.toLowerCase().includes(texto)) {
+                
+                // Validar que la marca tenga la estructura correcta
+                if (!marca) continue
+                
+                var nombreMarca = marca.nombre || marca.Nombre || ""
+                
+                if (nombreMarca.toLowerCase().includes(texto)) {
                     filtradas.push(marca)
                 }
             }
             marcasFiltradas = filtradas
+            console.log("🔍 Filtradas:", marcasFiltradas.length, "de", marcasModel.length)
         }
     }
     
     function seleccionarMarca(index) {
-        if (index < 0 || index >= marcasFiltradas.length) return
-        
+        // Validaciones exhaustivas
+        if (!marcasFiltradas) {
+            console.log("❌ marcasFiltradas no disponible")
+            return
+        }
+
+        if (index < 0 || index >= marcasFiltradas.length) {
+            console.log("❌ Índice inválido:", index, "de", marcasFiltradas.length)
+            return
+        }
+
         var marca = marcasFiltradas[index]
-        marcaSeleccionada = marca.nombre
-        marcaIdSeleccionada = marca.id
-        searchField.text = marca.nombre
-        
+
+        if (!marca) {
+            console.log("❌ Marca no encontrada en índice:", index)
+            return
+        }
+
+        // Validar estructura de marca
+        var marcaId = marca.id || 0
+        var marcaNombre = marca.nombre || marca.Nombre || ""
+
+        if (marcaId === 0 || marcaNombre === "") {
+            console.log("❌ Marca inválida - ID:", marcaId, "Nombre:", marcaNombre)
+            return
+        }
+
+        // ✅ CORRECCIÓN: Actualizar propiedades PRIMERO y luego emitir señal
+        cargandoProgramaticamente = true
+
+        // Actualizar propiedades locales del ComboBox
+        marcaSeleccionada = marcaNombre
+        marcaIdSeleccionada = marcaId
+        searchField.text = marcaNombre
+
+        console.log("✅ Marca seleccionada:", marcaNombre, "ID:", marcaId)
+
+        // Cerrar dropdown
         dropdownPopup.close()
-        marcaCambiada(marca.nombre, marca.id)
+
+        // ✅ CORRECCIÓN CRÍTICA: Emitir señal con valores DIRECTOS, no propiedades
+        Qt.callLater(function() {
+            marcaCambiada(marcaNombre, marcaId)  // ← Usar variables locales, no propiedades
+            cargandoProgramaticamente = false
+            console.log("📢 Señal emitida - Marca:", marcaNombre, "ID:", marcaId)
+        })
     }
     
     function crearNuevaMarca() {
         var nombreNuevo = searchField.text.trim()
         
         if (nombreNuevo.length < 2) {
-            console.log("Nombre de marca muy corto")
+            console.log("❌ Nombre muy corto")
             return
         }
         
-        // Verificar duplicados (case-insensitive)
-        for (var i = 0; i < marcasModel.length; i++) {
-            if (marcasModel[i].nombre.toLowerCase() === nombreNuevo.toLowerCase()) {
-                // Ya existe, seleccionarla
-                seleccionarMarca(i)
-                return
+        // ✅ VALIDAR marcasModel antes de verificar duplicados
+        if (marcasModel && marcasModel.length > 0) {
+            for (var i = 0; i < marcasModel.length; i++) {
+                var marca = marcasModel[i]
+                if (marca && marca.nombre && marca.nombre.toLowerCase() === nombreNuevo.toLowerCase()) {
+                    console.log("⚠️ Marca ya existe, seleccionándola")
+                    seleccionarMarca(i)
+                    return
+                }
             }
         }
         
-        // Abrir diálogo de confirmación
-        dialogoCrearMarca.nombreMarca = nombreNuevo
-        dialogoCrearMarca.open()
+        // Marca nueva - emitir señal
+        dropdownPopup.close()
+        nuevaMarcaCreada(nombreNuevo)
     }
     
     function setMarcaById(marcaId) {
-        // ✅ ACTIVAR BANDERA ANTES DE ESTABLECER TEXTO
+        console.log("🎯 setMarcaById llamado con ID:", marcaId)
+        
+        // Validar marcaId
+        if (!marcaId || marcaId <= 0) {
+            console.log("❌ ID de marca inválido:", marcaId)
+            return
+        }
+        
+        // Validar marcasModel
+        if (!marcasModel || marcasModel.length === 0) {
+            console.log("⚠️ marcasModel vacío, esperando datos...")
+            
+            // Guardar para intentar después
+            Qt.callLater(function() {
+                if (marcasModel && marcasModel.length > 0) {
+                    console.log("🔄 Reintentando setMarcaById después de cargar marcas")
+                    setMarcaById(marcaId)
+                }
+            })
+            return
+        }
+        
         cargandoProgramaticamente = true
         
+        // Buscar marca por ID
+        var marcaEncontrada = null
         for (var i = 0; i < marcasModel.length; i++) {
-            if (marcasModel[i].id === marcaId) {
-                marcaSeleccionada = marcasModel[i].nombre
-                marcaIdSeleccionada = marcaId
-                searchField.text = marcasModel[i].nombre
+            var marca = marcasModel[i]
+            if (marca && marca.id === marcaId) {
+                marcaEncontrada = marca
                 break
             }
         }
         
-        // ✅ DESACTIVAR BANDERA DESPUÉS DE UN BREVE DELAY
-        Qt.callLater(function() {
+        if (marcaEncontrada) {
+            var nombreMarca = marcaEncontrada.nombre || marcaEncontrada.Nombre || ""
+            
+            marcaSeleccionada = nombreMarca
+            marcaIdSeleccionada = marcaId
+            searchField.text = nombreMarca
+            
+            console.log("✅ Marca establecida programáticamente:", nombreMarca, "ID:", marcaId)
+            
+            // Emitir señal para notificar el cambio
+            Qt.callLater(function() {
+                marcaCambiada(marcaSeleccionada, marcaIdSeleccionada)
+                cargandoProgramaticamente = false
+            })
+        } else {
+            console.log("❌ No se encontró marca con ID:", marcaId)
+            console.log("   Marcas disponibles:", marcasModel.length)
             cargandoProgramaticamente = false
-        })
+        }
+    }
+
+    function recargarMarcas(nuevoMarcasModel) {
+        console.log("🔄 Recargando marcas en ComboBox")
+        
+        if (nuevoMarcasModel && nuevoMarcasModel.length > 0) {
+            marcasModel = nuevoMarcasModel
+            filtrarMarcas()
+            console.log("✅ Marcas recargadas:", marcasModel.length)
+        } else {
+            console.log("⚠️ No hay marcas para recargar")
+        }
     }
     
     function reset() {
-        // ✅ TAMBIÉN USAR BANDERA AQUÍ
         cargandoProgramaticamente = true
         searchField.text = ""
         marcaSeleccionada = ""
@@ -447,7 +558,6 @@ Item {
             anchors.margins: 16
             spacing: 16
             
-            // Header
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 12
@@ -490,7 +600,6 @@ Item {
                 }
             }
             
-            // Nombre de marca
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 6
@@ -520,7 +629,6 @@ Item {
                 }
             }
             
-            // Descripción opcional
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 6
@@ -558,7 +666,6 @@ Item {
             
             Item { Layout.fillHeight: true }
             
-            // Botones
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 12
@@ -616,22 +723,78 @@ Item {
     
     function confirmarCreacionMarca() {
         var nombre = dialogoCrearMarca.nombreMarca.trim()
-        var descripcion = descripcionField.text.trim()
         
         if (nombre.length < 2) {
-            console.log("Nombre muy corto")
+            console.log("❌ Nombre muy corto")
             return
         }
         
-        // Emitir señal para crear en backend
         nuevaMarcaCreada(nombre)
-        
-        // Cerrar diálogo
         dialogoCrearMarca.close()
         descripcionField.text = ""
     }
     
     Component.onCompleted: {
+        console.log("🎬 MarcaComboBox inicializado")
+        console.log("   - Marcas disponibles:", marcasModel ? marcasModel.length : 0)
+        
+        // Cargar marcas iniciales
         filtrarMarcas()
     }
+    
+    // ✅ Observar cambios en marcasModel
+    onMarcasModelChanged: {
+        console.log("🔄 marcasModel cambió, refrescando filtros")
+        console.log("   - Marcas disponibles:", marcasModel ? marcasModel.length : 0)
+        
+        // Forzar actualización inmediata
+        Qt.callLater(function() {
+            filtrarMarcas()
+            
+            // Si tenemos marcas y hay una selección pendiente, restaurarla
+            if (marcaIdSeleccionada > 0 && marcasModel && marcasModel.length > 0) {
+                console.log("🔍 Verificando selección actual ID:", marcaIdSeleccionada)
+                var encontrada = false
+                
+                for (var i = 0; i < marcasModel.length; i++) {
+                    if (marcasModel[i].id === marcaIdSeleccionada) {
+                        encontrada = true
+                        console.log("✅ Marca actual aún válida:", marcasModel[i].nombre)
+                        break
+                    }
+                }
+                
+                if (!encontrada) {
+                    console.log("⚠️ Marca seleccionada ya no existe, limpiando")
+                    limpiarSeleccion()
+                }
+            }
+        })
+    }
+
+    // Agregar estas funciones para mejor control:
+    function limpiarSeleccion() {
+        cargandoProgramaticamente = true
+        searchField.text = ""
+        marcaSeleccionada = ""
+        marcaIdSeleccionada = 0
+        Qt.callLater(function() {
+            cargandoProgramaticamente = false
+        })
+    }
+
+    function forzarSeleccion(marcaId, nombreMarca) {
+        cargandoProgramaticamente = true
+        marcaSeleccionada = nombreMarca || ""
+        marcaIdSeleccionada = marcaId || 0
+        searchField.text = nombreMarca || ""
+        
+        if (marcaId > 0 && nombreMarca) {
+            marcaCambiada(nombreMarca, marcaId)
+        }
+        
+        Qt.callLater(function() {
+            cargandoProgramaticamente = false
+        })
+}
 }

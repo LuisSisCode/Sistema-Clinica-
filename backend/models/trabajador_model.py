@@ -318,7 +318,7 @@ class TrabajadorModel(QObject):
             
             # ✅ VERIFICAR QUE SEA LISTA
             if not isinstance(self._tipos_trabajador, list):
-                print(f"⚠️ tiposTrabajador no es lista: {type(self._tipos_trabajador)}")
+                #print(f"⚠️ tiposTrabajador no es lista: {type(self._tipos_trabajador)}")
                 return []
             
             return self._tipos_trabajador

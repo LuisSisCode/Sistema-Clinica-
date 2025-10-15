@@ -330,7 +330,26 @@ class ProductoRepository(BaseRepository):
 
     @ExceptionHandler.handle_exception
     def crear_producto_con_lote_inicial(self, datos_producto: dict, datos_lote: dict) -> int:
-        """Crea producto con su primer lote en una sola transacción"""
+        """Crea producto con su primer lote - CON VALIDACIÓN DE MARCA"""
+        
+        # Validar que tenemos ID_Marca
+        if 'ID_Marca' not in datos_producto or not datos_producto['ID_Marca']:
+            raise ValueError("ID de marca es requerido")
+        
+        id_marca = datos_producto['ID_Marca']
+        print(f"🏷️ Creando producto con marca ID: {id_marca}")
+        
+        # Verificar que la marca existe
+        marca_existente = self._execute_query(
+            "SELECT id FROM Marca WHERE id = ?", 
+            (id_marca,), 
+            fetch_one=True
+        )
+        
+        if not marca_existente:
+            print(f"⚠️ Marca ID {id_marca} no existe, usando marca por defecto")
+            datos_producto['ID_Marca'] = 1  # Marca por defecto
+        
         conn = None
         producto_id = None
         
@@ -754,33 +773,76 @@ class ProductoRepository(BaseRepository):
             if conn:
                 conn.close()
 
-    def crear_marca(self, nombre_marca: str) -> bool:
-        """Crea una nueva marca en la base de datos"""
+    def crear_marca(self, nombre_marca: str) -> int:
+        """
+        Crea una nueva marca en la base de datos - CORREGIDO - Retorna ID
+        
+        Returns:
+            int: ID de la marca creada, 0 si ya existe, -1 si error
+        """
         try:
-            print(f"📝 Creando marca en BD: {nombre_marca}")
+            print(f"🔍 Creando marca en BD: {nombre_marca}")
             
-            cursor = self._execute_query(
-                """
-                INSERT INTO Marca (Nombre) 
-                VALUES (?)
-                """,
-                (nombre_marca,)
+            # Validar nombre
+            if not nombre_marca or len(nombre_marca.strip()) < 2:
+                print("❌ Nombre de marca inválido")
+                return -1
+            
+            nombre_limpio = nombre_marca.strip()
+            
+            # Verificar si ya existe
+            marca_existente = self._execute_query(
+                "SELECT id FROM Marca WHERE LOWER(Nombre) = LOWER(?)", 
+                (nombre_limpio,), 
+                fetch_one=True,
+                use_cache=False
             )
             
-            if cursor and cursor.rowcount > 0:
-                cursor.commit()
+            if marca_existente:
+                print(f"⚠️ Marca '{nombre_limpio}' ya existe con ID: {marca_existente['id']}")
+                return 0  # Indicar que ya existe (no es error, pero no se creó)
+            
+            # Crear nueva marca con OUTPUT para obtener ID
+            conn = None
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
                 
-                # Invalidar caché de marcas
-                self.cache_manager.invalidate('marcas')
+                # SQL Server: Usar OUTPUT INSERTED.id
+                query = """
+                INSERT INTO Marca (Nombre, Detalles) 
+                OUTPUT INSERTED.id
+                VALUES (?, ?)
+                """
                 
-                print(f"✅ Marca '{nombre_marca}' creada con éxito")
-                return True
-            else:
-                print(f"❌ No se pudo crear la marca '{nombre_marca}'")
-                return False
+                cursor.execute(query, (nombre_limpio, f"Marca creada automáticamente"))
                 
+                # Obtener ID insertado
+                resultado = cursor.fetchone()
+                if not resultado:
+                    raise Exception("No se pudo obtener el ID de la marca creada")
+                
+                nueva_marca_id = resultado[0]
+                
+                conn.commit()
+                
+                # Invalidar caché
+                self._invalidate_cache_after_modification()
+                
+                print(f"✅ Marca '{nombre_limpio}' creada con ID: {nueva_marca_id}")
+                return nueva_marca_id
+                
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                print(f"❌ Error en transacción crear marca: {e}")
+                return -1
+            finally:
+                if conn:
+                    conn.close()
+                    
         except Exception as e:
             print(f"❌ Error creando marca: {e}")
             import traceback
             traceback.print_exc()
-            return False
+            return -1
