@@ -119,8 +119,12 @@ class UsuarioRepository(BaseRepository):
         }
         
         user_id = self.insert(user_data)
-        print(f"👤 Usuario creado: {nombre} {apellido_paterno} - ID: {user_id}")
-        
+
+        if user_id:
+            # ✅ INVALIDAR CACHÉ INMEDIATAMENTE
+            self.invalidate_user_caches()
+            print(f"👤 Usuario creado: {nombre} {apellido_paterno} - ID: {user_id}")
+
         return user_id
     
     def update_user(self, usuario_id: int, nombre: str = None, apellido_paterno: str = None,
@@ -179,9 +183,12 @@ class UsuarioRepository(BaseRepository):
             return True
         
         success = self.update(usuario_id, update_data)
+
         if success:
+            # ✅ INVALIDAR CACHÉ INMEDIATAMENTE
+            self.invalidate_user_caches()
             print(f"👤 Usuario actualizado: ID {usuario_id}")
-        
+
         return success
     
     def change_password(self, usuario_id: int, current_password: str, new_password: str) -> bool:
@@ -217,10 +224,12 @@ class UsuarioRepository(BaseRepository):
         
         # CORREGIDO: Guardar nueva contraseña en texto plano (igual que el sistema actual)
         success = self.update(usuario_id, {'contrasena': new_password})
-        
+
         if success:
+            # ✅ INVALIDAR CACHÉ INMEDIATAMENTE
+            self.invalidate_user_caches()
             print(f"🔑 Contraseña cambiada: Usuario ID {usuario_id}")
-        
+
         return success
     
     def reset_password(self, usuario_id: int, new_password: str) -> bool:
@@ -244,10 +253,12 @@ class UsuarioRepository(BaseRepository):
         
         # CORREGIDO: Guardar contraseña en texto plano
         success = self.update(usuario_id, {'contrasena': new_password})
-        
+
         if success:
+            # ✅ INVALIDAR CACHÉ INMEDIATAMENTE
+            self.invalidate_user_caches()
             print(f"🔓 Contraseña reseteada: Usuario ID {usuario_id}")
-        
+
         return success
     
     # ===============================

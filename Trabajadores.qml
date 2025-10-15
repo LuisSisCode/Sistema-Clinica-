@@ -37,6 +37,10 @@ Item {
     readonly property color violetColor: "#9b59b6"
     readonly property color infoColor: "#17a2b8"
 
+    // ✅ PROPIEDADES REACTIVAS PARA COMBOS
+    property var tiposParaFiltro: ["Todos los tipos"]
+    property var tiposParaCombo: ["Seleccionar tipo..."]
+
     // Propiedades de roles y permisos
     readonly property string usuarioActualRol: authModel ? authModel.userRole || "" : ""
     readonly property bool esAdministrador: usuarioActualRol === "Administrador" 
@@ -91,73 +95,139 @@ Item {
     readonly property real colFecha: 0.10
 
     // ===== FUNCIONES HELPER MEJORADAS CON VERIFICACIONES ROBUSTAS =====
-    function getTiposTrabajadoresNombres() {
-        // ✅ VERIFICACIÓN ROBUSTA: Verificar modelo, propiedad Y que tenga contenido
+    function actualizarTiposParaFiltro() {
+        console.log("🔍 actualizarTiposParaFiltro - INICIO")
+        
         if (!trabajadorModel) {
-            console.log("🔄 TrabajadorModel aún no disponible (inicializando...)")
-            return ["Todos los tipos"]
+            console.log("❌ TrabajadorModel no disponible")
+            tiposParaFiltro = ["Todos los tipos"]
+            return
         }
         
-        if (!trabajadorModel.tiposTrabajador) {
-            console.log("🔄 tiposTrabajador aún no inicializado (cargando...)")
-            return ["Todos los tipos"]
-        }
-        
-        // ✅ VERIFICAR QUE SEA ARRAY Y TENGA LONGITUD
-        var tipos = trabajadorModel.tiposTrabajador
-        if (!Array.isArray(tipos) || tipos.length === 0) {
-            console.log("🔄 tiposTrabajador vacío o no es array (esperando carga...)")
-            return ["Todos los tipos"]
-        }
-        
-        // ✅ TODO OK - CONSTRUIR LISTA
-        var nombres = ["Todos los tipos"]
-        for (var i = 0; i < tipos.length; i++) {
-            if (tipos[i] && tipos[i].Tipo) {  // ✅ Verificar que el objeto y la propiedad existan
-                nombres.push(tipos[i].Tipo)
+        try {
+            // ✅ OBTENER TIPOS SIN VERIFICACIÓN DE TIPO
+            var tipos = trabajadorModel.tiposTrabajador
+            
+            console.log("   Tipos recibidos:", tipos)
+            console.log("   Tipo de datos:", typeof tipos)
+            console.log("   Tiene length?", tipos ? tipos.length : "NO")
+            
+            // ✅ VERIFICACIÓN SIMPLE: Solo checar que exista y tenga length > 0
+            if (!tipos) {
+                console.log("❌ tipos es null/undefined")
+                tiposParaFiltro = ["Todos los tipos"]
+                return
             }
+            
+            // ✅ VERIFICAR LENGTH (funciona con QVariant)
+            var length = tipos.length || 0
+            console.log("   Length detectado:", length)
+            
+            if (length === 0) {
+                console.log("❌ tipos.length es 0")
+                tiposParaFiltro = ["Todos los tipos"]
+                return
+            }
+            
+            // ✅ CONSTRUIR LISTA DIRECTAMENTE
+            var nombres = ["Todos los tipos"]
+            
+            console.log("   Iterando sobre", length, "tipos...")
+            for (var i = 0; i < length; i++) {
+                try {
+                    var tipo = tipos[i]
+                    console.log("   Tipo [" + i + "]:", JSON.stringify(tipo))
+                    
+                    if (tipo && tipo.Tipo) {
+                        nombres.push(tipo.Tipo)
+                        console.log("      ✅ Agregado:", tipo.Tipo)
+                    } else {
+                        console.log("      ⚠️ Tipo inválido:", tipo)
+                    }
+                } catch (err) {
+                    console.log("      ❌ Error en índice", i, ":", err)
+                }
+            }
+            
+            tiposParaFiltro = nombres
+            console.log("✅ Tipos cargados para filtro:", nombres.length - 1, "tipos")
+            console.log("   Lista completa:", JSON.stringify(nombres))
+            
+        } catch (error) {
+            console.log("❌ ERROR en actualizarTiposParaFiltro:", error)
+            console.log("   Stack:", error.stack)
+            tiposParaFiltro = ["Todos los tipos"]
         }
-        
-        console.log("✅ Tipos de trabajador cargados para filtro:", nombres.length - 1, "tipos")
-        return nombres
     }
 
-    function getTiposTrabajadoresParaCombo() {
-        // ✅ VERIFICACIÓN ROBUSTA: Verificar modelo, propiedad Y que tenga contenido
+    function actualizarTiposParaCombo() {
+        console.log("🔍 actualizarTiposParaCombo - INICIO")
+        
         if (!trabajadorModel) {
-            console.log("🔄 TrabajadorModel aún no disponible para combo (inicializando...)")
-            return ["Seleccionar tipo..."]
+            console.log("❌ TrabajadorModel no disponible")
+            tiposParaCombo = ["Seleccionar tipo..."]
+            return
         }
         
-        if (!trabajadorModel.tiposTrabajador) {
-            console.log("🔄 tiposTrabajador aún no inicializado para combo (cargando...)")
-            return ["Seleccionar tipo..."]
-        }
-        
-        // ✅ VERIFICAR QUE SEA ARRAY Y TENGA LONGITUD
-        var tipos = trabajadorModel.tiposTrabajador
-        if (!Array.isArray(tipos) || tipos.length === 0) {
-            console.log("🔄 tiposTrabajador vacío o no es array para combo (esperando carga...)")
-            return ["Seleccionar tipo..."]
-        }
-        
-        // ✅ TODO OK - CONSTRUIR LISTA
-        var nombres = ["Seleccionar tipo..."]
-        for (var i = 0; i < tipos.length; i++) {
-            if (tipos[i] && tipos[i].Tipo) {  // ✅ Verificar que el objeto y la propiedad existan
-                nombres.push(tipos[i].Tipo)
+        try {
+            // ✅ OBTENER TIPOS SIN VERIFICACIÓN DE TIPO
+            var tipos = trabajadorModel.tiposTrabajador
+            
+            console.log("   Tipos recibidos:", tipos)
+            console.log("   Tipo de datos:", typeof tipos)
+            console.log("   Tiene length?", tipos ? tipos.length : "NO")
+            
+            // ✅ VERIFICACIÓN SIMPLE
+            if (!tipos) {
+                console.log("❌ tipos es null/undefined")
+                tiposParaCombo = ["Seleccionar tipo..."]
+                return
             }
+            
+            var length = tipos.length || 0
+            console.log("   Length detectado:", length)
+            
+            if (length === 0) {
+                console.log("❌ tipos.length es 0")
+                tiposParaCombo = ["Seleccionar tipo..."]
+                return
+            }
+            
+            // ✅ CONSTRUIR LISTA DIRECTAMENTE
+            var nombres = ["Seleccionar tipo..."]
+            
+            console.log("   Iterando sobre", length, "tipos...")
+            for (var i = 0; i < length; i++) {
+                try {
+                    var tipo = tipos[i]
+                    console.log("   Tipo [" + i + "]:", JSON.stringify(tipo))
+                    
+                    if (tipo && tipo.Tipo) {
+                        nombres.push(tipo.Tipo)
+                        console.log("      ✅ Agregado:", tipo.Tipo)
+                    } else {
+                        console.log("      ⚠️ Tipo inválido:", tipo)
+                    }
+                } catch (err) {
+                    console.log("      ❌ Error en índice", i, ":", err)
+                }
+            }
+            
+            tiposParaCombo = nombres
+            console.log("✅ Tipos cargados para combo:", nombres.length - 1, "tipos")
+            console.log("   Lista completa:", JSON.stringify(nombres))
+            
+        } catch (error) {
+            console.log("❌ ERROR en actualizarTiposParaCombo:", error)
+            console.log("   Stack:", error.stack)
+            tiposParaCombo = ["Seleccionar tipo..."]
         }
-        
-        console.log("✅ Tipos de trabajador cargados para combo:", nombres.length - 1, "tipos")
-        return nombres
     }
 
     // ✅ NUEVA FUNCIÓN HELPER PARA VERIFICAR SI EL MODELO ESTÁ LISTO
     function isModeloListo() {
         return trabajadorModel && 
                trabajadorModel.tiposTrabajador && 
-               Array.isArray(trabajadorModel.tiposTrabajador) && 
                trabajadorModel.tiposTrabajador.length > 0
     }
 
@@ -200,24 +270,25 @@ Item {
         target: trabajadorModel
         enabled: trabajadorModel !== null
         
-        function onTrabajadoresChanged() {
-            
-            // ✅ VERIFICAR QUE EL MODELO ESTÉ COMPLETAMENTE LISTO ANTES DE APLICAR FILTROS
-            if (isModeloListo()) {
-                Qt.callLater(aplicarFiltros)
-            } else {
-                console.log("🔄 Esperando a que el modelo esté completamente listo...")
-            }
-        }
-        
         function onTiposTrabajadorChanged() {
             console.log("🏷️ Signal: Tipos de trabajador actualizados:", trabajadorModel ? trabajadorModel.tiposTrabajador.length : 0)
-            
-            // ✅ ACTUALIZAR COMBOS DE FORMA SEGURA CON DELAY
+
+            // ✅ ACTUALIZAR AMBOS COMBOS INMEDIATAMENTE
+            actualizarTiposParaFiltro()
+            actualizarTiposParaCombo()
+
+            // ✅ FORZAR REFRESH DEL UI
             Qt.callLater(function() {
-                actualizarCombosSiEsNecesario()
+                if (filtroTipo) {
+                    filtroTipo.model = tiposParaFiltro
+                    console.log("📋 Filtro combo actualizado con", tiposParaFiltro.length, "items")
+                }
+                if (tipoTrabajadorCombo) {
+                    tipoTrabajadorCombo.model = tiposParaCombo
+                    console.log("📋 Tipo trabajador combo actualizado con", tiposParaCombo.length, "items")
+                }
             })
-        }
+            }
         
         function onTrabajadorCreado(success, message) {
             console.log("📋 Signal trabajadorCreado recibido:", success, message)
@@ -477,9 +548,14 @@ Item {
                                 id: filtroTipo
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
-                                model: getTiposTrabajadoresNombres()
+                                model: tiposParaFiltro  // ✅ USAR PROPERTY REACTIVA
                                 currentIndex: 0
                                 onCurrentIndexChanged: aplicarFiltros()
+                                
+                                // ✅ AGREGAR ACTUALIZACIÓN CUANDO CAMBIE EL MODELO
+                                onModelChanged: {
+                                    console.log("📋 Modelo de filtro actualizado:", model.length, "items")
+                                }
                                 
                                 contentItem: Label {
                                     text: filtroTipo.displayText
@@ -1353,7 +1429,13 @@ Item {
                                         Layout.fillWidth: true
                                         font.pixelSize: fontBaseSize
                                         font.family: "Segoe UI, Arial, sans-serif"
-                                        model: getTiposTrabajadoresParaCombo()
+                                        model: tiposParaCombo  // ✅ USAR PROPERTY REACTIVA
+                                        
+                                        // ✅ AGREGAR ACTUALIZACIÓN CUANDO CAMBIE EL MODELO
+                                        onModelChanged: {
+                                            console.log("📋 Modelo de tipo trabajador actualizado:", model.length, "items")
+                                        }
+                                        
                                         onCurrentIndexChanged: {
                                             if (currentIndex > 0) {
                                                 workerForm.selectedTipoTrabajadorIndex = currentIndex - 1
@@ -1898,6 +1980,79 @@ Item {
         }
     }
 
+    // ✅ TIMER DE DEBUG TEMPORAL
+    Timer {
+        id: debugTimer
+        interval: 3000  // 3 segundos después de cargar
+        repeat: false
+        running: false
+        
+        onTriggered: {
+            console.log("=" .repeat(60))
+            console.log("🔍 DEBUG MANUAL DE TIPOS DE TRABAJADOR")
+            console.log("=" .repeat(60))
+            
+            if (!trabajadorModel) {
+                console.log("❌ trabajadorModel no existe")
+                return
+            }
+            
+            console.log("✅ trabajadorModel existe:", trabajadorModel)
+            
+            // Test 1: Probar property directamente
+            console.log("\n📋 TEST 1: Property tiposTrabajador")
+            try {
+                var tipos1 = trabajadorModel.tiposTrabajador
+                console.log("   Resultado:", tipos1)
+                console.log("   Tipo:", typeof tipos1)
+                console.log("   Es null?", tipos1 === null)
+                console.log("   Es undefined?", tipos1 === undefined)
+                console.log("   Tiene length?", tipos1 ? tipos1.hasOwnProperty('length') : "N/A")
+                console.log("   Length:", tipos1 ? tipos1.length : "N/A")
+                
+                if (tipos1 && tipos1.length > 0) {
+                    console.log("   Primer elemento:", JSON.stringify(tipos1[0]))
+                }
+            } catch (e) {
+                console.log("   ❌ ERROR:", e)
+            }
+            
+            // Test 2: Probar método helper
+            console.log("\n📋 TEST 2: Método obtenerTiposTrabajadorParaQML")
+            try {
+                if (trabajadorModel.obtenerTiposTrabajadorParaQML) {
+                    var tipos2 = trabajadorModel.obtenerTiposTrabajadorParaQML()
+                    console.log("   Resultado:", tipos2)
+                    console.log("   Tipo:", typeof tipos2)
+                    console.log("   Length:", tipos2 ? tipos2.length : "N/A")
+                    
+                    if (tipos2 && tipos2.length > 0) {
+                        console.log("   Primer elemento:", JSON.stringify(tipos2[0]))
+                    }
+                } else {
+                    console.log("   ❌ Método no existe")
+                }
+            } catch (e) {
+                console.log("   ❌ ERROR:", e)
+            }
+            
+            // Test 3: Contador
+            console.log("\n📋 TEST 3: Método cantidadTiposDisponibles")
+            try {
+                if (trabajadorModel.cantidadTiposDisponibles) {
+                    var cantidad = trabajadorModel.cantidadTiposDisponibles()
+                    console.log("   Cantidad:", cantidad)
+                } else {
+                    console.log("   ❌ Método no existe")
+                }
+            } catch (e) {
+                console.log("   ❌ ERROR:", e)
+            }
+            
+            console.log("=" .repeat(60))
+        }
+    }
+
     // ===== INICIALIZACIÓN MEJORADA CON VERIFICACIONES DE TIMING =====
     Component.onCompleted: {
         console.log("💥 Módulo Trabajadores iniciado")
@@ -1911,6 +2066,9 @@ Item {
         
         console.log("✅ AppController disponible")
         
+        // ✅ INICIAR TIMER DE DEBUG
+        debugTimer.start()
+        
         // ✅ FUNCIÓN DE INICIALIZACIÓN DIFERIDA CON REINTENTOS
         function inicializarModelo(reintentos) {
             reintentos = reintentos || 0
@@ -1918,6 +2076,9 @@ Item {
             
             if (trabajadorModel) {
                 console.log("✅ TrabajadorModel disponible")
+
+                actualizarTiposParaFiltro()
+                actualizarTiposParaCombo()
                 
                 // ✅ DEBUG DE AUTENTICACIÓN AL INICIO
                 console.log("🔍 Verificando autenticación inicial:")

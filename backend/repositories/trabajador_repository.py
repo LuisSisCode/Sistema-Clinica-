@@ -563,10 +563,22 @@ class TrabajadorRepository(BaseRepository):
     # ===============================
     
     def invalidate_worker_caches(self):
-        """Invalida cachés relacionados con trabajadores"""
-        cache_types = ['trabajadores', 'trabajadores_tipos', 'tipos_trabajadores', 'stats_trabajadores']
-        from ..core.cache_system import invalidate_after_update
-        invalidate_after_update(cache_types)
+        """Invalida cachés de trabajadores"""
+        try:
+            from ..core.cache_system import invalidate_after_update
+            
+            cache_types = [
+                'trabajadores',
+                'trabajadores_activos', 
+                'tipos_trabajador',
+                'stats_trabajadores'
+            ]
+            
+            invalidate_after_update(cache_types)
+            print("🗑️ Cachés de trabajadores invalidados")
+            
+        except Exception as e:
+            print(f"⚠️ Error invalidando cachés: {e}")
     
     def _invalidate_cache_after_modification(self):
         """Override para invalidación específica"""

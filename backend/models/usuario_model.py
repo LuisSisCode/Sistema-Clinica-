@@ -642,7 +642,42 @@ class UsuarioModel(QObject):
             return rol['Nombre'] if rol else "Desconocido"
         except Exception:
             return "Desconocido"
-    
+
+    @Slot(str, result=int)
+    def obtenerIdRolPorNombre(self, nombre_rol: str) -> int:
+        """Obtiene el ID del rol por su nombre"""
+        try:
+            nombre_rol_lower = nombre_rol.strip().lower()
+            for rol in self._roles:
+                if rol.get('Nombre', '').lower() == nombre_rol_lower:
+                    return rol.get('id', 0)
+            
+            print(f"⚠️ Rol '{nombre_rol}' no encontrado en lista de roles")
+            return 0
+        except Exception as e:
+            print(f"❌ Error obteniendo ID de rol: {e}")
+            return 0
+        
+    @Slot(result=list)
+    def obtenerRolesParaComboBox(self) -> List[Dict[str, Any]]:
+        """Obtiene roles formateados para ComboBox con id, text, data"""
+        try:
+            roles_formateados = []
+            
+            for rol in self._roles:
+                if rol.get('Estado', True):  # Solo roles activos
+                    roles_formateados.append({
+                        'id': rol.get('id', 0),
+                        'text': rol.get('Nombre', 'Desconocido'),
+                        'data': rol
+                    })
+            
+            print(f"📋 Roles formateados para ComboBox: {len(roles_formateados)}")
+            return roles_formateados
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo roles para ComboBox: {e}")
+            return []
     # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
@@ -658,6 +693,8 @@ class UsuarioModel(QObject):
             print(f"❌ Error cargando datos iniciales: {e}")
             self.errorOccurred.emit("Error inicial", f"Error cargando datos: {str(e)}")
     
+    
+
     def _cargar_usuarios(self):
         """Carga lista de usuarios desde el repository"""
         try:

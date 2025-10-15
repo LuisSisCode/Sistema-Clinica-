@@ -788,11 +788,35 @@ Item {
     
     // ===== EVENTOS =====
     Component.onCompleted: {
-        //console.log("👥 Componente de configuración de tipos de trabajadores iniciado")
+        console.log("👥 Componente de configuración de tipos de trabajadores iniciado")
         
-        // Cargar datos iniciales si el modelo está disponible
-        if (confiTrabajadoresModel) {
-            confiTrabajadoresModel.recargarDatos()
+        // ✅ VERIFICAR Y CARGAR DATOS CON RETRY
+        function cargarDatosIniciales(intentos) {
+            intentos = intentos || 0
+            const MAX_INTENTOS = 3
+            
+            if (confiTrabajadoresModel) {
+                console.log("✅ ConfiTrabajadoresModel disponible")
+                confiTrabajadoresModel.recargarDatos()
+                
+                // ✅ TAMBIÉN VERIFICAR TrabajadorModel
+                if (trabajadorModel) {
+                    console.log("✅ TrabajadorModel disponible para sincronización")
+                    
+                    // ✅ FORZAR ACTUALIZACIÓN DE TIPOS
+                    if (trabajadorModel.forzarActualizacionTipos) {
+                        trabajadorModel.forzarActualizacionTipos()
+                    }
+                }
+            } else if (intentos < MAX_INTENTOS) {
+                console.log("🔄 Reintentando cargar datos, intento", intentos + 1)
+                Qt.callLater(function() {
+                    cargarDatosIniciales(intentos + 1)
+                })
+            }
         }
+        
+        // ✅ INICIAR CARGA
+        Qt.callLater(cargarDatosIniciales)
     }
 }

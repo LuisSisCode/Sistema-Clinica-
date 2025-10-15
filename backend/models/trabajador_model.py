@@ -307,10 +307,69 @@ class TrabajadorModel(QObject):
         """Lista de trabajadores para mostrar en QML"""
         return self._trabajadores_filtrados
     
-    @Property(list, notify=tiposTrabajadorChanged)
-    def tiposTrabajador(self) -> List[Dict[str, Any]]:
-        """Lista de tipos de trabajador disponibles"""
-        return self._tipos_trabajador
+    @Property('QVariantList', notify=tiposTrabajadorChanged)
+    def tiposTrabajador(self):
+        """Lista de tipos de trabajador disponibles - COMPATIBLE CON QML"""
+        # ✅ CONVERTIR A QVariantList PARA QML
+        try:
+            if not self._tipos_trabajador:
+                print(f"⚠️ tiposTrabajador property: Lista vacía")
+                return []
+            
+            # ✅ VERIFICAR QUE SEA LISTA
+            if not isinstance(self._tipos_trabajador, list):
+                print(f"⚠️ tiposTrabajador no es lista: {type(self._tipos_trabajador)}")
+                return []
+            
+            # ✅ LOG DETALLADO
+            print(f"📋 tiposTrabajador property: Retornando {len(self._tipos_trabajador)} tipos")
+            if len(self._tipos_trabajador) > 0:
+                print(f"   Primer tipo: {self._tipos_trabajador[0].get('Tipo', 'N/A')}")
+            
+            return self._tipos_trabajador
+            
+        except Exception as e:
+            print(f"❌ Error en tiposTrabajador property: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+        
+    @Slot(result='QVariantList')
+    def obtenerTiposTrabajadorParaQML(self):
+        """Obtiene tipos de trabajador en formato QVariantList para QML"""
+        try:
+            print(f"🔍 obtenerTiposTrabajadorParaQML llamado")
+            print(f"   Tipos en memoria: {len(self._tipos_trabajador)}")
+            
+            if not self._tipos_trabajador:
+                print(f"⚠️ Lista vacía en memoria")
+                return []
+            
+            # ✅ CREAR LISTA COMPATIBLE CON QML
+            tipos_qml = []
+            for tipo in self._tipos_trabajador:
+                tipo_dict = {
+                    'id': tipo.get('id', 0),
+                    'Tipo': tipo.get('Tipo', ''),
+                    'descripcion': tipo.get('descripcion', '')
+                }
+                tipos_qml.append(tipo_dict)
+            
+            print(f"✅ Retornando {len(tipos_qml)} tipos para QML")
+            return tipos_qml
+            
+        except Exception as e:
+            print(f"❌ Error en obtenerTiposTrabajadorParaQML: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    @Slot(result=int)
+    def cantidadTiposDisponibles(self) -> int:
+        """Retorna la cantidad de tipos disponibles"""
+        cantidad = len(self._tipos_trabajador) if self._tipos_trabajador else 0
+        print(f"📊 cantidadTiposDisponibles: {cantidad}")
+        return cantidad
     
     @Property('QVariantMap', notify=estadisticasChanged)
     def estadisticas(self) -> Dict[str, Any]:
@@ -527,13 +586,21 @@ class TrabajadorModel(QObject):
             tipo_id = self.repository.create_worker_type(nombre.strip())
             
             if tipo_id:
+                # ✅ INVALIDAR CACHÉ Y RECARGAR
+                if hasattr(self.repository, 'invalidate_worker_caches'):
+                    self.repository.invalidate_worker_caches()
+                
                 self._cargar_tipos_trabajador()
+                
+                # ✅ EMITIR SEÑAL GLOBAL PARA OTROS MÓDULOS
+                self.global_signals.tiposTrabajadoresModificados.emit()
                 
                 mensaje = f"Tipo de trabajador creado exitosamente - ID: {tipo_id}"
                 self.tipoTrabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
                 print(f"✅ Tipo trabajador creado desde QML: {nombre}")
+                print(f"📊 Tipos actuales: {len(self._tipos_trabajador)}")
                 return True
             else:
                 error_msg = "Error creando tipo de trabajador"
@@ -565,12 +632,20 @@ class TrabajadorModel(QObject):
             success = self.repository.update_worker_type(tipo_id, nombre.strip())
             
             if success:
+                # ✅ INVALIDAR CACHÉ Y RECARGAR
+                if hasattr(self.repository, 'invalidate_worker_caches'):
+                    self.repository.invalidate_worker_caches()
+                
                 self._cargar_tipos_trabajador()
+                
+                # ✅ EMITIR SEÑAL GLOBAL
+                self.global_signals.tiposTrabajadoresModificados.emit()
                 
                 mensaje = "Tipo actualizado exitosamente"
                 self.tipoTrabajadorActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
+                print(f"✅ Tipo trabajador actualizado desde QML: ID {tipo_id}")
                 return True
             else:
                 error_msg = "Error actualizando tipo"
@@ -610,12 +685,20 @@ class TrabajadorModel(QObject):
             success = self.repository.delete_worker_type(tipo_id)
             
             if success:
+                # ✅ INVALIDAR CACHÉ Y RECARGAR
+                if hasattr(self.repository, 'invalidate_worker_caches'):
+                    self.repository.invalidate_worker_caches()
+                
                 self._cargar_tipos_trabajador()
+                
+                # ✅ EMITIR SEÑAL GLOBAL
+                self.global_signals.tiposTrabajadoresModificados.emit()
                 
                 mensaje = "Tipo eliminado exitosamente"
                 self.tipoTrabajadorEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
+                print(f"✅ Tipo trabajador eliminado desde QML: ID {tipo_id}")
                 return True
             else:
                 error_msg = "Error eliminando tipo"
@@ -885,6 +968,34 @@ class TrabajadorModel(QObject):
             return "Desconocido"
         except Exception:
             return "Desconocido"
+        
+    @Slot(result=bool)
+    def hayTiposDisponibles(self) -> bool:
+        """Verifica si hay tipos de trabajador disponibles"""
+        return len(self._tipos_trabajador) > 0
+
+    @Slot(result=int)
+    def cantidadTipos(self) -> int:
+        """Obtiene cantidad de tipos disponibles"""
+        return len(self._tipos_trabajador)
+
+    @Slot()
+    def forzarActualizacionTipos(self):
+        """Fuerza actualización de tipos desde QML"""
+        try:
+            print("🔄 Forzando actualización de tipos desde QML...")
+            
+            # Invalidar caché
+            if hasattr(self.repository, 'invalidate_worker_caches'):
+                self.repository.invalidate_worker_caches()
+            
+            # Recargar
+            self._cargar_tipos_trabajador()
+            
+            print(f"✅ Tipos actualizados: {len(self._tipos_trabajador)}")
+            
+        except Exception as e:
+            print(f"❌ Error forzando actualización: {e}")
     
     @Slot(result='QVariantMap')
     def obtenerEstadisticasCompletas(self) -> Dict[str, Any]:
@@ -952,14 +1063,31 @@ class TrabajadorModel(QObject):
         """Carga lista de tipos de trabajador desde el repository"""
         try:
             tipos = self.repository.get_all_worker_types()
+            
+            # ✅ VERIFICAR QUE SEA UNA LISTA VÁLIDA
+            if not isinstance(tipos, list):
+                print(f"⚠️ get_all_worker_types no retornó lista: {type(tipos)}")
+                tipos = []
+            
             self._tipos_trabajador = tipos
+            
+            # ✅ EMITIR SEÑAL SIEMPRE
             self.tiposTrabajadorChanged.emit()
+            
+            # ✅ LOG DETALLADO
             print(f"🏷️ Tipos de trabajador cargados: {len(self._tipos_trabajador)}")
+            if self._tipos_trabajador:
+                print(f"   Tipos: {[t.get('Tipo', 'N/A') for t in self._tipos_trabajador[:3]]}")
+            else:
+                print("   ⚠️ Lista de tipos está vacía")
                 
         except Exception as e:
             print(f"❌ Error cargando tipos de trabajador: {e}")
+            import traceback
+            traceback.print_exc()
             self._tipos_trabajador = []
-            raise e
+            # ✅ EMITIR SEÑAL INCLUSO SI FALLA (para limpiar UI)
+            self.tiposTrabajadorChanged.emit()
     
     def _cargar_estadisticas(self):
         """Carga estadísticas desde el repository"""

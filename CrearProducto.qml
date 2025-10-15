@@ -50,6 +50,8 @@ Dialog {
     // Estados
     property bool showSuccessMessage: false
     property string successMessage: ""
+    property bool showErrorMessage: false
+    property string errorMessage: ""
     property bool marcasCargadas: false
     
     // Datos del formulario - PRODUCTO
@@ -74,8 +76,12 @@ Dialog {
     onClosed: {
         try {
             showSuccessMessage = false
+            showErrorMessage = false
             if (successTimer.running) {
                 successTimer.stop()
+            }
+            if (errorTimer.running) {
+                errorTimer.stop()
             }
             console.log("🚪 Diálogo cerrado - estado limpiado")
         } catch (error) {
@@ -87,6 +93,12 @@ Dialog {
         id: successTimer
         interval: 3000
         onTriggered: showSuccessMessage = false
+    }
+
+    Timer {
+        id: errorTimer
+        interval: 5000
+        onTriggered: showErrorMessage = false
     }
 
     // FUNCIONES
@@ -174,6 +186,62 @@ Dialog {
     function generarCodigoAutomatico() {
         return "PROD" + String(Date.now()).slice(-6)
     }
+
+    function validarPrecios() {
+        if (inputPurchasePrice <= 0) {
+            return {valido: false, mensaje: "El precio de compra debe ser mayor a 0"}
+        }
+        if (inputSalePrice <= 0) {
+            return {valido: false, mensaje: "El precio de venta debe ser mayor a 0"}
+        }
+        if (inputPurchasePrice > inputSalePrice) {
+            return {valido: false, mensaje: "El precio de compra no puede ser mayor al precio de venta"}
+        }
+        if (inputSalePrice < inputPurchasePrice * 1.1) {
+            return {valido: false, mensaje: "El precio de venta debe ser al menos 10% mayor al precio de compra para tener margen de ganancia"}
+        }
+        return {valido: true, mensaje: ""}
+    }
+
+    function validarStock() {
+        if (inputStockUnit < 0) {
+            return {valido: false, mensaje: "El stock no puede ser negativo"}
+        }
+        if (inputStockUnit > 100000) {
+            return {valido: false, mensaje: "El stock no puede ser mayor a 100,000 unidades"}
+        }
+        return {valido: true, mensaje: ""}
+    }
+
+    function validarFechaVencimiento() {
+        if (!inputNoExpiry && inputExpirationDate.length === 0) {
+            return {valido: false, mensaje: "Debe ingresar una fecha de vencimiento o marcar 'Sin vencimiento'"}
+        }
+        if (!inputNoExpiry && !validateExpiryDate(inputExpirationDate)) {
+            return {valido: false, mensaje: "Formato de fecha inválido. Use YYYY-MM-DD (ej: 2024-12-31)"}
+        }
+        return {valido: true, mensaje: ""}
+    }
+
+    function validarNombreProducto() {
+        if (inputProductName.trim().length === 0) {
+            return {valido: false, mensaje: "El nombre del producto es obligatorio"}
+        }
+        if (inputProductName.trim().length < 2) {
+            return {valido: false, mensaje: "El nombre del producto debe tener al menos 2 caracteres"}
+        }
+        if (inputProductName.trim().length > 100) {
+            return {valido: false, mensaje: "El nombre del producto no puede exceder 100 caracteres"}
+        }
+        return {valido: true, mensaje: ""}
+    }
+
+    function validarMarca() {
+        if (marcaIdSeleccionada === 0) {
+            return {valido: false, mensaje: "Debe seleccionar una marca para el producto"}
+        }
+        return {valido: true, mensaje: ""}
+    }
     
     function guardarProducto() {
         // Guard para prevenir errores de contexto
@@ -189,15 +257,43 @@ Dialog {
             }
         }
         
-        if (!calcularValidacion()) {  // ← Cambiar aquí también
-            showMessage("Complete todos los campos obligatorios")
+        // Validaciones específicas con mensajes detallados
+        var validacionNombre = validarNombreProducto()
+        if (!validacionNombre.valido) {
+            showError(validacionNombre.mensaje)
+            if (nombreField) nombreField.forceActiveFocus()
             return false
         }
-        
-        // Validación de fecha
-        if (!modoEdicion && !inputNoExpiry && !validateExpiryDate(inputExpirationDate)) {
-            showMessage("Fecha de vencimiento inválida (YYYY-MM-DD)")
+
+        var validacionMarca = validarMarca()
+        if (!validacionMarca.valido) {
+            showError(validacionMarca.mensaje)
+            if (marcaComboBox) marcaComboBox.forceActiveFocus()
             return false
+        }
+
+        var validacionPrecios = validarPrecios()
+        if (!validacionPrecios.valido) {
+            showError(validacionPrecios.mensaje)
+            if (precioCompraField) precioCompraField.forceActiveFocus()
+            return false
+        }
+
+        // Validaciones solo para nuevo producto (no edición)
+        if (!modoEdicion) {
+            var validacionStock = validarStock()
+            if (!validacionStock.valido) {
+                showError(validacionStock.mensaje)
+                if (stockUnitarioField) stockUnitarioField.forceActiveFocus()
+                return false
+            }
+
+            var validacionFecha = validarFechaVencimiento()
+            if (!validacionFecha.valido) {
+                showError(validacionFecha.mensaje)
+                if (fechaVencimientoField) fechaVencimientoField.forceActiveFocus()
+                return false
+            }
         }
         
         // SIN CAJAS: producto solo con stock unitario
@@ -226,7 +322,7 @@ Dialog {
                 
                 // ✅ LLAMAR AL INVENTARIOMODEL PARA ACTUALIZAR EN BD
                 if (!inventarioModel) {
-                    showMessage("Error: Sistema no disponible")
+                    showError("Error: Sistema no disponible")
                     return false
                 }
                 
@@ -236,7 +332,7 @@ Dialog {
                 )
                 
                 if (!exito) {
-                    showMessage("Error al actualizar producto")
+                    showError("Error al actualizar producto en la base de datos")
                     return false
                 }
             } else {
@@ -269,7 +365,7 @@ Dialog {
             
         } catch (error) {
             console.error("Error al guardar producto:", error)
-            // NO llamar showMessage aquí porque puede estar en contexto inválido
+            showError("Error inesperado al guardar el producto: " + error)
             return false
         }
     }
@@ -349,6 +445,7 @@ Dialog {
         try {
             successMessage = mensaje
             showSuccessMessage = true
+            showErrorMessage = false // Ocultar errores al mostrar éxito
             successTimer.restart()
             console.log("📢 Mostrando mensaje:", mensaje)
         } catch (error) {
@@ -356,17 +453,45 @@ Dialog {
         }
     }
 
+    function showError(mensaje) {
+        if (!crearProductoDialog || !crearProductoDialog.visible) {
+            console.log("❌ Error:", mensaje)
+            return
+        }
+        
+        try {
+            errorMessage = mensaje
+            showErrorMessage = true
+            showSuccessMessage = false // Ocultar éxito al mostrar error
+            errorTimer.restart()
+            console.log("❌ Mostrando error:", mensaje)
+        } catch (error) {
+            console.log("⚠️ Error mostrando mensaje de error:", error)
+        }
+    }
+
     function crearNuevaMarcaEnBackend(nombreMarca) {
         if (!inventarioModel) {
             console.log("❌ InventarioModel no disponible")
-            showMessage("Error: Sistema no disponible")
+            showError("Error: Sistema no disponible")
+            return
+        }
+
+        // Validar nombre de marca
+        if (!nombreMarca || nombreMarca.trim().length === 0) {
+            showError("El nombre de la marca no puede estar vacío")
+            return
+        }
+
+        if (nombreMarca.trim().length < 2) {
+            showError("El nombre de la marca debe tener al menos 2 caracteres")
             return
         }
         
         console.log("🏷️ Creando marca:", nombreMarca)
         
         // Llamar método Python
-        var marcaId = inventarioModel.crear_marca_rapida(nombreMarca)
+        var marcaId = inventarioModel.crear_marca_rapida(nombreMarca.trim())
         
         if (marcaId > 0) {
             console.log("✅ Marca creada con ID:", marcaId)
@@ -382,10 +507,12 @@ Dialog {
                 }
             })
             
-            showMessage("Marca creada: " + nombreMarca)
+            showMessage("Marca creada: " + nombreMarca.trim())
+        } else if (marcaId === -1) {
+            showError("Ya existe una marca con ese nombre")
         } else {
             console.log("❌ Error creando marca")
-            showMessage("Error al crear la marca")
+            showError("Error al crear la marca en la base de datos")
         }
     }
     
@@ -394,6 +521,10 @@ Dialog {
         
         modoEdicion = modo
         productoData = datos
+        
+        // Limpiar mensajes previos
+        showSuccessMessage = false
+        showErrorMessage = false
         
         // ✅ CARGAR MARCAS Y ESPERAR A QUE SE COMPLETE
         cargarMarcasDisponibles()
@@ -1229,7 +1360,7 @@ Dialog {
                             
                             onEnabledChanged: {
                                 console.log("🔘 Botón Guardar enabled:", enabled)
-                                console.log("  - calcularValidacion():", calcularValidacion())  // ✅ CORREGIDO
+                                console.log("  - calcularValidacion():", calcularValidacion())
                                 console.log("  - marcasCargadas:", marcasCargadas)
                             }
                             
@@ -1250,7 +1381,7 @@ Dialog {
         }
     }
 
-    // Notificación
+    // Notificación de éxito
     Rectangle {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: 100
@@ -1284,6 +1415,48 @@ Dialog {
                 font.pixelSize: 12
                 font.bold: true
                 anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+    }
+
+    // Notificación de error
+    Rectangle {
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: 100
+        width: Math.min(parent.width - baseSpacing * 2, 400)
+        height: 50
+        color: dangerRed
+        radius: 8
+        visible: showErrorMessage
+        opacity: showErrorMessage ? 1.0 : 0.0
+        z: 100
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+        
+        Row {
+            anchors.centerIn: parent
+            spacing: 8
+            anchors.margins: 8
+            
+            Text {
+                text: "⚠"
+                color: white
+                font.pixelSize: 14
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            
+            Text {
+                text: errorMessage
+                color: white
+                font.pixelSize: 12
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
             }
         }
     }

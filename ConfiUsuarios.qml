@@ -62,7 +62,12 @@ Item {
         function onModelsReady() {
             if (appController.usuario_model_instance) {
                 usuarioModel = appController.usuario_model_instance
-                rolesDisponibles = usuarioModel.obtenerRolesDisponibles()
+                
+                // ✅ MEJORADO: Cargar roles sin "Todos los roles"
+                var todosLosRoles = usuarioModel.obtenerRolesDisponibles()
+                rolesDisponibles = todosLosRoles.filter(rol => rol !== "Todos los roles")
+                
+                console.log("✅ Roles cargados:", rolesDisponibles)
                 cargarDatosOriginales()
             }
         }
@@ -71,6 +76,11 @@ Item {
     // ===== CONEXIONES CON EL MODELO DE USUARIO =====
     Connections {
         target: usuarioModel
+
+        function onUsuariosChanged() {
+            console.log("📊 Cargando datos originales de usuarios...")
+            cargarDatosOriginales()
+        }
         
         function onUsuarioCreado(success, message) {
             if (success) {
@@ -753,6 +763,16 @@ Item {
                                 radius: baseUnit * 0.8
                             }
                         }
+                        // ✅ NUEVA ETIQUETA DE AYUDA
+                        Label {
+                            Layout.fillWidth: true
+                            text: rolComboBox.currentIndex >= 0 ? 
+                                "✓ Rol seleccionado: " + rolComboBox.currentText : 
+                                "⚠️ Debe seleccionar un rol"
+                            color: rolComboBox.currentIndex >= 0 ? successColor : warningColor
+                            font.pixelSize: fontBase * 0.75
+                            font.italic: true
+                        }
                         
                         // ===== ESTADO =====
                         ColumnLayout {
@@ -967,9 +987,21 @@ Item {
         usuarioField.text = usuario.nombre_usuario || ""
         
         // Configurar rol
-        var rolIndex = rolesDisponibles.indexOf(usuario.rol_nombre)
-        if (rolIndex >= 0) {
-            rolComboBox.currentIndex = rolIndex
+        // ✅ CORREGIDO: Configurar rol por nombre, no por índice
+        var rolNombre = usuario.rol_nombre || ""
+        var encontrado = false
+
+        for (var i = 0; i < rolComboBox.model.length; i++) {
+            if (rolComboBox.model[i] === rolNombre) {
+                rolComboBox.currentIndex = i
+                encontrado = true
+                break
+            }
+        }
+
+        if (!encontrado) {
+            console.log("⚠️ Rol", rolNombre, "no encontrado en ComboBox")
+            rolComboBox.currentIndex = -1
         }
         
         // Configurar estado
@@ -986,8 +1018,17 @@ Item {
         if (!usuarioModel) return
         
         var estado = activoRadio.checked ? "Activo" : "Inactivo"
-        var rolIndex = rolComboBox.currentIndex
-        var rolesValidos = rolesDisponibles.filter(rol => rol !== "Todos los roles")
+        
+        // ✅ CORREGIDO: Obtener ID real del rol, no índice del ComboBox
+        var rolNombre = rolComboBox.currentText
+        var rolId = usuarioModel.obtenerIdRolPorNombre(rolNombre)
+        
+        if (rolId <= 0) {
+            mostrarNotificacion("Error", "Debe seleccionar un rol válido", dangerColor)
+            return
+        }
+        
+        console.log("💾 Guardando usuario con rol:", rolNombre, "(ID:", rolId + ")")
         
         if (isEditMode && editingUser) {
             // Actualizar usuario existente
@@ -997,7 +1038,7 @@ Item {
                 apellidoPaternoField.text,
                 apellidoMaternoField.text,
                 usuarioField.text,
-                rolIndex + 1,
+                rolId,  // ✅ Ahora usa el ID correcto
                 estado
             )
         } else {
@@ -1009,7 +1050,7 @@ Item {
                 usuarioField.text,
                 passwordField.text,
                 confirmPasswordField.text,
-                rolIndex + 1,
+                rolId,  // ✅ Ahora usa el ID correcto
                 estado
             )
         }
