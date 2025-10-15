@@ -77,12 +77,8 @@ Dialog {
     
     onClosed: {
         try {
-            // Desconectar señal si está conectada
-            if (marcasListenerConnected && inventarioModel) {
-                inventarioModel.marcasChanged.disconnect()
-                marcasListenerConnected = false
-            }
-            
+            // NO desconectar marcasChanged - mantener la conexión activa
+            // Solo limpiar mensajes
             showSuccessMessage = false
             showErrorMessage = false
             if (successTimer.running) {
@@ -91,7 +87,7 @@ Dialog {
             if (errorTimer.running) {
                 errorTimer.stop()
             }
-            console.log("🚪 Diálogo cerrado - estado limpiado")
+            console.log("🚪 Diálogo cerrado - estado limpiado (conexiones mantenidas)")
         } catch (error) {
             console.log("⚠️ Error limpiando al cerrar:", error)
         }
@@ -111,34 +107,40 @@ Dialog {
 
     // FUNCIONES
     function cargarMarcasDisponibles() {
-        if (!inventarioModel || !crearProductoDialog) {
+        if (!inventarioModel) {
+            console.log("❌ inventarioModel no disponible")
             marcasCargadas = false
             return
         }
         
         try {
-            // ✅ CORRECCIÓN: Usar la propiedad marcasDisponibles en lugar de get_marcas_disponibles
-            var marcas = inventarioModel.marcasDisponibles
+            console.log("📋 Iniciando carga de marcas...")
             
-            if (marcas && marcas.length > 0) {
-                marcasModel = marcas
-                marcasCargadas = true
-                console.log("✅ Marcas cargadas:", marcas.length)
-            } else {
-                // Intentar cargar usando el método si la propiedad está vacía
-                marcas = inventarioModel.get_marcas_disponibles()
+            // Forzar refresh de marcas
+            inventarioModel.refresh_marcas()
+            
+            // Esperar y obtener marcas actualizadas
+            Qt.callLater(function() {
+                var marcas = inventarioModel.marcasDisponibles
+                
                 if (marcas && marcas.length > 0) {
                     marcasModel = marcas
                     marcasCargadas = true
-                    console.log("✅ Marcas cargadas via método:", marcas.length)
+                    console.log("✅ Marcas cargadas:", marcas.length)
+                    
+                    // Actualizar ComboBox
+                    if (marcaComboBox && typeof marcaComboBox.recargarMarcas === 'function') {
+                        marcaComboBox.recargarMarcas(marcas)
+                    }
                 } else {
+                    console.log("⚠️ No se pudieron cargar marcas")
                     marcasModel = []
-                    marcasCargadas = true
-                    console.log("⚠️ No hay marcas disponibles")
+                    marcasCargadas = false
                 }
-            }
+            })
+            
         } catch (error) {
-            console.error("Error al cargar marcas:", error)
+            console.error("❌ Error al cargar marcas:", error)
             marcasModel = []
             marcasCargadas = false
         }
@@ -256,23 +258,51 @@ Dialog {
     }
 
     function validarMarca() {
-        if (marcaIdSeleccionada === 0) {
-            return {valido: false, mensaje: "Debe seleccionar una marca para el producto"}
+        console.log("🔍 Validando marca - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
+        
+        if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
+            console.log("❌ Validación falló: Marca no seleccionada")
+            return {valido: false, mensaje: "Debe seleccionar una marca válida para el producto"}
         }
+        
+        // Verificar que la marca existe en el modelo
+        var marcaExiste = false
+        if (marcasModel && marcasModel.length > 0) {
+            for (var i = 0; i < marcasModel.length; i++) {
+                var marca = marcasModel[i]
+                if (marca.id === marcaIdSeleccionada) {
+                    marcaExiste = true
+                    break
+                }
+            }
+        }
+        
+        if (!marcaExiste) {
+            console.log("❌ Validación falló: Marca no encontrada en modelo")
+            return {valido: false, mensaje: "La marca seleccionada no es válida"}
+        }
+        
+        console.log("✅ Validación de marca exitosa")
         return {valido: true, mensaje: ""}
     }
     
     function guardarProducto() {
-        // Guard para prevenir errores de contexto
+        // Guard para prevenir errores
         if (!crearProductoDialog || !crearProductoDialog.visible) {
             return false
         }
 
-        // ✅ VERIFICAR MARCA ANTES DE GUARDAR
-        console.log("🔍 Verificando marca antes de guardar - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
+        console.log("💾 Iniciando guardado de producto")
+        console.log("   - marcaIdSeleccionada:", marcaIdSeleccionada)
+        console.log("   - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
 
-        if (marcaIdSeleccionada === 0) {
+        // ✅ VALIDACIÓN CRÍTICA DE MARCA ANTES DE TODO
+        if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
+            console.log("❌ GUARDADO BLOQUEADO: Marca no seleccionada")
             showError("Debe seleccionar una marca válida para el producto")
+            if (marcaComboBox) {
+                marcaComboBox.forceActiveFocus()
+            }
             return false
         }
 
@@ -328,8 +358,8 @@ Dialog {
             codigo: inputProductCode.trim(),
             nombre: inputProductName.trim(),
             detalles: inputProductDetails.trim(),
-            id_marca: marcaIdSeleccionada,  // ✅ Usar la propiedad actualizada
-            marca: marcaSeleccionadaNombre.trim(),  // Nombre para logging
+            id_marca: marcaIdSeleccionada,      // ✅ ID numérico (IMPORTANTE)
+            marca: marcaSeleccionadaNombre,     // ✅ Nombre (para compatibilidad)
             precio_compra: inputPurchasePrice,
             precio_venta: inputSalePrice,
             unidad_medida: inputMeasureUnit,
@@ -339,7 +369,9 @@ Dialog {
             sin_vencimiento: inputNoExpiry
         }
 
-        console.log("💾 Guardando producto con marca ID:", producto.id_marca, "Nombre:", producto.marca)
+        console.log("📦 Producto a guardar:")
+        console.log("   - id_marca:", producto.id_marca, "(tipo:", typeof producto.id_marca, ")")
+        console.log("   - marca:", producto.marca)
 
         try {
             var mensajeExito = ""
@@ -393,70 +425,50 @@ Dialog {
     }
     
     function limpiarFormularioSeguro() {
-        // GUARDS MÚLTIPLES para prevenir errores de contexto
-        if (!crearProductoDialog) {
-            console.log("⚠️ Dialog no disponible para limpieza")
-            return
+    if (!crearProductoDialog) return;
+    
+    try {
+        console.log("🧹 Iniciando limpieza completa del formulario...")
+        
+        // ✅ CORRECCIÓN: Limpiar propiedades de marca PRIMERO
+        marcaIdSeleccionada = 0
+        marcaSeleccionadaNombre = ""
+        
+        // Limpiar otras propiedades
+        inputProductCode = ""
+        inputProductName = ""
+        inputProductDetails = ""
+        inputPurchasePrice = 0.0
+        inputSalePrice = 0.0
+        inputMeasureUnit = "Tabletas"
+        inputExpirationDate = ""
+        inputNoExpiry = false
+        inputStockUnit = 0
+        inputSupplier = ""
+
+        // ✅ CORRECCIÓN: Resetear ComboBox de marca
+        if (marcaComboBox && typeof marcaComboBox.reset === 'function') {
+            marcaComboBox.reset()
         }
         
-        try {
-            // Limpiar propiedades primero
-            inputProductCode = ""
-            inputProductName = ""
-            inputProductDetails = ""
-            inputPurchasePrice = 0.0
-            inputSalePrice = 0.0
-            inputMarca = ""
-            inputExpirationDate = ""
-            inputNoExpiry = false
-            inputStockUnit = 0
-            inputSupplier = ""
-
-            marcaIdSeleccionada = 0
-            marcaSeleccionadaNombre = ""
-            
-            // Limpiar campos UI con verificación individual
-            if (typeof codigoField !== 'undefined' && codigoField) {
-                codigoField.text = ""
-            }
-            if (typeof nombreField !== 'undefined' && nombreField) {
-                nombreField.text = ""
-            }
-            if (typeof detallesField !== 'undefined' && detallesField) {
-                detallesField.text = ""
-            }
-            if (typeof precioCompraField !== 'undefined' && precioCompraField) {
-                precioCompraField.text = ""
-            }
-            if (typeof precioVentaField !== 'undefined' && precioVentaField) {
-                precioVentaField.text = ""
-            }
-            if (typeof marcaComboBox !== 'undefined' && marcaComboBox) {
-                marcaComboBox.reset()
-            }
-            if (typeof fechaVencimientoField !== 'undefined' && fechaVencimientoField) {
-                fechaVencimientoField.text = ""
-            }
-            if (typeof stockUnitarioField !== 'undefined' && stockUnitarioField) {
-                stockUnitarioField.text = ""
-            }
-            if (typeof proveedorField !== 'undefined' && proveedorField) {
-                proveedorField.text = ""
-            }
-            
-            // Resetear ComboBox con verificación
-            if (typeof unidadCombo !== 'undefined' && unidadCombo && 
-                typeof unidadCombo.currentIndex !== 'undefined') {
-                unidadCombo.currentIndex = 0
-            }
-            
-            console.log("🧹 Formulario limpiado exitosamente")
-            
-        } catch (error) {
-            console.log("⚠️ Error en limpieza (no crítico):", error)
-            // No propagar el error para evitar crashes
-        }
+        // Limpiar campos UI
+        if (codigoField) codigoField.text = ""
+        if (nombreField) nombreField.text = ""
+        if (detallesField) detallesField.text = ""
+        if (precioCompraField) precioCompraField.text = ""
+        if (precioVentaField) precioVentaField.text = ""
+        if (fechaVencimientoField) fechaVencimientoField.text = ""
+        if (stockUnitarioField) stockUnitarioField.text = ""
+        if (proveedorField) proveedorField.text = ""
+        
+        if (unidadCombo) unidadCombo.currentIndex = 0
+        
+        console.log("✅ Formulario limpiado exitosamente")
+        
+    } catch (error) {
+        console.log("⚠️ Error en limpieza:", error)
     }
+}
     
     function showMessage(mensaje) {
         if (!crearProductoDialog || !crearProductoDialog.visible) {
@@ -499,38 +511,43 @@ Dialog {
             return
         }
 
-        // Validar nombre de marca
-        if (!nombreMarca || nombreMarca.trim().length === 0) {
-            showError("El nombre de la marca no puede estar vacío")
-            return
-        }
-
-        if (nombreMarca.trim().length < 2) {
+        // Validar nombre
+        if (!nombreMarca || nombreMarca.trim().length < 2) {
             showError("El nombre de la marca debe tener al menos 2 caracteres")
             return
         }
         
-        console.log("🏷️ Creando marca:", nombreMarca)
+        var nombreLimpio = nombreMarca.trim()
+        console.log("🏷️ Creando marca:", nombreLimpio)
         
-        // Llamar método Python
-        var marcaId = inventarioModel.crear_marca_rapida(nombreMarca.trim())
+        // Llamar método Python - AHORA RETORNA ID
+        var marcaId = inventarioModel.crear_marca_desde_qml(nombreLimpio)
+        
+        console.log("🔍 Resultado crear_marca_desde_qml:", marcaId)
         
         if (marcaId > 0) {
             console.log("✅ Marca creada con ID:", marcaId)
             
-            // Recargar marcas
-            cargarMarcasDisponibles()
-            
-            // Esperar un momento para que se actualice el modelo
+            // Esperar a que se actualice el modelo
             Qt.callLater(function() {
-                // Seleccionar la nueva marca automáticamente en el ComboBox
-                if (marcaComboBox) {
-                    marcaComboBox.setMarcaById(marcaId)
-                }
+                // Recargar marcas
+                cargarMarcasDisponibles()
+                
+                // Esperar un poco más y seleccionar la nueva marca
+                Qt.callLater(function() {
+                    if (marcaComboBox) {
+                        console.log("🎯 Seleccionando marca recién creada ID:", marcaId)
+                        marcaComboBox.setMarcaById(marcaId)
+                        
+                        // FORZAR actualización de propiedades
+                        marcaIdSeleccionada = marcaId
+                        marcaSeleccionadaNombre = nombreLimpio
+                    }
+                })
             })
             
-            showMessage("Marca creada: " + nombreMarca.trim())
-        } else if (marcaId === -1) {
+            showMessage("Marca creada: " + nombreLimpio)
+        } else if (marcaId === 0) {
             showError("Ya existe una marca con ese nombre")
         } else {
             console.log("❌ Error creando marca")
@@ -548,33 +565,27 @@ Dialog {
         showSuccessMessage = false
         showErrorMessage = false
         
-        // ✅ CARGAR MARCAS Y ESPERAR A QUE SE COMPLETE
-        cargarMarcasDisponibles()
-        
-        // ✅ FORZAR marcasCargadas a true si hay marcas disponibles
-        if (marcasModel && marcasModel.length > 0) {
-            marcasCargadas = true
-            console.log("✅ Marcas disponibles confirmadas:", marcasModel.length)
+        // ✅ CORRECCIÓN: Limpiar selección de marca ANTES de abrir
+        marcaIdSeleccionada = 0
+        marcaSeleccionadaNombre = ""
+        if (marcaComboBox) {
+            marcaComboBox.reset()
         }
         
-        // Limpiar formulario de forma segura
-        limpiarFormularioSeguro()
-        
-        if (modoEdicion && productoData) {
-            console.log("📝 Modo edición detectado, cargando datos...")
-            Qt.callLater(function() {
-                Qt.callLater(function() {
-                    if (crearProductoDialog && crearProductoDialog.visible) {
-                        cargarDatosProducto()
-                    }
-                })
-            })
-        }
-        
+        // Abrir diálogo PRIMERO
         open()
         
-        // ✅ VERIFICAR ESTADO FINAL
-        console.log("🔍 Estado al abrir: marcasCargadas =", marcasCargadas)
+        // ✅ CORRECCIÓN: Cargar marcas DESPUÉS de que el diálogo esté visible
+        Qt.callLater(function() {
+            cargarMarcasDisponibles()
+            
+            // Si es modo edición, cargar datos después de cargar marcas
+            if (modoEdicion && productoData) {
+                Qt.callLater(function() {
+                    cargarDatosProducto()
+                })
+            }
+        })
     }
     
     function cargarDatosProducto() {
@@ -903,15 +914,23 @@ Dialog {
                                 Layout.fillWidth: true
                                 marcasModel: inventarioModel ? inventarioModel.marcasDisponibles : []
                                 required: true
-                                
-                                onMarcaCambiada: function(marca, marcaId) {
-                                    console.log("✅ Marca seleccionada:", marca, "ID:", marcaId)
-                                    // ✅ CORRECCIÓN: Actualizar las propiedades directamente
-                                    marcaIdSeleccionada = marcaId
-                                    marcaSeleccionadaNombre = marca
-                                    console.log("🏷️ Propiedades actualizadas - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
+
+                                onMarcaCambiada: function(marcaNombre, marcaId) {
+                                    console.log("📡 Señal recibida - Marca:", marcaNombre, "ID:", marcaId)
+                                    
+                                    // ✅ CORRECCIÓN: Actualizar propiedades del diálogo DIRECTAMENTE
+                                    crearProductoDialog.marcaIdSeleccionada = marcaId
+                                    crearProductoDialog.marcaSeleccionadaNombre = marcaNombre
+                                    
+                                    console.log("✅ Propiedades actualizadas - ID:", crearProductoDialog.marcaIdSeleccionada, 
+                                               "Nombre:", crearProductoDialog.marcaSeleccionadaNombre)
+                                    
+                                    // ✅ FORZAR reevaluación de validación
+                                    Qt.callLater(function() {
+                                        crearProductoDialog.calcularValidacion()
+                                    })
                                 }
-                                
+
                                 onNuevaMarcaCreada: function(nombreMarca) {
                                     console.log("🆕 Solicitando crear marca:", nombreMarca)
                                     
@@ -933,9 +952,10 @@ Dialog {
                                                             marcaComboBox.setMarcaById(marcas[i].id)
                                                             
                                                             // ✅ FORZAR ACTUALIZACIÓN DE PROPIEDADES
-                                                            marcaIdSeleccionada = marcas[i].id
-                                                            marcaSeleccionadaNombre = marcas[i].nombre
-                                                            console.log("🔄 Propiedades forzadas - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
+                                                            crearProductoDialog.marcaIdSeleccionada = marcas[i].id
+                                                            crearProductoDialog.marcaSeleccionadaNombre = marcas[i].nombre
+                                                            console.log("🔄 Propiedades forzadas - ID:", crearProductoDialog.marcaIdSeleccionada, 
+                                                                       "Nombre:", crearProductoDialog.marcaSeleccionadaNombre)
                                                             break
                                                         }
                                                     }
@@ -1512,15 +1532,27 @@ Dialog {
     }
 
     Component.onCompleted: {
+        console.log("🎬 CrearProducto inicializado")
+        
         if (inventarioModel) {
-            // Conectar a la señal de marcasChanged
-            inventarioModel.marcasChanged.connect(function() {
-                console.log("🔄 Señal marcasChanged recibida, actualizando lista...")
-                cargarMarcasDisponibles()
-            })
-            marcasListenerConnected = true
+            // Conectar SOLO SI NO ESTÁ CONECTADO
+            if (!marcasListenerConnected) {
+                try {
+                    inventarioModel.marcasChanged.connect(function() {
+                        console.log("📡 Señal marcasChanged recibida")
+                        cargarMarcasDisponibles()
+                    })
+                    marcasListenerConnected = true
+                    console.log("✅ Listener marcasChanged conectado")
+                } catch (error) {
+                    console.log("⚠️ Error conectando marcasChanged:", error)
+                }
+            }
             
+            // Carga inicial
             cargarMarcasDisponibles()
+        } else {
+            console.log("❌ InventarioModel no disponible en Component.onCompleted")
         }
     }
 
@@ -1563,5 +1595,16 @@ Dialog {
             
             return resultado
         }
+        debugMarcaEstado()
+    }
+
+    function debugMarcaEstado() {
+        console.log("=== DEBUG MARCA ===")
+        console.log("  - marcaIdSeleccionada:", marcaIdSeleccionada)
+        console.log("  - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
+        console.log("  - marcasModel length:", marcasModel ? marcasModel.length : 0)
+        console.log("  - marcasCargadas:", marcasCargadas)
+        console.log("  - calcularValidacion():", calcularValidacion())
+        console.log("===================")
     }
 }

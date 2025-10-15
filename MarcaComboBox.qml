@@ -339,8 +339,21 @@ Item {
     // ========== FUNCIONES CORREGIDAS CON VALIDACIONES ==========
     
     function filtrarMarcas() {
-        // ✅ VALIDAR QUE marcasModel EXISTA
-        if (!marcasModel || marcasModel.length === undefined) {
+        // Validación robusta
+        if (!marcasModel) {
+            console.log("⚠️ marcasModel es null")
+            marcasFiltradas = []
+            return
+        }
+        
+        if (typeof marcasModel.length === 'undefined') {
+            console.log("⚠️ marcasModel no es un array")
+            marcasFiltradas = []
+            return
+        }
+        
+        if (marcasModel.length === 0) {
+            console.log("⚠️ marcasModel está vacío")
             marcasFiltradas = []
             return
         }
@@ -348,41 +361,76 @@ Item {
         var texto = searchField.text.toLowerCase().trim()
         
         if (texto.length === 0) {
-            marcasFiltradas = marcasModel
+            // Mostrar todas las marcas
+            marcasFiltradas = marcasModel.slice() // Copia para evitar mutación
+            console.log("🔍 Mostrando todas las marcas:", marcasFiltradas.length)
         } else {
+            // Filtrar por texto
             var filtradas = []
             for (var i = 0; i < marcasModel.length; i++) {
                 var marca = marcasModel[i]
-                if (marca && marca.nombre && marca.nombre.toLowerCase().includes(texto)) {
+                
+                // Validar que la marca tenga la estructura correcta
+                if (!marca) continue
+                
+                var nombreMarca = marca.nombre || marca.Nombre || ""
+                
+                if (nombreMarca.toLowerCase().includes(texto)) {
                     filtradas.push(marca)
                 }
             }
             marcasFiltradas = filtradas
+            console.log("🔍 Filtradas:", marcasFiltradas.length, "de", marcasModel.length)
         }
     }
     
     function seleccionarMarca(index) {
-        // ✅ VALIDAR ÍNDICE
-        if (!marcasFiltradas || index < 0 || index >= marcasFiltradas.length) {
-            console.log("❌ Índice inválido:", index)
+        // Validaciones exhaustivas
+        if (!marcasFiltradas) {
+            console.log("❌ marcasFiltradas no disponible")
             return
         }
-        
+
+        if (index < 0 || index >= marcasFiltradas.length) {
+            console.log("❌ Índice inválido:", index, "de", marcasFiltradas.length)
+            return
+        }
+
         var marca = marcasFiltradas[index]
-        if (!marca || !marca.nombre || !marca.id) {
-            console.log("❌ Marca inválida:", marca)
+
+        if (!marca) {
+            console.log("❌ Marca no encontrada en índice:", index)
             return
         }
-        
-        // ✅ CORRECCIÓN: Asegurar que las propiedades se actualicen correctamente
-        marcaSeleccionada = marca.nombre || ""
-        marcaIdSeleccionada = marca.id || 0
-        searchField.text = marca.nombre || ""
-        
-        console.log("🎯 Marca seleccionada:", marcaSeleccionada, "ID:", marcaIdSeleccionada)
-        
+
+        // Validar estructura de marca
+        var marcaId = marca.id || 0
+        var marcaNombre = marca.nombre || marca.Nombre || ""
+
+        if (marcaId === 0 || marcaNombre === "") {
+            console.log("❌ Marca inválida - ID:", marcaId, "Nombre:", marcaNombre)
+            return
+        }
+
+        // ✅ CORRECCIÓN: Actualizar propiedades PRIMERO y luego emitir señal
+        cargandoProgramaticamente = true
+
+        // Actualizar propiedades locales del ComboBox
+        marcaSeleccionada = marcaNombre
+        marcaIdSeleccionada = marcaId
+        searchField.text = marcaNombre
+
+        console.log("✅ Marca seleccionada:", marcaNombre, "ID:", marcaId)
+
+        // Cerrar dropdown
         dropdownPopup.close()
-        marcaCambiada(marcaSeleccionada, marcaIdSeleccionada)
+
+        // ✅ CORRECCIÓN CRÍTICA: Emitir señal con valores DIRECTOS, no propiedades
+        Qt.callLater(function() {
+            marcaCambiada(marcaNombre, marcaId)  // ← Usar variables locales, no propiedades
+            cargandoProgramaticamente = false
+            console.log("📢 Señal emitida - Marca:", marcaNombre, "ID:", marcaId)
+        })
     }
     
     function crearNuevaMarca() {
@@ -412,17 +460,30 @@ Item {
     
     function setMarcaById(marcaId) {
         console.log("🎯 setMarcaById llamado con ID:", marcaId)
-        cargandoProgramaticamente = true
         
-        // ✅ VALIDAR marcasModel
+        // Validar marcaId
+        if (!marcaId || marcaId <= 0) {
+            console.log("❌ ID de marca inválido:", marcaId)
+            return
+        }
+        
+        // Validar marcasModel
         if (!marcasModel || marcasModel.length === 0) {
-            console.log("⚠️ marcasModel vacío en setMarcaById")
+            console.log("⚠️ marcasModel vacío, esperando datos...")
+            
+            // Guardar para intentar después
             Qt.callLater(function() {
-                cargandoProgramaticamente = false
+                if (marcasModel && marcasModel.length > 0) {
+                    console.log("🔄 Reintentando setMarcaById después de cargar marcas")
+                    setMarcaById(marcaId)
+                }
             })
             return
         }
         
+        cargandoProgramaticamente = true
+        
+        // Buscar marca por ID
         var marcaEncontrada = null
         for (var i = 0; i < marcasModel.length; i++) {
             var marca = marcasModel[i]
@@ -433,21 +494,36 @@ Item {
         }
         
         if (marcaEncontrada) {
-            marcaSeleccionada = marcaEncontrada.nombre || marcaEncontrada.Nombre || ""
+            var nombreMarca = marcaEncontrada.nombre || marcaEncontrada.Nombre || ""
+            
+            marcaSeleccionada = nombreMarca
             marcaIdSeleccionada = marcaId
-            searchField.text = marcaSeleccionada
+            searchField.text = nombreMarca
             
-            console.log("✅ Marca establecida programáticamente:", marcaSeleccionada, "ID:", marcaId)
+            console.log("✅ Marca establecida programáticamente:", nombreMarca, "ID:", marcaId)
             
-            // ✅ EMITIR SEÑAL para notificar el cambio
-            marcaCambiada(marcaSeleccionada, marcaIdSeleccionada)
+            // Emitir señal para notificar el cambio
+            Qt.callLater(function() {
+                marcaCambiada(marcaSeleccionada, marcaIdSeleccionada)
+                cargandoProgramaticamente = false
+            })
         } else {
             console.log("❌ No se encontró marca con ID:", marcaId)
-        }
-        
-        Qt.callLater(function() {
+            console.log("   Marcas disponibles:", marcasModel.length)
             cargandoProgramaticamente = false
-        })
+        }
+    }
+
+    function recargarMarcas(nuevoMarcasModel) {
+        console.log("🔄 Recargando marcas en ComboBox")
+        
+        if (nuevoMarcasModel && nuevoMarcasModel.length > 0) {
+            marcasModel = nuevoMarcasModel
+            filtrarMarcas()
+            console.log("✅ Marcas recargadas:", marcasModel.length)
+        } else {
+            console.log("⚠️ No hay marcas para recargar")
+        }
     }
     
     function reset() {
@@ -659,14 +735,41 @@ Item {
     }
     
     Component.onCompleted: {
-        // ✅ Llamar filtrarMarcas() con validación
+        console.log("🎬 MarcaComboBox inicializado")
+        console.log("   - Marcas disponibles:", marcasModel ? marcasModel.length : 0)
+        
+        // Cargar marcas iniciales
         filtrarMarcas()
     }
     
     // ✅ Observar cambios en marcasModel
     onMarcasModelChanged: {
         console.log("🔄 marcasModel cambió, refrescando filtros")
-        filtrarMarcas()
+        console.log("   - Marcas disponibles:", marcasModel ? marcasModel.length : 0)
+        
+        // Forzar actualización inmediata
+        Qt.callLater(function() {
+            filtrarMarcas()
+            
+            // Si tenemos marcas y hay una selección pendiente, restaurarla
+            if (marcaIdSeleccionada > 0 && marcasModel && marcasModel.length > 0) {
+                console.log("🔍 Verificando selección actual ID:", marcaIdSeleccionada)
+                var encontrada = false
+                
+                for (var i = 0; i < marcasModel.length; i++) {
+                    if (marcasModel[i].id === marcaIdSeleccionada) {
+                        encontrada = true
+                        console.log("✅ Marca actual aún válida:", marcasModel[i].nombre)
+                        break
+                    }
+                }
+                
+                if (!encontrada) {
+                    console.log("⚠️ Marca seleccionada ya no existe, limpiando")
+                    limpiarSeleccion()
+                }
+            }
+        })
     }
 
     // Agregar estas funciones para mejor control:
