@@ -45,7 +45,7 @@ Item {
             modulo: "",
             icono: "📊", 
             descripcion: "Seleccione el tipo de reporte que desea generar",
-            color: lightGrayColor
+            color: "#ECF0F1" 
         },
         {
             id: 1,
@@ -53,7 +53,7 @@ Item {
             modulo: "farmacia",
             icono: "💰",
             descripcion: "Reporte detallado de todas las ventas realizadas en farmacia",
-            color: primaryColor
+            color: "#2C3E50"
         },
         {
             id: 2,
@@ -61,7 +61,7 @@ Item {
             modulo: "farmacia",
             icono: "📦",
             descripcion: "Estado actual del inventario con stock y valores",
-            color: infoColor
+            color: "#34495E" 
         },
         {
             id: 3,
@@ -77,7 +77,7 @@ Item {
             modulo: "consultas",
             icono: "🩺",
             descripcion: "Registro de consultas médicas por especialidad y doctor",
-            color: primaryColor
+            color: "#2C3E50"
         },
         {
             id: 5,
@@ -312,7 +312,7 @@ Item {
                                 visible: tipoReporteSeleccionado > 0
                                 
                                 background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(lightGrayColor, 1.1) : lightGrayColor
+                                    color: parent.pressed ? Qt.darker("#ECF0F1", 1.1) : "#ECF0F1"
                                     radius: 4
                                     border.color: "#BDC3C7"
                                     border.width: 1
@@ -362,7 +362,15 @@ Item {
                                         id: tiposReportesModel
                                         Component.onCompleted: {
                                             for (var i = 0; i < tiposReportes.length; i++) {
-                                                append(tiposReportes[i])
+                                                var item = tiposReportes[i]
+                                                append({
+                                                    "id": item.id,
+                                                    "nombre": item.nombre,
+                                                    "modulo": item.modulo,
+                                                    "icono": item.icono,
+                                                    "descripcion": item.descripcion,
+                                                    "color": item.color
+                                                })
                                             }
                                         }
                                     }
@@ -501,7 +509,7 @@ Item {
                                     width: 32
                                     height: 32
                                     color: tipoReporteSeleccionado > 0 ? 
-                                           tiposReportes[tipoReporteSeleccionado].color : lightGrayColor
+                                           tiposReportes[tipoReporteSeleccionado].color : "#ECF0F1"
                                     radius: 4
                                     
                                     Label {
@@ -556,7 +564,7 @@ Item {
                                 background: Rectangle {
                                     color: parent.enabled ? 
                                            (parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor) : 
-                                           lightGrayColor
+                                           "#ECF0F1"
                                     radius: 6
                                     border.color: parent.enabled ? primaryColor : "#BDC3C7"
                                     border.width: 1
@@ -1100,7 +1108,7 @@ Item {
                                             font.pixelSize: 11
                                             font.bold: true
                                             font.family: "Segoe UI"
-                                            color: infoColor
+                                            color: "#34495E"
                                         }
                                     }
                                     

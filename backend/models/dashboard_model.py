@@ -96,11 +96,11 @@ class DashboardModel(QObject):
         self._ano_seleccionado = datetime.now().year
         
         # Datos cache internos
-        self._farmacia_total = 0.0
-        self._consultas_total = 0.0
-        self._laboratorio_total = 0.0
-        self._enfermeria_total = 0.0
-        self._servicios_basicos_total = 0.0
+        self._farmacia_total = 0.00
+        self._consultas_total = 0.00
+        self._laboratorio_total = 0.00
+        self._enfermeria_total = 0.00
+        self._servicios_basicos_total = 0.00
         
         self._grafico_ingresos = []
         self._grafico_egresos = []
@@ -123,27 +123,27 @@ class DashboardModel(QObject):
     @Property(float, notify=farmaciaDataChanged)
     def farmaciaTotal(self):
         """Total de ingresos por farmacia según período"""
-        return self._farmacia_total
+        return round(self._farmacia_total, 2)
     
     @Property(float, notify=consultasDataChanged) 
     def consultasTotal(self):
         """Total de ingresos por consultas según período"""
-        return self._consultas_total
+        return round(self._consultas_total, 2)
     
     @Property(float, notify=laboratorioDataChanged)
     def laboratorioTotal(self):
         """Total de ingresos por laboratorio según período"""
-        return self._laboratorio_total
+        return round(self._laboratorio_total, 2)
     
     @Property(float, notify=enfermeriaDataChanged)
     def enfermeriaTotal(self):
         """Total de ingresos por enfermería según período"""
-        return self._enfermeria_total
+        return round(self._enfermeria_total, 2)
     
     @Property(float, notify=serviciosBasicosDataChanged)
     def serviciosBasicosTotal(self):
         """Total de egresos por servicios básicos según período"""
-        return self._servicios_basicos_total
+        return round(self._servicios_basicos_total, 2)
     
     # ===============================
     # PROPERTIES - TOTALES CONSOLIDADOS
@@ -152,18 +152,18 @@ class DashboardModel(QObject):
     @Property(float, notify=dashboardUpdated)
     def totalIngresos(self):
         """Total consolidado de ingresos"""
-        return (self._farmacia_total + self._consultas_total + 
-                self._laboratorio_total + self._enfermeria_total)
+        return round(self._farmacia_total + self._consultas_total + 
+                self._laboratorio_total + self._enfermeria_total, 2)
     
     @Property(float, notify=dashboardUpdated)
     def totalEgresos(self):
         """Total consolidado de egresos"""
-        return self._servicios_basicos_total
+        return round(self._servicios_basicos_total, 2)
     
     @Property(float, notify=dashboardUpdated)
     def balanceNeto(self):
         """Balance neto (ingresos - egresos)"""
-        return self.totalIngresos - self.totalEgresos
+        return round(self.totalIngresos - self.totalEgresos, 2)
     
     # ===============================
     # PROPERTIES - FILTROS
@@ -359,7 +359,7 @@ class DashboardModel(QObject):
         try:
             if not self.venta_repo:
                 print("⚠️ VentaRepository no disponible")
-                self._farmacia_total = 0.0
+                self._farmacia_total = 0.00
                 self.farmaciaDataChanged.emit()
                 return
                 
@@ -376,27 +376,27 @@ class DashboardModel(QObject):
                 # Fallback si no existe el método
                 ventas = self.venta_repo.get_ventas_con_detalles(fecha_inicio_str, fecha_fin_str)
             
-            total = 0.0
+            total = 0.00
             for venta in ventas:
                 # Usar las mismas claves que usa CierreCaja
-                total += float(venta.get('Total', venta.get('Venta_Total', 0)))
+                total += round(float(venta.get('Total', venta.get('Venta_Total', 0))), 2)
             
             print(f"💊 Dashboard - Farmacia calculada: Bs {total:.2f} ({len(ventas)} ventas)")
             
             if total != self._farmacia_total:
-                self._farmacia_total = float(total)
+                self._farmacia_total = round(float(total), 2)
                 self.farmaciaDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando farmacia en dashboard: {e}")
-            self._farmacia_total = 0.0
+            self._farmacia_total = 0.00
             self.farmaciaDataChanged.emit()
             
     def _actualizar_consultas_data(self, fecha_inicio: datetime, fecha_fin: datetime):
         """CORREGIDO: Usar precios reales de especialidades en lugar de precios fijos"""
         try:
             if not self.consulta_repo:
-                self._consultas_total = 0.0
+                self._consultas_total = 0.00
                 self.consultasDataChanged.emit()
                 return
                 
@@ -444,12 +444,12 @@ class DashboardModel(QObject):
             
             print(f"🩺 Dashboard - Consultas calculadas: Bs {total:.2f} ({len(consultas)} consultas)")
             
-            self._consultas_total = total
+            self._consultas_total = round(total, 2)
             self.consultasDataChanged.emit()
             
         except Exception as e:
             print(f"❌ Error actualizando consultas en dashboard: {e}")
-            self._consultas_total = 0.0
+            self._consultas_total = 0.00
             self.consultasDataChanged.emit()
     
     def _actualizar_laboratorio_data(self, fecha_inicio: datetime, fecha_fin: datetime):
@@ -487,17 +487,17 @@ class DashboardModel(QObject):
                         examen.get('Precio_Total') or 
                         examen.get('precio') or 0)
                 if precio:
-                    total += float(precio)
+                    total += round(float(precio), 2)
             
             print(f"🔬 Dashboard - Laboratorio calculado: Bs {total:.2f} ({len(examenes)} exámenes)")
             
             if total != self._laboratorio_total:
-                self._laboratorio_total = total
+                self._laboratorio_total = round(total, 2)
                 self.laboratorioDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando laboratorio en dashboard: {e}")
-            self._laboratorio_total = 0.0
+            self._laboratorio_total = 0.00
             self.laboratorioDataChanged.emit()
     
     def _actualizar_enfermeria_data(self, fecha_inicio: datetime, fecha_fin: datetime):
@@ -505,7 +505,7 @@ class DashboardModel(QObject):
         try:
             if not self.enfermeria_repo:
                 print("⚠️ EnfermeriaRepository no disponible")
-                self._enfermeria_total = 0.0
+                self._enfermeria_total = 0.00
                 self.enfermeriaDataChanged.emit()
                 return
                 
@@ -525,7 +525,7 @@ class DashboardModel(QObject):
                 print(f"Error obteniendo procedimientos: {e}")
                 procedimientos = []
             
-            total = 0.0
+            total = 0.00
             for proc in procedimientos:
                 # CORREGIDO: Manejar diferentes formatos de precio
                 precio_str = str(proc.get('precioTotal', '0'))
@@ -542,17 +542,17 @@ class DashboardModel(QObject):
                                 proc.get('Precio_Total') or 
                                 proc.get('precio_unitario', 0))
                     if precio_alt:
-                        total += float(precio_alt)
+                        total += round(float(precio_alt), 2)
             
             print(f"🩹 Dashboard - Enfermería calculada: Bs {total:.2f} ({len(procedimientos)} procedimientos)")
             
             if total != self._enfermeria_total:
-                self._enfermeria_total = total
+                self._enfermeria_total = round(total, 2)
                 self.enfermeriaDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando enfermería en dashboard: {e}")
-            self._enfermeria_total = 0.0
+            self._enfermeria_total = 0.00
             self.enfermeriaDataChanged.emit()
     
     def _actualizar_servicios_basicos_data(self, fecha_inicio: datetime, fecha_fin: datetime):
@@ -560,7 +560,7 @@ class DashboardModel(QObject):
         try:
             if not self.gasto_repo:
                 print("⚠️ GastoRepository no disponible")
-                self._servicios_basicos_total = 0.0
+                self._servicios_basicos_total = 0.00
                 self.serviciosBasicosDataChanged.emit()
                 return
                 
@@ -569,7 +569,7 @@ class DashboardModel(QObject):
             # CORREGIDO: Usar el mismo método que CierreCaja
             gastos = self.gasto_repo.get_expenses_by_date_range(fecha_inicio, fecha_fin)
             
-            total = 0.0
+            total = 0.00
             for gasto in gastos:
                 monto = float(gasto.get('Monto', 0))
                 if monto > 0:  # Validar que el monto sea válido
@@ -578,12 +578,12 @@ class DashboardModel(QObject):
             print(f"⚡ Dashboard - Servicios Básicos calculados: Bs {total:.2f} ({len(gastos)} gastos)")
             
             if total != self._servicios_basicos_total:
-                self._servicios_basicos_total = total
+                self._servicios_basicos_total = round(total, 2)
                 self.serviciosBasicosDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando servicios básicos en dashboard: {e}")
-            self._servicios_basicos_total = 0.0
+            self._servicios_basicos_total = 0.00
             self.serviciosBasicosDataChanged.emit()
     
     def _actualizar_datos_grafico(self, fecha_inicio: datetime, fecha_fin: datetime):
@@ -626,13 +626,13 @@ class DashboardModel(QObject):
                 ingreso_mes = self.totalIngresos * proporcion
                 egreso_mes = self.totalEgresos * proporcion
                 
-                ingresos_mes.append(float(ingreso_mes))
-                egresos_mes.append(float(egreso_mes))
+                ingresos_mes.append(float(ingreso_mes), 2)
+                egresos_mes.append(float(egreso_mes), 2)
                 
             except Exception as e:
                 print(f"❌ Error procesando mes {mes}: {e}")
-                ingresos_mes.append(0.0)
-                egresos_mes.append(0.0)
+                ingresos_mes.append(0.00)
+                egresos_mes.append(0.00)
         
         self._grafico_ingresos = ingresos_mes
         self._grafico_egresos = egresos_mes
@@ -649,8 +649,8 @@ class DashboardModel(QObject):
             ingreso_sem = self.totalIngresos * proporcion
             egreso_sem = self.totalEgresos * proporcion
             
-            ingresos_sem.append(float(ingreso_sem))
-            egresos_sem.append(float(egreso_sem))
+            ingresos_sem.append(float(ingreso_sem), 2)
+            egresos_sem.append(float(egreso_sem), 2)
         
         self._grafico_ingresos = ingresos_sem
         self._grafico_egresos = egresos_sem
@@ -666,8 +666,8 @@ class DashboardModel(QObject):
             ingreso_dia = self.totalIngresos * proporcion
             egreso_dia = self.totalEgresos * proporcion
             
-            ingresos_dia.append(float(ingreso_dia))
-            egresos_dia.append(float(egreso_dia))
+            ingresos_dia.append(float(ingreso_dia), 2)
+            egresos_dia.append(float(egreso_dia), 2)
         
         self._grafico_ingresos = ingresos_dia
         self._grafico_egresos = egresos_dia
@@ -685,11 +685,11 @@ class DashboardModel(QObject):
                 ingreso_hora_val = self.totalIngresos * proporcion
                 egreso_hora_val = self.totalEgresos * proporcion
             else:
-                ingreso_hora_val = 0.0
-                egreso_hora_val = 0.0
+                ingreso_hora_val = 0.00
+                egreso_hora_val = 0.00
             
-            ingresos_hora.append(float(ingreso_hora_val))
-            egresos_hora.append(float(egreso_hora_val))
+            ingresos_hora.append(float(ingreso_hora_val), 2)
+            egresos_hora.append(float(egreso_hora_val), 2)
         
         self._grafico_ingresos = ingresos_hora
         self._grafico_egresos = egresos_hora
@@ -749,11 +749,11 @@ class DashboardModel(QObject):
                         pass
             
             # Limpiar datos
-            self._farmacia_total = 0.0
-            self._consultas_total = 0.0
-            self._laboratorio_total = 0.0
-            self._enfermeria_total = 0.0
-            self._servicios_basicos_total = 0.0
+            self._farmacia_total = 0.00
+            self._consultas_total = 0.00
+            self._laboratorio_total = 0.00
+            self._enfermeria_total = 0.00
+            self._servicios_basicos_total = 0.00
             self._grafico_ingresos = []
             self._grafico_egresos = []
             self._alertas_vencimientos = []

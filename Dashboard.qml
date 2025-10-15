@@ -679,7 +679,7 @@ ScrollView {
                 KPICard {
                     Layout.fillWidth: true
                     title: "Farmacia"
-                    value: "Bs " + calculateFarmaciaTotal().toFixed(0)
+                    value: "Bs " + calculateFarmaciaTotal().toFixed(2)
                     icon: "Resources/iconos/farmacia.png"  // Cambiar de "💊"
                     cardColor: farmaciaColor
                     borderColor: farmaciaColor
@@ -688,7 +688,7 @@ ScrollView {
                 KPICard {
                     Layout.fillWidth: true
                     title: "Consultas"
-                    value: "Bs " + calculateConsultasTotal().toFixed(0)
+                    value: "Bs " + calculateConsultasTotal().toFixed(2)
                     icon: "Resources/iconos/Consulta.png"  // Cambiar de "🩺"
                     cardColor: consultasColor
                     borderColor: consultasColor
@@ -697,7 +697,7 @@ ScrollView {
                 KPICard {
                     Layout.fillWidth: true
                     title: "Laboratorio"
-                    value: "Bs " + calculateLaboratorioTotal().toFixed(0)
+                    value: "Bs " + calculateLaboratorioTotal().toFixed(2)
                     icon: "Resources/iconos/Laboratorio.png"  // Cambiar de "🔬"
                     cardColor: laboratorioColor
                     borderColor: laboratorioColor
@@ -706,7 +706,7 @@ ScrollView {
                 KPICard {
                     Layout.fillWidth: true
                     title: "Enfermería"
-                    value: "Bs " + calculateEnfermeriaTotal().toFixed(0)
+                    value: "Bs " + calculateEnfermeriaTotal().toFixed(2)
                     icon: "Resources/iconos/Enfermeria.png"  // Cambiar de "👩‍⚕️"
                     cardColor: enfermeriaColor
                     borderColor: enfermeriaColor
@@ -715,7 +715,7 @@ ScrollView {
                 KPICard {
                     Layout.fillWidth: true
                     title: "Servicios Básicos"
-                    value: "Bs " + calculateServiciosBasicosTotal().toFixed(0)
+                    value: "Bs " + calculateServiciosBasicosTotal().toFixed(2)
                     icon: "Resources/iconos/ServiciosBasicos.png"  // Cambiar de "⚡"
                     cardColor: serviciosColor
                     borderColor: serviciosColor
@@ -766,7 +766,7 @@ ScrollView {
                                     color: "#10b981"
                                 }
                                 Label {
-                                    text: "Ingresos: Bs " + calculateTotalIngresos().toFixed(0)
+                                    text: "Ingresos: Bs " + calculateTotalIngresos().toFixed(2)
                                     color: "#6b7280"
                                     font.pixelSize: 12
                                     font.bold: true
@@ -782,7 +782,7 @@ ScrollView {
                                     color: "#ef4444"
                                 }
                                 Label {
-                                    text: "Egresos: Bs " + calculateTotalEgresos().toFixed(0)
+                                    text: "Egresos: Bs " + calculateTotalEgresos().toFixed(2)
                                     color: "#6b7280"
                                     font.pixelSize: 12
                                     font.bold: true
@@ -1124,8 +1124,8 @@ ScrollView {
                                 function updateData(index) {
                                     if (index >= 0 && index < chartCanvas.labels.length) {
                                         periodText = chartCanvas.labels[index]
-                                        ingresosText = "Ingresos: Bs" + Math.round(chartCanvas.ingresosData[index])
-                                        egresosText = "Egresos: Bs" + Math.round(chartCanvas.egresosData[index])
+                                        ingresosText = "Ingresos: Bs " + chartCanvas.ingresosData[index].toFixed(2)
+                                        egresosText = "Egresos: Bs " + chartCanvas.egresosData[index].toFixed(2)
                                     }
                                 }
                                 
