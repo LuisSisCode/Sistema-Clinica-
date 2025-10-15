@@ -699,43 +699,186 @@ class AppController(QObject):
         # Establecer usuario en todos los modelos
         self._establecer_usuario_en_modelos()
         
-        print(f"âœ… Usuario autenticado establecido correctamente")
+        print(f"Usuario autenticado establecido correctamente")
 
     def _establecer_usuario_en_modelos(self):
-        """Establece el usuario autenticado en todos los modelos que lo necesiten"""
+        """
+        ✅ VERSIÓN CORREGIDA: Establece el usuario autenticado en TODOS los modelos
+        CRÍTICO: Este método debe llamarse DESPUÉS de initialize_models()
+        """
         if self._usuario_autenticado_id > 0:
-            print(f"ðŸ‘¤ Estableciendo usuario {self._usuario_autenticado_id} en modelos...")
+            print(f"\n{'='*60}")
+            print(f"🔐 ESTABLECIENDO USUARIO EN TODOS LOS MODELOS")
+            print(f"{'='*60}")
+            print(f"   Usuario ID: {self._usuario_autenticado_id}")
+            print(f"   Nombre: {self._usuario_autenticado_nombre}")
+            print(f"   Rol: {self._usuario_autenticado_rol}")
+            print()
             
-            # Lista de modelos y sus mÃ©todos de autenticaciÃ³n
-            models_to_set = [
-                (self.usuario_model, 'set_usuario_actual_con_rol'),
-                (self.venta_model, 'set_usuario_actual_con_rol'),
-                (self.compra_model, 'set_usuario_actual'),
-                (self.proveedor_model, 'set_usuario_actual_con_rol'),  
-                (self.consulta_model, 'set_usuario_actual_con_rol'),
-                (self.enfermeria_model, 'set_usuario_actual_con_rol'),
-                (self.laboratorio_model, 'set_usuario_actual_con_rol'),
-                (self.gasto_model, 'set_usuario_actual_con_rol'),
-                (self.trabajador_model, 'set_usuario_actual_con_rol'),  
-                (self.reportes_model, 'set_usuario_actual'),
-                (self.dashboard_model, 'set_usuario_actual_con_rol'),
-                (self.cierre_caja_model, 'set_usuario_actual_con_rol'),
-                (self.ingreso_extra_model, 'set_usuario_actual_con_rol'),
-            ]
+            # ✅ MODELO INVENTARIO (usa set_usuario_actual)
+            if self.inventario_model and hasattr(self.inventario_model, 'set_usuario_actual'):
+                try:
+                    self.inventario_model.set_usuario_actual(self._usuario_autenticado_id)
+                    print("  ✅ Usuario establecido en InventarioModel")
+                except Exception as e:
+                    print(f"  ❌ Error en InventarioModel: {e}")
             
-            # Establecer usuario en cada modelo
-            for model, method_name in models_to_set:
-                if model and hasattr(model, method_name):
-                    try:
-                        if method_name == 'set_usuario_actual_con_rol':
-                            getattr(model, method_name)(self._usuario_autenticado_id, self._usuario_autenticado_rol)
-                            print(f"  âœ… Usuario establecido en {type(model).__name__} con rol")
-                        else:
-                            getattr(model, method_name)(self._usuario_autenticado_id)
-                            print(f"  âœ… Usuario establecido en {type(model).__name__}")
-                    except Exception as e:
-                        print(f"  âŒ Error estableciendo usuario en {type(model).__name__}: {e}")
-
+            # ✅ MODELO VENTA (CRÍTICO - usa set_usuario_actual_con_rol)
+            if self.venta_model and hasattr(self.venta_model, 'set_usuario_actual_con_rol'):
+                try:
+                    print(f"  🔍 Estableciendo usuario en VentaModel...")
+                    print(f"     ID: {self._usuario_autenticado_id}")
+                    print(f"     Rol: {self._usuario_autenticado_rol}")
+                    
+                    self.venta_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    
+                    # Verificar que se estableció correctamente
+                    actual_id = self.venta_model.usuario_actual_id
+                    print(f"  ✅ VentaModel configurado - Usuario verificado: {actual_id}")
+                    
+                    if actual_id != self._usuario_autenticado_id:
+                        print(f"  ⚠️ ADVERTENCIA: Usuario no coincide en VentaModel!")
+                        print(f"     Esperado: {self._usuario_autenticado_id}, Actual: {actual_id}")
+                        
+                except Exception as e:
+                    print(f"  ❌ Error CRÍTICO en VentaModel: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # ✅ MODELO COMPRA (usa set_usuario_actual)
+            if self.compra_model and hasattr(self.compra_model, 'set_usuario_actual'):
+                try:
+                    self.compra_model.set_usuario_actual(self._usuario_autenticado_id)
+                    print("  ✅ Usuario establecido en CompraModel")
+                except Exception as e:
+                    print(f"  ❌ Error en CompraModel: {e}")
+            
+            # ✅ MODELO PROVEEDOR (usa set_usuario_actual_con_rol)
+            if self.proveedor_model and hasattr(self.proveedor_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.proveedor_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en ProveedorModel")
+                except Exception as e:
+                    print(f"  ❌ Error en ProveedorModel: {e}")
+            
+            # ✅ MODELO CONSULTA (usa set_usuario_actual_con_rol)
+            if self.consulta_model and hasattr(self.consulta_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.consulta_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en ConsultaModel")
+                except Exception as e:
+                    print(f"  ❌ Error en ConsultaModel: {e}")
+            
+            # ✅ MODELO ENFERMERÍA (usa set_usuario_actual_con_rol)
+            if self.enfermeria_model and hasattr(self.enfermeria_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.enfermeria_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en EnfermeriaModel")
+                except Exception as e:
+                    print(f"  ❌ Error en EnfermeriaModel: {e}")
+            
+            # ✅ MODELO LABORATORIO (usa set_usuario_actual_con_rol)
+            if self.laboratorio_model and hasattr(self.laboratorio_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.laboratorio_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en LaboratorioModel")
+                except Exception as e:
+                    print(f"  ❌ Error en LaboratorioModel: {e}")
+            
+            # ✅ MODELO GASTO (usa set_usuario_actual_con_rol)
+            if self.gasto_model and hasattr(self.gasto_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.gasto_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en GastoModel")
+                except Exception as e:
+                    print(f"  ❌ Error en GastoModel: {e}")
+            
+            # ✅ MODELO TRABAJADOR (usa set_usuario_actual_con_rol)
+            if self.trabajador_model and hasattr(self.trabajador_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.trabajador_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en TrabajadorModel")
+                except Exception as e:
+                    print(f"  ❌ Error en TrabajadorModel: {e}")
+            
+            # ✅ MODELO USUARIO (usa set_usuario_actual_con_rol)
+            if self.usuario_model and hasattr(self.usuario_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.usuario_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en UsuarioModel")
+                except Exception as e:
+                    print(f"  ❌ Error en UsuarioModel: {e}")
+            
+            # ✅ MODELO REPORTES (usa set_usuario_actual)
+            if self.reportes_model and hasattr(self.reportes_model, 'set_usuario_actual'):
+                try:
+                    self.reportes_model.set_usuario_actual(self._usuario_autenticado_id)
+                    print("  ✅ Usuario establecido en ReportesModel")
+                except Exception as e:
+                    print(f"  ❌ Error en ReportesModel: {e}")
+            
+            # ✅ MODELO DASHBOARD (usa set_usuario_actual_con_rol)
+            if self.dashboard_model and hasattr(self.dashboard_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.dashboard_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en DashboardModel")
+                except Exception as e:
+                    print(f"  ❌ Error en DashboardModel: {e}")
+            
+            # ✅ MODELO CIERRE CAJA (usa set_usuario_actual_con_rol)
+            if self.cierre_caja_model and hasattr(self.cierre_caja_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.cierre_caja_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en CierreCajaModel")
+                except Exception as e:
+                    print(f"  ❌ Error en CierreCajaModel: {e}")
+            
+            # ✅ MODELO INGRESO EXTRA (usa set_usuario_actual_con_rol)
+            if self.ingreso_extra_model and hasattr(self.ingreso_extra_model, 'set_usuario_actual_con_rol'):
+                try:
+                    self.ingreso_extra_model.set_usuario_actual_con_rol(
+                        self._usuario_autenticado_id,
+                        self._usuario_autenticado_rol
+                    )
+                    print("  ✅ Usuario establecido en IngresoExtraModel")
+                except Exception as e:
+                    print(f"  ❌ Error en IngresoExtraModel: {e}")
+            
+            print()
+            print("="*60)
+            print("✅ USUARIO ESTABLECIDO EN TODOS LOS MODELOS")
+            print("="*60)
+            print()
     # Handlers para eventos especÃ­ficos de modelos
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
@@ -1984,7 +2127,7 @@ def main():
     
     try:
         # Ruta al archivo de icono (puede ser .ico, .png, .svg)
-        icon_path = os.path.join(os.path.dirname(__file__), "Resources/iconos/Logo_de_Emergencia_MÃƒÂ©dica_RGL-removebg-preview.ico")
+        icon_path = os.path.join(os.path.dirname(__file__), "Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.ico")
         
         # Si el archivo existe, establecerlo como icono
         if os.path.exists(icon_path):

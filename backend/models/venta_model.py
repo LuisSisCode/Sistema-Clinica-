@@ -103,6 +103,7 @@ class VentaModel(QObject):
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
                 self._usuario_rol = rol.strip()
+                self._usuario_nombre = f"Usuario_{usuario_id}" 
                 
                 print(f"👤 Usuario autenticado: {usuario_id} - {rol}")
                 
@@ -111,7 +112,6 @@ class VentaModel(QObject):
                 self._cargar_estadisticas(usar_cache=False)
                 
                 self.operacionExitosa.emit(f"Usuario {usuario_id} ({rol}) establecido")
-                
             else:
                 self.operacionError.emit("Usuario o rol inválido")
         except Exception as e:
@@ -191,6 +191,7 @@ class VentaModel(QObject):
     def _verificar_autenticacion(self) -> bool:
         """Verifica si el usuario está autenticado"""
         if self._usuario_actual_id <= 0:
+            print(f"🚨 USUARIO NO AUTENTICADO: ID={self._usuario_actual_id}")
             self.operacionError.emit("Usuario no autenticado. Por favor inicie sesión.")
             return False
         return True

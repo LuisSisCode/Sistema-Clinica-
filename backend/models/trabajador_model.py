@@ -321,11 +321,6 @@ class TrabajadorModel(QObject):
                 print(f"⚠️ tiposTrabajador no es lista: {type(self._tipos_trabajador)}")
                 return []
             
-            # ✅ LOG DETALLADO
-            print(f"📋 tiposTrabajador property: Retornando {len(self._tipos_trabajador)} tipos")
-            if len(self._tipos_trabajador) > 0:
-                print(f"   Primer tipo: {self._tipos_trabajador[0].get('Tipo', 'N/A')}")
-            
             return self._tipos_trabajador
             
         except Exception as e:

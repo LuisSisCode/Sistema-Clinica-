@@ -58,6 +58,7 @@ Item {
     // Inicialización de models después de que estén listos
     Connections {
         target: appController
+        
         function onModelsReady() {
             console.log("🔗 Farmacia: Conectando Models QObject a BD")
             inventarioModel = appController.inventario_model_instance
@@ -72,14 +73,50 @@ Item {
             }
             if (ventaModel) {
                 console.log("💰 VentaModel disponible")
+                console.log("   Usuario ID inicial:", ventaModel.usuario_actual_id)
             }
             if (compraModel) {
                 console.log("🛒 CompraModel disponible")
                 compraModel.force_refresh_compras()
             }
 
-            // Cargar datos iniciales desde BD
-            refrescarTodosLosDatos()
+            // ⚠️ NO CARGAR DATOS AQUÍ - Esperar a que el usuario esté autenticado
+            console.log("⏳ Esperando autenticación completa del usuario...")
+        }
+        
+        // ✅ NUEVA CONEXIÓN: Refrescar cuando el usuario cambie
+        function onUsuarioChanged() {
+            console.log("🔐 Farmacia: Usuario cambió en AppController")
+            
+            if (!appController) return
+            
+            var userId = appController.usuario_actual_id
+            var userRole = appController.usuario_actual_rol
+            
+            console.log("   Nuevo usuario ID:", userId)
+            console.log("   Rol:", userRole)
+            
+            // Verificar que VentaModel tiene el usuario correcto
+            if (ventaModel) {
+                console.log("   VentaModel.usuario_actual_id:", ventaModel.usuario_actual_id)
+                
+                if (userId > 0 && ventaModel.usuario_actual_id === userId) {
+                    console.log("✅ Usuario correctamente establecido - Cargando datos iniciales...")
+                    
+                    // Ahora SÍ cargar datos con un pequeño delay
+                    Qt.callLater(function() {
+                        refrescarTodosLosDatos()
+                    })
+                } else if (userId > 0 && ventaModel.usuario_actual_id === 0) {
+                    console.log("⚠️ Usuario no establecido en VentaModel - Reintentando...")
+                    // Reintentar después de 500ms
+                    Qt.callLater(function() {
+                        if (ventaModel && ventaModel.usuario_actual_id > 0) {
+                            refrescarTodosLosDatos()
+                        }
+                    })
+                }
+            }
         }
     }
 
@@ -632,21 +669,48 @@ Item {
     function refrescarTodosLosDatos() {
         console.log("🔄 Refrescando todos los datos desde BD...")
         
+        // ✅ VERIFICAR QUE HAY USUARIO AUTENTICADO ANTES DE REFRESCAR
+        if (ventaModel && ventaModel.usuario_actual_id === 0) {
+            console.log("⚠️ Esperando autenticación de usuario antes de refrescar...")
+            console.log("   VentaModel.usuario_actual_id:", ventaModel.usuario_actual_id)
+            
+            // Reintentar después de 500ms
+            Qt.callLater(function() {
+                if (ventaModel && ventaModel.usuario_actual_id > 0) {
+                    console.log("✅ Usuario autenticado - Refrescando datos...")
+                    refrescarTodosLosDatos()
+                } else {
+                    console.log("❌ Usuario sigue sin autenticar - Cancelando refresh")
+                }
+            })
+            return
+        }
+        
+        console.log("✅ Usuario autenticado OK - Procediendo con refresh...")
+        console.log("   Usuario ID:", ventaModel ? ventaModel.usuario_actual_id : "N/A")
+        
+        // Refrescar inventario
         if (inventarioModel) {
             inventarioModel.refresh_productos()
             inventarioModel.actualizar_alertas()
         }
+        
+        // Refrescar ventas (ahora con usuario autenticado)
         if (ventaModel) {
             ventaModel.refresh_ventas_hoy()
             ventaModel.refresh_estadisticas()
         }
+        
+        // Refrescar compras
         if (compraModel) {
             compraModel.refresh_compras()
             compraModel.refresh_proveedores()
         }
         
-        // Emitir signal de actualización
+        // Emitir señal de actualización
         datosActualizados()
+        
+        console.log("✅ Todos los datos refrescados desde BD")
     }
     
     // Señal para notificar cambios en los datos
