@@ -347,13 +347,26 @@ class ConsultaRepository(BaseRepository):
         return self.get_consultations_by_date_range(start_date, end_date)
     
     def get_consultations_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
-        """Obtiene consultas en rango de fechas - CORREGIDO"""
+        """Obtiene consultas en rango de fechas - CORREGIDO CON PRECIOS"""
         query = """
-        SELECT c.*, 
-               CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_nombre,
-               p.Cedula as paciente_cedula,
-               e.Nombre as especialidad_nombre,
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor_nombre
+        SELECT 
+            c.id,
+            c.Fecha,
+            c.Detalles,
+            c.Tipo_Consulta,
+            c.Id_Paciente,
+            c.Id_Especialidad,
+            c.Id_Usuario,
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_nombre,
+            p.Cedula as paciente_cedula,
+            e.Nombre as especialidad_nombre,
+            ISNULL(e.Precio_Normal, 0) as Precio_Normal,         -- ✅ AGREGADO
+            ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia, -- ✅ AGREGADO
+            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor_nombre,
+            CASE 
+                WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
+                ELSE ISNULL(e.Precio_Normal, 0)
+            END as precio                                         -- ✅ AGREGADO
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
