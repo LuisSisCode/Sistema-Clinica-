@@ -8,13 +8,22 @@ import os
 import pyodbc
 from pathlib import Path
 from typing import Tuple, Optional
+import sys
 
 class DatabaseInstaller:
     """Instalador automatizado de base de datos"""
     
     def __init__(self):
-        self.base_dir = Path(__file__).resolve().parent.parent.parent
-        self.scripts_dir = self.base_dir / "database_scripts"
+        """Inicializar instalador de BD con rutas correctas"""
+        if getattr(sys, 'frozen', False):
+            # Ejecutable: scripts en _internal
+            base_path = sys._MEIPASS
+            self.scripts_dir = Path(base_path) / '_internal' / 'database_scripts'
+        else:
+            # Desarrollo: scripts en raíz
+            self.scripts_dir = Path(__file__).parent.parent.parent / 'database_scripts'
+        
+        print(f"📁 Directorio de scripts SQL: {self.scripts_dir}")
         
     def verificar_sql_server(self, server: str = "localhost\\SQLEXPRESS") -> Tuple[bool, str]:
         """

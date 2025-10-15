@@ -273,6 +273,49 @@ class InventarioModel(QObject):
             self.operacionError.emit(f"Error actualizando productos: {str(e)}")
         finally:
             self._set_loading(False)
+
+    # ================== DESPUÉS DE refresh_productos() ==================
+
+    @Slot(str, result=bool)
+    def crear_marca_desde_qml(self, nombre_marca: str) -> bool:
+        """
+        Crea una nueva marca desde QML
+        Llamado por MarcaComboBox cuando el usuario crea una marca
+        """
+        try:
+            print(f"🏷️ Creando marca desde QML: '{nombre_marca}'")
+            
+            # Validar nombre
+            if not nombre_marca or len(nombre_marca.strip()) < 2:
+                print("❌ Nombre de marca inválido")
+                self.operacionError.emit("El nombre debe tener al menos 2 caracteres")
+                return False
+            
+            # Crear marca en BD
+            exito = self.repository.crear_marca(nombre_marca.strip())
+            
+            if exito:
+                print(f"✅ Marca '{nombre_marca}' creada exitosamente")
+                
+                # Refrescar lista de marcas
+                self.refresh_marcas()
+                
+                # Emitir señal de éxito
+                self.operacionExitosa.emit(f"Marca '{nombre_marca}' creada")
+                
+                return True
+            else:
+                print(f"❌ Error creando marca '{nombre_marca}'")
+                self.operacionError.emit("Error al crear la marca en la base de datos")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error en crear_marca_desde_qml: {e}")
+            import traceback
+            traceback.print_exc()
+            self.operacionError.emit(f"Error inesperado: {str(e)}")
+            return False
+        
     @Slot(str)
     def buscar_productos(self, termino: str):
         """
