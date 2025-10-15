@@ -626,8 +626,8 @@ class DashboardModel(QObject):
                 ingreso_mes = self.totalIngresos * proporcion
                 egreso_mes = self.totalEgresos * proporcion
                 
-                ingresos_mes.append(float(ingreso_mes), 2)
-                egresos_mes.append(float(egreso_mes), 2)
+                ingresos_mes.append(round(float(ingreso_mes), 2)) 
+                egresos_mes.append(round(float(egreso_mes), 2))    
                 
             except Exception as e:
                 print(f"❌ Error procesando mes {mes}: {e}")
@@ -649,8 +649,8 @@ class DashboardModel(QObject):
             ingreso_sem = self.totalIngresos * proporcion
             egreso_sem = self.totalEgresos * proporcion
             
-            ingresos_sem.append(float(ingreso_sem), 2)
-            egresos_sem.append(float(egreso_sem), 2)
+            ingresos_sem.append(round(float(ingreso_sem), 2))
+            egresos_sem.append(round(float(egreso_sem), 2))
         
         self._grafico_ingresos = ingresos_sem
         self._grafico_egresos = egresos_sem
@@ -666,8 +666,8 @@ class DashboardModel(QObject):
             ingreso_dia = self.totalIngresos * proporcion
             egreso_dia = self.totalEgresos * proporcion
             
-            ingresos_dia.append(float(ingreso_dia), 2)
-            egresos_dia.append(float(egreso_dia), 2)
+            ingresos_dia.append(round(float(ingreso_dia), 2))
+            egresos_dia.append(round(float(egreso_dia), 2))
         
         self._grafico_ingresos = ingresos_dia
         self._grafico_egresos = egresos_dia
@@ -688,8 +688,8 @@ class DashboardModel(QObject):
                 ingreso_hora_val = 0.00
                 egreso_hora_val = 0.00
             
-            ingresos_hora.append(float(ingreso_hora_val), 2)
-            egresos_hora.append(float(egreso_hora_val), 2)
+            ingresos_hora.append(round(float(ingreso_hora_val), 2))
+            egresos_hora.append(round(float(egreso_hora_val), 2))
         
         self._grafico_ingresos = ingresos_hora
         self._grafico_egresos = egresos_hora
