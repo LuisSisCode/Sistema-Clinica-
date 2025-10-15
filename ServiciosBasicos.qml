@@ -1508,13 +1508,6 @@ Item {
                 Layout.fillHeight: true
                 source: "IngresosExtras.qml"
             }
-            
-            // Subsección 2: Egresos Extras  
-            Loader {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                source: "EgresosExtras.qml"
-            }
         }
     }
 

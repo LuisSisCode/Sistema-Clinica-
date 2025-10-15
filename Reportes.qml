@@ -382,8 +382,16 @@ Item {
                                         spacing: 8
                                         
                                         Label {
-                                            text: tipoReporteCombo.currentIndex >= 0 ? 
-                                                  tiposReportesModel.get(tipoReporteCombo.currentIndex).icono : "📊"
+                                            text: {
+                                                // ✅ VERIFICACIÓN DEFENSIVA
+                                                if (tipoReporteCombo.currentIndex >= 0 && 
+                                                    tiposReportesModel.count > 0 && 
+                                                    tipoReporteCombo.currentIndex < tiposReportesModel.count) {
+                                                    var item = tiposReportesModel.get(tipoReporteCombo.currentIndex)
+                                                    return item && item.icono ? item.icono : "📊"
+                                                }
+                                                return "📊"
+                                            }
                                             font.pixelSize: 16
                                         }
                                         
@@ -910,40 +918,56 @@ Item {
                                             }
                                         }
                                     }
-                                }
-                                
+                                }                          
                                 // ==========================================
-                                // FILA DE TOTAL UNIVERSAL - FUNCIONA PARA TODOS LOS REPORTES
+                                // FILA DE TOTAL UNIVERSAL - SOLUCIÓN DEFINITIVA
                                 // ==========================================
                                 Rectangle {
+                                    id: filaTotal
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 50
                                     color: "#2C3E50"  
                                     border.color: "#34495E"
                                     border.width: 2
                                     
+                                    // ✅ SOLUCIÓN 1: Obtener columnas DIRECTAMENTE aquí
+                                    property var columnasLocal: obtenerColumnasReporte()
+                                    
                                     RowLayout {
+                                        id: rowTotal
                                         anchors.fill: parent
                                         anchors.margins: 12
                                         spacing: 0
                                         
-                                        // ✅ DEFINIR COLUMNAS UNA SOLA VEZ AL NIVEL CORRECTO
-                                        property var todasLasColumnas: obtenerColumnasReporte()
-                                        
                                         Repeater {
-                                            model: parent.todasLasColumnas.length  // ✅ Usar parent directamente
+                                            id: repeaterTotal
+                                            model: filaTotal.columnasLocal ? filaTotal.columnasLocal.length : 0
                                             
                                             Rectangle {
-                                                Layout.preferredWidth: parent.todasLasColumnas[index].width  // ✅ Acceso directo
+                                                id: celdaTotal
+                                                Layout.preferredWidth: {
+                                                    // ✅ ACCESO SEGURO
+                                                    if (filaTotal.columnasLocal && 
+                                                        index >= 0 && 
+                                                        index < filaTotal.columnasLocal.length) {
+                                                        return filaTotal.columnasLocal[index].width
+                                                    }
+                                                    return 80
+                                                }
                                                 Layout.fillHeight: true
                                                 color: "transparent"
                                                 
-                                                  Label {
+                                                Label {
                                                     anchors.centerIn: parent
                                                     text: {
-                                                        // ✅ ACCESO DIRECTO SIN PARENT.PARENT
-                                                        var columna = parent.parent.todasLasColumnas[index]
-                                                        var nombreColumna = columna.titulo
+                                                        // ✅ VALIDACIÓN COMPLETA
+                                                        if (!filaTotal.columnasLocal || 
+                                                            index < 0 || 
+                                                            index >= filaTotal.columnasLocal.length) {
+                                                            return ""
+                                                        }
+                                                        
+                                                        var columna = filaTotal.columnasLocal[index]
                                                         var campoColumna = columna.campo
                                                         
                                                         // MOSTRAR TOTAL en columna de valor monetario
@@ -952,7 +976,7 @@ Item {
                                                             return "Bs " + total.toFixed(2)
                                                         }
 
-                                                        // ✅ PARA VENTAS: mostrar "TOTAL GENERAL:" en VENDEDOR (ahora en la posición correcta)
+                                                        // PARA VENTAS: mostrar "TOTAL GENERAL:" en VENDEDOR
                                                         if (tipoReporteSeleccionado === 1 && campoColumna === "usuario") {
                                                             return "TOTAL GENERAL:"
                                                         }
@@ -962,14 +986,14 @@ Item {
                                                             return "TOTAL GENERAL:"
                                                         }
 
-                                                        // PARA OTROS REPORTES: mostrar "TOTAL GENERAL:" en penúltima columna
-                                                        if (tipoReporteSeleccionado !== 7 && tipoReporteSeleccionado !== 1 && 
-                                                            index === parent.parent.todasLasColumnas.length - 2 && 
+                                                        // PARA OTROS REPORTES: mostrar en penúltima columna
+                                                        if (tipoReporteSeleccionado !== 7 && 
+                                                            tipoReporteSeleccionado !== 1 && 
+                                                            index === filaTotal.columnasLocal.length - 2 && 
                                                             campoColumna !== "valor") {
                                                             return "TOTAL GENERAL:"
                                                         }
 
-                                                        // Todas las demás columnas vacías
                                                         return ""
                                                     }
                                                     
@@ -978,8 +1002,14 @@ Item {
                                                     font.family: "Segoe UI"
                                                     color: whiteColor
                                                     horizontalAlignment: {
-                                                        // ✅ ACCESO CORREGIDO
-                                                        var columna = parent.parent.parent.todasLasColumnas[index]
+                                                        // ✅ VALIDACIÓN COMPLETA
+                                                        if (!filaTotal.columnasLocal || 
+                                                            index < 0 || 
+                                                            index >= filaTotal.columnasLocal.length) {
+                                                            return Text.AlignCenter
+                                                        }
+                                                        
+                                                        var columna = filaTotal.columnasLocal[index]
                                                         var campoColumna = columna.campo
                                                         
                                                         if (campoColumna === "valor") {
@@ -987,8 +1017,10 @@ Item {
                                                         } else if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
                                                             return Text.AlignRight
                                                         } else if (tipoReporteSeleccionado === 1 && campoColumna === "usuario") {
-                                                            return Text.AlignRight  // ✅ CAMBIO: VENDEDOR ahora alineado a la derecha para "TOTAL GENERAL:"
-                                                        } else if (tipoReporteSeleccionado !== 7 && tipoReporteSeleccionado !== 1 && index === parent.parent.parent.todasLasColumnas.length - 2) {
+                                                            return Text.AlignRight
+                                                        } else if (tipoReporteSeleccionado !== 7 && 
+                                                                tipoReporteSeleccionado !== 1 && 
+                                                                index === filaTotal.columnasLocal.length - 2) {
                                                             return Text.AlignRight
                                                         } else {
                                                             return Text.AlignCenter
