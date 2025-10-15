@@ -226,6 +226,12 @@ class InventarioModel(QObject):
     def total_alertas(self):
         """Total de alertas"""
         return len(self._alertas)
+
+    @Property(list, notify=marcasChanged)
+    def marcasDisponibles(self):
+        """Property para marcas disponibles - REQUERIDA por QML"""
+        return self._marcas
+
     
     # ===============================
     # SLOTS PARA QML - CONSULTAS (SIN VERIFICACIÓN - LECTURA)
@@ -279,8 +285,7 @@ class InventarioModel(QObject):
     @Slot(str, result=bool)
     def crear_marca_desde_qml(self, nombre_marca: str) -> bool:
         """
-        Crea una nueva marca desde QML
-        Llamado por MarcaComboBox cuando el usuario crea una marca
+        Crea una nueva marca desde QML - CORREGIDO
         """
         try:
             print(f"🏷️ Creando marca desde QML: '{nombre_marca}'")
@@ -291,14 +296,28 @@ class InventarioModel(QObject):
                 self.operacionError.emit("El nombre debe tener al menos 2 caracteres")
                 return False
             
+            # Verificar si ya existe
+            for marca in self._marcas:
+                if marca['Nombre'].lower() == nombre_marca.strip().lower():
+                    print(f"⚠️ Marca '{nombre_marca}' ya existe")
+                    self.operacionError.emit(f"La marca '{nombre_marca}' ya existe")
+                    return False
+            
+            # ✅ CORRECCIÓN: Usar producto_repo para crear la marca
+            if not self.producto_repo:
+                print("❌ ProductoRepository no disponible")
+                self.operacionError.emit("Error: Sistema no disponible")
+                return False
+            
             # Crear marca en BD
-            exito = self.repository.crear_marca(nombre_marca.strip())
+            exito = self.producto_repo.crear_marca(nombre_marca.strip())
             
             if exito:
                 print(f"✅ Marca '{nombre_marca}' creada exitosamente")
                 
                 # Refrescar lista de marcas
-                self.refresh_marcas()
+                self._marcas = self._cargar_marcas() or []
+                self.marcasChanged.emit()
                 
                 # Emitir señal de éxito
                 self.operacionExitosa.emit(f"Marca '{nombre_marca}' creada")
@@ -314,7 +333,17 @@ class InventarioModel(QObject):
             import traceback
             traceback.print_exc()
             self.operacionError.emit(f"Error inesperado: {str(e)}")
-            return False
+        return False
+
+    @Slot()
+    def refresh_marcas(self):
+        """Refresca la lista de marcas disponibles"""
+        try:
+            self._marcas = self._cargar_marcas() or []
+            self.marcasChanged.emit()
+            print(f"🔄 Marcas refrescadas: {len(self._marcas)}")
+        except Exception as e:
+            print(f"❌ Error refrescando marcas: {e}")
         
     @Slot(str)
     def buscar_productos(self, termino: str):
@@ -1123,18 +1152,21 @@ class InventarioModel(QObject):
     
     @Slot(result='QVariant')
     def get_marcas_disponibles(self):
-        """Obtiene lista de marcas disponibles para productos - SIN VERIFICACIÓN (solo lectura)"""
+        """Obtiene lista de marcas disponibles - CORREGIDO"""
         try:
-            # Asegurar que las marcas estén actualizadas
-            marcas = self._cargar_marcas() or []
+            # Si ya tenemos marcas cargadas, devolverlas
+            if self._marcas and len(self._marcas) > 0:
+                print(f"🏷️ Marcas disponibles desde cache: {len(self._marcas)}")
+                return self._marcas
             
-            # Actualizar marcas internas si es necesario
-            if marcas:
-                self._marcas = marcas
-                self.marcasChanged.emit()
+            # Si no, cargarlas
+            print("🔄 Cargando marcas desde BD...")
+            self._marcas = self._cargar_marcas() or []
+            self.marcasChanged.emit()
             
-            print(f"🏷️ Marcas disponibles: {len(marcas)}")
-            return marcas
+            print(f"🏷️ Marcas cargadas: {len(self._marcas)}")
+            return self._marcas
+            
         except Exception as e:
             print(f"❌ Error obteniendo marcas: {e}")
             self.operacionError.emit(f"Error obteniendo marcas: {str(e)}")
@@ -1370,12 +1402,12 @@ class InventarioModel(QObject):
             self._set_loading(False)
     
     def _cargar_marcas(self):
-        """Carga lista de marcas"""
+        """Carga lista de marcas - CORREGIDO"""
         try:
             query = "SELECT * FROM Marca ORDER BY Nombre"
             marcas_raw = self.producto_repo._execute_query(query) or []
             
-            # Normalizar marcas para QML
+            # Normalizar marcas para QML con estructura consistente
             marcas_normalizadas = []
             for marca in marcas_raw:
                 marca_normalizada = {
