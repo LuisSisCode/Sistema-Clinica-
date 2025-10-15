@@ -542,7 +542,6 @@ class InventarioModel(QObject):
     def crear_producto(self, producto_json: str):
         """
         Crea un nuevo producto desde QML CON PRIMER LOTE (opcional si stock > 0)
-        
         Args:
             producto_json: JSON string con datos del producto + primer lote
         """
@@ -582,23 +581,38 @@ class InventarioModel(QObject):
             if producto_existente:
                 raise ValueError(f"El código {codigo_producto} ya existe")
             
-            # Obtener ID de marca - CORREGIDO
-            id_marca = datos.get('id_marca')
+            # ✅ CORRECCIÓN MEJORADA: Manejo explícito de marca
+            id_marca = datos.get('id_marca', 0)
             marca_nombre = datos.get('marca', '')
             
-            print(f"🏷️ Procesando marca - ID: {id_marca}, Nombre: {marca_nombre}")
+            print(f"🏷️ Procesando marca - ID recibido: {id_marca}, Nombre: {marca_nombre}")
+
+            # CASO 1: Ya tenemos un ID de marca válido (cuando se creó nueva marca)
+            if id_marca and id_marca > 0:
+                print(f"✅ Usando ID de marca existente: {id_marca}")
+                # Verificar que la marca existe en la base de datos
+                marca_valida = False
+                try:
+                    marca_valida = any(m['id'] == id_marca for m in self._marcas)
+                except Exception:
+                    marca_valida = False
+                if not marca_valida:
+                    print(f"⚠️ Marca ID {id_marca} no existe, usando marca por defecto")
+                    id_marca = 1
             
-            # ✅ CORRECCIÓN: Si tenemos ID de marca, usarlo directamente
-            # Si no, intentar obtener por nombre
-            if not id_marca or id_marca <= 0:
-                if marca_nombre:
-                    id_marca = self._obtener_id_marca(marca_nombre)
-                else:
-                    id_marca = 1  # Marca por defecto
-                    print("⚠️ Usando marca por defecto (GENÉRICO)")
+            # CASO 2: No tenemos ID pero tenemos nombre (marca existente)
+            elif marca_nombre and marca_nombre.strip():
+                print(f"🔍 Buscando marca por nombre: '{marca_nombre}'")
+                id_marca = self._obtener_id_marca(marca_nombre.strip())
+                print(f"✅ Marca encontrada: ID {id_marca}")
             
-            print(f"✅ Usando marca ID: {id_marca}")
-            
+            # CASO 3: Sin marca especificada
+            else:
+                print("⚠️ No se especificó marca, usando marca por defecto")
+                id_marca = 1
+
+            print(f"🎯 Usando marca final - ID: {id_marca}")
+
             # Preparar datos del producto
             datos_producto = {
                 'Codigo': codigo_producto,
@@ -607,7 +621,7 @@ class InventarioModel(QObject):
                 'Precio_compra': float(datos['precio_compra']),
                 'Precio_venta': float(datos['precio_venta']),
                 'Unidad_Medida': datos.get('unidad_medida', 'Tabletas'),
-                'ID_Marca': id_marca,  # ✅ Usar ID directamente
+                'ID_Marca': id_marca,
                 'Fecha_Venc': self._procesar_fecha_vencimiento(fecha_vencimiento)
             }
             
@@ -1848,6 +1862,16 @@ class InventarioModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión InventarioModel: {e}")
+
+    def _verificar_marca_existe(self, marca_id: int) -> bool:
+        """Verifica si una marca existe en la base de datos"""
+        try:
+            query = "SELECT id FROM Marca WHERE id = ?"
+            resultado = self.producto_repo._execute_query(query, (marca_id,), fetch_one=True)
+            return resultado is not None and 'id' in resultado
+        except Exception as e:
+            print(f"❌ Error verificando marca ID {marca_id}: {e}")
+            return False
 
 # Registrar el tipo para QML
 def register_inventario_model():
