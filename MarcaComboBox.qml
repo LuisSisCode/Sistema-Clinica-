@@ -783,18 +783,25 @@ Item {
         })
     }
 
+
     function forzarSeleccion(marcaId, nombreMarca) {
+        console.log("🎯 Forzando selección - ID:", marcaId, "Nombre:", nombreMarca)
+        
         cargandoProgramaticamente = true
+        
+        // Actualizar propiedades internas
         marcaSeleccionada = nombreMarca || ""
         marcaIdSeleccionada = marcaId || 0
         searchField.text = nombreMarca || ""
         
+        // Emitir señal inmediatamente
         if (marcaId > 0 && nombreMarca) {
             marcaCambiada(nombreMarca, marcaId)
         }
         
         Qt.callLater(function() {
             cargandoProgramaticamente = false
+            console.log("✅ Selección forzada completada")
         })
-}
+    }
 }

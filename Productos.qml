@@ -1895,11 +1895,13 @@ Item {
                 forceActiveFocus()
             }
         }
+        
+        // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN - MEJORADO
         Dialog {
             id: confirmarEliminacionDialog
             anchors.centerIn: parent
             width: Math.min(400, parent.width * 0.8)
-            height: Math.min(250, parent.height * 0.6)
+            height: Math.min(350, parent.height * 0.6)
             modal: true
             visible: false
             z: 1500
@@ -2034,7 +2036,7 @@ Item {
                 
                 Item { Layout.fillHeight: true }
                 
-                // Botones
+                // Botones - CENTRADOS Y MEJOR DISEÑO
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
@@ -2062,7 +2064,7 @@ Item {
                         
                         onClicked: {
                             confirmarEliminacionDialog.close()
-                            productoAEliminar = null
+                            confirmarEliminacionDialog.productoAEliminar = null
                         }
                     }
                     
@@ -2093,6 +2095,8 @@ Item {
                             confirmarEliminacionDialog.productoAEliminar = null 
                         }
                     }
+                    
+                    Item { Layout.fillWidth: true }
                 }
             }
         }

@@ -589,14 +589,11 @@ Dialog {
     }
     
     function cargarDatosProducto() {
-        if (!productoData) {
-            console.log("❌ No hay datos de producto para cargar")
-            return
-        }
+        if (!productoData) return;
         
         console.log("📋 Cargando datos del producto:", JSON.stringify(productoData))
         
-        // ✅ ASIGNAR VALORES A LAS PROPIEDADES
+        // Asignar otras propiedades del producto
         inputProductCode = productoData.codigo || ""
         inputProductName = productoData.nombre || ""
         inputProductDetails = productoData.detalles || ""
@@ -604,85 +601,53 @@ Dialog {
         inputSalePrice = productoData.precio_venta || 0
         inputMeasureUnit = productoData.unidad_medida || "Tabletas"
         
-        // ✅ ASIGNAR VALORES A LOS CAMPOS DE TEXTO (sin marca todavía)
         if (codigoField) codigoField.text = inputProductCode
         if (nombreField) nombreField.text = inputProductName
         if (detallesField) detallesField.text = inputProductDetails
         if (precioCompraField) precioCompraField.text = inputPurchasePrice.toString()
         if (precioVentaField) precioVentaField.text = inputSalePrice.toString()
         
-        // ✅ ESTABLECER COMBOBOX DE UNIDAD
         if (unidadCombo) {
             var unidadIndex = unidadCombo.model.indexOf(inputMeasureUnit)
             if (unidadIndex >= 0) {
                 unidadCombo.currentIndex = unidadIndex
             }
         }
-        
-        // ✅ CARGAR MARCA - ENFOQUE MEJORADO
+
+        // ✅ CORRECCIÓN MEJORADA: Carga de marca en edición
         var marcaCargada = false
         
+        // PRIORIDAD 1: Usar ID_Marca si está disponible
         if (productoData.ID_Marca || productoData.id_marca) {
             var marcaId = productoData.ID_Marca || productoData.id_marca
+            var marcaNombre = productoData.Marca_Nombre || productoData.marca || ""
+            
+            console.log("🔍 Cargando marca por ID:", marcaId, "Nombre:", marcaNombre)
+            
             marcaIdSeleccionada = marcaId
-            marcaSeleccionadaNombre = productoData.marca || ""
+            marcaSeleccionadaNombre = marcaNombre
             
-            console.log("🔍 Buscando marca por ID:", marcaId)
-            
-            // Buscar en las marcas disponibles
-            if (marcasModel && marcasModel.length > 0) {
-                for (var i = 0; i < marcasModel.length; i++) {
-                    var marca = marcasModel[i]
-                    if (marca.id === marcaId) {
-                        marcaSeleccionadaNombre = marca.nombre || marca.Nombre
-                        console.log("✅ Marca encontrada por ID:", marcaSeleccionadaNombre, "ID:", marcaId)
-                        marcaCargada = true
-                        break
-                    }
-                }
-            }
-            
-            // Establecer en el ComboBox después de un breve delay
-            if (marcaComboBox && marcaCargada) {
+            // Establecer en ComboBox inmediatamente
+            if (marcaComboBox) {
                 Qt.callLater(function() {
-                    marcaComboBox.setMarcaById(marcaId)
-                    console.log("🎯 Marca establecida en ComboBox: ID", marcaId)
+                    marcaComboBox.forzarSeleccion(marcaId, marcaNombre)
                 })
             }
-        } 
-        
-        // Fallback: buscar por nombre si no se encontró por ID
-        if (!marcaCargada && productoData.marca) {
-            console.log("⚠️ Solo nombre de marca disponible, buscando ID...")
-            marcaSeleccionadaNombre = productoData.marca
             
-            if (marcasModel && marcasModel.length > 0) {
-                for (var j = 0; j < marcasModel.length; j++) {
-                    var marcaItem = marcasModel[j]
-                    var nombreMarca = marcaItem.nombre || marcaItem.Nombre
-                    if (nombreMarca === productoData.marca) {
-                        marcaIdSeleccionada = marcaItem.id
-                        marcaCargada = true
-                        
-                        if (marcaComboBox) {
-                            Qt.callLater(function() {
-                                marcaComboBox.setMarcaById(marcaItem.id)
-                            })
-                        }
-                        console.log("✅ Marca encontrada por nombre:", nombreMarca, "ID:", marcaItem.id)
-                        break
-                    }
-                }
-            }
+            marcaCargada = true
+            console.log("✅ Marca cargada por ID:", marcaId, marcaNombre)
+        }
+        
+        // PRIORIDAD 2: Si no se pudo cargar por ID, intentar por nombre
+        if (!marcaCargada && productoData.marca) {
+            console.log("🔍 Intentando cargar marca por nombre:", productoData.marca)
+            // Aquí el ComboBox debería encontrar la marca por nombre cuando se carguen las marcas
+            marcaSeleccionadaNombre = productoData.marca
         }
         
         if (!marcaCargada) {
             console.log("⚠️ No se pudo cargar la marca del producto")
-            marcaIdSeleccionada = 0
-            marcaSeleccionadaNombre = ""
         }
-        
-        console.log("✅ Datos cargados en el formulario - Marca ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
     }
 
     // Header personalizado
@@ -935,34 +900,35 @@ Dialog {
                                     console.log("🆕 Solicitando crear marca:", nombreMarca)
                                     
                                     if (inventarioModel) {
-                                        // Llamar al método en Python
-                                        var exito = inventarioModel.crear_marca_desde_qml(nombreMarca)
+                                        // Llamar método Python - RETORNA ID DIRECTAMENTE
+                                        var nuevaMarcaId = inventarioModel.crear_marca_desde_qml(nombreMarca)
                                         
-                                        if (exito) {
-                                            console.log("✅ Marca creada exitosamente")
+                                        console.log("🔍 Resultado crear_marca_desde_qml - ID:", nuevaMarcaId)
+                                        
+                                        if (nuevaMarcaId > 0) {
+                                            console.log("✅ Nueva marca creada con ID:", nuevaMarcaId)
                                             
-                                            // Esperar un momento para que se actualice la lista
+                                            // ✅ CORRECCIÓN: USAR EL ID DIRECTAMENTE SIN BUSCAR
+                                            marcaIdSeleccionada = nuevaMarcaId
+                                            marcaSeleccionadaNombre = nombreMarca
+                                            
+                                            // Actualizar ComboBox inmediatamente
+                                            if (marcaComboBox) {
+                                                marcaComboBox.forzarSeleccion(nuevaMarcaId, nombreMarca)
+                                            }
+                                            
+                                            // Recargar lista de marcas en background (para futuras selecciones)
                                             Qt.callLater(function() {
-                                                // Buscar la marca recién creada y seleccionarla
-                                                var marcas = inventarioModel.marcasDisponibles
-                                                if (marcas && marcas.length > 0) {
-                                                    for (var i = 0; i < marcas.length; i++) {
-                                                        if (marcas[i].nombre.toLowerCase() === nombreMarca.toLowerCase()) {
-                                                            console.log("🎯 Seleccionando marca recién creada ID:", marcas[i].id)
-                                                            marcaComboBox.setMarcaById(marcas[i].id)
-                                                            
-                                                            // ✅ FORZAR ACTUALIZACIÓN DE PROPIEDADES
-                                                            crearProductoDialog.marcaIdSeleccionada = marcas[i].id
-                                                            crearProductoDialog.marcaSeleccionadaNombre = marcas[i].nombre
-                                                            console.log("🔄 Propiedades forzadas - ID:", crearProductoDialog.marcaIdSeleccionada, 
-                                                                       "Nombre:", crearProductoDialog.marcaSeleccionadaNombre)
-                                                            break
-                                                        }
-                                                    }
-                                                }
+                                                cargarMarcasDisponibles()
                                             })
+                                            
+                                            showMessage("Marca creada: " + nombreMarca)
+                                            
+                                        } else if (nuevaMarcaId === 0) {
+                                            showError("Ya existe una marca con ese nombre")
                                         } else {
                                             console.log("❌ Error creando marca")
+                                            showError("Error al crear la marca en la base de datos")
                                         }
                                     } else {
                                         console.log("❌ InventarioModel no disponible")

@@ -775,13 +775,10 @@ class ProductoRepository(BaseRepository):
 
     def crear_marca(self, nombre_marca: str) -> int:
         """
-        Crea una nueva marca en la base de datos - CORREGIDO - Retorna ID
-        
-        Returns:
-            int: ID de la marca creada, 0 si ya existe, -1 si error
+        Crea una nueva marca en la base de datos - VERSIÓN MEJORADA
         """
         try:
-            print(f"🔍 Creando marca en BD: {nombre_marca}")
+            print(f"🏷️ Creando marca: '{nombre_marca}'")
             
             # Validar nombre
             if not nombre_marca or len(nombre_marca.strip()) < 2:
@@ -790,7 +787,7 @@ class ProductoRepository(BaseRepository):
             
             nombre_limpio = nombre_marca.strip()
             
-            # Verificar si ya existe
+            # Verificar si ya existe (case-insensitive)
             marca_existente = self._execute_query(
                 "SELECT id FROM Marca WHERE LOWER(Nombre) = LOWER(?)", 
                 (nombre_limpio,), 
@@ -800,9 +797,9 @@ class ProductoRepository(BaseRepository):
             
             if marca_existente:
                 print(f"⚠️ Marca '{nombre_limpio}' ya existe con ID: {marca_existente['id']}")
-                return 0  # Indicar que ya existe (no es error, pero no se creó)
+                return 0  # Ya existe
             
-            # Crear nueva marca con OUTPUT para obtener ID
+            # Crear nueva marca
             conn = None
             try:
                 conn = self._get_connection()
@@ -817,16 +814,14 @@ class ProductoRepository(BaseRepository):
                 
                 cursor.execute(query, (nombre_limpio, f"Marca creada automáticamente"))
                 
-                # Obtener ID insertado
                 resultado = cursor.fetchone()
                 if not resultado:
                     raise Exception("No se pudo obtener el ID de la marca creada")
                 
                 nueva_marca_id = resultado[0]
-                
                 conn.commit()
                 
-                # Invalidar caché
+                # Invalidar caché de marcas
                 self._invalidate_cache_after_modification()
                 
                 print(f"✅ Marca '{nombre_limpio}' creada con ID: {nueva_marca_id}")
@@ -843,6 +838,5 @@ class ProductoRepository(BaseRepository):
                     
         except Exception as e:
             print(f"❌ Error creando marca: {e}")
-            import traceback
             traceback.print_exc()
             return -1
