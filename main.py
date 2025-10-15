@@ -33,6 +33,34 @@ from backend.models.ingreso_extra_model import IngresoExtraModel, register_ingre
 
 from setup_handler import SetupHandler
 from backend.core.config_manager import ConfigManager
+
+def get_resource_path(relative_path):
+    """
+    Obtiene la ruta correcta de recursos tanto en desarrollo como en ejecutable
+    Busca en múltiples ubicaciones para mayor compatibilidad
+    """
+    # Si está ejecutando desde PyInstaller
+    if getattr(sys, 'frozen', False):
+        # Ejecutable compilado
+        base_path = sys._MEIPASS
+        
+        # Intentar múltiples rutas
+        possible_paths = [
+            os.path.join(base_path, '_internal', relative_path),  # ✅ NUEVO
+            os.path.join(base_path, relative_path),
+            os.path.join(os.path.dirname(sys.executable), relative_path),
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+        
+        # Si no encuentra, usar la primera opción
+        return possible_paths[0]
+    else:
+        # Desarrollo normal
+        return os.path.join(os.path.dirname(__file__), relative_path)
+
 class NotificationWorker(QObject):
     finished = Signal(str, str)
     
@@ -1651,7 +1679,7 @@ class AuthAppController(QObject):
             root_context.setContextProperty("authModel", self.auth_model)
             
             # Cargar login.qml
-            login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
+            login_qml = get_resource_path("login.qml")
             self.login_engine.load(QUrl.fromLocalFile(login_qml))
             
             # Verificar que se cargó correctamente
@@ -1682,7 +1710,7 @@ class AuthAppController(QObject):
             root_context.setContextProperty("authController", self)
             
             # Cargar setup_wizard.qml
-            setup_qml = os.path.join(os.path.dirname(__file__), "setup_wizard.qml")
+            setup_qml = get_resource_path("setup_wizard.qml")
             
             if not os.path.exists(setup_qml):
                 print(f"❌ Error: setup_wizard.qml no encontrado: {setup_qml}")
@@ -1756,7 +1784,7 @@ class AuthAppController(QObject):
             root_context.setContextProperty("authController", self)
             
             # PASO 5: Cargar main.qml
-            main_qml = os.path.join(os.path.dirname(__file__), "main.qml")
+            main_qml = get_resource_path("main.qml")
             self.main_engine.load(QUrl.fromLocalFile(main_qml))
             
             # PASO 6: Verificar que se cargó correctamente
@@ -1995,7 +2023,7 @@ def main():
             login_engine = QQmlApplicationEngine()
             setup_qml_context(login_engine, auth_controller)
             
-            login_qml = os.path.join(os.path.dirname(__file__), "login.qml")
+            login_qml = get_resource_path("login.qml")
             if not os.path.exists(login_qml):
                 print(f"❌ Archivo login.qml no encontrado: {login_qml}")
                 return -1

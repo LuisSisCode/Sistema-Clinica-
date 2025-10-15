@@ -852,51 +852,43 @@ Dialog {
                             MarcaComboBox {
                                 id: marcaComboBox
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                
-                                // Pasar modelo de marcas
-                                marcasModel: {
-                                    var marcasFormateadas = []
-                                    for (var i = 0; i < crearProductoDialog.marcasModel.length; i++) {
-                                        var marca = crearProductoDialog.marcasModel[i]
-                                        marcasFormateadas.push({
-                                            id: marca.id,
-                                            nombre: marca.Nombre || marca.nombre,
-                                            detalles: marca.Detalles || marca.detalles || ""
-                                        })
-                                    }
-                                    return marcasFormateadas
-                                }
-                                
-                                placeholderText: "Buscar o crear marca..."
+                                marcasModel: inventarioModel ? inventarioModel.marcasDisponibles : []
                                 required: true
                                 
-                                // Colores adaptados al diseño
-                                primaryColor: crearProductoDialog.primaryBlue
-                                successColor: crearProductoDialog.successGreen
-                                dangerColor: crearProductoDialog.dangerRed
-                                lightGray: crearProductoDialog.grayLight
-                                darkGray: crearProductoDialog.grayMedium
-                                
-                                // Cuando se selecciona una marca existente
                                 onMarcaCambiada: function(marca, marcaId) {
-                                    console.log("🏷️ MARCA CAMBIADA - Nombre:", marca, "ID:", marcaId)
-                                    
-                                    // ✅ ASIGNACIÓN DIRECTA E INMEDIATA
-                                    crearProductoDialog.marcaIdSeleccionada = marcaId
-                                    crearProductoDialog.marcaSeleccionadaNombre = marca
-                                    crearProductoDialog.inputMarca = marca
-                                    
-                                    // Verificación inmediata
-                                    console.log("🔍 Verificación inmediata:")
-                                    console.log("  - marcaIdSeleccionada:", crearProductoDialog.marcaIdSeleccionada)
-                                    console.log("  - Validación:", crearProductoDialog.calcularValidacion())
+                                    console.log("✅ Marca seleccionada:", marca, "ID:", marcaId)
+                                    selectedMarcaId = marcaId
                                 }
                                 
-                                // Cuando se solicita crear una nueva marca
+                                // ✅ AGREGAR ESTA CONEXIÓN:
                                 onNuevaMarcaCreada: function(nombreMarca) {
-                                    console.log("➕ Solicitando crear nueva marca:", nombreMarca)
-                                    crearNuevaMarcaEnBackend(nombreMarca)
+                                    console.log("🆕 Solicitando crear marca:", nombreMarca)
+                                    
+                                    if (inventarioModel) {
+                                        // Llamar al método en Python
+                                        var exito = inventarioModel.crear_marca_desde_qml(nombreMarca)
+                                        
+                                        if (exito) {
+                                            console.log("✅ Marca creada exitosamente")
+                                            
+                                            // Esperar un momento para que se actualice la lista
+                                            Qt.callLater(function() {
+                                                // Buscar la marca recién creada y seleccionarla
+                                                var marcas = inventarioModel.marcasDisponibles
+                                                for (var i = 0; i < marcas.length; i++) {
+                                                    if (marcas[i].nombre.toLowerCase() === nombreMarca.toLowerCase()) {
+                                                        console.log("🎯 Seleccionando marca recién creada ID:", marcas[i].id)
+                                                        marcaComboBox.setMarcaById(marcas[i].id)
+                                                        break
+                                                    }
+                                                }
+                                            })
+                                        } else {
+                                            console.log("❌ Error creando marca")
+                                        }
+                                    } else {
+                                        console.log("❌ InventarioModel no disponible")
+                                    }
                                 }
                             }
                         }

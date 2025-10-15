@@ -753,3 +753,34 @@ class ProductoRepository(BaseRepository):
         finally:
             if conn:
                 conn.close()
+
+    def crear_marca(self, nombre_marca: str) -> bool:
+        """Crea una nueva marca en la base de datos"""
+        try:
+            print(f"📝 Creando marca en BD: {nombre_marca}")
+            
+            cursor = self._execute_query(
+                """
+                INSERT INTO Marca (Nombre) 
+                VALUES (?)
+                """,
+                (nombre_marca,)
+            )
+            
+            if cursor and cursor.rowcount > 0:
+                cursor.commit()
+                
+                # Invalidar caché de marcas
+                self.cache_manager.invalidate('marcas')
+                
+                print(f"✅ Marca '{nombre_marca}' creada con éxito")
+                return True
+            else:
+                print(f"❌ No se pudo crear la marca '{nombre_marca}'")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error creando marca: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
