@@ -1,65 +1,99 @@
-# main.py - VERSIÃ“N FUSIONADA Y COMPLETA
+# main.py - VERSIÓN CORREGIDA PARA EJECUTABLE
+"""
+✅ MEJORAS APLICADAS:
+1. Sistema de logging a archivo (funciona con console=False)
+2. Validación temprana de recursos
+3. MessageBox de error para casos críticos
+4. Try-catch global con manejo robusto
+5. Get_resource_path mejorado
+"""
+
 import sys
 import os
 import gc
-from PySide6.QtCore import QObject, Signal, Slot, QUrl, QTimer, Property, QSettings, QDateTime
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtQml import QQmlApplicationEngine
+import logging
+from pathlib import Path
 
-from generar_pdf import GeneradorReportesPDF
+# ============================================
+# ✅ PASO 0: CONFIGURAR LOGGING ANTES DE TODO
+# ============================================
+from logger_config import setup_logger, log_exception, redirect_prints_to_logger
+from resource_validator import (
+    get_resource_path,
+    validate_all_resources, 
+    show_error_message,
+    list_available_files
+)
 
-# IMPORTAR MODELS QOBJECT
-from backend.models.inventario_model import InventarioModel, register_inventario_model
-from backend.models.venta_model import VentaModel, register_venta_model
-from backend.models.compra_model import CompraModel, register_compra_model
-from backend.models.proveedor_model import ProveedorModel, register_proveedor_model
-from backend.models.usuario_model import UsuarioModel, register_usuario_model
-from backend.models.consulta_model import ConsultaModel, register_consulta_model
-from backend.models.gasto_model import GastoModel, register_gasto_model
-from backend.models.paciente_model import PacienteModel, register_paciente_model
-from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
-from backend.models.trabajador_model import TrabajadorModel, register_trabajador_model
-from backend.models.enfermeria_model import EnfermeriaModel, register_enfermeria_model
-from backend.models.reportes_model import ReportesModel, register_reportes_model
-from backend.models.dashboard_model import DashboardModel, register_dashboard_model
-from backend.models.ConfiguracionModel.ConfiServiciosbasicos_model import ConfiguracionModel, register_configuracion_model
-from backend.models.ConfiguracionModel.ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
-from backend.models.ConfiguracionModel.ConfiEnfermeria_model import ConfiEnfermeriaModel, register_confi_enfermeria_model
-from backend.models.ConfiguracionModel.ConfiConsulta_model import ConfiConsultaModel, register_confi_consulta_model
-from backend.models.ConfiguracionModel.ConfiTrabajadores_model import ConfiTrabajadoresModel, register_confi_trabajadores_model
-from backend.models.auth_model import AuthModel, register_auth_model
-from backend.models.cierre_caja_model import CierreCajaModel, register_cierre_caja_model
-from backend.models.ingreso_extra_model import IngresoExtraModel, register_ingreso_extra_model
+# Configurar logger ANTES de cualquier otra cosa
+logger = setup_logger("ClinicaApp")
 
-from setup_handler import SetupHandler
-from backend.core.config_manager import ConfigManager
+# Redirigir print() a logger si es ejecutable
+redirect_prints_to_logger(logger)
 
-def get_resource_path(relative_path):
-    """
-    Obtiene la ruta correcta de recursos tanto en desarrollo como en ejecutable
-    Busca en múltiples ubicaciones para mayor compatibilidad
-    """
-    # Si está ejecutando desde PyInstaller
-    if getattr(sys, 'frozen', False):
-        # Ejecutable compilado
-        base_path = sys._MEIPASS
-        
-        # Intentar múltiples rutas
-        possible_paths = [
-            os.path.join(base_path, '_internal', relative_path),  # ✅ NUEVO
-            os.path.join(base_path, relative_path),
-            os.path.join(os.path.dirname(sys.executable), relative_path),
-        ]
-        
-        for path in possible_paths:
-            if os.path.exists(path):
-                return path
-        
-        # Si no encuentra, usar la primera opción
-        return possible_paths[0]
-    else:
-        # Desarrollo normal
-        return os.path.join(os.path.dirname(__file__), relative_path)
+logger.info("🚀 Iniciando aplicación...")
+
+# Imports de Qt
+try:
+    from PySide6.QtCore import QObject, Signal, Slot, QUrl, QTimer, Property, QSettings, QDateTime
+    from PySide6.QtGui import QGuiApplication, QIcon
+    from PySide6.QtQml import QQmlApplicationEngine
+    from PySide6.QtWidgets import QMessageBox, QApplication
+    logger.info("✅ Imports de Qt exitosos")
+except Exception as e:
+    logger.error(f"❌ Error importando Qt: {e}")
+    show_error_message(
+        "Error de Importación",
+        "No se pudieron cargar las librerías de Qt.\n\nReinstala la aplicación.",
+        str(e)
+    )
+    sys.exit(1)
+
+# Imports del proyecto
+try:
+    from generar_pdf import GeneradorReportesPDF
+    
+    # IMPORTAR MODELS QOBJECT
+    from backend.models.inventario_model import InventarioModel, register_inventario_model
+    from backend.models.venta_model import VentaModel, register_venta_model
+    from backend.models.compra_model import CompraModel, register_compra_model
+    from backend.models.proveedor_model import ProveedorModel, register_proveedor_model
+    from backend.models.usuario_model import UsuarioModel, register_usuario_model
+    from backend.models.consulta_model import ConsultaModel, register_consulta_model
+    from backend.models.gasto_model import GastoModel, register_gasto_model
+    from backend.models.paciente_model import PacienteModel, register_paciente_model
+    from backend.models.laboratorio_model import LaboratorioModel, register_laboratorio_model
+    from backend.models.trabajador_model import TrabajadorModel, register_trabajador_model
+    from backend.models.enfermeria_model import EnfermeriaModel, register_enfermeria_model
+    from backend.models.reportes_model import ReportesModel, register_reportes_model
+    from backend.models.dashboard_model import DashboardModel, register_dashboard_model
+    from backend.models.ConfiguracionModel.ConfiServiciosbasicos_model import ConfiguracionModel, register_configuracion_model
+    from backend.models.ConfiguracionModel.ConfiLaboratorio_model import ConfiLaboratorioModel, register_confi_laboratorio_model
+    from backend.models.ConfiguracionModel.ConfiEnfermeria_model import ConfiEnfermeriaModel, register_confi_enfermeria_model
+    from backend.models.ConfiguracionModel.ConfiConsulta_model import ConfiConsultaModel, register_confi_consulta_model
+    from backend.models.ConfiguracionModel.ConfiTrabajadores_model import ConfiTrabajadoresModel, register_confi_trabajadores_model
+    from backend.models.auth_model import AuthModel, register_auth_model
+    from backend.models.cierre_caja_model import CierreCajaModel, register_cierre_caja_model
+    from backend.models.ingreso_extra_model import IngresoExtraModel, register_ingreso_extra_model
+    
+    from setup_handler import SetupHandler
+    from backend.core.config_manager import ConfigManager
+    
+    logger.info("✅ Imports del proyecto exitosos")
+    
+except Exception as e:
+    log_exception(logger, e, "Importando módulos del proyecto")
+    show_error_message(
+        "Error de Importación",
+        "No se pudieron cargar los módulos del sistema.\n\nVerifica la instalación.",
+        str(e)
+    )
+    sys.exit(1)
+
+
+# ============================================
+# ✅ CLASE AppController (CON LOGGING)
+# ============================================
 
 class NotificationWorker(QObject):
     finished = Signal(str, str)
@@ -71,12 +105,14 @@ class NotificationWorker(QObject):
     def process_notification(self, title, message):
         self.finished.emit(title, message)
 
+
 class AppController(QObject):
     modelsReady = Signal()
     notificationProcessed = Signal(str, str)
     
     def __init__(self):
         super().__init__()
+        logger.info("📦 Inicializando AppController...")
         
         self.notification_worker = NotificationWorker()
         self.notification_worker.finished.connect(self.notificationProcessed)
@@ -84,7 +120,7 @@ class AppController(QObject):
         # INICIALIZAR GENERADOR DE PDF
         self.pdf_generator = GeneradorReportesPDF()
         
-        # MODELS QOBJECT - Se inicializarÃ¡n despuÃ©s
+        # MODELS QOBJECT - Se inicializarán después
         self.inventario_model = None
         self.venta_model = None
         self.compra_model = None
@@ -107,11 +143,13 @@ class AppController(QObject):
         self.cierre_caja_model = None
         self.ingreso_extra_model = None
         
-        # Usuario autenticado - SIMPLIFICADO
+        # Usuario autenticado
         self._usuario_autenticado_id = 0
         self._usuario_autenticado_nombre = ""
         self._usuario_autenticado_rol = ""
         self._is_shutting_down = False
+        
+        logger.info("✅ AppController inicializado")
 
     # Propiedades para usuario autenticado
     usuarioChanged = Signal()
@@ -128,7 +166,7 @@ class AppController(QObject):
     def initialize_models(self):
         """Inicializa todos los models QObject"""
         try:
-            print("ðŸ—‚ï¸ Creando instancias de modelos...")
+            logger.info("🔄 Creando instancias de modelos...")
             
             # Crear instancias de models
             self.auth_model = AuthModel() 
@@ -154,16 +192,15 @@ class AppController(QObject):
             self.cierre_caja_model = CierreCajaModel()
             self.ingreso_extra_model = IngresoExtraModel()
 
-
-            print("ðŸ”— Conectando signals entre modelos...")
+            logger.info("🔗 Conectando signals entre modelos...")
             # Conectar signals entre models
             self._connect_models()
             
-            print("âœ… Modelos inicializados correctamente")
+            logger.info("✅ Modelos inicializados correctamente")
             self.modelsReady.emit()
             
         except Exception as e:
-            print(f"âŒ Error inicializando models: {e}")
+            logger.error(f"❌ Error inicializando models: {e}")
             import traceback
             traceback.print_exc()
 
@@ -175,41 +212,42 @@ class AppController(QObject):
     @Slot()
     def emergency_shutdown(self):
         """
-        Sistema de shutdown de emergencia - VERSIÃ“N SEGURA
-        NO destruye modelos si estÃ¡n en operaciÃ³n activa
+        Sistema de shutdown de emergencia - VERSIÓN SEGURA
+        NO destruye modelos si están en operación activa
         """
         try:
-            print("ðŸ”´ EMERGENCY SHUTDOWN INICIADO")
+            logger.warning("🛑 EMERGENCY SHUTDOWN INICIADO")
             
-            # âœ… MARCAR QUE ESTAMOS EN SHUTDOWN INMEDIATAMENTE
+            # ✅ MARCAR QUE ESTAMOS EN SHUTDOWN INMEDIATAMENTE
             self._is_shutting_down = True
             
-            # âœ… VALIDAR QUE NO HAY OPERACIONES ACTIVAS
+            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
             if self._hay_operaciones_activas():
-                print("â¸ï¸ Operaciones activas detectadas - Shutdown pospuesto")
-                # Reintentar despuÃ©s de 500ms
+                logger.info("⏸️ Operaciones activas detectadas - Shutdown pospuesto")
+                # Reintentar después de 500ms
                 QTimer.singleShot(500, self.emergency_shutdown)
                 return
             
-            print("âœ… No hay operaciones activas - Procediendo con shutdown")
+            logger.info("✅ No hay operaciones activas - Procediendo con shutdown")
             
             # FASE 1: DETENER TODOS LOS TIMERS INMEDIATAMENTE
             self._stop_all_timers_immediately()
             
-            # FASE 2: DESCONECTAR SEÃ‘ALES ORDENADAMENTE  
+            # FASE 2: DESCONECTAR SEÑALES ORDENADAMENTE  
             self._disconnect_all_signals_ordered()
             
             # FASE 3: LIMPIEZA SINCRONIZADA DE RECURSOS
             self._cleanup_resources_synchronously()
             
-            print("âœ… EMERGENCY SHUTDOWN COMPLETADO")
+            logger.info("✅ EMERGENCY SHUTDOWN COMPLETADO")
             
         except Exception as e:
-            print(f"âš ï¸ Error en emergency shutdown: {e}")
-            # Forzar limpieza bÃ¡sica aunque falle
+            logger.error(f"❌ Error en emergency shutdown: {e}")
+            # Forzar limpieza básica aunque falle
             self._force_basic_cleanup()
+
     def _hay_operaciones_activas(self) -> bool:
-        """âœ… NUEVO: Verifica si hay operaciones activas en algÃºn modelo"""
+        """✅ Verifica si hay operaciones activas en algún modelo"""
         try:
             # Lista de modelos a verificar
             models_to_check = [
@@ -227,24 +265,25 @@ class AppController(QObject):
                 if model:
                     # Verificar si tiene flag de loading activo
                     if hasattr(model, '_loading') and model._loading:
-                        print(f"âš ï¸ {type(model).__name__} estÃ¡ en operaciÃ³n")
+                        logger.warning(f"⚠️ {type(model).__name__} está en operación")
                         return True
                     
                     # Verificar si tiene lock activo
                     if hasattr(model, '_operation_lock') and model._operation_lock:
-                        print(f"âš ï¸ {type(model).__name__} tiene lock activo")
+                        logger.warning(f"⚠️ {type(model).__name__} tiene lock activo")
                         return True
             
             return False
             
         except Exception as e:
-            print(f"âš ï¸ Error verificando operaciones activas: {e}")
-            # En caso de error, asumir que NO hay operaciones (mÃ¡s seguro)
+            logger.error(f"⚠️ Error verificando operaciones activas: {e}")
+            # En caso de error, asumir que NO hay operaciones (más seguro)
             return False
+
     def _stop_all_timers_immediately(self):
-        """FASE 1: Detiene TODOS los timers sin excepciÃ³n"""
+        """FASE 1: Detiene TODOS los timers sin excepción"""
         try:
-            print("â¹ï¸ FASE 1: Deteniendo todos los timers...")
+            logger.info("⏱️ FASE 1: Deteniendo todos los timers...")
             
             # Lista de todos los modelos
             models = [
@@ -276,9 +315,9 @@ class AppController(QObject):
                                 if timer and hasattr(timer, 'isActive') and timer.isActive():
                                     timer.stop()
                                     timer_count += 1
-                                    print(f"   â¹ï¸ Timer detenido: {type(model).__name__}.{timer_name}")
+                                    logger.info(f"⏱️ Timer detenido: {type(model).__name__}.{timer_name}")
                         
-                        # Buscar timers por inspecciÃ³n de atributos
+                        # Buscar timers por inspección de atributos
                         for attr_name in dir(model):
                             if not attr_name.startswith('__'):
                                 try:
@@ -289,29 +328,29 @@ class AppController(QObject):
                                         attr.isActive()):
                                         attr.stop()
                                         timer_count += 1
-                                        print(f"   â¹ï¸ Timer detectado detenido: {type(model).__name__}.{attr_name}")
+                                        logger.info(f"⏱️ Timer detectado detenido: {type(model).__name__}.{attr_name}")
                                 except:
                                     pass
                                     
                     except Exception as e:
-                        print(f"âš ï¸ Error deteniendo timers en {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error deteniendo timers en {type(model).__name__}: {e}")
             
-            print(f"âœ… FASE 1 COMPLETA: {timer_count} timers detenidos")
+            logger.info(f"✅ FASE 1 COMPLETA: {timer_count} timers detenidos")
             
         except Exception as e:
-            print(f"âŒ Error en FASE 1: {e}")
+            logger.error(f"❌ Error en FASE 1: {e}")
 
     def _disconnect_all_signals_ordered(self):
-        """FASE 2: Desconecta seÃ±ales en orden especÃ­fico"""
+        """FASE 2: Desconecta señales en orden específico"""
         try:
-            print("ðŸ”Œ FASE 2: Desconectando seÃ±ales...")
+            logger.info("🔌 FASE 2: Desconectando señales...")
             
-            # 2.1: Desconectar seÃ±ales globales primero
+            # 2.1: Desconectar señales globales primero
             try:
-                # Intentar desconectar seÃ±ales globales si existen
+                # Intentar desconectar señales globales si existen
                 app = QGuiApplication.instance()
                 if app:
-                    # Desconectar todas las seÃ±ales de la aplicaciÃ³n
+                    # Desconectar todas las señales de la aplicación
                     for signal_name in dir(app):
                         if not signal_name.startswith('__'):
                             try:
@@ -320,9 +359,9 @@ class AppController(QObject):
                                     signal.disconnect()
                             except:
                                 pass
-                    print("   ðŸ”Œ SeÃ±ales globales desconectadas")
+                    logger.info("🔌 Señales globales desconectadas")
             except Exception as e:
-                print(f"   âš ï¸ Error desconectando seÃ±ales globales: {e}")
+                logger.error(f"⚠️ Error desconectando señales globales: {e}")
             
             # 2.2: Desconectar referencias bidireccionales
             try:
@@ -332,11 +371,11 @@ class AppController(QObject):
                         self.compra_model._proveedor_model_ref = None
                     if hasattr(self.proveedor_model, '_compra_model_ref'):
                         self.proveedor_model._compra_model_ref = None
-                    print("   ðŸ”Œ Referencias bidireccionales rotas")
+                    logger.info("🔌 Referencias bidireccionales rotas")
             except Exception as e:
-                print(f"   âš ï¸ Error rompiendo referencias: {e}")
+                logger.error(f"⚠️ Error rompiendo referencias: {e}")
             
-            # 2.3: Desconectar seÃ±ales internas de cada modelo
+            # 2.3: Desconectar señales internas de cada modelo
             models = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.consulta_model, self.paciente_model,
@@ -351,30 +390,30 @@ class AppController(QObject):
             for model in models:
                 if model:
                     try:
-                        # Llamar mÃ©todo cleanup especÃ­fico si existe
+                        # Llamar método cleanup específico si existe
                         if hasattr(model, 'emergency_disconnect'):
                             model.emergency_disconnect()
                         elif hasattr(model, 'cleanup'):
                             model.cleanup()
                     except Exception as e:
-                        print(f"   âš ï¸ Error cleanup {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error cleanup {type(model).__name__}: {e}")
             
-            print("âœ… FASE 2 COMPLETA: SeÃ±ales desconectadas")
+            logger.info("✅ FASE 2 COMPLETA: Señales desconectadas")
             
         except Exception as e:
-            print(f"âŒ Error en FASE 2: {e}")
+            logger.error(f"❌ Error en FASE 2: {e}")
 
     def _cleanup_resources_synchronously(self):
         """FASE 3: Limpieza sincronizada de recursos"""
         try:
-            print("ðŸ§¹ FASE 3: Limpieza sincronizada...")
+            logger.info("🧹 FASE 3: Limpieza sincronizada...")
             
             # 3.1: Invalidar todos los caches
             models_with_repos = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.consulta_model, self.gasto_model,
-                self.laboratorio_model, self.trabajador_model, self.enfermeria_model
-                , self.ingreso_extra_model
+                self.laboratorio_model, self.trabajador_model, self.enfermeria_model,
+                self.ingreso_extra_model
             ]
             
             for model in models_with_repos:
@@ -386,7 +425,7 @@ class AppController(QObject):
                         if hasattr(repo, 'invalidate_all_caches'):
                             repo.invalidate_all_caches()
                     except Exception as e:
-                        print(f"   âš ï¸ Error limpiando cache {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error limpiando cache {type(model).__name__}: {e}")
             
             # 3.2: Establecer estados de shutdown
             all_models = [
@@ -408,13 +447,13 @@ class AppController(QObject):
                             model._estadoActual = "shutdown"
                         if hasattr(model, '_loading'):
                             model._loading = False
-                        # âœ… RESETEAR USUARIO EN TODOS LOS MODELOS
+                        # ✅ RESETEAR USUARIO EN TODOS LOS MODELOS
                         if hasattr(model, '_usuario_actual_id'):
                             model._usuario_actual_id = 0
                         # Limpiar datos en memoria
                         self._clear_model_data(model)
                     except Exception as e:
-                        print(f"   âš ï¸ Error estableciendo shutdown {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error estableciendo shutdown {type(model).__name__}: {e}")
             
             # 3.3: Usar destroy() en lugar de deleteLater()
             for model in all_models:
@@ -422,10 +461,10 @@ class AppController(QObject):
                     try:
                         # Disconnect all signals before destroying
                         model.blockSignals(True)
-                        # Forzar destrucciÃ³n inmediata
+                        # Forzar destrucción inmediata
                         model.setParent(None)
                     except Exception as e:
-                        print(f"   âš ï¸ Error destruyendo {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error destruyendo {type(model).__name__}: {e}")
             
             # 3.4: Limpiar referencias
             self.inventario_model = None
@@ -449,20 +488,20 @@ class AppController(QObject):
             self.auth_model = None
             self.cierre_caja_model = None
             
-            # âœ… RESETEAR USUARIO AUTENTICADO
+            # ✅ RESETEAR USUARIO AUTENTICADO
             self._usuario_autenticado_id = 0
             self._usuario_autenticado_nombre = ""
             self._usuario_autenticado_rol = ""
             
-            print("âœ… FASE 3 COMPLETA: Recursos limpiados")
+            logger.info("✅ FASE 3 COMPLETA: Recursos limpiados")
             
         except Exception as e:
-            print(f"âŒ Error en FASE 3: {e}")
+            logger.error(f"❌ Error en FASE 3: {e}")
 
     def _force_basic_cleanup(self):
-        """Limpieza bÃ¡sica de emergencia si falla el shutdown normal"""
+        """Limpieza básica de emergencia si falla el shutdown normal"""
         try:
-            print("ðŸ†˜ FORZANDO LIMPIEZA BÃSICA...")
+            logger.warning("🔄 FORZANDO LIMPIEZA BÁSICA...")
             
             # Forzar parada de todos los QTimer activos
             # No hay una forma directa de obtener todos los QTimer, 
@@ -477,16 +516,16 @@ class AppController(QObject):
                     except:
                         pass
             
-            print("âœ… Limpieza bÃ¡sica completada")
+            logger.info("✅ Limpieza básica completada")
             
         except Exception as e:
-            print(f"âŒ Error en limpieza bÃ¡sica: {e}")
+            logger.error(f"❌ Error en limpieza básica: {e}")
 
     @Slot()
     def gradual_cleanup(self):
         """Sistema de cleanup gradual - preserva la estructura para transiciones"""
         try:
-            print("ðŸ§¹ CLEANUP GRADUAL INICIADO")
+            logger.info("🧹 CLEANUP GRADUAL INICIADO")
             
             # RESETEAR USUARIO AUTENTICADO INMEDIATAMENTE
             self._usuario_autenticado_id = 0
@@ -497,15 +536,15 @@ class AppController(QObject):
             # LIMPIAR DATOS EN MEMORIA SIN DESTRUIR OBJETOS
             self._clear_model_data_only()
             
-            print("âœ… CLEANUP GRADUAL COMPLETADO")
+            logger.info("✅ CLEANUP GRADUAL COMPLETADO")
             
         except Exception as e:
-            print(f"âš ï¸ Error en cleanup gradual: {e}")
+            logger.error(f"⚠️ Error en cleanup gradual: {e}")
 
     def _clear_model_data_only(self):
         """Limpia datos sin destruir objetos"""
         try:
-            print("ðŸ§¹ Limpiando datos...")
+            logger.info("🧹 Limpiando datos...")
             
             all_models = [
                 self.inventario_model, self.venta_model, self.compra_model,
@@ -531,15 +570,15 @@ class AppController(QObject):
                         self._clear_model_data(model)
                         
                     except Exception as e:
-                        print(f"âš ï¸ Error limpiando datos {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error limpiando datos {type(model).__name__}: {e}")
             
-            print("âœ… Datos limpiados")
+            logger.info("✅ Datos limpiados")
             
         except Exception as e:
-            print(f"âŒ Error en limpieza de datos: {e}")
+            logger.error(f"❌ Error en limpieza de datos: {e}")
 
     def _clear_model_data(self, model):
-        """Limpia datos especÃ­ficos de un modelo"""
+        """Limpia datos específicos de un modelo"""
         try:
             # Limpiar listas comunes
             data_attrs = [
@@ -562,31 +601,31 @@ class AppController(QObject):
                     setattr(model, attr_name, {})
                     
         except Exception as e:
-            print(f"   âš ï¸ Error limpiando datos de modelo: {e}")
+            logger.error(f"⚠️ Error limpiando datos de modelo: {e}")
 
     def _connect_models(self):
-        """Conecta signals entre models para sincronizaciÃ³n - VERSIÃ“N CORREGIDA"""
+        """Conecta signals entre models para sincronización - VERSIÓN CORREGIDA"""
         try:
-            print("ðŸ”— Configurando conexiones entre modelos...")
+            logger.info("🔗 Configurando conexiones entre modelos...")
             
-            # ===== CONEXIONES BÃSICAS =====
+            # ===== CONEXIONES BÁSICAS =====
             if self.venta_model:
                 self.venta_model.ventaCreada.connect(self._on_venta_creada)
-                print("   âœ… VERIFICADO: Ventas â†’ Cierre de Caja conectado")
+                logger.info("✅ VERIFICADO: Ventas → Cierre de Caja conectado")
                 
             if self.compra_model:
                 self.compra_model.compraCreada.connect(self._on_compra_creada)
             
-            # ===== CONEXIONES ESPECÃFICAS PARA CIERRE DE CAJA =====
+            # ===== CONEXIONES ESPECÍFICAS PARA CIERRE DE CAJA =====
             if self.cierre_caja_model:
                 # Solo establecer referencia para PDFs
                 self.cierre_caja_model.set_app_controller(self)
-                print("   âœ… AppController conectado al CierreCajaModel para PDFs")
+                logger.info("✅ AppController conectado al CierreCajaModel para PDFs")
             if self.ingreso_extra_model:
                 if hasattr(self.ingreso_extra_model, 'errorOcurrido'):
                     self.ingreso_extra_model.errorOcurrido.connect(self._on_model_error)
-                print("   âœ… IngresoExtraModel conectado")
-            # ===== CONEXIONES DE ERRORES Y Ã‰XITOS - VERSIÃ“N SEGURA =====
+                logger.info("✅ IngresoExtraModel conectado")
+            # ===== CONEXIONES DE ERRORES Y ÉXITOS - VERSIÓN SEGURA =====
             models_with_errors = [
                 self.inventario_model, self.venta_model, self.compra_model,
                 self.proveedor_model, self.usuario_model, self.gasto_model,
@@ -600,7 +639,7 @@ class AppController(QObject):
             for model in models_with_errors:
                 if model:
                     try:
-                        # âœ… CONECTAR SEÃ‘ALES CON TRY-CATCH
+                        # ✅ CONECTAR SEÑALES CON TRY-CATCH
                         if hasattr(model, 'operacionError'):
                             model.operacionError.connect(self._on_model_error)
                         if hasattr(model, 'errorOccurred'):
@@ -610,7 +649,7 @@ class AppController(QObject):
                         if hasattr(model, 'successMessage'):
                             model.successMessage.connect(self._on_model_success)
                     except Exception as e:
-                        print(f"âš ï¸ Error conectando seÃ±ales de {type(model).__name__}: {e}")
+                        logger.error(f"⚠️ Error conectando señales de {type(model).__name__}: {e}")
             
             for model in models_with_errors:
                 if model:
@@ -623,7 +662,7 @@ class AppController(QObject):
                     if hasattr(model, 'successMessage'):
                         model.successMessage.connect(self._on_model_success)
 
-            # ===== CONEXIONES ESPECÃFICAS PARA MODELOS =====
+            # ===== CONEXIONES ESPECÍFICAS PARA MODELOS =====
             if self.proveedor_model:
                 self.proveedor_model.proveedorCreado.connect(self._on_proveedor_creado)
                 self.proveedor_model.proveedorActualizado.connect(self._on_proveedor_actualizado)
@@ -677,29 +716,28 @@ class AppController(QObject):
             if self.cierre_caja_model:
                 # Solo establecer referencia para PDFs
                 self.cierre_caja_model.set_app_controller(self)
-                print("   âœ… AppController conectado al CierreCajaModel para PDFs")
+                logger.info("✅ AppController conectado al CierreCajaModel para PDFs")
 
         except Exception as e:
-            print(f"âŒ Error conectando models: {e}")
+            logger.error(f"❌ Error conectando models: {e}")
             import traceback
             traceback.print_exc()
 
     @Slot(int, str, str)
     def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
         
-        
         # Establecer usuario inmediatamente
         self._usuario_autenticado_id = usuario_id
         self._usuario_autenticado_nombre = usuario_nombre
         self._usuario_autenticado_rol = usuario_rol
         
-        # Emitir seÃ±al de cambio
+        # Emitir señal de cambio
         self.usuarioChanged.emit()
         
         # Establecer usuario en todos los modelos
         self._establecer_usuario_en_modelos()
         
-        print(f"Usuario autenticado establecido correctamente")
+        logger.info(f"✅ Usuario autenticado establecido correctamente")
 
     def _establecer_usuario_en_modelos(self):
         """
@@ -707,28 +745,28 @@ class AppController(QObject):
         CRÍTICO: Este método debe llamarse DESPUÉS de initialize_models()
         """
         if self._usuario_autenticado_id > 0:
-            print(f"\n{'='*60}")
-            print(f"🔐 ESTABLECIENDO USUARIO EN TODOS LOS MODELOS")
-            print(f"{'='*60}")
-            print(f"   Usuario ID: {self._usuario_autenticado_id}")
-            print(f"   Nombre: {self._usuario_autenticado_nombre}")
-            print(f"   Rol: {self._usuario_autenticado_rol}")
-            print()
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🔐 ESTABLECIENDO USUARIO EN TODOS LOS MODELOS")
+            logger.info(f"{'='*60}")
+            logger.info(f"   Usuario ID: {self._usuario_autenticado_id}")
+            logger.info(f"   Nombre: {self._usuario_autenticado_nombre}")
+            logger.info(f"   Rol: {self._usuario_autenticado_rol}")
+            logger.info("")
             
             # ✅ MODELO INVENTARIO (usa set_usuario_actual)
             if self.inventario_model and hasattr(self.inventario_model, 'set_usuario_actual'):
                 try:
                     self.inventario_model.set_usuario_actual(self._usuario_autenticado_id)
-                    print("  ✅ Usuario establecido en InventarioModel")
+                    logger.info("✅ Usuario establecido en InventarioModel")
                 except Exception as e:
-                    print(f"  ❌ Error en InventarioModel: {e}")
+                    logger.error(f"❌ Error en InventarioModel: {e}")
             
             # ✅ MODELO VENTA (CRÍTICO - usa set_usuario_actual_con_rol)
             if self.venta_model and hasattr(self.venta_model, 'set_usuario_actual_con_rol'):
                 try:
-                    print(f"  🔍 Estableciendo usuario en VentaModel...")
-                    print(f"     ID: {self._usuario_autenticado_id}")
-                    print(f"     Rol: {self._usuario_autenticado_rol}")
+                    logger.info(f"🔍 Estableciendo usuario en VentaModel...")
+                    logger.info(f"   ID: {self._usuario_autenticado_id}")
+                    logger.info(f"   Rol: {self._usuario_autenticado_rol}")
                     
                     self.venta_model.set_usuario_actual_con_rol(
                         self._usuario_autenticado_id,
@@ -737,14 +775,14 @@ class AppController(QObject):
                     
                     # Verificar que se estableció correctamente
                     actual_id = self.venta_model.usuario_actual_id
-                    print(f"  ✅ VentaModel configurado - Usuario verificado: {actual_id}")
+                    logger.info(f"✅ VentaModel configurado - Usuario verificado: {actual_id}")
                     
                     if actual_id != self._usuario_autenticado_id:
-                        print(f"  ⚠️ ADVERTENCIA: Usuario no coincide en VentaModel!")
-                        print(f"     Esperado: {self._usuario_autenticado_id}, Actual: {actual_id}")
+                        logger.warning(f"⚠️ ADVERTENCIA: Usuario no coincide en VentaModel!")
+                        logger.warning(f"   Esperado: {self._usuario_autenticado_id}, Actual: {actual_id}")
                         
                 except Exception as e:
-                    print(f"  ❌ Error CRÍTICO en VentaModel: {e}")
+                    logger.error(f"❌ Error CRÍTICO en VentaModel: {e}")
                     import traceback
                     traceback.print_exc()
             
@@ -752,9 +790,9 @@ class AppController(QObject):
             if self.compra_model and hasattr(self.compra_model, 'set_usuario_actual'):
                 try:
                     self.compra_model.set_usuario_actual(self._usuario_autenticado_id)
-                    print("  ✅ Usuario establecido en CompraModel")
+                    logger.info("✅ Usuario establecido en CompraModel")
                 except Exception as e:
-                    print(f"  ❌ Error en CompraModel: {e}")
+                    logger.error(f"❌ Error en CompraModel: {e}")
             
             # ✅ MODELO PROVEEDOR (usa set_usuario_actual_con_rol)
             if self.proveedor_model and hasattr(self.proveedor_model, 'set_usuario_actual_con_rol'):
@@ -763,9 +801,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en ProveedorModel")
+                    logger.info("✅ Usuario establecido en ProveedorModel")
                 except Exception as e:
-                    print(f"  ❌ Error en ProveedorModel: {e}")
+                    logger.error(f"❌ Error en ProveedorModel: {e}")
             
             # ✅ MODELO CONSULTA (usa set_usuario_actual_con_rol)
             if self.consulta_model and hasattr(self.consulta_model, 'set_usuario_actual_con_rol'):
@@ -774,9 +812,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en ConsultaModel")
+                    logger.info("✅ Usuario establecido en ConsultaModel")
                 except Exception as e:
-                    print(f"  ❌ Error en ConsultaModel: {e}")
+                    logger.error(f"❌ Error en ConsultaModel: {e}")
             
             # ✅ MODELO ENFERMERÍA (usa set_usuario_actual_con_rol)
             if self.enfermeria_model and hasattr(self.enfermeria_model, 'set_usuario_actual_con_rol'):
@@ -785,9 +823,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en EnfermeriaModel")
+                    logger.info("✅ Usuario establecido en EnfermeriaModel")
                 except Exception as e:
-                    print(f"  ❌ Error en EnfermeriaModel: {e}")
+                    logger.error(f"❌ Error en EnfermeriaModel: {e}")
             
             # ✅ MODELO LABORATORIO (usa set_usuario_actual_con_rol)
             if self.laboratorio_model and hasattr(self.laboratorio_model, 'set_usuario_actual_con_rol'):
@@ -796,9 +834,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en LaboratorioModel")
+                    logger.info("✅ Usuario establecido en LaboratorioModel")
                 except Exception as e:
-                    print(f"  ❌ Error en LaboratorioModel: {e}")
+                    logger.error(f"❌ Error en LaboratorioModel: {e}")
             
             # ✅ MODELO GASTO (usa set_usuario_actual_con_rol)
             if self.gasto_model and hasattr(self.gasto_model, 'set_usuario_actual_con_rol'):
@@ -807,9 +845,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en GastoModel")
+                    logger.info("✅ Usuario establecido en GastoModel")
                 except Exception as e:
-                    print(f"  ❌ Error en GastoModel: {e}")
+                    logger.error(f"❌ Error en GastoModel: {e}")
             
             # ✅ MODELO TRABAJADOR (usa set_usuario_actual_con_rol)
             if self.trabajador_model and hasattr(self.trabajador_model, 'set_usuario_actual_con_rol'):
@@ -818,9 +856,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en TrabajadorModel")
+                    logger.info("✅ Usuario establecido en TrabajadorModel")
                 except Exception as e:
-                    print(f"  ❌ Error en TrabajadorModel: {e}")
+                    logger.error(f"❌ Error en TrabajadorModel: {e}")
             
             # ✅ MODELO USUARIO (usa set_usuario_actual_con_rol)
             if self.usuario_model and hasattr(self.usuario_model, 'set_usuario_actual_con_rol'):
@@ -829,17 +867,17 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en UsuarioModel")
+                    logger.info("✅ Usuario establecido en UsuarioModel")
                 except Exception as e:
-                    print(f"  ❌ Error en UsuarioModel: {e}")
+                    logger.error(f"❌ Error en UsuarioModel: {e}")
             
             # ✅ MODELO REPORTES (usa set_usuario_actual)
             if self.reportes_model and hasattr(self.reportes_model, 'set_usuario_actual'):
                 try:
                     self.reportes_model.set_usuario_actual(self._usuario_autenticado_id)
-                    print("  ✅ Usuario establecido en ReportesModel")
+                    logger.info("✅ Usuario establecido en ReportesModel")
                 except Exception as e:
-                    print(f"  ❌ Error en ReportesModel: {e}")
+                    logger.error(f"❌ Error en ReportesModel: {e}")
             
             # ✅ MODELO DASHBOARD (usa set_usuario_actual_con_rol)
             if self.dashboard_model and hasattr(self.dashboard_model, 'set_usuario_actual_con_rol'):
@@ -848,9 +886,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en DashboardModel")
+                    logger.info("✅ Usuario establecido en DashboardModel")
                 except Exception as e:
-                    print(f"  ❌ Error en DashboardModel: {e}")
+                    logger.error(f"❌ Error en DashboardModel: {e}")
             
             # ✅ MODELO CIERRE CAJA (usa set_usuario_actual_con_rol)
             if self.cierre_caja_model and hasattr(self.cierre_caja_model, 'set_usuario_actual_con_rol'):
@@ -859,9 +897,9 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en CierreCajaModel")
+                    logger.info("✅ Usuario establecido en CierreCajaModel")
                 except Exception as e:
-                    print(f"  ❌ Error en CierreCajaModel: {e}")
+                    logger.error(f"❌ Error en CierreCajaModel: {e}")
             
             # ✅ MODELO INGRESO EXTRA (usa set_usuario_actual_con_rol)
             if self.ingreso_extra_model and hasattr(self.ingreso_extra_model, 'set_usuario_actual_con_rol'):
@@ -870,41 +908,43 @@ class AppController(QObject):
                         self._usuario_autenticado_id,
                         self._usuario_autenticado_rol
                     )
-                    print("  ✅ Usuario establecido en IngresoExtraModel")
+                    logger.info("✅ Usuario establecido en IngresoExtraModel")
                 except Exception as e:
-                    print(f"  ❌ Error en IngresoExtraModel: {e}")
+                    logger.error(f"❌ Error en IngresoExtraModel: {e}")
             
-            print()
-            print("="*60)
-            print("✅ USUARIO ESTABLECIDO EN TODOS LOS MODELOS")
-            print("="*60)
-            print()
-    # Handlers para eventos especÃ­ficos de modelos
+            logger.info("")
+            logger.info("="*60)
+            logger.info("✅ USUARIO ESTABLECIDO EN TODOS LOS MODELOS")
+            logger.info("="*60)
+            logger.info("")
+
+    # Handlers para eventos específicos de modelos
     @Slot(int, float)
     def _on_venta_creada(self, venta_id: int, total: float):
         """Handler SIMPLIFICADO para ventas creadas"""
         try:
-            print(f"ðŸ›’ Venta creada - ID: {venta_id}, Total: Bs {total:,.2f}")
+            logger.info(f"💰 Venta creada - ID: {venta_id}, Total: Bs {total:,.2f}")
             
-            # Actualizar inventario Ãºnicamente
+            # Actualizar inventario únicamente
             if self.inventario_model:
                 QTimer.singleShot(1000, self.inventario_model.refresh_productos)
                 
         except Exception as e:
-            print(f"âŒ Error procesando venta creada: {e}")
+            logger.error(f"❌ Error procesando venta creada: {e}")
 
     @Slot(int, float)
     def _on_compra_creada(self, compra_id: int, total: float):
         """Handler SIMPLIFICADO para compras creadas"""
         try:
-            print(f"ðŸ›ï¸ Compra creada - ID: {compra_id}, Total: Bs {total:,.2f}")
+            logger.info(f"🛒 Compra creada - ID: {compra_id}, Total: Bs {total:,.2f}")
             
-            # Actualizar inventario Ãºnicamente
+            # Actualizar inventario únicamente
             if self.inventario_model:
                 QTimer.singleShot(1000, self.inventario_model.refresh_productos)
                 
         except Exception as e:
-            print(f"âŒ Error procesando compra creada: {e}")
+            logger.error(f"❌ Error procesando compra creada: {e}")
+
     @Slot(int, str)
     def _on_proveedor_creado(self, proveedor_id: int, nombre: str):
         self.showNotification("Proveedor Creado", f"Proveedor '{nombre}' agregado exitosamente")
@@ -926,41 +966,41 @@ class AppController(QObject):
 
     @Slot(int, float)
     def _on_transaccion_financiera(self, transaccion_id: int, monto: float):
-        """Handler genÃ©rico para transacciones financieras - MEJORADO"""
+        """Handler genérico para transacciones financieras - MEJORADO"""
         try:
             if self.cierre_caja_model:
-                print(f"ðŸ’° TransacciÃ³n registrada - ID: {transaccion_id}, Monto: {monto}")
+                logger.info(f"💳 Transacción registrada - ID: {transaccion_id}, Monto: {monto}")
                 
                 # Refresh inmediato sin delay
                 self.cierre_caja_model.repository.refresh_cache_immediately()
-                # Delay mÃ­nimo para que la BD se actualice
-                QTimer.singleShot(200, lambda: self._refresh_cierre_caja("TransacciÃ³n general"))
+                # Delay mínimo para que la BD se actualice
+                QTimer.singleShot(200, lambda: self._refresh_cierre_caja("Transacción general"))
         except Exception as e:
-            print(f"âŒ Error procesando transacciÃ³n: {e}")
+            logger.error(f"❌ Error procesando transacción: {e}")
 
     def _refresh_cierre_directo(self, tipo_transaccion: str, transaccion_id: int, monto: float):
         """
-        MÃ©todo UNIFICADO de refresh directo - USA LA LÃ“GICA QUE FUNCIONA
+        Método UNIFICADO de refresh directo - USA LA LÓGICA QUE FUNCIONA
         """
         try:
-            # 1. Invalidar cachÃ© inmediatamente
+            # 1. Invalidar caché inmediatamente
             self.repository.invalidar_cache_transaccion()
             
-            # 2. Log de la transacciÃ³n (sin polling complejo)
+            # 2. Log de la transacción (sin polling complejo)
             if hasattr(self.repository, 'notificar_transaccion_nueva'):
                 self.repository.notificar_transaccion_nueva(tipo_transaccion, monto, transaccion_id)
             
-            # 3. Refresh inmediato usando el mÃ©todo que funciona
+            # 3. Refresh inmediato usando el método que funciona
             self.repository.refresh_cache_immediately()
             
-            # 4. Forzar actualizaciÃ³n del modelo
+            # 4. Forzar actualización del modelo
             self._cargar_datos_dia()
             
-            print(f"âœ… Cierre de caja actualizado por {tipo_transaccion} {transaccion_id}")
+            logger.info(f"✅ Cierre de caja actualizado por {tipo_transaccion} {transaccion_id}")
             
         except Exception as e:
-            print(f"âŒ Error en refresh directo: {e}")
-            # Fallback: al menos invalidar y recargar bÃ¡sico
+            logger.error(f"❌ Error en refresh directo: {e}")
+            # Fallback: al menos invalidar y recargar básico
             try:
                 self.repository.invalidar_cache_completo()
                 self._cargar_datos_dia()
@@ -969,22 +1009,22 @@ class AppController(QObject):
 
     @Slot(str)
     def _refresh_cierre_caja(self, mensaje: str = ""):
-        """Refresca los datos del cierre de caja - MÃ‰TODO MEJORADO"""
+        """Refresca los datos del cierre de caja - MÉTODO MEJORADO"""
         try:
             if self.cierre_caja_model:
-                print(f"ðŸ”„ Refrescando datos de Cierre de Caja... ({mensaje})")
+                logger.info(f"🔄 Refrescando datos de Cierre de Caja... ({mensaje})")
                 
-                # 1. Invalidar cachÃ© inmediatamente
+                # 1. Invalidar caché inmediatamente
                 if hasattr(self.cierre_caja_model.repository, 'refresh_cache_immediately'):
                     self.cierre_caja_model.repository.refresh_cache_immediately()
                 
-                # 2. Forzar actualizaciÃ³n del modelo
+                # 2. Forzar actualización del modelo
                 self.cierre_caja_model.forzarActualizacion()
                 
-                print(f"âœ… Cierre de caja actualizado: {mensaje}")
+                logger.info(f"✅ Cierre de caja actualizado: {mensaje}")
                 
         except Exception as e:
-            print(f"âŒ Error refrescando cierre de caja: {e}")
+            logger.error(f"❌ Error refrescando cierre de caja: {e}")
 
     @Slot(bool, str)
     def _on_gasto_creado(self, success: bool, message: str):
@@ -1025,7 +1065,7 @@ class AppController(QObject):
             if data.get('exito', False):
                 self.showNotification("Procedimiento Creado", "Procedimiento creado exitosamente")
         except Exception as e:
-            print(f"Error en handler procedimiento creado: {e}")
+            logger.error(f"Error en handler procedimiento creado: {e}")
 
     @Slot(str)
     def _on_procedimiento_actualizado(self, message: str):
@@ -1036,7 +1076,7 @@ class AppController(QObject):
             if data.get('exito', False):
                 self.showNotification("Procedimiento Actualizado", "Procedimiento actualizado exitosamente")
         except Exception as e:
-            print(f"Error en handler procedimiento actualizado: {e}")
+            logger.error(f"Error en handler procedimiento actualizado: {e}")
 
     @Slot(str)
     def _on_procedimiento_eliminado(self, message: str):
@@ -1047,7 +1087,7 @@ class AppController(QObject):
             if data.get('exito', False):
                 self.showNotification("Procedimiento Eliminado", "Procedimiento eliminado exitosamente")
         except Exception as e:
-            print(f"Error en handler procedimiento eliminado: {e}")
+            logger.error(f"Error en handler procedimiento eliminado: {e}")
 
     @Slot(bool, str)
     def _on_tipo_gasto_creado(self, success: bool, message: str):
@@ -1067,17 +1107,17 @@ class AppController(QObject):
     @Slot(bool, str)
     def _on_tipo_analisis_creado(self, success: bool, message: str):
         if success:
-            self.showNotification("AnÃ¡lisis Creado", message)
+            self.showNotification("Análisis Creado", message)
 
     @Slot(bool, str)
     def _on_tipo_analisis_actualizado(self, success: bool, message: str):
         if success:
-            self.showNotification("AnÃ¡lisis Actualizado", message)
+            self.showNotification("Análisis Actualizado", message)
 
     @Slot(bool, str)
     def _on_tipo_analisis_eliminado(self, success: bool, message: str):
         if success:
-            self.showNotification("AnÃ¡lisis Eliminado", message)
+            self.showNotification("Análisis Eliminado", message)
 
     @Slot(bool, str)
     def _on_tipo_procedimiento_creado(self, success: bool, message: str):
@@ -1126,38 +1166,38 @@ class AppController(QObject):
 
     @Slot(str)
     def _on_model_error(self, mensaje: str):
-        """Handler de errores de modelos - VERSIÃ“N SEGURA"""
+        """Handler de errores de modelos - VERSIÓN SEGURA"""
         try:
-            # âœ… NO PROCESAR DURANTE SHUTDOWN
+            # ✅ NO PROCESAR DURANTE SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
-                print(f"â¸ï¸ Error de modelo ignorado durante shutdown: {mensaje}")
+                logger.warning(f"⏸️ Error de modelo ignorado durante shutdown: {mensaje}")
                 return
             
-            # âœ… LOG DEL ERROR
-            print(f"âŒ Error de modelo: {mensaje}")
+            # ✅ LOG DEL ERROR
+            logger.error(f"❌ Error de modelo: {mensaje}")
             
-            # âœ… MOSTRAR NOTIFICACIÃ“N DE FORMA SEGURA
+            # ✅ MOSTRAR NOTIFICACIÓN DE FORMA SEGURA
             self.showNotification("Error", mensaje)
             
         except Exception as e:
-            print(f"âš ï¸ Error en handler de errores: {e}")
+            logger.error(f"⚠️ Error en handler de errores: {e}")
 
     @Slot(str)
     def _on_model_success(self, mensaje: str):
-        """Handler de Ã©xitos de modelos - VERSIÃ“N SEGURA"""
+        """Handler de éxitos de modelos - VERSIÓN SEGURA"""
         try:
-            # âœ… NO PROCESAR DURANTE SHUTDOWN
+            # ✅ NO PROCESAR DURANTE SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
                 return
             
-            # âœ… LOG OPCIONAL (comentado para no saturar)
-            # print(f"âœ… Ã‰xito de modelo: {mensaje}")
+            # ✅ LOG OPCIONAL (comentado para no saturar)
+            # logger.info(f"✅ Éxito de modelo: {mensaje}")
             
-            # Opcional: mostrar notificaciÃ³n
-            # self.showNotification("Ã‰xito", mensaje)
+            # Opcional: mostrar notificación
+            # self.showNotification("Éxito", mensaje)
             
         except Exception as e:
-            print(f"âš ï¸ Error en handler de Ã©xitos: {e}")
+            logger.error(f"⚠️ Error en handler de éxitos: {e}")
 
     # ===============================
     # GETTERS PARA MODELS (ACCESO DESDE QML)
@@ -1248,35 +1288,35 @@ class AppController(QObject):
         return self.ingreso_extra_model
 
     # ===============================
-    # MÃ‰TODOS DE NAVEGACIÃ“N Y NOTIFICACIONES
+    # MÉTODOS DE NAVEGACIÓN Y NOTIFICACIONES
     # ===============================
     
     @Slot(str, str)
     def showNotification(self, title, message):
-        """Muestra notificaciÃ³n de forma segura - VERSIÃ“N MEJORADA"""
+        """Muestra notificación de forma segura - VERSIÓN MEJORADA"""
         try:
-            # âœ… VALIDAR QUE NO ESTEMOS EN SHUTDOWN
+            # ✅ VALIDAR QUE NO ESTEMOS EN SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
-                print(f"â¸ï¸ NotificaciÃ³n bloqueada durante shutdown: {title}")
+                logger.warning(f"⏸️ Notificación bloqueada durante shutdown: {title}")
                 return
             
-            # âœ… VALIDAR QUE notification_worker EXISTA
+            # ✅ VALIDAR QUE notification_worker EXISTA
             if not hasattr(self, 'notification_worker') or not self.notification_worker:
-                print(f"âš ï¸ notification_worker no disponible: {title} - {message}")
+                logger.error(f"⚠️ notification_worker no disponible: {title} - {message}")
                 return
             
-            # âœ… EMITIR DIRECTAMENTE SIN QTimer (mÃ¡s seguro)
+            # ✅ EMITIR DIRECTAMENTE SIN QTimer (más seguro)
             self.notification_worker.process_notification(title, message)
             
         except Exception as e:
-            print(f"âš ï¸ Error en showNotification: {e}")
+            logger.error(f"⚠️ Error en showNotification: {e}")
     
     @Slot(str)
     def navigateToModule(self, module_name):
-        pass  # ImplementaciÃ³n en QML
+        pass  # Implementación en QML
 
     # ===============================
-    # MÃ‰TODOS DE GENERACIÃ“N DE PDF (COMPLETOS)
+    # MÉTODOS DE GENERACIÓN DE PDF (COMPLETOS)
     # ===============================
     
     @Slot(str, result=str)
@@ -1307,7 +1347,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte inventario: {e}")
+            logger.error(f"Error generando reporte inventario: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1338,7 +1378,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte ventas: {e}")
+            logger.error(f"Error generando reporte ventas: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1373,7 +1413,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de proveedores: {e}")
+            logger.error(f"Error generando reporte de proveedores: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1406,7 +1446,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte usuarios: {e}")
+            logger.error(f"Error generando reporte usuarios: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1449,7 +1489,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de trabajadores: {e}")
+            logger.error(f"Error generando reporte de trabajadores: {e}")
             return ""
 
     @Slot(str, str, str, result=str)
@@ -1491,7 +1531,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de gastos: {e}")
+            logger.error(f"Error generando reporte de gastos: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1524,7 +1564,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuraciÃ³n: {e}")
+            logger.error(f"Error generando reporte de configuración: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1559,7 +1599,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuraciÃ³n de laboratorio: {e}")
+            logger.error(f"Error generando reporte de configuración de laboratorio: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1594,7 +1634,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuraciÃ³n de enfermerÃ­a: {e}")
+            logger.error(f"Error generando reporte de configuración de enfermería: {e}")
             return ""
 
     @Slot(str, result=str)
@@ -1629,7 +1669,7 @@ class AppController(QObject):
             )
             
         except Exception as e:
-            print(f"Error generando reporte de configuraciÃ³n de consultas: {e}")
+            logger.error(f"Error generando reporte de configuración de consultas: {e}")
             return ""
 
     @Slot(str, str, str, str, result=str)
@@ -1646,14 +1686,14 @@ class AppController(QObject):
             usuario_nombre = self._usuario_autenticado_nombre or "Usuario Sistema"
             usuario_rol = self._usuario_autenticado_rol or "Usuario"
             
-            print(f"\n{'='*60}")
-            print(f"📄 GENERANDO PDF CON RESPONSABLE")
-            print(f"{'='*60}")
-            print(f"   👤 Nombre: {usuario_nombre}")
-            print(f"   🔑 Rol: {usuario_rol}")
-            print(f"   📊 Tipo Reporte: {tipo_reporte}")
-            print(f"   📅 Período: {fecha_desde} - {fecha_hasta}")
-            print(f"{'='*60}\n")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"📄 GENERANDO PDF CON RESPONSABLE")
+            logger.info(f"{'='*60}")
+            logger.info(f"   👤 Nombre: {usuario_nombre}")
+            logger.info(f"   🔑 Rol: {usuario_rol}")
+            logger.info(f"   📊 Tipo Reporte: {tipo_reporte}")
+            logger.info(f"   📅 Período: {fecha_desde} - {fecha_hasta}")
+            logger.info(f"{'='*60}\n")
             
             # ✅ ESTABLECER RESPONSABLE EN EL GENERADOR
             self.pdf_generator.set_responsable(usuario_nombre, usuario_rol)
@@ -1667,18 +1707,19 @@ class AppController(QObject):
             )
             
             if resultado:
-                print(f"✅ PDF generado exitosamente: {resultado}")
-                print(f"   👤 Responsable registrado: {usuario_nombre}\n")
+                logger.info(f"✅ PDF generado exitosamente: {resultado}")
+                logger.info(f"   👤 Responsable registrado: {usuario_nombre}\n")
             
             return resultado if resultado else ""
                 
         except Exception as e:
-            print(f"❌ Error generando PDF: {e}")
+            logger.error(f"❌ Error generando PDF: {e}")
+            import traceback
             traceback.print_exc()
             return ""
 
     # ===============================
-    # MÃ‰TODOS AUXILIARES PARA PDFs
+    # MÉTODOS AUXILIARES PARA PDFs
     # ===============================
     
     @Slot(result=str)
@@ -1711,126 +1752,124 @@ class AppController(QObject):
             
             return True
         except Exception as e:
-            print(f"Error abriendo carpeta: {e}")
+            logger.error(f"Error abriendo carpeta: {e}")
             return False
 
+
+# ============================================
+# ✅ CLASE AuthAppController (CON LOGGING Y VALIDACIÓN)
+# ============================================
+
 class AuthAppController(QObject):
-    """Controller principal SIMPLIFICADO - CORREGIDO para cambios de usuario y SETUP WIZARD"""
+    """
+    ✅ VERSIÓN MEJORADA: Con validación de recursos y logging
+    """
     
     # Signals
     authenticationRequired = Signal()
     authenticationSuccess = Signal()
     loadMainApp = Signal()
-    setupRequired = Signal()  # 🆕 Nueva señal para setup
+    setupRequired = Signal()
     
     def __init__(self):
         super().__init__()
+        logger.info("🔐 Inicializando AuthAppController...")
         
-        # 🆕 AGREGAR: Gestor de configuración y setup
-        self.config_manager = ConfigManager()
-        self.setup_handler = SetupHandler()
-        
-        self.auth_model = AuthModel()
-        self.main_controller = None
-        self.authenticated = False
-        self.main_engine = None
-        self.login_engine = None
-        self.setup_engine = None  # 🆕 Engine para setup wizard
-        
-        # Conectar signals del AuthModel
-        self.auth_model.loginSuccessful.connect(self.handleLoginSuccess)
-        self.auth_model.loginFailed.connect(self.handleLoginFailed)
-        self.auth_model.logoutCompleted.connect(self.handleLogout)
-        
-        # 🆕 Conectar signals del SetupHandler
-        self.setup_handler.setupCompleted.connect(self.handleSetupCompleted)
+        try:
+            self.config_manager = ConfigManager()
+            self.setup_handler = SetupHandler()
+            self.auth_model = AuthModel()
+            
+            self.main_controller = None
+            self.authenticated = False
+            self.main_engine = None
+            self.login_engine = None
+            self.setup_engine = None
+            
+            # Conectar signals
+            self.auth_model.loginSuccessful.connect(self.handleLoginSuccess)
+            self.auth_model.loginFailed.connect(self.handleLoginFailed)
+            self.auth_model.logoutCompleted.connect(self.handleLogout)
+            self.setup_handler.setupCompleted.connect(self.handleSetupCompleted)
+            
+            logger.info("✅ AuthAppController inicializado")
+            
+        except Exception as e:
+            log_exception(logger, e, "Inicializando AuthAppController")
+            raise
     
     @Slot(bool, str, 'QVariantMap')
     def handleLoginSuccess(self, success: bool, message: str, userData: dict):
-        """Manejo simplificado de login exitoso"""
+        """Manejo de login exitoso con logging"""
         if success:
+            logger.info(f"✅ Login exitoso: {userData.get('Nombre', 'Usuario')}")
             self.authenticated = True
-            
-            # Delay para mostrar animación y asegurar destrucción completa
             QTimer.singleShot(1500, lambda: self.initializeMainApp(userData))
-        
+        else:
+            logger.warning(f"⚠️ Login no exitoso pero success=True")
+    
     @Slot(str)
     def handleLoginFailed(self, message: str):
         """Manejo de login fallido"""
-        print(f"❌ Login fallido: {message}")
+        logger.warning(f"❌ Login fallido: {message}")
     
     @Slot()
     def handleLogout(self):
-        """LOGOUT MANUAL - VERSIÓN SEGURA CON VALIDACIÓN"""
+        """Logout con validación y logging"""
         try:
-            print("🚪 Cierre de sesión manual solicitado...")
+            logger.info("🚪 Cerrando sesión...")
             
-            # ✅ VALIDAR QUE EL CONTROLADOR EXISTA
             if not self.main_controller:
-                print("⚠️ main_controller ya es None - Creando login directo")
+                logger.warning("main_controller ya es None")
                 self.authenticated = False
                 QTimer.singleShot(100, self.createAndShowLogin)
                 return
             
-            # ✅ VALIDAR QUE NO HAY OPERACIONES ACTIVAS
             if hasattr(self.main_controller, '_hay_operaciones_activas'):
                 if self.main_controller._hay_operaciones_activas():
-                    print("⏸️ Operaciones activas - Logout pospuesto")
+                    logger.info("⏸️ Operaciones activas - Logout pospuesto")
                     QTimer.singleShot(1000, self.handleLogout)
                     return
             
-            print("✅ No hay operaciones activas - Procediendo con logout")
-            
             self.authenticated = False
             
-            # PASO 1: Cleanup del controlador principal CON VALIDACIÓN
+            # Cleanup
             try:
-                print("🧹 Limpiando main_controller...")
-                # Usar gradual_cleanup en lugar de emergency_shutdown
                 self.main_controller.gradual_cleanup()
                 self.main_controller = None
-                print("✅ main_controller limpiado")
+                logger.info("✅ main_controller limpiado")
             except Exception as e:
-                print(f"⚠️ Error en cleanup del controlador: {e}")
+                log_exception(logger, e, "Limpiando main_controller")
                 self.main_controller = None
             
-            # PASO 2: Destruir motor principal con delay
+            # Destruir engine
             if self.main_engine:
                 try:
-                    print("🗑️ Destruyendo main_engine...")
                     self.main_engine.deleteLater()
                     self.main_engine = None
-                    print("✅ main_engine destruido")
+                    logger.info("✅ main_engine destruido")
                 except Exception as e:
-                    print(f"⚠️ Error destruyendo motor principal: {e}")
+                    log_exception(logger, e, "Destruyendo main_engine")
                     self.main_engine = None
             
-            # PASO 3: Forzar garbage collection
-            import gc
             gc.collect()
-            
-            # PASO 4: Crear y mostrar nuevo login con delay
             QTimer.singleShot(500, self.createAndShowLogin)
             
-            print("✅ Logout manual completado")
+            logger.info("✅ Logout completado")
             
         except Exception as e:
-            print(f"❌ Error durante logout manual: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Forzar reset completo en caso de error
+            log_exception(logger, e, "Durante logout")
             self.main_controller = None
             self.main_engine = None
             self.authenticated = False
             QTimer.singleShot(1000, self.createAndShowLogin)
-
+    
     def createAndShowLogin(self):
-        """Crea y muestra una nueva instancia de login - MEJORADO"""
+        """✅ VERSIÓN MEJORADA: Crea login con validación de recursos"""
         try:
-            print("🔐 Creando nueva instancia de login...")
+            logger.info("🔑 Creando ventana de login...")
             
-            # Asegurar que login anterior esté destruido
+            # Limpiar login anterior
             if self.login_engine:
                 try:
                     self.login_engine.deleteLater()
@@ -1838,109 +1877,135 @@ class AuthAppController(QObject):
                 except:
                     pass
             
-            # Crear nueva engine para login
+            # ✅ VALIDAR QUE login.qml EXISTA
+            try:
+                login_qml = get_resource_path("login.qml", logger)
+                logger.info(f"✅ login.qml encontrado: {login_qml}")
+            except FileNotFoundError as e:
+                logger.error(f"❌ login.qml NO ENCONTRADO")
+                show_error_message(
+                    "Archivo Faltante",
+                    "No se encontró el archivo login.qml\n\nReinstala la aplicación.",
+                    str(e)
+                )
+                return
+            
+            # Crear engine
             self.login_engine = QQmlApplicationEngine()
             
-            # Configurar contexto para login
+            # Configurar contexto
             root_context = self.login_engine.rootContext()
             root_context.setContextProperty("authController", self)
             root_context.setContextProperty("authModel", self.auth_model)
             
-            # Cargar login.qml
-            login_qml = get_resource_path("login.qml")
+            # Cargar QML
             self.login_engine.load(QUrl.fromLocalFile(login_qml))
             
-            # Verificar que se cargó correctamente
+            # ✅ VALIDAR CARGA
             if not self.login_engine.rootObjects():
-                print("❌ Error: login.qml no se cargó correctamente")
+                logger.error("❌ login.qml no se cargó correctamente")
+                show_error_message(
+                    "Error de Carga",
+                    "No se pudo cargar la ventana de login.\n\nVerifica los logs.",
+                    f"login.qml: {login_qml}"
+                )
                 return
             
             self.authenticationRequired.emit()
-            print("✅ Login creado y mostrado exitosamente")
+            logger.info("✅ Login creado y mostrado")
             
         except Exception as e:
-            print(f"❌ Error creando login: {e}")
-            import traceback
-            traceback.print_exc()
-
-    # 🆕 NUEVO MÉTODO: Crear y mostrar Setup Wizard
+            log_exception(logger, e, "Creando login")
+            show_error_message(
+                "Error Crítico",
+                "No se pudo iniciar la aplicación.\n\nRevisa el archivo de logs.",
+                str(e)
+            )
+    
     def createAndShowSetupWizard(self):
-        """Crea y muestra el Setup Wizard para primera configuración"""
+        """✅ VERSIÓN MEJORADA: Crea setup wizard con validación"""
         try:
-            print("🚀 Creando Setup Wizard...")
+            logger.info("🚀 Creando Setup Wizard...")
             
-            # Crear nueva engine para setup
+            # ✅ VALIDAR QUE setup_wizard.qml EXISTA
+            try:
+                setup_qml = get_resource_path("setup_wizard.qml", logger)
+                logger.info(f"✅ setup_wizard.qml encontrado: {setup_qml}")
+            except FileNotFoundError as e:
+                logger.error(f"❌ setup_wizard.qml NO ENCONTRADO")
+                show_error_message(
+                    "Archivo Faltante",
+                    "No se encontró el archivo setup_wizard.qml\n\nReinstala la aplicación.",
+                    str(e)
+                )
+                # Fallback: mostrar login directamente
+                self.createAndShowLogin()
+                return
+            
+            # Crear engine
             self.setup_engine = QQmlApplicationEngine()
             
-            # Configurar contexto para setup
+            # Configurar contexto
             root_context = self.setup_engine.rootContext()
             root_context.setContextProperty("setupHandler", self.setup_handler)
             root_context.setContextProperty("authController", self)
             
-            # Cargar setup_wizard.qml
-            setup_qml = get_resource_path("setup_wizard.qml")
-            
-            if not os.path.exists(setup_qml):
-                print(f"❌ Error: setup_wizard.qml no encontrado: {setup_qml}")
-                return
-            
+            # Cargar QML
             self.setup_engine.load(QUrl.fromLocalFile(setup_qml))
             
-            # Verificar que se cargó correctamente
+            # ✅ VALIDAR CARGA
             if not self.setup_engine.rootObjects():
-                print("❌ Error: setup_wizard.qml no se cargó correctamente")
+                logger.error("❌ setup_wizard.qml no se cargó")
+                show_error_message(
+                    "Error de Carga",
+                    "No se pudo cargar el Setup Wizard.\n\nIntenta reinstalar.",
+                    f"setup_wizard.qml: {setup_qml}"
+                )
+                # Fallback
+                self.createAndShowLogin()
                 return
             
             self.setupRequired.emit()
-            print("✅ Setup Wizard creado y mostrado exitosamente")
+            logger.info("✅ Setup Wizard mostrado")
             
         except Exception as e:
-            print(f"❌ Error creando Setup Wizard: {e}")
-            import traceback
-            traceback.print_exc()
+            log_exception(logger, e, "Creando Setup Wizard")
+            show_error_message(
+                "Error Crítico",
+                "No se pudo iniciar el Setup.\n\nRevisa el archivo de logs.",
+                str(e)
+            )
+            # Fallback
+            self.createAndShowLogin()
     
     @Slot(bool, str, 'QVariantMap')
     def handleSetupCompleted(self, success: bool, message: str, credenciales: dict):
-        """Maneja la completación del setup wizard"""
-        try:
-            print(f"📊 Setup completado: {success} - {message}")
-            
-            if success:
-                print("✅ Setup exitoso - Las credenciales se mostraron en el wizard")
-                print(f"   Usuario: {credenciales.get('username', 'N/A')}")
-                print(f"   Base de datos: {credenciales.get('database', 'N/A')}")
-                
-                # ❌ NO DESTRUIR setup_engine aquí
-                # El wizard sigue vivo hasta que el usuario haga click en "IR AL LOGIN"
-                print("ℹ️ Esperando que el usuario haga click en 'IR AL LOGIN'...")
-                
-            else:
-                print(f"❌ Setup falló: {message}")
-                # El wizard mostrará el error internamente
-                
-        except Exception as e:
-            print(f"❌ Error manejando setup completado: {e}")
-            import traceback
-            traceback.print_exc()
-
+        """Maneja completación del setup"""
+        logger.info(f"📊 Setup completado: {success} - {message}")
+        
+        if success:
+            logger.info(f"✅ Credenciales: {credenciales.get('username', 'N/A')}")
+        else:
+            logger.error(f"❌ Setup falló: {message}")
+    
     def initializeMainApp(self, userData):
         """Inicializa la aplicación principal - CORREGIDO para recrear siempre"""
         try:
             # PASO 1: Destruir login engine si existe
             if self.login_engine:
                 try:
-                    print("🗑️ Destruyendo login_engine...")
+                    logger.info("🗑️ Destruyendo login_engine...")
                     self.login_engine.deleteLater()
                     self.login_engine = None
-                    print("✅ login_engine destruido")
+                    logger.info("✅ login_engine destruido")
                 except Exception as e:
-                    print(f"⚠️ Error destruyendo login engine: {e}")
+                    logger.error(f"⚠️ Error destruyendo login engine: {e}")
                     self.login_engine = None
             
             # PASO 2: SIEMPRE crear nuevo controller (no reutilizar)
-            print("🔧 Creando nuevo AppController...")
+            logger.info("🔧 Creando nuevo AppController...")
             self.main_controller = AppController()
-            print("✅ Nuevo AppController creado")
+            logger.info("✅ Nuevo AppController creado")
             
             # PASO 3: Crear nueva engine para main app
             self.main_engine = QQmlApplicationEngine()
@@ -1952,15 +2017,45 @@ class AuthAppController(QObject):
             root_context.setContextProperty("authController", self)
             
             # PASO 5: Cargar main.qml
-            main_qml = get_resource_path("main.qml")
+            main_qml = get_resource_path("main.qml", logger)
             self.main_engine.load(QUrl.fromLocalFile(main_qml))
             
             # PASO 6: Verificar que se cargó correctamente
             if not self.main_engine.rootObjects():
-                print("❌ Error: main.qml no se cargó correctamente")
+                logger.error("❌ Error: main.qml no se cargó correctamente")
                 return
             
-            print("✅ main.qml cargado exitosamente")
+            logger.info("✅ main.qml cargado exitosamente")
+            
+            # ✅ ✅ ✅ AGREGAR ESTAS LÍNEAS AQUÍ (DESPUÉS DE VERIFICAR rootObjects)
+            # =========================================================
+            # ESTABLECER ICONO EN LA VENTANA PRINCIPAL
+            # =========================================================
+            try:
+                window = self.main_engine.rootObjects()[0]
+                
+                # Obtener ruta del icono
+                if getattr(sys, 'frozen', False):
+                    base_path = Path(sys._MEIPASS)
+                else:
+                    base_path = Path(__file__).parent
+                
+                icon_paths = [
+                    base_path / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.ico",
+                    base_path / "_internal" / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.ico",
+                ]
+                
+                for icon_path in icon_paths:
+                    if icon_path.exists():
+                        window.setIcon(QIcon(str(icon_path)))
+                        logger.info(f"✅ Icono establecido en ventana principal: {icon_path}")
+                        break
+                else:
+                    logger.warning("⚠️ No se encontró archivo de icono para la ventana principal")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Error estableciendo icono en ventana principal: {e}")
+            # =========================================================
             
             # ===== AGREGAR ICONO A LA VENTANA PRINCIPAL =====
             try:
@@ -1980,29 +2075,29 @@ class AuthAppController(QObject):
                     if os.path.exists(icon_path):
                         from PySide6.QtGui import QIcon
                         window.setIcon(QIcon(icon_path))
-                        print(f"✅ Icono de ventana establecido: {icon_path}")
+                        logger.info(f"✅ Icono de ventana establecido: {icon_path}")
                         icon_loaded = True
                         break
                 
                 if not icon_loaded:
-                    print("⚠️ No se encontró ningún archivo de icono para la ventana")
+                    logger.warning("⚠️ No se encontró ningún archivo de icono para la ventana")
                     
             except Exception as e:
-                print(f"⚠️ Error estableciendo icono de ventana: {e}")
+                logger.error(f"⚠️ Error estableciendo icono de ventana: {e}")
             # ===== FIN ICONO =====
             
             # PASO 7: Inicializar modelos
-            print("🔧 Inicializando modelos...")
+            logger.info("🔧 Inicializando modelos...")
             self.main_controller.initialize_models()
             
             # PASO 8: Establecer autenticación con delay
             QTimer.singleShot(800, lambda: self._set_user_authentication(userData))
             
             self.authenticationSuccess.emit()
-            print("🎉 Aplicación principal inicializada exitosamente")
+            logger.info("🎉 Aplicación principal inicializada exitosamente")
             
         except Exception as e:
-            print(f"❌ Error inicializando app principal: {e}")
+            logger.error(f"❌ Error inicializando app principal: {e}")
             import traceback
             traceback.print_exc()
             
@@ -2013,11 +2108,11 @@ class AuthAppController(QObject):
         """Establece la autenticación del usuario - MEJORADO con verificaciones"""
         try:
             if not self.main_controller:
-                print("❌ Error: main_controller es None al establecer autenticación")
+                logger.error("❌ Error: main_controller es None al establecer autenticación")
                 return
             
             if not userData:
-                print("❌ Error: userData es None al establecer autenticación")
+                logger.error("❌ Error: userData es None al establecer autenticación")
                 return
             
             user_id = userData.get('id', 0)
@@ -2025,23 +2120,23 @@ class AuthAppController(QObject):
             user_role = userData.get('rol_nombre', 'Usuario')
             # Verificar que los datos son válidos
             if user_id <= 0:
-                print("❌ Error: ID de usuario inválido")
+                logger.error("❌ Error: ID de usuario inválido")
                 return
             
             if not user_role:
-                print("❌ Error: Rol de usuario vacío")
+                logger.error("❌ Error: Rol de usuario vacío")
                 return
             
             # Establecer autenticación
             self.main_controller.set_usuario_autenticado(user_id, user_name, user_role)
             
-            print("✅ Autenticación establecida exitosamente")
+            logger.info("✅ Autenticación establecida exitosamente")
             
             # Verificación adicional con delay
             QTimer.singleShot(1000, lambda: self._verify_authentication(user_id, user_role))
             
         except Exception as e:
-            print(f"❌ Error estableciendo autenticación: {e}")
+            logger.error(f"❌ Error estableciendo autenticación: {e}")
             import traceback
             traceback.print_exc()
     
@@ -2052,38 +2147,38 @@ class AuthAppController(QObject):
                 actual_id = self.main_controller.usuario_actual_id
                 actual_role = self.main_controller.usuario_actual_rol
                 
-                print(f"🔍 VERIFICACIÓN DE AUTENTICACIÓN:")
-                print(f"   Esperado: ID={expected_id}, Rol='{expected_role}'")
-                print(f"   Actual: ID={actual_id}, Rol='{actual_role}'")
+                logger.info(f"🔍 VERIFICACIÓN DE AUTENTICACIÓN:")
+                logger.info(f"   Esperado: ID={expected_id}, Rol='{expected_role}'")
+                logger.info(f"   Actual: ID={actual_id}, Rol='{actual_role}'")
                 
                 if actual_id == expected_id and actual_role == expected_role:
                     pass
                 else:
-                    print("⚠️ Autenticación no coincide - reintentando...")
+                    logger.warning("⚠️ Autenticación no coincide - reintentando...")
                     # Reintentar establecer autenticación
                     user_name = f"Usuario {expected_id}"
                     self.main_controller.set_usuario_autenticado(expected_id, user_name, expected_role)
             else:
-                print("❌ main_controller es None durante verificación")
+                logger.error("❌ main_controller es None durante verificación")
                 
         except Exception as e:
-            print(f"❌ Error verificando autenticación: {e}")
+            logger.error(f"❌ Error verificando autenticación: {e}")
     
     # Métodos públicos para QML
     @Slot()
     def showLogin(self):
         """Muestra login (para uso desde QML)"""
-        print("📞 showLogin() llamado desde QML")
+        logger.info("📞 showLogin() llamado desde QML")
         
         # Destruir setup engine si existe
         if self.setup_engine:
             try:
-                print("🗑️ Destruyendo setup_engine antes de crear login...")
+                logger.info("🗑️ Destruyendo setup_engine antes de crear login...")
                 self.setup_engine.deleteLater()
                 self.setup_engine = None
-                print("✅ Setup engine destruido")
+                logger.info("✅ Setup engine destruido")
             except Exception as e:
-                print(f"⚠️ Error destruyendo setup engine: {e}")
+                logger.error(f"⚠️ Error destruyendo setup engine: {e}")
                 self.setup_engine = None
         
         # Usar un timer para crear el login después de un pequeño delay
@@ -2097,13 +2192,13 @@ class AuthAppController(QObject):
     @Slot()
     def forceRestart(self):
         """Fuerza un reinicio completo (para debug)"""
-        print("🔄 FORZANDO REINICIO COMPLETO...")
+        logger.info("🔄 FORZANDO REINICIO COMPLETO...")
         
         # Limpiar todo
         self.main_controller = None
         self.main_engine = None
         self.login_engine = None
-        self.setup_engine = None  # 🆕
+        self.setup_engine = None
         self.authenticated = False
         
         # Forzar garbage collection
@@ -2113,106 +2208,324 @@ class AuthAppController(QObject):
         # Recrear login después de un delay
         QTimer.singleShot(1000, self.createAndShowLogin)
         
-        print("✅ Reinicio completo ejecutado")
+        logger.info("✅ Reinicio completo ejecutado")
+
+
+# ============================================
+# ✅ FUNCIONES AUXILIARES
+# ============================================
+
 def register_qml_types():
-    register_inventario_model()
-    register_venta_model() 
-    register_compra_model()
-    register_proveedor_model()
-    register_usuario_model()
-    register_consulta_model()
-    register_gasto_model()
-    register_paciente_model()
-    register_laboratorio_model()
-    register_trabajador_model()
-    register_enfermeria_model()
-    register_configuracion_model()
-    register_confi_laboratorio_model()
-    register_confi_enfermeria_model()
-    register_confi_consulta_model()
-    register_confi_trabajadores_model()
-    register_reportes_model()
-    register_dashboard_model()
-    register_auth_model()
-    register_cierre_caja_model()
-    register_ingreso_extra_model()
+    """Registra tipos QML con manejo de errores"""
+    try:
+        logger.info("📝 Registrando tipos QML...")
+        
+        register_inventario_model()
+        register_venta_model() 
+        register_compra_model()
+        register_proveedor_model()
+        register_usuario_model()
+        register_consulta_model()
+        register_gasto_model()
+        register_paciente_model()
+        register_laboratorio_model()
+        register_trabajador_model()
+        register_enfermeria_model()
+        register_configuracion_model()
+        register_confi_laboratorio_model()
+        register_confi_enfermeria_model()
+        register_confi_consulta_model()
+        register_confi_trabajadores_model()
+        register_reportes_model()
+        register_dashboard_model()
+        register_auth_model()
+        register_cierre_caja_model()
+        register_ingreso_extra_model()
+        
+        logger.info("✅ Tipos QML registrados")
+        return True
+        
+    except Exception as e:
+        log_exception(logger, e, "Registrando tipos QML")
+        return False
+
 
 def setup_qml_context(engine, controller):
+    """Configura contexto QML"""
     root_context = engine.rootContext()
     root_context.setContextProperty("authController", controller)
     root_context.setContextProperty("authModel", controller.auth_model)
 
+
+# ============================================
+# ✅ FUNCIÓN MAIN MEJORADA
+# ============================================
+
 def main():
-    # 🆕 CONFIGURAR ESTILO ANTES DE CREAR LA APP
-    os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
-    app = QGuiApplication(sys.argv)
-    app.setApplicationName("Sistema de GestiÃ³n MÃ©dica")
-    app.setApplicationVersion("1.0.0")
-    app.setOrganizationName("Clínica Maria Inmaculada")
+    """
+    ✅ FUNCIÓN MAIN MEJORADA
+    - Validación temprana de recursos
+    - Logging completo
+    - Manejo robusto de errores
+    - MessageBox para errores críticos
+    """
+    
+    # ============================================
+    # PASO 1: VALIDAR RECURSOS ANTES DE INICIAR
+    # ============================================
+    logger.info("="*60)
+    logger.info("🔍 VALIDANDO RECURSOS DEL EJECUTABLE")
+    logger.info("="*60)
     
     try:
-        # Ruta al archivo de icono (puede ser .ico, .png, .svg)
-        icon_path = os.path.join(os.path.dirname(__file__), "Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.ico")
+        # Listar archivos disponibles (debugging)
+        list_available_files(logger)
         
-        # Si el archivo existe, establecerlo como icono
-        if os.path.exists(icon_path):
-            from PySide6.QtGui import QIcon
-            app.setWindowIcon(QIcon(icon_path))
-            print(f"Ã¢Å“â€¦ Icono de aplicaciÃƒÂ³n cargado: {icon_path}")
-        else:
-            print(f"Ã¢Å¡ Ã¯Â¸Â Icono no encontrado en: {icon_path}")
+        # Validar que todos los recursos existan
+        recursos_ok, error_msg = validate_all_resources(logger)
+        
+        if not recursos_ok:
+            logger.error(f"❌ Validación de recursos falló:\n{error_msg}")
+            show_error_message(
+                "Recursos Faltantes",
+                "La aplicación no puede iniciar porque faltan archivos necesarios.\n\n"
+                "Reinstala la aplicación o contacta soporte.",
+                error_msg
+            )
+            return 1
+        
+        logger.info("✅ Validación de recursos exitosa")
+        
     except Exception as e:
-        print(f"Ã¢Å¡ Ã¯Â¸Â Error cargando icono: {e}")
-    # ===== FIN ICONO =====
+        log_exception(logger, e, "Validando recursos")
+        show_error_message(
+            "Error de Validación",
+            "No se pudieron validar los recursos del sistema.",
+            str(e)
+        )
+        return 1
+    
+    # ============================================
+    # PASO 2: CONFIGURAR APLICACIÓN QT
+    # ============================================
     try:
-        register_qml_types()
+        logger.info("🎨 Configurando aplicación Qt...")
+        
+        os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
+        
+        app = QGuiApplication(sys.argv)
+        app.setApplicationName("Sistema de Gestión Médica")
+        app.setApplicationVersion("1.0.0")
+        app.setOrganizationName("Clínica Maria Inmaculada")
+
+        try:
+            if getattr(sys, 'frozen', False):
+                base_path = Path(sys._MEIPASS)
+            else:
+                base_path = Path(__file__).parent
+            
+            icon_paths = [
+                base_path / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.ico",
+                base_path / "_internal" / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.ico",
+            ]
+            
+            for icon_path in icon_paths:
+                if icon_path.exists():
+                    app.setWindowIcon(QIcon(str(icon_path)))
+                    logger.info(f"✅ Icono de aplicación establecido: {icon_path}")
+                    break
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo establecer icono: {e}")
+        
+        logger.info("✅ Aplicación Qt configurada")
+        
+    except Exception as e:
+        log_exception(logger, e, "Configurando Qt")
+        show_error_message(
+            "Error de Inicialización",
+            "No se pudo inicializar la aplicación Qt.",
+            str(e)
+        )
+        return 1
+    
+    # ============================================
+    # PASO 3: CONFIGURAR ICONO
+    # ============================================
+    try:
+        icon_path = os.path.join(
+            os.path.dirname(__file__), 
+            "Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.ico"
+        )
+        
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
+            logger.info(f"✅ Icono cargado: {icon_path}")
+        else:
+            logger.warning(f"⚠️ Icono no encontrado: {icon_path}")
+            
+    except Exception as e:
+        logger.warning(f"⚠️ Error cargando icono: {e}")
+        # No crítico, continuar
+    
+    # ============================================
+    # PASO 4: REGISTRAR TIPOS QML
+    # ============================================
+    try:
+        logger.info("📝 Registrando tipos QML...")
+        
+        if not register_qml_types():
+            show_error_message(
+                "Error de Registro",
+                "No se pudieron registrar los tipos QML.\n\nRevisa los logs.",
+                "Ver logs/ClinicaApp_YYYYMMDD.log"
+            )
+            return 1
+        
+        logger.info("✅ Tipos QML registrados")
+        
+    except Exception as e:
+        log_exception(logger, e, "Registrando tipos QML")
+        show_error_message(
+            "Error de Registro",
+            "No se pudieron registrar los tipos QML.",
+            str(e)
+        )
+        return 1
+    
+    # ============================================
+    # PASO 5: CREAR CONTROLADOR DE AUTENTICACIÓN
+    # ============================================
+    try:
+        logger.info("🔐 Creando AuthAppController...")
         
         auth_controller = AuthAppController()
         
-        # 🆕 VERIFICAR SI ES PRIMERA VEZ
-        print("\n" + "="*60)
-        print("🔍 VERIFICANDO CONFIGURACIÓN INICIAL")
-        print("="*60 + "\n")
+        logger.info("✅ AuthAppController creado")
         
+    except Exception as e:
+        log_exception(logger, e, "Creando AuthAppController")
+        show_error_message(
+            "Error de Inicialización",
+            "No se pudo crear el controlador de autenticación.",
+            str(e)
+        )
+        return 1
+    
+    # ============================================
+    # PASO 6: VERIFICAR CONFIGURACIÓN (PRIMERA VEZ?)
+    # ============================================
+    logger.info("")
+    logger.info("="*60)
+    logger.info("🔍 VERIFICANDO CONFIGURACIÓN INICIAL")
+    logger.info("="*60)
+    
+    es_primera_vez = False
+    
+    try:
         config_manager = ConfigManager()
         es_primera_vez = config_manager.es_primera_vez()
+        logger.info(f"✅ ConfigManager inicializado")
+        logger.info(f"   Primera vez: {es_primera_vez}")
         
+    except FileNotFoundError as e:
+        logger.warning(f"⚠️ Archivo .env no encontrado")
+        logger.info("   → Forzando Setup Wizard (primera vez)")
+        es_primera_vez = True
+        
+    except Exception as e:
+        log_exception(logger, e, "Leyendo configuración")
+        logger.warning("   → Forzando Setup Wizard por seguridad")
+        es_primera_vez = True
+    
+    # ============================================
+    # PASO 7: DECIDIR QUÉ MOSTRAR (SETUP O LOGIN)
+    # ============================================
+    try:
         if es_primera_vez:
-            print("🆕 PRIMERA EJECUCIÓN DETECTADA")
-            print("   → Mostrando Setup Wizard\n")
+            logger.info("")
+            logger.info("🆕 PRIMERA EJECUCIÓN DETECTADA")
+            logger.info("   → Mostrando Setup Wizard")
+            logger.info("")
             
-            # Mostrar Setup Wizard
             auth_controller.createAndShowSetupWizard()
-        else:
-            print("✅ CONFIGURACIÓN EXISTENTE ENCONTRADA")
-            print("   → Mostrando Login Normal\n")
             
-            # Mostrar Login Normal
+        else:
+            logger.info("")
+            logger.info("✅ CONFIGURACIÓN EXISTENTE ENCONTRADA")
+            logger.info("   → Mostrando Login Normal")
+            logger.info("")
+            
+            # Crear y configurar login engine
             login_engine = QQmlApplicationEngine()
             setup_qml_context(login_engine, auth_controller)
             
-            login_qml = get_resource_path("login.qml")
-            if not os.path.exists(login_qml):
-                print(f"❌ Archivo login.qml no encontrado: {login_qml}")
-                return -1
+            # Obtener ruta de login.qml (ya validada en PASO 1)
+            login_qml = get_resource_path("login.qml", logger)
             
+            # Cargar
             login_engine.load(QUrl.fromLocalFile(login_qml))
             
+            # Validar carga
             if not login_engine.rootObjects():
-                print("❌ Error cargando login.qml")
-                return -1
+                logger.error("❌ login.qml no se cargó correctamente")
+                show_error_message(
+                    "Error de Carga",
+                    "No se pudo cargar la ventana de login.",
+                    f"Archivo: {login_qml}"
+                )
+                return 1
+            
+            logger.info("✅ Login cargado correctamente")
         
-        print("="*60)
-        print("✅ Aplicación iniciada correctamente")
-        print("="*60 + "\n")
-        
+    except Exception as e:
+        log_exception(logger, e, "Mostrando interfaz inicial")
+        show_error_message(
+            "Error Crítico",
+            "No se pudo mostrar la interfaz inicial.\n\nRevisa los logs.",
+            str(e)
+        )
+        return 1
+    
+    # ============================================
+    # PASO 8: EJECUTAR APLICACIÓN
+    # ============================================
+    logger.info("")
+    logger.info("="*60)
+    logger.info("🚀 APLICACIÓN INICIADA EXITOSAMENTE")
+    logger.info("="*60)
+    logger.info("")
+    
+    try:
         return app.exec()
         
     except Exception as e:
-        print(f"❌ Error crítico iniciando aplicación: {e}")
-        import traceback
-        traceback.print_exc()
-        return -1
+        log_exception(logger, e, "Ejecutando aplicación")
+        show_error_message(
+            "Error de Ejecución",
+            "La aplicación encontró un error durante la ejecución.",
+            str(e)
+        )
+        return 1
 
+
+# ============================================
+# ✅ PUNTO DE ENTRADA CON TRY-CATCH GLOBAL
+# ============================================
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        exit_code = main()
+        logger.info(f"🏁 Aplicación finalizada con código: {exit_code}")
+        sys.exit(exit_code)
+        
+    except Exception as e:
+        # Último recurso: capturar cualquier excepción no manejada
+        log_exception(logger, e, "EXCEPCIÓN NO CAPTURADA EN MAIN")
+        
+        show_error_message(
+            "Error Fatal",
+            "La aplicación encontró un error fatal.\n\nConsulta el archivo de logs.",
+            str(e)
+        )
+        
+        logger.critical("💥 APLICACIÓN TERMINADA POR ERROR FATAL")
+        sys.exit(1)

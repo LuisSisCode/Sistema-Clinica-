@@ -1,19 +1,21 @@
 """
-Configuración SEGURA de PyInstaller para Sistema Clínica
-- Archivos QML empaquetados internamente
-- Scripts SQL protegidos
-- Icono en todas las ventanas
+Configuración CORREGIDA - Archivos QML y SQL en RAÍZ
 """
 
 import sys
 import os
 from pathlib import Path
+from PyInstaller.building.build_main import Analysis, EXE, COLLECT, PYZ
 
 # Directorio base
 project_dir = Path('.').resolve()
 
+print("="*60)
+print("🔨 CONFIGURACIÓN DE PYINSTALLER - VERSIÓN CORREGIDA")
+print("="*60)
+
 # ============================================
-# 1. ARCHIVOS QML (EMPAQUETADOS INTERNAMENTE)
+# 1. ARCHIVOS QML (EN RAÍZ - CORREGIDO)
 # ============================================
 qml_files = [
     'main.qml', 'login.qml', 'setup_wizard.qml', 'Dashboard.qml',
@@ -30,50 +32,75 @@ qml_files = [
     'MarcaComboBox.qml', 'ProveedorComboBox.qml', 'GlobalDataCenter.qml',
 ]
 
-# Empaquetar QML en _internal (no visible directamente)
-datas_qml = [(str(project_dir / qml), '_internal/qml') for qml in qml_files 
-             if (project_dir / qml).exists()]
+datas_qml = []
+for qml_file in qml_files:
+    full_path = project_dir / qml_file
+    if full_path.exists():
+        # ✅ CORRECCIÓN CRÍTICA: Incluir archivo individualmente
+        datas_qml.append((str(full_path), '.'))
+        print(f"✅ QML incluido: {qml_file}")
+    else:
+        print(f"⚠️ QML no encontrado: {qml_file}")
 
-print(f"✅ {len(datas_qml)} archivos QML empaquetados en _internal/qml")
+print(f"📦 Total archivos QML: {len(datas_qml)}")
 
 # ============================================
-# 2. SCRIPTS SQL (PROTEGIDOS)
+# 2. SCRIPTS SQL (EN database_scripts/ - CORREGIDO)
 # ============================================
 datas_db_scripts = []
 db_scripts_dir = project_dir / 'database_scripts'
 if db_scripts_dir.exists():
-    # Empaquetar en _internal (no visible)
-    datas_db_scripts.append((str(db_scripts_dir), '_internal/database_scripts'))
-    print(f"✅ Scripts SQL empaquetados en _internal/database_scripts")
+    for sql_file in db_scripts_dir.glob('*.sql'):
+        # ✅ CORRECCIÓN CRÍTICA: Incluir archivos SQL individualmente
+        datas_db_scripts.append((str(sql_file), 'database_scripts'))
+        print(f"✅ SQL incluido: {sql_file.name}")
+    print(f"📦 Total archivos SQL: {len(datas_db_scripts)}")
+else:
+    print("❌ ERROR: Carpeta database_scripts no encontrada")
 
 # ============================================
-# 3. RECURSOS (ICONOS - NECESARIOS)
+# 3. RECURSOS (ICONOS)
 # ============================================
 datas_resources = []
 resources_dir = project_dir / 'Resources'
 if resources_dir.exists():
-    # Iconos sí deben estar visibles para Qt
+    # ✅ Incluir carpeta Resources completa
     datas_resources.append((str(resources_dir), 'Resources'))
-    print(f"✅ Recursos incluidos")
+    print("✅ Carpeta Resources incluida")
+else:
+    print("⚠️ Carpeta Resources no encontrada")
 
 # ============================================
-# 4. DOCUMENTACIÓN PARA USUARIO
+# 4. ARCHIVOS ADICIONALES (MODIFICADO)
 # ============================================
-datas_docs = []
-readme = project_dir / 'README.md'
-if readme.exists():
-    datas_docs.append((str(readme), '.'))
+datas_additional = []
+additional_files = [
+    'generar_pdf.py', 
+    'setup_handler.py',
+    'logger_config.py',        # ✅ AGREGADO
+    'resource_validator.py',   # ✅ AGREGADO
+    'README.md', 
+    'LEEME.txt'
+]
+
+for file in additional_files:
+    full_path = project_dir / file
+    if full_path.exists():
+        datas_additional.append((str(full_path), '.'))
+        print(f"✅ Archivo adicional: {file}")
+    else:
+        print(f"⚠️ Archivo adicional no encontrado: {file}")
 
 # ============================================
-# 5. COMBINAR DATOS
+# 5. COMBINAR TODOS LOS DATOS
 # ============================================
-all_datas = datas_qml + datas_db_scripts + datas_resources + datas_docs
+all_datas = datas_qml + datas_db_scripts + datas_resources + datas_additional
+print(f"📊 TOTAL ARCHIVOS A INCLUIR: {len(all_datas)}")
 
 # ============================================
-# 6. MÓDULOS OCULTOS
+# 6. MÓDULOS OCULTOS (MODIFICADO)
 # ============================================
 hiddenimports = [
-    # PySide6
     'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtQml',
     'PySide6.QtQuick', 'PySide6.QtQuickControls2', 'PySide6.QtWidgets',
     
@@ -85,14 +112,22 @@ hiddenimports = [
     'backend.core.config_manager',
     
     # Models
-    'backend.models', 'backend.models.auth_model',
-    'backend.models.usuario_model', 'backend.models.paciente_model',
-    'backend.models.trabajador_model', 'backend.models.consulta_model',
-    'backend.models.enfermeria_model', 'backend.models.laboratorio_model',
-    'backend.models.inventario_model', 'backend.models.proveedor_model',
-    'backend.models.compra_model', 'backend.models.venta_model',
-    'backend.models.gasto_model', 'backend.models.cierre_caja_model',
-    'backend.models.ingreso_extra_model', 'backend.models.reportes_model',
+    'backend.models',
+    'backend.models.auth_model',
+    'backend.models.usuario_model',
+    'backend.models.paciente_model',
+    'backend.models.trabajador_model',
+    'backend.models.consulta_model',
+    'backend.models.enfermeria_model',
+    'backend.models.laboratorio_model',
+    'backend.models.inventario_model',
+    'backend.models.proveedor_model',
+    'backend.models.compra_model',
+    'backend.models.venta_model',
+    'backend.models.gasto_model',
+    'backend.models.cierre_caja_model',
+    'backend.models.ingreso_extra_model',
+    'backend.models.reportes_model',
     'backend.models.dashboard_model',
     
     # Configuración Models
@@ -104,14 +139,22 @@ hiddenimports = [
     'backend.models.ConfiguracionModel.ConfiTrabajadores_model',
     
     # Repositories
-    'backend.repositories', 'backend.repositories.auth_repository',
-    'backend.repositories.usuario_repository', 'backend.repositories.paciente_repository',
-    'backend.repositories.trabajador_repository', 'backend.repositories.consulta_repository',
-    'backend.repositories.enfermeria_repository', 'backend.repositories.laboratorio_repository',
-    'backend.repositories.producto_repository', 'backend.repositories.proveedor_repository',
-    'backend.repositories.compra_repository', 'backend.repositories.venta_repository',
-    'backend.repositories.gasto_repository', 'backend.repositories.cierre_caja_repository',
-    'backend.repositories.ingreso_extra_repository', 'backend.repositories.reportes_repository',
+    'backend.repositories',
+    'backend.repositories.auth_repository',
+    'backend.repositories.usuario_repository',
+    'backend.repositories.paciente_repository',
+    'backend.repositories.trabajador_repository',
+    'backend.repositories.consulta_repository',
+    'backend.repositories.enfermeria_repository',
+    'backend.repositories.laboratorio_repository',
+    'backend.repositories.producto_repository',
+    'backend.repositories.proveedor_repository',
+    'backend.repositories.compra_repository',
+    'backend.repositories.venta_repository',
+    'backend.repositories.gasto_repository',
+    'backend.repositories.cierre_caja_repository',
+    'backend.repositories.ingreso_extra_repository',
+    'backend.repositories.reportes_repository',
     
     # Configuración Repositories
     'backend.repositories.ConfiguracionRepositor',
@@ -122,16 +165,25 @@ hiddenimports = [
     'backend.repositories.ConfiguracionRepositor.ConfiTrabajadores_repository',
     
     # Dependencias
-    'pyodbc', 'reportlab', 'reportlab.pdfgen', 'reportlab.pdfgen.canvas',
+    'pyodbc', 
+    'reportlab', 'reportlab.pdfgen', 'reportlab.pdfgen.canvas',
     'reportlab.lib', 'reportlab.lib.pagesizes', 'reportlab.lib.styles',
     'reportlab.lib.colors', 'reportlab.lib.units',
     'reportlab.platypus', 'reportlab.platypus.paragraph',
     'reportlab.platypus.tables', 'reportlab.platypus.frames',
-    'dotenv', 'pathlib', 'PIL', 'PIL.Image',
+    'dotenv', 
+    'pathlib', 
+    'PIL', 'PIL.Image',
+    
+    # ✅ AGREGADOS AL FINAL:
+    'logger_config',
+    'resource_validator',
 ]
 
+print("✅ Módulos ocultos configurados")
+
 # ============================================
-# 7. ANÁLISIS
+# 7. ANÁLISIS PRINCIPAL
 # ============================================
 a = Analysis(
     ['main.py'],
@@ -154,7 +206,6 @@ pyz = PYZ(a.pure, a.zipped_data)
 # ============================================
 # 8. EJECUTABLE CON ICONO
 # ============================================
-# Buscar icono
 icon_path = None
 possible_icons = [
     'Resources/iconos/logo_CMI.ico',
@@ -168,7 +219,7 @@ for icon in possible_icons:
         break
 
 if not icon_path:
-    print("⚠️ No se encontró icono, ejecutable sin icono")
+    print("⚠️ No se encontró icono")
 
 exe = EXE(
     pyz,
@@ -180,13 +231,13 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # Sin consola (app gráfica)
+    console=False,  # ✅ SIN CONSOLA
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=icon_path,  # Icono del ejecutable
+    icon=icon_path,
 )
 
 coll = COLLECT(
@@ -199,11 +250,6 @@ coll = COLLECT(
     name='ClinicaApp',
 )
 
-print("\n" + "="*60)
-print("✅ CONFIGURACIÓN DE SEGURIDAD APLICADA")
 print("="*60)
-print(f"🔒 Archivos QML: Empaquetados en _internal/qml")
-print(f"🔒 Scripts SQL: Empaquetados en _internal/database_scripts")
-print(f"📦 Icono: {icon_path if icon_path else 'No configurado'}")
-print(f"📊 Total archivos: {len(all_datas)}")
-print("="*60 + "\n")
+print("🎯 CONFIGURACIÓN COMPLETADA - LISTO PARA COMPILAR")
+print("="*60)

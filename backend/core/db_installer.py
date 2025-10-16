@@ -14,16 +14,52 @@ class DatabaseInstaller:
     """Instalador automatizado de base de datos"""
     
     def __init__(self):
-        """Inicializar instalador de BD con rutas correctas"""
-        if getattr(sys, 'frozen', False):
-            # Ejecutable: scripts en _internal
-            base_path = sys._MEIPASS
-            self.scripts_dir = Path(base_path) / '_internal' / 'database_scripts'
-        else:
-            # Desarrollo: scripts en raíz
-            self.scripts_dir = Path(__file__).parent.parent.parent / 'database_scripts'
+        """
+        ✅ VERSIÓN CORREGIDA: Inicializar instalador con rutas correctas
         
-        print(f"📁 Directorio de scripts SQL: {self.scripts_dir}")
+        Cambios:
+        - En ejecutable: Busca en database_scripts/ (raíz de _MEIPASS)
+        - Ya NO busca en _internal/database_scripts/
+        """
+        if getattr(sys, 'frozen', False):
+            # ✅ EJECUTABLE: Scripts en RAÍZ de _MEIPASS
+            base_path = sys._MEIPASS
+            
+            # Intentar múltiples rutas por seguridad
+            possible_paths = [
+                Path(base_path) / 'database_scripts',              # PRIMERA OPCIÓN (correcta)
+                Path(base_path) / '_internal' / 'database_scripts', # Legacy (por si acaso)
+            ]
+            
+            # Buscar la que existe
+            self.scripts_dir = None
+            for path in possible_paths:
+                if path.exists():
+                    self.scripts_dir = path
+                    print(f"✅ Scripts SQL encontrados en: {path}")
+                    break
+            
+            # Si no encuentra, usar la primera y dar warning
+            if self.scripts_dir is None:
+                self.scripts_dir = possible_paths[0]
+                print(f"⚠️ Scripts SQL NO encontrados, usando ruta por defecto: {self.scripts_dir}")
+                print(f"   Archivos en base: {list(Path(base_path).iterdir())[:10]}")
+        else:
+            # ✅ DESARROLLO: Scripts en raíz del proyecto
+            self.scripts_dir = Path(__file__).parent.parent.parent / 'database_scripts'
+            print(f"🔍 MODO DESARROLLO - Scripts en: {self.scripts_dir}")
+        
+        print(f"📂 Directorio de scripts SQL configurado: {self.scripts_dir}")
+        print(f"   ¿Existe? {self.scripts_dir.exists()}")
+        
+        # Listar archivos .sql disponibles
+        if self.scripts_dir.exists():
+            sql_files = list(self.scripts_dir.glob('*.sql'))
+            print(f"   Archivos .sql encontrados: {len(sql_files)}")
+            for sql_file in sql_files:
+                print(f"      - {sql_file.name}")
+        else:
+            print(f"   ⚠️ ADVERTENCIA: Directorio no existe")
         
     def verificar_sql_server(self, server: str = "localhost\\SQLEXPRESS") -> Tuple[bool, str]:
         """

@@ -170,10 +170,38 @@ class GeneradorReportesPDF:
     """
     
     def __init__(self):
-        """Inicializar el generador de PDFs"""
-        self.setup_directories()
+        """Inicializa el generador con configuración por defecto"""
+        # Importaciones locales para no romper el resto del módulo si no se usan
+
+        # ✅ DETERMINAR DIRECTORIO BASE DE REPORTES
+        if getattr(sys, 'frozen', False):
+            # Ejecutable: usar APPDATA del usuario (Windows)
+            base_dir = Path(os.environ.get('APPDATA', Path.home())) / 'ClinicaMariaInmaculada'
+        else:
+            # Desarrollo: colocar reportes en la carpeta del proyecto (nivel superior)
+            base_dir = Path(__file__).resolve().parent.parent
+
+        # Crear estructura de directorios
+        try:
+            base_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # Fallback seguro al directorio de usuario
+            base_dir = Path.home() / 'ClinicaMariaInmaculada'
+            base_dir.mkdir(parents=True, exist_ok=True)
+
+        # Directorio de PDFs (como string para compatibilidad con os.path.join)
+        self.pdf_dir = str(base_dir / 'reportes')
+        os.makedirs(self.pdf_dir, exist_ok=True)
+
+        # Directorio de assets (proyecto)
+        project_dir = Path(__file__).resolve().parent.parent
+        self.assets_dir = str(project_dir / 'assets')
+        os.makedirs(self.assets_dir, exist_ok=True)
+
+        # Inicializar logo y campos relacionados
+        self.logo_path = None
         self.setup_logo()
-        
+
         # ✅ NUEVO: Información del responsable (se establecerá antes de generar)
         self._usuario_responsable_nombre = ""
         self._usuario_responsable_rol = ""
