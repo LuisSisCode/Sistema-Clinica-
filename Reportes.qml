@@ -37,7 +37,13 @@ Item {
     property var datosReporte: []
     property var resumenReporte: ({})
 
-    // Tipos de reportes disponibles - CAMBIO APLICADO
+    // ✅ NUEVA PROPIEDAD: Mensajes de estado del sistema
+    property string mensajeEstado: "🟢 Todos los módulos operativos"
+    property string colorEstado: successColor
+    property string mensajeError: ""
+    property bool mostrarMensajeError: false
+
+    // Tipos de reportes disponibles
     property var tiposReportes: [
         {
             id: 0,
@@ -104,7 +110,6 @@ Item {
             color: dangerColor
         },
         {
-            // ✅ CAMBIO PRINCIPAL: Nuevo nombre y descripción
             id: 8,
             nombre: "Reporte de Ingresos y Egresos",
             modulo: "financiero",
@@ -114,24 +119,111 @@ Item {
         }
     ]
 
-//holaaa
-
-    // Función para obtener título del reporte - ACTUALIZADA
-    function obtenerTituloReporte() {
-        switch(tipoReporteSeleccionado) {
-            case 1: return "REPORTE DE VENTAS DE FARMACIA"
-            case 2: return "REPORTE DE INVENTARIO DE PRODUCTOS"
-            case 3: return "REPORTE DE COMPRAS DE FARMACIA"
-            case 4: return "REPORTE DE CONSULTAS MÉDICAS"
-            case 5: return "REPORTE DE ANÁLISIS DE LABORATORIO"
-            case 6: return "REPORTE DE PROCEDIMIENTOS DE ENFERMERÍA"
-            case 7: return "REPORTE DE GASTOS OPERATIVOS"
-            case 8: return "REPORTE DE INGRESOS Y EGRESOS"  // ✅ CAMBIO APLICADO
-            default: return "REPORTE GENERAL"
+    // ✅ CORREGIDO: Mensaje de error emergente SIN DropShadow
+    Rectangle {
+        id: mensajeEmergente
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width * 0.8
+        height: 70
+        color: dangerColor
+        radius: 8
+        border.color: Qt.darker(dangerColor, 1.2)
+        border.width: 2
+        visible: mostrarMensajeError
+        z: 1000
+        
+        // ✅ ELIMINADO: DropShadow problemático
+        // En su lugar, usamos un efecto de sombra simple con otro rectángulo
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 2
+            anchors.leftMargin: 2
+            color: "#40000000"
+            radius: parent.radius
+            z: -1
+        }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 15
+            spacing: 15
+            
+            Rectangle {
+                width: 40
+                height: 40
+                color: "white"
+                radius: 20
+                
+                Label {
+                    anchors.centerIn: parent
+                    text: "⚠️"
+                    font.pixelSize: 18
+                }
+            }
+            
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+                
+                Label {
+                    text: "ADVERTENCIA DEL SISTEMA"
+                    font.pixelSize: 14
+                    font.bold: true
+                    color: whiteColor
+                    font.family: "Segoe UI"
+                }
+                
+                Label {
+                    text: mensajeError
+                    font.pixelSize: 12
+                    color: whiteColor
+                    font.family: "Segoe UI"
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+            }
+            
+            Button {
+                text: "✕"
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+                
+                background: Rectangle {
+                    color: parent.pressed ? "#40FFFFFF" : "transparent"
+                    radius: 15
+                    border.color: whiteColor
+                    border.width: 1
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: whiteColor
+                    font.bold: true
+                    font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    mostrarMensajeError = false
+                    mensajeError = ""
+                }
+            }
+        }
+        
+        // Auto-ocultar después de 8 segundos
+        Timer {
+            id: timerOcultarMensaje
+            interval: 8000
+            onTriggered: {
+                mostrarMensajeError = false
+                mensajeError = ""
+            }
         }
     }
 
-    // CONEXIONES AL MODELO DE REPORTES
+    // CONEXIONES AL MODELO DE REPORTES - MEJORADAS
     Connections {
         target: reportesModel
         function onReporteGenerado(success, message, totalRegistros) {
@@ -143,22 +235,61 @@ Item {
                     reporteGenerado = true
                     vistaActual = 1
                     mostrarNotificacionGeneracion(message, totalRegistros)
+                    
+                    // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+                    mensajeEstado = "🟢 Reporte generado exitosamente"
+                    colorEstado = successColor
                 } else {
                     mostrarNotificacionSinDatos()
+                    // ✅ NO CAMBIAR A VISTA DE RESULTADOS SI NO HAY DATOS
+                    vistaActual = 0
+                    
+                    // ✅ MOSTRAR MENSAJE EMERGENTE
+                    mensajeError = "No se encontraron registros para el período seleccionado. Verifique las fechas e intente nuevamente."
+                    mostrarMensajeError = true
+                    timerOcultarMensaje.restart()
+                    
+                    // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+                    mensajeEstado = "🟡 Sin datos para el período"
+                    colorEstado = warningColor
                 }
             } else {
                 console.log("❌ Error generando reporte:", message)
                 mostrarNotificacionError(message)
+                
+                // ✅ MOSTRAR MENSAJE EMERGENTE
+                mensajeError = "Error al generar el reporte: " + message
+                mostrarMensajeError = true
+                timerOcultarMensaje.restart()
+                
+                // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+                mensajeEstado = "🔴 Error en generación de reporte"
+                colorEstado = dangerColor
             }
         }
         
         function onReporteError(title, message) {
             console.log("❌ Error en reporte:", title, "-", message)
             mostrarNotificacionError(message)
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = title + ": " + message
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
+            
+            // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+            mensajeEstado = "🔴 Error del sistema"
+            colorEstado = dangerColor
         }
         
         function onLoadingChanged() {
             console.log("Loading changed:", reportesModel ? reportesModel.loading : false)
+            
+            // ✅ ACTUALIZAR ESTADO DURANTE CARGA
+            if (reportesModel && reportesModel.loading) {
+                mensajeEstado = "🟡 Generando reporte..."
+                colorEstado = warningColor
+            }
         }
     }
     
@@ -175,7 +306,7 @@ Item {
                 anchors.margins: 40
                 spacing: 32
                 
-                // Header del módulo PROFESIONAL
+                // Header del módulo PROFESIONAL - MEJORADO
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 120
@@ -236,6 +367,7 @@ Item {
                         
                         Item { Layout.fillWidth: true }
                         
+                        // ✅ MEJORADO: Estado del sistema dinámico
                         Rectangle {
                             Layout.preferredWidth: 220
                             Layout.preferredHeight: 70
@@ -258,9 +390,9 @@ Item {
                                 }
                                 
                                 Label {
-                                    text: "🟢 Todos los módulos operativos"
+                                    text: mensajeEstado
                                     font.pixelSize: 12
-                                    color: successColor
+                                    color: colorEstado
                                     font.bold: true
                                     font.family: "Segoe UI"
                                     Layout.alignment: Qt.AlignHCenter
@@ -391,7 +523,6 @@ Item {
                                         
                                         Label {
                                             text: {
-                                                // ✅ VERIFICACIÓN DEFENSIVA
                                                 if (tipoReporteCombo.currentIndex >= 0 && 
                                                     tiposReportesModel.count > 0 && 
                                                     tipoReporteCombo.currentIndex < tiposReportesModel.count) {
@@ -486,6 +617,36 @@ Item {
                                     onTextChanged: {
                                         fechaHasta = text
                                     }
+                                }
+                            }
+                        }
+                        
+                        // ✅ NUEVO: Panel de ayuda y validación
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 50
+                            color: "#FFF9E6"
+                            radius: 6
+                            border.color: "#FFEAA7"
+                            border.width: 1
+                            visible: tipoReporteSeleccionado > 0 && (!fechaDesde || !fechaHasta)
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 10
+                                
+                                Label {
+                                    text: "💡"
+                                    font.pixelSize: 16
+                                }
+                                
+                                Label {
+                                    text: "Complete ambas fechas para generar el reporte"
+                                    font.pixelSize: 12
+                                    color: "#E67E22"
+                                    font.family: "Segoe UI"
+                                    Layout.fillWidth: true
                                 }
                             }
                         }
@@ -699,16 +860,15 @@ Item {
                                 contentItem: RowLayout {
                                     anchors.fill: parent
                                     anchors.margins: 8
-                                    spacing: 10  // Aumenté el espaciado entre icono y texto
+                                    spacing: 10
                                     
                                     Image {
                                         source: "Resources/iconos/descargarpdf.png"
-                                        Layout.preferredWidth: 28  // Aumentado de 20 a 28
-                                        Layout.preferredHeight: 28 // Aumentado de 20 a 28
+                                        Layout.preferredWidth: 28
+                                        Layout.preferredHeight: 28
                                         fillMode: Image.PreserveAspectFit
                                         smooth: true
                                         
-                                        // Fallback si no encuentra la imagen
                                         onStatusChanged: {
                                             if (status === Image.Error) {
                                                 source = "Resources/iconos/descargarpdf.png"
@@ -721,7 +881,7 @@ Item {
                                         text: parent.parent.text
                                         color: whiteColor
                                         font.bold: true
-                                        font.pixelSize: 13  // Aumenté ligeramente el tamaño de fuente
+                                        font.pixelSize: 13
                                         font.family: "Segoe UI"
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
@@ -793,7 +953,6 @@ Item {
                                     font.family: "Segoe UI"
                                 }
                                 
-                                // ✅ NUEVO: Indicador especial para Ingresos y Egresos
                                 Rectangle {
                                     Layout.preferredWidth: 120
                                     Layout.preferredHeight: 25
@@ -823,13 +982,7 @@ Item {
                                 }
                             }
                         }
-
-
                                                 
-                        // ========================================
-                        // REEMPLAZAR LA TABLA COMPLETA EN REPORTES.QML
-                        // ========================================
-
                         // Tabla de datos con zebra striping Y TOTALES
                         Rectangle {
                             Layout.fillWidth: true
@@ -846,13 +999,13 @@ Item {
                                 // Encabezados de la tabla
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 50  // ✅ Aumentado para títulos largos
+                                    Layout.preferredHeight: 50
                                     color: blackColor
                                     radius: 4
                                     
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.margins: 8  // ✅ Reducido para más espacio
+                                        anchors.margins: 8
                                         spacing: 0
                                         
                                         Repeater {
@@ -863,13 +1016,11 @@ Item {
                                                 Layout.fillHeight: true
                                                 text: modelData.titulo
                                                 font.bold: true
-                                                font.pixelSize: 10  // ✅ Tamaño ligeramente más pequeño
+                                                font.pixelSize: 10
                                                 font.family: "Segoe UI"
                                                 color: whiteColor
                                                 horizontalAlignment: modelData.align || Text.AlignLeft
                                                 verticalAlignment: Text.AlignVCenter
-                                                
-                                                // ✅ AGREGAR AJUSTE DE TEXTO PARA TÍTULOS LARGOS
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 elide: Text.ElideRight
@@ -927,9 +1078,8 @@ Item {
                                         }
                                     }
                                 }                          
-                                // ==========================================
-                                // FILA DE TOTAL UNIVERSAL - SOLUCIÓN DEFINITIVA
-                                // ==========================================
+                                
+                                // FILA DE TOTAL UNIVERSAL
                                 Rectangle {
                                     id: filaTotal
                                     Layout.fillWidth: true
@@ -938,7 +1088,6 @@ Item {
                                     border.color: "#34495E"
                                     border.width: 2
                                     
-                                    // ✅ SOLUCIÓN 1: Obtener columnas DIRECTAMENTE aquí
                                     property var columnasLocal: obtenerColumnasReporte()
                                     
                                     RowLayout {
@@ -954,7 +1103,6 @@ Item {
                                             Rectangle {
                                                 id: celdaTotal
                                                 Layout.preferredWidth: {
-                                                    // ✅ ACCESO SEGURO
                                                     if (filaTotal.columnasLocal && 
                                                         index >= 0 && 
                                                         index < filaTotal.columnasLocal.length) {
@@ -968,7 +1116,6 @@ Item {
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: {
-                                                        // ✅ VALIDACIÓN COMPLETA
                                                         if (!filaTotal.columnasLocal || 
                                                             index < 0 || 
                                                             index >= filaTotal.columnasLocal.length) {
@@ -978,23 +1125,19 @@ Item {
                                                         var columna = filaTotal.columnasLocal[index]
                                                         var campoColumna = columna.campo
                                                         
-                                                        // MOSTRAR TOTAL en columna de valor monetario
                                                         if (campoColumna === "valor") {
                                                             var total = calcularTotalReporte()
                                                             return "Bs " + total.toFixed(2)
                                                         }
 
-                                                        // PARA VENTAS: mostrar "TOTAL GENERAL:" en VENDEDOR
                                                         if (tipoReporteSeleccionado === 1 && campoColumna === "usuario") {
                                                             return "TOTAL GENERAL:"
                                                         }
 
-                                                        // PARA GASTOS: mostrar "TOTAL GENERAL:" en DESCRIPCIÓN
                                                         if (tipoReporteSeleccionado === 7 && campoColumna === "descripcion") {
                                                             return "TOTAL GENERAL:"
                                                         }
 
-                                                        // PARA OTROS REPORTES: mostrar en penúltima columna
                                                         if (tipoReporteSeleccionado !== 7 && 
                                                             tipoReporteSeleccionado !== 1 && 
                                                             index === filaTotal.columnasLocal.length - 2 && 
@@ -1010,7 +1153,6 @@ Item {
                                                     font.family: "Segoe UI"
                                                     color: whiteColor
                                                     horizontalAlignment: {
-                                                        // ✅ VALIDACIÓN COMPLETA
                                                         if (!filaTotal.columnasLocal || 
                                                             index < 0 || 
                                                             index >= filaTotal.columnasLocal.length) {
@@ -1043,12 +1185,10 @@ Item {
                             }
                         }
 
-                        // ==========================================
                         // RESUMEN INFERIOR UNIVERSAL CON ESTADÍSTICAS
-                        // ==========================================
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: tipoReporteSeleccionado === 8 ? 110 : 90  // ✅ Más alto para reporte financiero
+                            Layout.preferredHeight: tipoReporteSeleccionado === 8 ? 110 : 90
                             color: "#F8F9FA"
                             radius: 4
                             border.color: "#E9ECEF"
@@ -1137,7 +1277,7 @@ Item {
                                         }
                                     }
                                     
-                                    // ✅ TERCERA FILA ESPECIAL PARA REPORTE FINANCIERO
+                                    // TERCERA FILA ESPECIAL PARA REPORTE FINANCIERO
                                     Row {
                                         spacing: 25
                                         visible: tipoReporteSeleccionado === 8
@@ -1219,20 +1359,39 @@ Item {
         mostrandoVistaPrevia = false
         datosReporte = []
         resumenReporte = {}
+        mostrarMensajeError = false
+        mensajeError = ""
+        
+        // ✅ RESTABLECER ESTADO DEL SISTEMA
+        mensajeEstado = "🟢 Todos los módulos operativos"
+        colorEstado = successColor
     }
     
     function generarReporte() {
         console.log("📊 Generando reporte real desde base de datos")
         console.log("🔍 Tipo:", tipoReporteSeleccionado, "Período:", fechaDesde, "al", fechaHasta)
         
+        // ✅ OCULTAR MENSAJES ANTERIORES
+        mostrarMensajeError = false
+        
         // Validaciones básicas
         if (tipoReporteSeleccionado === 0) {
             mostrarNotificacionError("Por favor seleccione un tipo de reporte")
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = "Debe seleccionar un tipo de reporte antes de continuar"
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
             return
         }
         
         if (!fechaDesde || !fechaHasta) {
             mostrarNotificacionError("Por favor ingrese las fechas del período")
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = "Complete ambas fechas (Desde y Hasta) para generar el reporte"
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
             return
         }
         
@@ -1240,20 +1399,43 @@ Item {
         if (!reportesModel) {
             console.log("❌ ReportesModel no disponible")
             mostrarNotificacionError("Sistema de reportes no disponible")
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = "El sistema de reportes no está disponible. Contacte al administrador."
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
+            
+            // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+            mensajeEstado = "🔴 Sistema de reportes no disponible"
+            colorEstado = dangerColor
             return
         }
         
         // Validar formato de fechas
         if (!reportesModel.validarFecha(fechaDesde) || !reportesModel.validarFecha(fechaHasta)) {
             mostrarNotificacionError("Formato de fecha inválido. Use DD/MM/YYYY")
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = "Formato de fecha incorrecto. Use el formato DD/MM/YYYY (ej: 15/10/2025)"
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
             return
         }
         
         // Validar rango de fechas
         if (!reportesModel.validarRangoFechas(fechaDesde, fechaHasta)) {
             mostrarNotificacionError("La fecha desde debe ser menor o igual a la fecha hasta")
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = "La fecha 'Desde' debe ser anterior o igual a la fecha 'Hasta'"
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
             return
         }
+        
+        // ✅ ACTUALIZAR ESTADO DURANTE GENERACIÓN
+        mensajeEstado = "🟡 Generando reporte..."
+        colorEstado = warningColor
         
         // Generar reporte real
         console.log("🚀 Llamando al modelo para generar reporte...")
@@ -1262,6 +1444,10 @@ Item {
         if (!success) {
             console.log("❌ El modelo reportó error inmediato")
             mostrarNotificacionError("Error iniciando generación del reporte")
+            
+            // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+            mensajeEstado = "🔴 Error iniciando reporte"
+            colorEstado = dangerColor
         }
     }
     
@@ -1272,16 +1458,30 @@ Item {
             if (!reporteGenerado || !datosReporte || datosReporte.length === 0) {
                 console.log("❌ No hay reporte generado para descargar")
                 mostrarNotificacionError("Primero debe generar un reporte")
+                
+                // ✅ MOSTRAR MENSAJE EMERGENTE
+                mensajeError = "No hay datos disponibles para descargar. Genere un reporte primero."
+                mostrarMensajeError = true
+                timerOcultarMensaje.restart()
                 return
             }
             
             if (!reportesModel) {
                 console.log("❌ ReportesModel no disponible para PDF")
                 mostrarNotificacionError("Sistema de reportes no disponible")
+                
+                // ✅ MOSTRAR MENSAJE EMERGENTE
+                mensajeError = "El sistema de reportes no está disponible para generar PDF"
+                mostrarMensajeError = true
+                timerOcultarMensaje.restart()
                 return
             }
             
             console.log("📊 Exportando", datosReporte.length, "registros a PDF...")
+            
+            // ✅ ACTUALIZAR ESTADO DURANTE GENERACIÓN DE PDF
+            mensajeEstado = "🟡 Generando PDF..."
+            colorEstado = warningColor
             
             var rutaArchivo = reportesModel.exportarPDF()
             
@@ -1290,21 +1490,42 @@ Item {
                 var nombreArchivo = rutaArchivo.split("/").pop().split("\\").pop()
                 mostrarNotificacionDescarga(nombreArchivo, rutaArchivo)
                 Qt.openUrlExternally("file:///" + rutaArchivo)
+                
+                // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+                mensajeEstado = "🟢 PDF generado exitosamente"
+                colorEstado = successColor
             } else {
                 console.log("❌ Error: No se pudo generar el PDF")
                 mostrarNotificacionError("Error generando el archivo PDF")
+                
+                // ✅ MOSTRAR MENSAJE EMERGENTE
+                mensajeError = "Error al generar el archivo PDF. Verifique los permisos del sistema."
+                mostrarMensajeError = true
+                timerOcultarMensaje.restart()
+                
+                // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+                mensajeEstado = "🔴 Error generando PDF"
+                colorEstado = dangerColor
             }
             
         } catch (error) {
             console.log("❌ Error en descargarPDF():", error)
             mostrarNotificacionError("Error inesperado al generar PDF")
+            
+            // ✅ MOSTRAR MENSAJE EMERGENTE
+            mensajeError = "Error inesperado al generar PDF: " + error
+            mostrarMensajeError = true
+            timerOcultarMensaje.restart()
+            
+            // ✅ ACTUALIZAR ESTADO DEL SISTEMA
+            mensajeEstado = "🔴 Error crítico en PDF"
+            colorEstado = dangerColor
         }
     }
 
     function obtenerColumnasReporte() {
         switch(tipoReporteSeleccionado) {
-
-            case 1: // Ventas de Farmacia - MANTENER COMO ESTÁ
+            case 1: // Ventas de Farmacia
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 70},
                     {titulo: "Nº VENTA", campo: "numeroVenta", width: 70},
@@ -1315,7 +1536,7 @@ Item {
                     {titulo: "TOTAL", campo: "valor", width: 80, align: Text.AlignRight}
                 ]
                     
-            case 2: // Inventario de Productos - MANTENER COMO ESTÁ
+            case 2: // Inventario de Productos
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 70},
                     {titulo: "PRODUCTO", campo: "descripcion", width: 140},
@@ -1327,7 +1548,7 @@ Item {
                     {titulo: "VALOR (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
 
-            case 3: // Compras de Farmacia - MANTENER COMO ESTÁ
+            case 3: // Compras de Farmacia
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 70},          
                     {titulo: "PRODUCTO", campo: "descripcion", width: 120},     
@@ -1339,7 +1560,7 @@ Item {
                     {titulo: "TOTAL (Bs)", campo: "valor", width: 80, align: Text.AlignRight}     
                 ]
                 
-            case 4: // Consultas Médicas - MANTENER COMO ESTÁ
+            case 4: // Consultas Médicas
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
                     {titulo: "ESPECIALIDAD", campo: "especialidad", width: 120},
@@ -1349,36 +1570,36 @@ Item {
                     {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
-            case 5: // ✅ LABORATORIO - ESTRUCTURA CORREGIDA SEGÚN SOLICITUD
+            case 5: // Laboratorio
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "ANÁLISIS", campo: "analisis", width: 140},        // ✅ CAMBIO: Era "TIPO ANÁLISIS"
-                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},  // ✅ NUEVO: Normal/Emergencia
+                    {titulo: "ANÁLISIS", campo: "analisis", width: 140},
+                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},
                     {titulo: "PACIENTE", campo: "paciente", width: 130},
-                    {titulo: "LABORATORISTA", campo: "laboratorista", width: 130}, // ✅ CAMBIO: Era "TÉCNICO"
+                    {titulo: "LABORATORISTA", campo: "laboratorista", width: 130},
                     {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
-            case 6: // ✅ ENFERMERÍA - ESTRUCTURA CORREGIDA SEGÚN SOLICITUD
+            case 6: // Enfermería
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "PROCEDIMIENTO", campo: "procedimiento", width: 140},  // ✅ CAMBIO: Con detalles
-                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},   // ✅ NUEVO: Normal/Emergencia
+                    {titulo: "PROCEDIMIENTO", campo: "procedimiento", width: 140},
+                    {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},
                     {titulo: "PACIENTE", campo: "paciente", width: 130},
                     {titulo: "ENFERMERO/A", campo: "enfermero", width: 130},
                     {titulo: "PRECIO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
-            case 7: // ✅ GASTOS OPERATIVOS - ESTRUCTURA CORREGIDA SEGÚN SOLICITUD
+            case 7: // Gastos Operativos
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
-                    {titulo: "TIPO GASTO", campo: "tipo_gasto", width: 120},       // ✅ CAMBIO: Campo específico
+                    {titulo: "TIPO GASTO", campo: "tipo_gasto", width: 120},
                     {titulo: "DESCRIPCIÓN", campo: "descripcion", width: 160},
                     {titulo: "PROVEEDOR", campo: "proveedor", width: 130},
-                    {titulo: "MONTO (Bs)", campo: "valor", width: 100, align: Text.AlignRight} // ✅ CAMBIO: Era "VALOR"
+                    {titulo: "MONTO (Bs)", campo: "valor", width: 100, align: Text.AlignRight}
                 ]
                 
-            case 8: // Consolidado - MANTENER COMO ESTÁ
+            case 8: // Consolidado
                 return [
                     {titulo: "FECHA", campo: "fecha", width: 80},
                     {titulo: "TIPO", campo: "tipo", width: 80, align: Text.AlignCenter},
@@ -1397,6 +1618,20 @@ Item {
         }
     }
 
+    function obtenerTituloReporte() {
+        switch(tipoReporteSeleccionado) {
+            case 1: return "REPORTE DE VENTAS DE FARMACIA"
+            case 2: return "REPORTE DE INVENTARIO DE PRODUCTOS"
+            case 3: return "REPORTE DE COMPRAS DE FARMACIA"
+            case 4: return "REPORTE DE CONSULTAS MÉDICAS"
+            case 5: return "REPORTE DE ANÁLISIS DE LABORATORIO"
+            case 6: return "REPORTE DE PROCEDIMIENTOS DE ENFERMERÍA"
+            case 7: return "REPORTE DE GASTOS OPERATIVOS"
+            case 8: return "REPORTE DE INGRESOS Y EGRESOS"
+            default: return "REPORTE GENERAL"
+        }
+    }
+
     function calcularTotalReporte() {
         var total = 0.0
         
@@ -1408,7 +1643,6 @@ Item {
             var registro = datosReporte[i]
             var valor = 0.0
             
-            // Buscar valor en diferentes campos posibles
             if (registro.valor !== undefined && registro.valor !== null) {
                 valor = parseFloat(registro.valor) || 0.0
             } else if (registro.Monto !== undefined && registro.Monto !== null) {
@@ -1437,50 +1671,40 @@ Item {
             case "descripcion":
                 return registro.descripcion || registro.Nombre || registro.nombre || "Sin descripción"
                 
-            // ✅ NUEVOS CAMPOS PARA LABORATORIO
             case "analisis":
-                // ✅ CAMBIO: Buscar en campo 'analisis' (nombre del análisis)
                 return registro.analisis || 
                     registro.tipoAnalisis || 
                     registro.tipo_analisis ||
                     "Análisis General"
             
             case "tipo":
-                // ✅ NUEVO: Tipo de servicio (Normal/Emergencia)  
                 var tipoServicio = registro.tipo || "Normal"
                 return tipoServicio === "Emergencia" ? "Emergencia" : "Normal"
             
             case "laboratorista":
-                // ✅ CAMBIO: Era 'tecnico', ahora 'laboratorista'
                 return registro.laboratorista || 
                     registro.tecnico ||
                     registro.trabajador_nombre ||
                     "Sin asignar"
             
-            // ✅ NUEVOS CAMPOS PARA ENFERMERÍA
             case "procedimiento":
-                // ✅ NUEVO: Procedimiento con detalles
                 return registro.procedimiento ||
                     registro.tipoProcedimiento ||
                     registro.descripcion ||
                     "Procedimiento General"
             
             case "enfermero":
-                // ✅ MANTENER: Campo enfermero/a
                 return registro.enfermero ||
                     registro.trabajador_nombre ||
                     registro.usuario ||
                     "Sin asignar"
             
-            // ✅ NUEVOS CAMPOS PARA GASTOS
             case "tipo_gasto":
-                // ✅ NUEVO: Tipo específico de gasto
                 return registro.tipo_gasto ||
                     registro.categoria ||
                     registro.tipo_nombre ||
                     "General"
             
-            // CAMPOS EXISTENTES - MANTENER LÓGICA
             case "marca":
                 return registro.marca || 
                     registro.Marca_Nombre || 
@@ -1521,7 +1745,6 @@ Item {
                     return "Sin venc."
                 }
                 
-                // Convertir formato si es necesario
                 if (typeof fechaVenc === 'string' && fechaVenc.includes('-')) {
                     try {
                         var partes = fechaVenc.split('-')
@@ -1552,7 +1775,6 @@ Item {
                 return registro.proveedor || "Sin proveedor"
                 
             default:
-                // Búsqueda genérica
                 var valor = registro[campo]
                 if (valor === undefined || valor === null || valor === "") {
                     return "---"
@@ -1573,29 +1795,79 @@ Item {
     // ===== FUNCIONES DE NOTIFICACIÓN =====
     
     function mostrarNotificacionError(mensaje) {
-        console.log("Mostrando notificación de error:", mensaje)
-        // Implementación simplificada - puedes expandir según necesites
+        console.log("❌ ERROR:", mensaje)
+        
+        if (typeof notificationManager !== 'undefined' && notificationManager) {
+            notificationManager.showNotification({
+                tipo: "error",
+                titulo: "Error en Reporte",
+                mensaje: mensaje,
+                duracion: 5000
+            })
+        }
     }
     
     function mostrarNotificacionDescarga(nombreArchivo, rutaCompleta) {
-        console.log("Mostrando notificación de descarga:", nombreArchivo)
-        // Implementación simplificada - puedes expandir según necesites
+        console.log(`📄 PDF descargado: ${nombreArchivo}`)
+        
+        var mensajeDescarga = `PDF generado exitosamente:\n\n` +
+                            `📁 Archivo: ${nombreArchivo}\n` +
+                            `📂 Ubicación: ${rutaCompleta}\n\n` +
+                            `El archivo se abrirá automáticamente.`
+        
+        if (typeof notificationManager !== 'undefined' && notificationManager) {
+            notificationManager.showNotification({
+                tipo: "success",
+                titulo: "PDF Descargado",
+                mensaje: mensajeDescarga,
+                duracion: 6000
+            })
+        }
     }
     
     function mostrarNotificacionGeneracion(mensaje, totalRegistros) {
-        console.log("Mostrando notificación de generación:", mensaje, totalRegistros)
-        // Implementación simplificada - puedes expandir según necesites
+        console.log(`✅ ÉXITO: ${mensaje} (${totalRegistros} registros)`)
+        
+        var mensajeExito = `Reporte generado exitosamente:\n\n` +
+                        `📊 Total de registros: ${totalRegistros}\n` +
+                        `📅 Período: ${fechaDesde} al ${fechaHasta}\n` +
+                        `📋 Tipo: ${tiposReportes[tipoReporteSeleccionado].nombre}`
+        
+        if (typeof notificationManager !== 'undefined' && notificationManager) {
+            notificationManager.showNotification({
+                tipo: "success",
+                titulo: "Reporte Generado",
+                mensaje: mensajeExito,
+                duracion: 4000
+            })
+        }
     }
     
     function mostrarNotificacionSinDatos() {
-        console.log("Mostrando notificación sin datos")
-        // Implementación simplificada - puedes expandir según necesites
+        console.log("ℹ️ Sin datos para el período seleccionado")
+        
+        var mensajeDetallado = `No se encontraron registros para el período:\n` +
+                            `${fechaDesde} al ${fechaHasta}\n\n` +
+                            `Tipo de reporte: ${tiposReportes[tipoReporteSeleccionado].nombre}\n\n` +
+                            `Sugerencias:\n` +
+                            `• Verifique que las fechas sean correctas\n` +
+                            `• Intente ampliar el rango de fechas\n` +
+                            `• Confirme que existan registros en este período`
+        
+        if (typeof notificationManager !== 'undefined' && notificationManager) {
+            notificationManager.showNotification({
+                tipo: "info",
+                titulo: "Sin Datos Disponibles",
+                mensaje: mensajeDetallado,
+                duracion: 7000
+            })
+        }
     }
     
     // ===== INICIALIZACIÓN =====
     
     Component.onCompleted: {
-        console.log("📊 Módulo de Reportes con datos reales inicializado")
+        console.log("📊 Módulo de Reportes con mensajes emergentes inicializado")
         
         if (reportesModel) {
             console.log("✅ ReportesModel conectado correctamente")
@@ -1620,5 +1892,9 @@ Item {
         fechaHasta = fechaHastaField.text
         
         console.log("📅 Fechas por defecto establecidas:", fechaDesde, "al", fechaHasta)
+        
+        // ✅ INICIALIZAR ESTADO DEL SISTEMA
+        mensajeEstado = "🟢 Todos los módulos operativos"
+        colorEstado = successColor
     }
 }

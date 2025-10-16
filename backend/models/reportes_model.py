@@ -264,9 +264,14 @@ class ReportesModel(QObject):
             self._set_loading(False)
 
     def _obtener_datos_reporte(self, tipo_reporte: int, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Obtiene datos según el tipo de reporte - CON VALIDACIÓN DE RETORNO"""
+        """Obtiene datos según el tipo de reporte - CON VALIDACIÓN MEJORADA"""
         try:
             datos = None
+            nombre_reporte = self._obtener_nombre_tipo_reporte(tipo_reporte)
+            
+            # ✅ LOG INICIAL
+            print(f"📊 Obteniendo datos para: {nombre_reporte}")
+            print(f"   Período: {fecha_desde} al {fecha_hasta}")
             
             if tipo_reporte == 1:
                 datos = self.repository.get_reporte_ventas(fecha_desde, fecha_hasta)
@@ -283,43 +288,77 @@ class ReportesModel(QObject):
             elif tipo_reporte == 7:
                 datos = self.repository.get_reporte_gastos(fecha_desde, fecha_hasta)
             elif tipo_reporte == 8:
-                # ✅ MANEJO ESPECIAL PARA REPORTE DE INGRESOS Y EGRESOS
-                print(f"💰 Obteniendo reporte de ingresos y egresos para período: {fecha_desde} - {fecha_hasta}")
+                print(f"💰 Obteniendo reporte de ingresos y egresos...")
                 datos = self.repository.get_reporte_consolidado(fecha_desde, fecha_hasta)
             else:
-                print(f"❌ Tipo de reporte no válido: {tipo_reporte}")
+                # ✅ ERROR EXPLÍCITO
+                error_msg = f"Tipo de reporte inválido: {tipo_reporte}"
+                print(f"❌ {error_msg}")
+                self.operacionError.emit(error_msg)
                 return []
             
-            # ✅ VALIDACIÓN CRUCIAL DEL TIPO DE RETORNO
+            # ✅ VALIDACIÓN COMPLETA DEL TIPO DE RETORNO
             if datos is None:
-                print(f"⚠️ Repository retornó None para tipo {tipo_reporte}")
+                mensaje = f"⚠️ Repository retornó None para {nombre_reporte}"
+                print(mensaje)
+                self.operacionError.emit(f"Error: No se pudo obtener datos de {nombre_reporte}")
                 return []
             
             if not isinstance(datos, list):
-                print(f"❌ Repository retornó tipo incorrecto: {type(datos)} en lugar de list")
+                mensaje = f"❌ Repository retornó tipo incorrecto: {type(datos)} (esperado: list)"
+                print(mensaje)
                 print(f"🔍 Contenido retornado: {datos}")
+                self.operacionError.emit(f"Error interno: Tipo de datos incorrecto en {nombre_reporte}")
                 return []
             
             if not datos:  # Lista vacía
-                print(f"ℹ️ Repository retornó lista vacía para tipo {tipo_reporte}")
+                mensaje = f"ℹ️ Repository retornó lista vacía para {nombre_reporte}"
+                print(mensaje)
+                # ✅ NO ES ERROR - Es información válida
                 return []
             
-            # ✅ VALIDAR ESTRUCTURA DE DATOS
-            if isinstance(datos[0], dict):
-                if tipo_reporte == 8:
-                    print(f"✅ Datos financieros válidos obtenidos: {len(datos)} movimientos")
-                else:
-                    print(f"✅ Datos válidos obtenidos: {len(datos)} registros tipo dict")
-                return datos
-            else:
-                print(f"❌ Primer elemento no es dict: {type(datos[0])}")
+            # ✅ VALIDAR ESTRUCTURA DE DATOS (primer elemento)
+            if not isinstance(datos[0], dict):
+                mensaje = f"❌ Primer elemento no es dict: {type(datos[0])}"
+                print(mensaje)
+                self.operacionError.emit(f"Error interno: Estructura de datos incorrecta en {nombre_reporte}")
                 return []
+            
+            # ✅ LOG DE ÉXITO CON DETALLES
+            print(f"✅ Datos válidos obtenidos: {len(datos)} registros")
+            print(f"   Campos disponibles: {list(datos[0].keys())[:5]}...")  # Mostrar solo 5 primeros
+            
+            return datos
                 
+        except DatabaseQueryError as db_error:
+            # ✅ ERROR ESPECÍFICO DE BASE DE DATOS
+            mensaje = f"Error de base de datos: {str(db_error)}"
+            print(f"❌ {mensaje}")
+            self.operacionError.emit(mensaje)
+            return []
+            
         except Exception as e:
-            print(f"❌ Error obteniendo datos del reporte tipo {tipo_reporte}: {e}")
+            # ✅ ERROR GENÉRICO CON STACK TRACE
+            mensaje = f"Error inesperado obteniendo datos: {str(e)}"
+            print(f"❌ {mensaje}")
             import traceback
             traceback.print_exc()
-            raise DatabaseQueryError(f"Error consultando datos: {str(e)}")
+            self.operacionError.emit(mensaje)
+            return []
+
+    def _obtener_nombre_tipo_reporte(self, tipo_reporte: int) -> str:
+        """Obtiene el nombre legible del tipo de reporte"""
+        nombres = {
+            1: "Ventas de Farmacia",
+            2: "Inventario de Productos",
+            3: "Compras de Farmacia",
+            4: "Consultas Médicas",
+            5: "Análisis de Laboratorio",
+            6: "Procedimientos de Enfermería",
+            7: "Gastos Operativos",
+            8: "Ingresos y Egresos"
+        }
+        return nombres.get(tipo_reporte, f"Reporte Tipo {tipo_reporte}")
 
     def _calcular_resumen(self, datos: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calcula resumen estadístico - CON VALIDACIÓN ROBUSTA DE TIPOS"""
@@ -564,7 +603,10 @@ class ReportesModel(QObject):
     
     @Slot(result=str)
     def exportarPDF(self) -> str:
-        """Exporta el reporte actual a PDF - Solo verifica autenticación básica"""
+        """
+        Exporta el reporte actual a PDF
+        ✅ MODIFICADO: Ahora usa AppController que maneja el responsable
+        """
         try:
             # ✅ VERIFICAR AUTENTICACIÓN BÁSICA
             if not self._verificar_autenticacion():
@@ -586,18 +628,35 @@ class ReportesModel(QObject):
                 print("❌ Método generarReportePDF no encontrado en AppController")
                 return ""
             
+            # ✅ LOG CON INFORMACIÓN DEL USUARIO
+            print(f"\n{'='*60}")
+            print(f"📄 EXPORTANDO PDF DESDE REPORTES_MODEL")
+            print(f"{'='*60}")
+            print(f"   👤 Usuario ID: {self._usuario_actual_id}")
+            print(f"   📊 Tipo Reporte: {self._tipo_reporte_actual}")
+            print(f"   📋 Registros: {len(self._datos_reporte)}")
+            print(f"{'='*60}\n")
+            
             # ✅ MENSAJE ESPECIAL PARA REPORTE FINANCIERO
             if self._tipo_reporte_actual == 8:
-                print(f"💰 Iniciando exportación PDF de Reporte de Ingresos y Egresos - Usuario: {self._usuario_actual_id}")
-                print(f"📄 Tipo: Financiero, Movimientos: {len(self._datos_reporte)}")
+                print(f"💰 Iniciando exportación PDF de Reporte de Ingresos y Egresos")
+                print(f"   Usuario: {self._usuario_actual_id}")
+                print(f"   Movimientos: {len(self._datos_reporte)}")
             else:
-                print(f"📄 Iniciando exportación PDF - Usuario: {self._usuario_actual_id}")
-                print(f"📄 Tipo: {self._tipo_reporte_actual}, Registros: {len(self._datos_reporte)}")
+                print(f"📄 Iniciando exportación PDF")
+                print(f"   Usuario: {self._usuario_actual_id}")
+                print(f"   Tipo: {self._tipo_reporte_actual}")
+                print(f"   Registros: {len(self._datos_reporte)}")
             
             # Usar todos los datos sin filtros
             datos_json = json.dumps(self._datos_reporte, default=str)
             
-            # Usar AppController para generar PDF
+            # ✅ USAR AppController QUE YA MANEJA EL RESPONSABLE
+            # El AppController tomará automáticamente:
+            # - self._usuario_autenticado_nombre
+            # - self._usuario_autenticado_rol
+            # Y los establecerá en el PDF generator
+            
             ruta_pdf = self._app_controller.generarReportePDF(
                 datos_json,
                 str(self._tipo_reporte_actual),
@@ -607,13 +666,14 @@ class ReportesModel(QObject):
             
             if ruta_pdf:
                 if self._tipo_reporte_actual == 8:
-                    mensaje_exito = f"Reporte de Ingresos y Egresos exportado exitosamente: {ruta_pdf}"
+                    mensaje_exito = f"Reporte de Ingresos y Egresos exportado exitosamente"
                     self.operacionExitosa.emit("Reporte financiero generado correctamente")
                 else:
-                    mensaje_exito = f"PDF exportado exitosamente: {ruta_pdf}"
+                    mensaje_exito = f"PDF exportado exitosamente"
                     self.operacionExitosa.emit("PDF generado correctamente")
                 
-                print(f"📄 {mensaje_exito}")
+                print(f"✅ {mensaje_exito}: {ruta_pdf}")
+                print(f"   👤 Responsable: Usuario {self._usuario_actual_id}\n")
                 return ruta_pdf
             else:
                 self.reporteError.emit("Error PDF", "No se pudo generar el PDF")

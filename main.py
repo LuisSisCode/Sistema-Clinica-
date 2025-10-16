@@ -1634,11 +1634,31 @@ class AppController(QObject):
 
     @Slot(str, str, str, str, result=str)
     def generarReportePDF(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
+        """
+        ✅ MODIFICADO: Ahora establece el responsable antes de generar el PDF
+        """
         try:
             if not datos_json or datos_json.strip() == "":
                 if tipo_reporte != "9":
                     return ""
             
+            # ✅ NUEVO: Establecer responsable ANTES de generar PDF
+            usuario_nombre = self._usuario_autenticado_nombre or "Usuario Sistema"
+            usuario_rol = self._usuario_autenticado_rol or "Usuario"
+            
+            print(f"\n{'='*60}")
+            print(f"📄 GENERANDO PDF CON RESPONSABLE")
+            print(f"{'='*60}")
+            print(f"   👤 Nombre: {usuario_nombre}")
+            print(f"   🔑 Rol: {usuario_rol}")
+            print(f"   📊 Tipo Reporte: {tipo_reporte}")
+            print(f"   📅 Período: {fecha_desde} - {fecha_hasta}")
+            print(f"{'='*60}\n")
+            
+            # ✅ ESTABLECER RESPONSABLE EN EL GENERADOR
+            self.pdf_generator.set_responsable(usuario_nombre, usuario_rol)
+            
+            # Generar PDF normalmente
             resultado = self.pdf_generator.generar_reporte_pdf(
                 datos_json,
                 tipo_reporte, 
@@ -1646,10 +1666,15 @@ class AppController(QObject):
                 fecha_hasta
             )
             
+            if resultado:
+                print(f"✅ PDF generado exitosamente: {resultado}")
+                print(f"   👤 Responsable registrado: {usuario_nombre}\n")
+            
             return resultado if resultado else ""
                 
         except Exception as e:
-            print(f"Error generando PDF: {e}")
+            print(f"❌ Error generando PDF: {e}")
+            traceback.print_exc()
             return ""
 
     # ===============================

@@ -1,7 +1,8 @@
 """
-Módulo para generar reportes PDF profesionales - VERSIÓN MEJORADA CON REPORTE DE INGRESOS Y EGRESOS
+Módulo para generar reportes PDF profesionales - VERSIÓN OPTIMIZADA
 Sistema de Gestión Médica - Clínica María Inmaculada
-Versión 4.2 - Reporte Financiero Mejorado y Comprensible
+Versión 5.0 - Tablas Optimizadas y Unificadas
+✅ INCLUYE: Campo "Responsable" con usuario actual
 """
 
 import os
@@ -17,8 +18,76 @@ from reportlab.platypus import PageTemplate, Frame, BaseDocTemplate
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
+
+# ============================================
+# CONSTANTES GLOBALES DE ANCHOS (en mm)
+# ============================================
+
+# Anchos base optimizados
+ANCHO_FECHA_COMPLETA = 26    # DD/MM/YYYY
+ANCHO_FECHA_CORTA = 22       # DD/MM HH:MM
+ANCHO_HORA = 15              # HH:MM
+
+ANCHO_CODIGO_CORTO = 20      # V001, C123
+ANCHO_CODIGO_MEDIO = 25      # IDs más largos
+
+ANCHO_CANTIDAD = 15          # 1-3 dígitos
+ANCHO_VALOR_CORTO = 22       # Bs 12.50
+ANCHO_VALOR_MEDIO = 26       # Bs 1,234.56
+ANCHO_VALOR_LARGO = 35       # +Bs 12,345.67
+
+ANCHO_TEXTO_CORTO = 25       # Tipos, estados
+ANCHO_TEXTO_MEDIO = 35       # Nombres, apellidos
+ANCHO_TEXTO_LARGO = 50       # Descripciones cortas
+ANCHO_TEXTO_EXTRA_LARGO = 85 # Descripciones largas
+
+ANCHO_PORCENTAJE = 18        # 99.9%
+
+# ============================================
+# CLASE DE UTILIDADES DE FORMATO
+# ============================================
+
+class FormatUtils:
+    """Utilidades de formato centralizadas"""
+    
+    @staticmethod
+    def formato_moneda(valor, mostrar_signo=False):
+        """Formato: Bs 1,234.56 o +Bs 1,234.56"""
+        try:
+            valor_float = float(valor)
+            signo = ""
+            if mostrar_signo:
+                signo = "+" if valor_float >= 0 else ""
+            return f"{signo}Bs {abs(valor_float):,.2f}"
+        except:
+            return "Bs 0.00"
+    
+    @staticmethod
+    def formato_fecha_hora(fecha_completa):
+        """Formato: 15/10 21:05"""
+        try:
+            if isinstance(fecha_completa, str):
+                # "15/10/2025 21:05:30" → "15/10 21:05"
+                partes = fecha_completa.split()
+                if len(partes) >= 2:
+                    fecha = partes[0].split('/')
+                    hora = partes[1].split(':')
+                    if len(fecha) >= 2 and len(hora) >= 2:
+                        return f"{fecha[0]}/{fecha[1]} {hora[0]}:{hora[1]}"
+            return str(fecha_completa)[:10]
+        except:
+            return "---"
+    
+    @staticmethod
+    def formato_numero(numero, decimales=0):
+        """Formato: 1,234 o 1,234.56"""
+        try:
+            if decimales > 0:
+                return f"{float(numero):,.{decimales}f}"
+            else:
+                return f"{int(float(numero)):,}"
+        except:
+            return "0"
 
 # Colores profesionales mejorados
 COLOR_AZUL_PRINCIPAL = colors.Color(0.12, 0.31, 0.52)  # Azul institucional
@@ -30,7 +99,10 @@ COLOR_VERDE_POSITIVO = colors.Color(0.13, 0.54, 0.13)  # Verde para valores posi
 COLOR_NARANJA_EGRESO = colors.Color(0.8, 0.4, 0.1)     # Naranja para egresos
 
 class CanvasNumerosPaginaProfesional(canvas.Canvas):
-    """Canvas personalizado con diseño profesional estilo gubernamental"""
+    """
+    Canvas personalizado con diseño profesional estilo gubernamental
+    ✅ MODIFICADO: Incluye usuario responsable en pie de página
+    """
     
     def __init__(self, *args, **kwargs):
         canvas.Canvas.__init__(self, *args, **kwargs)
@@ -41,6 +113,10 @@ class CanvasNumerosPaginaProfesional(canvas.Canvas):
         self.fecha_hasta = ""
         self.fecha_generacion = ""
         
+        # ✅ NUEVO: Información del responsable
+        self.usuario_responsable = ""
+        self.usuario_rol = ""
+    
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
         self._startPage()
@@ -55,7 +131,10 @@ class CanvasNumerosPaginaProfesional(canvas.Canvas):
         canvas.Canvas.save(self)
         
     def draw_page_number(self, page_num, total_pages):
-        """Dibuja pie de página profesional"""
+        """
+        Dibuja pie de página profesional
+        ✅ MODIFICADO: Incluye usuario responsable
+        """
         # Línea superior del pie de página
         self.setStrokeColor(COLOR_AZUL_PRINCIPAL)
         self.setLineWidth(2)
@@ -68,8 +147,12 @@ class CanvasNumerosPaginaProfesional(canvas.Canvas):
         # Página (izquierda)
         self.drawString(25*mm, 28*mm, f"Página {page_num} de {total_pages}")
         
-        # Fecha de generación (derecha)
-        fecha_texto = f"Generado: {self.fecha_generacion}"
+        # ✅ CAMBIO: Usuario responsable (derecha superior)
+        if self.usuario_responsable:
+            fecha_texto = f"Generado: {self.fecha_generacion} - {self.usuario_responsable}"
+        else:
+            fecha_texto = f"Generado: {self.fecha_generacion}"
+        
         text_width = self.stringWidth(fecha_texto, "Helvetica", 9)
         self.drawString(letter[0]-25*mm-text_width, 28*mm, fecha_texto)
         
@@ -82,14 +165,18 @@ class CanvasNumerosPaginaProfesional(canvas.Canvas):
 
 class GeneradorReportesPDF:
     """
-    Generador de reportes PDF con diseño profesional mejorado
-    INCLUYE: Reporte de Ingresos y Egresos profesional y comprensible
+    Generador de reportes PDF con diseño profesional optimizado
+    ✅ INCLUYE: Campo "Responsable" con usuario actual
     """
     
     def __init__(self):
         """Inicializar el generador de PDFs"""
         self.setup_directories()
         self.setup_logo()
+        
+        # ✅ NUEVO: Información del responsable (se establecerá antes de generar)
+        self._usuario_responsable_nombre = ""
+        self._usuario_responsable_rol = ""
     
     def setup_directories(self):
         """Crear directorios necesarios"""
@@ -133,10 +220,29 @@ class GeneradorReportesPDF:
         if not self.logo_path:
             print("⚠️ Logo no encontrado, usando logo profesional")
     
+    # ✅ NUEVO MÉTODO: Establecer responsable antes de generar PDF
+    def set_responsable(self, nombre: str, rol: str):
+        """
+        Establece el usuario responsable de generar el reporte
+        
+        Args:
+            nombre: Nombre completo del usuario (ej: "Carlos Mendez")
+            rol: Rol del usuario (ej: "Administrador", "Médico")
+        """
+        self._usuario_responsable_nombre = nombre
+        self._usuario_responsable_rol = rol
+        print(f"📋 Responsable establecido: {nombre} ({rol})")
+    
     def generar_reporte_pdf(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
-        """Método principal para generar un PDF del reporte - VERSIÓN MEJORADA"""
+        """Método principal para generar un PDF del reporte - ✅ CON RESPONSABLE"""
         try:
-            print(f"📄 Iniciando generación de PDF profesional mejorado - Tipo: {tipo_reporte}")
+            print(f"📄 Iniciando generación de PDF optimizado - Tipo: {tipo_reporte}")
+            
+            # ✅ VALIDAR QUE SE HAYA ESTABLECIDO EL RESPONSABLE
+            if not self._usuario_responsable_nombre:
+                print("⚠️ ADVERTENCIA: Responsable no establecido, usando 'Sistema'")
+                self._usuario_responsable_nombre = "Sistema de Gestión Médica"
+                self._usuario_responsable_rol = "Sistema"
             
             # ✅ VALIDAR ENTRADA JSON
             if not datos_json or datos_json.strip() == "":
@@ -172,7 +278,7 @@ class GeneradorReportesPDF:
             
             # ✅ CREAR PDF CON MANEJO DE ERRORES
             try:
-                success = self._crear_pdf_profesional_mejorado(
+                success = self._crear_pdf_profesional_optimizado(
                     filepath, datos, tipo_reporte_int, fecha_desde, fecha_hasta
                 )
             except Exception as pdf_error:
@@ -182,7 +288,7 @@ class GeneradorReportesPDF:
                 return ""
             
             if success:
-                print(f"✅ PDF profesional mejorado generado: {filepath}")
+                print(f"✅ PDF optimizado generado: {filepath}")
                 return filepath
             else:
                 print("⚠️ Error al generar PDF")
@@ -230,7 +336,7 @@ class GeneradorReportesPDF:
             5: "Laboratorio",
             6: "Enfermería",
             7: "Servicios Básicos",
-            8: "Análisis Financiero",  # 📄 CAMBIO: Nuevo módulo para consolidado
+            8: "Análisis Financiero",
             9: "Cierre de Caja"
         }
         return modulos.get(tipo_reporte, "General")
@@ -250,8 +356,11 @@ class GeneradorReportesPDF:
         }
         return titulos.get(tipo_reporte, "INFORME GENERAL")
     
-    def _crear_pdf_profesional_mejorado(self, filepath, datos, tipo_reporte, fecha_desde, fecha_hasta):
-        """Crea el archivo PDF con diseño profesional mejorado"""
+    def _crear_pdf_profesional_optimizado(self, filepath, datos, tipo_reporte, fecha_desde, fecha_hasta):
+        """
+        Crea el archivo PDF con diseño profesional optimizado
+        ✅ MODIFICADO: Pasa información del responsable al canvas
+        """
         try:
             print(f"📊 Creando PDF: {filepath}")
             print(f"📊 Datos: {len(datos)} registros")
@@ -273,11 +382,21 @@ class GeneradorReportesPDF:
                 id='normal'
             )
             
+            # ✅ MODIFICAR: Pasar info del responsable al template
+            def add_page_elements(canvas, doc):
+                # Establecer información del responsable en el canvas
+                canvas.usuario_responsable = self._usuario_responsable_nombre
+                canvas.usuario_rol = self._usuario_responsable_rol
+                canvas.fecha_generacion = self._fecha_generacion
+                
+                # Llamar al método de encabezado
+                self._crear_encabezado_profesional_mejorado(canvas, doc)
+            
             # Template de página profesional
             template = PageTemplate(
                 id='todas_paginas',
                 frames=[frame],
-                onPage=self._crear_encabezado_profesional_mejorado,
+                onPage=add_page_elements,  # ✅ Usar función modificada
                 pagesize=letter
             )
             
@@ -301,10 +420,10 @@ class GeneradorReportesPDF:
             
             # ✅ TRATAMIENTO ESPECIAL PARA REPORTE DE INGRESOS Y EGRESOS
             if tipo_reporte == 8:
-                print("💰 Generando Reporte de Ingresos y Egresos profesional...")
+                print("💰 Generando Reporte de Ingresos y Egresos optimizado...")
                 story.extend(self._crear_reporte_ingresos_egresos_completo(datos, fecha_desde, fecha_hasta))
             elif tipo_reporte == 9:
-                print("💰 Generando Arqueo de Caja detallado...")
+                print("💰 Generando Arqueo de Caja optimizado...")
                 story.extend(self._crear_arqueo_caja_completo(datos, fecha_desde, fecha_hasta))
             else:
                 # Información del reporte estándar
@@ -313,10 +432,14 @@ class GeneradorReportesPDF:
                 story.extend(info_elementos)
                 story.append(Spacer(1, 8*mm))
                 
-                # Contenido principal estándar
+                # Contenido principal optimizado
                 if datos and len(datos) > 0:
-                    print("📊 Agregando tabla principal...")
-                    story.append(self._crear_tabla_profesional_mejorada(datos, tipo_reporte))
+                    print("📊 Agregando tabla optimizada...")
+                    tablas = self._crear_tabla_profesional_optimizada(datos, tipo_reporte)
+                    if isinstance(tablas, list):
+                        story.extend(tablas)
+                    else:
+                        story.append(tablas)
                     story.append(Spacer(1, 8*mm))
                     
                     # Análisis y conclusiones estándar
@@ -336,38 +459,561 @@ class GeneradorReportesPDF:
             return True
             
         except Exception as e:
-            print(f"⚠️ Error creando PDF profesional mejorado: {e}")
+            print(f"⚠️ Error creando PDF profesional optimizado: {e}")
             print(f"🔍 Error en tipo de reporte: {tipo_reporte}")
             print(f"🔍 Número de registros: {len(datos) if datos else 0}")
             import traceback
             traceback.print_exc()
             return False
 
+    # ============================================
+    # MÉTODOS OPTIMIZADOS PARA TABLAS
+    # ============================================
+
+    def _crear_tabla_profesional_optimizada(self, datos, tipo_reporte):
+        """Crea tabla con estilo COMPLETAMENTE OPTIMIZADO Y PAGINADO"""
+        from reportlab.platypus import Table, TableStyle, PageBreak
+        
+        # Obtener definición de columnas optimizadas
+        columnas_def = self._obtener_columnas_reporte_optimizadas(tipo_reporte)
+        
+        # ✅ NUEVO: Control de filas por página
+        FILAS_POR_PAGINA = 25  # Máximo de filas antes de page break
+        
+        if len(datos) > FILAS_POR_PAGINA:
+            # Dividir en múltiples tablas
+            tablas = []
+            for i in range(0, len(datos), FILAS_POR_PAGINA):
+                chunk = datos[i:i+FILAS_POR_PAGINA]
+                tabla_chunk = self._crear_tabla_chunk(chunk, tipo_reporte, columnas_def, i==0)
+                tablas.append(tabla_chunk)
+                
+                # PageBreak entre tablas excepto la última
+                if i + FILAS_POR_PAGINA < len(datos):
+                    tablas.append(PageBreak())
+            
+            return tablas
+        else:
+            # Tabla única como antes
+            return self._crear_tabla_unica(datos, tipo_reporte, columnas_def)
+
+    def _crear_tabla_chunk(self, chunk_datos, tipo_reporte, columnas_def, es_primera=False):
+        """Crea una parte de la tabla con encabezados"""
+        # Preparar datos
+        encabezados = [col[0] for col in columnas_def]
+        anchos_columnas = [col[1]*mm for col in columnas_def]
+        
+        tabla_datos = [encabezados]
+        total_valor = 0
+        
+        # Agregar filas de datos del chunk
+        for registro in chunk_datos:
+            fila = []
+            for col_titulo, ancho, alineacion in columnas_def:
+                valor = self._obtener_valor_campo_optimizado(registro, col_titulo, tipo_reporte)
+                fila.append(valor)
+            
+            tabla_datos.append(fila)
+            
+            # Calcular totales parciales
+            try:
+                valor_monetario = float(registro.get('valor', 0))
+                total_valor += valor_monetario
+            except (ValueError, TypeError):
+                continue
+        
+        # Solo agregar fila de total si es el último chunk
+        if es_primera:
+            fila_total = self._crear_fila_total(columnas_def, total_valor, tipo_reporte)
+            tabla_datos.append(fila_total)
+
+        # Crear tabla
+        tabla = Table(
+            tabla_datos, 
+            colWidths=anchos_columnas, 
+            repeatRows=1,
+            splitByRow=1,
+            spaceAfter=12,
+            spaceBefore=12,
+            hAlign='CENTER'
+        )
+
+        # Aplicar estilos unificados
+        estilos_base = self._crear_estilos_tabla_unificados()
+        
+        # Aplicar alineaciones específicas por columna
+        for col_idx, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
+            align_map = {'LEFT': 'LEFT', 'RIGHT': 'RIGHT', 'CENTER': 'CENTER'}
+            tabla_align = align_map.get(alineacion, 'LEFT')
+            
+            # Alineación para datos normales
+            estilos_base.append(('ALIGN', (col_idx, 1), (col_idx, -2), tabla_align))
+            
+            # Alineación para fila de total (si existe)
+            if es_primera:
+                estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
+
+        tabla.setStyle(TableStyle(estilos_base))
+        
+        return tabla
+
+    def _crear_tabla_unica(self, datos, tipo_reporte, columnas_def):
+        """Crea tabla única para conjuntos de datos pequeños"""
+        # Preparar datos
+        encabezados = [col[0] for col in columnas_def]
+        anchos_columnas = [col[1]*mm for col in columnas_def]
+        
+        tabla_datos = [encabezados]
+        total_valor = 0
+        
+        # Agregar filas de datos
+        for registro in datos:
+            fila = []
+            for col_titulo, ancho, alineacion in columnas_def:
+                valor = self._obtener_valor_campo_optimizado(registro, col_titulo, tipo_reporte)
+                fila.append(valor)
+            
+            tabla_datos.append(fila)
+            
+            # Calcular totales
+            try:
+                valor_monetario = float(registro.get('valor', 0))
+                total_valor += valor_monetario
+            except (ValueError, TypeError):
+                continue
+
+        # Fila de total
+        fila_total = self._crear_fila_total(columnas_def, total_valor, tipo_reporte)
+        tabla_datos.append(fila_total)
+
+        # Crear tabla
+        tabla = Table(
+            tabla_datos, 
+            colWidths=anchos_columnas, 
+            repeatRows=1,
+            splitByRow=1,
+            spaceAfter=12,
+            spaceBefore=12,
+            hAlign='CENTER'
+        )
+
+        # Aplicar estilos unificados
+        estilos_base = self._crear_estilos_tabla_unificados()
+        
+        # Aplicar alineaciones específicas por columna
+        for col_idx, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
+            align_map = {'LEFT': 'LEFT', 'RIGHT': 'RIGHT', 'CENTER': 'CENTER'}
+            tabla_align = align_map.get(alineacion, 'LEFT')
+            
+            estilos_base.append(('ALIGN', (col_idx, 1), (col_idx, -2), tabla_align))
+            estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
+
+        tabla.setStyle(TableStyle(estilos_base))
+        
+        return tabla
+
+    def _crear_fila_total(self, columnas_def, total_valor, tipo_reporte):
+        """Crea fila de total optimizada"""
+        fila_total = [""] * len(columnas_def)
+        
+        # ✅ MAPEO ESPECÍFICO OPTIMIZADO PARA CADA TIPO DE REPORTE
+        if tipo_reporte == 1:  # Ventas de Farmacia
+            for i, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
+                if col_titulo in ["VENDEDOR", "USUARIO"]:
+                    fila_total[i] = "TOTAL GENERAL:"
+                elif col_titulo in ["TOTAL", "TOTAL (Bs)", "VALOR (Bs)"]:
+                    fila_total[i] = FormatUtils.formato_moneda(total_valor)
+        
+        elif tipo_reporte == 7:  # Gastos Operativos
+            for i, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
+                if col_titulo == "CONCEPTO":
+                    fila_total[i] = "TOTAL GENERAL:"
+                elif col_titulo in ["MONTO", "VALOR"]:
+                    fila_total[i] = FormatUtils.formato_moneda(total_valor)
+        
+        elif tipo_reporte == 8:  # Ingresos y Egresos
+            for i, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
+                if col_titulo == "CONCEPTO":
+                    fila_total[i] = "SALDO NETO:"
+                elif col_titulo == "VALOR":
+                    fila_total[i] = FormatUtils.formato_moneda(total_valor, mostrar_signo=True)
+        
+        else:  # Otros reportes (2, 3, 4, 5, 6)
+            if len(columnas_def) >= 2:
+                fila_total[-2] = "TOTAL GENERAL:"
+                fila_total[-1] = FormatUtils.formato_moneda(total_valor)
+            else:
+                fila_total[0] = f"TOTAL GENERAL: {FormatUtils.formato_moneda(total_valor)}"
+
+        return fila_total
+
+    def _obtener_columnas_reporte_optimizadas(self, tipo_reporte):
+        """Define las columnas con ANCHOS OPTIMIZADOS Y ESTANDARIZADOS"""
+        
+        columnas = {
+            1: [  # Ventas de Farmacia - ✅ OPTIMIZADO
+                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("PRODUCTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+                ("CANT", ANCHO_CANTIDAD, 'RIGHT'),
+                ("P.UNIT", ANCHO_VALOR_CORTO, 'RIGHT'),
+                ("VENDEDOR", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("TOTAL", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            2: [  # Inventario - ✅ OPTIMIZADO
+                ("PRODUCTO / MARCA", ANCHO_TEXTO_EXTRA_LARGO + 5, 'LEFT'),
+                ("LOTE", ANCHO_TEXTO_CORTO, 'CENTER'),
+                ("STOCK", ANCHO_CANTIDAD, 'RIGHT'),
+                ("P.UNIT", ANCHO_VALOR_CORTO, 'RIGHT'),
+                ("F.VENC", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("VALOR", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            3: [  # Compras - ✅ OPTIMIZADO
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("PRODUCTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+                ("UNID", ANCHO_CANTIDAD, 'RIGHT'),
+                ("PROVEEDOR", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("F.VENC", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("TOTAL", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            4: [  # Consultas Médicas - ✅ OPTIMIZADO
+                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("ESPECIALIDAD", ANCHO_TEXTO_LARGO, 'LEFT'),
+                ("PACIENTE", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("MÉDICO", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("PRECIO", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            5: [  # Laboratorio - ✅ OPTIMIZADO
+                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("ANÁLISIS", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+                ("PACIENTE", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("TÉCNICO", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("PRECIO", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            6: [  # Enfermería - ✅ OPTIMIZADO
+                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("PROCEDIMIENTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+                ("PACIENTE", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("ENFERMERO/A", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("PRECIO", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            7: [  # Gastos - ✅ OPTIMIZADO
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("CONCEPTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+                ("PROVEEDOR", ANCHO_TEXTO_MEDIO, 'LEFT'),
+                ("MONTO", ANCHO_VALOR_MEDIO, 'RIGHT')
+            ],
+            
+            8: [  # Consolidado - ✅ OPTIMIZADO
+                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("CONCEPTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+                ("TIPO", ANCHO_TEXTO_CORTO, 'CENTER'),
+                ("VALOR", ANCHO_VALOR_LARGO, 'RIGHT')
+            ]
+        }
+        
+        return columnas.get(tipo_reporte, [
+            ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
+            ("DESCRIPCIÓN", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
+            ("VALOR", ANCHO_VALOR_MEDIO, 'RIGHT')
+        ])
+
+    def _obtener_valor_campo_optimizado(self, registro, campo_titulo, tipo_reporte):
+        """Extrae valores con FORMATO UNIFICADO Y OPTIMIZADO"""
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import Paragraph
+        from reportlab.lib.enums import TA_LEFT
+        
+        # ✅ MAPEO OPTIMIZADO CON FORMATO UNIFICADO
+        mapeo_campos = {
+            # CAMPOS BÁSICOS
+            "FECHA/HORA": "fecha",
+            "FECHA": "fecha",
+            "DESCRIPCIÓN": "descripcion", 
+            "CONCEPTO": "descripcion",
+            "CANTIDAD": "cantidad",
+            "CANT": "cantidad",
+            "UNID": "cantidad",
+            "UNIDADES": "cantidad",
+            
+            # VALORES MONETARIOS
+            "PRECIO": "valor",
+            "TOTAL": "valor", 
+            "VALOR": "valor",
+            "MONTO": "valor",
+            "P.UNIT": "precioUnitario", 
+            
+            # CAMPOS ESPECÍFICOS
+            "PRODUCTO": "descripcion",
+            "PRODUCTO / MARCA": "descripcion",
+            "ANÁLISIS": "analisis",
+            "PROCEDIMIENTO": "procedimiento",
+            "ESPECIALIDAD": "especialidad",
+            "PACIENTE": "paciente",
+            "MÉDICO": "doctor_nombre",
+            "TÉCNICO": "laboratorista",
+            "ENFERMERO/A": "enfermero",
+            "VENDEDOR": "usuario",
+            "PROVEEDOR": "proveedor",
+            "LOTE": "lote",
+            "F.VENC": "fecha_vencimiento",
+            "TIPO": "tipo",
+            "STOCK": "cantidad"
+        }
+        
+        campo_dato = mapeo_campos.get(campo_titulo, campo_titulo.lower())
+        valor = registro.get(campo_dato, "")
+        valor = str(valor) if valor else ""
+
+        def crear_parrafo(texto):
+            if not texto or len(str(texto).strip()) == 0:
+                return ""
+            styles = getSampleStyleSheet()
+            style = ParagraphStyle(
+                'CellParagraph',
+                parent=styles['Normal'],
+                fontSize=8,
+                leading=9,
+                alignment=TA_LEFT,
+                wordWrap='LTR',
+                splitLongWords=True
+            )
+            return Paragraph(str(texto), style)
+
+        # ✅ PROCESAMIENTO UNIFICADO CON FormatUtils
+
+        # 1. Campos de fecha/hora
+        if campo_titulo in ["FECHA/HORA", "FECHA"]:
+            return FormatUtils.formato_fecha_hora(valor)
+        
+        # 2. Campos monetarios
+        elif any(palabra in campo_titulo.upper() for palabra in ["PRECIO", "TOTAL", "VALOR", "MONTO", "P.UNIT"]):
+            try:
+                if campo_titulo == "P.UNIT":
+                    precio = float(registro.get('precioUnitario', 0))
+                    return FormatUtils.formato_moneda(float(precio))
+                elif tipo_reporte == 8 and campo_titulo == "VALOR":
+                    # Para ingresos/egresos mostrar con signo
+                    tipo_movimiento = registro.get('tipo', '')
+                    mostrar_signo = tipo_movimiento in ['INGRESO', 'EGRESO']
+                    return FormatUtils.formato_moneda(float(valor), mostrar_signo)
+                else:
+                    return FormatUtils.formato_moneda(float(valor))
+            except:
+                return FormatUtils.formato_moneda(0)
+        
+        # 3. Campos numéricos
+        elif campo_titulo in ["CANT", "UNID", "STOCK", "CANTIDAD"]:
+            return FormatUtils.formato_numero(valor)
+        
+        # 4. Campos de texto largo (usar Paragraph)
+        elif campo_titulo in ["PRODUCTO", "PRODUCTO / MARCA", "CONCEPTO", "DESCRIPCIÓN", 
+                             "ANÁLISIS", "PROCEDIMIENTO", "ESPECIALIDAD"]:
+            if not valor:
+                valor = "Sin descripción"
+            
+            if len(valor) > 40:
+                return crear_parrafo(valor)
+            return valor
+        
+        # 5. Campos de texto medio
+        elif campo_titulo in ["PACIENTE", "MÉDICO", "TÉCNICO", "ENFERMERO/A", "VENDEDOR", "PROVEEDOR"]:
+            if not valor:
+                valor = "Sin asignar"
+            
+            if len(valor) > 25:
+                return crear_parrafo(valor)
+            return valor
+        
+        # 6. Campo LOTE
+        elif campo_titulo == "LOTE":
+            if not valor or valor == "":
+                return "---"
+            return str(valor)[:15]
+        
+        # 7. Campo F.VENC
+        elif campo_titulo == "F.VENC":
+            if not valor or str(valor) in ["", "None", "null"]:
+                return "Sin venc."
+            return FormatUtils.formato_fecha_hora(valor)
+        
+        # 8. Campo TIPO
+        elif campo_titulo == "TIPO":
+            tipo = str(valor).upper()
+            return tipo if tipo in ['INGRESO', 'EGRESO', 'NORMAL', 'EMERGENCIA'] else 'NORMAL'
+        
+        # 9. Genérico con fallback
+        if not valor or valor == "":
+            return "---"
+        
+        # Formatear valor final
+        if len(str(valor)) > 30:
+            return crear_parrafo(str(valor))
+        
+        return str(valor)
+
+    # ============================================
+    # MÉTODOS DE INFORMACIÓN Y ANÁLISIS
+    # ============================================
+
+    def _crear_informacion_reporte_mejorada(self):
+        """
+        Crea sección de información del reporte 
+        ✅ MODIFICADO: Incluye responsable real en lugar de "Sistema"
+        """
+        try:
+            styles = getSampleStyleSheet()
+            
+            # Estilo para el título específico del reporte (centrado)
+            titulo_especifico_style = ParagraphStyle(
+                'TituloEspecifico',
+                parent=styles['Normal'],
+                fontSize=16,
+                fontName='Helvetica-Bold',
+                textColor=COLOR_AZUL_PRINCIPAL,
+                spaceAfter=12,
+                alignment=TA_CENTER
+            )
+            
+            # Estilo para la información (alineación mejorada)
+            info_style = ParagraphStyle(
+                'InfoReporte',
+                parent=styles['Normal'],
+                fontSize=11,
+                fontName='Helvetica',
+                textColor=COLOR_GRIS_OSCURO,
+                spaceAfter=6,
+                leftIndent=0,
+                alignment=TA_LEFT
+            )
+            
+            # Crear contenido
+            contenido = []
+            
+            # Título específico del tipo de reporte (centrado)
+            titulo_reporte = self._obtener_titulo_reporte(self._tipo_reporte)
+            contenido.append(Paragraph(titulo_reporte, titulo_especifico_style))
+            
+            # ✅ INFORMACIÓN ESENCIAL CON RESPONSABLE REAL
+            contenido.append(Paragraph(
+                f"<b>Período de Análisis:</b> {self._fecha_desde} al {self._fecha_hasta}", 
+                info_style
+            ))
+            contenido.append(Paragraph(
+                f"<b>Fecha de Generación:</b> {self._fecha_generacion}", 
+                info_style
+            ))
+            
+            # ✅ CAMBIO PRINCIPAL: Mostrar usuario responsable con su rol
+            if self._usuario_responsable_rol != "Sistema":
+                # Usuario real autenticado
+                responsable_texto = f"<b>Responsable:</b> {self._usuario_responsable_nombre} ({self._usuario_responsable_rol})"
+            else:
+                # Fallback al sistema
+                responsable_texto = f"<b>Responsable:</b> {self._usuario_responsable_nombre}"
+            
+            contenido.append(Paragraph(responsable_texto, info_style))
+            
+            print(f"📋 Información del reporte creada: {len(contenido)} elementos")
+            print(f"👤 Responsable en PDF: {self._usuario_responsable_nombre} ({self._usuario_responsable_rol})")
+            
+            return contenido
+            
+        except Exception as e:
+            print(f"⚠️ Error creando información del reporte: {e}")
+            # Retornar contenido básico en caso de error
+            styles = getSampleStyleSheet()
+            return [Paragraph("INFORMACIÓN DEL REPORTE", styles['Heading2'])]
+
+    def _crear_analisis_conclusiones(self, datos):
+        """Crea sección de análisis simple como antes"""
+        try:
+            # Cálculo básico de totales
+            total_valor = sum(float(item.get('valor', 0)) for item in datos)
+            total_registros = len(datos)
+            
+            conclusion_text = f"""
+            <b>ANÁLISIS Y CONCLUSIONES:</b><br/>
+            
+            El presente informe presenta el análisis de {total_registros} registros correspondientes al período establecido. 
+            El valor total procesado asciende a {FormatUtils.formato_moneda(total_valor)}.<br/>
+            
+            <b>Observaciones:</b> Los datos han sido procesados y validados por el sistema. 
+            El informe refleja la situación al momento de la generación. 
+            Todos los valores están expresados en Bolivianos (Bs).<br/>
+            
+            <b>Estado:</b> INFORME COMPLETADO - DOCUMENTO OFICIAL
+            """
+            
+            styles = getSampleStyleSheet()
+            conclusion_style = ParagraphStyle(
+                'Conclusion',
+                parent=styles['Normal'],
+                fontSize=9,
+                spaceAfter=6,
+                alignment=TA_JUSTIFY,
+                leftIndent=8,
+                rightIndent=8
+            )
+            
+            return Paragraph(conclusion_text, conclusion_style)
+            
+        except Exception as e:
+            print(f"Error creando análisis: {e}")
+            # Retornar párrafo simple en caso de error
+            styles = getSampleStyleSheet()
+            return Paragraph("Análisis completado.", styles['Normal'])
+
+    def _crear_mensaje_sin_datos(self):
+        """Crea mensaje cuando no hay datos"""
+        styles = getSampleStyleSheet()
+        sin_datos_style = ParagraphStyle(
+            'SinDatos',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceAfter=20*mm,
+            alignment=TA_CENTER,
+            textColor=COLOR_GRIS_OSCURO
+        )
+        
+        mensaje = """
+        <b>INFORME SIN DATOS</b><br/><br/>
+        No se encontraron registros para el período seleccionado.<br/>
+        Verifique los criterios de búsqueda y el rango de fechas.
+        """
+        
+        return Paragraph(mensaje, sin_datos_style)
+
+    # ============================================
+    # MÉTODOS PARA INGRESOS Y EGRESOS
+    # ============================================
+
     def _crear_reporte_ingresos_egresos_completo(self, datos, fecha_desde, fecha_hasta):
-        """
-        ✅ NUEVO: Crea un reporte completo de Ingresos y Egresos con estructura profesional
-        Incluye: Resumen, Detalle por categorías, Análisis y Estado final
-        """
+        """Crea reporte de ingresos y egresos optimizado"""
         elementos = []
         
         try:
             # 1. TÍTULO PRINCIPAL
             elementos.extend(self._crear_titulo_ingresos_egresos())
             
-            
             # 2. DETALLE DE INGRESOS Y EGRESOS
             elementos.extend(self._crear_detalle_ingresos_egresos(datos))
             elementos.append(Spacer(1, 8*mm))
             
-            # 3. TABLA PRINCIPAL CON TODOS LOS MOVIMIENTOS
-            elementos.append(self._crear_tabla_movimientos_financieros(datos))
+            # 3. TABLA PRINCIPAL OPTIMIZADA
+            elementos.append(self._crear_tabla_movimientos_financieros_optimizada(datos))
             elementos.append(Spacer(1, 8*mm))
             
             # 4. ANÁLISIS Y CONCLUSIONES FINANCIERAS
             elementos.extend(self._crear_analisis_financiero_profesional(datos))
             elementos.append(Spacer(1, 8*mm))
             
-            print("✅ Reporte de Ingresos y Egresos completo creado")
+            print("✅ Reporte de Ingresos y Egresos optimizado creado")
             return elementos
             
         except Exception as e:
@@ -377,7 +1023,7 @@ class GeneradorReportesPDF:
             return [self._crear_mensaje_error()]
 
     def _crear_titulo_ingresos_egresos(self):
-        """Crea título principal para reporte de ingresos y egresos - CORREGIDO"""
+        """Crea título principal para reporte de ingresos y egresos"""
         try:
             styles = getSampleStyleSheet()
             
@@ -415,7 +1061,7 @@ class GeneradorReportesPDF:
             return []
 
     def _crear_detalle_ingresos_egresos(self, datos):
-        """Crea detalle separado de ingresos y egresos por categorías - NUMERACIÓN CORREGIDA"""
+        """Crea detalle separado de ingresos y egresos por categorías"""
         try:
             styles = getSampleStyleSheet()
             
@@ -435,7 +1081,6 @@ class GeneradorReportesPDF:
             
             elementos = []
             
-            # ✅ CAMBIO: Numeración corregida - empieza en 1
             elementos.append(Paragraph("1. DETALLE DE INGRESOS Y EGRESOS", titulo_detalle_style))
             
             # TABLA DE INGRESOS
@@ -463,10 +1108,10 @@ class GeneradorReportesPDF:
             return []
 
     def _crear_tabla_categoria_financiera(self, datos_categoria, tipo_categoria, color_header):
-        """Crea tabla específica para una categoría financiera - ANCHOS CORREGIDOS"""
+        """Crea tabla específica para una categoría financiera CORREGIDA"""
         try:
             # Preparar datos de la tabla
-            encabezados = ["CATEGORÍA", "CANTIDAD\nOPERACIONES", "VALOR TOTAL (Bs)", "PORCENTAJE"]
+            encabezados = ["CATEGORÍA", "OPS.", "VALOR TOTAL", "%"]
             tabla_datos = [encabezados]
             
             # Agrupar por descripción/categoría
@@ -475,7 +1120,11 @@ class GeneradorReportesPDF:
             
             for item in datos_categoria:
                 descripcion = item.get('descripcion', 'Sin categoría')
-                valor = abs(float(item.get('valor', 0)))  # Usar valor absoluto para mostrar positivo
+                # Limitar longitud de descripción para evitar desbordamiento
+                if len(descripcion) > 40:
+                    descripcion = descripcion[:37] + "..."
+                
+                valor = abs(float(item.get('valor', 0)))
                 cantidad = int(item.get('cantidad', 1))
                 
                 if descripcion not in categorias_agrupadas:
@@ -491,8 +1140,8 @@ class GeneradorReportesPDF:
                 
                 fila = [
                     descripcion,
-                    f"{datos_cat['cantidad']:,}",
-                    f"Bs {datos_cat['valor']:,.2f}",
+                    str(datos_cat['cantidad']),  # Convertir a string
+                    FormatUtils.formato_moneda(datos_cat['valor']),
                     f"{porcentaje:.1f}%"
                 ]
                 tabla_datos.append(fila)
@@ -500,18 +1149,24 @@ class GeneradorReportesPDF:
             # Fila de total
             fila_total = [
                 f"TOTAL {tipo_categoria}",
-                f"{sum(cat['cantidad'] for cat in categorias_agrupadas.values()):,}",
-                f"Bs {total_categoria:,.2f}",
+                str(sum(cat['cantidad'] for cat in categorias_agrupadas.values())),
+                FormatUtils.formato_moneda(total_categoria),
                 "100.0%"
             ]
             tabla_datos.append(fila_total)
             
-            # ✅ CAMBIO CRÍTICO: ANCHOS REDUCIDOS PARA EVITAR SUPERPOSICIÓN
+            # ✅ ANCHOS CORREGIDOS Y PROPORCIONALES
+            ancho_total = letter[0] - 40*mm  # Ancho total disponible
             tabla = Table(
                 tabla_datos,
-                colWidths=[70*mm, 25*mm, 30*mm, 20*mm],  # ✅ REDUCIDOS: antes era 85,30,35,25
+                colWidths=[
+                    ancho_total * 0.45,  # 45% para descripción
+                    ancho_total * 0.15,  # 15% para operaciones
+                    ancho_total * 0.25,  # 25% para valor
+                    ancho_total * 0.15   # 15% para porcentaje
+                ],
                 repeatRows=1,
-                hAlign='CENTER'
+                hAlign='CENTER' 
             )
             
             # Estilos de la tabla
@@ -520,25 +1175,31 @@ class GeneradorReportesPDF:
                 ('BACKGROUND', (0, 0), (-1, 0), color_header),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),  # ✅ REDUCIDO: antes era 10
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 
                 # Datos
                 ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -2), 8),  # ✅ REDUCIDO: antes era 9
-                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),  # Alinear números a la derecha
+                ('FONTSIZE', (0, 1), (-1, -2), 8),
+                ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Ops centrado
+                ('ALIGN', (2, 1), (2, -1), 'RIGHT'),   # Valor a la derecha
+                ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # % centrado
                 ('ALIGN', (0, 1), (0, -2), 'LEFT'),    # Categorías a la izquierda
                 
                 # Fila de total
                 ('BACKGROUND', (0, -1), (-1, -1), COLOR_GRIS_CLARO),
                 ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, -1), (-1, -1), 9),  # ✅ REDUCIDO: antes era 10
+                ('FONTSIZE', (0, -1), (-1, -1), 9),
                 ('TEXTCOLOR', (0, -1), (-1, -1), COLOR_GRIS_OSCURO),
                 
                 # Bordes y formato general
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
+                
+                # Padding adicional
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
             ]
             
             tabla.setStyle(TableStyle(estilos))
@@ -547,76 +1208,74 @@ class GeneradorReportesPDF:
             
         except Exception as e:
             print(f"Error creando tabla de categoría financiera: {e}")
-            # Retornar tabla básica en caso de error
-            return Table([["Error", "creando", "tabla", "financiera"]], hAlign='CENTER')
+            return Table([["Error", "creando", "tabla", "financiera"]], hAlign='LEFT')
 
-    def _crear_tabla_movimientos_financieros(self, datos):
-        """Crea tabla principal con todos los movimientos financieros - ANCHOS CORREGIDOS"""
+    def _crear_tabla_movimientos_financieros_optimizada(self, datos):
+        """Crea tabla principal de movimientos financieros optimizada"""
         try:
-            # Preparar datos
-            encabezados = ["FECHA", "TIPO", "DESCRIPCIÓN", "CANT", "VALOR (Bs)"]
+            # Preparar datos con encabezados optimizados
+            encabezados = ["FECHA/HORA", "CONCEPTO", "TIPO", "VALOR"]
             tabla_datos = [encabezados]
             
             total_general = 0
             
             # Agregar filas de datos
             for item in datos:
-                fecha = item.get('fecha', 'Sin fecha')
+                fecha = FormatUtils.formato_fecha_hora(item.get('fecha', ''))
                 tipo = item.get('tipo', 'Sin tipo')
                 descripcion = item.get('descripcion', 'Sin descripción')
-                cantidad = str(item.get('cantidad', 1))
                 valor = float(item.get('valor', 0))
                 
-                # Formatear valor con signo
-                if tipo == 'INGRESO':
-                    valor_formateado = f"+Bs {abs(valor):,.2f}"
-                else:
-                    valor_formateado = f"-Bs {abs(valor):,.2f}"
+                # Formatear valor con signo usando FormatUtils
+                valor_formateado = FormatUtils.formato_moneda(valor, mostrar_signo=True)
                 
-                fila = [fecha, tipo, descripcion, cantidad, valor_formateado]
+                fila = [fecha, descripcion, tipo, valor_formateado]
                 tabla_datos.append(fila)
                 total_general += valor
             
-            # Fila de total
-            signo = "+" if total_general >= 0 else ""
+            # Fila de total optimizada
             fila_total = [
-                "",
                 "",
                 "SALDO NETO DEL PERÍODO",
                 "",
-                f"{signo}Bs {total_general:,.2f}"
+                FormatUtils.formato_moneda(total_general, mostrar_signo=True)
             ]
             tabla_datos.append(fila_total)
             
-            # ✅ CAMBIO CRÍTICO: ANCHOS AJUSTADOS PARA EVITAR DESBORDAMIENTO
+            # ✅ ANCHOS OPTIMIZADOS
             tabla = Table(
                 tabla_datos,
-                colWidths=[22*mm, 22*mm, 70*mm, 18*mm, 28*mm],  # ✅ REDUCIDOS: antes era 25,25,85,20,30
+                colWidths=[
+                    ANCHO_FECHA_CORTA*mm,        # 22mm
+                    ANCHO_TEXTO_EXTRA_LARGO*mm,  # 85mm
+                    ANCHO_TEXTO_CORTO*mm,        # 25mm
+                    ANCHO_VALOR_LARGO*mm         # 35mm
+                ],
                 repeatRows=1,
                 hAlign='CENTER'
             )
             
-            # Estilos
+            # Estilos optimizados
             estilos = [
                 # Encabezado
                 ('BACKGROUND', (0, 0), (-1, 0), COLOR_AZUL_PRINCIPAL),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),  # ✅ REDUCIDO: antes era 9
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 
                 # Datos
                 ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -2), 7),  # ✅ REDUCIDO: antes era 8
-                ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),  # Cantidad y valor a la derecha
+                ('FONTSIZE', (0, 1), (-1, -2), 8),
+                ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),
                 
                 # Fila de total
                 ('BACKGROUND', (0, -1), (-1, -1), COLOR_AZUL_PRINCIPAL),
                 ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
                 ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, -1), (-1, -1), 9),  # ✅ REDUCIDO: antes era 10
+                ('FONTSIZE', (0, -1), (-1, -1), 9),
                 ('ALIGN', (0, -1), (-1, -1), 'RIGHT'),
-                ('SPAN', (0, -1), (2, -1)),  # Combinar celdas para "SALDO NETO"
+                ('SPAN', (0, -1), (2, -1)),
                 
                 # Bordes
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
@@ -629,11 +1288,11 @@ class GeneradorReportesPDF:
             return tabla
             
         except Exception as e:
-            print(f"Error creando tabla de movimientos: {e}")
+            print(f"Error creando tabla de movimientos optimizada: {e}")
             return Table([["Error", "creando", "tabla", "de", "movimientos"]], hAlign='CENTER')
 
     def _crear_analisis_financiero_profesional(self, datos):
-        """Crea análisis y conclusiones financieras profesionales - NUMERACIÓN CORREGIDA"""
+        """Crea análisis y conclusiones financieras profesionales"""
         try:
             styles = getSampleStyleSheet()
             
@@ -666,7 +1325,6 @@ class GeneradorReportesPDF:
             
             elementos = []
             
-            # ✅ CAMBIO: Numeración corregida - ahora es sección 2
             elementos.append(Paragraph("2. ANÁLISIS Y CONCLUSIONES FINANCIERAS", titulo_analisis_style))
             
             # Análisis de cobertura
@@ -697,7 +1355,7 @@ class GeneradorReportesPDF:
                 
                 egresos_texto = f"""
                 <b>Análisis de Egresos:</b> El rubro que representa el mayor gasto es 
-                "{mayor_egreso[0]}" con Bs {mayor_egreso[1]:,.2f}, representando el 
+                "{mayor_egreso[0]}" con {FormatUtils.formato_moneda(mayor_egreso[1])}, representando el 
                 {(mayor_egreso[1] / totales['total_egresos'] * 100):.1f}% del total de egresos.
                 """
                 elementos.append(Paragraph(egresos_texto, analisis_style))
@@ -709,7 +1367,7 @@ class GeneradorReportesPDF:
                 
                 ingresos_texto = f"""
                 <b>Análisis de Ingresos:</b> El área que genera mayores ingresos es 
-                "{mayor_ingreso[0]}" con Bs {mayor_ingreso[1]:,.2f}, representando el 
+                "{mayor_ingreso[0]}" con {FormatUtils.formato_moneda(mayor_ingreso[1])}, representando el 
                 {(mayor_ingreso[1] / totales['total_ingresos'] * 100):.1f}% del total de ingresos.
                 """
                 elementos.append(Paragraph(ingresos_texto, analisis_style))
@@ -856,42 +1514,13 @@ class GeneradorReportesPDF:
         except Exception as e:
             print(f"Error generando recomendaciones: {e}")
             return ["Continuar monitoreando la situación financiera de la institución."]
-    
-    def _debug_datos_arqueo(self, datos_organizados):
-        """Método de debug para inspeccionar la estructura real de datos - TEMPORAL"""
-        try:
-            print("=" * 50)
-            print("🔍 DEBUG: ESTRUCTURA DE DATOS ARQUEO")
-            print("=" * 50)
-            
-            for categoria, items in datos_organizados.items():
-                print(f"\n📊 CATEGORÍA: {categoria.upper()}")
-                print(f"📈 Total items: {len(items)}")
-                
-                if items and len(items) > 0:
-                    print("🗂️  Primer elemento:")
-                    primer_item = items[0]
-                    for key, value in primer_item.items():
-                        print(f"   {key}: {value} ({type(value).__name__})")
-                    
-                    if len(items) > 1:
-                        print(f"🗂️  Campos únicos en todos los elementos:")
-                        all_keys = set()
-                        for item in items:
-                            all_keys.update(item.keys())
-                        print(f"   {sorted(all_keys)}")
-                else:
-                    print("   ❌ Sin datos")
-            
-            print("=" * 50)
-            return True
-            
-        except Exception as e:
-            print(f"Error en debug: {e}")
-            return False
+
+    # ============================================
+    # MÉTODOS PARA ARQUEO DE CAJA
+    # ============================================
 
     def _crear_arqueo_caja_completo(self, datos, fecha_desde, fecha_hasta):
-        """Crea arqueo de caja con estructura mejorada - VERSIÓN VALIDADA"""
+        """Crea arqueo de caja con estructura mejorada"""
         elementos = []
         
         try:
@@ -907,7 +1536,6 @@ class GeneradorReportesPDF:
             
             # 2. EXTRAER DATOS SEGÚN ESTRUCTURA CON VALIDACIÓN
             if isinstance(datos, dict):
-                # ✅ VALIDAR CLAVES ANTES DE ACCEDER
                 movimientos = datos.get('movimientos_completos', [])
                 
                 # ✅ VALIDAR QUE movimientos SEA LISTA
@@ -955,46 +1583,7 @@ class GeneradorReportesPDF:
                 print(f"⚠️ Error creando info cierre: {info_error}")
                 # Continuar sin info cierre
             
-            # 4. ORGANIZAR POR MÓDULOS CON VALIDACIÓN
-            try:
-                datos_organizados = self._organizar_movimientos_por_categoria(movimientos)
-            except Exception as org_error:
-                print(f"❌ Error organizando movimientos: {org_error}")
-                return [self._crear_mensaje_error()]
-            
-            # 5. DETALLE DE INGRESOS POR SECCIÓN (con manejo de errores individual)
-            try:
-                elementos.extend(self._crear_detalle_ventas_farmacia(datos_organizados))
-                elementos.append(Spacer(1, 4*mm))
-            except Exception as e:
-                print(f"⚠️ Error detalle farmacia: {e}")
-            
-            try:
-                elementos.extend(self._crear_detalle_consultas_medicas(datos_organizados))
-                elementos.append(Spacer(1, 4*mm))
-            except Exception as e:
-                print(f"⚠️ Error detalle consultas: {e}")
-            
-            try:
-                elementos.extend(self._crear_detalle_laboratorio(datos_organizados))
-                elementos.append(Spacer(1, 4*mm))
-            except Exception as e:
-                print(f"⚠️ Error detalle laboratorio: {e}")
-            
-            try:
-                elementos.extend(self._crear_detalle_enfermeria(datos_organizados))
-                elementos.append(Spacer(1, 8*mm))
-            except Exception as e:
-                print(f"⚠️ Error detalle enfermería: {e}")
-            
-            # 6. DETALLE DE EGRESOS
-            try:
-                elementos.extend(self._crear_detalle_egresos_completo(datos_organizados))
-                elementos.append(Spacer(1, 8*mm))
-            except Exception as e:
-                print(f"⚠️ Error detalle egresos: {e}")
-            
-            # 7. RESUMEN FINAL
+            # 4. RESUMEN FINAL
             try:
                 elementos.extend(self._crear_resumen_arqueo_fisico_mejorado(resumen))
             except Exception as e:
@@ -1013,82 +1602,60 @@ class GeneradorReportesPDF:
             import traceback
             traceback.print_exc()
             return [self._crear_mensaje_error()]
+
+    def _crear_titulo_arqueo_caja(self, fecha):
+        """Título específico para arqueo de caja"""
+        styles = getSampleStyleSheet()
         
-    def _organizar_movimientos_por_categoria(self, movimientos: List[Dict]) -> Dict:
-        """Organiza movimientos por categoría - VERSIÓN VALIDADA"""
+        titulo_style = ParagraphStyle(
+            'TituloArqueo',
+            parent=styles['Normal'],
+            fontSize=16,
+            fontName='Helvetica-Bold',
+            textColor=COLOR_AZUL_PRINCIPAL,
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            borderWidth=2,
+            borderColor=COLOR_AZUL_PRINCIPAL,
+            borderPadding=8
+        )
+        
+        return [
+            Paragraph(f"ARQUEO DE CAJA DETALLADO - {fecha.upper()}", titulo_style),
+            Spacer(1, 4*mm)
+        ]
+
+    def _crear_info_cierre_arqueo_mejorada(self, fecha: str, hora_inicio: str, 
+                                       hora_fin: str, resumen: Dict) -> List:
+        """Info del cierre con datos del resumen"""
         try:
-            # ✅ ESTRUCTURA BASE GARANTIZADA
-            datos_org = {
-                'farmacia': [],
-                'consultas': [],
-                'laboratorio': [],
-                'enfermeria': [],
-                'ingresos_extras': [],
-                'egresos': []
-            }
+            info_data = [
+                ["Fecha:", fecha, "Hora Inicio:", hora_inicio],
+                ["Responsable:", "Sistema CMI", "Hora Fin:", hora_fin],
+                ["Total Ingresos:", FormatUtils.formato_moneda(resumen.get('total_ingresos', 0)), 
+                "Total Egresos:", FormatUtils.formato_moneda(resumen.get('total_egresos', 0))]
+            ]
             
-            # ✅ VALIDAR QUE movimientos SEA LISTA
-            if not isinstance(movimientos, list):
-                print(f"❌ movimientos no es lista: {type(movimientos)}")
-                return datos_org
+            tabla = Table(info_data, colWidths=[30*mm, 35*mm, 30*mm, 35*mm])
             
-            # ✅ VALIDAR CADA MOVIMIENTO
-            for mov in movimientos:
-                # ✅ VALIDAR QUE mov SEA DICT
-                if not isinstance(mov, dict):
-                    print(f"⚠️ Movimiento no es dict: {type(mov)}, omitiendo")
-                    continue
-                
-                try:
-                    tipo = str(mov.get('tipo', '')).upper()
-                    categoria = str(mov.get('categoria', '')).lower()
-                    
-                    # Clasificar por tipo y categoría
-                    if tipo == 'EGRESO':
-                        datos_org['egresos'].append(mov)
-                    
-                    elif 'farmacia' in categoria:
-                        datos_org['farmacia'].append(mov)
-                    
-                    elif 'consulta' in categoria:
-                        datos_org['consultas'].append(mov)
-                    
-                    elif 'laboratorio' in categoria:
-                        datos_org['laboratorio'].append(mov)
-                    
-                    elif 'enfermeria' in categoria or 'enfermería' in categoria:
-                        datos_org['enfermeria'].append(mov)
-                    
-                    elif 'extra' in categoria or 'ingreso' in categoria:
-                        datos_org['ingresos_extras'].append(mov)
-                    
-                except Exception as mov_error:
-                    print(f"⚠️ Error procesando movimiento individual: {mov_error}")
-                    continue  # ✅ CONTINUAR CON EL SIGUIENTE
+            estilos = [
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_GRIS_CLARO),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]
             
-            print(f"📊 Datos organizados:")
-            print(f"   Farmacia: {len(datos_org['farmacia'])}")
-            print(f"   Consultas: {len(datos_org['consultas'])}")
-            print(f"   Laboratorio: {len(datos_org['laboratorio'])}")
-            print(f"   Enfermería: {len(datos_org['enfermeria'])}")
-            print(f"   Ingresos Extras: {len(datos_org['ingresos_extras'])}")
-            print(f"   Egresos: {len(datos_org['egresos'])}")
-            
-            return datos_org
+            tabla.setStyle(TableStyle(estilos))
+            return [tabla]
             
         except Exception as e:
-            print(f"❌ Error organizando movimientos: {e}")
-            import traceback
-            traceback.print_exc()
-            # ✅ RETORNAR ESTRUCTURA VACÍA PERO VÁLIDA
-            return {
-                'farmacia': [],
-                'consultas': [],
-                'laboratorio': [],
-                'enfermeria': [],
-                'ingresos_extras': [],
-                'egresos': []
-            }     
+            print(f"Error info cierre: {e}")
+            return []
+
     def _calcular_resumen_desde_movimientos(self, movimientos: List[Dict]) -> Dict:
         """Calcula resumen financiero - VERSIÓN VALIDADA"""
         try:
@@ -1149,636 +1716,7 @@ class GeneradorReportesPDF:
                 'efectivo_real': 0.0,
                 'diferencia': 0.0
             }
-    
-    
-    def _crear_info_cierre_arqueo_mejorada(self, fecha: str, hora_inicio: str, 
-                                       hora_fin: str, resumen: Dict) -> List:
-        """Info del cierre con datos del resumen"""
-        try:
-            info_data = [
-                ["Fecha:", fecha, "Hora Inicio:", hora_inicio],
-                ["Responsable:", "Sistema CMI", "Hora Fin:", hora_fin],
-                ["Total Ingresos:", f"Bs {resumen.get('total_ingresos', 0):,.2f}", 
-                "Total Egresos:", f"Bs {resumen.get('total_egresos', 0):,.2f}"]
-            ]
-            
-            tabla = Table(info_data, colWidths=[30*mm, 35*mm, 30*mm, 35*mm])
-            
-            estilos = [
-                ('BACKGROUND', (0, 0), (-1, -1), COLOR_GRIS_CLARO),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ]
-            
-            tabla.setStyle(TableStyle(estilos))
-            return [tabla]
-            
-        except Exception as e:
-            print(f"Error info cierre: {e}")
-            return []
-    def _organizar_datos_por_modulos(self, datos):
-        """Organiza los datos por módulos para el arqueo de caja - NUEVO MÉTODO"""
-        try:
-            datos_organizados = {
-                'farmacia': [],
-                'consultas': [],
-                'laboratorio': [],
-                'enfermeria': [],
-                'egresos': []
-            }
-            
-            # Obtener movimientos completos
-            movimientos = datos.get('movimientos_completos', [])
-            if isinstance(movimientos, dict):
-                # Si ya viene organizado por módulos
-                return movimientos
-            
-            # Si viene como array plano, organizarlo
-            for movimiento in movimientos:
-                categoria = movimiento.get('categoria', '').lower()
-                tipo = movimiento.get('tipo', '').upper()
-                
-                # Clasificar por categoría/tipo
-                if categoria == 'farmacia' or 'farmacia' in movimiento.get('descripcion', '').lower():
-                    datos_organizados['farmacia'].append(movimiento)
-                elif categoria == 'consultas' or 'consulta' in movimiento.get('descripcion', '').lower():
-                    datos_organizados['consultas'].append(movimiento)
-                elif categoria == 'laboratorio' or 'laboratorio' in movimiento.get('descripcion', '').lower():
-                    datos_organizados['laboratorio'].append(movimiento)
-                elif categoria == 'enfermeria' or 'enfermeria' in movimiento.get('descripcion', '').lower():
-                    datos_organizados['enfermeria'].append(movimiento)
-                elif tipo == 'EGRESO' or categoria in ['gastos', 'compras']:
-                    datos_organizados['egresos'].append(movimiento)
-                else:
-                    # Por defecto, si es ingreso, clasificar por descripción
-                    descripcion = movimiento.get('descripcion', '').lower()
-                    if 'farmacia' in descripcion:
-                        datos_organizados['farmacia'].append(movimiento)
-                    elif 'consulta' in descripcion:
-                        datos_organizados['consultas'].append(movimiento)
-                    elif 'laboratorio' in descripcion or 'análisis' in descripcion:
-                        datos_organizados['laboratorio'].append(movimiento)
-                    elif 'enfermeria' in descripcion or 'procedimiento' in descripcion:
-                        datos_organizados['enfermeria'].append(movimiento)
-                    elif tipo == 'EGRESO':
-                        datos_organizados['egresos'].append(movimiento)
-            
-            return datos_organizados
-            
-        except Exception as e:
-            print(f"Error organizando datos: {e}")
-            return {'farmacia': [], 'consultas': [], 'laboratorio': [], 'enfermeria': [], 'egresos': []}
 
-    def _crear_titulo_arqueo_caja(self, fecha):
-        """Título específico para arqueo de caja"""
-        styles = getSampleStyleSheet()
-        
-        titulo_style = ParagraphStyle(
-            'TituloArqueo',
-            parent=styles['Normal'],
-            fontSize=16,
-            fontName='Helvetica-Bold',
-            textColor=COLOR_AZUL_PRINCIPAL,
-            spaceAfter=12,
-            alignment=TA_CENTER,
-            borderWidth=2,
-            borderColor=COLOR_AZUL_PRINCIPAL,
-            borderPadding=8
-        )
-        
-        return [
-            Paragraph(f"ARQUEO DE CAJA DETALLADO - {fecha.upper()}", titulo_style),
-            Spacer(1, 4*mm)
-        ]
-
-    def _crear_info_cierre_arqueo(self, datos):
-        """Información del cierre de caja"""
-        try:
-            info_data = [
-                ["Fecha:", datos.get('fecha', 'N/A'), "Responsable:", datos.get('responsable', 'Sistema')],
-                ["Hora:", datos.get('hora_generacion', 'N/A'), "N° Arqueo:", datos.get('numero_arqueo', 'ARQ-001')],
-                ["Estado:", datos.get('estado', 'COMPLETADO'), "Supervisor:", "Dr. Administrador"]
-            ]
-            
-            tabla = Table(info_data, colWidths=[25*mm, 35*mm, 25*mm, 35*mm])
-            
-            estilos = [
-                ('BACKGROUND', (0, 0), (-1, -1), COLOR_GRIS_CLARO),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),  # Primera columna bold
-                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),  # Tercera columna bold
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ]
-            
-            tabla.setStyle(TableStyle(estilos))
-            return [tabla]
-            
-        except Exception as e:
-            print(f"Error info cierre: {e}")
-            return []
-
-    def _crear_detalle_ventas_farmacia(self, datos_organizados):
-        """Detalle de ventas con estructura mejorada"""
-        try:
-            ventas = datos_organizados.get('farmacia', [])
-            
-            if not ventas:
-                return [self._crear_seccion_vacia("FARMACIA - VENTAS")]
-            
-            elementos = []
-            
-            titulo_style = ParagraphStyle(
-                'TituloSeccion',
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_AZUL_PRINCIPAL,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-            elementos.append(Paragraph("💊 FARMACIA - DETALLE DE VENTAS", titulo_style))
-            
-            # Encabezados
-            encabezados = ["HORA", "VENTA N°", "PRODUCTO", "CANT.", "P.UNIT", "SUBTOTAL"]
-            tabla_datos = [encabezados]
-            
-            total_ventas = 0
-            
-            for venta in ventas:
-                # Extraer hora de la fecha
-                fecha_completa = venta.get('fecha', '')
-                hora = self._extraer_hora_de_fecha(fecha_completa)
-                
-                # ID de venta
-                id_venta = venta.get('id_venta') or venta.get('id') or '-'
-                
-                # Descripción
-                producto = venta.get('descripcion', 'Producto')
-                if producto.startswith('Venta de medicamentos'):
-                    producto = 'Medicamentos varios'
-                
-                # Cantidad y valores
-                cantidad = int(venta.get('cantidad', 1))
-                valor_total = float(venta.get('valor', 0))
-                precio_unitario = valor_total / cantidad if cantidad > 0 else 0
-                
-                fila = [
-                    hora,
-                    f"V{id_venta}" if isinstance(id_venta, int) else str(id_venta),
-                    producto[:30] + "..." if len(producto) > 30 else producto,
-                    str(cantidad),
-                    f"Bs {precio_unitario:.2f}",
-                    f"Bs {valor_total:.2f}"
-                ]
-                tabla_datos.append(fila)
-                total_ventas += valor_total
-            
-            # Fila de total
-            fila_total = ["", "", "TOTAL VENTAS FARMACIA", 
-                        f"{len(ventas)}", "", f"Bs {total_ventas:,.2f}"]
-            tabla_datos.append(fila_total)
-            
-            # Crear tabla
-            tabla = Table(
-                tabla_datos,
-                colWidths=[20*mm, 20*mm, 50*mm, 15*mm, 20*mm, 25*mm],
-                repeatRows=1
-            )
-            
-            estilos = self._obtener_estilos_tabla_detalle()
-            tabla.setStyle(TableStyle(estilos))
-            elementos.append(tabla)
-            
-            return elementos
-            
-        except Exception as e:
-            print(f"Error detalle ventas: {e}")
-            import traceback
-            traceback.print_exc()
-            return [self._crear_seccion_vacia("FARMACIA - VENTAS")]
-
-    def _crear_detalle_consultas_medicas(self, datos_organizados):
-        """Detalle de consultas médicas individuales - CORREGIDO"""
-        try:
-            consultas = datos_organizados.get('consultas', [])
-            
-            if not consultas:
-                return [self._crear_seccion_vacia("CONSULTAS MÉDICAS")]
-            
-            elementos = []
-            
-            # Título de sección
-            titulo_style = ParagraphStyle(
-                'TituloSeccion',
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_AZUL_PRINCIPAL,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-            elementos.append(Paragraph("🩺 CONSULTAS MÉDICAS - DETALLE", titulo_style))
-            
-            encabezados = ["HORA", "CONSULTA N°", "ESPECIALIDAD", "PACIENTE", "TIPO", "IMPORTE"]
-            tabla_datos = [encabezados]
-            
-            total_consultas = 0
-            numero_consulta = 1
-            
-            for consulta in consultas:
-                fecha_completa = consulta.get('fecha', '')
-                hora = self._extraer_hora_de_fecha(fecha_completa)
-                
-                # ✅ USAR ID REAL DE CONSULTA
-                id_consulta = consulta.get('id_consulta') or consulta.get('id') or numero_consulta
-                
-                especialidad = consulta.get('especialidad', 'Medicina General')
-                
-                # ✅ USAR NOMBRE REAL DEL PACIENTE (del JOIN con Pacientes)
-                paciente = (consulta.get('paciente_nombre') or 
-                        f"Paciente #{numero_consulta}")
-                
-                # ✅ EXTRAER TIPO REAL (Normal/Emergencia) - campo correcto de BD
-                tipo_consulta = consulta.get('tipo_consulta', 'Normal')
-                
-                # ✅ USAR MÉDICO REAL
-                medico = consulta.get('doctor_nombre', 'Sin médico')
-                
-                importe = float(consulta.get('valor', 0))
-                
-                fila = [
-                    hora,
-                    f"C{id_consulta}" if isinstance(id_consulta, int) else str(id_consulta),
-                    especialidad[:20] + "..." if len(especialidad) > 20 else especialidad,
-                    paciente[:20] + "..." if len(paciente) > 20 else paciente,
-                    tipo_consulta,  # Normal o Emergencia directo de BD
-                    f"Bs {importe:.2f}"
-                ]
-                tabla_datos.append(fila)
-                total_consultas += importe
-                numero_consulta += 1
-            
-            # Fila de total
-            fila_total = ["", "", "TOTAL CONSULTAS", "", "", f"Bs {total_consultas:,.2f}"]
-            tabla_datos.append(fila_total)
-            
-            tabla = Table(
-                tabla_datos,
-                colWidths=[20*mm, 25*mm, 35*mm, 35*mm, 15*mm, 25*mm],
-                repeatRows=1
-            )
-            
-            estilos = self._obtener_estilos_tabla_detalle()
-            tabla.setStyle(TableStyle(estilos))
-            elementos.append(tabla)
-            
-            return elementos
-            
-        except Exception as e:
-            print(f"Error detalle consultas: {e}")
-            return [self._crear_seccion_vacia("CONSULTAS MÉDICAS")]
-
-    def _crear_detalle_laboratorio(self, datos_organizados):
-        """Detalle de análisis de laboratorio - CORREGIDO"""
-        try:
-            laboratorio = datos_organizados.get('laboratorio', [])
-            
-            if not laboratorio:
-                return [self._crear_seccion_vacia("LABORATORIO")]
-            
-            elementos = []
-            
-            # Título de sección
-            titulo_style = ParagraphStyle(
-                'TituloSeccion',
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_AZUL_PRINCIPAL,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-            elementos.append(Paragraph("🧪 LABORATORIO - ANÁLISIS", titulo_style))
-            
-            encabezados = ["HORA", "ANÁLISIS N°", "TIPO ANÁLISIS", "PACIENTE", "TÉCNICO", "IMPORTE"]
-            tabla_datos = [encabezados]
-            
-            total_lab = 0
-            numero_analisis = 1
-            
-            for analisis in laboratorio:
-                fecha_completa = analisis.get('fecha', '')
-                hora = self._extraer_hora_de_fecha(fecha_completa)
-                
-                # ✅ USAR ID REAL DE ANÁLISIS
-                id_analisis = analisis.get('id_laboratorio') or analisis.get('id') or numero_analisis
-                
-                # ✅ USAR NOMBRE REAL DEL ANÁLISIS (del JOIN con Tipos_Analisis)
-                tipo_analisis = analisis.get('analisis', 'Análisis General')
-                
-                # ✅ USAR NOMBRE REAL DEL PACIENTE (del JOIN con Pacientes)
-                paciente = analisis.get('paciente_nombre', f"Paciente #{numero_analisis}")
-                
-                # ✅ USAR TÉCNICO REAL (del JOIN con Trabajadores)
-                tecnico = analisis.get('laboratorista', 'Técnico Sistema')
-                
-                importe = float(analisis.get('valor', 0))
-                
-                fila = [
-                    hora,
-                    f"L{id_analisis}" if isinstance(id_analisis, int) else str(id_analisis),
-                    tipo_analisis[:25] + "..." if len(tipo_analisis) > 25 else tipo_analisis,
-                    paciente[:20] + "..." if len(paciente) > 20 else paciente,
-                    tecnico[:15] + "..." if len(tecnico) > 15 else tecnico,
-                    f"Bs {importe:.2f}"
-                ]
-                tabla_datos.append(fila)
-                total_lab += importe
-                numero_analisis += 1
-            
-            # Fila de total
-            fila_total = ["", "", "TOTAL LABORATORIO", "", "", f"Bs {total_lab:,.2f}"]
-            tabla_datos.append(fila_total)
-            
-            tabla = Table(
-                tabla_datos,
-                colWidths=[20*mm, 25*mm, 40*mm, 30*mm, 25*mm, 25*mm],
-                repeatRows=1
-            )
-            
-            estilos = self._obtener_estilos_tabla_detalle()
-            tabla.setStyle(TableStyle(estilos))
-            elementos.append(tabla)
-            
-            return elementos
-            
-        except Exception as e:
-            print(f"Error detalle laboratorio: {e}")
-            return [self._crear_seccion_vacia("LABORATORIO")]
-
-    def _crear_detalle_enfermeria(self, datos_organizados):
-        """Detalle de procedimientos de enfermería - CORREGIDO"""
-        try:
-            enfermeria = datos_organizados.get('enfermeria', [])
-            
-            if not enfermeria:
-                return [self._crear_seccion_vacia("ENFERMERÍA")]
-            
-            elementos = []
-            
-            # Título de sección
-            titulo_style = ParagraphStyle(
-                'TituloSeccion',
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_AZUL_PRINCIPAL,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-            elementos.append(Paragraph("💉 ENFERMERÍA - PROCEDIMIENTOS", titulo_style))
-            
-            encabezados = ["HORA", "PROC. N°", "PROCEDIMIENTO", "PACIENTE", "ENFERMERA", "IMPORTE"]
-            tabla_datos = [encabezados]
-            
-            total_enf = 0
-            numero_proc = 1
-            
-            for proc in enfermeria:
-                fecha_completa = proc.get('fecha', '')
-                hora = self._extraer_hora_de_fecha(fecha_completa)
-                
-                # ✅ USAR ID REAL DE PROCEDIMIENTO
-                id_proc = proc.get('id_enfermeria') or proc.get('id') or numero_proc
-                
-                # ✅ USAR NOMBRE REAL DEL PROCEDIMIENTO (del JOIN con Tipos_Procedimientos)
-                procedimiento = proc.get('procedimiento', 'Procedimiento General')
-                
-                # ✅ USAR NOMBRE REAL DEL PACIENTE (del JOIN con Pacientes)
-                paciente = proc.get('paciente_nombre', f"Paciente #{numero_proc}")
-                
-                # ✅ USAR ENFERMERO/A REAL (del JOIN con Trabajadores)
-                enfermera = proc.get('enfermero', 'Enfermera Sistema')
-                
-                importe = float(proc.get('valor', 0))
-                
-                fila = [
-                    hora,
-                    f"E{id_proc}" if isinstance(id_proc, int) else str(id_proc),
-                    procedimiento[:25] + "..." if len(procedimiento) > 25 else procedimiento,
-                    paciente[:20] + "..." if len(paciente) > 20 else paciente,
-                    enfermera[:15] + "..." if len(enfermera) > 15 else enfermera,
-                    f"Bs {importe:.2f}"
-                ]
-                tabla_datos.append(fila)
-                total_enf += importe
-                numero_proc += 1
-            
-            # Fila de total
-            fila_total = ["", "", "TOTAL ENFERMERÍA", "", "", f"Bs {total_enf:,.2f}"]
-            tabla_datos.append(fila_total)
-            
-            tabla = Table(
-                tabla_datos,
-                colWidths=[20*mm, 25*mm, 40*mm, 30*mm, 25*mm, 25*mm],
-                repeatRows=1
-            )
-            
-            estilos = self._obtener_estilos_tabla_detalle()
-            tabla.setStyle(TableStyle(estilos))
-            elementos.append(tabla)
-            
-            return elementos
-            
-        except Exception as e:
-            print(f"Error detalle enfermería: {e}")
-            return [self._crear_seccion_vacia("ENFERMERÍA")]
-
-
-    def _crear_detalle_egresos_completo(self, datos_organizados):
-        """Detalle completo de egresos - CORREGIDO"""
-        try:
-            egresos = datos_organizados.get('egresos', [])
-            
-            if not egresos:
-                return [self._crear_seccion_vacia("EGRESOS DEL DÍA")]
-            
-            elementos = []
-            
-            # Título de sección
-            titulo_style = ParagraphStyle(
-                'TituloSeccion',
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_ROJO_ACENTO,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-            elementos.append(Paragraph("💸 EGRESOS DEL DÍA", titulo_style))
-            
-            encabezados = ["HORA", "CONCEPTO", "PROVEEDOR", "DETALLE", "IMPORTE"]
-            tabla_datos = [encabezados]
-            
-            total_egresos = 0
-            
-            for egreso in egresos:
-                fecha_completa = egreso.get('fecha', '')
-                hora = self._extraer_hora_de_fecha(fecha_completa)
-                
-                # ✅ EXTRAER CONCEPTO REAL según tipo de egreso
-                if egreso.get('categoria') == 'Compras de Farmacia':
-                    concepto = 'Compras Farmacia'
-                    # Para compras, proveedor viene del JOIN con Proveedor
-                    proveedor = egreso.get('proveedor', 'Sin proveedor')
-                    detalle = f"{egreso.get('descripcion', 'Producto')} - {egreso.get('cantidad', 1)} unid."
-                else:
-                    # Para gastos, concepto viene del tipo_gasto
-                    concepto = egreso.get('tipo_gasto', 'Gasto General')
-                    # Proveedor viene directamente del campo Gastos.Proveedor
-                    proveedor = egreso.get('proveedor', 'N/A')
-                    detalle = egreso.get('descripcion', 'Sin descripción')
-                
-                importe = abs(float(egreso.get('valor', 0)))
-                
-                fila = [
-                    hora,
-                    concepto[:20] + "..." if len(concepto) > 20 else concepto,
-                    proveedor[:20] + "..." if len(proveedor) > 20 else proveedor,
-                    detalle[:30] + "..." if len(detalle) > 30 else detalle,
-                    f"Bs {importe:.2f}"
-                ]
-                tabla_datos.append(fila)
-                total_egresos += importe
-            
-            # Fila de total
-            fila_total = ["", "TOTAL EGRESOS", "", "", f"Bs {total_egresos:,.2f}"]
-            tabla_datos.append(fila_total)
-            
-            tabla = Table(
-                tabla_datos,
-                colWidths=[20*mm, 30*mm, 35*mm, 45*mm, 25*mm],
-                repeatRows=1
-            )
-            
-            # Usar estilos con color rojo para egresos
-            estilos = self._obtener_estilos_tabla_detalle(color_negativo=True)
-            tabla.setStyle(TableStyle(estilos))
-            elementos.append(tabla)
-            
-            return elementos
-            
-        except Exception as e:
-            print(f"Error detalle egresos: {e}")
-            return [self._crear_seccion_vacia("EGRESOS DEL DÍA")]
-        
-    def _obtener_estilos_tabla_detalle(self, color_negativo=False):
-        """Estilos unificados para tablas de detalle del arqueo"""
-        color_header = COLOR_ROJO_ACENTO if color_negativo else COLOR_AZUL_PRINCIPAL
-        
-        return [
-            # Encabezado
-            ('BACKGROUND', (0, 0), (-1, 0), color_header),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            
-            # Datos
-            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 7),
-            ('ALIGN', (0, 1), (0, -2), 'CENTER'),  # HORA centrada
-            ('ALIGN', (-1, 1), (-1, -2), 'RIGHT'), # IMPORTE a la derecha
-            
-            # Fila de total
-            ('BACKGROUND', (0, -1), (-1, -1), color_header),
-            ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 8),
-            ('ALIGN', (0, -1), (-1, -1), 'RIGHT'),
-            
-            # Formato general
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ]
-    
-    def _extraer_hora_de_fecha(self, fecha_completa):
-        """Extrae la hora de una fecha completa - VERSIÓN ROBUSTA"""
-        try:
-            # ✅ VALIDAR QUE NO SEA None O VACÍO
-            if not fecha_completa or fecha_completa == "" or str(fecha_completa) == "None":
-                return "N/A"
-            
-            fecha_str = str(fecha_completa).strip()
-            
-            # Si tiene espacio, tomar la parte después del espacio como hora
-            if ' ' in fecha_str:
-                hora_parte = fecha_str.split(' ')[-1]
-                # Si parece una hora (tiene :), devolverla
-                if ':' in hora_parte:
-                    # Tomar solo HH:MM
-                    partes_hora = hora_parte.split(':')
-                    if len(partes_hora) >= 2:
-                        try:
-                            hh = int(partes_hora[0])
-                            mm = int(partes_hora[1])
-                            return f"{hh:02d}:{mm:02d}"
-                        except (ValueError, TypeError):
-                            pass
-            
-            # Si tiene formato ISO (T en medio)
-            if 'T' in fecha_str:
-                try:
-                    hora_parte = fecha_str.split('T')[1]
-                    if ':' in hora_parte:
-                        partes_hora = hora_parte.split(':')
-                        if len(partes_hora) >= 2:
-                            hh = int(partes_hora[0])
-                            mm = int(partes_hora[1])
-                            return f"{hh:02d}:{mm:02d}"
-                except (ValueError, IndexError, TypeError):
-                    pass
-            
-            # Si todo falla, retornar N/A
-            return "N/A"
-            
-        except Exception as e:
-            print(f"⚠️ Error extrayendo hora de fecha: {e}")
-            return "N/A"
-
-    def _limpiar_descripcion_farmacia(self, descripcion):
-        """Limpia la descripción de productos de farmacia"""
-        if not descripcion:
-            return "Producto"
-        
-        # Remover prefijos comunes
-        descripcion = str(descripcion)
-        prefijos = ["Ventas de Farmacia - ", "Farmacia - ", "Venta - "]
-        
-        for prefijo in prefijos:
-            if descripcion.startswith(prefijo):
-                descripcion = descripcion[len(prefijo):]
-                break
-        
-        return descripcion.strip()
-    
-    def _crear_seccion_vacia(self, nombre_seccion):
-        """Crea mensaje para sección sin datos"""
-        style = ParagraphStyle(
-            'SeccionVacia',
-            fontSize=10,
-            textColor=COLOR_GRIS_OSCURO,
-            spaceAfter=6,
-            leftIndent=10
-        )
-        
-        return Paragraph(f"📋 {nombre_seccion}: Sin registros en el período", style)
     def _crear_resumen_arqueo_fisico_mejorado(self, resumen: Dict) -> List:
         """Resumen final con datos estructurados"""
         elementos = []
@@ -1793,11 +1731,11 @@ class GeneradorReportesPDF:
             # Tabla de resumen
             resumen_data = [
                 ["CONCEPTO", "IMPORTE"],
-                ["Total Ingresos", f"Bs {total_ingresos:,.2f}"],
-                ["Total Egresos", f"Bs {total_egresos:,.2f}"],
-                ["Saldo Teórico", f"Bs {saldo_teorico:,.2f}"],
-                ["Efectivo Real", f"Bs {efectivo_real:,.2f}"],
-                ["Diferencia", f"Bs {diferencia:,.2f}"]
+                ["Total Ingresos", FormatUtils.formato_moneda(total_ingresos)],
+                ["Total Egresos", FormatUtils.formato_moneda(total_egresos)],
+                ["Saldo Teórico", FormatUtils.formato_moneda(saldo_teorico)],
+                ["Efectivo Real", FormatUtils.formato_moneda(efectivo_real)],
+                ["Diferencia", FormatUtils.formato_moneda(diferencia, mostrar_signo=True)]
             ]
             
             tabla_resumen = Table(resumen_data, colWidths=[60*mm, 40*mm])
@@ -1841,7 +1779,7 @@ class GeneradorReportesPDF:
             )
             
             elementos.append(Paragraph(
-                f"{'✅' if abs(diferencia) < 50 else '⚠️'} {tipo_diff} EN CAJA: Bs {abs(diferencia):,.2f}", 
+                f"{'✅' if abs(diferencia) < 50 else '⚠️'} {tipo_diff} EN CAJA: {FormatUtils.formato_moneda(abs(diferencia))}", 
                 resultado_style
             ))
             
@@ -1851,217 +1789,10 @@ class GeneradorReportesPDF:
             print(f"Error resumen arqueo: {e}")
             return []
 
-    def _crear_tabla_seccion(self, titulo, tabla_datos, color_negativo=False):
-        """Crea tabla con formato específico para secciones del arqueo"""
-        try:
-            styles = getSampleStyleSheet()
-            
-            titulo_style = ParagraphStyle(
-                'TituloSeccion',
-                parent=styles['Normal'],
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_AZUL_PRINCIPAL,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-            
-            elementos = []
-            elementos.append(Paragraph(titulo, titulo_style))
-            
-            tabla = Table(tabla_datos, 
-                        colWidths=[15*mm, 20*mm, 45*mm, 15*mm, 20*mm, 25*mm],
-                        repeatRows=1)
-            
-            color_header = COLOR_ROJO_ACENTO if color_negativo else COLOR_AZUL_PRINCIPAL
-            
-            estilos = [
-                ('BACKGROUND', (0, 0), (-1, 0), color_header),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -2), 7),
-                ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),
-                ('BACKGROUND', (0, -1), (-1, -1), color_header),
-                ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, -1), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
-            ]
-            
-            tabla.setStyle(TableStyle(estilos))
-            elementos.append(tabla)
-            
-            return elementos[0] if len(elementos) == 2 else elementos
-            
-        except Exception as e:
-            print(f"Error tabla sección: {e}")
-            return self._crear_seccion_vacia(titulo.split(' - ')[-1])
+    # ============================================
+    # MÉTODOS AUXILIARES GENERALES
+    # ============================================
 
-    def _crear_seccion_vacia(self, nombre_seccion):
-        """Crea sección vacía cuando no hay datos"""
-        styles = getSampleStyleSheet()
-        
-        return Paragraph(f"📋 {nombre_seccion}: Sin registros en el período", 
-                        ParagraphStyle('SeccionVacia', fontSize=10, 
-                                    textColor=COLOR_GRIS_OSCURO, spaceAfter=6))
-    def _crear_mensaje_error(self):
-        """Crea mensaje de error para el PDF"""
-        styles = getSampleStyleSheet()
-        error_style = ParagraphStyle(
-            'Error',
-            parent=styles['Normal'],
-            fontSize=12,
-            textColor=COLOR_ROJO_ACENTO,
-            alignment=TA_CENTER
-        )
-        
-        return Paragraph("Error generando reporte de ingresos y egresos", error_style)
-    
-    def _crear_mensaje_sin_movimientos(self):
-        """✅ NUEVO: Crea mensaje cuando no hay movimientos"""
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import Paragraph
-        from reportlab.lib.enums import TA_CENTER
-        
-        styles = getSampleStyleSheet()
-        mensaje_style = ParagraphStyle(
-            'SinMovimientos',
-            parent=styles['Normal'],
-            fontSize=14,
-            textColor=COLOR_GRIS_OSCURO,
-            alignment=TA_CENTER,
-            spaceAfter=20*mm,
-            spaceBefore=20*mm
-        )
-        
-        mensaje = """
-        <b>📋 NO HAY MOVIMIENTOS PARA ESTE PERÍODO</b><br/><br/>
-        No se registraron transacciones en el rango de fecha y hora especificado.<br/>
-        Verifique los parámetros de consulta.
-        """
-        
-        return Paragraph(mensaje, mensaje_style)
-    
-    # ===== MÉTODOS EXISTENTES (MANTENER FUNCIONALIDAD ANTERIOR) =====
-    
-    def _crear_encabezado_profesional_mejorado(self, canvas, doc):
-        """Crea encabezado profesional mejorado con logo en posición correcta"""
-        canvas.saveState()
-        
-        # Fondo blanco del encabezado (más compacto)
-        canvas.setFillColor(colors.white)
-        canvas.rect(0, letter[1]-40*mm, letter[0], 40*mm, fill=1, stroke=0)  # Reducido a 40mm de altura
-        
-        # Franja decorativa superior (roja)
-        canvas.setFillColor(COLOR_ROJO_ACENTO)
-        canvas.rect(0, letter[1]-6*mm, letter[0], 6*mm, fill=1, stroke=0)
-        
-        # LÍNEA AZUL en la parte inferior del encabezado
-        canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
-        canvas.setLineWidth(3)
-        canvas.line(0, letter[1]-40*mm, letter[0], letter[1]-40*mm)  # Ajustado a 40mm
-        
-        # Bordes laterales azules (ajustados)
-        canvas.setLineWidth(2)
-        canvas.line(0, letter[1]-40*mm, 0, letter[1]-6*mm)  # Izquierdo
-        canvas.line(letter[0], letter[1]-40*mm, letter[0], letter[1]-6*mm)  # Derecho
-        
-        # Logo (POSICIÓN CORRECTA: lado izquierdo arriba, pegado al borde, tamaño grande)
-        if self.logo_path and os.path.exists(self.logo_path):
-            try:
-                canvas.drawImage(
-                    self.logo_path, 
-                    25*mm, letter[1]-45*mm,
-                    width=120*mm, height=40*mm,
-                    preserveAspectRatio=True,
-                    mask='auto'
-                )
-            except:
-                self._dibujar_logo_profesional(canvas, 25*mm, letter[1]-45*mm, 120*mm, 40*mm)
-        else:
-            self._dibujar_logo_profesional(canvas, 25*mm, letter[1]-45*mm, 120*mm, 40*mm)
-        
-        # Información institucional (lado derecho, ajustada para no interferir con logo)
-        canvas.setFont("Helvetica-Bold", 14)
-        canvas.setFillColor(COLOR_AZUL_PRINCIPAL)
-        canvas.drawRightString(letter[0]-20*mm, letter[1]-20*mm, "CLÍNICA MARÍA INMACULADA")
-        
-        canvas.setFont("Helvetica", 11)
-        canvas.setFillColor(COLOR_GRIS_OSCURO)
-        canvas.drawRightString(letter[0]-20*mm, letter[1]-28*mm, "Atención Médica Integral")
-        canvas.drawRightString(letter[0]-20*mm, letter[1]-35*mm, "Villa Yapacaní, Santa Cruz - Bolivia")
-        
-        canvas.restoreState()
-    
-    def _dibujar_logo_profesional(self, canvas, x, y, ancho, alto):
-        """Dibuja logo profesional con tamaño y posición personalizados"""
-        # Texto del logo en azul sobre fondo blanco
-        canvas.setFillColor(COLOR_AZUL_PRINCIPAL)
-        canvas.setFont("Helvetica-Bold", 28)
-        canvas.drawCentredText(x + ancho/2, y + alto/2 + 10, "CMI")
-        
-        canvas.setFont("Helvetica", 14)
-        canvas.drawCentredText(x + ancho/2, y + alto/2 - 5, "CLÍNICA MARÍA")
-        canvas.drawCentredText(x + ancho/2, y + alto/2 - 20, "INMACULADA")
-        
-        # Marco decorativo azul
-        canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
-        canvas.setLineWidth(2)
-        canvas.rect(x, y, ancho, alto, fill=0, stroke=1)
-
-    def _crear_informacion_reporte_mejorada(self):
-        """Crea sección de información del reporte SIN tabla, estilo normal y sin redundancias"""
-        try:
-            styles = getSampleStyleSheet()
-            
-            # Estilo para el título específico del reporte (centrado)
-            titulo_especifico_style = ParagraphStyle(
-                'TituloEspecifico',
-                parent=styles['Normal'],
-                fontSize=16,
-                fontName='Helvetica-Bold',
-                textColor=COLOR_AZUL_PRINCIPAL,
-                spaceAfter=12,
-                alignment=TA_CENTER
-            )
-            
-            # Estilo para la información (alineación mejorada)
-            info_style = ParagraphStyle(
-                'InfoReporte',
-                parent=styles['Normal'],
-                fontSize=11,
-                fontName='Helvetica',
-                textColor=COLOR_GRIS_OSCURO,
-                spaceAfter=6,
-                leftIndent=0,  # Sin indentación para mejor alineación
-                alignment=TA_LEFT
-            )
-            
-            # Crear contenido
-            contenido = []
-            
-            # Título específico del tipo de reporte (centrado)
-            titulo_reporte = self._obtener_titulo_reporte(self._tipo_reporte)
-            contenido.append(Paragraph(titulo_reporte, titulo_especifico_style))
-            
-            # Información esencial (sin redundancias)
-            contenido.append(Paragraph(f"<b>Período de Análisis:</b> {self._fecha_desde} al {self._fecha_hasta}", info_style))
-            contenido.append(Paragraph(f"<b>Fecha de Generación:</b> {self._fecha_generacion}", info_style))
-            contenido.append(Paragraph(f"<b>Responsable:</b> Sistema de Gestión Médica", info_style))
-            
-            print(f"📋 Información del reporte creada: {len(contenido)} elementos")
-            return contenido
-            
-        except Exception as e:
-            print(f"⚠️ Error creando información del reporte: {e}")
-            # Retornar contenido básico en caso de error
-            styles = getSampleStyleSheet()
-            return [Paragraph("INFORMACIÓN DEL REPORTE", styles['Heading2'])]
-        
     def _crear_estilos_tabla_unificados(self):
         """Estilos unificados para todas las tablas de reportes"""
         return [
@@ -2105,587 +1836,113 @@ class GeneradorReportesPDF:
             # ✅ ZEBRA STRIPING SUTIL Y UNIFORME
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
         ]
-    
+
+    def _crear_encabezado_profesional_mejorado(self, canvas, doc):
+        """
+        Crea encabezado profesional mejorado con logo
+        ✅ NOTA: El responsable se muestra en la sección de información, no en el encabezado
+        """
+        canvas.saveState()
         
-    def _crear_tabla_profesional_mejorada(self, datos, tipo_reporte):
-        """Crea tabla con estilo COMPLETAMENTE UNIFICADO"""
-        from reportlab.platypus import Table, TableStyle
-        from reportlab.lib import colors
+        # Fondo blanco del encabezado (más compacto)
+        canvas.setFillColor(colors.white)
+        canvas.rect(0, letter[1]-40*mm, letter[0], 40*mm, fill=1, stroke=0)
         
-        # Obtener definición de columnas
-        columnas_def = self._obtener_columnas_reporte(tipo_reporte)
+        # Franja decorativa superior (roja)
+        canvas.setFillColor(COLOR_ROJO_ACENTO)
+        canvas.rect(0, letter[1]-6*mm, letter[0], 6*mm, fill=1, stroke=0)
         
-        # Crear encabezados
-        encabezados = [col[0] for col in columnas_def]
-        anchos_columnas = [col[1]*mm for col in columnas_def]
+        # LÍNEA AZUL en la parte inferior del encabezado
+        canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
+        canvas.setLineWidth(3)
+        canvas.line(0, letter[1]-40*mm, letter[0], letter[1]-40*mm)
         
-        # Preparar datos
-        tabla_datos = [encabezados]
-        total_valor = 0
+        # Bordes laterales azules (ajustados)
+        canvas.setLineWidth(2)
+        canvas.line(0, letter[1]-40*mm, 0, letter[1]-6*mm)
+        canvas.line(letter[0], letter[1]-40*mm, letter[0], letter[1]-6*mm)
         
-        # Agregar filas de datos
-        for i, registro in enumerate(datos):
-            fila = []
-            for col_titulo, ancho, alineacion in columnas_def:
-                valor = self._obtener_valor_campo(registro, col_titulo, tipo_reporte)
-                fila.append(valor)
-                
-            tabla_datos.append(fila)
-            
-            # Calcular totales
+        # Logo
+        if self.logo_path and os.path.exists(self.logo_path):
             try:
-                valor_monetario = 0
-                if 'valor' in registro and registro['valor']:
-                    valor_monetario = float(registro['valor'])
-                elif 'Monto' in registro and registro['Monto']:
-                    valor_monetario = float(registro['Monto'])
-                elif 'Total' in registro and registro['Total']:
-                    valor_monetario = float(registro['Total'])
-                
-                total_valor += valor_monetario
-                
-            except (ValueError, TypeError):
-                continue
-                
-        # ✅ CREAR FILA DE TOTAL CON ETIQUETA "TOTAL GENERAL:" EN LA POSICIÓN CORRECTA
-        fila_total = [""] * len(columnas_def)
-
-        # ✅ LÓGICA ESPECÍFICA PARA VENTAS - CORREGIDA
-        if tipo_reporte == 1:  # Ventas de Farmacia
-            # Buscar las posiciones de VENDEDOR y TOTAL
-            for i, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
-                if col_titulo == "VENDEDOR":
-                    fila_total[i] = "TOTAL GENERAL:"
-                elif col_titulo == "TOTAL (Bs)":
-                    fila_total[i] = f"Bs {total_valor:,.2f}"
+                canvas.drawImage(
+                    self.logo_path, 
+                    25*mm, letter[1]-45*mm,
+                    width=120*mm, height=40*mm,
+                    preserveAspectRatio=True,
+                    mask='auto'
+                )
+            except:
+                self._dibujar_logo_profesional(canvas, 25*mm, letter[1]-45*mm, 120*mm, 40*mm)
         else:
-            # Para otros reportes
-            if len(columnas_def) >= 2:
-                fila_total[-2] = "TOTAL GENERAL:"  # Penúltima columna
-                fila_total[-1] = f"Bs {total_valor:,.2f}"  # Última columna
-            else:
-                fila_total[0] = f"TOTAL GENERAL: Bs {total_valor:,.2f}"
-
-        tabla_datos.append(fila_total)
-
-        # ✅ CREAR TABLA CON ESTILOS UNIFICADOS
-        tabla = Table(
-            tabla_datos, 
-            colWidths=anchos_columnas, 
-            repeatRows=1,
-            splitByRow=1,
-            spaceAfter=12,
-            spaceBefore=12,
-            hAlign='CENTER'
-        )
-
-        # ✅ APLICAR ESTILOS UNIFICADOS
-        estilos_base = self._crear_estilos_tabla_unificados()
-
-        # Aplicar alineaciones específicas por columna
-        for col_idx, (col_titulo, ancho, alineacion) in enumerate(columnas_def):
-            align_map = {'LEFT': 'LEFT', 'RIGHT': 'RIGHT', 'CENTER': 'CENTER'}
-            tabla_align = align_map.get(alineacion, 'LEFT')
-            
-            # Alineación para datos normales
-            estilos_base.append(('ALIGN', (col_idx, 1), (col_idx, -2), tabla_align))
-            
-            # ✅ ALINEACIÓN CORREGIDA PARA FILA DE TOTAL
-            if tipo_reporte == 1:  # Ventas - orden corregido
-                if col_titulo == "VENDEDOR" or col_titulo == "TOTAL (Bs)":
-                    estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
-                else:
-                    estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'CENTER'))
-            else:  # Otros reportes
-                if col_idx >= len(columnas_def) - 2:  # Últimas dos columnas
-                    estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'RIGHT'))
-                else:
-                    estilos_base.append(('ALIGN', (col_idx, -1), (col_idx, -1), 'CENTER'))
-
-        # Aplicar estilos
-        tabla.setStyle(TableStyle(estilos_base))
+            self._dibujar_logo_profesional(canvas, 25*mm, letter[1]-45*mm, 120*mm, 40*mm)
         
-        print(f"✅ Tabla PDF creada con estilo unificado: {len(datos)} filas + total")
+        # Información institucional
+        canvas.setFont("Helvetica-Bold", 14)
+        canvas.setFillColor(COLOR_AZUL_PRINCIPAL)
+        canvas.drawRightString(letter[0]-20*mm, letter[1]-20*mm, "CLÍNICA MARÍA INMACULADA")
         
-        return tabla
+        canvas.setFont("Helvetica", 11)
+        canvas.setFillColor(COLOR_GRIS_OSCURO)
+        canvas.drawRightString(letter[0]-20*mm, letter[1]-28*mm, "Atención Médica Integral")
+        canvas.drawRightString(letter[0]-20*mm, letter[1]-35*mm, "Villa Yapacaní, Santa Cruz - Bolivia")
+        
+        canvas.restoreState()
 
-    def _crear_analisis_conclusiones(self, datos):
-        """Crea sección de análisis simple como antes"""
-        try:
-            # Cálculo básico de totales
-            total_valor = sum(float(item.get('valor', 0)) for item in datos)
-            total_registros = len(datos)
-            
-            conclusion_text = f"""
-            <b>ANÁLISIS Y CONCLUSIONES:</b><br/>
-            
-            El presente informe presenta el análisis de {total_registros} registros correspondientes al período establecido. 
-            El valor total procesado asciende a Bs {total_valor:,.2f}.<br/>
-            
-            <b>Observaciones:</b> Los datos han sido procesados y validados por el sistema. 
-            El informe refleja la situación al momento de la generación. 
-            Todos los valores están expresados en Bolivianos (Bs).<br/>
-            
-            <b>Estado:</b> INFORME COMPLETADO - DOCUMENTO OFICIAL
-            """
-            
-            styles = getSampleStyleSheet()
-            conclusion_style = ParagraphStyle(
-                'Conclusion',
-                parent=styles['Normal'],
-                fontSize=9,
-                spaceAfter=6,
-                alignment=TA_JUSTIFY,
-                leftIndent=8,
-                rightIndent=8
-            )
-            
-            return Paragraph(conclusion_text, conclusion_style)
-            
-        except Exception as e:
-            print(f"Error creando análisis: {e}")
-            # Retornar párrafo simple en caso de error
-            styles = getSampleStyleSheet()
-            return Paragraph("Análisis completado.", styles['Normal'])
-    
-    def _crear_mensaje_sin_datos(self):
-        """Crea mensaje cuando no hay datos"""
+    def _dibujar_logo_profesional(self, canvas, x, y, ancho, alto):
+        """Dibuja logo profesional con tamaño y posición personalizados"""
+        # Texto del logo en azul sobre fondo blanco
+        canvas.setFillColor(COLOR_AZUL_PRINCIPAL)
+        canvas.setFont("Helvetica-Bold", 28)
+        canvas.drawCentredText(x + ancho/2, y + alto/2 + 10, "CMI")
+        
+        canvas.setFont("Helvetica", 14)
+        canvas.drawCentredText(x + ancho/2, y + alto/2 - 5, "CLÍNICA MARÍA")
+        canvas.drawCentredText(x + ancho/2, y + alto/2 - 20, "INMACULADA")
+        
+        # Marco decorativo azul
+        canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
+        canvas.setLineWidth(2)
+        canvas.rect(x, y, ancho, alto, fill=0, stroke=1)
+
+    def _crear_mensaje_error(self):
+        """Crea mensaje de error para el PDF"""
         styles = getSampleStyleSheet()
-        sin_datos_style = ParagraphStyle(
-            'SinDatos',
+        error_style = ParagraphStyle(
+            'Error',
             parent=styles['Normal'],
             fontSize=12,
-            spaceAfter=20*mm,
+            textColor=COLOR_ROJO_ACENTO,
+            alignment=TA_CENTER
+        )
+        
+        return Paragraph("Error generando reporte", error_style)
+
+    def _crear_mensaje_sin_movimientos(self):
+        """Crea mensaje cuando no hay movimientos"""
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import Paragraph
+        from reportlab.lib.enums import TA_CENTER
+        
+        styles = getSampleStyleSheet()
+        mensaje_style = ParagraphStyle(
+            'SinMovimientos',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=COLOR_GRIS_OSCURO,
             alignment=TA_CENTER,
-            textColor=COLOR_GRIS_OSCURO
+            spaceAfter=20*mm,
+            spaceBefore=20*mm
         )
         
         mensaje = """
-        <b>INFORME SIN DATOS</b><br/><br/>
-        No se encontraron registros para el período seleccionado.<br/>
-        Verifique los criterios de búsqueda y el rango de fechas.
+        <b>📋 NO HAY MOVIMIENTOS PARA ESTE PERÍODO</b><br/><br/>
+        No se registraron transacciones en el rango de fecha y hora especificado.<br/>
+        Verifique los parámetros de consulta.
         """
         
-        return Paragraph(mensaje, sin_datos_style)
+        return Paragraph(mensaje, mensaje_style)
 
-    def _obtener_columnas_reporte(self, tipo_reporte):
-        """Define las columnas con ANCHOS UNIFORMES Y CORREGIDOS"""
-        
-        # ANCHOS ESTÁNDAR CORREGIDOS (optimizados para evitar truncamiento)
-        ANCHO_FECHA = 25      # Aumentado de 22
-        ANCHO_CODIGO = 22     # Aumentado de 20
-        ANCHO_CORTO = 28      # Aumentado de 25
-        ANCHO_MEDIO = 38      # Aumentado de 35
-        ANCHO_LARGO = 50      # Aumentado de 45
-        ANCHO_VALOR = 32      # Aumentado de 28
-        
-        columnas = {
-            1: [  # Ventas de Farmacia
-                ("FECHA", ANCHO_FECHA, 'LEFT'),
-                ("Nº VENTA", ANCHO_CODIGO, 'LEFT'), 
-                ("PRODUCTO", ANCHO_LARGO-5, 'LEFT'),
-                ("CANT", ANCHO_CORTO-8, 'RIGHT'),
-                ("P.UNIT (Bs)", ANCHO_VALOR-5, 'RIGHT'),
-                ("VENDEDOR", ANCHO_MEDIO-3, 'LEFT'),
-                ("TOTAL (Bs)", ANCHO_VALOR-5, 'RIGHT')
-            ],
-            
-            2: [  # Inventario
-                ("FECHA", ANCHO_FECHA-5, 'LEFT'),
-                ("PRODUCTO", ANCHO_LARGO, 'LEFT'),   
-                ("MARCA", ANCHO_MEDIO-13, 'LEFT'),
-                ("STOCK", ANCHO_CORTO-8, 'RIGHT'),
-                ("LOTES", ANCHO_CORTO-13, 'CENTER'),
-                ("P.UNIT", ANCHO_CORTO-3, 'RIGHT'),
-                ("F.VENC", ANCHO_CORTO-3, 'LEFT'),
-                ("VALOR (Bs)", ANCHO_VALOR-3, 'RIGHT')
-            ],
-            
-            3: [  # Compras
-                ("FECHA", ANCHO_FECHA-3, 'LEFT'),
-                ("PRODUCTO", ANCHO_MEDIO+7, 'LEFT'),
-                ("MARCA", ANCHO_CORTO-5, 'LEFT'),
-                ("UNIDADES", ANCHO_CORTO-5, 'RIGHT'),
-                ("PROVEEDOR", ANCHO_MEDIO-3, 'LEFT'),
-                ("F.VENC", ANCHO_CODIGO, 'LEFT'),
-                ("USUARIO", ANCHO_CORTO, 'LEFT'),
-                ("TOTAL (Bs)", ANCHO_VALOR-2, 'RIGHT')
-            ],
-            
-            4: [  # Consultas Médicas
-                ("FECHA", ANCHO_FECHA, 'LEFT'),
-                ("ESPECIALIDAD", ANCHO_MEDIO, 'LEFT'),
-                ("DESCRIPCIÓN", ANCHO_LARGO, 'LEFT'),
-                ("PACIENTE", ANCHO_MEDIO+5, 'LEFT'),
-                ("MÉDICO", ANCHO_MEDIO, 'LEFT'),
-                ("PRECIO (Bs)", ANCHO_VALOR, 'RIGHT')
-            ],
-            
-            5: [  # Laboratorio
-                ("FECHA", ANCHO_FECHA-3, 'LEFT'),
-                ("ANÁLISIS", ANCHO_MEDIO+7, 'LEFT'),
-                ("TIPO", ANCHO_CORTO-3, 'CENTER'),
-                ("PACIENTE", ANCHO_MEDIO+5, 'LEFT'),
-                ("LABORATORISTA", ANCHO_MEDIO, 'LEFT'),
-                ("PRECIO (Bs)", ANCHO_VALOR, 'RIGHT')
-            ],
-            
-            6: [  # Enfermería
-                ("FECHA", ANCHO_FECHA-3, 'LEFT'),
-                ("PROCEDIMIENTO", ANCHO_MEDIO+7, 'LEFT'),
-                ("TIPO", ANCHO_CORTO-3, 'CENTER'),
-                ("PACIENTE", ANCHO_MEDIO+5, 'LEFT'),
-                ("ENFERMERO/A", ANCHO_MEDIO, 'LEFT'),
-                ("PRECIO (Bs)", ANCHO_VALOR, 'RIGHT')
-            ],
-            
-            7: [  # Gastos
-                ("FECHA", ANCHO_FECHA, 'LEFT'),
-                ("TIPO GASTO", ANCHO_MEDIO, 'LEFT'),
-                ("DESCRIPCIÓN", ANCHO_LARGO, 'LEFT'),
-                ("PROVEEDOR", ANCHO_MEDIO-5, 'LEFT'),
-                ("MONTO (Bs)", ANCHO_VALOR, 'RIGHT')
-            ],
-            
-            8: [  # Ingresos y Egresos
-                ("FECHA", ANCHO_FECHA, 'LEFT'),
-                ("TIPO", ANCHO_CORTO+5, 'CENTER'),
-                ("DESCRIPCIÓN", ANCHO_LARGO+20, 'LEFT'),
-                ("CANTIDAD", ANCHO_CORTO, 'RIGHT'),
-                ("VALOR (Bs)", ANCHO_VALOR+8, 'RIGHT')
-            ],
-
-            9: [  # Arqueo de Caja - Columnas flexibles
-                ("FECHA", ANCHO_FECHA, 'LEFT'),
-                ("TIPO", ANCHO_CORTO+5, 'CENTER'),
-                ("DESCRIPCIÓN", ANCHO_LARGO+15, 'LEFT'),
-                ("CANTIDAD", ANCHO_CORTO, 'RIGHT'),
-                ("VALOR (Bs)", ANCHO_VALOR, 'RIGHT')
-            ]
-        }
-        
-        return columnas.get(tipo_reporte, [
-            ("FECHA", ANCHO_FECHA, 'LEFT'),
-            ("DESCRIPCIÓN", ANCHO_LARGO+20, 'LEFT'),
-            ("CANTIDAD", ANCHO_CORTO, 'RIGHT'),
-            ("VALOR (Bs)", ANCHO_VALOR, 'RIGHT')
-        ])
-
-    def _obtener_valor_campo(self, registro, campo_titulo, tipo_reporte):
-        """Extrae valores con MAPEO CORREGIDO PARA NUEVOS CAMPOS"""
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import Paragraph
-        from reportlab.lib.enums import TA_LEFT
-        
-        # ✅ MAPEO ACTUALIZADO CON NUEVOS CAMPOS
-        mapeo_campos = {
-            # CAMPOS BÁSICOS
-            "FECHA": "fecha",
-            "DESCRIPCIÓN": "descripcion", 
-            "CANTIDAD": "cantidad",
-            "CANT": "cantidad",
-            "UNIDADES": "cantidad",
-            
-            # VALORES MONETARIOS
-            "PRECIO (Bs)": "valor",
-            "TOTAL (Bs)": "valor", 
-            "VALOR (Bs)": "valor",
-            "MONTO (Bs)": "valor",  # ✅ NUEVO para gastos
-            "P.UNIT (Bs)": "precio_unitario",
-            
-            # ✅ LABORATORIO - CAMPOS CORREGIDOS
-            "ANÁLISIS": "analisis",           # ✅ NUEVO campo
-            "TIPO": "tipo",                   # ✅ Normal/Emergencia
-            "LABORATORISTA": "laboratorista", # ✅ NUEVO campo
-            
-            # ✅ ENFERMERÍA - CAMPOS CORREGIDOS  
-            "PROCEDIMIENTO": "procedimiento", # ✅ NUEVO campo (con detalles)
-            "ENFERMERO/A": "enfermero",       # ✅ MANTENER
-            
-            # ✅ GASTOS - CAMPOS CORREGIDOS
-            "TIPO GASTO": "tipo_gasto",       # ✅ NUEVO campo
-            
-            # VENTAS - MAPEOS EXISTENTES
-            "Nº VENTA": "numeroVenta",
-            "Nº VENTA": "numeroVenta",
-            "NUMERO VENTA": "numeroVenta",
-            "VENDEDOR": "usuario",
-            
-            # CAMPOS EXISTENTES
-            "PACIENTE": "paciente",
-            "MÉDICO": "doctor_nombre",
-            "ESPECIALIDAD": "especialidad",
-            "TÉCNICO": "tecnico",
-            "TIPO ANÁLISIS": "tipoAnalisis",
-            "PRODUCTO": "descripcion",
-            "MARCA": "marca", 
-            "PROVEEDOR": "proveedor",
-            "F.VENC": "fecha_vencimiento",
-            "USUARIO": "usuario",
-            "STOCK": "cantidad",
-            "LOTES": "lotes"
-        }
-        
-        campo_dato = mapeo_campos.get(campo_titulo, campo_titulo.lower())
-        valor = registro.get(campo_dato, "")
-        valor = str(valor) if valor else ""
-
-        def crear_parrafo(texto):
-            if not texto or len(str(texto).strip()) == 0:
-                return ""
-            styles = getSampleStyleSheet()
-            style = ParagraphStyle(
-                'CellParagraph',
-                parent=styles['Normal'],
-                fontSize=8,
-                leading=9,
-                alignment=TA_LEFT,
-                wordWrap='LTR',
-                splitLongWords=True
-            )
-            return Paragraph(str(texto), style)
-
-        # ✅ PROCESAMIENTO ESPECÍFICO PARA REPORTE DE INGRESOS Y EGRESOS (TIPO 8)
-        if tipo_reporte == 8:
-            if campo_titulo == "TIPO":
-                tipo = registro.get('tipo', 'Sin tipo')
-                return tipo
-            elif campo_titulo == "VALOR (Bs)":
-                try:
-                    valor_num = float(registro.get('valor', 0))
-                    tipo = registro.get('tipo', '')
-                    
-                    # Mostrar con signo según el tipo
-                    if tipo == 'INGRESO':
-                        return f"+Bs {abs(valor_num):,.2f}"
-                    elif tipo == 'EGRESO':
-                        return f"-Bs {abs(valor_num):,.2f}"
-                    else:
-                        return f"Bs {valor_num:,.2f}"
-                except:
-                    return "Bs 0.00"
-        
-        # ✅ PROCESAMIENTO ESPECÍFICO PARA NUEVOS CAMPOS
-        
-        # 1. Campo ANÁLISIS (laboratorio)
-        if campo_titulo == "ANÁLISIS":
-            analisis = (registro.get('analisis') or 
-                       registro.get('tipoAnalisis') or
-                       registro.get('tipo_analisis') or 
-                       "Análisis General")
-            
-            if len(analisis) > 25:
-                return crear_parrafo(analisis)
-            return analisis
-        
-        # 2. Campo TIPO (laboratorio y enfermería)
-        elif campo_titulo == "TIPO" and tipo_reporte in [5, 6]:
-            tipo = registro.get('tipo', 'Normal')
-            return tipo if tipo in ['Normal', 'Emergencia'] else 'Normal'
-        
-        # 3. Campo LABORATORISTA
-        elif campo_titulo == "LABORATORISTA":
-            laboratorista = (registro.get('laboratorista') or
-                           registro.get('tecnico') or 
-                           registro.get('trabajador_nombre') or
-                           "Sin asignar")
-            
-            if len(laboratorista) > 20:
-                return crear_parrafo(laboratorista)
-            return laboratorista
-        
-        # 4. Campo PROCEDIMIENTO (enfermería)
-        elif campo_titulo == "PROCEDIMIENTO":
-            procedimiento = (registro.get('procedimiento') or 
-                           registro.get('tipoProcedimiento') or
-                           registro.get('tipo_procedimiento') or
-                           registro.get('Procedimiento') or
-                           registro.get('descripcion') or 
-                           "Procedimiento General")
-            
-            if len(procedimiento) > 25:
-                return crear_parrafo(procedimiento)
-            return procedimiento
-        
-        # 5. Campo TIPO GASTO
-        elif campo_titulo == "TIPO GASTO":
-            tipo_gasto = (registro.get('tipo_gasto') or
-                         registro.get('categoria') or 
-                         registro.get('tipo_nombre') or
-                         "General")
-            
-            if len(tipo_gasto) > 18:
-                return crear_parrafo(tipo_gasto)
-            return tipo_gasto
-        
-        # 6. Campos monetarios
-        elif any(palabra in campo_titulo.upper() for palabra in ["PRECIO", "TOTAL", "VALOR", "MONTO"]):
-            try:
-                return f"Bs {float(valor):,.2f}"
-            except:
-                return "Bs 0.00"
-        
-        # 7. Campos numéricos
-        elif campo_titulo in ["CANTIDAD", "UNIDADES", "STOCK", "LOTES"]:
-            try:
-                if valor == "" or valor is None or str(valor).strip() == "":
-                    # Para STOCK: Buscar en múltiples campos posibles
-                    if campo_titulo == "STOCK":
-                        stock_valor = (registro.get('cantidad') or 
-                                     registro.get('Stock_Total') or 
-                                     registro.get('stock_total') or
-                                     registro.get('Stock_Calculado') or
-                                     registro.get('Cantidad_Unitario') or
-                                     0)
-                        return str(int(float(stock_valor)))
-                    else:
-                        return "0"
-                
-                valor_num = float(valor)
-                return f"{int(valor_num):,}"
-            except:
-                if campo_titulo == "STOCK":
-                    stock_valor = (registro.get('cantidad') or 
-                                 registro.get('Stock_Total') or 
-                                 registro.get('stock_total') or
-                                 0)
-                    try:
-                        return str(int(float(stock_valor)))
-                    except:
-                        return "0"
-                return "0"
-        
-        # 8. Enfermero/a
-        elif campo_titulo == "ENFERMERO/A":
-            enfermero = (registro.get('enfermero') or
-                        registro.get('Enfermero') or 
-                        registro.get('enfermero_nombre') or
-                        registro.get('trabajador_nombre') or
-                        "Sin asignar")
-            
-            if len(enfermero) > 20:
-                return crear_parrafo(enfermero)
-            return enfermero
-        
-        # 9. Marca
-        elif campo_titulo == "MARCA":
-            marca = (registro.get('marca') or 
-                    registro.get('Marca') or
-                    registro.get('Marca_Nombre') or
-                    registro.get('marca_nombre') or
-                    "Sin marca")
-            
-            if len(marca) > 15:
-                return crear_parrafo(marca)
-            return marca
-        
-        # 10. Proveedor
-        elif campo_titulo == "PROVEEDOR":
-            proveedor = (registro.get('proveedor') or
-                        registro.get('Proveedor') or 
-                        registro.get('proveedor_nombre') or
-                        registro.get('Proveedor_Nombre') or
-                        "Sin proveedor")
-            
-            if len(proveedor) > 18:
-                return crear_parrafo(proveedor)
-            return proveedor
-        
-        # 11. Precio unitario
-        elif campo_titulo in ["P.UNIT (Bs)", "PRECIO UNIT.", "P.UNIT"]:
-            try:
-                precio_unit = float(registro.get('precio_unitario', 0))
-                return f"Bs {precio_unit:.2f}"
-            except:
-                return "Bs 0.00"
-
-        # 12. Vendedor
-        elif campo_titulo == "VENDEDOR":
-            return registro.get('usuario', "Sin vendedor")
-        
-        # 13. Usuario
-        elif campo_titulo == "USUARIO":
-            usuario = (registro.get('usuario') or
-                      registro.get('Usuario') or
-                      registro.get('usuario_nombre') or
-                      registro.get('registrado_por') or
-                      "Sin usuario")
-            
-            if len(usuario) > 15:
-                return crear_parrafo(usuario)
-            return usuario
-        
-        # 14. Fecha de vencimiento
-        elif campo_titulo == "F.VENC":
-            fecha_venc = (registro.get('fecha_vencimiento') or 
-                         registro.get('Fecha_Vencimiento') or
-                         registro.get('proxima_vencimiento') or
-                         None)
-            
-            if not fecha_venc or str(fecha_venc) in ["", "None", "null"]:
-                return "Sin venc."
-            
-            # Formatear fecha si viene en formato ISO
-            if isinstance(fecha_venc, str) and len(fecha_venc) >= 10:
-                try:
-                    if '-' in fecha_venc:  # Formato YYYY-MM-DD
-                        partes = fecha_venc[:10].split('-')
-                        return f"{partes[2]}/{partes[1]}/{partes[0]}"
-                except:
-                    pass
-            
-            return str(fecha_venc)
-        
-        # 15. Descripciones (usar Paragraph para texto largo)
-        elif campo_titulo in ["DESCRIPCIÓN", "PRODUCTO"]:
-            if not valor:
-                valor = "Sin descripción"
-            
-            if len(valor) > 30:
-                return crear_parrafo(valor)
-            return valor
-        
-        # 16. Paciente
-        elif campo_titulo == "PACIENTE":
-            paciente = (registro.get('paciente') or
-                       registro.get('Paciente') or
-                       registro.get('paciente_nombre') or
-                       "Paciente")
-            
-            if len(paciente) > 25:
-                return crear_parrafo(paciente)
-            return paciente
-        
-        # 17. Número de venta
-        elif campo_titulo in ["Nº VENTA", "Nº VENTA"]:
-            return registro.get('numeroVenta', f"V{str(1).zfill(3)}")
-        
-        # 18. Especialidad
-        elif campo_titulo == "ESPECIALIDAD":
-            return registro.get('especialidad', "Sin especialidad")
-        
-        # 19. Médico
-        elif campo_titulo == "MÉDICO":
-            return registro.get('doctor_nombre', "Sin médico")
-        
-        # 20. Genérico con fallback
-        if not valor or valor == "":
-            # Intentar búsqueda alternativa
-            campo_alt = campo_dato.replace('_', '').lower()
-            for key in registro.keys():
-                if key.lower().replace('_', '') == campo_alt:
-                    valor = registro[key]
-                    break
-            
-            if not valor:
-                return "---"
-        
-        # Formatear valor final
-        if len(str(valor)) > 25:
-            return crear_parrafo(str(valor))
-        
-        return str(valor)
-    
 # Funciones de utilidad
 def crear_generador_pdf():
     """Función factoría para crear una instancia del generador de PDFs"""

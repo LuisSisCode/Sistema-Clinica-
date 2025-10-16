@@ -27,29 +27,31 @@ class ReportesRepository(BaseRepository):
     # REPORTES DE VENTAS (TIPO 1)
     # ===============================
     
-    @cached_query('reporte_ventas', ttl=30)  # ✅ CAMBIAR: TTL muy bajo para actualizaciones rápidas
+    @cached_query('reporte_ventas', ttl=30)
     def get_reporte_ventas(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """
-        ✅ CORREGIDO: Muestra productos individuales, no agregados
-        """
+        """CORREGIDO: Números de venta y campos validados"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
                 
         query = """
         SELECT 
             FORMAT(v.Fecha, 'dd/MM/yyyy') as fecha,
-            'V' + RIGHT('000' + CAST(v.id AS VARCHAR), 3) as numeroVenta,  -- ✅ DEBE ser numeroVenta
-            p.Nombre as descripcion,
-            dv.Cantidad_Unitario as cantidad,                              -- ✅ DEBE ser cantidad  
-            dv.Precio_Unitario as precio_unitario,                         -- ✅ DEBE ser precio_unitario
-            (dv.Cantidad_Unitario * dv.Precio_Unitario) as valor,
-            u.Nombre + ' ' + u.Apellido_Paterno as usuario                 -- ✅ DEBE ser usuario
+            -- ✅ NÚMERO DE VENTA CORREGIDO
+            CASE 
+                WHEN v.id IS NOT NULL THEN 'V' + RIGHT('000' + CAST(v.id AS VARCHAR(10)), 3)
+                ELSE 'V000'
+            END as numeroVenta,
+            COALESCE(p.Nombre, 'Producto sin nombre') as descripcion,
+            COALESCE(dv.Cantidad_Unitario, 0) as cantidad,
+            COALESCE(dv.Precio_Unitario, 0) as precio_unitario,
+            COALESCE((dv.Cantidad_Unitario * dv.Precio_Unitario), 0) as valor,
+            COALESCE(u.Nombre + ' ' + u.Apellido_Paterno, 'Sin usuario') as usuario
         FROM Ventas v
         INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
         INNER JOIN Lote l ON dv.Id_Lote = l.id
         INNER JOIN Productos p ON l.Id_Producto = p.id
-        INNER JOIN Usuario u ON v.Id_Usuario = u.id
-        WHERE v.Fecha >= ? AND v.Fecha <= ?
+        LEFT JOIN Usuario u ON v.Id_Usuario = u.id
+        WHERE v.Fecha >= ? AND v.Fecha < ?
         ORDER BY v.Fecha DESC, v.id DESC, p.Nombre ASC
         """
         
@@ -61,31 +63,40 @@ class ReportesRepository(BaseRepository):
         
     @cached_query('reporte_inventario', ttl=600)
     def get_reporte_inventario(self, fecha_desde: str = "", fecha_hasta: str = "") -> List[Dict[str, Any]]:
-        """Genera reporte de inventario con PRECIOS REALES - NO más "---" """
+        """Reporte de inventario con identificación de lotes CORREGIDO"""
         query = """
         SELECT 
             FORMAT(GETDATE(), 'dd/MM/yyyy') as fecha,
             p.Nombre as descripcion,
             m.Nombre as marca,
             
-            -- ✅ STOCK REAL - Suma de todos los lotes
+            -- ✅ STOCK REAL
             (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id) as cantidad,
             
-            -- ✅ LOTES ACTIVOS - Solo lotes con stock
+            -- ✅ IDENTIFICADOR DE LOTE PRINCIPAL (el más antiguo con stock)
+            COALESCE(
+                (SELECT TOP 1 'L' + RIGHT('000' + CAST(l.id AS VARCHAR(10)), 3)
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0
+                ORDER BY l.Fecha_Vencimiento ASC, l.id ASC),
+                '---'
+            ) as lote,
+            
+            -- ✅ CANTIDAD DE LOTES ACTIVOS
             (SELECT COUNT(*) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as lotes,
             
-            -- ✅ PRECIO UNITARIO REAL - Nunca NULL, siempre un valor
+            -- ✅ PRECIO UNITARIO
             CASE 
                 WHEN p.Precio_venta IS NULL OR p.Precio_venta = 0 
-                THEN COALESCE(p.Precio_compra, 0)  -- Usar precio de compra si no hay precio de venta
+                THEN COALESCE(p.Precio_compra, 0)
                 ELSE p.Precio_venta
             END as precioUnitario,
             
-            -- ✅ FECHA VENCIMIENTO MÁS PRÓXIMA - Formato correcto
+            -- ✅ FECHA VENCIMIENTO MÁS PRÓXIMA
             CASE 
                 WHEN EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id 
                             AND l.Cantidad_Unitario > 0 AND l.Fecha_Vencimiento IS NOT NULL)
@@ -97,7 +108,7 @@ class ReportesRepository(BaseRepository):
                 ELSE 'Sin vencimiento'
             END as fecha_vencimiento,
             
-            -- ✅ VALOR TOTAL REAL - Stock × Precio de venta
+            -- ✅ VALOR TOTAL
             ((SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id) * 
@@ -107,29 +118,13 @@ class ReportesRepository(BaseRepository):
                 ELSE p.Precio_venta
             END) as valor,
             
-            -- Campos adicionales
             p.Codigo as codigo,
-            p.Unidad_Medida as unidad,
-            
-            -- ✅ ESTADO BASADO EN VENCIMIENTO REAL
-            CASE 
-                WHEN EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id 
-                            AND l.Cantidad_Unitario > 0 
-                            AND l.Fecha_Vencimiento IS NOT NULL
-                            AND l.Fecha_Vencimiento <= DATEADD(MONTH, 3, GETDATE()))
-                THEN 'Próximo a vencer'
-                WHEN NOT EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0)
-                THEN 'Sin stock'
-                ELSE 'Normal'
-            END as estado
+            p.Unidad_Medida as unidad
             
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id)  -- Solo productos que tienen lotes
-        ORDER BY 
-            CASE WHEN EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) 
-                THEN 0 ELSE 1 END,  -- Productos con stock primero
-            valor DESC, p.Nombre
+        WHERE EXISTS (SELECT 1 FROM Lote l WHERE l.Id_Producto = p.id)
+        ORDER BY valor DESC, p.Nombre
         """
         
         return self._execute_query(query)
@@ -399,7 +394,7 @@ class ReportesRepository(BaseRepository):
     
     @cached_query('reporte_gastos', ttl=300)
     def get_reporte_gastos(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
-        """Gastos: fecha, tipo de gasto, descripción, proveedor, monto"""
+        """Gastos: fecha, tipo de gasto, descripción, proveedor, monto - CORREGIDO"""
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
         fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
         
@@ -411,10 +406,10 @@ class ReportesRepository(BaseRepository):
             tg.Nombre as tipo_gasto,
             
             -- ✅ DESCRIPCIÓN
-            g.Descripcion as descripcion,
+            COALESCE(g.Descripcion, 'Gasto operativo') as descripcion,
             
-            -- ✅ PROVEEDOR
-            COALESCE(g.Proveedor, 'Sin proveedor') as proveedor,
+            -- ✅ PROVEEDOR - CORREGIDO: Ahora usa JOIN con Proveedor_Gastos
+            COALESCE(pg.Nombre, 'Sin proveedor') as proveedor,
             
             -- ✅ MONTO
             g.Monto as valor,
@@ -424,8 +419,9 @@ class ReportesRepository(BaseRepository):
             
         FROM Gastos g
         INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
+        LEFT JOIN Proveedor_Gastos pg ON g.ID_Proveedor = pg.id  -- ✅ JOIN CORREGIDO
         INNER JOIN Usuario u ON g.Id_RegistradoPor = u.id
-        WHERE g.Fecha >= ? AND g.Fecha <= ?
+        WHERE g.Fecha >= ? AND g.Fecha < ?
         ORDER BY g.Fecha DESC, g.id DESC
         """
         return self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql))
@@ -437,22 +433,22 @@ class ReportesRepository(BaseRepository):
     @cached_query('reporte_ingresos_egresos', ttl=600)
     def get_reporte_consolidado(self, fecha_desde: str, fecha_hasta: str) -> List[Dict[str, Any]]:
         """
-        ✅ MEJORADO: Genera reporte de ingresos y egresos comprehensivo y detallado
-        Incluye análisis por categorías y datos estructurados para el PDF profesional
+        ✅ MEJORADO: Genera reporte con manejo individual de errores por módulo
         """
         
         fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
-        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)
+        fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)  # ✅ Ahora suma 1 día
         
         movimientos_financieros = []
         
         try:
             print(f"💰 Generando Reporte de Ingresos y Egresos para período: {fecha_desde} - {fecha_hasta}")
+            print(f"   SQL desde: {fecha_desde_sql}")
+            print(f"   SQL hasta: {fecha_hasta_sql}")
             
-            # ===== INGRESOS DETALLADOS =====
-            
-            # 1. VENTAS DE FARMACIA (INGRESOS)
+            # ===== MÓDULO 1: VENTAS DE FARMACIA =====
             try:
+                print("📊 [1/6] Obteniendo ventas de farmacia...")
                 query_ventas = """
                 SELECT 
                     FORMAT(v.Fecha, 'dd/MM/yyyy') as fecha,
@@ -466,19 +462,23 @@ class ReportesRepository(BaseRepository):
                 INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
                 INNER JOIN Lote l ON dv.Id_Lote = l.id
                 INNER JOIN Productos p ON l.Id_Producto = p.id
-                WHERE v.Fecha >= ? AND v.Fecha <= ?
+                WHERE v.Fecha >= ? AND v.Fecha < ?  -- ✅ Cambio: < en lugar de <=
                 """
                 
                 ventas_detalle = self._execute_query(query_ventas, (fecha_desde_sql, fecha_hasta_sql))
                 if ventas_detalle:
                     movimientos_financieros.extend(ventas_detalle)
-                    print(f"✅ Ventas detalladas: {len(ventas_detalle)} movimientos")
-                
+                    print(f"   ✅ Ventas: {len(ventas_detalle)} movimientos")
+                else:
+                    print("   ℹ️ Sin ventas en el período")
+                    
             except Exception as e:
-                print(f"⚠️ Error en ventas detalladas: {e}")
+                print(f"   ⚠️ ERROR en ventas: {e}")
+                # ✅ Continuar con el siguiente módulo
             
-            # 2. CONSULTAS MÉDICAS (INGRESOS)
+            # ===== MÓDULO 2: CONSULTAS MÉDICAS =====
             try:
+                print("📊 [2/6] Obteniendo consultas médicas...")
                 query_consultas = """
                 SELECT 
                     FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
@@ -493,19 +493,22 @@ class ReportesRepository(BaseRepository):
                     'Consulta #' + CAST(c.id AS VARCHAR) as referencia
                 FROM Consultas c
                 INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-                WHERE c.Fecha >= ? AND c.Fecha <= ?
+                WHERE c.Fecha >= ? AND c.Fecha < ?  -- ✅ Cambio: < en lugar de <=
                 """
                 
                 consultas_detalle = self._execute_query(query_consultas, (fecha_desde_sql, fecha_hasta_sql))
                 if consultas_detalle:
                     movimientos_financieros.extend(consultas_detalle)
-                    print(f"✅ Consultas médicas: {len(consultas_detalle)} movimientos")
-                
+                    print(f"   ✅ Consultas: {len(consultas_detalle)} movimientos")
+                else:
+                    print("   ℹ️ Sin consultas en el período")
+                    
             except Exception as e:
-                print(f"⚠️ Error en consultas médicas: {e}")
+                print(f"   ⚠️ ERROR en consultas: {e}")
             
-            # 3. ANÁLISIS DE LABORATORIO (INGRESOS)
+            # ===== MÓDULO 3: ANÁLISIS DE LABORATORIO =====
             try:
+                print("📊 [3/6] Obteniendo análisis de laboratorio...")
                 query_laboratorio = """
                 SELECT 
                     FORMAT(l.Fecha, 'dd/MM/yyyy') as fecha,
@@ -520,19 +523,22 @@ class ReportesRepository(BaseRepository):
                     'Lab #' + CAST(l.id AS VARCHAR) as referencia
                 FROM Laboratorio l
                 LEFT JOIN Tipos_Analisis ta ON l.Id_Tipo_Analisis = ta.id
-                WHERE l.Fecha >= ? AND l.Fecha <= ?
+                WHERE l.Fecha >= ? AND l.Fecha < ?  -- ✅ Cambio: < en lugar de <=
                 """
                 
                 laboratorio_detalle = self._execute_query(query_laboratorio, (fecha_desde_sql, fecha_hasta_sql))
                 if laboratorio_detalle:
                     movimientos_financieros.extend(laboratorio_detalle)
-                    print(f"✅ Análisis de laboratorio: {len(laboratorio_detalle)} movimientos")
-                
+                    print(f"   ✅ Laboratorio: {len(laboratorio_detalle)} movimientos")
+                else:
+                    print("   ℹ️ Sin análisis de laboratorio en el período")
+                    
             except Exception as e:
-                print(f"⚠️ Error en análisis de laboratorio: {e}")
+                print(f"   ⚠️ ERROR en laboratorio: {e}")
             
-            # 4. PROCEDIMIENTOS DE ENFERMERÍA (INGRESOS)
+            # ===== MÓDULO 4: PROCEDIMIENTOS DE ENFERMERÍA =====
             try:
+                print("📊 [4/6] Obteniendo procedimientos de enfermería...")
                 query_enfermeria = """
                 SELECT 
                     FORMAT(e.Fecha, 'dd/MM/yyyy') as fecha,
@@ -549,84 +555,101 @@ class ReportesRepository(BaseRepository):
                     'Proc #' + CAST(e.id AS VARCHAR) as referencia
                 FROM Enfermeria e
                 LEFT JOIN Tipos_Procedimientos tp ON e.Id_Procedimiento = tp.id
-                WHERE e.Fecha >= ? AND e.Fecha <= ?
+                WHERE e.Fecha >= ? AND e.Fecha < ?  -- ✅ Cambio: < en lugar de <=
                 """
                 
                 enfermeria_detalle = self._execute_query(query_enfermeria, (fecha_desde_sql, fecha_hasta_sql))
                 if enfermeria_detalle:
                     movimientos_financieros.extend(enfermeria_detalle)
-                    print(f"✅ Procedimientos de enfermería: {len(enfermeria_detalle)} movimientos")
-                
+                    print(f"   ✅ Enfermería: {len(enfermeria_detalle)} movimientos")
+                else:
+                    print("   ℹ️ Sin procedimientos de enfermería en el período")
+                    
             except Exception as e:
-                print(f"⚠️ Error en procedimientos de enfermería: {e}")
+                print(f"   ⚠️ ERROR en enfermería: {e}")
             
-            # ===== EGRESOS DETALLADOS =====
-            
-            # 5. COMPRAS DE FARMACIA (EGRESOS)
+            # ===== MÓDULO 5: COMPRAS DE FARMACIA =====
             try:
+                print("📊 [5/6] Obteniendo compras de farmacia...")
                 query_compras = """
                 SELECT 
                     FORMAT(c.Fecha, 'dd/MM/yyyy') as fecha,
                     'EGRESO' as tipo,
                     'Compra Farmacia - ' + p.Nombre as descripcion,
                     dc.Cantidad_Unitario as cantidad,
-                    -dc.Precio_Unitario as valor,  -- Negativo para egresos
+                    dc.Precio_Unitario as valor,  -- ✅ Valor positivo, se convierte a negativo después
                     'compras_farmacia' as categoria,
                     'Compra #' + CAST(c.id AS VARCHAR) as referencia
                 FROM Compra c
                 INNER JOIN DetalleCompra dc ON c.id = dc.Id_Compra
                 INNER JOIN Lote l ON dc.Id_Lote = l.id
                 INNER JOIN Productos p ON l.Id_Producto = p.id
-                WHERE c.Fecha >= ? AND c.Fecha <= ?
+                WHERE c.Fecha >= ? AND c.Fecha < ?  -- ✅ Cambio: < en lugar de <=
                 """
                 
                 compras_detalle = self._execute_query(query_compras, (fecha_desde_sql, fecha_hasta_sql))
                 if compras_detalle:
+                    # ✅ Convertir valores a negativos para egresos
+                    for compra in compras_detalle:
+                        compra['valor'] = -abs(float(compra['valor']))
+                    
                     movimientos_financieros.extend(compras_detalle)
-                    print(f"✅ Compras de farmacia: {len(compras_detalle)} movimientos")
-                
+                    print(f"   ✅ Compras: {len(compras_detalle)} movimientos")
+                else:
+                    print("   ℹ️ Sin compras en el período")
+                    
             except Exception as e:
-                print(f"⚠️ Error en compras de farmacia: {e}")
+                print(f"   ⚠️ ERROR en compras: {e}")
             
-            # 6. GASTOS OPERATIVOS (EGRESOS)
+            # ===== MÓDULO 6: GASTOS OPERATIVOS =====
             try:
+                print("📊 [6/6] Obteniendo gastos operativos...")
                 query_gastos = """
                 SELECT 
                     FORMAT(g.Fecha, 'dd/MM/yyyy') as fecha,
                     'EGRESO' as tipo,
                     tg.Nombre + ' - ' + g.Descripcion as descripcion,
                     1 as cantidad,
-                    -g.Monto as valor,  -- Negativo para egresos
+                    g.Monto as valor,
                     'gastos_operativos' as categoria,
                     'Gasto #' + CAST(g.id AS VARCHAR) as referencia
                 FROM Gastos g
                 INNER JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-                WHERE g.Fecha >= ? AND g.Fecha <= ?
+                WHERE g.Fecha >= ? AND g.Fecha < ?
                 """
                 
                 gastos_detalle = self._execute_query(query_gastos, (fecha_desde_sql, fecha_hasta_sql))
                 if gastos_detalle:
+                    # ✅ Convertir valores a negativos para egresos
+                    for gasto in gastos_detalle:
+                        gasto['valor'] = -abs(float(gasto['valor']))
+                    
                     movimientos_financieros.extend(gastos_detalle)
-                    print(f"✅ Gastos operativos: {len(gastos_detalle)} movimientos")
-                
+                    print(f"   ✅ Gastos: {len(gastos_detalle)} movimientos")
+                else:
+                    print("   ℹ️ Sin gastos en el período")
+                    
             except Exception as e:
-                print(f"⚠️ Error en gastos operativos: {e}")
+                print(f"   ⚠️ ERROR en gastos: {e}")
             
-            # ===== ORDENAR MOVIMIENTOS POR FECHA =====
+            # ===== ORDENAR Y RETORNAR MOVIMIENTOS =====
             if movimientos_financieros:
                 # Ordenar por fecha descendente
-                movimientos_financieros.sort(key=lambda x: self._parse_fecha_dd_mm_yyyy(x.get('fecha', '01/01/2024')), reverse=True)
+                movimientos_financieros.sort(
+                    key=lambda x: self._parse_fecha_dd_mm_yyyy(x.get('fecha', '01/01/2024')), 
+                    reverse=True
+                )
                 
                 # Calcular totales para logging
                 total_ingresos = sum(float(m.get('valor', 0)) for m in movimientos_financieros if m.get('tipo') == 'INGRESO')
                 total_egresos = sum(abs(float(m.get('valor', 0))) for m in movimientos_financieros if m.get('tipo') == 'EGRESO')
                 saldo_neto = total_ingresos - total_egresos
                 
-                print(f"💹 RESUMEN FINANCIERO:")
+                print(f"\n💹 RESUMEN FINANCIERO:")
                 print(f"   📈 Total Ingresos: Bs {total_ingresos:,.2f}")
                 print(f"   📉 Total Egresos: Bs {total_egresos:,.2f}")
                 print(f"   💰 Saldo Neto: Bs {saldo_neto:,.2f}")
-                print(f"   📊 Total Movimientos: {len(movimientos_financieros)}")
+                print(f"   📊 Total Movimientos: {len(movimientos_financieros)}\n")
                 
                 return movimientos_financieros
             else:
@@ -634,7 +657,7 @@ class ReportesRepository(BaseRepository):
                 return []
             
         except Exception as e:
-            print(f"❌ Error crítico en get_reporte_consolidado mejorado: {e}")
+            print(f"❌ Error crítico en get_reporte_consolidado: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -736,17 +759,21 @@ class ReportesRepository(BaseRepository):
     def _convertir_fecha_sql(self, fecha_str: str, es_fecha_final: bool = False) -> str:
         """
         Convierte fecha de DD/MM/YYYY a YYYY-MM-DD para SQL Server
+        ✅ CORREGIDO: Ahora incluye correctamente el día final
         
         Args:
             fecha_str: Fecha en formato DD/MM/YYYY
-            es_fecha_final: Si True, agrega 23:59:59 para incluir todo el día
+            es_fecha_final: Si True, agrega 23:59:59 para incluir TODO el día
             
         Returns:
             Fecha en formato YYYY-MM-DD [HH:MM:SS]
         """
         try:
             if not fecha_str or fecha_str.strip() == "":
-                return datetime.now().strftime("%Y-%m-%d")
+                if es_fecha_final:
+                    return datetime.now().strftime("%Y-%m-%d 23:59:59")
+                else:
+                    return datetime.now().strftime("%Y-%m-%d 00:00:00")
             
             # Parsear DD/MM/YYYY
             dia, mes, anio = fecha_str.split('/')
@@ -763,9 +790,12 @@ class ReportesRepository(BaseRepository):
             if anio < 2020 or anio > 2030:
                 raise ValueError("Año inválido")
             
-            # ✅ CORRECCIÓN: Agregar hora según si es fecha final
+            # ✅ CORRECCIÓN CRÍTICA: Para fecha final, sumar 1 día y usar 00:00:00
             if es_fecha_final:
-                return f"{anio:04d}-{mes:02d}-{dia:02d} 23:59:59"
+                # Convertir a datetime para sumar 1 día correctamente
+                fecha_obj = datetime(anio, mes, dia)
+                fecha_obj = fecha_obj + timedelta(days=1)  # ✅ Sumar 1 día
+                return fecha_obj.strftime("%Y-%m-%d 00:00:00")
             else:
                 return f"{anio:04d}-{mes:02d}-{dia:02d} 00:00:00"
             
@@ -773,7 +803,8 @@ class ReportesRepository(BaseRepository):
             print(f"⚠️ Error convirtiendo fecha '{fecha_str}': {e}")
             # Fallback: fecha actual
             if es_fecha_final:
-                return datetime.now().strftime("%Y-%m-%d 23:59:59")
+                fecha_obj = datetime.now() + timedelta(days=1)
+                return fecha_obj.strftime("%Y-%m-%d 00:00:00")
             else:
                 return datetime.now().strftime("%Y-%m-%d 00:00:00")
     
@@ -828,35 +859,91 @@ class ReportesRepository(BaseRepository):
             }
     
     def verificar_datos_disponibles(self, tipo_reporte: int, fecha_desde: str, fecha_hasta: str) -> bool:
-        """Verifica si hay datos disponibles para el reporte solicitado"""
+        """Verifica si hay datos disponibles para el reporte solicitado - ✅ CORREGIDO"""
         try:
-            fecha_desde_sql = self._convertir_fecha_sql(fecha_desde)
-            fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta)
+            fecha_desde_sql = self._convertir_fecha_sql(fecha_desde, es_fecha_final=False)
+            fecha_hasta_sql = self._convertir_fecha_sql(fecha_hasta, es_fecha_final=True)  # ✅ Suma 1 día
+            
+            print(f"🔍 Verificando datos disponibles para tipo {tipo_reporte}")
+            print(f"   Período SQL: {fecha_desde_sql} a {fecha_hasta_sql}")
             
             tablas_por_tipo = {
-                1: "Ventas",
-                2: "Productos", 
-                3: "Compra",
-                4: "Consultas",
-                5: "Laboratorio",
-                6: "Enfermeria",
-                7: "Gastos",
-                8: "Ventas"  # Para ingresos y egresos, verificamos al menos una tabla
+                1: ("Ventas", "v.Fecha"),
+                2: ("Productos", None),  # Inventario no depende de fechas
+                3: ("Compra", "c.Fecha"),
+                4: ("Consultas", "c.Fecha"),
+                5: ("Laboratorio", "l.Fecha"),
+                6: ("Enfermeria", "e.Fecha"),
+                7: ("Gastos", "g.Fecha"),
+                8: ("Ventas", "v.Fecha")  # Para consolidado, verificamos al menos ventas
             }
             
-            tabla = tablas_por_tipo.get(tipo_reporte, "Ventas")
+            if tipo_reporte not in tablas_por_tipo:
+                print(f"⚠️ Tipo de reporte inválido: {tipo_reporte}")
+                return False
             
-            if tipo_reporte == 2:  # Inventario no depende de fechas
-                query = f"SELECT COUNT(*) as total FROM {tabla} WHERE Stock_Caja + Stock_Unitario > 0"
+            tabla_info = tablas_por_tipo[tipo_reporte]
+            tabla = tabla_info[0]
+            campo_fecha = tabla_info[1]
+            
+            if tipo_reporte == 2:  # Inventario - sin filtro de fechas
+                # ✅ CORRECCIÓN: Ya no buscar Stock_Caja
+                query = """
+                SELECT COUNT(*) as total 
+                FROM Productos p
+                WHERE EXISTS (
+                    SELECT 1 FROM Lote l 
+                    WHERE l.Id_Producto = p.id 
+                    AND l.Cantidad_Unitario > 0
+                )
+                """
                 resultado = self._execute_query(query, fetch_one=True)
-            else:
-                query = f"SELECT COUNT(*) as total FROM {tabla} WHERE Fecha >= ? AND Fecha <= ?"
+                
+            elif tipo_reporte == 8:  # Consolidado - verificar múltiples tablas
+                # ✅ Verificar si hay al menos UN movimiento en CUALQUIER tabla
+                query = """
+                SELECT 
+                    (SELECT COUNT(*) FROM Ventas WHERE Fecha >= ? AND Fecha < ?) +
+                    (SELECT COUNT(*) FROM Consultas WHERE Fecha >= ? AND Fecha < ?) +
+                    (SELECT COUNT(*) FROM Laboratorio WHERE Fecha >= ? AND Fecha < ?) +
+                    (SELECT COUNT(*) FROM Enfermeria WHERE Fecha >= ? AND Fecha < ?) +
+                    (SELECT COUNT(*) FROM Compra WHERE Fecha >= ? AND Fecha < ?) +
+                    (SELECT COUNT(*) FROM Gastos WHERE Fecha >= ? AND Fecha < ?)
+                    as total
+                """
+                params = (fecha_desde_sql, fecha_hasta_sql) * 6
+                resultado = self._execute_query(query, params, fetch_one=True)
+                
+            else:  # Otros reportes con filtro de fecha
+                # Obtener el alias correcto según la tabla
+                alias_map = {
+                    "Ventas": "v",
+                    "Compra": "c",
+                    "Consultas": "c",
+                    "Laboratorio": "l",
+                    "Enfermeria": "e",
+                    "Gastos": "g"
+                }
+                alias = alias_map.get(tabla, "t")
+                
+                query = f"""
+                SELECT COUNT(*) as total 
+                FROM {tabla} {alias}
+                WHERE {alias}.Fecha >= ? AND {alias}.Fecha < ?
+                """
                 resultado = self._execute_query(query, (fecha_desde_sql, fecha_hasta_sql), fetch_one=True)
             
-            return resultado.get('total', 0) > 0 if resultado else False
+            total = resultado.get('total', 0) if resultado else 0
+            tiene_datos = total > 0
+            
+            print(f"   {'✅' if tiene_datos else '❌'} Registros encontrados: {total}")
+            
+            return tiene_datos
             
         except Exception as e:
             print(f"⚠️ Error verificando datos disponibles: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     # ===============================
