@@ -2,9 +2,11 @@
 """
 Gestor de Configuración
 Maneja el archivo .env de forma segura
+✅ CORREGIDO: Usa APPDATA en ejecutable
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -12,9 +14,20 @@ class ConfigManager:
     """Gestor de configuración del sistema"""
     
     def __init__(self):
-        self.base_dir = Path(__file__).resolve().parent.parent.parent
+        # ✅ DETERMINAR UBICACIÓN BASE
+        if getattr(sys, 'frozen', False):
+            # Ejecutable: usar APPDATA
+            self.base_dir = Path(os.environ['APPDATA']) / 'ClinicaMariaInmaculada'
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            # Desarrollo: usar carpeta del proyecto
+            self.base_dir = Path(__file__).resolve().parent.parent.parent
+        
         self.env_file = self.base_dir / ".env"
         self.template_file = self.base_dir / "config_template.txt"
+        
+        print(f"📂 ConfigManager - Base dir: {self.base_dir}")
+        print(f"📄 Archivo .env: {self.env_file}")
     
     def existe_configuracion(self) -> bool:
         """Verifica si existe el archivo de configuración"""
@@ -52,6 +65,7 @@ class ConfigManager:
                            trusted_connection: str = "yes") -> bool:
         """
         Crea el archivo de configuración .env
+        ✅ CORREGIDO: Asegura que el directorio existe
         
         Args:
             server: Servidor SQL
@@ -62,6 +76,9 @@ class ConfigManager:
             bool: True si se creó exitosamente
         """
         try:
+            # ✅ Asegurar que existe el directorio
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+            
             config_content = f"""# Configuración - Sistema Clínica María Inmaculada
 # Archivo generado automáticamente por Setup Wizard
 
@@ -89,6 +106,8 @@ SECRET_KEY=clinica-secret-key-2025
             
         except Exception as e:
             print(f"❌ Error creando configuración: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def actualizar_configuracion(self, key: str, value: str) -> bool:
@@ -121,6 +140,7 @@ SECRET_KEY=clinica-secret-key-2025
         """
         # Si no existe .env, es primera vez
         if not self.existe_configuracion():
+            print("🆕 Primera vez detectada: .env no existe")
             return True
         
         # Leer configuración
@@ -128,7 +148,10 @@ SECRET_KEY=clinica-secret-key-2025
         
         # Si FIRST_TIME_SETUP no existe o es True, es primera vez
         first_time = config.get("FIRST_TIME_SETUP", "True")
-        return first_time.lower() in ["true", "yes", "1"]
+        es_primera = first_time.lower() in ["true", "yes", "1"]
+        
+        print(f"🔍 FIRST_TIME_SETUP={first_time} → Es primera vez: {es_primera}")
+        return es_primera
 
 
 # Testing

@@ -2412,20 +2412,39 @@ def main():
         return 1
     
     # ============================================
-    # PASO 6: VERIFICAR CONFIGURACIÓN (PRIMERA VEZ?)
+    # PASO 6: VERIFICAR CONFIGURACIÓN Y BASE DE DATOS
     # ============================================
     logger.info("")
     logger.info("="*60)
-    logger.info("🔍 VERIFICANDO CONFIGURACIÓN INICIAL")
+    logger.info("🔍 VERIFICANDO CONFIGURACIÓN Y BASE DE DATOS")
     logger.info("="*60)
     
     es_primera_vez = False
+    bd_disponible = False
     
     try:
         config_manager = ConfigManager()
         es_primera_vez = config_manager.es_primera_vez()
         logger.info(f"✅ ConfigManager inicializado")
         logger.info(f"   Primera vez: {es_primera_vez}")
+        
+        # ✅ NUEVO: Verificar si la BD existe (solo si NO es primera vez)
+        if not es_primera_vez:
+            logger.info("🔍 Verificando existencia de base de datos...")
+            try:
+                from backend.core.db_installer import DatabaseInstaller
+                db_installer = DatabaseInstaller()
+                bd_disponible, mensaje_bd = db_installer.verificar_base_datos_existe()
+                logger.info(f"   Base de datos disponible: {bd_disponible}")
+                if not bd_disponible:
+                    logger.warning(f"   ⚠️ {mensaje_bd}")
+                    logger.info("   → Forzando Setup Wizard")
+                else:
+                    logger.info(f"   ✅ {mensaje_bd}")
+            except Exception as e_bd:
+                logger.error(f"   ❌ Error verificando BD: {e_bd}")
+                logger.info("   → Forzando Setup Wizard por seguridad")
+                bd_disponible = False
         
     except FileNotFoundError as e:
         logger.warning(f"⚠️ Archivo .env no encontrado")
@@ -2441,9 +2460,14 @@ def main():
     # PASO 7: DECIDIR QUÉ MOSTRAR (SETUP O LOGIN)
     # ============================================
     try:
-        if es_primera_vez:
+        # ✅ NUEVA LÓGICA: Mostrar Setup si es primera vez O si la BD no existe
+        if es_primera_vez or not bd_disponible:
             logger.info("")
-            logger.info("🆕 PRIMERA EJECUCIÓN DETECTADA")
+            logger.info("🆕 SETUP REQUERIDO")
+            if es_primera_vez:
+                logger.info("   Razón: Primera ejecución detectada")
+            if not bd_disponible:
+                logger.info("   Razón: Base de datos no disponible")
             logger.info("   → Mostrando Setup Wizard")
             logger.info("")
             
@@ -2451,7 +2475,7 @@ def main():
             
         else:
             logger.info("")
-            logger.info("✅ CONFIGURACIÓN EXISTENTE ENCONTRADA")
+            logger.info("✅ CONFIGURACIÓN Y BASE DE DATOS OK")
             logger.info("   → Mostrando Login Normal")
             logger.info("")
             

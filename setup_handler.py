@@ -1,9 +1,12 @@
 # setup_handler.py
 """
 Handler Principal del Setup Wizard
-Coordinador entre la UI (QML) y la lógica (Python)
+✅ CORREGIDO: Guarda configuración en APPDATA
 """
 
+import sys
+import os
+from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, Property
 from backend.core.db_installer import DatabaseInstaller
 from backend.core.config_manager import ConfigManager
@@ -65,15 +68,14 @@ class SetupHandler(QObject):
             exito, mensaje, credenciales = self.db_installer.setup_completo()
             
             if exito:
-                # Crear archivo de configuración
-                self.setupProgress.emit("📝 Guardando configuración...")
+                # ✅ Guardar configuración en APPDATA
+                self.setupProgress.emit("💾 Guardando configuración...")
                 
                 server = credenciales.get('server', 'localhost\\SQLEXPRESS')
                 database = credenciales.get('database', 'ClinicaMariaInmaculada')
                 
-                if self.config_manager.crear_configuracion(server, database):
-                    self.config_manager.marcar_setup_completado()
-                    
+                # Guardar .env usando el método corregido
+                if self._guardar_configuracion_env(server, database):
                     # Convertir credenciales a QVariantMap compatible
                     creds_dict = {
                         'username': credenciales.get('username', 'admin'),
@@ -132,11 +134,9 @@ class SetupHandler(QObject):
                 self.setupCompleted.emit(False, mensaje, {})
                 return
             
-            # Guardar configuración
+            # ✅ Guardar configuración
             self.setupProgress.emit("💾 Guardando configuración...")
-            if self.config_manager.crear_configuracion(server, database):
-                self.config_manager.marcar_setup_completado()
-                
+            if self._guardar_configuracion_env(server, database):
                 creds_dict = {
                     'username': 'admin',
                     'password': 'admin123',
@@ -153,6 +153,50 @@ class SetupHandler(QObject):
         
         finally:
             self._is_processing = False
+    
+    def _guardar_configuracion_env(self, server: str, database: str) -> bool:
+        """
+        ✅ NUEVO MÉTODO: Guarda configuración en APPDATA
+        
+        Args:
+            server: Servidor SQL
+            database: Nombre de la base de datos
+            
+        Returns:
+            bool: True si se guardó correctamente
+        """
+        try:
+            # ✅ DETERMINAR UBICACIÓN CORRECTA
+            if getattr(sys, 'frozen', False):
+                # Ejecutable: guardar en APPDATA
+                config_dir = Path(os.environ['APPDATA']) / 'ClinicaMariaInmaculada'
+                config_dir.mkdir(parents=True, exist_ok=True)
+                env_path = config_dir / '.env'
+            else:
+                # Desarrollo: guardar en raíz del proyecto
+                env_path = Path(__file__).parent / '.env'
+            
+            # Contenido del .env
+            env_content = f"""# Configuración de Base de Datos
+DB_SERVER={server}
+DB_DATABASE={database}
+DB_TRUSTED_CONNECTION=yes
+DB_TIMEOUT=30
+FIRST_TIME_SETUP=False
+"""
+            
+            # Guardar archivo
+            with open(env_path, 'w', encoding='utf-8') as f:
+                f.write(env_content)
+            
+            print(f"✅ Configuración guardada en: {env_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error guardando .env: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 
 # Testing
@@ -169,5 +213,4 @@ if __name__ == "__main__":
     handler.validationCompleted.connect(lambda ok, msg: print(f"Validación: {ok} - {msg}"))
     handler.validar_sql_server()
     
-    sys.exit(app.exec()) 
-    
+    sys.exit(app.exec())

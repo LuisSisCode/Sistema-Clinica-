@@ -6,10 +6,12 @@ Versión 5.0 - Tablas Optimizadas y Unificadas
 """
 
 import os
+from pathlib import Path
+import sys
 from typing import List, Dict, Any
 import json
 from datetime import datetime
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
 from reportlab.lib import colors
@@ -170,83 +172,94 @@ class GeneradorReportesPDF:
     """
     
     def __init__(self):
-        """Inicializa el generador con configuración por defecto"""
-        # Importaciones locales para no romper el resto del módulo si no se usan
+        """
+        Inicializa el generador con configuración por defecto
+        ✅ CORREGIDO: Solo usar directorios en APPDATA, no en la ruta de instalación
+        """
 
-        # ✅ DETERMINAR DIRECTORIO BASE DE REPORTES
+        # ✅ DETERMINAR DIRECTORIO DE REPORTES (solo en APPDATA)
         if getattr(sys, 'frozen', False):
-            # Ejecutable: usar APPDATA del usuario (Windows)
+            # Ejecutable: reportes en APPDATA del usuario
             base_dir = Path(os.environ.get('APPDATA', Path.home())) / 'ClinicaMariaInmaculada'
         else:
-            # Desarrollo: colocar reportes en la carpeta del proyecto (nivel superior)
-            base_dir = Path(__file__).resolve().parent.parent
+            # Desarrollo: reportes en carpeta del proyecto
+            base_dir = Path(__file__).parent
 
-        # Crear estructura de directorios
+        # Directorio de PDFs (Path para mayor flexibilidad)
+        self.pdf_dir = base_dir / 'reportes'
         try:
-            base_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
+            self.pdf_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
             # Fallback seguro al directorio de usuario
-            base_dir = Path.home() / 'ClinicaMariaInmaculada'
-            base_dir.mkdir(parents=True, exist_ok=True)
+            self.pdf_dir = Path.home() / 'ClinicaMariaInmaculada' / 'reportes'
+            self.pdf_dir.mkdir(parents=True, exist_ok=True)
 
-        # Directorio de PDFs (como string para compatibilidad con os.path.join)
-        self.pdf_dir = str(base_dir / 'reportes')
-        os.makedirs(self.pdf_dir, exist_ok=True)
+        # Configuración de página
+        self.page_width, self.page_height = A4
+        self.margin = 50
 
-        # Directorio de assets (proyecto)
-        project_dir = Path(__file__).resolve().parent.parent
-        self.assets_dir = str(project_dir / 'assets')
-        os.makedirs(self.assets_dir, exist_ok=True)
+        # ✅ ELIMINADO: No intentar crear assets_dir en la ruta de instalación
+        # En su lugar, usamos el directorio de reportes para los PDFs y el logo se busca en recursos embebidos.
 
         # Inicializar logo y campos relacionados
         self.logo_path = None
-        self.setup_logo()
+        try:
+            self.setup_logo()
+        except Exception:
+            # No detener inicialización si setup_logo falla
+            self.logo_path = None
+
+        # Forzar ruta específica si existe
+        ruta_especifica = "Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.png"
+        if os.path.exists(ruta_especifica):
+            self.logo_path = ruta_especifica
+            print(f"✅ Usando logo en ruta específica: {self.logo_path}")
 
         # ✅ NUEVO: Información del responsable (se establecerá antes de generar)
         self._usuario_responsable_nombre = ""
         self._usuario_responsable_rol = ""
     
-    def setup_directories(self):
-        """Crear directorios necesarios"""
-        try:
-            project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            self.assets_dir = os.path.join(project_dir, "assets")
-            os.makedirs(self.assets_dir, exist_ok=True)
-            
-            home_dir = os.path.expanduser("~")
-            self.pdf_dir = os.path.join(home_dir, "Documents", "Reportes_CMI")
-            os.makedirs(self.pdf_dir, exist_ok=True)
-            
-            print(f"📁 Directorio de assets: {self.assets_dir}")
-            print(f"📁 Directorio de reportes: {self.pdf_dir}")
-            
-        except Exception as e:
-            print(f"⚠️ Error creando directorios: {e}")
-            self.assets_dir = os.path.join(os.getcwd(), "assets")
-            self.pdf_dir = os.path.join(os.getcwd(), "Reportes_CMI")
-            os.makedirs(self.assets_dir, exist_ok=True)
-            os.makedirs(self.pdf_dir, exist_ok=True)
-    
     def setup_logo(self):
-        """Configurar logo para PDF"""
-        logo_path_directo = r"Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.png"
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        """Configurar logo para PDF - MEJORADO con búsqueda más exhaustiva"""
+        logo_paths = []
         
-        logo_paths = [
-            logo_path_directo,
-            os.path.join(current_dir, "..", "Resources", "iconos", "logo.png"),
-            os.path.join(current_dir, "..", "Resources", "iconos", "logo_CMI.png"),
-            os.path.join(current_dir, "..", "Resources", "iconos", "logo_CMI.svg"),
-        ]
+        # Si es ejecutable, buscar en el directorio del ejecutable
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys.executable).parent
+            logo_paths.extend([
+                base_dir / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.png",
+                base_dir / "Resources" / "iconos" / "logo.png",
+                base_dir / "Resources" / "iconos" / "logo_CMI.png",
+                base_dir / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.png",
+                base_dir / "iconos" / "logo.png",
+                base_dir / "iconos" / "logo_CMI.png",
+            ])
+        
+        # También buscar en el directorio del script (desarrollo)
+        script_dir = Path(__file__).parent
+        logo_paths.extend([
+            script_dir / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.png",
+            script_dir / "Resources" / "iconos" / "logo.png",
+            script_dir / "Resources" / "iconos" / "logo_CMI.png",
+            script_dir / ".." / "Resources" / "iconos" / "Logo_de_Emergencia_Médica_RGL-removebg-preview.png",
+            script_dir / ".." / "Resources" / "iconos" / "logo.png",
+            script_dir / ".." / "Resources" / "iconos" / "logo_CMI.png",
+            # Ruta específica que mencionaste
+            Path("Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.png"),
+        ])
         
         self.logo_path = None
         for logo_path in logo_paths:
-            if os.path.exists(logo_path):
-                self.logo_path = logo_path
-                break
+            try:
+                if logo_path.exists():
+                    self.logo_path = str(logo_path)
+                    print(f"✅ Logo encontrado: {self.logo_path}")
+                    break
+            except Exception as e:
+                continue
         
         if not self.logo_path:
-            print("⚠️ Logo no encontrado, usando logo profesional")
+            print("⚠️ Logo no encontrado en ninguna ruta, usando logo profesional de texto")
     
     # ✅ NUEVO MÉTODO: Establecer responsable antes de generar PDF
     def set_responsable(self, nombre: str, rol: str):
@@ -774,7 +787,7 @@ class GeneradorReportesPDF:
             "TOTAL": "valor", 
             "VALOR": "valor",
             "MONTO": "valor",
-            "P.UNIT": "precioUnitario", 
+            "P.UNIT": "precio_unitario", 
             
             # CAMPOS ESPECÍFICOS
             "PRODUCTO": "descripcion",
@@ -823,7 +836,7 @@ class GeneradorReportesPDF:
         elif any(palabra in campo_titulo.upper() for palabra in ["PRECIO", "TOTAL", "VALOR", "MONTO", "P.UNIT"]):
             try:
                 if campo_titulo == "P.UNIT":
-                    precio = float(registro.get('precioUnitario', 0))
+                    precio = float(registro.get('precio_unitario', 0))
                     return FormatUtils.formato_moneda(float(precio))
                 elif tipo_reporte == 8 and campo_titulo == "VALOR":
                     # Para ingresos/egresos mostrar con signo
@@ -892,32 +905,34 @@ class GeneradorReportesPDF:
     def _crear_informacion_reporte_mejorada(self):
         """
         Crea sección de información del reporte 
-        ✅ MODIFICADO: Incluye responsable real en lugar de "Sistema"
+        ✅ ALINEACIÓN A LA IZQUIERDA (no centrada)
+        ✅ Diseño profesional y compacto
         """
         try:
             styles = getSampleStyleSheet()
             
-            # Estilo para el título específico del reporte (centrado)
+            # ✅ Estilo para el título específico del reporte (IZQUIERDA)
             titulo_especifico_style = ParagraphStyle(
                 'TituloEspecifico',
                 parent=styles['Normal'],
-                fontSize=16,
+                fontSize=18,
                 fontName='Helvetica-Bold',
                 textColor=COLOR_AZUL_PRINCIPAL,
                 spaceAfter=12,
-                alignment=TA_CENTER
+                spaceBefore=6,
+                alignment=TA_CENTER  # Mantener centrado como en la imagen
             )
             
-            # Estilo para la información (alineación mejorada)
+            # ✅ Estilo para la información (IZQUIERDA)
             info_style = ParagraphStyle(
                 'InfoReporte',
                 parent=styles['Normal'],
                 fontSize=11,
                 fontName='Helvetica',
                 textColor=COLOR_GRIS_OSCURO,
-                spaceAfter=6,
+                spaceAfter=3,
                 leftIndent=0,
-                alignment=TA_LEFT
+                alignment=TA_LEFT  # ✅ CAMBIO PRINCIPAL: Alineado a la izquierda
             )
             
             # Crear contenido
@@ -927,7 +942,7 @@ class GeneradorReportesPDF:
             titulo_reporte = self._obtener_titulo_reporte(self._tipo_reporte)
             contenido.append(Paragraph(titulo_reporte, titulo_especifico_style))
             
-            # ✅ INFORMACIÓN ESENCIAL CON RESPONSABLE REAL
+            # ✅ INFORMACIÓN ESENCIAL CON RESPONSABLE - ALINEADA A LA IZQUIERDA
             contenido.append(Paragraph(
                 f"<b>Período de Análisis:</b> {self._fecha_desde} al {self._fecha_hasta}", 
                 info_style
@@ -937,24 +952,24 @@ class GeneradorReportesPDF:
                 info_style
             ))
             
-            # ✅ CAMBIO PRINCIPAL: Mostrar usuario responsable con su rol
+            # Usuario responsable con su rol
             if self._usuario_responsable_rol != "Sistema":
-                # Usuario real autenticado
                 responsable_texto = f"<b>Responsable:</b> {self._usuario_responsable_nombre} ({self._usuario_responsable_rol})"
             else:
-                # Fallback al sistema
                 responsable_texto = f"<b>Responsable:</b> {self._usuario_responsable_nombre}"
             
             contenido.append(Paragraph(responsable_texto, info_style))
             
-            print(f"📋 Información del reporte creada: {len(contenido)} elementos")
+            # Línea separadora
+            contenido.append(Spacer(1, 8*mm))
+            
+            print(f"📋 Información del reporte creada (alineada a la izquierda)")
             print(f"👤 Responsable en PDF: {self._usuario_responsable_nombre} ({self._usuario_responsable_rol})")
             
             return contenido
             
         except Exception as e:
             print(f"⚠️ Error creando información del reporte: {e}")
-            # Retornar contenido básico en caso de error
             styles = getSampleStyleSheet()
             return [Paragraph("INFORMACIÓN DEL REPORTE", styles['Heading2'])]
 
@@ -1867,70 +1882,115 @@ class GeneradorReportesPDF:
 
     def _crear_encabezado_profesional_mejorado(self, canvas, doc):
         """
-        Crea encabezado profesional mejorado con logo
-        ✅ NOTA: El responsable se muestra en la sección de información, no en el encabezado
+        Crea encabezado profesional optimizado - VERSIÓN FINAL
+        ✅ Logo a la izquierda (más grande)
+        ✅ Información institucional a la derecha
+        ✅ Diseño compacto y profesional
         """
         canvas.saveState()
         
-        # Fondo blanco del encabezado (más compacto)
+        # Fondo blanco del encabezado
         canvas.setFillColor(colors.white)
         canvas.rect(0, letter[1]-40*mm, letter[0], 40*mm, fill=1, stroke=0)
         
         # Franja decorativa superior (roja)
         canvas.setFillColor(COLOR_ROJO_ACENTO)
-        canvas.rect(0, letter[1]-6*mm, letter[0], 6*mm, fill=1, stroke=0)
+        canvas.rect(0, letter[1]-8*mm, letter[0], 8*mm, fill=1, stroke=0)
         
         # LÍNEA AZUL en la parte inferior del encabezado
         canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
-        canvas.setLineWidth(3)
+        canvas.setLineWidth(2)
         canvas.line(0, letter[1]-40*mm, letter[0], letter[1]-40*mm)
         
-        # Bordes laterales azules (ajustados)
-        canvas.setLineWidth(2)
-        canvas.line(0, letter[1]-40*mm, 0, letter[1]-6*mm)
-        canvas.line(letter[0], letter[1]-40*mm, letter[0], letter[1]-6*mm)
+        # ============================================
+        # LOGO - Izquierda (tamaño medio, más visible)
+        # ============================================
+        logo_x = 20*mm
+        logo_y = letter[1]-36*mm
+        logo_width = 50*mm  # ✅ Más grande que antes (era 35mm)
+        logo_height = 28*mm  # ✅ Proporcionalmente más alto
         
-        # Logo
         if self.logo_path and os.path.exists(self.logo_path):
             try:
                 canvas.drawImage(
                     self.logo_path, 
-                    25*mm, letter[1]-45*mm,
-                    width=120*mm, height=40*mm,
+                    logo_x, logo_y,
+                    width=logo_width, height=logo_height,
                     preserveAspectRatio=True,
                     mask='auto'
                 )
-            except:
-                self._dibujar_logo_profesional(canvas, 25*mm, letter[1]-45*mm, 120*mm, 40*mm)
+            except Exception as e:
+                print(f"⚠️ Error dibujando logo: {e}")
+                self._dibujar_logo_profesional_mejorado(canvas, logo_x, logo_y, logo_width, logo_height)
         else:
-            self._dibujar_logo_profesional(canvas, 25*mm, letter[1]-45*mm, 120*mm, 40*mm)
+            self._dibujar_logo_profesional_mejorado(canvas, logo_x, logo_y, logo_width, logo_height)
         
-        # Información institucional
-        canvas.setFont("Helvetica-Bold", 14)
+        # ============================================
+        # INFORMACIÓN INSTITUCIONAL - Derecha del logo
+        # ============================================
+        info_x = logo_x + logo_width + 15*mm  # Después del logo con separación
+        
+        # Título principal - alineado a la derecha de la página
+        canvas.setFont("Helvetica-Bold", 18)
         canvas.setFillColor(COLOR_AZUL_PRINCIPAL)
-        canvas.drawRightString(letter[0]-20*mm, letter[1]-20*mm, "CLÍNICA MARÍA INMACULADA")
+        titulo_texto = "CLÍNICA MARÍA INMACULADA"
+        titulo_width = canvas.stringWidth(titulo_texto, "Helvetica-Bold", 18)
+        titulo_x = letter[0] - 20*mm - titulo_width
+        canvas.drawString(titulo_x, letter[1]-16*mm, titulo_texto)
         
+        # Línea divisoria bajo el título (de extremo a extremo del título)
+        canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
+        canvas.setLineWidth(1.5)
+        canvas.line(titulo_x, letter[1]-17.5*mm, letter[0] - 20*mm, letter[1]-17.5*mm)
+        
+        # Información de contacto - alineada a la derecha
         canvas.setFont("Helvetica", 11)
         canvas.setFillColor(COLOR_GRIS_OSCURO)
-        canvas.drawRightString(letter[0]-20*mm, letter[1]-28*mm, "Atención Médica Integral")
-        canvas.drawRightString(letter[0]-20*mm, letter[1]-35*mm, "Villa Yapacaní, Santa Cruz - Bolivia")
+        
+        lineas_info = [
+            "Atención Médica Integral",
+            "Villa Yapacaní, Santa Cruz - Bolivia"
+        ]
+        
+        y_pos = letter[1]-24*mm
+        for linea in lineas_info:
+            linea_width = canvas.stringWidth(linea, "Helvetica", 11)
+            linea_x = letter[0] - 20*mm - linea_width
+            canvas.drawString(linea_x, y_pos, linea)
+            y_pos -= 5*mm
         
         canvas.restoreState()
 
-    def _dibujar_logo_profesional(self, canvas, x, y, ancho, alto):
-        """Dibuja logo profesional con tamaño y posición personalizados"""
-        # Texto del logo en azul sobre fondo blanco
+    def _dibujar_logo_profesional_mejorado(self, canvas, x, y, ancho, alto):
+        """Dibuja logo profesional MEJORADO cuando no hay imagen disponible"""
+        # Fondo azul para el logo
         canvas.setFillColor(COLOR_AZUL_PRINCIPAL)
-        canvas.setFont("Helvetica-Bold", 28)
-        canvas.drawCentredText(x + ancho/2, y + alto/2 + 10, "CMI")
+        canvas.rect(x, y, ancho, alto, fill=1, stroke=0)
         
-        canvas.setFont("Helvetica", 14)
-        canvas.drawCentredText(x + ancho/2, y + alto/2 - 5, "CLÍNICA MARÍA")
-        canvas.drawCentredText(x + ancho/2, y + alto/2 - 20, "INMACULADA")
+        # Texto del logo en blanco - MEJORADO con mejor espaciado
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 14)
         
-        # Marco decorativo azul
-        canvas.setStrokeColor(COLOR_AZUL_PRINCIPAL)
-        canvas.setLineWidth(2)
+        # Texto "CMI" centrado
+        texto_cmi = "CMI"
+        texto_cmi_width = canvas.stringWidth(texto_cmi, "Helvetica-Bold", 14)
+        canvas.drawString(x + (ancho - texto_cmi_width) / 2, y + alto/2 + 5, texto_cmi)
+        
+        # Texto "CLÍNICA" 
+        canvas.setFont("Helvetica-Bold", 8)
+        texto_clinica = "CLÍNICA"
+        texto_clinica_width = canvas.stringWidth(texto_clinica, "Helvetica-Bold", 8)
+        canvas.drawString(x + (ancho - texto_clinica_width) / 2, y + alto/2 - 5, texto_clinica)
+        
+        # Texto "MARÍA INMACULADA"
+        canvas.setFont("Helvetica-Bold", 6)
+        texto_inmaculada = "MARÍA INMACULADA"
+        texto_inmaculada_width = canvas.stringWidth(texto_inmaculada, "Helvetica-Bold", 6)
+        canvas.drawString(x + (ancho - texto_inmaculada_width) / 2, y + alto/2 - 12, texto_inmaculada)
+        
+        # Borde blanco alrededor del logo
+        canvas.setStrokeColor(colors.white)
+        canvas.setLineWidth(1)
         canvas.rect(x, y, ancho, alto, fill=0, stroke=1)
 
     def _crear_mensaje_error(self):

@@ -1,7 +1,7 @@
 # logger_config.py
 """
 Sistema de Logging para Aplicación Compilada
-Guarda logs en archivo cuando console=False
+✅ CORREGIDO: Logs en APPDATA (no en Program Files)
 """
 
 import logging
@@ -13,7 +13,7 @@ from datetime import datetime
 def setup_logger(app_name="ClinicaApp"):
     """
     Configura el sistema de logging para el ejecutable
-    ✅ CORREGIDO: Logs en carpeta del usuario (no en Program Files)
+    ✅ CORREGIDO: Guarda logs en APPDATA del usuario
     
     Returns:
         logging.Logger: Logger configurado
