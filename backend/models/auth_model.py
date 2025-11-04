@@ -87,7 +87,7 @@ class AuthModel(QObject):
     # Slots para QML
     @Slot(str, str)
     def login(self, username: str, password: str):
-        """Autenticación usando la BD existente - VERSIÓN CORREGIDA"""
+        """Autenticación usando AuthRepository con bcrypt"""
         try:
             print(f"🔐 Login attempt: {username}")
             
@@ -103,53 +103,42 @@ class AuthModel(QObject):
             # Limpiar estado anterior
             self._clear_current_user()
             
-            # Usar AuthRepository para obtener usuario con rol
+            # ✅ USAR authenticate_user del repository (tiene bcrypt)
             from ..repositories.auth_repository import AuthRepository
             auth_repo = AuthRepository()
             
-            # Obtener usuario por username (incluye rol)
-            user_data = auth_repo.get_user_by_username(username.strip())
+            # Llamar al método que YA tiene bcrypt
+            result = auth_repo.authenticate_user(username.strip(), password.strip())
             
-            # Verificar credenciales y estado
+            # Verificar resultado
+            if not result.get('success', False):
+                error = result.get('error', 'Error de autenticación')
+                print(f"❌ Login fallido: {error}")
+                self.loginFailed.emit(error)
+                return
+            
+            # Login exitoso - Obtener datos del usuario
+            user_data = result.get('usuario', {})
+            
             if not user_data:
-                print(f"❌ Usuario no encontrado: {username}")
-                self.loginFailed.emit("Usuario no encontrado")
+                print(f"❌ No se obtuvieron datos del usuario")
+                self.loginFailed.emit("Error obteniendo datos del usuario")
                 return
             
-            if not user_data.get('Estado', True):
-                print(f"❌ Usuario inactivo: {username}")
-                self.loginFailed.emit("Usuario inactivo")
-                return
-            
-            # Verificar contraseña
-            stored_password = user_data.get('contrasena', '')
-            if password != stored_password:
-                print(f"❌ Contraseña incorrecta para: {username}")
-                self.loginFailed.emit("Contraseña incorrecta")
-                return
-            
-            # Verificar que tenga rol
-            rol_nombre = user_data.get('rol_nombre', '')
-            if not rol_nombre:
-                print(f"⚠️ Usuario sin rol asignado: {username}")
-                self.loginFailed.emit("Usuario sin rol asignado")
-                return
-            
-            # Login exitoso - Establecer usuario
-            self._current_user = user_data.copy()
+            # Establecer usuario actual
+            self._current_user = user_data
             self._is_authenticated = True
             
             # Emitir señal de cambio
             self.currentUserChanged.emit()
             
-            # Preparar mensaje de bienvenida
-            full_name = self.userName
-            message = f"Bienvenido, {full_name}"
+            # Mensaje de bienvenida
+            message = result.get('message', f"Bienvenido, {user_data.get('nombre_completo', '')}")
             
             print(f"✅ Login exitoso:")
             print(f"   Usuario: {username}")
-            print(f"   Nombre: {full_name}")
-            print(f"   Rol: {rol_nombre}")
+            print(f"   Nombre: {user_data.get('nombre_completo', '')}")
+            print(f"   Rol: {user_data.get('rol_nombre', '')}")
             print(f"   ID: {user_data.get('id', 0)}")
             
             # Emitir señal de éxito
@@ -158,6 +147,8 @@ class AuthModel(QObject):
         except Exception as e:
             error_msg = f"Error de autenticación: {str(e)}"
             print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
             self._clear_current_user()
             self.loginFailed.emit(error_msg)
     

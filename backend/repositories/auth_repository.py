@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import hashlib
 import secrets
+import bcrypt
 
 from ..core.base_repository import BaseRepository
 from ..core.excepciones import (
@@ -370,12 +371,54 @@ class AuthRepository(BaseRepository):
         return secrets.token_urlsafe(32)
     
     def _hash_password(self, password: str) -> str:
-        """Hash simple de contraseña (usar bcrypt en producción)"""
-        return hashlib.sha256(password.encode()).hexdigest()
+        """✅ ACTUALIZADO: Hash de contraseña usando bcrypt"""
+        salt = bcrypt.gensalt(rounds=12)
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
     
     def _verify_password(self, password: str, password_hash: str) -> bool:
-        """Verifica contraseña contra hash"""
-        return self._hash_password(password) == password_hash
+        """
+        ✅ ACTUALIZADO: Verifica contraseña contra hash usando bcrypt
+        
+        Soporta:
+        - Contraseñas bcrypt (nuevas, empiezan con $2b$)
+        - Contraseñas SHA-256 (viejas, 64 caracteres hex)
+        - Contraseñas texto plano (migración automática)
+        """
+        try:
+            # Intentar verificación con bcrypt primero
+            password_match = bcrypt.checkpw(
+                password.encode('utf-8'),
+                password_hash.encode('utf-8')
+            )
+            
+            if password_match:
+                print(f"✅ Contraseña verificada con bcrypt")
+                return True
+            else:
+                print(f"❌ Contraseña incorrecta (bcrypt)")
+                return False
+                
+        except ValueError as e:
+            # Si falla bcrypt, puede ser SHA-256 o texto plano
+            print(f"⚠️ Contraseña no es bcrypt, intentando SHA-256/texto plano...")
+            
+            # Intentar SHA-256
+            sha256_hash = hashlib.sha256(password.encode()).hexdigest()
+            if sha256_hash == password_hash:
+                print(f"✅ Contraseña verificada con SHA-256 (requiere migración)")
+                return True
+            
+            # Intentar texto plano
+            if password == password_hash:
+                print(f"✅ Contraseña verificada en texto plano (requiere migración urgente)")
+                return True
+            
+            print(f"❌ Contraseña incorrecta en todos los formatos")
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error verificando contraseña: {e}")
+            return False
     
     def _validate_username_format(self, username: str) -> str:
         """Valida formato de nombre de usuario"""

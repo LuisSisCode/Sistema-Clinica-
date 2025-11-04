@@ -408,8 +408,8 @@ class DashboardModel(QObject):
             # CORREGIDO: Usar el método con detalles para obtener precios reales
             try:
                 # Intentar usar el mismo método que CierreCaja
-                if hasattr(self.consulta_repo, 'get_consultas_by_date_range'):
-                    consultas = self.consulta_repo.get_consultas_by_date_range(fecha_inicio, fecha_fin)
+                if hasattr(self.consulta_repo, 'get_consultations_by_date_range'):  # ✅ CORRECTO
+                    consultas = self.consulta_repo.get_consultations_by_date_range(fecha_inicio, fecha_fin)
                 else:
                     consultas = self.consulta_repo.get_all_with_details(1000)
                     # Filtrar manualmente si no hay método específico

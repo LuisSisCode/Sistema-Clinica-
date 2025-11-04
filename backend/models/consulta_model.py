@@ -81,13 +81,18 @@ class ConsultaModel(QObject):
     def _conectar_senales_globales(self):
         """Conecta con las señales globales para recibir actualizaciones"""
         try:
-            # Conectar señales de especialidades
+            # ✅ Conectar señales de especialidades
             self.global_signals.especialidadesModificadas.connect(self._actualizar_especialidades_desde_signal)
             self.global_signals.consultasNecesitaActualizacion.connect(self._manejar_actualizacion_global)
             
-            #print("🔗 Señales globales conectadas en ConsultaModel")
+            # ✅ NUEVO: Conectar señales de trabajadores
+            self.global_signals.trabajadoresNecesitaActualizacion.connect(self._actualizar_trabajadores_desde_signal)
+            self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_trabajadores_desde_signal)
+            
+            print("🔗 Señales globales conectadas en ConsultaModel (incluyendo trabajadores)")
         except Exception as e:
             print(f"❌ Error conectando señales globales en ConsultaModel: {e}")
+
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
         """Método simple para establecer usuario (sin rol) - Para compatibilidad"""
@@ -1275,40 +1280,26 @@ class ConsultaModel(QObject):
         else:
             if hasattr(self, '_autoRefreshTimer'):
                 self._autoRefreshTimer.stop()
-    @Slot()
-    def _actualizar_especialidades_desde_signal(self):
-        """Actualiza especialidades cuando recibe señal global"""
-        try:
-            print("📡 ConsultaModel: Recibida señal de actualización de especialidades")
-            
-            # Invalidar cache del repository principal
-            if hasattr(self.repository, 'invalidate_consultation_caches'):
-                self.repository.invalidate_consultation_caches()
-                print("🗑️ Cache invalidado en ConsultaModel")
-            
-            # ✅ FORZAR INVALIDACIÓN COMPLETA DEL DOCTOR REPOSITORY
-            if hasattr(self.doctor_repo, 'invalidate_cache'):
-                self.doctor_repo.invalidate_cache()
-                print("🗑️ Cache de doctor_repo invalidado")
-            
-            # ✅ INVALIDAR CACHE MANUALMENTE SI ES NECESARIO
-            from ..core.cache_system import invalidate_after_update
-            invalidate_after_update(['doctores', 'especialidades'])
-            print("🗑️ Cache doctores/especialidades invalidado manualmente")
-            
-            self.cargar_especialidades()
-            print("✅ Especialidades actualizadas desde señal global en ConsultaModel")
-        except Exception as e:
-            print(f"❌ Error actualizando especialidades desde señal: {e}")
+    
     @Slot(str)
-    def _manejar_actualizacion_global(self, mensaje: str):
-        """Maneja actualizaciones globales de consultas"""
+    def _manejar_actualizacion_global(self, mensaje: str = ""):
+        """
+        Maneja actualizaciones globales del sistema
+        Se ejecuta cuando hay cambios que afectan a consultas
+        """
         try:
-            print(f"📡 ConsultaModel: {mensaje}")
-            # Emitir señal para notificar a QML que hay cambios
-            self.especialidadesChanged.emit()
+            print(f"🌐 Actualización global en ConsultaModel: {mensaje}")
+            
+            # Si el mensaje contiene "trabajador", actualizar trabajadores
+            if "trabajador" in mensaje.lower():
+                self._actualizar_trabajadores_desde_signal(mensaje)
+            
+            # Si el mensaje contiene "especialidad", actualizar especialidades
+            if "especialidad" in mensaje.lower() or "consulta" in mensaje.lower():
+                self._actualizar_especialidades_desde_signal(mensaje)
+                
         except Exception as e:
-            print(f"❌ Error manejando actualización global: {e}")
+            print(f"⚠️ Error en actualización global: {e}")
 
     def cleanup(self):
         """Limpieza completa de ConsultaModel"""
@@ -1569,6 +1560,95 @@ class ConsultaModel(QObject):
         except Exception as e:
             print(f"⚠️ Error comparando pacientes: {e}")
             return False
+        
+    @Slot(str)
+    def _actualizar_trabajadores_desde_signal(self, mensaje: str = ""):
+        """
+        ✅ NUEVO: Responde a cambios en trabajadores desde señales globales
+        Se ejecuta cuando se crea/actualiza/elimina un trabajador
+        """
+        try:
+            print(f"📢 Signal recibida en ConsultaModel: {mensaje}")
+            
+            # Recargar lista de trabajadores (si tienes un método para esto)
+            # Si el modelo tiene una property de trabajadores, recárgala aquí
+            
+            # Emitir señal para que QML actualice combos
+            self.doctoresDisponiblesChanged.emit()
+            
+            print("✅ Trabajadores actualizados en ConsultaModel")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando trabajadores desde signal: {e}")
+
+    @Slot(str)
+    def _actualizar_especialidades_desde_signal(self, mensaje: str = ""):
+        """
+        ✅ YA EXISTE, pero asegurar que está implementado
+        Responde a cambios en especialidades desde señales globales
+        """
+        try:
+            print(f"📢 Signal de especialidades recibida: {mensaje}")
+            
+            # Recargar especialidades
+            if hasattr(self, '_cargar_especialidades'):
+                self._cargar_especialidades()
+            
+            # Emitir señal para QML
+            self.especialidadesChanged.emit()
+            
+            print("✅ Especialidades actualizadas en ConsultaModel")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando especialidades: {e}")
+
+    def _cargar_doctores(self):
+        """Carga la lista de doctores disponibles desde el repositorio"""
+        try:
+            # Obtener doctores desde el repository
+            doctores_raw = self.doctor_repo.get_active()
+            
+            # Transformar a formato QML-friendly
+            self._doctoresData = [
+                {
+                    'id': doc['id'],
+                    'nombre_completo': f"{doc['Nombre']} {doc['Apellido_Paterno']} {doc.get('Apellido_Materno', '')}".strip(),
+                    'especialidad': doc.get('Especialidad', ''),
+                    'matricula': doc.get('Matricula', '')
+                }
+                for doc in doctores_raw
+            ]
+            
+            print(f"✅ {len(self._doctoresData)} doctores cargados")
+            
+        except Exception as e:
+            print(f"❌ Error cargando doctores: {e}")
+            self._doctoresData = []
+
+    def _cargar_especialidades(self):
+        """Carga la lista de especialidades disponibles desde el repositorio"""
+        try:
+            # Obtener especialidades desde el repository
+            especialidades_raw = self.repository.get_especialidades()
+            
+            # Transformar a formato QML-friendly
+            self._especialidadesData = [
+                {
+                    'id': esp['id'],
+                    'nombre': esp['Nombre'],
+                    'precio_normal': float(esp.get('Precio_Normal', 0)),
+                    'precio_emergencia': float(esp.get('Precio_Emergencia', 0)),
+                    'doctor_id': esp.get('Id_Doctor', 0)
+                }
+                for esp in especialidades_raw
+            ]
+            
+            print(f"✅ {len(self._especialidadesData)} especialidades cargadas")
+            
+        except Exception as e:
+            print(f"❌ Error cargando especialidades: {e}")
+            self._especialidadesData = []
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================

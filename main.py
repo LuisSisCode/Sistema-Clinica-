@@ -2434,7 +2434,14 @@ def main():
             try:
                 from backend.core.db_installer import DatabaseInstaller
                 db_installer = DatabaseInstaller()
-                bd_disponible, mensaje_bd = db_installer.verificar_base_datos_existe()
+                
+                # ✅ LEER CONFIGURACIÓN PARA PASAR PARÁMETROS
+                server = config_manager.get('DB_SERVER', 'localhost\\SQLEXPRESS')
+                database = config_manager.get('DB_DATABASE', 'ClinicaMariaInmaculada')
+                
+                # ✅ LLAMAR CON PARÁMETROS CORRECTOS
+                bd_disponible, mensaje_bd = db_installer.verificar_base_datos_existe(server, database)
+                
                 logger.info(f"   Base de datos disponible: {bd_disponible}")
                 if not bd_disponible:
                     logger.warning(f"   ⚠️ {mensaje_bd}")

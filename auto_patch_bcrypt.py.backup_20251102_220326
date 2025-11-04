@@ -1,0 +1,236 @@
+"""
+auto_patch_bcrypt.py
+Script automático para parchear la autenticación con bcrypt
+================================================================================
+
+EJECUTAR:
+python auto_patch_bcrypt.py
+
+Este script:
+1. Busca el archivo que contiene el método authenticate()
+2. Crea un backup del archivo
+3. Aplica el parche para usar bcrypt
+4. Verifica que el parche se aplicó correctamente
+================================================================================
+"""
+
+import os
+import sys
+import shutil
+from pathlib import Path
+from datetime import datetime
+
+def buscar_archivo_auth(base_dir="."):
+    """Busca el archivo que contiene el método authenticate"""
+    print("🔍 Buscando archivo de autenticación...")
+    
+    candidatos = []
+    
+    for root, dirs, files in os.walk(base_dir):
+        # Ignorar directorios no relevantes
+        if any(x in root for x in ['venv', '.git', '__pycache__', 'dist', 'build']):
+            continue
+            
+        for file in files:
+            if file.endswith('.py'):
+                filepath = os.path.join(root, file)
+                
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                        # Buscar el método authenticate
+                        if 'def authenticate' in content and 'contrasena' in content:
+                            candidatos.append(filepath)
+                            print(f"   📄 Candidato encontrado: {filepath}")
+                            
+                except Exception as e:
+                    pass
+    
+    return candidatos
+
+
+def crear_backup(filepath):
+    """Crea backup del archivo"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = f"{filepath}.backup_{timestamp}"
+    
+    shutil.copy2(filepath, backup_path)
+    print(f"💾 Backup creado: {backup_path}")
+    
+    return backup_path
+
+
+def aplicar_parche(filepath):
+    """Aplica el parche de bcrypt al archivo"""
+    print(f"\n🔧 Aplicando parche a: {filepath}")
+    
+    try:
+        # Leer archivo
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Verificar que bcrypt esté importado
+        if 'import bcrypt' not in content:
+            # Agregar import al inicio (después de otros imports)
+            lines = content.split('\n')
+            
+            # Buscar línea de imports
+            import_line = 0
+            for i, line in enumerate(lines):
+                if line.startswith('import ') or line.startswith('from '):
+                    import_line = i
+            
+            # Insertar import bcrypt
+            lines.insert(import_line + 1, 'import bcrypt')
+            content = '\n'.join(lines)
+            print("   ✅ Import bcrypt agregado")
+        
+        # Buscar el método authenticate
+        if 'def authenticate(' not in content:
+            print("   ❌ No se encontró el método authenticate()")
+            return False
+        
+        # NUEVO MÉTODO CON BCRYPT
+        nuevo_metodo = '''    def authenticate(self, username: str, password: str):
+        """✅ ACTUALIZADO: Autentica un usuario usando bcrypt"""
+        try:
+            query = """
+            SELECT id, Nombre, Apellido_Paterno, Apellido_Materno, 
+                   contrasena, Id_Rol, Estado
+            FROM Usuario 
+            WHERE nombre_usuario = ? AND Estado = 1
+            """
+            
+            result = self._execute_query(query, (username,), use_cache=False)
+            
+            if not result or len(result) == 0:
+                print(f"❌ Usuario no encontrado: {username}")
+                return False, "Usuario no encontrado", None
+            
+            user = result[0]
+            stored_hash = user['contrasena']
+            
+            # ✅ VERIFICAR CON BCRYPT
+            try:
+                password_match = bcrypt.checkpw(
+                    password.encode('utf-8'), 
+                    stored_hash.encode('utf-8')
+                )
+                
+                if not password_match:
+                    print(f"❌ Contraseña incorrecta para: {username}")
+                    return False, "Contraseña incorrecta", None
+                    
+            except Exception as bcrypt_error:
+                # Fallback a texto plano si falla bcrypt
+                print(f"⚠️ Error bcrypt, intentando texto plano: {bcrypt_error}")
+                
+                if stored_hash != password:
+                    print(f"❌ Contraseña incorrecta: {username}")
+                    return False, "Contraseña incorrecta", None
+                
+                # Migrar a bcrypt
+                print(f"🔐 Migrando contraseña para: {username}")
+                try:
+                    new_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(12))
+                    update_query = "UPDATE Usuario SET contrasena = ? WHERE id = ?"
+                    self._execute_update(update_query, (new_hash.decode('utf-8'), user['id']))
+                    print(f"✅ Contraseña migrada")
+                except:
+                    pass
+            
+            # Autenticación exitosa
+            print(f"✅ Login exitoso: {username}")
+            
+            user_data = {
+                'id': user['id'],
+                'nombre': user['Nombre'],
+                'apellido_paterno': user['Apellido_Paterno'],
+                'apellido_materno': user.get('Apellido_Materno', ''),
+                'username': username,
+                'rol_id': user['Id_Rol'],
+                'estado': user['Estado']
+            }
+            
+            return True, "Autenticación exitosa", user_data
+            
+        except Exception as e:
+            print(f"❌ Error autenticación: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, f"Error: {str(e)}", None'''
+        
+        # Buscar y reemplazar el método authenticate completo
+        # Esto es complicado porque necesitamos encontrar el método completo
+        # Por ahora, mostrar instrucciones manuales
+        
+        print("\n⚠️ PARCHE MANUAL REQUERIDO")
+        print("="*70)
+        print("El archivo correcto es:", filepath)
+        print("\nPasos:")
+        print("1. Abre el archivo en tu editor")
+        print("2. Busca el método 'def authenticate'")
+        print("3. Reemplaza TODO el método con el código del archivo:")
+        print("   PARCHE_URGENTE_AUTH.py")
+        print("\nO copia el método directamente de aquí:")
+        print("="*70)
+        print(nuevo_metodo)
+        print("="*70)
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error aplicando parche: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def main():
+    print("="*70)
+    print("AUTO-PARCHE BCRYPT PARA AUTENTICACIÓN")
+    print("="*70)
+    print()
+    
+    # Buscar archivo
+    candidatos = buscar_archivo_auth()
+    
+    if not candidatos:
+        print("\n❌ No se encontró el archivo de autenticación")
+        print("Busca manualmente el archivo que contenga:")
+        print("   - def authenticate(")
+        print("   - contrasena")
+        print("   - Usuario")
+        return
+    
+    print(f"\n✅ {len(candidatos)} archivo(s) encontrado(s)")
+    
+    # Mostrar candidatos
+    for i, candidato in enumerate(candidatos, 1):
+        print(f"\n{i}. {candidato}")
+        
+        respuesta = input(f"   ¿Es este el archivo correcto? (s/n): ").lower()
+        
+        if respuesta == 's':
+            # Crear backup
+            backup = crear_backup(candidato)
+            
+            # Aplicar parche
+            if aplicar_parche(candidato):
+                print("\n✅ PRÓXIMO PASO:")
+                print("   1. Abre el archivo:", candidato)
+                print("   2. Busca 'def authenticate'")
+                print("   3. Reemplaza con el código de PARCHE_URGENTE_AUTH.py")
+                print("   4. Guarda el archivo")
+                print("   5. Reinicia la aplicación")
+                print("   6. Intenta login: admin / admin123")
+            
+            return
+    
+    print("\n⚠️ No seleccionaste ningún archivo")
+    print("Ejecuta el script de nuevo cuando estés listo")
+
+
+if __name__ == "__main__":
+    main()

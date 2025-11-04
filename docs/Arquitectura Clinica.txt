@@ -19,8 +19,8 @@ Sistema-Clinica-/
 │   │   ├── excepciones.py              # Excepciones personalizadas
 │   │   ├── base_repository.py          # Repositorio base
 │   │   ├── utils.py                     # Utilidades generales
-│   │   ├── db_installer.py             # ✅ NUEVO - Instalador de BD
-│   │   └── config_manager.py           # ✅ NUEVO - Gestor de configuración
+│   │   ├── db_installer.py             # Instalador de BD
+│   │   └── config_manager.py           # Gestor de configuración
 │   │
 │   ├── 📁 models/                       # Modelos QObject (Qt)
 │   │   ├── __init__.py
@@ -66,6 +66,7 @@ Sistema-Clinica-/
 │       ├── cierre_caja_repository.py
 │       ├── ingreso_extra_repository.py
 │       ├── reportes_repository.py
+│       ├── egreso_repository.py
 │       │
 │       └── 📁 ConfiguracionRepositor/   # Configuración
 │           ├── __init__.py
@@ -529,25 +530,3 @@ v1.0 (Octubre 2025):
   ✅ Gestión de usuarios y permisos
   ✅ Compilación a ejecutable standalone
   ✅ Sistema portable (ZIP)
-
-Próximas Mejoras Sugeridas:
-  • Sistema de backup automático
-  • Exportación de datos a Excel
-  • Gráficos estadísticos avanzados
-  • Notificaciones por correo
-  • API REST para integraciones
-  • Aplicación móvil (opcional)
-
-================================================================================
-                       SOPORTE Y CONTACTO
-================================================================================
-
-Para soporte técnico o consultas sobre el sistema,
-contactar al administrador del proyecto.
-
-Documentación completa: README.md
-Instrucciones de usuario: LEEME.txt
-
-================================================================================
-           © 2025 Clínica María Inmaculada - Todos los derechos reservados
-================================================================================
