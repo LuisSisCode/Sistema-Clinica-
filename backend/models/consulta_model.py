@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from ..core.excepciones import ExceptionHandler, ClinicaBaseException
 from ..repositories.consulta_repository import ConsultaRepository
-from ..repositories.doctor_repository import DoctorRepository
+from ..repositories.medico_repository import MedicoRepository
 from ..core.Signals_manager import get_global_signals
 
 class ConsultaModel(QObject):
@@ -49,7 +49,7 @@ class ConsultaModel(QObject):
     # Datos actualizados
     consultasRecientesChanged = Signal()
     especialidadesChanged = Signal()
-    doctoresDisponiblesChanged = Signal()
+    medicosDisponiblesChanged = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -57,13 +57,13 @@ class ConsultaModel(QObject):
         
         # Repositories
         self.repository = ConsultaRepository()
-        self.doctor_repo = DoctorRepository()
+        self.medico_repo = MedicoRepository()
         self.global_signals = get_global_signals()
         self._conectar_senales_globales()
         # Estados internos
         self._consultasData = []
         self._especialidadesData = []
-        self._doctoresData = []
+        self._medicosData = []
         self._dashboardData = {}
         self._estadisticasData = {}
         self._estadoActual = "listo"  # listo, cargando, error
@@ -208,9 +208,9 @@ class ConsultaModel(QObject):
         """Getter para especialidades en formato JSON"""
         return json.dumps(self._especialidadesData, default=str, ensure_ascii=False)
     
-    def _get_doctores_json(self) -> str:
+    def _get_medicos_json(self) -> str:
         """Getter para doctores en formato JSON"""
-        return json.dumps(self._doctoresData, default=str, ensure_ascii=False)
+        return json.dumps(self._medicosData, default=str, ensure_ascii=False)
     
     def _get_dashboard_json(self) -> str:
         """Getter para datos de dashboard en formato JSON"""
@@ -229,7 +229,7 @@ class ConsultaModel(QObject):
     # Properties expuestas a QML
     consultasJson = Property(str, _get_consultas_json, notify=consultasRecientesChanged)
     especialidadesJson = Property(str, _get_especialidades_json, notify=especialidadesChanged)
-    doctoresJson = Property(str, _get_doctores_json, notify=doctoresDisponiblesChanged)
+    medicosJson = Property(str, _get_medicos_json, notify=medicosDisponiblesChanged)
     dashboardJson = Property(str, _get_dashboard_json, notify=dashboardActualizado)
     estadoActual = Property(str, _get_estado_actual, notify=estadoCambiado)
     
@@ -244,10 +244,10 @@ class ConsultaModel(QObject):
         """Lista de especialidades para compatibilidad"""
         return self._especialidadesData
     
-    @Property(list, notify=doctoresDisponiblesChanged)
+    @Property(list, notify=medicosDisponiblesChanged)
     def doctores_disponibles(self):
         """Lista de doctores disponibles para compatibilidad"""
-        return self._doctoresData
+        return self._medicosData
     
     # ===============================
     # SLOTS PARA BÚSQUEDA POR CÉDULA - CORREGIDOS
@@ -859,10 +859,10 @@ class ConsultaModel(QObject):
             return json.dumps({'exito': False, 'error': error_msg})
     
     @Slot(int, result=str)
-    def obtener_consultas_del_doctor(self, doctor_id: int) -> str:
+    def obtener_consultas_del_doctor(self, medico_id: int) -> str:
         """Obtiene consultas atendidas por un doctor"""
         try:
-            consultas = self.repository.get_consultations_by_doctor(doctor_id)
+            consultas = self.repository.get_consultations_by_doctor(medico_id)
             
             return json.dumps({
                 'exito': True,
@@ -981,7 +981,7 @@ class ConsultaModel(QObject):
     def cargar_especialidades(self):
         """Carga especialidades disponibles"""
         try:
-            especialidades = self.doctor_repo.get_all_specialty_services()
+            especialidades = self.medico_repo.get_all_specialty_services()
             self._especialidadesData = []
             
             for esp in especialidades or []:
@@ -1007,11 +1007,11 @@ class ConsultaModel(QObject):
     def cargar_doctores(self):
         """Carga doctores disponibles"""
         try:
-            doctores = self.doctor_repo.get_all()
-            self._doctoresData = []
+            doctores = self.medico_repo.get_all()
+            self._medicosData = []
             
             for d in doctores or []:
-                self._doctoresData.append({
+                self._medicosData.append({
                     'id': d['id'],
                     'text': f"{d['Nombre']} {d['Apellido_Paterno']} {d['Apellido_Materno']}",
                     'especialidad': d['Especialidad'],
@@ -1019,7 +1019,7 @@ class ConsultaModel(QObject):
                     'data': d
                 })
             
-            self.doctoresDisponiblesChanged.emit()
+            self.medicosDisponiblesChanged.emit()
             
         except Exception as e:
             self.operacionError.emit(f"Error cargando doctores: {str(e)}")
@@ -1101,7 +1101,7 @@ class ConsultaModel(QObject):
         try:
             return json.dumps({
                 'exito': True,
-                'doctores': self._doctoresData
+                'doctores': self._medicosData
             }, default=str)
         except Exception as e:
             return json.dumps({'exito': False, 'error': str(e)})
@@ -1317,7 +1317,7 @@ class ConsultaModel(QObject):
             # Limpiar datos
             self._consultasData = []
             self._especialidadesData = []
-            self._doctoresData = []
+            self._medicosData = []
             self._dashboardData = {}
             self._estadisticasData = {}
             
@@ -1574,7 +1574,7 @@ class ConsultaModel(QObject):
             # Si el modelo tiene una property de trabajadores, recárgala aquí
             
             # Emitir señal para que QML actualice combos
-            self.doctoresDisponiblesChanged.emit()
+            self.medicosDisponiblesChanged.emit()
             
             print("✅ Trabajadores actualizados en ConsultaModel")
             
@@ -1603,30 +1603,40 @@ class ConsultaModel(QObject):
             print(f"❌ Error actualizando especialidades: {e}")
 
     def _cargar_doctores(self):
-        """Carga la lista de doctores disponibles desde el repositorio"""
+        """
+        Carga la lista de médicos disponibles desde el repositorio
+        ACTUALIZADO: Ahora usa MedicoRepository que consulta Trabajadores
+        """
         try:
-            # Obtener doctores desde el repository
-            doctores_raw = self.doctor_repo.get_active()
+            # Obtener médicos desde el repository (usa TrabajadorRepository internamente)
+            medicos_raw = self.medico_repo.get_active()
             
             # Transformar a formato QML-friendly
-            self._doctoresData = [
+            self._medicosData = [
                 {
-                    'id': doc['id'],
-                    'nombre_completo': f"{doc['Nombre']} {doc['Apellido_Paterno']} {doc.get('Apellido_Materno', '')}".strip(),
-                    'especialidad': doc.get('Especialidad', ''),
-                    'matricula': doc.get('Matricula', '')
+                    'id': medico['id'],
+                    'nombre_completo': f"{medico['Nombre']} {medico['Apellido_Paterno']} {medico.get('Apellido_Materno', '')}".strip(),
+                    'especialidad': medico.get('especialidad_descriptiva', ''),
+                    'matricula': medico.get('Matricula', ''),
+                    'especialidades_asignadas': medico.get('especialidades_nombres', ''),
+                    'total_especialidades': medico.get('total_especialidades', 0)
                 }
-                for doc in doctores_raw
+                for medico in medicos_raw
             ]
             
-            print(f"✅ {len(self._doctoresData)} doctores cargados")
+            print(f"✅ {len(self._medicosData)} médicos cargados")
             
         except Exception as e:
-            print(f"❌ Error cargando doctores: {e}")
-            self._doctoresData = []
+            print(f"❌ Error cargando médicos: {e}")
+            import traceback
+            traceback.print_exc()
+            self._medicosData = []
 
     def _cargar_especialidades(self):
-        """Carga la lista de especialidades disponibles desde el repositorio"""
+        """
+        Carga la lista de especialidades disponibles desde el repositorio
+        ACTUALIZADO: Usa método actualizado de ConsultaRepository
+        """
         try:
             # Obtener especialidades desde el repository
             especialidades_raw = self.repository.get_especialidades()
@@ -1638,7 +1648,8 @@ class ConsultaModel(QObject):
                     'nombre': esp['Nombre'],
                     'precio_normal': float(esp.get('Precio_Normal', 0)),
                     'precio_emergencia': float(esp.get('Precio_Emergencia', 0)),
-                    'doctor_id': esp.get('Id_Doctor', 0)
+                    'medicos_disponibles': esp.get('medicos_disponibles', 0),
+                    'detalles': esp.get('Detalles', '')
                 }
                 for esp in especialidades_raw
             ]
@@ -1647,6 +1658,8 @@ class ConsultaModel(QObject):
             
         except Exception as e:
             print(f"❌ Error cargando especialidades: {e}")
+            import traceback
+            traceback.print_exc()
             self._especialidadesData = []
 
 # ===============================

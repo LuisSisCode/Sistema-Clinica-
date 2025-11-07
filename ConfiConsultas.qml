@@ -79,9 +79,9 @@ Item {
             detallesField.text = especialidad.Detalles || ""
             
             // Seleccionar doctor en combo
-            if (especialidad.Id_Doctor) {
+            if (especialidad.Id_Medico) {
                 for (let i = 0; i < doctorComboBox.model.length; i++) {
-                    if (doctorComboBox.model[i].id === especialidad.Id_Doctor) {
+                    if (doctorComboBox.model[i].id === especialidad.Id_Medico) {
                         doctorComboBox.currentIndex = i
                         break
                     }

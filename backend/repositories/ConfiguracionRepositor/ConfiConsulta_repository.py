@@ -28,17 +28,16 @@ class ConfiConsultaRepository(BaseRepository):
     # ===============================
     
     def create_especialidad(self, nombre: str, detalles: str = None, 
-                           precio_normal: float = 0.0, precio_emergencia: float = 0.0,
-                           id_doctor: int = None) -> int:
+                           precio_normal: float = 0.0, precio_emergencia: float = 0.0) -> int:
         """
         Crea nueva especialidad con validaciones
+        ACTUALIZADO: Ya no usa Id_Doctor (siempre NULL)
         
         Args:
             nombre: Nombre de la especialidad
             detalles: Descripción de la especialidad
             precio_normal: Precio para consulta normal
             precio_emergencia: Precio para consulta de emergencia
-            id_doctor: ID del doctor asignado
             
         Returns:
             ID de la especialidad creada
@@ -58,15 +57,12 @@ class ConfiConsultaRepository(BaseRepository):
         if precio_emergencia < 0:
             raise ValidationError("precio_emergencia", precio_emergencia, "El precio de emergencia debe ser mayor o igual a 0")
         
-        # Verificar que el doctor existe si se proporciona
-        if id_doctor is not None and not self.doctor_exists(id_doctor):
-            raise ValidationError("id_doctor", id_doctor, "El doctor especificado no existe")
-        
-        # Crear especialidad
+        # Crear especialidad (Id_Doctor siempre NULL - ahora usa Trabajador_Especialidad)
         especialidad_data = {
             'Nombre': normalize_name(nombre),
             'Precio_Normal': precio_normal,
-            'Precio_Emergencia': precio_emergencia
+            'Precio_Emergencia': precio_emergencia,
+            'Id_Doctor': None  # Ya no se usa - se mantiene por compatibilidad de esquema
         }
         
         # Agregar detalles si se proporciona
@@ -75,12 +71,6 @@ class ConfiConsultaRepository(BaseRepository):
         else:
             especialidad_data['Detalles'] = None
         
-        # Agregar doctor si se proporciona
-        if id_doctor is not None:
-            especialidad_data['Id_Doctor'] = id_doctor
-        else:
-            especialidad_data['Id_Doctor'] = None
-        
         especialidad_id = self.insert(especialidad_data)
         print(f"🏥 Especialidad creada: {nombre} - ID: {especialidad_id}")
         
@@ -88,8 +78,11 @@ class ConfiConsultaRepository(BaseRepository):
     
     def update_especialidad(self, especialidad_id: int, nombre: str = None, 
                            detalles: str = None, precio_normal: float = None,
-                           precio_emergencia: float = None, id_doctor: int = None) -> bool:
-        """Actualiza especialidad existente"""
+                           precio_emergencia: float = None) -> bool:
+        """
+        Actualiza especialidad existente
+        ACTUALIZADO: Ya no modifica Id_Doctor
+        """
         # Verificar existencia
         if not self.get_by_id(especialidad_id):
             raise ValidationError("especialidad_id", especialidad_id, "Especialidad no encontrada")
@@ -115,11 +108,6 @@ class ConfiConsultaRepository(BaseRepository):
             if precio_emergencia < 0:
                 raise ValidationError("precio_emergencia", precio_emergencia, "El precio de emergencia debe ser mayor o igual a 0")
             update_data['Precio_Emergencia'] = precio_emergencia
-        
-        if id_doctor is not None:
-            if id_doctor > 0 and not self.doctor_exists(id_doctor):
-                raise ValidationError("id_doctor", id_doctor, "El doctor especificado no existe")
-            update_data['Id_Doctor'] = id_doctor if id_doctor > 0 else None
         
         if not update_data:
             return True
@@ -150,7 +138,10 @@ class ConfiConsultaRepository(BaseRepository):
     
     @cached_query('especialidades_all', ttl=600)
     def get_all_especialidades(self) -> List[Dict[str, Any]]:
-        """Obtiene todas las especialidades con información del doctor"""
+        """
+        Obtiene todas las especialidades con información de médicos asignados
+        ACTUALIZADO: Usa Trabajador_Especialidad - SINTAXIS SQL SERVER CORREGIDA
+        """
         query = """
         SELECT 
             e.id, 
@@ -158,20 +149,25 @@ class ConfiConsultaRepository(BaseRepository):
             e.Detalles, 
             e.Precio_Normal, 
             e.Precio_Emergencia,
-            e.Id_Doctor,
-            CASE 
-                WHEN e.Id_Doctor IS NOT NULL THEN 
-                    CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                ELSE NULL 
-            END as nombre_doctor
+            (
+                SELECT STRING_AGG(
+                    t2.Nombre + ' ' + t2.Apellido_Paterno, 
+                    ', '
+                )
+                FROM Trabajador_Especialidad te2
+                INNER JOIN Trabajadores t2 ON te2.Id_Trabajador = t2.id
+                WHERE te2.Id_Especialidad = e.id
+            ) as nombres_medicos
         FROM Especialidad e
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
         ORDER BY e.Nombre
         """
         return self._execute_query(query)
     
     def get_especialidad_by_id(self, especialidad_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene especialidad específica por ID"""
+        """
+        Obtiene especialidad específica por ID con médicos asignados
+        ACTUALIZADO: Usa Trabajador_Especialidad
+        """
         query = """
         SELECT 
             e.id, 
@@ -179,14 +175,16 @@ class ConfiConsultaRepository(BaseRepository):
             e.Detalles, 
             e.Precio_Normal, 
             e.Precio_Emergencia,
-            e.Id_Doctor,
-            CASE 
-                WHEN e.Id_Doctor IS NOT NULL THEN 
-                    CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                ELSE NULL 
-            END as nombre_doctor
+            (
+                SELECT STRING_AGG(
+                    t2.Nombre + ' ' + t2.Apellido_Paterno, 
+                    ', '
+                )
+                FROM Trabajador_Especialidad te2
+                INNER JOIN Trabajadores t2 ON te2.Id_Trabajador = t2.id
+                WHERE te2.Id_Especialidad = e.id
+            ) as nombres_medicos
         FROM Especialidad e
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
         WHERE e.id = ?
         """
         return self._execute_query(query, (especialidad_id,), fetch_one=True)
@@ -214,40 +212,21 @@ class ConfiConsultaRepository(BaseRepository):
             e.Detalles, 
             e.Precio_Normal, 
             e.Precio_Emergencia,
-            e.Id_Doctor,
-            CASE 
-                WHEN e.Id_Doctor IS NOT NULL THEN 
-                    CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                ELSE NULL 
-            END as nombre_doctor
+            COUNT(DISTINCT te.Id_Trabajador) as medicos_asignados
         FROM Especialidad e
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
         WHERE e.Nombre LIKE ? OR e.Detalles LIKE ?
+        GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
         ORDER BY e.Nombre
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         
         return self._execute_query(query, (search_term, search_term, limit))
     
-    def get_especialidades_por_doctor(self, id_doctor: int) -> List[Dict[str, Any]]:
-        """Obtiene especialidades asignadas a un doctor específico"""
-        query = """
-        SELECT 
-            e.id, 
-            e.Nombre, 
-            e.Detalles, 
-            e.Precio_Normal, 
-            e.Precio_Emergencia,
-            e.Id_Doctor
-        FROM Especialidad e
-        WHERE e.Id_Doctor = ?
-        ORDER BY e.Nombre
-        """
-        return self._execute_query(query, (id_doctor,))
-    
-    def get_especialidades_por_rango_precios(self, precio_min: float, precio_max: float) -> List[Dict[str, Any]]:
-        """Obtiene especialidades en un rango de precios específico"""
-        if precio_max == -1:  # -1 significa sin límite superior
+    def get_especialidades_by_price_range(self, precio_min: float = 0, 
+                                         precio_max: float = None) -> List[Dict[str, Any]]:
+        """Obtiene especialidades por rango de precios"""
+        if precio_max is not None:
             query = """
             SELECT 
                 e.id, 
@@ -255,18 +234,14 @@ class ConfiConsultaRepository(BaseRepository):
                 e.Detalles, 
                 e.Precio_Normal, 
                 e.Precio_Emergencia,
-                e.Id_Doctor,
-                CASE 
-                    WHEN e.Id_Doctor IS NOT NULL THEN 
-                        CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                    ELSE NULL 
-                END as nombre_doctor
+                COUNT(DISTINCT te.Id_Trabajador) as medicos_asignados
             FROM Especialidad e
-            LEFT JOIN Doctores d ON e.Id_Doctor = d.id
-            WHERE e.Precio_Normal >= ?
+            LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+            WHERE e.Precio_Normal BETWEEN ? AND ?
+            GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
             ORDER BY e.Precio_Normal
             """
-            return self._execute_query(query, (precio_min,))
+            return self._execute_query(query, (precio_min, precio_max))
         else:
             query = """
             SELECT 
@@ -275,18 +250,14 @@ class ConfiConsultaRepository(BaseRepository):
                 e.Detalles, 
                 e.Precio_Normal, 
                 e.Precio_Emergencia,
-                e.Id_Doctor,
-                CASE 
-                    WHEN e.Id_Doctor IS NOT NULL THEN 
-                        CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                    ELSE NULL 
-                END as nombre_doctor
+                COUNT(DISTINCT te.Id_Trabajador) as medicos_asignados
             FROM Especialidad e
-            LEFT JOIN Doctores d ON e.Id_Doctor = d.id
-            WHERE e.Precio_Normal BETWEEN ? AND ?
+            LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+            WHERE e.Precio_Normal >= ?
+            GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
             ORDER BY e.Precio_Normal
             """
-            return self._execute_query(query, (precio_min, precio_max))
+            return self._execute_query(query, (precio_min,))
     
     # ===============================
     # VALIDACIONES Y UTILIDADES
@@ -310,12 +281,6 @@ class ConfiConsultaRepository(BaseRepository):
         result = self._execute_query(query, tuple(params), fetch_one=True)
         return result['count'] > 0 if result else False
     
-    def doctor_exists(self, id_doctor: int) -> bool:
-        """Verifica si existe un doctor en el sistema"""
-        query = "SELECT COUNT(*) as count FROM Doctores WHERE id = ?"
-        result = self._execute_query(query, (id_doctor,), fetch_one=True)
-        return result['count'] > 0 if result else False
-    
     def validate_especialidad_exists(self, especialidad_id: int) -> bool:
         """Valida que la especialidad existe"""
         return self.exists('id', especialidad_id)
@@ -326,25 +291,35 @@ class ConfiConsultaRepository(BaseRepository):
         result = self._execute_query(query)
         return [row['Nombre'] for row in result]
     
-    def get_doctores_disponibles(self) -> List[Dict[str, Any]]:
-        """Obtiene lista de doctores disponibles para asignar"""
+    def get_medicos_disponibles(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene lista de médicos disponibles para asignar
+        ACTUALIZADO: Usa tabla Trabajadores en lugar de Doctores
+        """
         try:
             query = """
             SELECT 
-                id, 
-                CONCAT(Nombre, ' ', Apellido_Paterno, ' ', Apellido_Materno) as nombre,
-                Especialidad as especialidad,
-                Matricula as matricula,
-                Edad as edad
-            FROM Doctores 
-            ORDER BY Apellido_Paterno, Apellido_Materno, Nombre
+                t.id, 
+                CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno) as nombre,
+                t.Especialidad as especialidad,
+                t.Matricula as matricula,
+                COUNT(DISTINCT te.Id_Especialidad) as especialidades_asignadas
+            FROM Trabajadores t
+            INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+            WHERE tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%'
+            GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
+                     t.Especialidad, t.Matricula
+            ORDER BY t.Apellido_Paterno, t.Apellido_Materno, t.Nombre
             """
             result = self._execute_query(query)
-            print(f"✅ Doctores cargados exitosamente: {len(result)}")
+            print(f"✅ Médicos cargados exitosamente: {len(result)}")
             return result
             
         except Exception as e:
-            print(f"❌ Error cargando doctores: {e}")
+            print(f"❌ Error cargando médicos: {e}")
+            import traceback
+            traceback.print_exc()
             # Devolver lista vacía en caso de error
             return []
     
@@ -354,19 +329,22 @@ class ConfiConsultaRepository(BaseRepository):
     
     @cached_query('stats_especialidades', ttl=600)
     def get_especialidades_statistics(self) -> Dict[str, Any]:
-        """Estadísticas de especialidades"""
+        """
+        Estadísticas de especialidades
+        ACTUALIZADO: Usa Trabajador_Especialidad
+        """
         query = """
         SELECT 
-            COUNT(*) as total_especialidades,
-            COUNT(CASE WHEN Id_Doctor IS NOT NULL THEN 1 END) as con_doctor_asignado,
-            COUNT(CASE WHEN Id_Doctor IS NULL THEN 1 END) as sin_doctor_asignado,
-            AVG(Precio_Normal) as precio_normal_promedio,
-            AVG(Precio_Emergencia) as precio_emergencia_promedio,
-            MIN(Precio_Normal) as precio_normal_minimo,
-            MAX(Precio_Normal) as precio_normal_maximo,
-            MIN(Precio_Emergencia) as precio_emergencia_minimo,
-            MAX(Precio_Emergencia) as precio_emergencia_maximo
-        FROM Especialidad
+            COUNT(DISTINCT e.id) as total_especialidades,
+            COUNT(DISTINCT te.Id_Trabajador) as total_medicos_asignados,
+            AVG(CAST(e.Precio_Normal AS FLOAT)) as precio_normal_promedio,
+            AVG(CAST(e.Precio_Emergencia AS FLOAT)) as precio_emergencia_promedio,
+            MIN(e.Precio_Normal) as precio_normal_minimo,
+            MAX(e.Precio_Normal) as precio_normal_maximo,
+            MIN(e.Precio_Emergencia) as precio_emergencia_minimo,
+            MAX(e.Precio_Emergencia) as precio_emergencia_maximo
+        FROM Especialidad e
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
         """
         
         general_stats = self._execute_query(query, fetch_one=True)
@@ -380,7 +358,10 @@ class ConfiConsultaRepository(BaseRepository):
     # ===============================
     
     def get_especialidades_for_report(self) -> List[Dict[str, Any]]:
-        """Obtiene especialidades formateadas para reportes"""
+        """
+        Obtiene especialidades formateadas para reportes
+        ACTUALIZADO: Usa Trabajador_Especialidad
+        """
         query = """
         SELECT 
             e.id, 
@@ -388,15 +369,15 @@ class ConfiConsultaRepository(BaseRepository):
             e.Detalles, 
             e.Precio_Normal, 
             e.Precio_Emergencia,
-            e.Id_Doctor,
-            CASE 
-                WHEN e.Id_Doctor IS NOT NULL THEN 
-                    CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                ELSE NULL 
-            END as nombre_doctor,
-            d.Especialidad as especialidad_doctor
+            COUNT(DISTINCT te.Id_Trabajador) as medicos_asignados,
+            STRING_AGG(
+                CONCAT(t.Nombre, ' ', t.Apellido_Paterno),
+                ', '
+            ) as nombres_medicos
         FROM Especialidad e
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
+        GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
         ORDER BY e.Nombre
         """
         
@@ -406,26 +387,26 @@ class ConfiConsultaRepository(BaseRepository):
         for especialidad in especialidades:
             if not especialidad.get('Detalles'):
                 especialidad['Detalles'] = 'Sin detalles'
-            if not especialidad.get('nombre_doctor'):
-                especialidad['nombre_doctor'] = 'Sin doctor asignado'
+            if not especialidad.get('nombres_medicos'):
+                especialidad['nombres_medicos'] = 'Sin médicos asignados'
         
         return especialidades
     
     def get_especialidades_summary(self) -> Dict[str, Any]:
-        """Resumen de especialidades"""
+        """
+        Resumen de especialidades
+        ACTUALIZADO: Usa Trabajador_Especialidad
+        """
         query = """
         SELECT 
             e.Nombre, 
             e.Detalles, 
             e.Precio_Normal, 
             e.Precio_Emergencia,
-            CASE 
-                WHEN e.Id_Doctor IS NOT NULL THEN 
-                    CONCAT(d.Nombre, ' ', d.Apellido_Paterno, ' ', d.Apellido_Materno)
-                ELSE NULL 
-            END as nombre_doctor
+            COUNT(DISTINCT te.Id_Trabajador) as medicos_asignados
         FROM Especialidad e
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
         ORDER BY e.Nombre
         """
         
@@ -433,8 +414,8 @@ class ConfiConsultaRepository(BaseRepository):
         
         # Calcular totales generales
         total_especialidades = len(especialidades_data)
-        especialidades_con_doctor = len([item for item in especialidades_data if item.get('nombre_doctor')])
-        especialidades_sin_doctor = total_especialidades - especialidades_con_doctor
+        especialidades_con_medicos = len([item for item in especialidades_data if item.get('medicos_asignados', 0) > 0])
+        especialidades_sin_medicos = total_especialidades - especialidades_con_medicos
         
         # Calcular promedios de precios
         precio_normal_promedio = sum(item['Precio_Normal'] for item in especialidades_data) / total_especialidades if total_especialidades > 0 else 0
@@ -444,8 +425,8 @@ class ConfiConsultaRepository(BaseRepository):
             'especialidades': especialidades_data,
             'resumen': {
                 'total_especialidades': total_especialidades,
-                'especialidades_con_doctor': especialidades_con_doctor,
-                'especialidades_sin_doctor': especialidades_sin_doctor,
+                'especialidades_con_medicos': especialidades_con_medicos,
+                'especialidades_sin_medicos': especialidades_sin_medicos,
                 'precio_normal_promedio': precio_normal_promedio,
                 'precio_emergencia_promedio': precio_emergencia_promedio
             }
@@ -468,6 +449,6 @@ class ConfiConsultaRepository(BaseRepository):
 
     def count_consultas_asociadas(self, especialidad_id: int) -> int:
         """Cuenta consultas asociadas a una especialidad específica"""
-        query = "SELECT COUNT(*) as count FROM Consultas WHERE ID_Especialidad = ?"
+        query = "SELECT COUNT(*) as count FROM Consultas WHERE Id_Especialidad = ?"
         result = self._execute_query(query, (especialidad_id,), fetch_one=True)
         return result['count'] if result else 0

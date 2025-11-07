@@ -268,6 +268,6 @@ class ConfiTrabajadoresRepository(BaseRepository):
 
     def count_trabajadores_asociados(self, tipo_id: int) -> int:
         """Cuenta trabajadores asociados a un tipo específico"""
-        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE ID_Tipo = ?"
+        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Id_Tipo_Trabajador = ?"  
         result = self._execute_query(query, (tipo_id,), fetch_one=True)
         return result['count'] if result else 0

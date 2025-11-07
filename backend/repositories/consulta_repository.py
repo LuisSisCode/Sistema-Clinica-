@@ -305,33 +305,56 @@ class ConsultaRepository(BaseRepository):
         return result
     
     def get_consultation_by_id_complete(self, consulta_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene consulta específica con información completa - CORREGIDO"""
+        """Obtiene consulta específica con información completa - ACTUALIZADO para Trabajadores"""
         query = """
-        SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
+        SELECT 
+            c.id, c.Fecha, 
+            CAST(c.Detalles AS VARCHAR(MAX)) as Detalles,
+            c.Tipo_Consulta as tipo_consulta,
+            
             -- Paciente (CON CÉDULA)
             p.id as paciente_id,
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
-            p.Nombre as paciente_nombre, p.Apellido_Paterno as paciente_apellido_p,
+            p.Nombre as paciente_nombre, 
+            p.Apellido_Paterno as paciente_apellido_p,
             p.Apellido_Materno as paciente_apellido_m,
             p.Cedula as paciente_cedula,
+            
             -- Especialidad/Servicio
-            e.id as especialidad_id, e.Nombre as especialidad_nombre, 
+            e.id as especialidad_id, 
+            e.Nombre as especialidad_nombre, 
             e.Detalles as especialidad_detalles,
-            e.Precio_Normal, e.Precio_Emergencia,
-            -- Doctor
-            d.id as doctor_id,
-            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
-            d.Especialidad as doctor_especialidad, d.Matricula as doctor_matricula,
+            e.Precio_Normal, 
+            e.Precio_Emergencia,
+            
+            -- Médicos asignados a esta especialidad (pueden ser varios)
+            STRING_AGG(
+                CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno, ' ', ISNULL(t.Apellido_Materno, '')),
+                ', '
+            ) as medicos_asignados,
+            STRING_AGG(CAST(t.id AS VARCHAR), ',') as medicos_ids,
+            STRING_AGG(t.Especialidad, ', ') as medicos_especialidades,
+            STRING_AGG(t.Matricula, ', ') as medicos_matriculas,
+            
             -- Usuario que registró
             u.id as usuario_id,
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
             u.nombre_usuario as usuario_username
+            
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE c.id = ?
+        GROUP BY 
+            c.id, c.Fecha, 
+            CAST(c.Detalles AS VARCHAR(MAX)),
+            c.Tipo_Consulta,
+            p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Cedula,
+            e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia,
+            u.id, u.Nombre, u.Apellido_Paterno, u.nombre_usuario
         """
         return self._execute_query(query, (consulta_id,), fetch_one=True)
     
@@ -349,31 +372,47 @@ class ConsultaRepository(BaseRepository):
     def get_consultations_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Obtiene consultas en rango de fechas - CORREGIDO CON PRECIOS"""
         query = """
-        SELECT 
-            c.id,
-            c.Fecha,
-            c.Detalles,
-            c.Tipo_Consulta,
-            c.Id_Paciente,
-            c.Id_Especialidad,
-            c.Id_Usuario,
-            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_nombre,
-            p.Cedula as paciente_cedula,
-            e.Nombre as especialidad_nombre,
-            ISNULL(e.Precio_Normal, 0) as Precio_Normal,         -- ✅ AGREGADO
-            ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia, -- ✅ AGREGADO
-            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor_nombre,
-            CASE 
-                WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
-                ELSE ISNULL(e.Precio_Normal, 0)
-            END as precio                                         -- ✅ AGREGADO
-        FROM Consultas c
-        INNER JOIN Pacientes p ON c.Id_Paciente = p.id
-        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
-        WHERE c.Fecha BETWEEN ? AND ?
-        ORDER BY c.Fecha DESC
-        """
+            SELECT 
+                c.id,
+                c.Fecha,
+                CAST(c.Detalles AS VARCHAR(MAX)) as Detalles,
+                c.Tipo_Consulta,
+                c.Id_Especialidad,
+                
+                -- Información del paciente
+                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_nombre,
+                p.Cedula as paciente_cedula,
+                
+                -- Información de la especialidad
+                e.Nombre as especialidad_nombre,
+                e.Precio_Normal,
+                e.Precio_Emergencia,
+                
+                -- Médicos asignados
+                STRING_AGG(
+                    CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno),
+                    ', '
+                ) as medicos_asignados,
+                
+                -- Usuario que registró
+                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
+                
+            FROM Consultas c
+            INNER JOIN Pacientes p ON c.Id_Paciente = p.id
+            LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
+            LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+            LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
+            INNER JOIN Usuario u ON c.Id_Usuario = u.id
+            WHERE c.Fecha BETWEEN ? AND ?
+            GROUP BY 
+                c.id, c.Fecha, 
+                CAST(c.Detalles AS VARCHAR(MAX)),
+                c.Tipo_Consulta, c.Id_Especialidad,
+                p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Cedula,
+                e.Nombre, e.Precio_Normal, e.Precio_Emergencia,
+                u.Nombre, u.Apellido_Paterno
+            ORDER BY c.Fecha DESC
+            """
         return self._execute_query(query, (start_date, end_date))
     
     @cached_query('consultas_hoy', ttl=60)
@@ -385,27 +424,48 @@ class ConsultaRepository(BaseRepository):
     def get_recent_consultations(self, days: int = 7) -> List[Dict[str, Any]]:
         """Obtiene consultas recientes - TOTALMENTE CORREGIDO"""
         query = """
-        SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
-            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
-            p.Cedula as paciente_cedula,
-            e.Nombre as especialidad_nombre,
-            e.Precio_Normal, e.Precio_Emergencia,
-            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
-            -- Campo combinado para la interfaz
-            CONCAT(e.Nombre, ' - Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as especialidad_doctor,
-            -- Precio según tipo
-            CASE 
-                WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia 
-                ELSE e.Precio_Normal 
-            END as precio
-        FROM Consultas c
-        LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
-        LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
-        WHERE c.Fecha >= DATEADD(day, -?, GETDATE())
-            AND c.id IS NOT NULL
-        ORDER BY c.Fecha DESC
-        """
+            SELECT 
+                c.id, c.Fecha, 
+                CAST(c.Detalles AS VARCHAR(MAX)) as Detalles,  -- ← Convertir TEXT a VARCHAR
+                c.Tipo_Consulta,
+                c.Id_Paciente, c.Id_Especialidad, c.Id_Usuario,
+                
+                -- Información del paciente
+                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_nombre_completo,
+                p.Cedula as paciente_cedula,
+                
+                -- Información de la especialidad
+                ISNULL(e.Nombre, 'Sin especialidad') as especialidad_nombre,
+                e.Precio_Normal as especialidad_precio_normal,
+                e.Precio_Emergencia as especialidad_precio_emergencia,
+                
+                -- Información del médico (a través de Trabajador_Especialidad)
+                STRING_AGG(
+                    CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno), 
+                    ', '
+                ) as medicos_asignados,
+                
+                -- Información del usuario que registró
+                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_nombre
+                
+            FROM Consultas c
+            INNER JOIN Pacientes p ON c.Id_Paciente = p.id
+            LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
+            LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+            LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
+            INNER JOIN Usuario u ON c.Id_Usuario = u.id
+            WHERE c.Fecha >= DATEADD(day, -?, GETDATE())
+            GROUP BY 
+                c.id, c.Fecha, 
+                CAST(c.Detalles AS VARCHAR(MAX)),
+                c.Tipo_Consulta,
+                c.Id_Paciente, c.Id_Especialidad, c.Id_Usuario,
+                p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Cedula,
+                e.Nombre, e.Precio_Normal, e.Precio_Emergencia,
+                u.Nombre, u.Apellido_Paterno
+            ORDER BY c.Fecha DESC
+            OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY
+            """
         return self._execute_query(query, (days,))
     
     def get_consultations_this_month(self) -> List[Dict[str, Any]]:
@@ -437,7 +497,7 @@ class ConsultaRepository(BaseRepository):
         """
         return self._execute_query(query, (paciente_id, limit))
     
-    def get_consultations_by_doctor(self, doctor_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_consultations_by_doctor(self, medico_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """Obtiene consultas atendidas por un doctor - CORREGIDO"""
         query = """
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
@@ -453,7 +513,7 @@ class ConsultaRepository(BaseRepository):
         ORDER BY c.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
-        return self._execute_query(query, (doctor_id, limit))
+        return self._execute_query(query, (medico_id, limit))
     
     def get_consultations_by_specialty(self, especialidad_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """Obtiene consultas por especialidad específica - CORREGIDO"""
@@ -883,7 +943,7 @@ class ConsultaRepository(BaseRepository):
         """Obtiene número total de consultas de un paciente"""
         return self.count("Id_Paciente = ?", (paciente_id,))
     
-    def get_doctor_consultation_count(self, doctor_id: int) -> int:
+    def get_doctor_consultation_count(self, medico_id: int) -> int:
         """Obtiene número total de consultas atendidas por un doctor"""
         query = """
         SELECT COUNT(c.id) as count
@@ -891,7 +951,7 @@ class ConsultaRepository(BaseRepository):
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         WHERE e.Id_Doctor = ?
         """
-        result = self._execute_query(query, (doctor_id,), fetch_one=True)
+        result = self._execute_query(query, (medico_id,), fetch_one=True)
         return result['count'] if result else 0
     
     def validate_consultation_exists(self, consulta_id: int) -> bool:
@@ -1042,7 +1102,7 @@ class ConsultaRepository(BaseRepository):
     # ===============================
     
     def get_consultations_for_report(self, start_date: datetime = None, end_date: datetime = None,
-                               doctor_id: int = None, specialty_id: int = None) -> List[Dict[str, Any]]:
+                               medico_id: int = None, specialty_id: int = None) -> List[Dict[str, Any]]:
         """Obtiene consultas formateadas para reportes - CORREGIDO"""
         base_query = """
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
@@ -1071,9 +1131,9 @@ class ConsultaRepository(BaseRepository):
             conditions.append("c.Fecha BETWEEN ? AND ?")
             params.extend([start_date, end_date])
         
-        if doctor_id:
+        if medico_id:
             conditions.append("d.id = ?")
-            params.append(doctor_id)
+            params.append(medico_id)
         
         if specialty_id:
             conditions.append("e.id = ?")
@@ -1423,6 +1483,32 @@ class ConsultaRepository(BaseRepository):
             limite, patron_exacto, patron_palabra, patron_palabra,
             patron_palabra, patron_palabra, patron_palabra, patron_exacto
         ))
+    
+    # ===============================
+    # MÉTODOS PARA ESPECIALIDADES
+    # ===============================
+    
+    @cached_query('consulta_especialidades', ttl=600)
+    def get_especialidades(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene especialidades disponibles para consultas
+        NUEVO: Reemplaza funcionalidad que estaba en DoctorRepository
+        """
+        query = """
+        SELECT 
+            e.id,
+            e.Nombre,
+            e.Detalles,
+            e.Precio_Normal,
+            e.Precio_Emergencia,
+            COUNT(DISTINCT te.Id_Trabajador) as medicos_disponibles
+        FROM Especialidad e
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
+        HAVING COUNT(DISTINCT te.Id_Trabajador) > 0
+        ORDER BY e.Nombre
+        """
+        return self._execute_query(query)
     
     # ===============================
     # CACHÉ

@@ -693,17 +693,20 @@ class LaboratorioRepository(BaseRepository):
     # ===============================
     
     def get_available_lab_workers(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores disponibles para laboratorio"""
+        """
+        Obtiene trabajadores disponibles para laboratorio
+        CORREGIDO: Busca 'Laboratorista' en lugar de 'Laboratorio'
+        """
         query = """
         SELECT t.id, 
-               t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-               CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno) as nombre_completo,
-               tt.Tipo as tipo_trabajador,
-               COUNT(l.id) as examenes_asignados
+            t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+            CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno) as nombre_completo,
+            tt.Tipo as tipo_trabajador,
+            COUNT(l.id) as examenes_asignados
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         LEFT JOIN Laboratorio l ON t.id = l.Id_Trabajador
-        WHERE tt.Tipo LIKE '%Laboratorio%' OR tt.Tipo LIKE '%Técnico%' OR tt.Tipo LIKE '%Lab%'
+        WHERE tt.Tipo LIKE '%Labor%' OR tt.Tipo LIKE '%Técnico%'
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, tt.Tipo
         ORDER BY examenes_asignados, t.Nombre
         """

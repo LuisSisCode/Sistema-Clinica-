@@ -1,5 +1,5 @@
 """
-DoctorModel - ACTUALIZADO con autenticación estandarizada
+MedicoModel - ACTUALIZADO con autenticación estandarizada
 Migrado del patrón sin autenticación al patrón de ConsultaModel
 """
 
@@ -8,7 +8,7 @@ from PySide6.QtQml import qmlRegisterType
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from ..repositories.doctor_repository import DoctorRepository
+from ..repositories.medico_repository import MedicoRepository
 from ..repositories.consulta_repository import ConsultaRepository
 from ..core.excepciones import (
     ValidationError, ExceptionHandler, safe_execute
@@ -20,7 +20,7 @@ from ..core.utils import (
 )
 from ..core.Signals_manager import get_global_signals
 
-class DoctorModel(QObject):
+class MedicoModel(QObject):
     """
     Model QObject para gestión de doctores y especialidades - ACTUALIZADO con autenticación
     Conecta directamente con QML mediante Signals/Slots/Properties
@@ -39,8 +39,8 @@ class DoctorModel(QObject):
     serviciosDoctorChanged = Signal()
     
     # Signals de operaciones
-    doctorCreado = Signal(int, str)        # doctor_id, nombre_completo
-    doctorActualizado = Signal(int)        # doctor_id
+    doctorCreado = Signal(int, str)        # medico_id, nombre_completo
+    doctorActualizado = Signal(int)        # medico_id
     servicioCreado = Signal(int, str)      # servicio_id, nombre
     servicioActualizado = Signal(int)      # servicio_id
     operacionExitosa = Signal(str)         # mensaje
@@ -56,7 +56,7 @@ class DoctorModel(QObject):
         super().__init__()
         
         # Repositories
-        self.doctor_repo = DoctorRepository()
+        self.medico_repo = MedicoRepository()
         self.consulta_repo = ConsultaRepository()
         self.global_signals = get_global_signals()
         self._conectar_senales_globales()
@@ -77,7 +77,7 @@ class DoctorModel(QObject):
         
         # ✅ AUTENTICACIÓN ESTANDARIZADA - COMO CONSULTAMODEL
         self._usuario_actual_id = 0  # Cambio de hardcoded a dinámico
-        print("👨‍⚕️ DoctorModel inicializado - Esperando autenticación")
+        print("👨‍⚕️ MedicoModel inicializado - Esperando autenticación")
         
         # Configuración
         self._filtros_activos = {}
@@ -91,7 +91,7 @@ class DoctorModel(QObject):
         # Cargar datos iniciales
         self._cargar_datos_iniciales()
         
-        print("👨‍⚕️ DoctorModel inicializado con autenticación estandarizada")
+        print("👨‍⚕️ MedicoModel inicializado con autenticación estandarizada")
     
     # ===============================
     # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
@@ -102,9 +102,9 @@ class DoctorModel(QObject):
         try:
             self.global_signals.especialidadesModificadas.connect(self._actualizar_especialidades_desde_signal)
             self.global_signals.doctoresNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            #print("🔗 Señales globales conectadas en DoctorModel")
+            #print("🔗 Señales globales conectadas en MedicoModel")
         except Exception as e:
-            print(f"❌ Error conectando señales globales en DoctorModel: {e}")
+            print(f"❌ Error conectando señales globales en MedicoModel: {e}")
     
     @Slot(int)
     def set_usuario_actual(self, usuario_id: int):
@@ -114,13 +114,13 @@ class DoctorModel(QObject):
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
-                print(f"👤 Usuario autenticado establecido en DoctorModel: {usuario_id}")
+                print(f"👤 Usuario autenticado establecido en MedicoModel: {usuario_id}")
                 self.operacionExitosa.emit(f"Usuario {usuario_id} establecido en módulo de doctores")
             else:
-                print(f"⚠️ ID de usuario inválido en DoctorModel: {usuario_id}")
+                print(f"⚠️ ID de usuario inválido en MedicoModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
         except Exception as e:
-            print(f"❌ Error estableciendo usuario en DoctorModel: {e}")
+            print(f"❌ Error estableciendo usuario en MedicoModel: {e}")
             self.operacionError.emit(f"Error estableciendo usuario: {str(e)}")
     
     @Property(int, notify=operacionExitosa)
@@ -219,13 +219,13 @@ class DoctorModel(QObject):
     # ===============================
     
     @Slot(int)
-    def set_doctor_seleccionado(self, doctor_id: int):
+    def set_doctor_seleccionado(self, medico_id: int):
         """Establece el doctor seleccionado - SIN VERIFICACIÓN (solo lectura)"""
-        if doctor_id > 0:
-            self._doctor_seleccionado_id = doctor_id
-            self._cargar_doctor_detalle(doctor_id)
-            self._cargar_servicios_doctor(doctor_id)
-            print(f"👨‍⚕️ Doctor seleccionado: {doctor_id}")
+        if medico_id > 0:
+            self._doctor_seleccionado_id = medico_id
+            self._cargar_doctor_detalle(medico_id)
+            self._cargar_servicios_doctor(medico_id)
+            print(f"👨‍⚕️ Doctor seleccionado: {medico_id}")
     
     @Slot()
     def refresh_doctores(self):
@@ -303,15 +303,15 @@ class DoctorModel(QObject):
                 raise ValidationError("edad", edad, "Edad debe estar entre 25 y 75 años")
             
             # Verificar que la matrícula no exista
-            if safe_execute(self.doctor_repo.matricula_exists, matricula):
+            if safe_execute(self.medico_repo.matricula_exists, matricula):
                 raise ValidationError("matricula", matricula, "Matrícula ya existe")
             
             # ✅ USAR usuario_actual_id EN LUGAR DE HARDCODED
             print(f"👨‍⚕️ Creando doctor - Usuario: {self._usuario_actual_id}")
             
             # Crear doctor
-            doctor_id = safe_execute(
-                self.doctor_repo.create_doctor,
+            medico_id = safe_execute(
+                self.medico_repo.create_doctor,
                 nombre=nombre,
                 apellido_paterno=apellido_paterno,
                 apellido_materno=apellido_materno,
@@ -320,15 +320,15 @@ class DoctorModel(QObject):
                 edad=edad
             )
             
-            if doctor_id:
+            if medico_id:
                 # Crear servicios iniciales si se proporcionan
                 servicios_creados = 0
                 if datos_doctor.get('servicios_iniciales'):
                     for servicio in datos_doctor['servicios_iniciales']:
                         try:
                             servicio_id = safe_execute(
-                                self.doctor_repo.create_specialty_service,
-                                doctor_id=doctor_id,
+                                self.medico_repo.create_specialty_service,
+                                medico_id=medico_id,
                                 nombre=servicio['nombre'],
                                 detalles=servicio.get('detalles', ''),
                                 precio_normal=safe_float(servicio['precio_normal']),
@@ -346,14 +346,14 @@ class DoctorModel(QObject):
                 
                 nombre_completo = formatear_nombre_completo(nombre, apellido_paterno, apellido_materno)
                 
-                self.doctorCreado.emit(doctor_id, nombre_completo)
+                self.doctorCreado.emit(medico_id, nombre_completo)
                 mensaje = f"Doctor creado: {nombre_completo}"
                 if servicios_creados > 0:
                     mensaje += f" ({servicios_creados} servicios)"
                 self.operacionExitosa.emit(mensaje)
                 
-                print(f"✅ Doctor creado - ID: {doctor_id}, Servicios: {servicios_creados}, Usuario: {self._usuario_actual_id}")
-                return doctor_id
+                print(f"✅ Doctor creado - ID: {medico_id}, Servicios: {servicios_creados}, Usuario: {self._usuario_actual_id}")
+                return medico_id
             else:
                 raise ValidationError("doctor", None, "Error creando doctor")
                 
@@ -364,20 +364,20 @@ class DoctorModel(QObject):
             self._set_procesando_doctor(False)
     
     @Slot(int, 'QVariant', result=bool)
-    def actualizar_doctor(self, doctor_id: int, nuevos_datos):
+    def actualizar_doctor(self, medico_id: int, nuevos_datos):
         """Actualiza doctor existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         # ✅ VERIFICAR AUTENTICACIÓN
         if not self._verificar_autenticacion():
             return False
         
-        if doctor_id <= 0 or not nuevos_datos:
+        if medico_id <= 0 or not nuevos_datos:
             self.operacionError.emit("ID de doctor y datos requeridos")
             return False
         
         self._set_procesando_doctor(True)
         
         try:
-            print(f"📝 Actualizando doctor ID: {doctor_id} por usuario: {self._usuario_actual_id}")
+            print(f"📝 Actualizando doctor ID: {medico_id} por usuario: {self._usuario_actual_id}")
             
             # Preparar datos para actualización
             datos_actualizacion = {}
@@ -397,8 +397,8 @@ class DoctorModel(QObject):
             if 'matricula' in nuevos_datos:
                 nueva_matricula = safe_str(nuevos_datos['matricula']).strip().upper()
                 # Verificar que no exista (excepto para este doctor)
-                if safe_execute(self.doctor_repo.matricula_exists, nueva_matricula):
-                    doctor_actual = safe_execute(self.doctor_repo.get_by_id, doctor_id)
+                if safe_execute(self.medico_repo.matricula_exists, nueva_matricula):
+                    doctor_actual = safe_execute(self.medico_repo.get_by_id, medico_id)
                     if not doctor_actual or doctor_actual.get('Matricula', '').upper() != nueva_matricula:
                         raise ValidationError("matricula", nueva_matricula, "Matrícula ya existe")
                 datos_actualizacion['matricula'] = nueva_matricula
@@ -411,17 +411,17 @@ class DoctorModel(QObject):
             
             # Actualizar doctor
             success = safe_execute(
-                self.doctor_repo.update_doctor,
-                doctor_id, **datos_actualizacion
+                self.medico_repo.update_doctor,
+                medico_id, **datos_actualizacion
             )
             
             if success:
                 # Actualizar datos
                 self._cargar_doctores()
-                if self._doctor_seleccionado_id == doctor_id:
-                    self._cargar_doctor_detalle(doctor_id)
+                if self._doctor_seleccionado_id == medico_id:
+                    self._cargar_doctor_detalle(medico_id)
                 
-                self.doctorActualizado.emit(doctor_id)
+                self.doctorActualizado.emit(medico_id)
                 self.operacionExitosa.emit("Doctor actualizado correctamente")
                 
                 return True
@@ -435,25 +435,25 @@ class DoctorModel(QObject):
             self._set_procesando_doctor(False)
     
     @Slot(int, result=bool)
-    def eliminar_doctor(self, doctor_id: int):
+    def eliminar_doctor(self, medico_id: int):
         """Elimina doctor (soft delete) - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
         # ✅ VERIFICAR AUTENTICACIÓN
         if not self._verificar_autenticacion():
             return False
         
-        if doctor_id <= 0:
+        if medico_id <= 0:
             self.operacionError.emit("ID de doctor requerido")
             return False
         
         self._set_procesando_doctor(True)
         
         try:
-            print(f"🗑️ Eliminando doctor ID: {doctor_id} por usuario: {self._usuario_actual_id}")
+            print(f"🗑️ Eliminando doctor ID: {medico_id} por usuario: {self._usuario_actual_id}")
             
             # Verificar si tiene consultas recientes
             consultas = safe_execute(
                 self.consulta_repo.get_consultations_by_doctor,
-                doctor_id, limit=1
+                medico_id, limit=1
             )
             
             if consultas:
@@ -461,11 +461,11 @@ class DoctorModel(QObject):
                 return False
             
             # Eliminar doctor
-            success = safe_execute(self.doctor_repo.delete_doctor, doctor_id)
+            success = safe_execute(self.medico_repo.delete_doctor, medico_id)
             
             if success:
                 self._cargar_doctores()
-                if self._doctor_seleccionado_id == doctor_id:
+                if self._doctor_seleccionado_id == medico_id:
                     self._doctor_actual = {}
                     self._servicios_doctor = []
                     self.doctorActualChanged.emit()
@@ -487,7 +487,7 @@ class DoctorModel(QObject):
     # ===============================
     
     @Slot(int, 'QVariant', result=int)
-    def crear_servicio(self, doctor_id: int, datos_servicio):
+    def crear_servicio(self, medico_id: int, datos_servicio):
         """
         Crea nuevo servicio para un doctor - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN
         datos_servicio: {
@@ -501,14 +501,14 @@ class DoctorModel(QObject):
         if not self._verificar_autenticacion():
             return 0
         
-        if doctor_id <= 0 or not datos_servicio:
+        if medico_id <= 0 or not datos_servicio:
             self.operacionError.emit("Doctor y datos de servicio requeridos")
             return 0
         
         self._set_procesando_doctor(True)
         
         try:
-            print(f"🔬 Creando servicio para doctor: {doctor_id} por usuario: {self._usuario_actual_id}")
+            print(f"🔬 Creando servicio para doctor: {medico_id} por usuario: {self._usuario_actual_id}")
             
             # Validaciones
             nombre = limpiar_texto(datos_servicio.get('nombre', ''))
@@ -530,14 +530,14 @@ class DoctorModel(QObject):
                                     "Precio emergencia debe ser mayor al precio normal")
             
             # Verificar límite de servicios por doctor
-            doctor = safe_execute(self.doctor_repo.get_doctor_with_services, doctor_id)
+            doctor = safe_execute(self.medico_repo.get_doctor_with_services, medico_id)
             if doctor and len(doctor.get('servicios', [])) >= 10:
                 raise ValidationError("servicios", None, "Doctor ya tiene el máximo de servicios (10)")
             
             # Crear servicio
             servicio_id = safe_execute(
-                self.doctor_repo.create_specialty_service,
-                doctor_id=doctor_id,
+                self.medico_repo.create_specialty_service,
+                medico_id=medico_id,
                 nombre=nombre,
                 detalles=detalles,
                 precio_normal=precio_normal,
@@ -547,13 +547,13 @@ class DoctorModel(QObject):
             if servicio_id:
                 # Actualizar datos
                 self._cargar_especialidades()
-                if self._doctor_seleccionado_id == doctor_id:
-                    self._cargar_servicios_doctor(doctor_id)
+                if self._doctor_seleccionado_id == medico_id:
+                    self._cargar_servicios_doctor(medico_id)
                 
                 self.servicioCreado.emit(servicio_id, nombre)
                 self.operacionExitosa.emit(f"Servicio creado: {nombre}")
                 
-                print(f"✅ Servicio creado - ID: {servicio_id}, Doctor: {doctor_id}")
+                print(f"✅ Servicio creado - ID: {servicio_id}, Doctor: {medico_id}")
                 return servicio_id
             else:
                 raise ValidationError("servicio", None, "Error creando servicio")
@@ -612,7 +612,7 @@ class DoctorModel(QObject):
             
             # Actualizar servicio
             success = safe_execute(
-                self.doctor_repo.update_specialty_service,
+                self.medico_repo.update_specialty_service,
                 servicio_id, **datos_actualizacion
             )
             
@@ -649,7 +649,7 @@ class DoctorModel(QObject):
         
         try:
             resultados = safe_execute(
-                self.doctor_repo.search_doctors,
+                self.medico_repo.search_doctors,
                 termino.strip(), 50
             )
             
@@ -700,11 +700,11 @@ class DoctorModel(QObject):
             # Búsqueda base
             if criterios.get('texto'):
                 resultados = safe_execute(
-                    self.doctor_repo.search_doctors,
+                    self.medico_repo.search_doctors,
                     criterios['texto'], 100
                 )
             else:
-                resultados = safe_execute(self.doctor_repo.get_all_with_specialties)
+                resultados = safe_execute(self.medico_repo.get_all_with_specialties)
             
             if not resultados:
                 resultados = []
@@ -760,9 +760,9 @@ class DoctorModel(QObject):
     # ===============================
     
     @Slot(int, str, str, result='QVariant')
-    def generar_reporte_doctor(self, doctor_id: int, fecha_inicio: str, fecha_fin: str):
+    def generar_reporte_doctor(self, medico_id: int, fecha_inicio: str, fecha_fin: str):
         """Genera reporte detallado de un doctor - SIN VERIFICACIÓN (solo lectura)"""
-        if doctor_id <= 0:
+        if medico_id <= 0:
             self.operacionError.emit("Doctor no seleccionado")
             return {}
         
@@ -771,8 +771,8 @@ class DoctorModel(QObject):
         try:
             # Obtener información del doctor
             doctor = safe_execute(
-                self.doctor_repo.get_doctor_with_consultation_history,
-                doctor_id
+                self.medico_repo.get_doctor_with_consultation_history,
+                medico_id
             )
             
             if not doctor:
@@ -850,7 +850,7 @@ class DoctorModel(QObject):
             return False
         
         try:
-            existe = safe_execute(self.doctor_repo.matricula_exists, matricula.strip().upper())
+            existe = safe_execute(self.medico_repo.matricula_exists, matricula.strip().upper())
             return not existe
         except Exception:
             return False
@@ -859,7 +859,7 @@ class DoctorModel(QObject):
     def get_especialidades_disponibles(self):
         """Obtiene lista de especialidades para ComboBox - SIN VERIFICACIÓN (solo lectura)"""
         try:
-            especialidades = safe_execute(self.doctor_repo.get_available_specialties)
+            especialidades = safe_execute(self.medico_repo.get_available_specialties)
             return especialidades or []
         except Exception as e:
             self.operacionError.emit(f"Error obteniendo especialidades: {str(e)}")
@@ -898,7 +898,7 @@ class DoctorModel(QObject):
     def _cargar_doctores(self):
         """Carga lista de doctores"""
         try:
-            doctores = safe_execute(self.doctor_repo.get_all_with_specialties)
+            doctores = safe_execute(self.medico_repo.get_all_with_specialties)
             
             doctores_formateados = []
             for doctor in doctores or []:
@@ -923,8 +923,8 @@ class DoctorModel(QObject):
     def _cargar_estadisticas_generales(self):
         """Carga estadísticas generales"""
         try:
-            stats = safe_execute(self.doctor_repo.get_doctor_statistics)
-            doctores_activos = safe_execute(self.doctor_repo.get_most_active_doctors, 10)
+            stats = safe_execute(self.medico_repo.get_doctor_statistics)
+            doctores_activos = safe_execute(self.medico_repo.get_most_active_doctors, 10)
             
             self._estadisticas_generales = {
                 'resumen_general': stats.get('general', {}) if stats else {},
@@ -957,7 +957,7 @@ class DoctorModel(QObject):
     def _cargar_especialidades(self):
         """Carga todas las especialidades/servicios"""
         try:
-            especialidades = safe_execute(self.doctor_repo.get_all_specialty_services)
+            especialidades = safe_execute(self.medico_repo.get_all_specialty_services)
             
             especialidades_formateadas = []
             for esp in especialidades or []:
@@ -979,12 +979,12 @@ class DoctorModel(QObject):
         except Exception as e:
             print(f"⚠️ Error cargando especialidades: {e}")
     
-    def _cargar_doctor_detalle(self, doctor_id: int):
+    def _cargar_doctor_detalle(self, medico_id: int):
         """Carga detalle completo de un doctor"""
         try:
             doctor = safe_execute(
-                self.doctor_repo.get_doctor_with_consultation_history,
-                doctor_id
+                self.medico_repo.get_doctor_with_consultation_history,
+                medico_id
             )
             
             if doctor:
@@ -1005,10 +1005,10 @@ class DoctorModel(QObject):
             self._doctor_actual = {}
             self.doctorActualChanged.emit()
     
-    def _cargar_servicios_doctor(self, doctor_id: int):
+    def _cargar_servicios_doctor(self, medico_id: int):
         """Carga servicios de un doctor específico"""
         try:
-            doctor = safe_execute(self.doctor_repo.get_doctor_with_services, doctor_id)
+            doctor = safe_execute(self.medico_repo.get_doctor_with_services, medico_id)
             
             if doctor and doctor.get('servicios'):
                 servicios_formateados = []
@@ -1071,9 +1071,9 @@ class DoctorModel(QObject):
     def _actualizar_especialidades_desde_signal(self):
         """Actualiza especialidades cuando recibe señal global"""
         try:
-            print("📡 DoctorModel: Recibida señal de actualización de especialidades")
+            print("📡 MedicoModel: Recibida señal de actualización de especialidades")
             self._cargar_especialidades()
-            print("✅ Especialidades actualizadas desde señal global en DoctorModel")
+            print("✅ Especialidades actualizadas desde señal global en MedicoModel")
         except Exception as e:
             print(f"❌ Error actualizando especialidades desde señal: {e}")
 
@@ -1081,15 +1081,15 @@ class DoctorModel(QObject):
     def _manejar_actualizacion_global(self, mensaje: str):
         """Maneja actualizaciones globales de doctores"""
         try:
-            print(f"📡 DoctorModel: {mensaje}")
+            print(f"📡 MedicoModel: {mensaje}")
             self.especialidadesChanged.emit()
         except Exception as e:
             print(f"❌ Error manejando actualización global: {e}")
 
     def emergency_disconnect(self):
-        """Desconexión de emergencia para DoctorModel"""
+        """Desconexión de emergencia para MedicoModel"""
         try:
-            print("🚨 DoctorModel: Iniciando desconexión de emergencia...")
+            print("🚨 MedicoModel: Iniciando desconexión de emergencia...")
             
             # Detener timer
             if hasattr(self, 'update_timer') and self.update_timer.isActive():
@@ -1137,19 +1137,19 @@ class DoctorModel(QObject):
             self._doctor_seleccionado_id = 0
             self._usuario_actual_id = 0  # ✅ RESETEAR USUARIO
             
-            self.doctor_repo = None
+            self.medico_repo = None
             self.consulta_repo = None
             
-            print("✅ DoctorModel: Desconexión de emergencia completada")
+            print("✅ MedicoModel: Desconexión de emergencia completada")
             
         except Exception as e:
-            print(f"❌ Error en desconexión DoctorModel: {e}")
+            print(f"❌ Error en desconexión MedicoModel: {e}")
 
 # ===============================
 # REGISTRO PARA QML
 # ===============================
 
-def register_doctor_model():
+def register_medico_model():
     """Registra el modelo para uso en QML"""
-    qmlRegisterType(DoctorModel, "ClinicaModels", 1, 0, "DoctorModel")
-    print("✅ DoctorModel registrado para QML con autenticación estandarizada")
+    qmlRegisterType(MedicoModel, "ClinicaModels", 1, 0, "MedicoModel")
+    print("✅ MedicoModel registrado para QML con autenticación estandarizada")

@@ -13,7 +13,7 @@ from .auth_model import AuthModel, register_auth_model                          
 from .compra_model import CompraModel, register_compra_model                        # 2
 from .consulta_model import ConsultaModel, register_consulta_model                  # 3
 from .dashboard_model import *                                                      # 4
-from .doctor_model import DoctorModel, register_doctor_model                        # 5
+from .medico_model import MedicoModel, register_medico_model                        # 5
 from .gasto_model import GastoModel, register_gasto_model                                                         # 6
 from .inventario_model import InventarioModel, register_inventario_model            # 7
 from .laboratorio_model import LaboratorioModel, register_laboratorio_model         # 8
@@ -31,7 +31,7 @@ __all__ = [
     'CompraModel', 'register_compra_model',
     'ConsultaModel', 'register_consulta_model',
     '', '',
-    'DoctorModel', 'register_doctor_model',
+    'MedicoModel', 'register_medico_model',
     'GastoModel', 'register_gasto_model',
     'InventarioModel', 'register_inventario_model',
     'LaboratorioModel', 'register_laboratorio_model',

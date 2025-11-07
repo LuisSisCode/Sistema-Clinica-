@@ -110,100 +110,98 @@ class DatabaseInstaller:
             else:
                 return False, f"❌ Error conectando a SQL Server: {error_msg[:200]}"
                 
-        except Exception as e:
             return False, f"❌ Error inesperado verificando SQL Server: {e}"
-    def verificar_base_datos_existe(self) -> Tuple[bool, str]:
+    
+    def verificar_base_datos_existe(self, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        Verifica si la base de datos existe y es accesible
-        ✅ NUEVO MÉTODO - Previene que la app vaya al login sin BD
+        ✅ Verifica si la base de datos existe y es accesible
+        
+        Args:
+            server: Servidor SQL (ej: 'localhost\\SQLEXPRESS')
+            db_name: Nombre de la base de datos (ej: 'ClinicaMariaInmaculada')
         
         Returns:
-            Tuple[bool, str]: (existe, mensaje)
-        
-        Uso en main.py:
-            db_installer = DatabaseInstaller()
-            bd_disponible, mensaje = db_installer.verificar_base_datos_existe()
+            Tuple[bool, str]: (existe, mensaje descriptivo)
         """
         try:
-            # Leer configuración del .env
-            config = self.config_manager.leer_configuracion()
-            server = config.get('DB_SERVER', 'localhost\\SQLEXPRESS')
-            database = config.get('DB_DATABASE', 'ClinicaMariaInmaculada')
+            print(f"🔍 Verificando BD: {db_name} en servidor: {server}")
             
-            print(f"🔍 Verificando BD: {database} en servidor: {server}")
-            
-            # Intentar conexión a la base de datos específica
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE={database};"
-                f"Trusted_Connection=yes;"
-                f"Timeout=5;"
-            )
-            
-            conn = pyodbc.connect(conn_str)
-            
-            # Verificar que tenga tablas (que no esté vacía)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_TYPE = 'BASE TABLE'
-            """)
-            num_tablas = cursor.fetchone()[0]
-            
-            cursor.close()
-            conn.close()
-            
-            if num_tablas < 5:  # Debe tener al menos 5 tablas del sistema
-                return False, f"Base de datos '{database}' existe pero está incompleta ({num_tablas} tablas)"
-            
-            return True, f"Base de datos '{database}' disponible con {num_tablas} tablas"
-            
-        except pyodbc.Error as e:
-            error_msg = str(e)
-            
-            # Analizar el tipo de error
-            if "Cannot open database" in error_msg or "does not exist" in error_msg:
-                return False, f"Base de datos '{database}' no existe en el servidor"
-            elif "Login failed" in error_msg:
-                return False, f"Error de autenticación en SQL Server"
-            elif "SQL Server does not exist" in error_msg or "Named Pipes Provider" in error_msg:
-                return False, f"No se puede conectar al servidor '{server}'"
-            else:
-                return False, f"Error de SQL: {error_msg[:100]}"
-        
-        except KeyError as e:
-            return False, f"Configuración incompleta: falta {str(e)}"
-        
-        except Exception as e:
-            return False, f"Error verificando BD: {str(e)}"
-    def verificar_base_datos_existe(self, server: str, db_name: str) -> bool:
-        """Verifica si la base de datos ya existe"""
-        try:
+            # Intentar conexión a master para verificar existencia
             conn_str = (
                 f"DRIVER={{ODBC Driver 17 for SQL Server}};"
                 f"SERVER={server};"
                 f"DATABASE=master;"
                 f"Trusted_Connection=yes;"
+                f"Timeout=5;"
             )
             
             try:
                 conn = pyodbc.connect(conn_str, timeout=5)
             except:
+                # Intentar con driver alternativo
                 conn_str = conn_str.replace("ODBC Driver 17", "SQL Server")
                 conn = pyodbc.connect(conn_str, timeout=5)
             
+            # Verificar si la base de datos existe
             cursor = conn.cursor()
             cursor.execute(f"SELECT database_id FROM sys.databases WHERE name = '{db_name}'")
             existe = cursor.fetchone() is not None
             
-            conn.close()
-            return existe
+            if not existe:
+                cursor.close()
+                conn.close()
+                return False, f"❌ Base de datos '{db_name}' no existe en el servidor"
             
+            cursor.close()
+            conn.close()
+            
+            # Si existe, verificar que tenga tablas
+            conn_str_db = (
+                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+                f"SERVER={server};"
+                f"DATABASE={db_name};"
+                f"Trusted_Connection=yes;"
+                f"Timeout=5;"
+            )
+            
+            try:
+                conn_db = pyodbc.connect(conn_str_db, timeout=5)
+            except:
+                conn_str_db = conn_str_db.replace("ODBC Driver 17", "SQL Server")
+                conn_db = pyodbc.connect(conn_str_db, timeout=5)
+            
+            cursor_db = conn_db.cursor()
+            cursor_db.execute("""
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.TABLES 
+                WHERE TABLE_TYPE = 'BASE TABLE'
+            """)
+            num_tablas = cursor_db.fetchone()[0]
+            
+            cursor_db.close()
+            conn_db.close()
+            
+            if num_tablas < 5:
+                return False, f"⚠️ Base de datos '{db_name}' existe pero está incompleta ({num_tablas} tablas)"
+            
+            return True, f"✅ Base de datos '{db_name}' disponible y operativa ({num_tablas} tablas)"
+            
+        except pyodbc.Error as e:
+            error_msg = str(e)
+            
+            if "Cannot open database" in error_msg or "does not exist" in error_msg:
+                return False, f"❌ Base de datos '{db_name}' no existe"
+            elif "Login failed" in error_msg:
+                return False, f"❌ Error de autenticación en SQL Server"
+            elif "SQL Server does not exist" in error_msg or "Named Pipes Provider" in error_msg:
+                return False, f"❌ No se puede conectar al servidor '{server}'"
+            else:
+                return False, f"❌ Error SQL: {error_msg[:100]}"
+        
         except Exception as e:
             print(f"⚠️ Error verificando BD: {e}")
-            return False
+            return False, f"❌ Error: {str(e)}"
+
     
     def ejecutar_script_sql(self, script_path: Path, server: str, db_name: Optional[str] = None) -> Tuple[bool, str]:
         """

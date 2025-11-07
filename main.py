@@ -1,6 +1,5 @@
 # main.py - VERSIÓN CORREGIDA PARA EJECUTABLE
 """
-✅ MEJORAS APLICADAS:
 1. Sistema de logging a archivo (funciona con console=False)
 2. Validación temprana de recursos
 3. MessageBox de error para casos críticos
@@ -2436,8 +2435,9 @@ def main():
                 db_installer = DatabaseInstaller()
                 
                 # ✅ LEER CONFIGURACIÓN PARA PASAR PARÁMETROS
-                server = config_manager.get('DB_SERVER', 'localhost\\SQLEXPRESS')
-                database = config_manager.get('DB_DATABASE', 'ClinicaMariaInmaculada')
+                config = config_manager.leer_configuracion()   
+                server = config.get('DB_SERVER', 'localhost\\SQLEXPRESS')
+                database = config.get('DB_DATABASE', 'ClinicaMariaInmaculada')
                 
                 # ✅ LLAMAR CON PARÁMETROS CORRECTOS
                 bd_disponible, mensaje_bd = db_installer.verificar_base_datos_existe(server, database)

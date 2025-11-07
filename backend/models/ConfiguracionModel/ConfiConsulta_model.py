@@ -91,7 +91,7 @@ class ConfiConsultaModel(QObject):
     @Slot(str, str, float, float, int, result=bool)
     def crearEspecialidad(self, nombre: str, detalles: str = "", 
                          precio_normal: float = 0.0, precio_emergencia: float = 0.0,
-                         id_doctor: int = 0) -> bool:
+                         Id_Medico: int = 0) -> bool:
         """Crea nueva especialidad desde QML"""
         try:
             self._set_loading(True)
@@ -101,7 +101,7 @@ class ConfiConsultaModel(QObject):
                 detalles=detalles.strip() if detalles.strip() else None,
                 precio_normal=precio_normal,
                 precio_emergencia=precio_emergencia,
-                id_doctor=id_doctor if id_doctor > 0 else None
+                Id_Medico=Id_Medico if Id_Medico > 0 else None
             )
             
             if especialidad_id:
@@ -152,7 +152,7 @@ class ConfiConsultaModel(QObject):
     @Slot(int, str, str, float, float, int, result=bool)
     def actualizarEspecialidad(self, especialidad_id: int, nombre: str = "", 
                               detalles: str = "", precio_normal: float = -1,
-                              precio_emergencia: float = -1, id_doctor: int = -1) -> bool:
+                              precio_emergencia: float = -1, Id_Medico: int = -1) -> bool:
         """Actualiza especialidad existente desde QML"""
         try:
             self._set_loading(True)
@@ -169,7 +169,7 @@ class ConfiConsultaModel(QObject):
                 kwargs['precio_normal'] = precio_normal
             if precio_emergencia >= 0:
                 kwargs['precio_emergencia'] = precio_emergencia
-            if id_doctor >= 0:
+            if Id_Medico >= 0:
                 kwargs['id_doctor'] = id_doctor if id_doctor > 0 else None
             
             success = self.repository.update_especialidad(especialidad_id, **kwargs)

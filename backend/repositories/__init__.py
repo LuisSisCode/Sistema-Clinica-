@@ -12,15 +12,16 @@ from .producto_repository import ProductoRepository         # 1
 from .venta_repository import VentaRepository               # 2
 from .compra_repository import CompraRepository             # 3
 from .consulta_repository import ConsultaRepository         # 4
-from .doctor_repository import DoctorRepository             # 5
+from .medico_repository import MedicoRepository             # 5
 from .gasto_repository import GastoRepository               # 6
 from .laboratorio_repository import LaboratorioRepository   # 7
 from .paciente_repository import PacienteRepository         # 8
 from .estadistica_repository import EstadisticaRepository   # 9
 from .trabajador_repository import TrabajadorRepository     # 10
 from .proveedor_repository import ProveedorRepository     # 11
-from .cierre_caja_repository import CierreCajaRepository  
-from .ingreso_extra_repository import IngresoExtraRepository  
+from .cierre_caja_repository import CierreCajaRepository  # 12
+from .ingreso_extra_repository import IngresoExtraRepository  # 13
+from .especialidad_repository import EspecialidadRepository # 14
 
 __all__ = [
     'AuthRepository',
@@ -28,7 +29,7 @@ __all__ = [
     'VentaRepository', 
     'CompraRepository',
     'ConsultaRepository',
-    'DoctorRepository',
+    'MedicoRepository',
     'GastoRepository',
     'LaboratorioRepository',
     'PacienteRepository',
@@ -36,7 +37,8 @@ __all__ = [
     'TrabajadorRepository',
     'ProveedorRepository',
     'CierreCajaRepository',
-    'IngresoExtraRepository'
+    'IngresoExtraRepository',
+    'EspecialidadRepository'
 
 ]
 

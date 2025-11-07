@@ -402,6 +402,271 @@ class TrabajadorRepository(BaseRepository):
         return self._execute_query(query)
     
     # ===============================
+    # MÉTODOS PARA MÉDICOS Y ESPECIALIDADES
+    # ===============================
+    
+    @cached_query('medicos_especialidades', ttl=600)
+    def get_medicos_con_especialidades(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene trabajadores médicos con sus especialidades asignadas
+        Reemplaza funcionalidad de DoctorRepository.get_all_with_specialties()
+        """
+        query = """
+        SELECT 
+            t.id,
+            t.Nombre,
+            t.Apellido_Paterno,
+            t.Apellido_Materno,
+            t.Matricula,
+            t.Especialidad as especialidad_descriptiva,
+            tt.Tipo as tipo_trabajador,
+            COUNT(DISTINCT te.Id_Especialidad) as total_especialidades,
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres,
+            AVG(e.Precio_Normal) as precio_promedio_normal,
+            AVG(e.Precio_Emergencia) as precio_promedio_emergencia
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%'
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
+                 t.Matricula, t.Especialidad, tt.Tipo
+        ORDER BY t.Nombre, t.Apellido_Paterno
+        """
+        return self._execute_query(query)
+    
+    def get_medico_con_especialidades(self, trabajador_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene médico específico con todas sus especialidades
+        Reemplaza funcionalidad de DoctorRepository.get_doctor_with_services()
+        """
+        # Verificar que sea médico
+        trabajador = self.get_by_id(trabajador_id)
+        if not trabajador:
+            return None
+        
+        # Verificar que sea tipo médico
+        tipo_query = """
+        SELECT tt.Tipo 
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        WHERE t.id = ?
+        """
+        tipo_result = self._execute_query(tipo_query, (trabajador_id,), fetch_one=True)
+        
+        if not tipo_result or 'Médico' not in tipo_result.get('Tipo', ''):
+            print(f"⚠️ Trabajador {trabajador_id} no es médico")
+            return None
+        
+        # Obtener especialidades asignadas
+        especialidades_query = """
+        SELECT 
+            e.id,
+            e.Nombre,
+            e.Detalles,
+            e.Precio_Normal,
+            e.Precio_Emergencia,
+            te.Es_Principal,
+            te.Fecha_Asignacion
+        FROM Trabajador_Especialidad te
+        INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE te.Id_Trabajador = ?
+        ORDER BY te.Es_Principal DESC, e.Nombre
+        """
+        
+        especialidades = self._execute_query(especialidades_query, (trabajador_id,))
+        trabajador['especialidades'] = especialidades
+        trabajador['total_especialidades'] = len(especialidades)
+        
+        # Calcular estadísticas de precios
+        if especialidades:
+            precios_normales = [float(e['Precio_Normal']) for e in especialidades]
+            precios_emergencia = [float(e['Precio_Emergencia']) for e in especialidades]
+            
+            trabajador['precio_min_normal'] = min(precios_normales)
+            trabajador['precio_max_normal'] = max(precios_normales)
+            trabajador['precio_promedio_normal'] = sum(precios_normales) / len(precios_normales)
+            
+            trabajador['precio_min_emergencia'] = min(precios_emergencia)
+            trabajador['precio_max_emergencia'] = max(precios_emergencia)
+            trabajador['precio_promedio_emergencia'] = sum(precios_emergencia) / len(precios_emergencia)
+        
+        return trabajador
+    
+    def get_medicos_por_especialidad(self, especialidad_id: int) -> List[Dict[str, Any]]:
+        """
+        Obtiene médicos que tienen asignada una especialidad específica
+        """
+        query = """
+        SELECT 
+            t.id,
+            t.Nombre,
+            t.Apellido_Paterno,
+            t.Apellido_Materno,
+            t.Matricula,
+            te.Es_Principal,
+            te.Fecha_Asignacion
+        FROM Trabajador_Especialidad te
+        INNER JOIN Trabajadores t ON te.Id_Trabajador = t.id
+        WHERE te.Id_Especialidad = ?
+        ORDER BY te.Es_Principal DESC, t.Nombre
+        """
+        return self._execute_query(query, (especialidad_id,))
+    
+    def asignar_especialidad(self, trabajador_id: int, especialidad_id: int, 
+                            es_principal: bool = False) -> bool:
+        """
+        Asigna una especialidad a un médico
+        
+        Args:
+            trabajador_id: ID del trabajador (debe ser médico)
+            especialidad_id: ID de la especialidad a asignar
+            es_principal: Si es la especialidad principal del médico
+            
+        Returns:
+            True si se asignó correctamente
+        """
+        # Validar que el trabajador existe y es médico
+        trabajador = self.get_medico_con_especialidades(trabajador_id)
+        if not trabajador:
+            raise ValidationError("trabajador_id", trabajador_id, 
+                                "Trabajador no encontrado o no es médico")
+        
+        # Validar que la especialidad existe
+        esp_query = "SELECT id FROM Especialidad WHERE id = ?"
+        esp_exists = self._execute_query(esp_query, (especialidad_id,), fetch_one=True)
+        if not esp_exists:
+            raise ValidationError("especialidad_id", especialidad_id, 
+                                "Especialidad no encontrada")
+        
+        # Verificar si ya está asignada
+        check_query = """
+        SELECT id FROM Trabajador_Especialidad 
+        WHERE Id_Trabajador = ? AND Id_Especialidad = ?
+        """
+        already_assigned = self._execute_query(check_query, 
+                                              (trabajador_id, especialidad_id), 
+                                              fetch_one=True)
+        
+        if already_assigned:
+            print(f"⚠️ Especialidad {especialidad_id} ya está asignada al trabajador {trabajador_id}")
+            return True
+        
+        # Si es principal, quitar la marca de principal de otras
+        if es_principal:
+            update_query = """
+            UPDATE Trabajador_Especialidad 
+            SET Es_Principal = 0 
+            WHERE Id_Trabajador = ?
+            """
+            self._execute_query(update_query, (trabajador_id,), fetch_all=False, use_cache=False)
+        
+        # Insertar asignación
+        insert_query = """
+        INSERT INTO Trabajador_Especialidad (Id_Trabajador, Id_Especialidad, Es_Principal)
+        VALUES (?, ?, ?)
+        """
+        affected = self._execute_query(insert_query, 
+                                      (trabajador_id, especialidad_id, 1 if es_principal else 0),
+                                      fetch_all=False, use_cache=False)
+        
+        success = affected > 0
+        if success:
+            print(f"✅ Especialidad {especialidad_id} asignada al médico {trabajador_id}")
+            self.invalidate_worker_caches()
+        
+        return success
+    
+    def desasignar_especialidad(self, trabajador_id: int, especialidad_id: int) -> bool:
+        """
+        Desasigna una especialidad de un médico
+        
+        Args:
+            trabajador_id: ID del trabajador
+            especialidad_id: ID de la especialidad a desasignar
+            
+        Returns:
+            True si se desasignó correctamente
+        """
+        delete_query = """
+        DELETE FROM Trabajador_Especialidad 
+        WHERE Id_Trabajador = ? AND Id_Especialidad = ?
+        """
+        
+        affected = self._execute_query(delete_query, 
+                                      (trabajador_id, especialidad_id),
+                                      fetch_all=False, use_cache=False)
+        
+        success = affected > 0
+        if success:
+            print(f"🗑️ Especialidad {especialidad_id} desasignada del médico {trabajador_id}")
+            self.invalidate_worker_caches()
+        
+        return success
+    
+    def search_medicos(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Búsqueda de médicos por nombre, apellidos o matrícula
+        Reemplaza funcionalidad de DoctorRepository.search_doctors()
+        """
+        if not search_term or len(search_term.strip()) < 2:
+            return []
+        
+        search_term = f"%{search_term.strip()}%"
+        
+        query = """
+        SELECT TOP (?)
+            t.id,
+            t.Nombre,
+            t.Apellido_Paterno,
+            t.Apellido_Materno,
+            t.Matricula,
+            t.Especialidad as especialidad_descriptiva,
+            tt.Tipo as tipo_trabajador,
+            COUNT(DISTINCT te.Id_Especialidad) as total_especialidades,
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE (tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%')
+          AND (t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? 
+               OR t.Apellido_Materno LIKE ? OR t.Matricula LIKE ?)
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
+                 t.Matricula, t.Especialidad, tt.Tipo
+        ORDER BY t.Nombre, t.Apellido_Paterno
+        """
+        
+        return self._execute_query(query, (limit, search_term, search_term, 
+                                          search_term, search_term))
+    
+    def get_medicos_activos_simple(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene lista simple de médicos activos (para ComboBox en QML)
+        Reemplaza funcionalidad usada en ConsultaModel
+        """
+        query = """
+        SELECT 
+            t.id,
+            t.Nombre,
+            t.Apellido_Paterno,
+            t.Apellido_Materno,
+            t.Matricula,
+            t.Especialidad as especialidad_descriptiva
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        WHERE tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%'
+        ORDER BY t.Nombre, t.Apellido_Paterno
+        """
+        return self._execute_query(query)
+    
+    def invalidate_medico_caches(self):
+        """Invalida cachés relacionados con médicos"""
+        cache_types = ['trabajadores', 'trabajadores_tipos', 'medicos_especialidades']
+        from ..core.cache_system import invalidate_after_update
+        invalidate_after_update(cache_types)
+    
+    # ===============================
     # ESTADÍSTICAS
     # ===============================
     
@@ -489,6 +754,30 @@ class TrabajadorRepository(BaseRepository):
         by_type_stats = self.get_worker_statistics()['por_tipos']
         return {item['Tipo']: item['cantidad'] for item in by_type_stats}
     
+    def matricula_exists(self, matricula: str) -> bool:
+        """Verifica si existe una matrícula en el sistema"""
+        if not matricula or not matricula.strip():
+            return False
+        
+        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Matricula = ?"
+        result = self._execute_query(query, (matricula.strip(),), fetch_one=True)
+        return result['count'] > 0 if result else False
+
+    def validate_matricula_unique(self, matricula: str, exclude_id: int = None) -> bool:
+        """Valida que la matrícula sea única (excluyendo un ID específico)"""
+        if not matricula or not matricula.strip():
+            return True  # Matrícula vacía es válida
+        
+        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Matricula = ?"
+        params = [matricula.strip()]
+        
+        if exclude_id:
+            query += " AND id != ?"
+            params.append(exclude_id)
+        
+        result = self._execute_query(query, tuple(params), fetch_one=True)
+        return result['count'] == 0 if result else True
+    
     # ===============================
     # REPORTES
     # ===============================
@@ -535,29 +824,7 @@ class TrabajadorRepository(BaseRepository):
             worker['nombre_completo'] = f"{worker['Nombre']} {worker['Apellido_Paterno']} {worker['Apellido_Materno']}"
         
         return workers
-    def matricula_exists(self, matricula: str) -> bool:
-        """Verifica si existe una matrícula en el sistema"""
-        if not matricula or not matricula.strip():
-            return False
-        
-        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Matricula = ?"
-        result = self._execute_query(query, (matricula.strip(),), fetch_one=True)
-        return result['count'] > 0 if result else False
-
-    def validate_matricula_unique(self, matricula: str, exclude_id: int = None) -> bool:
-        """Valida que la matrícula sea única (excluyendo un ID específico)"""
-        if not matricula or not matricula.strip():
-            return True  # Matrícula vacía es válida
-        
-        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE Matricula = ?"
-        params = [matricula.strip()]
-        
-        if exclude_id:
-            query += " AND id != ?"
-            params.append(exclude_id)
-        
-        result = self._execute_query(query, tuple(params), fetch_one=True)
-        return result['count'] == 0 if result else True
+    
     # ===============================
     # CACHÉ
     # ===============================
@@ -571,7 +838,8 @@ class TrabajadorRepository(BaseRepository):
                 'trabajadores',
                 'trabajadores_activos', 
                 'tipos_trabajador',
-                'stats_trabajadores'
+                'stats_trabajadores',
+                'medicos_especialidades'
             ]
             
             invalidate_after_update(cache_types)
@@ -584,4 +852,3 @@ class TrabajadorRepository(BaseRepository):
         """Override para invalidación específica"""
         super()._invalidate_cache_after_modification()
         self.invalidate_worker_caches()
-    

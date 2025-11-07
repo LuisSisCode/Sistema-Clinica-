@@ -20,6 +20,8 @@ Sistema-Clinica-/
 │   │   ├── base_repository.py          # Repositorio base
 │   │   ├── utils.py                     # Utilidades generales
 │   │   ├── db_installer.py             # Instalador de BD
+│   │   ├── Signal_manager.py             
+│   │   ├── login.py            
 │   │   └── config_manager.py           # Gestor de configuración
 │   │
 │   ├── 📁 models/                       # Modelos QObject (Qt)
@@ -40,6 +42,7 @@ Sistema-Clinica-/
 │   │   ├── ingreso_extra_model.py       # Ingresos extras
 │   │   ├── reportes_model.py            # Reportes
 │   │   ├── dashboard_model.py           # Dashboard
+│   │   ├── medico_model.py 
 │   │   │
 │   │   └── 📁 ConfiguracionModel/       # Configuración
 │   │       ├── __init__.py
@@ -67,6 +70,9 @@ Sistema-Clinica-/
 │       ├── ingreso_extra_repository.py
 │       ├── reportes_repository.py
 │       ├── egreso_repository.py
+│       ├── medico_repository.py
+│       ├── especialidad_repository.py
+│       ├── estadistica_repository.py
 │       │
 │       └── 📁 ConfiguracionRepositor/   # Configuración
 │           ├── __init__.py
@@ -330,63 +336,6 @@ Otras Dependencias:
    4. Sistema calcula diferencia
    5. Genera PDF de arqueo
 
-================================================================================
-                       BASE DE DATOS (SQL SERVER)
-================================================================================
-
-📊 TABLAS PRINCIPALES:
-
-Sistema:
-  • Roles (Administrador, Médico)
-  • Usuario (Credenciales y permisos)
-
-Clínica:
-  • Pacientes (Con/sin cédula)
-  • Doctores
-  • Especialidad
-  • Consultas
-
-Farmacia:
-  • Productos (Código único)
-  • Marca
-  • Lote (Control FIFO)
-  • Proveedor
-
-Transacciones:
-  • Ventas
-  • DetallesVentas (FIFO)
-  • Compra
-  • DetalleCompra
-
-Laboratorio:
-  • Tipos_Analisis
-  • Laboratorio (Registros)
-
-Enfermería:
-  • Tipos_Procedimientos
-  • Enfermeria (Registros)
-
-Recursos Humanos:
-  • Trabajadores
-  • Tipo_Trabajadores
-
-Finanzas:
-  • Gastos
-  • Tipo_Gastos
-  • Proveedor_Gastos
-  • IngresosExtras
-  • CierreCaja
-
-✅ DATOS INICIALES PRECARGADOS:
-  • 2 Roles (Administrador, Médico)
-  • 6 Tipos de Trabajadores
-  • 6 Tipos de Gastos
-  • 5 Especialidades médicas
-  • 10 Tipos de análisis de laboratorio
-  • 10 Tipos de procedimientos de enfermería
-  • 8 Marcas de productos
-  • 1 Doctor del sistema
-  • 1 Proveedor de gastos base
 
 ================================================================================
                        CARACTERÍSTICAS TÉCNICAS
@@ -430,59 +379,7 @@ Finanzas:
    • Navegación fluida
    • Feedback visual
 
-================================================================================
-                       COMPILACIÓN Y DISTRIBUCIÓN
-================================================================================
 
-📦 COMPILAR EJECUTABLE:
-   
-   1. Activar entorno virtual:
-      .\venv\Scripts\Activate.ps1
-
-   2. Limpiar compilaciones previas:
-      Remove-Item -Recurse -Force build, dist
-
-   3. Compilar con PyInstaller:
-      pyinstaller clinica.spec --clean
-
-   4. Ejecutable generado en:
-      dist\ClinicaApp\ClinicaApp.exe
-
-📦 CREAR ZIP PORTABLE:
-   
-   1. Verificar que NO exista .env en dist\ClinicaApp\
-   2. Eliminar archivos temporales (*.log, *.tmp)
-   3. Copiar LEEME.txt a dist\ClinicaApp\
-   4. Comprimir:
-      Compress-Archive -Path "dist\ClinicaApp" -DestinationPath "ClinicaApp_v1.0.zip"
-
-📦 ESTRUCTURA DEL EJECUTABLE:
-
-   ClinicaApp/
-   ├── ClinicaApp.exe              (Ejecutable principal)
-   ├── database_scripts/           (Scripts SQL - CRÍTICO)
-   │   ├── 01_schema.sql
-   │   └── 02_datos_iniciales.sql
-   ├── Resources/                  (Recursos)
-   ├── _internal/                  (Librerías internas)
-   ├── *.qml                       (Archivos de interfaz)
-   ├── setup_wizard.qml            ✅ NUEVO
-   ├── LEEME.txt                   (Instrucciones)
-   ├── reportes/                   (Se crea automáticamente)
-   ├── logs/                       (Se crea automáticamente)
-   └── temp/                       (Se crea automáticamente)
-
-================================================================================
-                       CREDENCIALES POR DEFECTO
-================================================================================
-
-🔑 Usuario Administrador:
-   Usuario: admin
-   Contraseña: admin123
-
-⚠️ IMPORTANTE: 
-   - Cambiar contraseña después del primer inicio
-   - Acceso desde: Configuración > Usuarios > Cambiar Contraseña
 
 ================================================================================
                        ARCHIVOS DE CONFIGURACIÓN
@@ -513,20 +410,3 @@ Finanzas:
    pyinstaller==6.16.0
    flask==3.1.1
    flask-cors==6.0.1
-
-================================================================================
-                       NOTAS DE VERSIÓN
-================================================================================
-
-v1.0 (Octubre 2025):
-  ✅ Sistema completo de gestión clínica
-  ✅ Setup Wizard automático (primera ejecución)
-  ✅ Instalador de base de datos automatizado
-  ✅ Módulos: Farmacia, Consultas, Laboratorio, Enfermería
-  ✅ Sistema FIFO completo
-  ✅ Reportes PDF personalizados
-  ✅ Dashboard con estadísticas en tiempo real
-  ✅ Cierre de caja con arqueo automático
-  ✅ Gestión de usuarios y permisos
-  ✅ Compilación a ejecutable standalone
-  ✅ Sistema portable (ZIP)
