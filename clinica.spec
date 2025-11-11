@@ -389,7 +389,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=icon_path,
-    version='file_version_info.txt',  # Opcional: info de versión
+    version=None
 )
 
 print("  ✅ Configuración del ejecutable completada")

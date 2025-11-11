@@ -938,6 +938,7 @@ ApplicationWindow {
                 const userName = authModel.userName
                 const userRole = authModel.userRole
                 if (userRole && userRole.toLowerCase().includes("medico")) {
+                    console.log("👨‍⚕️ Usuario con rol medico detectado: " + userName)
                     return "Dr. " + userName.split(" ")[0]
                 }
                 return userName.split(" ")[0] || "Usuario"

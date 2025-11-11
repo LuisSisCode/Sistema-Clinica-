@@ -1,37 +1,52 @@
 # backend/core/db_installer.py
 """
 Sistema de Instalación de Base de Datos
-Ejecuta scripts SQL y valida SQL Server
+✅ CORREGIDO: Detección automática de driver ODBC y mejor lógica
 """
 
 import os
 import pyodbc
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 import sys
+import time
+import re
 
 class DatabaseInstaller:
     """Instalador automatizado de base de datos"""
     
+    # ✅ Lista de drivers ODBC en orden de preferencia
+    ODBC_DRIVERS = [
+        "ODBC Driver 18 for SQL Server",
+        "ODBC Driver 17 for SQL Server",
+        "ODBC Driver 13 for SQL Server",
+        "SQL Server Native Client 11.0",
+        "SQL Server"
+    ]
+    
     def __init__(self):
         """
-        ✅ VERSIÓN CORREGIDA: Inicializar instalador con rutas correctas
-        
-        Cambios:
-        - En ejecutable: Busca en database_scripts/ (raíz de _MEIPASS)
-        - Ya NO busca en _internal/database_scripts/
+        ✅ Inicializar instalador con rutas correctas y detección de driver
         """
+        # Detectar driver ODBC disponible
+        self.driver = self._detectar_driver_odbc()
+        
+        if not self.driver:
+            print("⚠️ ADVERTENCIA: No se detectó driver ODBC para SQL Server")
+            print("   Instala 'ODBC Driver 17 for SQL Server' o superior")
+        else:
+            print(f"🔌 Driver ODBC detectado: {self.driver}")
+        
+        # Configurar directorio de scripts
         if getattr(sys, 'frozen', False):
             # ✅ EJECUTABLE: Scripts en RAÍZ de _MEIPASS
             base_path = sys._MEIPASS
             
-            # Intentar múltiples rutas por seguridad
             possible_paths = [
-                Path(base_path) / 'database_scripts',              # PRIMERA OPCIÓN (correcta)
-                Path(base_path) / '_internal' / 'database_scripts', # Legacy (por si acaso)
+                Path(base_path) / 'database_scripts',
+                Path(base_path) / '_internal' / 'database_scripts',
             ]
             
-            # Buscar la que existe
             self.scripts_dir = None
             for path in possible_paths:
                 if path.exists():
@@ -39,28 +54,75 @@ class DatabaseInstaller:
                     print(f"✅ Scripts SQL encontrados en: {path}")
                     break
             
-            # Si no encuentra, usar la primera y dar warning
             if self.scripts_dir is None:
                 self.scripts_dir = possible_paths[0]
                 print(f"⚠️ Scripts SQL NO encontrados, usando ruta por defecto: {self.scripts_dir}")
-                print(f"   Archivos en base: {list(Path(base_path).iterdir())[:10]}")
         else:
-            # ✅ DESARROLLO: Scripts en raíz del proyecto
+            # ✅ DESARROLLO
             self.scripts_dir = Path(__file__).parent.parent.parent / 'database_scripts'
             print(f"🔍 MODO DESARROLLO - Scripts en: {self.scripts_dir}")
         
         print(f"📂 Directorio de scripts SQL configurado: {self.scripts_dir}")
         print(f"   ¿Existe? {self.scripts_dir.exists()}")
         
-        # Listar archivos .sql disponibles
         if self.scripts_dir.exists():
             sql_files = list(self.scripts_dir.glob('*.sql'))
             print(f"   Archivos .sql encontrados: {len(sql_files)}")
             for sql_file in sql_files:
                 print(f"      - {sql_file.name}")
-        else:
-            print(f"   ⚠️ ADVERTENCIA: Directorio no existe")
+    
+    def _detectar_driver_odbc(self) -> Optional[str]:
+        """
+        ✅ NUEVO: Detecta automáticamente el driver ODBC disponible
         
+        Returns:
+            str: Nombre del driver encontrado, o None
+        """
+        try:
+            drivers_disponibles = list(pyodbc.drivers())
+            print(f"🔍 Drivers ODBC disponibles: {drivers_disponibles}")
+            
+            for driver in self.ODBC_DRIVERS:
+                if driver in drivers_disponibles:
+                    return driver
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error detectando drivers: {e}")
+            return None
+    
+    def _build_connection_string(self, server: str, database: str = "master") -> str:
+        """
+        ✅ NUEVO: Construye cadena de conexión con el driver detectado
+        
+        Args:
+            server: Servidor SQL Server
+            database: Base de datos
+            
+        Returns:
+            str: Cadena de conexión
+        """
+        if not self.driver:
+            raise Exception("❌ No hay driver ODBC disponible")
+        
+        conn_parts = [
+            f"DRIVER={{{self.driver}}}",
+            f"SERVER={server}",
+            f"DATABASE={database}",
+            "Trusted_Connection=yes",
+            "Timeout=10"
+        ]
+        
+        # Para drivers modernos, agregar configuración
+        if "17" in self.driver or "18" in self.driver:
+            conn_parts.extend([
+                "Encrypt=no",
+                "TrustServerCertificate=yes"
+            ])
+        
+        return ";".join(conn_parts)
+    
     def verificar_sql_server(self, server: str = "localhost\\SQLEXPRESS") -> Tuple[bool, str]:
         """
         Verifica si SQL Server está disponible
@@ -69,82 +131,59 @@ class DatabaseInstaller:
             Tuple[bool, str]: (éxito, mensaje)
         """
         try:
-            # Intentar conexión con master (base de datos del sistema)
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE=master;"
-                f"Trusted_Connection=yes;"
-            )
+            if not self.driver:
+                return False, "❌ No se encontró driver ODBC. Instala 'ODBC Driver 17 for SQL Server'"
             
-            # Intentar con driver alternativo si el 17 no está
-            try:
-                conn = pyodbc.connect(conn_str, timeout=5)
-            except pyodbc.Error:
-                # Probar con driver 13
-                conn_str = conn_str.replace("ODBC Driver 17", "ODBC Driver 13")
-                try:
-                    conn = pyodbc.connect(conn_str, timeout=5)
-                except pyodbc.Error:
-                    # Probar con SQL Server Native Client
-                    conn_str = (
-                        f"DRIVER={{SQL Server}};"
-                        f"SERVER={server};"
-                        f"DATABASE=master;"
-                        f"Trusted_Connection=yes;"
-                    )
-                    conn = pyodbc.connect(conn_str, timeout=5)
+            conn_str = self._build_connection_string(server, "master")
             
+            conn = pyodbc.connect(conn_str, timeout=5)
+            cursor = conn.cursor()
+            cursor.execute("SELECT @@VERSION")
+            version = cursor.fetchone()[0]
             conn.close()
+            
+            print(f"✅ SQL Server conectado")
+            print(f"   Versión: {version[:100]}")
+            
             return True, f"✅ SQL Server detectado correctamente: {server}"
             
         except pyodbc.Error as e:
             error_msg = str(e)
             
             if "Login timeout expired" in error_msg:
-                return False, f"❌ SQL Server no responde. Verifica que el servicio esté iniciado."
-            elif "Data source name not found" in error_msg:
-                return False, f"❌ Driver ODBC no encontrado. Instala 'ODBC Driver for SQL Server'."
-            elif "Cannot open database" in error_msg:
-                return True, "✅ SQL Server disponible (conexión OK)"
+                return False, "❌ SQL Server no responde. Verifica que el servicio esté iniciado."
+            elif "Data source name not found" in error_msg or "IM002" in error_msg:
+                return False, "❌ Driver ODBC no encontrado. Instala 'ODBC Driver 17 for SQL Server'."
             else:
                 return False, f"❌ Error conectando a SQL Server: {error_msg[:200]}"
-                
-            return False, f"❌ Error inesperado verificando SQL Server: {e}"
+        
+        except Exception as e:
+            return False, f"❌ Error inesperado: {str(e)}"
     
     def verificar_base_datos_existe(self, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        ✅ Verifica si la base de datos existe y es accesible
+        ✅ CORREGIDO: Verifica si la base de datos existe y es accesible
         
         Args:
-            server: Servidor SQL (ej: 'localhost\\SQLEXPRESS')
-            db_name: Nombre de la base de datos (ej: 'ClinicaMariaInmaculada')
+            server: Servidor SQL
+            db_name: Nombre de la base de datos
         
         Returns:
-            Tuple[bool, str]: (existe, mensaje descriptivo)
+            Tuple[bool, str]: (existe, mensaje)
         """
         try:
             print(f"🔍 Verificando BD: {db_name} en servidor: {server}")
             
-            # Intentar conexión a master para verificar existencia
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE=master;"
-                f"Trusted_Connection=yes;"
-                f"Timeout=5;"
-            )
+            if not self.driver:
+                return False, "❌ No hay driver ODBC disponible"
             
-            try:
-                conn = pyodbc.connect(conn_str, timeout=5)
-            except:
-                # Intentar con driver alternativo
-                conn_str = conn_str.replace("ODBC Driver 17", "SQL Server")
-                conn = pyodbc.connect(conn_str, timeout=5)
+            # Conectar a master
+            conn_str = self._build_connection_string(server, "master")
+            conn = pyodbc.connect(conn_str, timeout=5)
             
-            # Verificar si la base de datos existe
+            # Verificar si existe
             cursor = conn.cursor()
-            cursor.execute(f"SELECT database_id FROM sys.databases WHERE name = '{db_name}'")
+            cursor.execute("SELECT database_id FROM sys.databases WHERE name = ?", (db_name,))
             existe = cursor.fetchone() is not None
             
             if not existe:
@@ -155,356 +194,231 @@ class DatabaseInstaller:
             cursor.close()
             conn.close()
             
-            # Si existe, verificar que tenga tablas
-            conn_str_db = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE={db_name};"
-                f"Trusted_Connection=yes;"
-                f"Timeout=5;"
-            )
+            # Verificar que tenga tablas
+            conn_str_db = self._build_connection_string(server, db_name)
             
             try:
                 conn_db = pyodbc.connect(conn_str_db, timeout=5)
-            except:
-                conn_str_db = conn_str_db.replace("ODBC Driver 17", "SQL Server")
-                conn_db = pyodbc.connect(conn_str_db, timeout=5)
-            
-            cursor_db = conn_db.cursor()
-            cursor_db.execute("""
-                SELECT COUNT(*) 
-                FROM INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_TYPE = 'BASE TABLE'
-            """)
-            num_tablas = cursor_db.fetchone()[0]
-            
-            cursor_db.close()
-            conn_db.close()
-            
-            if num_tablas < 5:
-                return False, f"⚠️ Base de datos '{db_name}' existe pero está incompleta ({num_tablas} tablas)"
-            
-            return True, f"✅ Base de datos '{db_name}' disponible y operativa ({num_tablas} tablas)"
+                cursor_db = conn_db.cursor()
+                cursor_db.execute("""
+                    SELECT COUNT(*) 
+                    FROM INFORMATION_SCHEMA.TABLES 
+                    WHERE TABLE_TYPE = 'BASE TABLE'
+                """)
+                num_tablas = cursor_db.fetchone()[0]
+                
+                cursor_db.close()
+                conn_db.close()
+                
+                if num_tablas < 5:
+                    return False, f"⚠️ Base de datos '{db_name}' existe pero está incompleta ({num_tablas} tablas)"
+                
+                return True, f"✅ Base de datos '{db_name}' disponible y operativa ({num_tablas} tablas)"
+                
+            except pyodbc.Error:
+                return False, f"❌ Base de datos '{db_name}' existe pero no es accesible"
             
         except pyodbc.Error as e:
             error_msg = str(e)
             
             if "Cannot open database" in error_msg or "does not exist" in error_msg:
                 return False, f"❌ Base de datos '{db_name}' no existe"
-            elif "Login failed" in error_msg:
-                return False, f"❌ Error de autenticación en SQL Server"
-            elif "SQL Server does not exist" in error_msg or "Named Pipes Provider" in error_msg:
-                return False, f"❌ No se puede conectar al servidor '{server}'"
             else:
-                return False, f"❌ Error SQL: {error_msg[:100]}"
+                return False, f"❌ Error verificando BD: {error_msg[:200]}"
         
         except Exception as e:
-            print(f"⚠️ Error verificando BD: {e}")
-            return False, f"❌ Error: {str(e)}"
-
+            return False, f"❌ Error inesperado: {str(e)}"
     
-    def ejecutar_script_sql(self, script_path: Path, server: str, db_name: Optional[str] = None) -> Tuple[bool, str]:
+    def ejecutar_script_sql(self, script_path: Path, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        Ejecuta un script SQL con detección automática de encoding
+        Ejecuta un archivo SQL
+        ✅ CORREGIDO: Detecta automáticamente la codificación del archivo
         
         Args:
             script_path: Ruta al archivo .sql
             server: Servidor SQL
-            db_name: Base de datos (None para usar master)
+            db_name: Base de datos
             
         Returns:
             Tuple[bool, str]: (éxito, mensaje)
         """
         try:
             if not script_path.exists():
-                return False, f"❌ Script no encontrado: {script_path}"
+                return False, f"❌ Archivo no encontrado: {script_path}"
             
-            print(f"📄 Leyendo script: {script_path.name}")
+            # ✅ NUEVO: Detectar codificación automáticamente
+            sql_content = None
+            encodings = ['utf-8', 'utf-16', 'utf-16-le', 'utf-16-be', 'latin-1', 'cp1252']
             
-            # 🆕 DETECTAR ENCODING AUTOMÁTICAMENTE
-            sql_script = None
-            encodings_to_try = ['utf-8-sig', 'utf-16', 'utf-8', 'latin-1', 'cp1252']
-            
-            for encoding in encodings_to_try:
+            for encoding in encodings:
                 try:
                     with open(script_path, 'r', encoding=encoding) as f:
-                        sql_script = f.read()
-                    print(f"✅ Archivo leído correctamente con encoding: {encoding}")
+                        sql_content = f.read()
+                    print(f"  ✅ Archivo leído con codificación: {encoding}")
                     break
-                except UnicodeDecodeError:
-                    continue
-                except Exception as e:
+                except (UnicodeDecodeError, UnicodeError):
                     continue
             
-            if sql_script is None:
-                return False, f"❌ No se pudo leer el archivo con ningún encoding conocido"
-            
-            # Separar por GO
-            batches = [batch.strip() for batch in sql_script.split('GO') if batch.strip()]
-            
-            print(f"📊 Script contiene {len(batches)} lotes de comandos")
+            if sql_content is None:
+                return False, f"❌ No se pudo leer el archivo con ninguna codificación conocida"
             
             # Conectar
-            database = db_name if db_name else "master"
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE={database};"
-                f"Trusted_Connection=yes;"
-            )
-            
-            try:
-                conn = pyodbc.connect(conn_str, timeout=30)
-            except:
-                conn_str = conn_str.replace("ODBC Driver 17", "SQL Server")
-                conn = pyodbc.connect(conn_str, timeout=30)
-            
+            conn_str = self._build_connection_string(server, db_name)
+            conn = pyodbc.connect(conn_str, autocommit=True)
             cursor = conn.cursor()
             
-            # Ejecutar cada lote
-            for i, batch in enumerate(batches, 1):
+            # Dividir por GO (con saltos de línea)
+            import re
+            comandos = re.split(r'\bGO\b', sql_content, flags=re.IGNORECASE)
+            comandos = [cmd.strip() for cmd in comandos if cmd.strip()]
+            
+            ejecutados = 0
+            errores = 0
+            
+            for i, comando in enumerate(comandos, 1):
                 try:
-                    # Limpiar comandos de USE (ya estamos en la BD correcta)
-                    if batch.strip().upper().startswith('USE '):
-                        continue
-                    
-                    cursor.execute(batch)
-                    conn.commit()
-                    
+                    cursor.execute(comando)
+                    ejecutados += 1
                 except pyodbc.Error as e:
                     error_msg = str(e)
-                    # Ignorar errores de "ya existe"
-                    if "already exists" in error_msg.lower() or "ya existe" in error_msg.lower():
-                        print(f"ℹ️ Lote {i}: Objeto ya existe (OK)")
-                        continue
-                    else:
-                        print(f"⚠️ Error en lote {i}: {error_msg[:100]}")
-                        # No fallar por un lote, continuar
-                        continue
+                    # Ignorar algunos errores comunes
+                    if "already exists" not in error_msg.lower():
+                        errores += 1
+                        if errores <= 3:
+                            print(f"⚠️ Error en comando {i}: {error_msg[:100]}")
             
+            cursor.close()
             conn.close()
-            print(f"✅ Script {script_path.name} ejecutado exitosamente")
-            return True, f"✅ Script ejecutado: {script_path.name}"
+            
+            print(f"✅ Script ejecutado: {ejecutados} comandos, {errores} errores")
+            return True, f"✅ Script ejecutado exitosamente"
             
         except Exception as e:
-            return False, f"❌ Error ejecutando script {script_path.name}: {str(e)[:200]}"
+            return False, f"❌ Error ejecutando script: {str(e)}"
     
     def crear_base_datos(self, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        Crea la base de datos completa usando comandos directos de SQL
+        Crea la base de datos y ejecuta scripts
         
+        Args:
+            server: Servidor SQL
+            db_name: Nombre de la base de datos
+            
         Returns:
             Tuple[bool, str]: (éxito, mensaje)
         """
         try:
-            print(f"🔧 Iniciando creación de base de datos: {db_name}")
+            print(f"📊 Creando base de datos: {db_name}")
             
-            # PASO 1: Conectar a master y crear la base de datos CON AUTOCOMMIT
-            print(f"📋 Conectando a master para crear la base de datos...")
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE=master;"
-                f"Trusted_Connection=yes;"
-            )
+            # Verificar que no exista
+            existe, _ = self.verificar_base_datos_existe(server, db_name)
+            if existe:
+                return True, f"ℹ️ Base de datos '{db_name}' ya existe"
             
-            try:
-                conn = pyodbc.connect(conn_str, timeout=30, autocommit=True)  # ✅ AUTOCOMMIT
-                print(f"✅ Conectado a master con autocommit=True")
-            except:
-                conn_str = conn_str.replace("ODBC Driver 17", "SQL Server")
-                conn = pyodbc.connect(conn_str, timeout=30, autocommit=True)  # ✅ AUTOCOMMIT
-                print(f"✅ Conectado a master con driver alternativo")
-            
+            # Conectar a master
+            conn_str = self._build_connection_string(server, "master")
+            conn = pyodbc.connect(conn_str, autocommit=True)
             cursor = conn.cursor()
             
-            # Verificar si la BD ya existe
-            cursor.execute(f"SELECT database_id FROM sys.databases WHERE name = '{db_name}'")
-            if cursor.fetchone():
-                print(f"ℹ️ Base de datos '{db_name}' ya existe")
-            else:
-                # Crear la base de datos (comando simple)
-                create_db_sql = f"CREATE DATABASE [{db_name}]"
-                
-                print(f"🔨 Creando base de datos: {db_name}")
-                cursor.execute(create_db_sql)
-                print(f"✅ Base de datos '{db_name}' creada exitosamente")
+            # Crear BD
+            print(f"🔨 Creando base de datos...")
+            cursor.execute(f"CREATE DATABASE [{db_name}]")
             
+            cursor.close()
             conn.close()
             
-            # PASO 2: Conectar a la nueva BD y ejecutar el script de schema (solo CREATE TABLE)
-            print(f"📋 Conectando a la nueva base de datos para crear tablas...")
-            
-            # Esperar un momento para que la BD esté lista
-            import time
+            # Esperar un momento
             time.sleep(2)
             
+            # Ejecutar script de esquema
             schema_script = self.scripts_dir / "01_schema.sql"
-            if schema_script.exists():
-                print(f"📄 Ejecutando script de tablas...")
-                
-                # Leer el script
-                sql_script = None
-                encodings_to_try = ['utf-8-sig', 'utf-16', 'utf-8', 'latin-1']
-                
-                for encoding in encodings_to_try:
-                    try:
-                        with open(schema_script, 'r', encoding=encoding) as f:
-                            sql_script = f.read()
-                        print(f"✅ Script leído con encoding: {encoding}")
-                        break
-                    except:
-                        continue
-                
-                if sql_script is None:
-                    return False, "❌ No se pudo leer el script de schema"
-                
-                # Conectar a la nueva BD (SIN autocommit para las tablas)
-                conn_str_new = (
-                    f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                    f"SERVER={server};"
-                    f"DATABASE={db_name};"
-                    f"Trusted_Connection=yes;"
-                )
-                
-                try:
-                    conn_new = pyodbc.connect(conn_str_new, timeout=30)
-                    print(f"✅ Conectado a {db_name} para crear objetos")
-                except:
-                    conn_str_new = conn_str_new.replace("ODBC Driver 17", "SQL Server")
-                    conn_new = pyodbc.connect(conn_str_new, timeout=30)
-                    print(f"✅ Conectado con driver alternativo")
-                
-                cursor_new = conn_new.cursor()
-                
-                # Separar por GO y filtrar comandos
-                batches = [batch.strip() for batch in sql_script.split('GO') if batch.strip()]
-                
-                print(f"📊 Procesando {len(batches)} comandos SQL...")
-                
-                comandos_ejecutados = 0
-                errores_importantes = 0
-                
-                for i, batch in enumerate(batches, 1):
-                    # Omitir comandos problemáticos
-                    batch_upper = batch.strip().upper()
-                    
-                    if any([
-                        batch_upper.startswith('USE '),
-                        batch_upper.startswith('CREATE DATABASE'),
-                        batch_upper.startswith('ALTER DATABASE'),
-                        batch_upper.startswith('DROP DATABASE'),
-                    ]):
-                        continue
-                    
-                    try:
-                        cursor_new.execute(batch)
-                        conn_new.commit()
-                        comandos_ejecutados += 1
-                    except pyodbc.Error as e:
-                        error_msg = str(e)
-                        if "already exists" in error_msg.lower() or "ya existe" in error_msg.lower():
-                            continue
-                        # Contar errores importantes (no ALTER DATABASE)
-                        if "ALTER DATABASE" not in error_msg:
-                            errores_importantes += 1
-                            if errores_importantes <= 5:  # Mostrar solo los primeros 5
-                                print(f"⚠️ Error en comando {i}: {error_msg[:100]}...")
-                
-                conn_new.close()
-                print(f"✅ Estructura creada: {comandos_ejecutados} comandos exitosos")
-                if errores_importantes > 0:
-                    print(f"⚠️ Se omitieron {errores_importantes} errores menores")
             
-            # PASO 3: Ejecutar script de datos iniciales
+            if not schema_script.exists():
+                return False, f"❌ No se encontró: {schema_script.name}"
+            
+            print(f"⚙️ Ejecutando {schema_script.name}...")
+            exito, mensaje = self.ejecutar_script_sql(schema_script, server, db_name)
+            
+            if not exito:
+                return False, f"❌ Error en esquema: {mensaje}"
+            
+            # Ejecutar datos iniciales
             datos_script = self.scripts_dir / "02_datos_iniciales.sql"
+            
             if datos_script.exists():
-                print(f"📄 Ejecutando datos iniciales...")
+                print(f"📝 Ejecutando {datos_script.name}...")
                 time.sleep(1)
                 exito, mensaje = self.ejecutar_script_sql(datos_script, server, db_name)
-                if exito:
-                    print(f"✅ Datos iniciales cargados")
-                else:
-                    print(f"⚠️ Advertencia datos iniciales: {mensaje[:100]}...")
+                
+                if not exito:
+                    print(f"⚠️ Advertencia en datos iniciales: {mensaje}")
             
-            return True, f"✅ Base de datos '{db_name}' configurada exitosamente"
+            return True, f"✅ Base de datos '{db_name}' creada exitosamente"
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return False, f"❌ Error en creación de BD: {str(e)}"
+            return False, f"❌ Error creando BD: {str(e)}"
     
     def crear_usuario_admin(self, server: str, db_name: str, username: str = "admin", password: str = "admin123") -> Tuple[bool, str]:
         """
         Crea el usuario administrador inicial
         
+        Args:
+            server: Servidor SQL
+            db_name: Base de datos
+            username: Nombre de usuario
+            password: Contraseña
+            
         Returns:
             Tuple[bool, str]: (éxito, mensaje)
         """
         try:
             print(f"👤 Creando usuario administrador en: {db_name}")
             
-            # Esperar un momento para asegurar que la BD esté lista
-            import time
             time.sleep(1)
             
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE={db_name};"
-                f"Trusted_Connection=yes;"
-            )
-            
-            try:
-                conn = pyodbc.connect(conn_str, timeout=30)
-                print(f"✅ Conectado a la base de datos: {db_name}")
-            except Exception as e:
-                print(f"⚠️ Intento con driver alternativo...")
-                conn_str = conn_str.replace("ODBC Driver 17", "SQL Server")
-                try:
-                    conn = pyodbc.connect(conn_str, timeout=30)
-                    print(f"✅ Conectado con driver alternativo")
-                except Exception as e2:
-                    return False, f"❌ No se pudo conectar a la BD: {str(e2)}"
-            
+            conn_str = self._build_connection_string(server, db_name)
+            conn = pyodbc.connect(conn_str, timeout=30)
             cursor = conn.cursor()
             
-            # Verificar si existe el usuario
+            # Verificar si existe
             cursor.execute("SELECT id FROM Usuario WHERE nombre_usuario = ?", (username,))
             if cursor.fetchone():
                 conn.close()
                 print(f"ℹ️ Usuario '{username}' ya existe")
                 return True, f"ℹ️ Usuario '{username}' ya existe"
             
-            # Obtener ID del rol Administrador
-            cursor.execute("SELECT id FROM Roles WHERE Nombre = 'Administrador'")
+            # Obtener ID del rol
+            cursor.execute("SELECT Id FROM Roles WHERE Nombre = 'Administrador'")
             rol = cursor.fetchone()
+            
             if not rol:
                 conn.close()
-                return False, "❌ Rol 'Administrador' no encontrado en la BD"
+                return False, "❌ Rol 'Administrador' no encontrado"
             
             rol_id = rol[0]
             
             # Crear usuario
             sql = """
-            INSERT INTO Usuario (Nombre, Apellido_Paterno, Apellido_Materno, nombre_usuario, contrasena, Id_Rol, Estado)
-            VALUES (?, ?, ?, ?, ?, ?, 1)
+            INSERT INTO Usuario 
+            (Nombre, Apellido_Paterno, Apellido_Materno, contrasena,
+            Id_Rol, Estado, nombre_usuario)
+            VALUES (?, ?, ?, ?, ?,GETDATE(), ? )
             """
             
-            cursor.execute(sql, ('Admin', 'Sistema', 'CMI', username, password, rol_id))
+            cursor.execute(sql, (
+                'Administrador', 'Sistema', 'General', 'admin@clinica.com',
+                username, password, rol_id, 1
+            ))
             conn.commit()
             
-            # Obtener ID del usuario creado
             cursor.execute("SELECT id FROM Usuario WHERE nombre_usuario = ?", (username,))
             user_id = cursor.fetchone()[0]
             
             conn.close()
             
-            print(f"✅ Usuario administrador creado:")
-            print(f"   ID: {user_id}")
-            print(f"   Usuario: {username}")
-            print(f"   Contraseña: {password}")
-            print(f"   Rol: Administrador (ID: {rol_id})")
+            print(f"✅ Usuario administrador creado (ID: {user_id})")
             
             return True, f"✅ Usuario '{username}' creado exitosamente"
             
@@ -513,7 +427,7 @@ class DatabaseInstaller:
             traceback.print_exc()
             return False, f"❌ Error creando usuario: {str(e)}"
     
-    def setup_completo(self, server: str = "localhost\\SQLEXPRESS", db_name: str = "ClinicaMariaInmaculada") -> Tuple[bool, str, dict]:
+    def setup_completo(self, server: str = "localhost\\SQLEXPRESS", db_name: str = "ClinicaMariaInmaculada") -> Tuple[bool, str, Dict]:
         """
         Ejecuta el setup completo automático
         
@@ -534,17 +448,14 @@ class DatabaseInstaller:
                 return False, mensaje, credenciales
             print(f"   {mensaje}\n")
             
-            # Paso 2: Verificar si la BD ya existe
+            # Paso 2: Verificar BD
             print("📋 Paso 2/4: Verificando base de datos...")
-            if self.verificar_base_datos_existe(server, db_name):
-                print(f"   ℹ️ Base de datos '{db_name}' ya existe")
-                respuesta = "usar"  # Por ahora usar la existente
-            else:
-                respuesta = "crear"
+            existe, mensaje = self.verificar_base_datos_existe(server, db_name)
+            print(f"   {mensaje}\n")
             
-            if respuesta == "crear":
-                # Paso 3: Crear base de datos
-                print("\n📋 Paso 3/4: Creando base de datos...")
+            if not existe:
+                # Paso 3: Crear BD
+                print("📋 Paso 3/4: Creando base de datos...")
                 exito, mensaje = self.crear_base_datos(server, db_name)
                 if not exito:
                     return False, mensaje, credenciales
@@ -582,7 +493,6 @@ class DatabaseInstaller:
             return False, f"❌ Error en setup: {str(e)}", credenciales
 
 
-# Para testing directo
 if __name__ == "__main__":
     print("🧪 Probando DatabaseInstaller...")
     

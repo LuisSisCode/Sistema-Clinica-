@@ -30,10 +30,17 @@ class AuthModel(QObject):
     
     @Property(str, notify=currentUserChanged)
     def userName(self) -> str:
+        """Retorna el nombre completo del usuario actual"""
         if self._current_user:
+            # Priorizar nombre_completo, luego construir desde Nombre + Apellido
+            nombre_completo = self._current_user.get('nombre_completo', '')
+            if nombre_completo:
+                return nombre_completo
+            
+            # Fallback: construir desde componentes
             nombre = self._current_user.get('Nombre', '')
             apellido = self._current_user.get('Apellido_Paterno', '')
-            return f"{nombre} {apellido}".strip()
+            return f"{nombre} {apellido}".strip() if nombre or apellido else "Usuario"
         return ""
     
     @Property(str, notify=currentUserChanged)
@@ -64,11 +71,7 @@ class AuthModel(QObject):
     @Property(str, notify=loginSuccessful) 
     def current_user_name(self) -> str:
         """Property para obtener el nombre del usuario actual"""
-        if hasattr(self, '_current_user') and self._current_user:
-            nombre = self._current_user.get('Nombre', '')
-            apellido = self._current_user.get('Apellido_Paterno', '')
-            return f"{nombre} {apellido}".strip()
-        return ""
+        return self.userName  # Reutilizar la lógica de userName
 
     @Property(str, notify=loginSuccessful)
     def current_user_role(self) -> str:
@@ -125,24 +128,50 @@ class AuthModel(QObject):
                 self.loginFailed.emit("Error obteniendo datos del usuario")
                 return
             
-            # Establecer usuario actual
-            self._current_user = user_data
+            # ✅ NORMALIZAR DATOS para compatibilidad con propiedades y main.py
+            # Extraer nombre completo y separarlo en componentes
+            nombre_completo = user_data.get('nombre_completo', '')
+            partes_nombre = nombre_completo.split() if nombre_completo else []
+            
+            # Crear estructura normalizada con TODAS las claves necesarias
+            normalized_data = {
+                # Claves originales del repository
+                'id': user_data.get('id', 0),
+                'nombre_usuario': user_data.get('nombre_usuario', ''),
+                'nombre_completo': nombre_completo,
+                'rol_nombre': user_data.get('rol_nombre', ''),
+                'rol_id': user_data.get('rol_id', 0),
+                'email': user_data.get('email', ''),
+                'activo': user_data.get('activo', True),
+                
+                # ✅ Claves adicionales para compatibilidad con main.py
+                'ID': user_data.get('id', 0),
+                'Usuario': user_data.get('nombre_usuario', ''),
+                'Nombre': nombre_completo,  # Nombre completo como fallback
+                'Rol': user_data.get('rol_nombre', ''),
+                
+                # ✅ Separar nombre en componentes si es posible
+                'Apellido_Paterno': partes_nombre[-1] if len(partes_nombre) > 1 else '',
+            }
+            
+            # Establecer usuario actual con datos normalizados
+            self._current_user = normalized_data
             self._is_authenticated = True
             
             # Emitir señal de cambio
             self.currentUserChanged.emit()
             
             # Mensaje de bienvenida
-            message = result.get('message', f"Bienvenido, {user_data.get('nombre_completo', '')}")
+            message = result.get('message', f"Bienvenido, {nombre_completo}")
             
             print(f"✅ Login exitoso:")
             print(f"   Usuario: {username}")
-            print(f"   Nombre: {user_data.get('nombre_completo', '')}")
-            print(f"   Rol: {user_data.get('rol_nombre', '')}")
-            print(f"   ID: {user_data.get('id', 0)}")
+            print(f"   Nombre: {nombre_completo}")
+            print(f"   Rol: {normalized_data.get('rol_nombre', '')}")
+            print(f"   ID: {normalized_data.get('id', 0)}")
             
-            # Emitir señal de éxito
-            self.loginSuccessful.emit(True, message, self._current_user.copy())
+            # Emitir señal de éxito con datos normalizados
+            self.loginSuccessful.emit(True, message, normalized_data.copy())
             
         except Exception as e:
             error_msg = f"Error de autenticación: {str(e)}"
