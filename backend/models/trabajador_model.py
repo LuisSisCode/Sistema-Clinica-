@@ -309,29 +309,31 @@ class TrabajadorModel(QObject):
     
     @Property('QVariantList', notify=tiposTrabajadorChanged)
     def tiposTrabajador(self):
-        """Lista de tipos de trabajador disponibles - COMPATIBLE CON QML"""
-        # ✅ CONVERTIR A QVariantList PARA QML
+        """Lista de tipos de trabajador - CORREGIDA para QML"""
         try:
             if not self._tipos_trabajador:
-                print(f"⚠️ tiposTrabajador property: Lista vacía")
                 return []
             
-            # ✅ VERIFICAR QUE SEA LISTA
-            if not isinstance(self._tipos_trabajador, list):
-                #print(f"⚠️ tiposTrabajador no es lista: {type(self._tipos_trabajador)}")
-                return []
+            # ✅ CONVERTIR EXPLÍCITAMENTE A LISTA COMPATIBLE CON QML
+            tipos_compatibles = []
+            for tipo in self._tipos_trabajador:
+                tipo_compatible = {
+                    'id': tipo.get('id', 0),
+                    'Tipo': str(tipo.get('Tipo', '')),
+                    'descripcion': str(tipo.get('descripcion', '')),
+                    'total_trabajadores': tipo.get('total_trabajadores', 0)
+                }
+                tipos_compatibles.append(tipo_compatible)
             
-            return self._tipos_trabajador
+            return tipos_compatibles
             
         except Exception as e:
             print(f"❌ Error en tiposTrabajador property: {e}")
-            import traceback
-            traceback.print_exc()
             return []
         
     @Slot(result='QVariantList')
     def obtenerTiposTrabajadorParaQML(self):
-        """Obtiene tipos de trabajador en formato QVariantList para QML"""
+        """Obtiene tipos de trabajador en formato QVariantList para QML - CORREGIDO"""
         try:
             print(f"🔍 obtenerTiposTrabajadorParaQML llamado")
             print(f"   Tipos en memoria: {len(self._tipos_trabajador)}")
@@ -340,13 +342,15 @@ class TrabajadorModel(QObject):
                 print(f"⚠️ Lista vacía en memoria")
                 return []
             
-            # ✅ CREAR LISTA COMPATIBLE CON QML
+            # ✅ CREAR LISTA COMPATIBLE CON QML - FORMATO SIMPLIFICADO
             tipos_qml = []
             for tipo in self._tipos_trabajador:
+                # Crear diccionario simple que QML pueda entender
                 tipo_dict = {
                     'id': tipo.get('id', 0),
                     'Tipo': tipo.get('Tipo', ''),
-                    'descripcion': tipo.get('descripcion', '')
+                    'descripcion': tipo.get('descripcion', ''),
+                    'total_trabajadores': tipo.get('total_trabajadores', 0)
                 }
                 tipos_qml.append(tipo_dict)
             
@@ -438,9 +442,12 @@ class TrabajadorModel(QObject):
                 mensaje = f"Trabajador creado exitosamente - ID: {trabajador_id}"
                 self.trabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-                
+
+                self.global_signals.trabajadoresNecesitaActualizacion.emit(
+                    f"Trabajador creado: ID {trabajador_id}"
+                )
                 print(f"✅ Trabajador creado desde QML: {nombre} {apellido_paterno}, Usuario: {self._usuario_actual_id}")
-                return True
+                return True 
             else:
                 error_msg = "Error creando trabajador"
                 self.trabajadorCreado.emit(False, error_msg)
@@ -491,9 +498,13 @@ class TrabajadorModel(QObject):
             if success:
                 self._cargar_trabajadores()
                 
-                mensaje = "Trabajador actualizado exitosamente"
+                mensaje = f"Trabajador actualizado exitosamente  - ID: {trabajador_id}"
                 self.trabajadorActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
+
+                self.global_signals.trabajadoresNecesitaActualizacion.emit(
+                    f"Trabajador actualizado: ID {trabajador_id}"
+                )
                 
                 print(f"✅ Trabajador actualizado desde QML: ID {trabajador_id}")
                 return True
@@ -541,9 +552,13 @@ class TrabajadorModel(QObject):
                 self._cargar_trabajadores()
                 self._cargar_estadisticas()
                 
-                mensaje = "Trabajador eliminado exitosamente"
+                mensaje = f"Trabajador eliminado exitosamente - ID: {trabajador_id}"
                 self.trabajadorEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
+
+                self.global_signals.trabajadoresNecesitaActualizacion.emit(
+                    f"Trabajador eliminado: ID {trabajador_id}"
+                )
                 
                 print(f"🗑️ Trabajador eliminado desde QML: ID {trabajador_id}")
                 return True

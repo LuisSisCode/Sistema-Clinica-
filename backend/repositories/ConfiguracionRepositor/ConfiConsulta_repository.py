@@ -295,12 +295,13 @@ class ConfiConsultaRepository(BaseRepository):
         """
         Obtiene lista de médicos disponibles para asignar
         ACTUALIZADO: Usa tabla Trabajadores en lugar de Doctores
+        CORREGIDO: Usa operador + en lugar de CONCAT para SQL Server
         """
         try:
             query = """
             SELECT 
                 t.id, 
-                CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno) as nombre,
+                t.Nombre + ' ' + t.Apellido_Paterno + ISNULL(' ' + t.Apellido_Materno, '') as nombre,
                 t.Especialidad as especialidad,
                 t.Matricula as matricula,
                 COUNT(DISTINCT te.Id_Especialidad) as especialidades_asignadas
@@ -313,11 +314,11 @@ class ConfiConsultaRepository(BaseRepository):
             ORDER BY t.Apellido_Paterno, t.Apellido_Materno, t.Nombre
             """
             result = self._execute_query(query)
-            print(f"✅ Médicos cargados exitosamente: {len(result)}")
+            print(f"✅ Médicos disponibles cargados: {len(result)}")
             return result
             
         except Exception as e:
-            print(f"❌ Error cargando médicos: {e}")
+            print(f"❌ Error cargando médicos disponibles: {e}")
             import traceback
             traceback.print_exc()
             # Devolver lista vacía en caso de error
@@ -361,6 +362,7 @@ class ConfiConsultaRepository(BaseRepository):
         """
         Obtiene especialidades formateadas para reportes
         ACTUALIZADO: Usa Trabajador_Especialidad
+        CORREGIDO: Usa operador + en lugar de CONCAT
         """
         query = """
         SELECT 
@@ -371,7 +373,7 @@ class ConfiConsultaRepository(BaseRepository):
             e.Precio_Emergencia,
             COUNT(DISTINCT te.Id_Trabajador) as medicos_asignados,
             STRING_AGG(
-                CONCAT(t.Nombre, ' ', t.Apellido_Paterno),
+                t.Nombre + ' ' + t.Apellido_Paterno,
                 ', '
             ) as nombres_medicos
         FROM Especialidad e

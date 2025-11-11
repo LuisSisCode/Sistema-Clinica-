@@ -238,9 +238,14 @@ class EnfermeriaModel(QObject):
         try:
             self.global_signals.tiposProcedimientosModificados.connect(self._actualizar_tipos_procedimientos_desde_signal)
             self.global_signals.enfermeriaNecesitaActualizacion.connect(self._manejar_actualizacion_global)
-            #print("🔗 Señales globales conectadas en EnfermeriaModel")
+            
+            # llamado a nuevas señales de trabajadores para actualizar los nuevos trabajadores  
+            self.global_signals.trabajadoresNecesitaActualizacion.connect(self._actualizar_trabajadores_desde_signal)
+            self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_trabajadores_desde_signal)
+            
+            print("Señales globales conectadas en EnfermeriaModel")
         except Exception as e:
-            print(f"❌ Error conectando señales globales en EnfermeriaModel: {e}")
+            print(f"Error conectando señales globales en EnfermeriaModel: {e}")
     
     def _get_procedimientos_json(self) -> str:
         """Getter para procedimientos en formato JSON"""
@@ -1678,6 +1683,23 @@ class EnfermeriaModel(QObject):
             print(f"💥 Error gestionando paciente anónimo: {e}")
             logger.error(f"Error gestionando paciente anónimo: {e}")
             return -1
+
+    @Slot(str)
+    def _actualizar_trabajadores_desde_signal(self, mensaje: str = ""):
+        """
+        ✅ NUEVO: Responde a cambios en trabajadores desde señales globales
+        Se ejecuta cuando se crea/actualiza/elimina un trabajador
+        """
+        try:
+            print(f"📢 Signal recibida en EnfermeriaModel: {mensaje}")
+            
+            # Recargar lista de trabajadores usando el método existente
+            self.actualizar_trabajadores_enfermeria()
+            
+            print("✅ Trabajadores actualizados en EnfermeriaModel")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando trabajadores desde signal: {e}")
 
 # ===============================
 # REGISTRO PARA QML

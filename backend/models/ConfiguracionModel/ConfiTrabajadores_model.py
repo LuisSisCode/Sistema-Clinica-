@@ -5,6 +5,7 @@ from PySide6.QtQml import qmlRegisterType
 from ...repositories.ConfiguracionRepositor import ConfiTrabajadoresRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
 from ...core.Signals_manager import get_global_signals
+
 class ConfiTrabajadoresModel(QObject):
     """
     Model QObject para gestión de configuración de tipos de trabajadores en QML
@@ -88,15 +89,26 @@ class ConfiTrabajadoresModel(QObject):
     
     # --- OPERACIONES CRUD TIPOS DE TRABAJADORES ---
     
-    @Slot(str, str, result=bool)
-    def crearTipoTrabajador(self, tipo: str, descripcion: str = "") -> bool:
-        """Crea nuevo tipo de trabajador desde QML"""
+    @Slot(str, str, str, result=bool)
+    def crearTipoTrabajador(self, tipo: str, descripcion: str = "", area_funcional: str = "") -> bool:
+        """
+        Crea nuevo tipo de trabajador desde QML con área funcional
+        
+        Args:
+            tipo: Nombre del tipo de trabajador
+            descripcion: Descripción del tipo de trabajador
+            area_funcional: Área funcional (MEDICO, ENFERMERIA, LABORATORIO, FARMACIA, ADMINISTRATIVO, o vacío)
+        """
         try:
             self._set_loading(True)
             
+            # Normalizar area_funcional (vacío = None)
+            area = None if not area_funcional or area_funcional == "Ninguna" else area_funcional
+            
             tipo_id = self.repository.create_tipo_trabajador(
                 tipo=tipo.strip(),
-                descripcion=descripcion.strip() if descripcion.strip() else None
+                descripcion=descripcion.strip() if descripcion.strip() else None,
+                area_funcional=area
             )
             
             if tipo_id:
@@ -107,11 +119,12 @@ class ConfiTrabajadoresModel(QObject):
                 # Forzar aplicación de filtros actuales
                 self.aplicarFiltros(self._filtro_busqueda)
                 
-                mensaje = f"Tipo de trabajador creado exitosamente - ID: {tipo_id}"
+                area_str = f" [{area}]" if area else ""
+                mensaje = f"Tipo de trabajador '{tipo}'{area_str} creado exitosamente - ID: {tipo_id}"
                 self.tipoTrabajadorCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 self.global_signals.notificar_cambio_tipos_trabajadores("creado", tipo_id, tipo.strip())
-                print(f"✅ Tipo de trabajador creado desde QML: {tipo}")
+                print(f"✅ Tipo de trabajador creado desde QML: {tipo}{area_str}")
                 print(f"🔄 Datos actualizados automáticamente - Total: {len(self._tipos_trabajadores)}")
                 return True
             else:
@@ -144,10 +157,18 @@ class ConfiTrabajadoresModel(QObject):
             print(f"❌ Error refrescando datos: {e}")
             self.errorOccurred.emit("Error", f"Error refrescando datos: {str(e)}")
     
-    @Slot(int, str, str, result=bool)
+    @Slot(int, str, str, str, result=bool)
     def actualizarTipoTrabajador(self, tipo_id: int, tipo: str = "", 
-                               descripcion: str = "") -> bool:
-        """Actualiza tipo de trabajador existente desde QML"""
+                               descripcion: str = "", area_funcional: str = "") -> bool:
+        """
+        Actualiza tipo de trabajador existente desde QML incluyendo área funcional
+        
+        Args:
+            tipo_id: ID del tipo a actualizar
+            tipo: Nuevo nombre (o vacío para no cambiar)
+            descripcion: Nueva descripción (o vacío para no cambiar)
+            area_funcional: Nueva área funcional (vacío = sin cambios, "Ninguna" = limpiar área)
+        """
         try:
             self._set_loading(True)
             
@@ -159,6 +180,15 @@ class ConfiTrabajadoresModel(QObject):
                 kwargs['descripcion'] = descripcion.strip()
             elif descripcion == "":  # Si es cadena vacía explícita, establecer None
                 kwargs['descripcion'] = None
+            
+            # Manejar area_funcional
+            if area_funcional == "":
+                # No actualizar área funcional
+                pass
+            elif area_funcional == "Ninguna":
+                kwargs['area_funcional'] = ""  # Limpiar área (se convertirá a None en repository)
+            elif area_funcional:
+                kwargs['area_funcional'] = area_funcional
             
             success = self.repository.update_tipo_trabajador(tipo_id, **kwargs)
             
@@ -234,7 +264,8 @@ class ConfiTrabajadoresModel(QObject):
                 tipos_filtrados = [
                     t for t in tipos_filtrados
                     if (buscar_lower in t.get('Tipo', '').lower() or
-                        buscar_lower in str(t.get('descripcion', '')).lower())
+                        buscar_lower in str(t.get('descripcion', '')).lower() or
+                        buscar_lower in str(t.get('area_funcional_nombre', '')).lower())
                 ]
             
             self._tipos_trabajadores_filtrados = tipos_filtrados
@@ -277,10 +308,86 @@ class ConfiTrabajadoresModel(QObject):
         """Obtiene tipo de trabajador específico por ID"""
         try:
             tipo_trabajador = self.repository.get_tipo_trabajador_by_id(tipo_id)
+            if tipo_trabajador:
+                # Agregar nombre amigable del área
+                area = tipo_trabajador.get('area_funcional', None)
+                tipo_trabajador['area_funcional_nombre'] = self.obtenerNombreAreaFuncional(area)
             return tipo_trabajador if tipo_trabajador else {}
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo tipo de trabajador: {str(e)}")
             return {}
+    
+    # --- ÁREAS FUNCIONALES ---
+    
+    @Slot(result='QVariantList')
+    def obtenerAreasFuncionalesDisponibles(self) -> List[Dict[str, str]]:
+        """
+        Obtiene lista de áreas funcionales disponibles para UI (ComboBox)
+        
+        Returns:
+            Lista de diccionarios con 'value' y 'label' para cada área
+        """
+        try:
+            return self.repository.get_areas_funcionales_con_nombres()
+        except Exception as e:
+            print(f"❌ Error obteniendo áreas funcionales: {e}")
+            return [
+                {'value': '', 'label': 'Ninguna'},
+                {'value': 'MEDICO', 'label': 'Área Médica'},
+                {'value': 'ENFERMERIA', 'label': 'Área de Enfermería'},
+                {'value': 'LABORATORIO', 'label': 'Área de Laboratorio'},
+                {'value': 'FARMACIA', 'label': 'Área de Farmacia'},
+                {'value': 'ADMINISTRATIVO', 'label': 'Área Administrativa'}
+            ]
+    
+    @Slot(str, result='QVariantList')
+    def obtenerTiposPorArea(self, area: str) -> List[Dict[str, Any]]:
+        """
+        Obtiene tipos de trabajadores filtrados por área funcional
+        
+        Args:
+            area: Área funcional a filtrar (MEDICO, ENFERMERIA, etc.)
+        
+        Returns:
+            Lista de tipos de trabajadores del área especificada
+        """
+        try:
+            if not area or area == "Todos":
+                return self._tipos_trabajadores
+            
+            tipos = self.repository.get_tipos_by_area_funcional(area)
+            
+            # Agregar nombre amigable del área a cada tipo
+            for tipo in tipos:
+                tipo['area_funcional_nombre'] = self.obtenerNombreAreaFuncional(area)
+            
+            return tipos
+        except Exception as e:
+            print(f"❌ Error obteniendo tipos por área: {e}")
+            return []
+    
+    @Slot(str, result=str)
+    def obtenerNombreAreaFuncional(self, area: str) -> str:
+        """
+        Convierte código de área funcional a nombre amigable para UI
+        
+        Args:
+            area: Código del área (MEDICO, ENFERMERIA, etc.)
+        
+        Returns:
+            Nombre amigable del área
+        """
+        areas_map = {
+            'MEDICO': 'Área Médica',
+            'ENFERMERIA': 'Área de Enfermería',
+            'LABORATORIO': 'Área de Laboratorio',
+            'FARMACIA': 'Área de Farmacia',
+            'ADMINISTRATIVO': 'Área Administrativa',
+            None: 'Sin área específica',
+            '': 'Sin área específica'
+        }
+        
+        return areas_map.get(area, 'Sin área específica')
     
     # --- RECARGA DE DATOS ---
     
@@ -323,9 +430,10 @@ class ConfiTrabajadoresModel(QObject):
             
             # Agregar tipos existentes
             for tipo in self._tipos_trabajadores:
+                area_nombre = tipo.get('area_funcional_nombre', 'Sin área específica')
                 tipos_formateados.append({
                     'id': tipo.get('id', 0),
-                    'text': tipo.get('Tipo', 'Sin nombre'),
+                    'text': f"{tipo.get('Tipo', 'Sin nombre')} ({area_nombre})",
                     'data': tipo
                 })
             
@@ -391,21 +499,40 @@ class ConfiTrabajadoresModel(QObject):
         try:
             tipos_trabajadores = self.repository.get_all_tipos_trabajadores()
             
-            # Procesar datos adicionales
+            # ✅ VERIFICAR QUE SEA UNA LISTA VÁLIDA
+            if not isinstance(tipos_trabajadores, list):
+                print(f"⚠️ get_all_tipos_trabajadores no retornó lista: {type(tipos_trabajadores)}")
+                tipos_trabajadores = []
+            
+            # ✅ AGREGAR NOMBRE AMIGABLE DEL ÁREA Y PROCESAR DATOS
             for tipo in tipos_trabajadores:
+                area = tipo.get('area_funcional', None)
+                tipo['area_funcional_nombre'] = self.obtenerNombreAreaFuncional(area)
+                
                 if not tipo.get('descripcion'):
                     tipo['descripcion'] = 'Sin descripción'
             
             self._tipos_trabajadores = tipos_trabajadores
             self._tipos_trabajadores_filtrados = tipos_trabajadores.copy()
             self.tiposTrabajadoresChanged.emit()
+            
+            # ✅ LOG DETALLADO
             print(f"👥 Tipos de trabajadores cargados: {len(tipos_trabajadores)}")
+            if self._tipos_trabajadores:
+                print(f"   Tipos: {[t.get('Tipo', 'N/A') for t in self._tipos_trabajadores[:3]]}")
+                areas_count = len(set(t.get('area_funcional') for t in self._tipos_trabajadores if t.get('area_funcional')))
+                print(f"   Áreas funcionales distintas: {areas_count}")
+            else:
+                print("   ⚠️ Lista de tipos está vacía")
                 
         except Exception as e:
             print(f"❌ Error cargando tipos de trabajadores: {e}")
+            import traceback
+            traceback.print_exc()
             self._tipos_trabajadores = []
             self._tipos_trabajadores_filtrados = []
-            raise e
+            # ✅ EMITIR SEÑAL INCLUSO SI FALLA (para limpiar UI)
+            self.tiposTrabajadoresChanged.emit()
     
     def _cargar_estadisticas(self):
         """Carga estadísticas desde el repository"""

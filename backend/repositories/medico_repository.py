@@ -208,7 +208,7 @@ class MedicoRepository(BaseRepository):
             tt.Tipo as tipo_trabajador
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE (tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%')
+        WHERE tt.area_funcional = 'MEDICO'
           AND t.Especialidad LIKE ?
         ORDER BY t.Nombre, t.Apellido_Paterno
         """
@@ -221,7 +221,7 @@ class MedicoRepository(BaseRepository):
         SELECT t.*
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE (tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%')
+        WHERE tt.area_funcional = 'MEDICO'
           AND t.Matricula = ?
         """
         return self._execute_query(query, (matricula.upper().strip(),), fetch_one=True)
@@ -293,7 +293,7 @@ class MedicoRepository(BaseRepository):
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
-        WHERE tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%'
+        WHERE tt.area_funcional = 'MEDICO'
         """
         
         # Por especialidades descriptivas
@@ -303,7 +303,7 @@ class MedicoRepository(BaseRepository):
             COUNT(*) as cantidad
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE (tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%')
+        WHERE tt.area_funcional = 'MEDICO'
           AND t.Especialidad IS NOT NULL
         GROUP BY t.Especialidad
         ORDER BY cantidad DESC
@@ -319,7 +319,7 @@ class MedicoRepository(BaseRepository):
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
-        WHERE tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%'
+        WHERE tt.area_funcional = 'MEDICO'
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Especialidad
         ORDER BY total_servicios DESC
         """
@@ -348,7 +348,7 @@ class MedicoRepository(BaseRepository):
         INNER JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
         INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
         INNER JOIN Consultas c ON e.id = c.Id_Especialidad
-        WHERE tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%'
+        WHERE tt.area_funcional = 'MEDICO'
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
                  t.Matricula, t.Especialidad
         ORDER BY total_consultas DESC, t.Nombre
@@ -377,7 +377,7 @@ class MedicoRepository(BaseRepository):
         SELECT DISTINCT Especialidad 
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE (tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%')
+        WHERE tt.area_funcional = 'MEDICO'
           AND Especialidad IS NOT NULL
         ORDER BY Especialidad
         """
@@ -405,7 +405,7 @@ class MedicoRepository(BaseRepository):
         query = """
         SELECT TOP 1 id 
         FROM Tipo_Trabajadores 
-        WHERE Tipo LIKE '%Médico%' OR Tipo LIKE '%Medico%'
+        WHERE area_funcional = 'MEDICO'
         ORDER BY id
         """
         result = self._execute_query(query, fetch_one=True)
@@ -423,7 +423,7 @@ class MedicoRepository(BaseRepository):
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         WHERE t.id = ? 
-          AND (tt.Tipo LIKE '%Médico%' OR tt.Tipo LIKE '%Medico%')
+          AND tt.area_funcional = 'MEDICO'
         """
         result = self._execute_query(query, (trabajador_id,), fetch_one=True)
         return result['count'] > 0 if result else False

@@ -8,6 +8,7 @@ Item {
     // ===== CONEXIÓN CON EL MODELO =====
     property var confiTrabajadoresModel: appController.confi_trabajadores_model_instance
     property var trabajadorModel: appController.trabajador_model_instance
+    
     // ===== SEÑALES PARA VOLVER =====
     signal volverClicked()
     signal backToMain()
@@ -47,6 +48,29 @@ Item {
     property bool isEditMode: false
     property int editingIndex: -1
     property int editingId: -1
+    
+    // ✅ NUEVO: Mapeo de íconos por área funcional
+    function obtenerIconoArea(area) {
+        const iconos = {
+            'MEDICO': '⚕️',
+            'LABORATORIO': '🔬',
+            'ENFERMERIA': '💉',
+            'ADMINISTRATIVO': '📋',
+            'FARMACIA': '💊'
+        }
+        return iconos[area] || '👷'
+    }
+    
+    function obtenerColorArea(area) {
+        const colores = {
+            'MEDICO': '#3B82F6',
+            'LABORATORIO': '#8B5CF6',
+            'ENFERMERIA': '#EC4899',
+            'ADMINISTRATIVO': '#6B7280',
+            'FARMACIA': '#10B981'
+        }
+        return colores[area] || '#9CA3AF'
+    }
     
     // ===== CONEXIONES CON SEÑALES DEL MODELO =====
     Connections {
@@ -91,6 +115,7 @@ Item {
     function limpiarFormulario() {
         nuevoTipoNombre.text = ""
         nuevoTipoDescripcion.text = ""
+        areaFuncionalCombo.currentIndex = 0  // ✅ NUEVO
         isEditMode = false
         editingIndex = -1
         editingId = -1
@@ -99,67 +124,111 @@ Item {
     function editarTipoTrabajador(index, tipoData) {
         nuevoTipoNombre.text = tipoData.Tipo || ""
         nuevoTipoDescripcion.text = tipoData.descripcion || ""
+        
+        // ✅ NUEVO: Seleccionar área funcional
+        var area = tipoData.area_funcional
+        if (area) {
+            var areasDisponibles = ['MEDICO', 'LABORATORIO', 'ENFERMERIA', 'FARMACIA', 'ADMINISTRATIVO']
+            var indexArea = areasDisponibles.indexOf(area)
+            if (indexArea !== -1) {
+                areaFuncionalCombo.currentIndex = indexArea + 1
+            } else {
+                areaFuncionalCombo.currentIndex = 0
+            }
+        } else {
+            areaFuncionalCombo.currentIndex = 0
+        }
+        
         isEditMode = true
         editingIndex = index
-        editingId = tipoData.id || -1
-    }
-    
-    function eliminarTipoTrabajador(tipoData) {
-        if (confiTrabajadoresModel) {
-            // Verificar si hay trabajadores asociados
-            var asociados = confiTrabajadoresModel.obtenerTrabajadoresAsociados(tipoData.id)
-            if (asociados > 0) {
-                showErrorMessage("No se puede eliminar. Tiene " + asociados + " trabajadores asociados")
-                return
-            }
-            
-            confiTrabajadoresModel.eliminarTipoTrabajador(tipoData.id)
-        }
+        editingId = tipoData.id
     }
     
     function guardarTipoTrabajador() {
-        if (!confiTrabajadoresModel) {
-            showErrorMessage("Modelo no disponible")
-            return
-        }
-        
         var tipo = nuevoTipoNombre.text.trim()
         var descripcion = nuevoTipoDescripcion.text.trim()
         
-        if (!tipo) {
+        // ✅ NUEVO: Obtener área funcional seleccionada
+        var areaIndex = areaFuncionalCombo.currentIndex
+        var areaFuncional = ""
+        if (areaIndex > 0) {
+            var areasDisponibles = ['MEDICO', 'LABORATORIO', 'ENFERMERIA', 'FARMACIA', 'ADMINISTRATIVO']
+            areaFuncional = areasDisponibles[areaIndex - 1]
+        }
+        
+        if (tipo.length === 0) {
             showErrorMessage("El nombre del tipo es obligatorio")
             return
         }
         
-        // Validar tipo único
-        if (!confiTrabajadoresModel.validarTipoUnico(tipo, editingId)) {
-            showErrorMessage("Ya existe un tipo de trabajador con ese nombre")
+        // ✅ NUEVO: Validar que se haya seleccionado un área
+        if (areaFuncional === "") {
+            showErrorMessage("Debe seleccionar una categoría funcional")
             return
         }
         
-        if (isEditMode && editingId > 0) {
-            // Editar tipo existente
-            confiTrabajadoresModel.actualizarTipoTrabajador(editingId, tipo, descripcion)
-        } else {
-            // Agregar nuevo tipo
-            confiTrabajadoresModel.crearTipoTrabajador(tipo, descripcion)
+        if (confiTrabajadoresModel) {
+            if (isEditMode && editingId > 0) {
+                // ✅ ACTUALIZADO: Incluir área funcional
+                confiTrabajadoresModel.actualizarTipoTrabajador(editingId, tipo, descripcion, areaFuncional)
+            } else {
+                // ✅ ACTUALIZADO: Incluir área funcional
+                confiTrabajadoresModel.crearTipoTrabajador(tipo, descripcion, areaFuncional)
+            }
         }
-    }
-    
-    function showSuccessMessage(message) {
-        // Implementar notificación de éxito
-        console.log("✅ Éxito:", message)
-    }
-    
-    function showErrorMessage(message) {
-        // Implementar notificación de error
-        console.log("❌ Error:", message)
     }
     
     function aplicarFiltros() {
+        var busqueda = campoBusqueda.text.trim()
         if (confiTrabajadoresModel) {
-            confiTrabajadoresModel.aplicarFiltros(campoBusqueda.text)
+            confiTrabajadoresModel.aplicarFiltros(busqueda)
         }
+    }
+    
+    function eliminarTipoTrabajador(tipoId, tipoNombre) {
+        // Verificar si tiene trabajadores asociados
+        if (confiTrabajadoresModel) {
+            var count = confiTrabajadoresModel.obtenerTrabajadoresAsociados(tipoId)
+            if (count > 0) {
+                showErrorMessage("No se puede eliminar el tipo '" + tipoNombre + "' porque tiene " + count + " trabajadores asociados")
+                return
+            }
+        }
+        
+        confirmDeleteDialog.tipoId = tipoId
+        confirmDeleteDialog.tipoNombre = tipoNombre
+        confirmDeleteDialog.open()
+    }
+    
+    function confirmarEliminacion() {
+        if (confiTrabajadoresModel && confirmDeleteDialog.tipoId > 0) {
+            confiTrabajadoresModel.eliminarTipoTrabajador(confirmDeleteDialog.tipoId)
+        }
+    }
+    
+    // ===== FUNCIONES DE MENSAJES =====
+    property alias messageText: messageLabel.text
+    property alias messageColor: messageRect.color
+    property bool showMessage: false
+    
+    function showSuccessMessage(msg) {
+        messageLabel.text = "✅ " + msg
+        messageRect.color = successColor
+        showMessage = true
+        messageTimer.restart()
+    }
+    
+    function showErrorMessage(msg) {
+        messageLabel.text = "❌ " + msg
+        messageRect.color = dangerColor
+        showMessage = true
+        messageTimer.restart()
+    }
+    
+    Timer {
+        id: messageTimer
+        interval: 3000
+        onTriggered: showMessage = false
     }
     
     // ===== LAYOUT PRINCIPAL =====
@@ -167,36 +236,32 @@ Item {
         anchors.fill: parent
         spacing: 0
         
-        // ===== HEADER PRINCIPAL UNIFICADO =====
+        // ===== ENCABEZADO MODERNO =====
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: baseUnit * 12
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: primaryColor }
-                GradientStop { position: 1.0; color: Qt.darker(primaryColor, 1.1) }
-            }
+            Layout.preferredHeight: baseUnit * 14
+            color: primaryColor
             
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: marginLarge
+                anchors.margins: marginMedium
                 spacing: marginMedium
                 
-                // ===== BOTÓN DE VOLVER =====
+                // ===== BOTÓN VOLVER =====
                 Button {
-                    Layout.preferredWidth: baseUnit * 6
-                    Layout.preferredHeight: baseUnit * 6
-                    text: "←"
+                    Layout.preferredWidth: baseUnit * 8
+                    Layout.preferredHeight: baseUnit * 8
                     
                     background: Rectangle {
-                        color: backgroundColor
-                        radius: baseUnit * 0.8
-                        opacity: parent.pressed ? 0.8 : 1.0
+                        color: parent.pressed ? Qt.lighter(primaryColor, 1.3) : Qt.lighter(primaryColor, 1.1)
+                        radius: radiusMedium
+                        opacity: parent.hovered ? 1.0 : 0.9
                     }
                     
                     contentItem: Label {
-                        text: parent.text
-                        color: primaryColor
-                        font.pixelSize: baseUnit * 2.5
+                        text: "←"
+                        font.pixelSize: fontMedium * 1.5
+                        color: backgroundColor
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -240,7 +305,7 @@ Item {
                     }
                     
                     Label {
-                        text: "Gestiona los tipos de personal del sistema"
+                        text: "Gestiona los tipos de personal y sus categorías funcionales"
                         color: backgroundColor
                         font.pixelSize: fontBase * 0.9
                         wrapMode: Text.WordWrap
@@ -360,8 +425,8 @@ Item {
                 // ===== FORMULARIO SUPERIOR =====
                 GroupBox {
                     Layout.fillWidth: true
-                    Layout.minimumHeight: baseUnit * 25  // AGREGAR ALTURA
-                    title: ""  // QUITAR EL TÍTULO
+                    Layout.minimumHeight: baseUnit * 32  // ✅ AUMENTADO PARA EL NUEVO CAMPO
+                    title: ""
                     
                     background: Rectangle {
                         color: backgroundColor
@@ -372,7 +437,7 @@ Item {
                     
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: marginMedium  // AGREGAR MÁRGENES
+                        anchors.margins: marginMedium
                         spacing: marginMedium
                         
                         // TÍTULO PERSONALIZADO
@@ -392,12 +457,13 @@ Item {
                             rowSpacing: marginMedium
                             columnSpacing: marginLarge
                             
+                            // ✅ CAMPO: Nombre del Tipo
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: marginSmall
                                 
                                 Label {
-                                    text: "Nombre del Tipo:"  // ESTE VA DESPUÉS DEL TÍTULO
+                                    text: "Nombre del Tipo: *"
                                     font.bold: true
                                     color: textColor
                                     font.pixelSize: fontBase
@@ -412,15 +478,129 @@ Item {
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: nuevoTipoNombre.activeFocus ? primaryColor : borderColor
+                                        border.width: nuevoTipoNombre.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
                             }
                             
+                            // ✅ NUEVO: Campo Categoría Funcional
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                spacing: marginSmall
+                                
+                                RowLayout {
+                                    spacing: marginSmall
+                                    
+                                    Label {
+                                        text: "Categoría Funcional: *"
+                                        font.bold: true
+                                        color: textColor
+                                        font.pixelSize: fontBase
+                                        font.family: "Segoe UI"
+                                    }
+                                    
+                                    Label {
+                                        text: "ⓘ"
+                                        font.pixelSize: fontSmall
+                                        color: textSecondaryColor
+                                        
+                                        ToolTip {
+                                            text: "Esta categoría determina en qué módulos del sistema aparecerá este tipo de trabajador"
+                                            visible: parent.hovered
+                                            delay: 500
+                                        }
+                                        
+                                        MouseArea {
+                                            id: tooltipArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            property bool hovered: false
+                                            onEntered: hovered = true
+                                            onExited: hovered = false
+                                        }
+                                    }
+                                }
+                                
+                                ComboBox {
+                                    id: areaFuncionalCombo
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: baseUnit * 4.5
+                                    font.pixelSize: fontBase
+                                    font.family: "Segoe UI"
+                                    
+                                    model: [
+                                        "Seleccionar categoría...",
+                                        "⚕️  Médico (Consultas)",
+                                        "🔬 Laboratorista",
+                                        "💉 Enfermero",
+                                        "💊 Farmacia",
+                                        "📋 Administrativo"
+                                    ]
+                                    
+                                    delegate: ItemDelegate {
+                                        width: areaFuncionalCombo.width
+                                        contentItem: Text {
+                                            text: modelData
+                                            color: textColor
+                                            font: areaFuncionalCombo.font
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        highlighted: areaFuncionalCombo.highlightedIndex === index
+                                        
+                                        background: Rectangle {
+                                            color: highlighted ? primaryColor : (parent.hovered ? surfaceColor : backgroundColor)
+                                            opacity: highlighted ? 0.1 : 1
+                                        }
+                                    }
+                                    
+                                    contentItem: Text {
+                                        leftPadding: baseUnit
+                                        rightPadding: areaFuncionalCombo.indicator.width + baseUnit
+                                        text: areaFuncionalCombo.displayText
+                                        font: areaFuncionalCombo.font
+                                        color: areaFuncionalCombo.currentIndex === 0 ? textSecondaryColor : textColor
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
+                                    
+                                    background: Rectangle {
+                                        color: backgroundColor
+                                        border.color: areaFuncionalCombo.activeFocus ? primaryColor : borderColor
+                                        border.width: areaFuncionalCombo.activeFocus ? 2 : 1
+                                        radius: radiusSmall
+                                    }
+                                    
+                                    popup: Popup {
+                                        y: areaFuncionalCombo.height
+                                        width: areaFuncionalCombo.width
+                                        implicitHeight: contentItem.implicitHeight
+                                        padding: 1
+                                        
+                                        contentItem: ListView {
+                                            clip: true
+                                            implicitHeight: contentHeight
+                                            model: areaFuncionalCombo.popup.visible ? areaFuncionalCombo.delegateModel : null
+                                            currentIndex: areaFuncionalCombo.highlightedIndex
+                                            
+                                            ScrollBar.vertical: ScrollBar {}
+                                        }
+                                        
+                                        background: Rectangle {
+                                            color: backgroundColor
+                                            border.color: borderColor
+                                            radius: radiusSmall
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // ✅ CAMPO: Descripción (ahora ocupa toda la fila)
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.columnSpan: width < baseUnit * 80 ? 1 : 2
                                 spacing: marginSmall
                                 
                                 Label {
@@ -439,8 +619,8 @@ Item {
                                     font.family: "Segoe UI"
                                     background: Rectangle {
                                         color: backgroundColor
-                                        border.color: borderColor
-                                        border.width: 1
+                                        border.color: nuevoTipoDescripcion.activeFocus ? primaryColor : borderColor
+                                        border.width: nuevoTipoDescripcion.activeFocus ? 2 : 1
                                         radius: radiusSmall
                                     }
                                 }
@@ -481,7 +661,9 @@ Item {
                             
                             Button {
                                 text: isEditMode ? "💾 Actualizar" : "➕ Agregar"
-                                enabled: nuevoTipoNombre.text.trim().length > 0 && !confiTrabajadoresModel.loading
+                                enabled: nuevoTipoNombre.text.trim().length > 0 && 
+                                        areaFuncionalCombo.currentIndex > 0 &&  // ✅ NUEVO: Validar categoría
+                                        !confiTrabajadoresModel.loading
                                 Layout.preferredWidth: baseUnit * 15
                                 Layout.preferredHeight: baseUnit * 4.5
                                 
@@ -544,7 +726,7 @@ Item {
                             }
                         }
                         
-                        // ENCABEZADOS
+                        // ✅ ACTUALIZADO: ENCABEZADOS CON COLUMNA DE CATEGORÍA
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 6
@@ -558,7 +740,7 @@ Item {
                                 spacing: marginSmall
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.35
+                                    Layout.preferredWidth: parent.width * 0.25
                                     text: "TIPO"
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -574,7 +756,23 @@ Item {
                                 }
                                 
                                 Label {
-                                    Layout.preferredWidth: parent.width * 0.45
+                                    Layout.preferredWidth: parent.width * 0.15
+                                    text: "CATEGORÍA"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    color: textColor
+                                    font.family: "Segoe UI"
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: borderColor
+                                }
+                                
+                                Label {
+                                    Layout.preferredWidth: parent.width * 0.40
                                     text: "DESCRIPCIÓN"
                                     font.bold: true
                                     font.pixelSize: fontSmall
@@ -601,183 +799,151 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO CON SCROLLVIEW
-                        ScrollView {
+                        // ✅ ACTUALIZADO: LISTVIEW CON COLUMNA DE CATEGORÍA
+                        ListView {
+                            id: tiposListView
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
                             
-                            ListView {
-                                id: listaTiposTrabajadores
-                                model: confiTrabajadoresModel ? confiTrabajadoresModel.tiposTrabajadores : []
+                            model: confiTrabajadoresModel ? confiTrabajadoresModel.tiposTrabajadores : []
+                            
+                            delegate: Rectangle {
+                                width: tiposListView.width
+                                height: baseUnit * 7
+                                color: index % 2 === 0 ? backgroundColor : surfaceColor
+                                border.color: borderColor
+                                border.width: 0.5
                                 
-                                delegate: Rectangle {
-                                    width: ListView.view.width
-                                    height: baseUnit * 8
-                                    color: index % 2 === 0 ? backgroundColor : "#f8f9fa"
-                                    border.color: borderColor
-                                    border.width: 1
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: marginSmall
+                                    spacing: marginSmall
                                     
+                                    // Tipo
+                                    Label {
+                                        Layout.preferredWidth: parent.width * 0.25
+                                        text: modelData.Tipo || "Sin nombre"
+                                        font.pixelSize: fontBase
+                                        color: textColor
+                                        elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignLeft
+                                        verticalAlignment: Text.AlignVCenter
+                                        font.family: "Segoe UI"
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 1
+                                        Layout.fillHeight: true
+                                        color: borderColor
+                                    }
+                                    
+                                    // ✅ NUEVO: Categoría con ícono
                                     RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: marginSmall
+                                        Layout.preferredWidth: parent.width * 0.15
                                         spacing: marginSmall
                                         
-                                        Label {
-                                            Layout.preferredWidth: parent.width * 0.35
-                                            text: modelData.Tipo || "Sin nombre"
-                                            font.bold: true
-                                            color: primaryColor
-                                            font.pixelSize: fontBase
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            wrapMode: Text.WordWrap
-                                            elide: Text.ElideRight
-                                        }
-                                        
                                         Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
-                                        
-                                        Label {
-                                            Layout.preferredWidth: parent.width * 0.45
-                                            text: modelData.descripcion || "Sin descripción"
-                                            color: textColor
-                                            font.pixelSize: fontSmall
-                                            font.family: "Segoe UI"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            wrapMode: Text.WordWrap
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 2
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
-                                            color: borderColor
-                                        }
-                                        
-                                        RowLayout {
-                                            Layout.preferredWidth: parent.width * 0.20
-                                            Layout.alignment: Qt.AlignHCenter
-                                            spacing: marginSmall
+                                            Layout.preferredWidth: baseUnit * 3.5
+                                            Layout.preferredHeight: baseUnit * 3.5
+                                            radius: baseUnit * 0.5
+                                            color: obtenerColorArea(modelData.area_funcional)
+                                            opacity: 0.15
                                             
-                                            Button {
-                                                Layout.preferredWidth: baseUnit * 3.5
-                                                Layout.preferredHeight: baseUnit * 3.5
-                                                text: "✏️"
-                                                
-                                                background: Rectangle {
-                                                    color: parent.pressed ? Qt.darker(warningColor, 1.2) : warningColor
-                                                    radius: radiusSmall
-                                                }
-                                                
-                                                contentItem: Label {
-                                                    text: parent.text
-                                                    color: backgroundColor
-                                                    font.pixelSize: fontSmall
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
-                                                
-                                                onClicked: editarTipoTrabajador(index, modelData)
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: obtenerIconoArea(modelData.area_funcional)
+                                                font.pixelSize: fontBase * 1.2
+                                            }
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 1
+                                        Layout.fillHeight: true
+                                        color: borderColor
+                                    }
+                                    
+                                    // Descripción
+                                    Label {
+                                        Layout.preferredWidth: parent.width * 0.40
+                                        text: modelData.descripcion || "Sin descripción"
+                                        font.pixelSize: fontSmall
+                                        color: textSecondaryColor
+                                        elide: Text.ElideRight
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 2
+                                        verticalAlignment: Text.AlignVCenter
+                                        font.family: "Segoe UI"
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 1
+                                        Layout.fillHeight: true
+                                        color: borderColor
+                                    }
+                                    
+                                    // Acciones
+                                    RowLayout {
+                                        Layout.preferredWidth: parent.width * 0.20
+                                        spacing: marginSmall
+                                        Layout.alignment: Qt.AlignHCenter
+                                        
+                                        Button {
+                                            text: "✏️"
+                                            Layout.preferredWidth: baseUnit * 4
+                                            Layout.preferredHeight: baseUnit * 4
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
+                                                radius: radiusSmall
+                                                opacity: parent.hovered ? 1.0 : 0.9
                                             }
                                             
-                                            Button {
-                                                Layout.preferredWidth: baseUnit * 3.5
-                                                Layout.preferredHeight: baseUnit * 3.5
-                                                text: "🗑️"
-                                                
-                                                background: Rectangle {
-                                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                                    radius: radiusSmall
-                                                }
-                                                
-                                                contentItem: Label {
-                                                    text: parent.text
-                                                    color: backgroundColor
-                                                    font.pixelSize: fontSmall
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
-                                                
-                                                onClicked: eliminarTipoTrabajador(modelData)
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: backgroundColor
+                                                font.pixelSize: fontSmall
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
                                             }
+                                            
+                                            ToolTip.visible: hovered
+                                            ToolTip.text: "Editar tipo"
+                                            
+                                            onClicked: editarTipoTrabajador(index, modelData)
+                                        }
+                                        
+                                        Button {
+                                            text: "🗑️"
+                                            Layout.preferredWidth: baseUnit * 4
+                                            Layout.preferredHeight: baseUnit * 4
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                                                radius: radiusSmall
+                                                opacity: parent.hovered ? 1.0 : 0.9
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: backgroundColor
+                                                font.pixelSize: fontSmall
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            ToolTip.visible: hovered
+                                            ToolTip.text: "Eliminar tipo"
+                                            
+                                            onClicked: eliminarTipoTrabajador(modelData.id, modelData.Tipo)
                                         }
                                     }
                                 }
                             }
-                        }
-                        
-                        // ESTADO VACÍO
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            color: "transparent"
-                            visible: confiTrabajadoresModel ? confiTrabajadoresModel.totalTiposTrabajadores === 0 : true
                             
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: marginMedium
-                                
-                                Label {
-                                    text: "👥"
-                                    font.pixelSize: fontTitle * 2
-                                    color: textSecondaryColor
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Label {
-                                    text: "No hay tipos de trabajadores registrados"
-                                    color: textColor
-                                    font.bold: true
-                                    font.pixelSize: fontMedium
-                                    Layout.alignment: Qt.AlignHCenter
-                                    font.family: "Segoe UI"
-                                }
-                                
-                                Label {
-                                    text: "Agrega el primer tipo de trabajador usando el formulario superior"
-                                    color: textSecondaryColor
-                                    font.pixelSize: fontBase
-                                    Layout.alignment: Qt.AlignHCenter
-                                    wrapMode: Text.WordWrap
-                                    horizontalAlignment: Text.AlignHCenter
-                                    font.family: "Segoe UI"
-                                }
-                            }
-                        }
-                        
-                        // INDICADOR DE CARGA
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            color: "transparent"
-                            visible: confiTrabajadoresModel ? confiTrabajadoresModel.loading : false
-                            
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: marginMedium
-                                
-                                Label {
-                                    text: "⏳"
-                                    font.pixelSize: fontTitle * 2
-                                    color: primaryColor
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-                                
-                                Label {
-                                    text: "Cargando tipos de trabajadores..."
-                                    color: textColor
-                                    font.bold: true
-                                    font.pixelSize: fontMedium
-                                    Layout.alignment: Qt.AlignHCenter
-                                    font.family: "Segoe UI"
-                                }
+                            ScrollBar.vertical: ScrollBar {
+                                policy: ScrollBar.AsNeeded
                             }
                         }
                     }
@@ -786,37 +952,178 @@ Item {
         }
     }
     
-    // ===== EVENTOS =====
-    Component.onCompleted: {
-        console.log("👥 Componente de configuración de tipos de trabajadores iniciado")
+    // ===== MENSAJE FLOTANTE =====
+    Rectangle {
+        id: messageRect
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: marginLarge
+        width: Math.min(parent.width * 0.5, baseUnit * 60)
+        height: baseUnit * 6
+        radius: radiusMedium
+        visible: showMessage
+        opacity: showMessage ? 1.0 : 0.0
         
-        // ✅ VERIFICAR Y CARGAR DATOS CON RETRY
-        function cargarDatosIniciales(intentos) {
-            intentos = intentos || 0
-            const MAX_INTENTOS = 3
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: marginMedium
+            spacing: marginMedium
             
-            if (confiTrabajadoresModel) {
-                console.log("✅ ConfiTrabajadoresModel disponible")
-                confiTrabajadoresModel.recargarDatos()
+            Label {
+                id: messageLabel
+                Layout.fillWidth: true
+                font.pixelSize: fontBase
+                font.bold: true
+                color: backgroundColor
+                wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignVCenter
+                font.family: "Segoe UI"
+            }
+            
+            Button {
+                text: "✕"
+                Layout.preferredWidth: baseUnit * 3
+                Layout.preferredHeight: baseUnit * 3
                 
-                // ✅ TAMBIÉN VERIFICAR TrabajadorModel
-                if (trabajadorModel) {
-                    console.log("✅ TrabajadorModel disponible para sincronización")
-                    
-                    // ✅ FORZAR ACTUALIZACIÓN DE TIPOS
-                    if (trabajadorModel.forzarActualizacionTipos) {
-                        trabajadorModel.forzarActualizacionTipos()
-                    }
+                background: Rectangle {
+                    color: "transparent"
                 }
-            } else if (intentos < MAX_INTENTOS) {
-                console.log("🔄 Reintentando cargar datos, intento", intentos + 1)
-                Qt.callLater(function() {
-                    cargarDatosIniciales(intentos + 1)
-                })
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: backgroundColor
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: showMessage = false
+            }
+        }
+    }
+    
+    // ===== DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN =====
+    Dialog {
+        id: confirmDeleteDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.4, baseUnit * 60)
+        modal: true
+        title: "Confirmar Eliminación"
+        
+        property int tipoId: 0
+        property string tipoNombre: ""
+        
+        background: Rectangle {
+            color: backgroundColor
+            radius: radiusMedium
+            border.color: borderColor
+            border.width: 1
+        }
+        
+        header: Rectangle {
+            width: parent.width
+            height: baseUnit * 8
+            color: dangerColor
+            radius: radiusMedium
+            
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: radiusMedium
+                color: parent.color
+            }
+            
+            Label {
+                anchors.centerIn: parent
+                text: "⚠️ Confirmar Eliminación"
+                font.pixelSize: fontLarge
+                font.bold: true
+                color: backgroundColor
+                font.family: "Segoe UI"
             }
         }
         
-        // ✅ INICIAR CARGA
-        Qt.callLater(cargarDatosIniciales)
+        contentItem: ColumnLayout {
+            spacing: marginMedium
+            
+            Label {
+                Layout.fillWidth: true
+                text: "¿Estás seguro de que deseas eliminar el tipo de trabajador '" + confirmDeleteDialog.tipoNombre + "'?"
+                wrapMode: Text.WordWrap
+                font.pixelSize: fontBase
+                color: textColor
+                font.family: "Segoe UI"
+            }
+            
+            Label {
+                Layout.fillWidth: true
+                text: "Esta acción no se puede deshacer."
+                wrapMode: Text.WordWrap
+                font.pixelSize: fontSmall
+                color: dangerColor
+                font.bold: true
+                font.family: "Segoe UI"
+            }
+        }
+        
+        footer: RowLayout {
+            spacing: marginMedium
+            
+            Item { Layout.fillWidth: true }
+            
+            Button {
+                text: "Cancelar"
+                Layout.preferredWidth: baseUnit * 12
+                Layout.preferredHeight: baseUnit * 4.5
+                
+                background: Rectangle {
+                    color: parent.pressed ? Qt.darker(surfaceColor, 1.1) : surfaceColor
+                    radius: radiusSmall
+                    border.color: borderColor
+                    border.width: 1
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: textColor
+                    font.pixelSize: fontSmall
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: "Segoe UI"
+                }
+                
+                onClicked: confirmDeleteDialog.close()
+            }
+            
+            Button {
+                text: "🗑️ Eliminar"
+                Layout.preferredWidth: baseUnit * 15
+                Layout.preferredHeight: baseUnit * 4.5
+                
+                background: Rectangle {
+                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                    radius: radiusSmall
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: backgroundColor
+                    font.bold: true
+                    font.pixelSize: fontSmall
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: "Segoe UI"
+                }
+                
+                onClicked: {
+                    confirmarEliminacion()
+                    confirmDeleteDialog.close()
+                }
+            }
+        }
     }
 }

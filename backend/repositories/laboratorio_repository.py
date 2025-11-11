@@ -706,7 +706,7 @@ class LaboratorioRepository(BaseRepository):
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         LEFT JOIN Laboratorio l ON t.id = l.Id_Trabajador
-        WHERE tt.Tipo LIKE '%Labor%' OR tt.Tipo LIKE '%Técnico%'
+        WHERE tt.area_funcional = 'LABORATORIO'
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, tt.Tipo
         ORDER BY examenes_asignados, t.Nombre
         """

@@ -1164,19 +1164,33 @@ class AppController(QObject):
             self.showNotification("Tipo Eliminado", message)
 
     @Slot(str)
-    def _on_model_error(self, mensaje: str):
-        """Handler de errores de modelos - VERSIÓN SEGURA"""
+    def _on_model_error(self, title: str, mensaje: str = ""):
+        """Handler de errores de modelos - VERSIÓN CORREGIDA CON 2 PARÁMETROS"""
         try:
             # ✅ NO PROCESAR DURANTE SHUTDOWN
             if hasattr(self, '_is_shutting_down') and self._is_shutting_down:
-                logger.warning(f"⏸️ Error de modelo ignorado durante shutdown: {mensaje}")
+                logger.warning(f"⏸️ Error de modelo ignorado durante shutdown: {title}")
                 return
             
-            # ✅ LOG DEL ERROR
-            logger.error(f"❌ Error de modelo: {mensaje}")
+            # ✅ IDENTIFICAR EL MODELO QUE GENERÓ EL ERROR
+            import traceback
+            caller_info = traceback.extract_stack()[-2]
+            modelo_origen = caller_info.filename.split('/')[-1] if '/' in caller_info.filename else caller_info.filename.split('\\')[-1]
+            
+            # Si el mensaje está vacío, usar el title
+            mensaje_completo = mensaje if mensaje else title
+            
+            # ✅ LOG MEJORADO DEL ERROR CON CONTEXTO
+            logger.error(f"❌ Error de modelo [{modelo_origen}:{caller_info.lineno}] {title}: {mensaje_completo}")
+            
+            # Si el mensaje es muy genérico, agregar más contexto
+            if mensaje_completo.strip().lower() in ['error', 'error de modelo', '']:
+                logger.error(f"   ⚠️ Mensaje de error genérico detectado")
+                logger.error(f"   📍 Origen: {modelo_origen} línea {caller_info.lineno}")
+                mensaje_completo = f"Error en {modelo_origen}: {mensaje_completo if mensaje_completo else 'Error no especificado'}"
             
             # ✅ MOSTRAR NOTIFICACIÓN DE FORMA SEGURA
-            self.showNotification("Error", mensaje)
+            self.showNotification(title, mensaje_completo)
             
         except Exception as e:
             logger.error(f"⚠️ Error en handler de errores: {e}")
@@ -2031,6 +2045,8 @@ class AuthAppController(QObject):
             # ESTABLECER ICONO EN LA VENTANA PRINCIPAL
             # =========================================================
             try:
+                from PySide6.QtGui import QIcon  # ✅ Import dentro del scope
+                
                 window = self.main_engine.rootObjects()[0]
                 
                 # Obtener ruta del icono

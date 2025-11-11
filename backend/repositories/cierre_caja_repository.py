@@ -142,7 +142,9 @@ class CierreCajaRepository(BaseRepository):
         return self._execute_query(query, (inicio, fin), use_cache=False)
 
     def _get_egresos_gastos(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
-        """Obtiene egresos por gastos"""
+        """Obtiene egresos por gastos - FILTRADO POR HORA"""
+        
+        # ✅ USAR LOS TIMESTAMPS COMPLETOS (no extraer solo la fecha)
         query = """
         SELECT 
             g.id,
@@ -159,6 +161,7 @@ class CierreCajaRepository(BaseRepository):
         WHERE g.Fecha >= ? AND g.Fecha <= ?
         ORDER BY g.Fecha
         """
+        # ✅ Pasar los timestamps completos (inicio, fin) sin modificar
         return self._execute_query(query, (inicio, fin), use_cache=False)
     
     def _get_ingresos_enfermeria(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
@@ -667,6 +670,10 @@ class CierreCajaRepository(BaseRepository):
 
     def get_gastos_detallados(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
         """Obtiene gastos con detalles completos por tipo"""
+        # ✅ CORRECCIÓN: Extraer solo la fecha del timestamp para comparación correcta
+        fecha_inicio_sql = inicio.split(' ')[0] if ' ' in inicio else inicio
+        fecha_fin_sql = fin.split(' ')[0] if ' ' in fin else fin
+        
         query = """
         SELECT 
             g.id,
@@ -681,13 +688,18 @@ class CierreCajaRepository(BaseRepository):
         FROM Gastos g
         LEFT JOIN Usuario u ON g.Id_RegistradoPor = u.id
         LEFT JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        WHERE g.Fecha >= ? AND g.Fecha <= ?
+        WHERE CAST(g.Fecha AS DATE) >= CAST(? AS DATE) 
+          AND CAST(g.Fecha AS DATE) <= CAST(? AS DATE)
         ORDER BY tg.Nombre, g.Fecha DESC
         """
-        return self._execute_query(query, (inicio, fin), use_cache=False)
+        return self._execute_query(query, (fecha_inicio_sql, fecha_fin_sql), use_cache=False)
 
     def get_resumen_gastos_por_tipo(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
         """Obtiene resumen de gastos agrupados por tipo"""
+        # ✅ CORRECCIÓN: Extraer solo la fecha del timestamp para comparación correcta
+        fecha_inicio_sql = inicio.split(' ')[0] if ' ' in inicio else inicio
+        fecha_fin_sql = fin.split(' ')[0] if ' ' in fin else fin
+        
         query = """
         SELECT 
             tg.Nombre as TipoGasto,
@@ -696,11 +708,12 @@ class CierreCajaRepository(BaseRepository):
             AVG(g.Monto) as PromedioGasto
         FROM Gastos g
         LEFT JOIN Tipo_Gastos tg ON g.ID_Tipo = tg.id
-        WHERE g.Fecha >= ? AND g.Fecha <= ?
+        WHERE CAST(g.Fecha AS DATE) >= CAST(? AS DATE) 
+          AND CAST(g.Fecha AS DATE) <= CAST(? AS DATE)
         GROUP BY tg.id, tg.Nombre
         ORDER BY SUM(g.Monto) DESC
         """
-        return self._execute_query(query, (inicio, fin), use_cache=False)
+        return self._execute_query(query, (fecha_inicio_sql, fecha_fin_sql), use_cache=False)
 
     def get_resumen_por_categorias(self, fecha: str, hora_inicio: str, hora_fin: str) -> Dict[str, Any]:
         """Obtiene resumen organizado por categorÃ­as para el QML"""
@@ -715,7 +728,7 @@ class CierreCajaRepository(BaseRepository):
                     'importe': datos_completos['resumen']['total_farmacia']
                 },
                 {
-                    'concepto': 'CONSULTAS MÃ‰DICAS',
+                    'concepto': 'CONSULTAS MEDICAS',
                     'transacciones': datos_completos['resumen']['transacciones_consultas'],
                     'importe': datos_completos['resumen']['total_consultas']
                 },
@@ -725,7 +738,7 @@ class CierreCajaRepository(BaseRepository):
                     'importe': datos_completos['resumen']['total_laboratorio']
                 },
                 {
-                    'concepto': 'ENFERMERÃA',
+                    'concepto': 'ENFERMERIA',
                     'transacciones': datos_completos['resumen']['transacciones_enfermeria'],
                     'importe': datos_completos['resumen']['total_enfermeria']
                 },
@@ -739,7 +752,7 @@ class CierreCajaRepository(BaseRepository):
             # Organizar egresos - TODOS LOS GASTOS JUNTOS
             egresos_por_categoria = [
                 {
-                    'concepto': 'GASTOS DEL DÃA',
+                    'concepto': 'GASTOS DEL DIA',
                     'detalle': f'{datos_completos["resumen"]["transacciones_egresos"]} transacciones de gastos',
                     'importe': datos_completos['resumen']['total_egresos']
                 }

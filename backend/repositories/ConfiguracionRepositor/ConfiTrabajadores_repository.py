@@ -16,6 +16,27 @@ class ConfiTrabajadoresRepository(BaseRepository):
         super().__init__('Tipo_Trabajadores', 'confi_trabajadores')
     
     # ===============================
+    # CONSTANTES DE ÁREAS FUNCIONALES
+    # ===============================
+    
+    @staticmethod
+    def get_areas_funcionales_validas() -> List[str]:
+        """Retorna lista de áreas funcionales válidas"""
+        return ['MEDICO', 'ENFERMERIA', 'LABORATORIO', 'FARMACIA', 'ADMINISTRATIVO']
+    
+    @staticmethod
+    def get_areas_funcionales_con_nombres() -> List[Dict[str, str]]:
+        """Retorna áreas funcionales con nombres amigables para UI"""
+        return [
+            {'value': 'MEDICO', 'label': 'Área Médica'},
+            {'value': 'ENFERMERIA', 'label': 'Área de Enfermería'},
+            {'value': 'LABORATORIO', 'label': 'Área de Laboratorio'},
+            {'value': 'FARMACIA', 'label': 'Área de Farmacia'},
+            {'value': 'ADMINISTRATIVO', 'label': 'Área Administrativa'},
+            {'value': None, 'label': 'Sin área específica'}
+        ]
+    
+    # ===============================
     # IMPLEMENTACIÓN ABSTRACTA
     # ===============================
     
@@ -27,13 +48,15 @@ class ConfiTrabajadoresRepository(BaseRepository):
     # CRUD ESPECÍFICO - TIPOS DE TRABAJADORES
     # ===============================
     
-    def create_tipo_trabajador(self, tipo: str, descripcion: str = None) -> int:
+    def create_tipo_trabajador(self, tipo: str, descripcion: str = None, 
+                             area_funcional: str = None) -> int:
         """
         Crea nuevo tipo de trabajador con validaciones
         
         Args:
             tipo: Nombre del tipo de trabajador
             descripcion: Descripción del tipo de trabajador
+            area_funcional: Área funcional (MEDICO, ENFERMERIA, LABORATORIO, FARMACIA, ADMINISTRATIVO, o None)
             
         Returns:
             ID del tipo de trabajador creado
@@ -41,6 +64,12 @@ class ConfiTrabajadoresRepository(BaseRepository):
         # Validaciones
         tipo = validate_required_string(tipo, "tipo", 2)
         validate_required(tipo, "tipo")
+        
+        # Validar area_funcional si se proporciona
+        AREAS_VALIDAS = self.get_areas_funcionales_validas()
+        if area_funcional and area_funcional not in AREAS_VALIDAS:
+            raise ValidationError("area_funcional", area_funcional, 
+                                f"Área funcional inválida. Valores permitidos: {', '.join(AREAS_VALIDAS)}")
         
         # Verificar que el tipo no exista
         if self.tipo_trabajador_name_exists(tipo):
@@ -57,14 +86,21 @@ class ConfiTrabajadoresRepository(BaseRepository):
         else:
             tipo_data['descripcion'] = None
         
+        # Agregar area_funcional si se proporciona
+        if area_funcional and area_funcional in AREAS_VALIDAS:
+            tipo_data['area_funcional'] = area_funcional
+        else:
+            tipo_data['area_funcional'] = None
+        
         tipo_id = self.insert(tipo_data)
-        print(f"👥 Tipo de trabajador creado: {tipo} - ID: {tipo_id}")
+        area_str = f" [{area_funcional}]" if area_funcional else ""
+        print(f"👥 Tipo de trabajador creado: {tipo}{area_str} - ID: {tipo_id}")
         
         return tipo_id
     
     def update_tipo_trabajador(self, tipo_id: int, tipo: str = None, 
-                             descripcion: str = None) -> bool:
-        """Actualiza tipo de trabajador existente"""
+                             descripcion: str = None, area_funcional: str = None) -> bool:
+        """Actualiza tipo de trabajador existente incluyendo area_funcional"""
         # Verificar existencia
         if not self.get_by_id(tipo_id):
             raise ValidationError("tipo_id", tipo_id, "Tipo de trabajador no encontrado")
@@ -80,6 +116,19 @@ class ConfiTrabajadoresRepository(BaseRepository):
         
         if descripcion is not None:
             update_data['descripcion'] = descripcion.strip() if descripcion.strip() else None
+        
+        # Manejar area_funcional
+        if area_funcional is not None:
+            AREAS_VALIDAS = self.get_areas_funcionales_validas()
+            
+            # Permitir cadena vacía para limpiar el área
+            if area_funcional == "" or area_funcional.upper() == "NINGUNA":
+                update_data['area_funcional'] = None
+            elif area_funcional in AREAS_VALIDAS:
+                update_data['area_funcional'] = area_funcional
+            else:
+                raise ValidationError("area_funcional", area_funcional, 
+                                    f"Área funcional inválida. Valores: {', '.join(AREAS_VALIDAS)} o vacío")
         
         if not update_data:
             return True
@@ -110,18 +159,27 @@ class ConfiTrabajadoresRepository(BaseRepository):
     
     @cached_query('tipos_trabajadores_all', ttl=600)
     def get_all_tipos_trabajadores(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los tipos de trabajadores"""
+        """Obtiene todos los tipos de trabajadores incluyendo area_funcional"""
         query = """
-        SELECT id, Tipo, descripcion
+        SELECT id, Tipo, descripcion, area_funcional
         FROM Tipo_Trabajadores
-        ORDER BY Tipo
+        ORDER BY 
+            CASE area_funcional
+                WHEN 'MEDICO' THEN 1
+                WHEN 'ENFERMERIA' THEN 2
+                WHEN 'LABORATORIO' THEN 3
+                WHEN 'FARMACIA' THEN 4
+                WHEN 'ADMINISTRATIVO' THEN 5
+                ELSE 6
+            END,
+            Tipo
         """
         return self._execute_query(query)
     
     def get_tipo_trabajador_by_id(self, tipo_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene tipo de trabajador específico por ID"""
+        """Obtiene tipo de trabajador específico por ID incluyendo area_funcional"""
         query = """
-        SELECT id, Tipo, descripcion
+        SELECT id, Tipo, descripcion, area_funcional
         FROM Tipo_Trabajadores
         WHERE id = ?
         """
@@ -131,6 +189,24 @@ class ConfiTrabajadoresRepository(BaseRepository):
         """Obtiene tipo de trabajador por nombre"""
         query = "SELECT * FROM Tipo_Trabajadores WHERE Tipo = ?"
         return self._execute_query(query, (tipo.strip(),), fetch_one=True)
+    
+    def get_tipos_by_area_funcional(self, area: str) -> List[Dict[str, Any]]:
+        """
+        Obtiene tipos de trabajadores de un área funcional específica
+        
+        Args:
+            area: Área funcional (MEDICO, ENFERMERIA, LABORATORIO, FARMACIA, ADMINISTRATIVO)
+        
+        Returns:
+            Lista de tipos de trabajadores del área especificada
+        """
+        query = """
+        SELECT id, Tipo, descripcion, area_funcional
+        FROM Tipo_Trabajadores
+        WHERE area_funcional = ?
+        ORDER BY Tipo
+        """
+        return self._execute_query(query, (area,))
     
     # ===============================
     # BÚSQUEDAS Y FILTROS
@@ -144,7 +220,7 @@ class ConfiTrabajadoresRepository(BaseRepository):
         search_term = f"%{search_term.strip()}%"
         
         query = """
-        SELECT id, Tipo, descripcion
+        SELECT id, Tipo, descripcion, area_funcional
         FROM Tipo_Trabajadores
         WHERE Tipo LIKE ? OR descripcion LIKE ?
         ORDER BY Tipo
@@ -196,14 +272,28 @@ class ConfiTrabajadoresRepository(BaseRepository):
         SELECT 
             COUNT(*) as total_tipos_trabajadores,
             COUNT(CASE WHEN descripcion IS NOT NULL AND descripcion != '' THEN 1 END) as con_descripcion,
-            COUNT(CASE WHEN descripcion IS NULL OR descripcion = '' THEN 1 END) as sin_descripcion
+            COUNT(CASE WHEN descripcion IS NULL OR descripcion = '' THEN 1 END) as sin_descripcion,
+            COUNT(CASE WHEN area_funcional IS NOT NULL THEN 1 END) as con_area_funcional,
+            COUNT(CASE WHEN area_funcional IS NULL THEN 1 END) as sin_area_funcional
         FROM Tipo_Trabajadores
         """
         
         general_stats = self._execute_query(query, fetch_one=True)
         
+        # Estadísticas por área funcional
+        query_areas = """
+        SELECT area_funcional, COUNT(*) as cantidad
+        FROM Tipo_Trabajadores
+        WHERE area_funcional IS NOT NULL
+        GROUP BY area_funcional
+        ORDER BY cantidad DESC
+        """
+        
+        areas_stats = self._execute_query(query_areas)
+        
         return {
-            'general': general_stats
+            'general': general_stats,
+            'areas_funcionales': areas_stats
         }
     
     # ===============================
@@ -213,9 +303,18 @@ class ConfiTrabajadoresRepository(BaseRepository):
     def get_tipos_trabajadores_for_report(self) -> List[Dict[str, Any]]:
         """Obtiene tipos de trabajadores formateados para reportes"""
         query = """
-        SELECT id, Tipo, descripcion
+        SELECT id, Tipo, descripcion, area_funcional
         FROM Tipo_Trabajadores
-        ORDER BY Tipo
+        ORDER BY 
+            CASE area_funcional
+                WHEN 'MEDICO' THEN 1
+                WHEN 'ENFERMERIA' THEN 2
+                WHEN 'LABORATORIO' THEN 3
+                WHEN 'FARMACIA' THEN 4
+                WHEN 'ADMINISTRATIVO' THEN 5
+                ELSE 6
+            END,
+            Tipo
         """
         
         tipos_trabajadores = self._execute_query(query)
@@ -224,15 +323,26 @@ class ConfiTrabajadoresRepository(BaseRepository):
         for tipo in tipos_trabajadores:
             if not tipo.get('descripcion'):
                 tipo['descripcion'] = 'Sin descripción'
+            if not tipo.get('area_funcional'):
+                tipo['area_funcional'] = 'Sin área específica'
         
         return tipos_trabajadores
     
     def get_tipos_trabajadores_summary(self) -> Dict[str, Any]:
         """Resumen simplificado de tipos de trabajadores"""
         query = """
-        SELECT Tipo, descripcion
+        SELECT Tipo, descripcion, area_funcional
         FROM Tipo_Trabajadores
-        ORDER BY Tipo
+        ORDER BY 
+            CASE area_funcional
+                WHEN 'MEDICO' THEN 1
+                WHEN 'ENFERMERIA' THEN 2
+                WHEN 'LABORATORIO' THEN 3
+                WHEN 'FARMACIA' THEN 4
+                WHEN 'ADMINISTRATIVO' THEN 5
+                ELSE 6
+            END,
+            Tipo
         """
         
         tipos_data = self._execute_query(query)
@@ -241,13 +351,17 @@ class ConfiTrabajadoresRepository(BaseRepository):
         total_tipos = len(tipos_data)
         tipos_con_descripcion = len([item for item in tipos_data if item.get('descripcion')])
         tipos_sin_descripcion = total_tipos - tipos_con_descripcion
+        tipos_con_area = len([item for item in tipos_data if item.get('area_funcional')])
+        tipos_sin_area = total_tipos - tipos_con_area
         
         return {
             'tipos_trabajadores': tipos_data,
             'resumen': {
                 'total_tipos': total_tipos,
                 'tipos_con_descripcion': tipos_con_descripcion,
-                'tipos_sin_descripcion': tipos_sin_descripcion
+                'tipos_sin_descripcion': tipos_sin_descripcion,
+                'tipos_con_area_funcional': tipos_con_area,
+                'tipos_sin_area_funcional': tipos_sin_area
             }
         }
     

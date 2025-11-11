@@ -172,6 +172,11 @@ class LaboratorioModel(QObject):
         try:
             self.global_signals.tiposAnalisisModificados.connect(self._actualizar_tipos_analisis_desde_signal)
             self.global_signals.laboratorioNecesitaActualizacion.connect(self._manejar_actualizacion_global)
+            
+            # ✅ AGREGAR ESTAS DOS LÍNEAS
+            self.global_signals.trabajadoresNecesitaActualizacion.connect(self._actualizar_trabajadores_desde_signal)
+            self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_trabajadores_desde_signal)
+            
             print("Señales globales conectadas en LaboratorioModel")
         except Exception as e:
             print(f"Error conectando señales globales en LaboratorioModel: {e}")
@@ -1144,6 +1149,23 @@ class LaboratorioModel(QObject):
         except Exception as e:
             print(f"⚠️ Error comparando pacientes: {e}")
             return False
+        
+    @Slot(str)
+    def _actualizar_trabajadores_desde_signal(self, mensaje: str = ""):
+        """
+        ✅ NUEVO: Responde a cambios en trabajadores desde señales globales
+        Se ejecuta cuando se crea/actualiza/elimina un trabajador
+        """
+        try:
+            print(f"📢 Signal recibida en LaboratorioModel: {mensaje}")
+            
+            # Recargar lista de trabajadores
+            self.cargarTrabajadores()
+            
+            print("✅ Trabajadores actualizados en LaboratorioModel")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando trabajadores desde signal: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

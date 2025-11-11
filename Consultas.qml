@@ -85,6 +85,11 @@ Item {
     // Agregar estas propiedades al inicio del archivo, después de las propiedades existentes
     property int pacienteSeleccionadoId: -1  // ✅ NUEVO: ID del paciente seleccionado
     property bool esPacienteExistente: false // ✅ NUEVO: Flag para paciente existente
+    // Propiedades para filtros avanzados
+    property int especialidadSeleccionadaId: -1
+    property int medicoSeleccionadoId: -1
+    property var medicosDisponibles: []
+    property bool autoSeleccionarMedico: false
 
     ListModel {
         id: consultasPaginadasModel
@@ -95,6 +100,9 @@ Item {
     }
     ListModel {
         id: resultadosBusquedaPacientesModel
+    }
+    ListModel {
+        id: medicosDisponiblesModel
     }
 
     // ✅ CONEXIONES SIMPLIFICADAS
@@ -861,7 +869,24 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.especialidad_doctor || "Sin especialidad/doctor"
+                                                
+                                                text: {
+                                                    // Primero intentar usar el campo completo desde el backend
+                                                    if (model.especialidad_doctor) {
+                                                        return model.especialidad_doctor
+                                                    }
+                                                    
+                                                    // Si no existe, intentar con el nombre completo
+                                                    if (model.especialidad_doctor_completo) {
+                                                        return model.especialidad_doctor_completo
+                                                    }
+                                                    
+                                                    // Fallback: construir manualmente si es necesario
+                                                    var especialidad = model.especialidad_nombre || "Sin especialidad"
+                                                    var medico = model.medico_nombre || "(Sin asignar)"
+                                                    return especialidad + " - " + medico
+                                                }
+                                                
                                                 color: primaryColor
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
@@ -2229,7 +2254,7 @@ Item {
                                 color: textColor
                                 font.family: "Segoe UI, Arial, sans-serif"
                             }
-                            
+                            // Especialidad Combobox
                             ComboBox {
                                 id: especialidadCombo
                                 Layout.fillWidth: true
@@ -2252,10 +2277,21 @@ Item {
                                         var newSelectedIndex = currentIndex - 1
                                         var selectedEsp = consultaModel.especialidades[newSelectedIndex]
                                         consultationFormDialog.selectedEspecialidadIndex = newSelectedIndex
+                                        
+                                        // ✅ NUEVO: Cargar médicos cuando se selecciona especialidad
+                                        console.log("🏥 Especialidad seleccionada - ID:", selectedEsp.id)
+                                        cargarMedicosPorEspecialidad(selectedEsp.id)
+                                        
                                         consultationFormDialog.updatePrices()
                                     } else {
                                         consultationFormDialog.selectedEspecialidadIndex = -1
                                         consultationFormDialog.calculatedPrice = 0.0
+                                        
+                                        // ✅ NUEVO: Limpiar médicos cuando no hay especialidad
+                                        medicosDisponiblesModel.clear()
+                                        comboMedico.currentIndex = -1
+                                        medicoSeleccionadoId = -1
+                                        comboMedico.enabled = false
                                     }
                                 }
                                 
@@ -2276,6 +2312,130 @@ Item {
                                     radius: baseUnit * 0.5
                                 }
                             }
+
+                            Label {
+                                text: "Médico:"
+                                font.pixelSize: fontBaseSize
+                                font.bold: true
+                                color: textColor
+                            }
+                            // Medico Combobox
+                            ComboBox {
+                                id: comboMedico
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: baseUnit * 5
+                                
+                                enabled: medicosDisponiblesModel.count > 0 
+                                
+                                model: medicosDisponiblesModel
+                                textRole: "display_text"
+                                
+                                displayText: currentIndex >= 0 ? currentText : "Seleccionar médico..."
+                                
+                                onCurrentIndexChanged: {
+                                    if (currentIndex >= 0) {
+                                        medicoSeleccionadoId = medicosDisponiblesModel.get(currentIndex).trabajador_id
+                                        console.log("👨‍⚕️ Médico seleccionado ID:", medicoSeleccionadoId)
+                                    } else {
+                                        medicoSeleccionadoId = -1
+                                    }
+                                }
+                                
+                                background: Rectangle {
+                                    color: comboMedico.enabled ? whiteColor : lightGrayColor
+                                    border.color: comboMedico.activeFocus ? primaryColor : borderColor
+                                    border.width: comboMedico.activeFocus ? 2 : 1
+                                    radius: baseUnit * 0.8
+                                }
+                                
+                                contentItem: Text {
+                                    leftPadding: baseUnit * 1.5
+                                    rightPadding: comboMedico.indicator.width + comboMedico.spacing
+                                    text: comboMedico.displayText
+                                    font.pixelSize: fontBaseSize
+                                    color: comboMedico.enabled ? textColor : textColorLight
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                                
+                                indicator: Rectangle {
+                                    x: comboMedico.width - width - baseUnit
+                                    y: comboMedico.topPadding + (comboMedico.availableHeight - height) / 2
+                                    width: baseUnit * 2
+                                    height: baseUnit * 2
+                                    color: "transparent"
+                                    
+                                    Canvas {
+                                        anchors.fill: parent
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.clearRect(0, 0, width, height)
+                                            ctx.strokeStyle = comboMedico.enabled ? primaryColor : textColorLight
+                                            ctx.lineWidth = 2
+                                            ctx.beginPath()
+                                            ctx.moveTo(width * 0.2, height * 0.3)
+                                            ctx.lineTo(width * 0.5, height * 0.6)
+                                            ctx.lineTo(width * 0.8, height * 0.3)
+                                            ctx.stroke()
+                                        }
+                                    }
+                                }
+                                
+                                popup: Popup {
+                                    y: comboMedico.height
+                                width: comboMedico.width
+                                implicitHeight: Math.min(contentItem.implicitHeight, baseUnit * 30)
+                                padding: 1
+                                
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: comboMedico.popup.visible ? comboMedico.delegateModel : null
+                                    currentIndex: comboMedico.highlightedIndex
+                                    
+                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                }
+                                
+                                background: Rectangle {
+                                    color: whiteColor
+                                    border.color: borderColor
+                                    radius: baseUnit * 0.8
+                                }
+                            }
+                            
+                            delegate: ItemDelegate {
+                                width: comboMedico.width
+                                height: baseUnit * 5
+                                
+                                contentItem: RowLayout {
+                                    spacing: baseUnit
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: baseUnit * 0.8
+                                        Layout.preferredHeight: baseUnit * 0.8
+                                        radius: width / 2
+                                        color: model.es_principal ? primaryColor : "transparent"
+                                        border.color: primaryColor
+                                        border.width: 1
+                                    }
+                                    
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: model.display_text
+                                        color: textColor
+                                        font.pixelSize: fontBaseSize
+                                        elide: Text.ElideRight
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                                
+                                background: Rectangle {
+                                    color: highlighted ? Qt.lighter(primaryColor, 1.8) : "transparent"
+                                    radius: baseUnit * 0.5
+                                }
+                            }
+                        }
+
                         }
                         
                         RowLayout {
@@ -2463,11 +2623,12 @@ Item {
                 text: isEditMode ? "Actualizar" : "Guardar"
                 enabled: {
                     var especialidadSeleccionada = consultationFormDialog.selectedEspecialidadIndex >= 0
+                    var medicoSeleccionado = medicoSeleccionadoId > 0
                     var nombreValido = nombrePaciente.text.length >= 2
                     var apellidoValido = apellidoPaterno.text.length >= 2
-                    var detallesValidos = detallesConsulta.text.length >= 10
+                    var detallesValidos = detallesConsulta.text.length >= 5
                     
-                    return especialidadSeleccionada && nombreValido && apellidoValido && detallesValidos
+                    return especialidadSeleccionada && medicoSeleccionado && nombreValido && apellidoValido && detallesValidos
                 }
                 Layout.preferredHeight: baseUnit * 4
                 
@@ -2795,6 +2956,10 @@ Item {
             }
             return false
         }
+
+        if (consultaModel) {
+            actualizarEspecialidadesCombo()
+        }
         
         var attempts = 0
         var timer = Qt.createQmlObject("import QtQuick 2.15; Timer { interval: 300; repeat: true }", consultasRoot)
@@ -2920,21 +3085,78 @@ Item {
     }
     // Guardar una nueva consulta
     function guardarConsulta() {
-        try {
-            console.log("🩺 Iniciando guardado consulta - Modo:", isEditMode ? "EDITAR" : "CREAR")
-            
-            if (isEditMode && consultationFormDialog.consultaParaEditar) {
-                actualizarConsulta()
-            } else {
-                crearNuevaConsulta()
-            }
-            
-        } catch (error) {
-            console.log("❌ Error en coordinador de guardado:", error.message)
-            consultationFormDialog.enabled = true
-            showNotification("Error", "Error procesando solicitud: " + error.message)
+        console.log("💾 Iniciando guardado de consulta...")
+        
+        // 1. Validar paciente
+        if (pacienteSeleccionadoId <= 0) {
+            console.log("❌ Error: Paciente no seleccionado")
+            showNotification("Error", "Debe seleccionar un paciente")
+            return false
+        }
+        
+        // 2. Validar especialidad - CORREGIDO
+        if (consultationFormDialog.selectedEspecialidadIndex < 0) {
+            console.log("❌ Error: Especialidad no seleccionada")
+            showNotification("Error", "Debe seleccionar una especialidad")
+            return false
+        }
+        
+        // 3. Validar médico
+        if (medicoSeleccionadoId <= 0) {
+            console.log("❌ Error: Médico no seleccionado")
+            showNotification("Error", "Debe seleccionar un médico")
+            return false
+        }
+        
+        // 4. Validar detalles - CORREGIDO
+        var detalles = detallesConsulta.text.trim()
+        if (detalles.length < 5) {
+            console.log("❌ Error: Detalles insuficientes")
+            showNotification("Error", "Los detalles deben tener al menos 5 caracteres")
+            return false
+        }
+        
+        // 5. Obtener tipo de consulta - CORREGIDO
+        var tipoConsulta = consultationFormDialog.consultationType
+        
+        // 6. Obtener ID de especialidad - CORREGIDO
+        var especialidadId = -1
+        if (consultationFormDialog.selectedEspecialidadIndex >= 0 && consultaModel && consultaModel.especialidades) {
+            var especialidadSeleccionada = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
+            especialidadId = especialidadSeleccionada.id
+            console.log("🏥 Especialidad seleccionada ID:", especialidadId)
+        }
+        
+        console.log("📝 Datos de la consulta:")
+        console.log("   - Paciente ID:", pacienteSeleccionadoId)
+        console.log("   - Especialidad ID:", especialidadId)
+        console.log("   - Médico ID:", medicoSeleccionadoId)
+        console.log("   - Tipo:", tipoConsulta)
+        console.log("   - Detalles:", detalles)
+        console.log("   - Usuario ID:", appController.usuario_actual_id)
+        
+        // 7. Llamar al método del modelo
+        var exito = consultaModel.crear_consulta_completa(
+            appController.usuario_actual_id,
+            pacienteSeleccionadoId,
+            especialidadId,
+            medicoSeleccionadoId,
+            detalles,
+            tipoConsulta
+        )
+        
+        if (exito) {
+            console.log("✅ Consulta guardada exitosamente")
+            limpiarYCerrarDialogoConsulta()
+            showNotification("Éxito", "Consulta creada correctamente")
+            return true
+        } else {
+            console.log("❌ Error guardando consulta")
+            showNotification("Error", "No se pudo guardar la consulta")
+            return false
         }
     }
+
     function crearNuevaConsulta() {
         try {
             console.log("🩺 === INICIANDO CREACIÓN DE NUEVA CONSULTA ===")
@@ -3668,36 +3890,49 @@ Item {
     // ===============================
 
     function limpiarYCerrarDialogoConsulta() {
+        console.log("🧹 Limpiando formulario de consulta...")
+        
         // Cerrar diálogo
         showNewConsultationDialog = false
-        
+
         // Limpiar datos del paciente usando nueva función
         limpiarDatosPaciente()
-        
+
         // Limpiar campos de consulta
         detallesConsulta.text = ""
         especialidadCombo.currentIndex = 0
-        
+
         // Resetear radiobuttons de tipo de consulta
         normalRadio.checked = true
         emergenciaRadio.checked = false
-        
+
         // Resetear propiedades del dialog
         consultationFormDialog.selectedEspecialidadIndex = -1
         consultationFormDialog.calculatedPrice = 0.0
         consultationFormDialog.consultationType = "Normal"
         consultationFormDialog.consultaParaEditar = null
-        
+
         // Resetear estados de la interfaz
         selectedRowIndex = -1
         isEditMode = false
         editingIndex = -1
-        
+
         // ✅ RESETEAR NUEVOS CAMPOS
         pacienteSeleccionadoId = -1
         esPacienteExistente = false
-        
-        console.log("Formulario de consulta limpiado completamente y diálogo cerrado")
+
+        // ✅ NUEVAS LIMPIEZAS RELACIONADAS A MÉDICOS/ESPECIALIDADES
+        especialidadSeleccionadaId = -1
+        medicoSeleccionadoId = -1
+        autoSeleccionarMedico = false
+
+        if (medicosDisponiblesModel) medicosDisponiblesModel.clear()
+        if (typeof comboMedico !== "undefined") {
+            comboMedico.currentIndex = -1
+            comboMedico.enabled = false
+        }
+
+        console.log("✅ Formulario limpiado completamente y diálogo cerrado")
     }
 
     // ===============================
@@ -3757,5 +3992,75 @@ Item {
         console.log("Reiniciando búsqueda de paciente...")
         limpiarDatosPaciente()
         campoBusquedaPaciente.forceActiveFocus()
+    }
+
+    function cargarMedicosPorEspecialidad(especialidadId) {
+        console.log("👨‍⚕️ Cargando médicos para especialidad:", especialidadId)
+        
+        if (!consultaModel || especialidadId <= 0) {
+            console.log("⚠️ No se puede cargar médicos: modelo no disponible o ID inválido")
+            medicosDisponiblesModel.clear()
+            return
+        }
+        
+        // Obtener médicos desde el backend
+        var medicos = consultaModel.obtener_medicos_por_especialidad(especialidadId)
+        
+        console.log("📋 Médicos obtenidos:", medicos ? medicos.length : 0)
+        
+        // Limpiar y poblar el modelo
+        medicosDisponiblesModel.clear()
+        
+        if (medicos && medicos.length > 0) {
+            for (var i = 0; i < medicos.length; i++) {
+                medicosDisponiblesModel.append({
+                    trabajador_id: medicos[i].trabajador_id,
+                    display_text: medicos[i].display_text,
+                    es_principal: medicos[i].es_principal,
+                    auto_seleccionar: medicos[i].auto_seleccionar || false
+                })
+                
+                console.log("   ✅ Médico agregado:", medicos[i].display_text)
+            }
+            
+            // Auto-seleccionar si solo hay 1 médico
+            if (medicos.length === 1) {
+                medicoSeleccionadoId = medicos[0].trabajador_id
+                comboMedico.currentIndex = 0
+                autoSeleccionarMedico = true
+                console.log("   ℹ️ Médico auto-seleccionado:", medicos[0].display_text)
+            } else {
+                medicoSeleccionadoId = -1
+                comboMedico.currentIndex = -1
+                autoSeleccionarMedico = false
+            }
+            
+            // Habilitar el ComboBox de médicos
+            comboMedico.enabled = true
+        } else {
+            console.log("⚠️ No hay médicos disponibles para esta especialidad")
+            comboMedico.enabled = false
+            medicoSeleccionadoId = -1
+        }
+    }
+    
+    function actualizarEspecialidadesCombo() {
+        console.log("🏥 Actualizando ComboBox de especialidades con médicos...")
+        
+        if (!consultaModel) {
+            console.log("⚠️ consultaModel no disponible")
+            return
+        }
+        
+        // Obtener especialidades que tienen médicos
+        var especialidades = consultaModel.obtener_especialidades_con_medicos()
+        
+        console.log("📋 Especialidades con médicos:", especialidades ? especialidades.length : 0)
+        
+        // Guardar en propiedad para uso posterior
+        especialidadMap = especialidades || []
+        
+        // Esto debería actualizar el ComboBox existente de especialidades
+        // El ComboBox ya debe estar conectado al backend
     }
 }

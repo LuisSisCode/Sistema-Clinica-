@@ -172,13 +172,26 @@ class ConsultaRepository(BaseRepository):
     # ===============================
     
     def create_consultation(self, usuario_id: int, paciente_id: int, especialidad_id: int,
-                       detalles: str, tipo_consulta: str = "Normal", fecha: datetime = None) -> int:
-        """Crea nueva consulta médica"""
+                           detalles: str, tipo_consulta: str = "Normal", trabajador_id: int = None, 
+                           fecha: datetime = None) -> int:
+        """
+        Crea nueva consulta médica asignando trabajador/médico que atiende
+        
+        Args:
+            usuario_id: ID del usuario que registra
+            paciente_id: ID del paciente 
+            especialidad_id: ID de la especialidad
+            detalles: Descripción o diagnóstico
+            tipo_consulta: "Normal" o "Emergencia"
+            trabajador_id: ID del trabajador/médico que atiende
+            fecha: Fecha de la consulta (default: ahora)
+        """
         
         # Validaciones
         validate_required(usuario_id, "usuario_id")
         validate_required(paciente_id, "paciente_id") 
         validate_required(especialidad_id, "especialidad_id")
+        validate_required(trabajador_id, "trabajador_id")
         detalles = validate_required_string(detalles, "detalles", 5)
         
         # Verificar entidades
@@ -188,6 +201,13 @@ class ConsultaRepository(BaseRepository):
             raise ValidationError("paciente_id", paciente_id, "Paciente no encontrado")
         if not self._specialty_exists(especialidad_id):
             raise ValidationError("especialidad_id", especialidad_id, "Especialidad no encontrada")
+        if not self._worker_exists(trabajador_id):
+            raise ValidationError("trabajador_id", trabajador_id, "Trabajador no encontrado")
+            
+        # Verificar que el trabajador tenga asignada la especialidad
+        if not self._trabajador_tiene_especialidad(trabajador_id, especialidad_id):
+            raise ValidationError("trabajador_id", trabajador_id, 
+                                "El trabajador no tiene asignada esta especialidad")
         
         # Fecha actual si no se proporciona
         if fecha is None:
@@ -204,9 +224,10 @@ class ConsultaRepository(BaseRepository):
             'Id_Usuario': usuario_id,
             'Id_Paciente': paciente_id,
             'Id_Especialidad': especialidad_id,
+            'Id_Trabajador': trabajador_id, # Campo añadido para trabajador/médico
             'Fecha': fecha,
             'Detalles': detalles.strip(),
-            'Tipo_Consulta': tipo_consulta  # CORREGIDO: Tipo_Consulta no tipo_consulta
+            'Tipo_Consulta': tipo_consulta
         }
         
         consultation_id = self.insert(consultation_data)
@@ -214,13 +235,12 @@ class ConsultaRepository(BaseRepository):
             # AGREGAR: Invalidar cache inmediatamente después de crear
             self.invalidate_consultation_caches()
             print(f"🔄 Cache de consultas invalidado después de crear consulta {consultation_id}")
-            
-            print(f"🩺 Consulta creada: Paciente ID {paciente_id} - Consulta ID: {consultation_id}")
+            print(f"🩺 Consulta creada: Paciente ID {paciente_id} - Médico ID {trabajador_id} - Consulta ID: {consultation_id}")
         
         return consultation_id
     
     def update_consultation(self, consulta_id: int, detalles: str = None, 
-                   tipo_consulta: str = None, especialidad_id: int = None,
+                   tipo_consulta: str = None, especialidad_id: int = None,trabajador_id: int = None,
                    fecha: datetime = None) -> bool:
         """Actualiza consulta existente"""
         # Verificar existencia
@@ -237,7 +257,6 @@ class ConsultaRepository(BaseRepository):
             if tipo_consulta.lower() in ['normal', 'emergencia']:
                 update_data['Tipo_Consulta'] = tipo_consulta.capitalize()
         
-        # ✅ AGREGAR ESTE BLOQUE:
         if especialidad_id is not None:
             try:
                 especialidad_id_int = int(especialidad_id)
@@ -252,6 +271,21 @@ class ConsultaRepository(BaseRepository):
                     print(f"❌ Repository: ID de especialidad inválido: {especialidad_id_int}")
             except (ValueError, TypeError) as e:
                 print(f"❌ Repository: Error procesando especialidad_id: {e}")
+
+        if trabajador_id is not None:
+            try:
+                trabajador_id_int = int(trabajador_id)
+                if trabajador_id_int > 0:
+                    # Verificar que el trabajador existe
+                    if self._worker_exists(trabajador_id_int):
+                        update_data['Id_Trabajador'] = trabajador_id_int
+                        print(f"👨‍⚕️ Repository: Trabajador actualizado a ID {trabajador_id_int}")
+                    else:
+                        print(f"❌ Repository: Trabajador {trabajador_id_int} no existe")
+                else:
+                    print(f"❌ Repository: ID de trabajador inválido: {trabajador_id_int}")
+            except (ValueError, TypeError) as e:
+                print(f"❌ Repository: Error procesando trabajador_id: {e}")
         
         if fecha is not None:
             update_data['Fecha'] = fecha
@@ -271,8 +305,6 @@ class ConsultaRepository(BaseRepository):
     # ===============================
     # CONSULTAS CON RELACIONES COMPLETAS - TOTALMENTE CORREGIDO
     # ===============================
-    
-    #@cached_query('consultas_completas', ttl=300)  # CAMBIAR: 30 segundos en lugar de 180
     def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtiene consultas con información completa - SQL SIMPLIFICADO"""
         query = """
@@ -281,13 +313,20 @@ class ConsultaRepository(BaseRepository):
             c.Fecha,
             c.Detalles, 
             c.Tipo_Consulta as tipo_consulta,
+            c.Id_trabajador,
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
             p.Cedula as paciente_cedula,
             ISNULL(e.Nombre, 'Sin especialidad') as especialidad_nombre,
             ISNULL(e.Precio_Normal, 0) as Precio_Normal, 
             ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia,
-            ISNULL(CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')), 'Sin doctor') as doctor_nombre,
-            CONCAT(ISNULL(e.Nombre, 'Sin especialidad'), ' - ', ISNULL(CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno), 'Sin doctor')) as especialidad_doctor,
+            
+            CASE 
+                WHEN t.id IS NOT NULL THEN
+                    CONCAT(e.Nombre, ' - Dr. ', t.Nombre, ' ', t.Apellido_Paterno)
+                ELSE
+                    CONCAT(e.Nombre, ' - (Sin asignar)')
+            END AS especialidad_doctor,
+            
             CASE 
                 WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
                 ELSE ISNULL(e.Precio_Normal, 0)
@@ -295,13 +334,12 @@ class ConsultaRepository(BaseRepository):
         FROM Consultas c
         LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
         LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
+        LEFT JOIN Trabajadores t ON c.Id_Trabajador = t.id
         ORDER BY c.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         
         result = self._execute_query(query, (limit,))
-        #print(f"🔍 Query devolvió {len(result)} consultas de BD")
         return result
     
     def get_consultation_by_id_complete(self, consulta_id: int) -> Optional[Dict[str, Any]]:
@@ -311,6 +349,7 @@ class ConsultaRepository(BaseRepository):
             c.id, c.Fecha, 
             CAST(c.Detalles AS VARCHAR(MAX)) as Detalles,
             c.Tipo_Consulta as tipo_consulta,
+            c.Id_trabajador,
             
             -- Paciente (CON CÉDULA)
             p.id as paciente_id,
@@ -352,6 +391,7 @@ class ConsultaRepository(BaseRepository):
             c.id, c.Fecha, 
             CAST(c.Detalles AS VARCHAR(MAX)),
             c.Tipo_Consulta,
+            c.Id_Trabajador,
             p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Cedula,
             e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia,
             u.id, u.Nombre, u.Apellido_Paterno, u.nombre_usuario
@@ -484,12 +524,9 @@ class ConsultaRepository(BaseRepository):
         query = """
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
                e.Nombre as especialidad_nombre, e.Precio_Normal, e.Precio_Emergencia,
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
-               d.Especialidad as doctor_especialidad,
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE c.Id_Paciente = ?
         ORDER BY c.Fecha DESC
@@ -509,7 +546,6 @@ class ConsultaRepository(BaseRepository):
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
-        WHERE e.Id_Doctor = ?
         ORDER BY c.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
@@ -521,12 +557,10 @@ class ConsultaRepository(BaseRepository):
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
                p.Cedula as paciente_cedula,
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor_nombre,
                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE c.Id_Especialidad = ?
         ORDER BY c.Fecha DESC
@@ -540,12 +574,10 @@ class ConsultaRepository(BaseRepository):
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
                p.Cedula as paciente_cedula,
-               e.Nombre as especialidad_nombre,
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor_nombre
+               e.Nombre as especialidad_nombre
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
         WHERE c.Id_Usuario = ?
         ORDER BY c.Fecha DESC
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
@@ -602,37 +634,42 @@ class ConsultaRepository(BaseRepository):
         
         # Query principal simplificado
         query = f"""
-        SELECT 
-            c.id, 
-            c.Fecha,
-            c.Detalles, 
-            c.Tipo_Consulta as tipo_consulta,
-            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
-            p.Cedula as paciente_cedula,
-            ISNULL(e.Nombre, 'Sin especialidad') as especialidad_nombre,
-            ISNULL(e.Precio_Normal, 0) as Precio_Normal, 
-            ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia,
-            ISNULL(CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')), 'Sin doctor') as doctor_nombre,
-            CONCAT(ISNULL(e.Nombre, 'Sin especialidad'), ' - ', ISNULL(CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno), 'Sin doctor')) as especialidad_doctor,
-            CASE 
-                WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
-                ELSE ISNULL(e.Precio_Normal, 0)
-            END as precio
-        FROM Consultas c
-        LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
-        LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
-        {where_clause}
-        ORDER BY c.Fecha DESC
-        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-        """
+            SELECT 
+                c.id, 
+                c.Fecha,
+                c.Detalles, 
+                c.Tipo_Consulta as tipo_consulta,
+                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
+                p.Cedula as paciente_cedula,
+                ISNULL(e.Nombre, 'Sin especialidad') as especialidad_nombre,
+                ISNULL(e.Precio_Normal, 0) as Precio_Normal, 
+                ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia,    
+                
+                CASE 
+                    WHEN t.id IS NOT NULL THEN
+                        CONCAT(e.Nombre, ' - Dr. ', t.Nombre, ' ', t.Apellido_Paterno)
+                    ELSE
+                        CONCAT(e.Nombre, ' - (Sin asignar)')
+                END AS especialidad_doctor,
+
+                CASE 
+                    WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
+                    ELSE ISNULL(e.Precio_Normal, 0)
+                END as precio
+            FROM Consultas c
+            LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
+            LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
+            LEFT JOIN Trabajadores t ON c.Id_Trabajador = t.id  
+            {where_clause}
+            ORDER BY c.Fecha DESC
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+            """
         
         count_query = f"""
         SELECT COUNT(*) as total 
         FROM Consultas c 
         LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
         LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
-        LEFT JOIN Doctores d ON e.Id_Doctor = d.id
         {where_clause}
         """
         
@@ -672,15 +709,12 @@ class ConsultaRepository(BaseRepository):
         SELECT c.id, c.Fecha, c.Detalles, c.Tipo_Consulta as tipo_consulta,
                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
                p.Cedula as paciente_cedula,
-               e.Nombre as especialidad_nombre,
-               CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo
+               e.Nombre as especialidad_nombre
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
-        WHERE (p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Apellido_Materno LIKE ?
-               OR d.Nombre LIKE ? OR d.Apellido_Paterno LIKE ? OR d.Apellido_Materno LIKE ?
-               OR e.Nombre LIKE ? OR c.Detalles LIKE ? OR p.Cedula LIKE ?)
+        INNER JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        INNER JOIN Trabajadores d ON te.Id_Trabajador = t.id
         """
         
         params = [search_term] * 9
@@ -839,27 +873,13 @@ class ConsultaRepository(BaseRepository):
         ORDER BY total_consultas DESC
         """
         
-        doctor_query = """
-        SELECT CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno) as doctor,
-            d.Especialidad as doctor_especialidad,
-            COUNT(c.id) as total_consultas,
-            COUNT(DISTINCT c.Id_Paciente) as pacientes_unicos
-        FROM Consultas c
-        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
-        GROUP BY d.id, d.Nombre, d.Apellido_Paterno, d.Especialidad
-        ORDER BY total_consultas DESC
-        """
-        
         monthly_stats = self._execute_query(monthly_query)
         specialty_stats = self._execute_query(specialty_query)
-        doctor_stats = self._execute_query(doctor_query)
         
         return {
             'general': general_stats,
             'por_mes': monthly_stats,
-            'por_especialidad': specialty_stats,
-            'por_doctor': doctor_stats
+            'por_especialidad': specialty_stats
         }
     
     @cached_query('consultas_today_stats', ttl=60)
@@ -871,8 +891,7 @@ class ConsultaRepository(BaseRepository):
         query = """
         SELECT 
             COUNT(*) as consultas_hoy,
-            COUNT(DISTINCT Id_Paciente) as pacientes_hoy,
-            COUNT(DISTINCT e.Id_Doctor) as doctores_activos_hoy
+            COUNT(DISTINCT Id_Paciente) as pacientes_hoy
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         WHERE c.Fecha BETWEEN ? AND ?
@@ -888,7 +907,6 @@ class ConsultaRepository(BaseRepository):
             FORMAT(Fecha, 'MMMM yyyy', 'es-ES') as mes_nombre,
             COUNT(*) as total_consultas,
             COUNT(DISTINCT Id_Paciente) as pacientes_unicos,
-            COUNT(DISTINCT e.Id_Doctor) as doctores_activos,
             AVG(e.Precio_Normal) as precio_promedio
         FROM Consultas c
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
@@ -939,6 +957,12 @@ class ConsultaRepository(BaseRepository):
         result = self._execute_query(query, (especialidad_id,), fetch_one=True)
         return result['count'] > 0 if result else False
     
+    def _worker_exists(self, trabajador_id: int) -> bool:
+        """Verifica si existe el trabajador"""
+        query = "SELECT COUNT(*) as count FROM Trabajadores WHERE id = ?"
+        result = self._execute_query(query, (trabajador_id,), fetch_one=True)
+        return result['count'] > 0 if result else False
+    
     def get_patient_consultation_count(self, paciente_id: int) -> int:
         """Obtiene número total de consultas de un paciente"""
         return self.count("Id_Paciente = ?", (paciente_id,))
@@ -948,8 +972,7 @@ class ConsultaRepository(BaseRepository):
         query = """
         SELECT COUNT(c.id) as count
         FROM Consultas c
-        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        WHERE e.Id_Doctor = ?
+        WHERE c.Id_Trabajador = ?
         """
         result = self._execute_query(query, (medico_id,), fetch_one=True)
         return result['count'] if result else 0
@@ -1111,16 +1134,16 @@ class ConsultaRepository(BaseRepository):
             p.Cedula as paciente_cedula,
             -- Especialidad/Servicio
             e.Nombre as especialidad_nombre, e.Precio_Normal, e.Precio_Emergencia,
-            -- Doctor
-            CONCAT('Dr. ', d.Nombre, ' ', d.Apellido_Paterno, ' ', ISNULL(d.Apellido_Materno, '')) as doctor_completo,
-            d.Especialidad as doctor_especialidad, d.Matricula as doctor_matricula,
+            -- Doctor (desde Trabajadores)
+            CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno, ' ', ISNULL(t.Apellido_Materno, '')) as doctor_completo,
+            t.Matricula as doctor_matricula,
             -- Usuario
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as usuario_registro,
             u.nombre_usuario as usuario_username
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        INNER JOIN Doctores d ON e.Id_Doctor = d.id
+        LEFT JOIN Trabajadores t ON c.Id_Trabajador = t.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         """
         
@@ -1132,7 +1155,7 @@ class ConsultaRepository(BaseRepository):
             params.extend([start_date, end_date])
         
         if medico_id:
-            conditions.append("d.id = ?")
+            conditions.append("t.id = ?")
             params.append(medico_id)
         
         if specialty_id:
@@ -1509,6 +1532,359 @@ class ConsultaRepository(BaseRepository):
         ORDER BY e.Nombre
         """
         return self._execute_query(query)
+    
+    # ===============================
+    # NUEVOS MÉTODOS PARA MÉDICOS Y ESPECIALIDADES
+    # ===============================
+    
+    def get_medicos_por_especialidad(self, especialidad_id: int) -> List[Dict[str, Any]]:
+        """
+        Obtiene médicos disponibles para una especialidad específica
+        
+        Args:
+            especialidad_id: ID de la especialidad
+            
+        Returns:
+            Lista de médicos con su información completa
+        """
+        try:
+            query = """
+            SELECT 
+                t.id AS trabajador_id,
+                t.Nombre AS medico_nombre,
+                t.Apellido_Paterno AS medico_apellido_p,
+                t.Apellido_Materno AS medico_apellido_m,
+                t.Matricula,
+                te.Es_Principal,
+                te.Fecha_Asignacion,
+                
+                -- Construir nombre completo
+                CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno, 
+                       CASE WHEN t.Apellido_Materno IS NOT NULL AND t.Apellido_Materno != '' 
+                            THEN ' ' + t.Apellido_Materno 
+                            ELSE '' END) AS medico_nombre_completo,
+                
+                -- Construir display con marca de principal
+                CASE 
+                    WHEN te.Es_Principal = 1 THEN
+                        CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno, ' (Principal)')
+                    ELSE
+                        CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno)
+                END AS medico_display
+                
+            FROM Trabajadores t
+            INNER JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+            INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            
+            WHERE 
+                te.Id_Especialidad = ?
+                AND tt.area_funcional = 'MEDICO'
+                
+            ORDER BY 
+                te.Es_Principal DESC,  -- Principales primero
+                t.Apellido_Paterno,
+                t.Nombre
+            """
+            
+            medicos = self._execute_query(query, (especialidad_id,))
+            
+            print(f"👨‍⚕️ Médicos encontrados para especialidad {especialidad_id}: {len(medicos)}")
+            
+            return medicos
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo médicos por especialidad: {e}")
+            return []
+    
+    def get_especialidades_con_medicos(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene especialidades que tienen al menos un médico activo disponible
+        Incluye contador de médicos por especialidad
+        
+        Returns:
+            Lista de especialidades con información de médicos
+        """
+        try:
+            query = """
+            SELECT 
+                e.id AS especialidad_id,
+                e.Nombre AS especialidad_nombre,
+                e.Detalles,
+                e.Precio_Normal,
+                e.Precio_Emergencia,
+                
+                -- Contar médicos activos
+                COUNT(DISTINCT t.id) AS cantidad_medicos,
+                
+                -- Si solo hay 1 médico, traer su ID para auto-selección
+                CASE 
+                    WHEN COUNT(DISTINCT t.id) = 1 THEN
+                        MIN(t.id)
+                    ELSE NULL
+                END AS medico_unico_id,
+                
+                -- Si solo hay 1 médico, traer su nombre completo
+                CASE 
+                    WHEN COUNT(DISTINCT t.id) = 1 THEN
+                        CONCAT('Dr. ', MIN(t.Nombre), ' ', MIN(t.Apellido_Paterno))
+                    ELSE NULL
+                END AS medico_unico_nombre,
+                
+                -- Construir display para ComboBox
+                CONCAT(e.Nombre, ' (', COUNT(DISTINCT t.id), 
+                       CASE WHEN COUNT(DISTINCT t.id) = 1 THEN ' médico)' ELSE ' médicos)' END
+                ) AS especialidad_display
+                
+            FROM Especialidad e
+            INNER JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+            INNER JOIN Trabajadores t ON te.Id_Trabajador = t.id
+            INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            
+            WHERE 
+                tt.area_funcional = 'MEDICO'
+                
+            GROUP BY e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia
+            
+            HAVING COUNT(DISTINCT t.id) > 0  -- Solo especialidades con médicos
+            
+            ORDER BY e.Nombre
+            """
+            
+            especialidades = self._execute_query(query)
+            
+            print(f"🏥 Especialidades con médicos disponibles: {len(especialidades)}")
+            if especialidades:
+                for esp in especialidades[:3]:
+                    print(f"   - {esp['especialidad_nombre']}: {esp['cantidad_medicos']} médico(s)")
+            
+            return especialidades
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo especialidades con médicos: {e}")
+            return []
+    
+    def get_consultas_completas(self, fecha_inicio: str = None, fecha_fin: str = None,
+                               especialidad_id: int = None, paciente_busqueda: str = None,
+                               tipo_consulta: str = None, limite: int = 100) -> List[Dict[str, Any]]:
+        """
+        Obtiene consultas con toda la información incluyendo datos del médico
+        
+        Args:
+            fecha_inicio: Fecha inicial del rango (formato: YYYY-MM-DD)
+            fecha_fin: Fecha final del rango (formato: YYYY-MM-DD)
+            especialidad_id: Filtrar por especialidad
+            paciente_busqueda: Buscar por nombre o CI del paciente
+            tipo_consulta: Filtrar por tipo (Normal/Emergencia)
+            limite: Máximo número de resultados
+            
+        Returns:
+            Lista de consultas con información completa
+        """
+        try:
+            query = f"""
+            SELECT TOP ({limite})
+                c.id AS consulta_id,
+                c.Fecha,
+                c.Tipo_Consulta,
+                c.Detalles,
+                c.Id_Usuario,
+                
+                -- Datos del paciente
+                p.id AS paciente_id,
+                p.Cedula AS paciente_ci,
+                p.Nombre AS paciente_nombre,
+                p.Apellido_Paterno AS paciente_apellido_p,
+                p.Apellido_Materno AS paciente_apellido_m,
+                CONCAT(p.Nombre, ' ', p.Apellido_Paterno, 
+                       ISNULL(' ' + p.Apellido_Materno, '')) AS paciente_nombre_completo,
+                
+                -- Datos de la especialidad
+                e.id AS especialidad_id,
+                e.Nombre AS especialidad_nombre,
+                e.Precio_Normal,
+                e.Precio_Emergencia,
+                
+                t.id AS trabajador_id,
+                t.Nombre AS medico_nombre,
+                t.Apellido_Paterno AS medico_apellido_p,
+                t.Apellido_Materno AS medico_apellido_m,
+                t.Matricula AS medico_matricula,
+                
+                CASE 
+                    WHEN t.id IS NOT NULL THEN
+                        CONCAT(e.Nombre, ' - Dr. ', t.Nombre, ' ', t.Apellido_Paterno)
+                    ELSE
+                        CONCAT(e.Nombre, ' - (Sin asignar)')
+                END AS especialidad_doctor_completo,
+                
+                CASE 
+                    WHEN t.id IS NOT NULL THEN
+                        CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno)
+                    ELSE
+                        '(Sin asignar)'
+                END AS medico_nombre_display,
+                
+                -- Calcular precio según tipo
+                CASE 
+                    WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia
+                    ELSE e.Precio_Normal
+                END AS precio_aplicado
+                
+            FROM Consultas c
+            INNER JOIN Pacientes p ON c.Id_Paciente = p.id
+            INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
+            LEFT JOIN Trabajadores t ON c.Id_Trabajador = t.id
+            
+            WHERE 1=1
+                {" AND c.Fecha >= ?" if fecha_inicio else ""}
+                {" AND c.Fecha <= ?" if fecha_fin else ""}
+                {" AND c.Id_Especialidad = ?" if especialidad_id else ""}
+                {" AND c.Tipo_Consulta = ?" if tipo_consulta else ""}
+                {" AND (p.Nombre LIKE ? OR p.Apellido_Paterno LIKE ? OR p.Cedula LIKE ?)" if paciente_busqueda else ""}
+                
+            ORDER BY c.Fecha DESC, c.id DESC
+            """
+            
+            # Construir parámetros
+            params = []
+            if fecha_inicio:
+                params.append(fecha_inicio)
+            if fecha_fin:
+                params.append(fecha_fin)
+            if especialidad_id:
+                params.append(especialidad_id)
+            if tipo_consulta:
+                params.append(tipo_consulta)
+            if paciente_busqueda:
+                search_pattern = f"%{paciente_busqueda}%"
+                params.extend([search_pattern, search_pattern, search_pattern])
+            
+            consultas = self._execute_query(query, tuple(params))
+            
+            print(f"📋 Consultas completas obtenidas: {len(consultas)}")
+            
+            return consultas
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo consultas completas: {e}")
+            return []
+    
+    def create_consultation_completa(self, usuario_id: int, paciente_id: int, 
+                                    especialidad_id: int, trabajador_id: int,
+                                    detalles: str, tipo_consulta: str = "Normal", 
+                                    fecha: datetime = None) -> int:
+        """
+        Crea nueva consulta médica con médico asignado
+        
+        Args:
+            usuario_id: ID del usuario que registra
+            paciente_id: ID del paciente
+            especialidad_id: ID de la especialidad
+            trabajador_id: ID del médico que atiende (NUEVO)
+            detalles: Observaciones o diagnóstico
+            tipo_consulta: "Normal" o "Emergencia"
+            fecha: Fecha de la consulta (default: ahora)
+            
+        Returns:
+            ID de la consulta creada
+        """
+        
+        # Validaciones
+        validate_required(usuario_id, "usuario_id")
+        validate_required(paciente_id, "paciente_id") 
+        validate_required(especialidad_id, "especialidad_id")
+        validate_required(trabajador_id, "trabajador_id")  # ✅ NUEVA VALIDACIÓN
+        detalles = validate_required_string(detalles, "detalles", 5)
+        
+        # Verificar entidades
+        if not self._user_exists(usuario_id):
+            raise ValidationError("usuario_id", usuario_id, "Usuario no encontrado")
+        if not self._patient_exists(paciente_id):
+            raise ValidationError("paciente_id", paciente_id, "Paciente no encontrado")
+        if not self._especialidad_exists(especialidad_id):
+            raise ValidationError("especialidad_id", especialidad_id, "Especialidad no encontrada")
+        if not self._trabajador_exists(trabajador_id):
+            raise ValidationError("trabajador_id", trabajador_id, "Médico no encontrado")
+        
+        # ✅ NUEVA VALIDACIÓN: Verificar que el médico tenga esa especialidad
+        if not self._trabajador_tiene_especialidad(trabajador_id, especialidad_id):
+            raise ValidationError("trabajador_especialidad", trabajador_id, 
+                                "El médico seleccionado no tiene asignada esta especialidad")
+        
+        # Tipo de consulta
+        if tipo_consulta not in ["Normal", "Emergencia"]:
+            tipo_consulta = "Normal"
+        
+        fecha_consulta = fecha if fecha else get_current_datetime()
+        
+        query = """
+        INSERT INTO Consultas (
+            Id_Usuario, 
+            Id_Paciente, 
+            Id_Especialidad,
+            Id_Trabajador,
+            Fecha, 
+            Detalles, 
+            Tipo_Consulta
+        )
+        OUTPUT INSERTED.id
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        
+        result = self._execute_query(
+            query,
+            (usuario_id, paciente_id, especialidad_id, trabajador_id, 
+             fecha_consulta, detalles, tipo_consulta),
+            fetch_one=True
+        )
+        
+        consultation_id = result['id'] if result else None
+        
+        if not consultation_id:
+            raise ValidationError("consulta", None, "Error creando consulta")
+        
+        # Invalidar cachés
+        self.invalidate_consultation_caches()
+        
+        print(f"✅ Consulta creada: ID {consultation_id} - Médico: {trabajador_id} - Especialidad: {especialidad_id}")
+        
+        return consultation_id
+    
+    # ===============================
+    # MÉTODOS AUXILIARES PRIVADOS
+    # ===============================
+    
+    def _trabajador_exists(self, trabajador_id: int) -> bool:
+        """Verifica si existe un trabajador activo"""
+        try:
+            query = "SELECT COUNT(*) as count FROM Trabajadores WHERE id = ?"
+            result = self._execute_query(query, (trabajador_id,), fetch_one=True)
+            return result and result['count'] > 0
+        except:
+            return False
+    
+    def _trabajador_tiene_especialidad(self, trabajador_id: int, especialidad_id: int) -> bool:
+        """Verifica si un trabajador tiene asignada una especialidad específica"""
+        try:
+            query = """
+            SELECT COUNT(*) as count 
+            FROM Trabajador_Especialidad 
+            WHERE Id_Trabajador = ? AND Id_Especialidad = ?
+            """
+            result = self._execute_query(query, (trabajador_id, especialidad_id), fetch_one=True)
+            return result and result['count'] > 0
+        except Exception as e:
+            print(f"⚠️ Error verificando especialidad del trabajador: {e}")
+            return False
+    
+    def _especialidad_exists(self, especialidad_id: int) -> bool:
+        """Verifica si existe una especialidad"""
+        try:
+            query = "SELECT COUNT(*) as count FROM Especialidad WHERE id = ?"
+            result = self._execute_query(query, (especialidad_id,), fetch_one=True)
+            return result and result['count'] > 0
+        except:
+            return False
     
     # ===============================
     # CACHÉ

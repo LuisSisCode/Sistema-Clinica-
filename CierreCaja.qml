@@ -29,7 +29,7 @@ Item {
             console.log("✅ CierreCaja mostrado")
             
             // ✅ EJECUTAR INICIALIZACIÓN AUTOMÁTICA
-            Qt.callLater(function() {
+            Qt.callLater(function() {        
                 if (cierreCajaModel && typeof cierreCajaModel.inicializarCamposAutomaticamente === 'function') {
                     console.log("🕐 Ejecutando inicialización automática de horarios...")
                     cierreCajaModel.inicializarCamposAutomaticamente()
@@ -208,6 +208,34 @@ Item {
                 }
             })
         }
+
+        function onCierreCompletado(success, mensaje) {
+            if (success) {
+                console.log("✅ Cierre completado exitosamente")
+                
+                // Limpiar la interfaz
+                Qt.callLater(function() {
+                    // Resetear campos en la UI
+                    efectivoReal = 0.0
+                    totalIngresos = 0.0
+                    totalEgresos = 0.0
+                    saldoTeorico = 0.0
+                    diferencia = 0.0
+                    
+                    // Mostrar notificación
+                    mostrarNotificacion("Éxito", mensaje)
+                    
+                    // Recargar automáticamente con nuevos horarios
+                    Qt.callLater(function() {
+                        if (cierreCajaModel && typeof cierreCajaModel.inicializarCamposAutomaticamente === 'function') {
+                            cierreCajaModel.inicializarCamposAutomaticamente()
+                        }
+                    }, 500)
+                })
+            } else {
+                mostrarNotificacion("Error", mensaje)
+            }
+        }
     }
 
     // ✅ NUEVO: Timer para sincronización retrasada
@@ -346,7 +374,7 @@ Item {
                             spacing: 4
                             
                             Label {
-                                text: "ARQUEO DE CAJA DIARIO"
+                                text: "💼 ARQUEO DE CAJA DIARIO"
                                 color: whiteColor
                                 font.bold: true
                                 font.pixelSize: 18
@@ -354,7 +382,7 @@ Item {
                             }
                             
                             Label {
-                                text: "Fecha: " + fechaActual + " • Hora: " + Qt.formatTime(new Date(), "hh:mm")
+                                text: "📅 Fecha: " + fechaActual + " • 🕐 Hora: " + Qt.formatTime(new Date(), "hh:mm")
                                 color: "#E8F4FD"
                                 font.pixelSize: 11
                                 font.family: "Segoe UI"
@@ -1220,6 +1248,11 @@ Item {
                                                     radius: 4
                                                 }
                                                 
+                                                // ✅ VALIDACIÓN MANUAL QUE ACEPTA PUNTO Y COMA
+                                                validator: RegularExpressionValidator {
+                                                    regularExpression: /^[0-9]*[.,]?[0-9]{0,2}$/
+                                                }
+                                                
                                                 onTextChanged: {
                                                     if (!actualizandoTexto) {
                                                         // ✅ VALIDACIÓN MEJORADA
@@ -1231,9 +1264,11 @@ Item {
                                                         var texto = text.trim()
                                                         var monto = 0
                                                         
-                                                        // ✅ Parsear monto con validación
+                                                        // ✅ Parsear monto con validación (ACEPTA PUNTO Y COMA)
                                                         if (texto.length > 0) {
                                                             try {
+                                                                // ✅ NORMALIZAR: Reemplazar coma por punto
+                                                                texto = texto.replace(',', '.')
                                                                 monto = parseFloat(texto)
                                                                 
                                                                 // ✅ Validar que sea número válido
@@ -1270,11 +1305,24 @@ Item {
                                                 }
                                                 
                                                 onFocusChanged: {
-                                                    if (!focus && text.trim().length === 0) {
+                                                    if (focus) {
+                                                        // ✅ Al recibir foco, seleccionar todo
+                                                        selectAll()
+                                                    } else if (text.trim().length === 0) {
                                                         // ✅ Si pierde el foco y está vacío, establecer a 0
                                                         if (cierreCajaModel) {
                                                             console.log("💵 Campo vacío, estableciendo a 0")
                                                             cierreCajaModel.establecerEfectivoReal(0)
+                                                        }
+                                                    } else {
+                                                        // ✅ NORMALIZAR AL PERDER FOCO: Mostrar con formato correcto
+                                                        var textoNormalizado = text.replace(',', '.')
+                                                        var valorFloat = parseFloat(textoNormalizado)
+                                                        
+                                                        if (!isNaN(valorFloat) && isFinite(valorFloat)) {
+                                                            actualizandoTexto = true
+                                                            text = valorFloat.toFixed(2)
+                                                            actualizandoTexto = false
                                                         }
                                                     }
                                                 }
@@ -1283,20 +1331,22 @@ Item {
                                                     selectAll()
                                                 }
                                                 
+                                                // ✅ Conexión para actualizar cuando el modelo cambia
                                                 Connections {
                                                     target: cierreCajaModel
                                                     function onEfectivoRealChanged() {
                                                         if (cierreCajaModel && !efectivoRealField.activeFocus) {
+                                                            efectivoRealField.actualizandoTexto = true
                                                             efectivoRealField.text = cierreCajaModel.efectivoReal.toFixed(2)
+                                                            efectivoRealField.actualizandoTexto = false
                                                         }
                                                     }
                                                 }
                                                 
-                                                validator: DoubleValidator {
-                                                    bottom: 0
-                                                    decimals: 2
-                                                    notation: DoubleValidator.StandardNotation
-                                                }
+                                                // ✅ TOOLTIP ÚTIL
+                                                ToolTip.visible: hovered
+                                                ToolTip.text: "Ingrese el efectivo real contado\nAcepta punto (.) o coma (,) como separador decimal\nEjemplos: 100.50 o 100,50"
+                                                ToolTip.delay: 500
                                             }
                                         }
                                         
@@ -1516,7 +1566,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 90
-                                                text: "FECHA"
+                                                text: "📅 FECHA"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1528,7 +1578,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 110
-                                                text: "HORARIO"
+                                                text: "🕐 HORARIO"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1540,7 +1590,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 110
-                                                text: "EFECTIVO REAL"
+                                                text: "💵 EFECTIVO REAL"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1552,7 +1602,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 110
-                                                text: "SALDO TEÓRICO"
+                                                text: "📊 SALDO TEÓRICO"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1564,7 +1614,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 90
-                                                text: "DIFERENCIA"
+                                                text: "⚖️ DIFERENCIA"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1576,7 +1626,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 80
-                                                text: "ESTADO"
+                                                text: "✅ ESTADO"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1588,7 +1638,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 120
-                                                text: "REGISTRADO POR"
+                                                text: "👤 REGISTRADO POR"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1601,7 +1651,7 @@ Item {
                                             Label {
                                                 Layout.fillWidth: true
                                                 Layout.minimumWidth: 150
-                                                text: "OBSERVACIONES"
+                                                text: "📝 OBSERVACIONES"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor
@@ -1613,7 +1663,7 @@ Item {
                                             
                                             Label {
                                                 Layout.preferredWidth: 100
-                                                text: "ACCIONES"
+                                                text: "⚙️ ACCIONES"
                                                 font.bold: true
                                                 font.pixelSize: 11
                                                 color: whiteColor

@@ -51,6 +51,10 @@ class ConsultaModel(QObject):
     especialidadesChanged = Signal()
     medicosDisponiblesChanged = Signal()
     
+    # NUEVAS SEÑALES PARA MÉDICOS
+    medicosEspecialidadChanged = Signal()
+    especialidadesFiltradaChanged = Signal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self._is_initializing = False
@@ -1041,31 +1045,32 @@ class ConsultaModel(QObject):
     
     @Slot()
     def refrescar_datos(self):
-        """Refresca todos los datos del modelo"""
-        if self._is_initializing:
-                return
+        """
+        Recarga todos los datos: consultas, especialidades y médicos
+        """
         try:
-            self._is_initializing = True
-            self._set_estado_actual("cargando")
+            if not self._verificar_autenticacion():
+                return
             
-            # Cargar datos principales
-            self._cargar_consultas_recientes()
-            self.cargar_especialidades()
-            self.cargar_doctores()
+            print("🔄 Refrescando datos del módulo de consultas...")
             
-            # Actualizar dashboard
-            self.obtener_dashboard()
+            self.estadoCambiado.emit("cargando")
             
-            self._set_estado_actual("listo")
+            # Cargar consultas con médicos
+            self.obtener_consultas_con_medicos()
+            
+            # Cargar especialidades con médicos disponibles
+            self.obtener_especialidades_con_medicos()
+            
+            self.estadoCambiado.emit("listo")
             self.operacionExitosa.emit("Datos actualizados correctamente")
-          
+            
+            print("✅ Datos refrescados exitosamente")
             
         except Exception as e:
-            error_msg = f"Error refrescando datos: {str(e)}"
-            self.operacionError.emit(error_msg)
-            self._set_estado_actual("error")
-        finally:
-            self._is_initializing = False
+            print(f"❌ Error refrescando datos: {e}")
+            self.estadoCambiado.emit("error")
+            self.operacionError.emit(f"Error actualizando datos: {str(e)}")
     
     # ===============================
     # SLOTS PARA CONSULTAS ESPECÍFICAS
@@ -1134,7 +1139,11 @@ class ConsultaModel(QObject):
                     consulta['paciente_completo'] = consulta.get('paciente_completo') or 'Sin nombre'
                     consulta['paciente_cedula'] = consulta.get('paciente_cedula') or 'Sin cédula'
                     consulta['Detalles'] = consulta.get('Detalles') or 'Sin detalles'
-                    consulta['especialidad_doctor'] = consulta.get('especialidad_doctor') or 'Sin especialidad/doctor'
+                    consulta['especialidad_doctor'] = (
+                        consulta.get('especialidad_doctor') or 
+                        consulta.get('especialidad_doctor_completo') or 
+                        f"{consulta.get('especialidad_nombre', 'Sin especialidad')} - (Sin asignar)"
+                    )
                     consulta['tipo_consulta'] = consulta.get('tipo_consulta') or 'Normal'
                     consulta['precio'] = float(consulta.get('precio') or 0)
             
@@ -1661,6 +1670,278 @@ class ConsultaModel(QObject):
             import traceback
             traceback.print_exc()
             self._especialidadesData = []
+
+    # ===============================
+    # NUEVOS MÉTODOS PARA COMBOBOX DE MÉDICOS
+    # ===============================
+    
+    @Slot(int, result='QVariantList')
+    def obtener_medicos_por_especialidad(self, especialidad_id: int):
+        """
+        Obtiene médicos disponibles para una especialidad específica
+        Para poblar el ComboBox de médicos después de seleccionar especialidad
+        
+        Args:
+            especialidad_id: ID de la especialidad seleccionada
+            
+        Returns:
+            Lista de médicos en formato QVariantList para QML
+        """
+        try:
+            if especialidad_id <= 0:
+                print(f"⚠️ ID de especialidad inválido: {especialidad_id}")
+                return []
+            
+            # Obtener médicos desde el repository
+            medicos = self.repository.get_medicos_por_especialidad(especialidad_id)
+            
+            print(f"👨‍⚕️ Médicos encontrados para especialidad {especialidad_id}: {len(medicos)}")
+            
+            # Convertir a formato QML amigable
+            medicos_qml = []
+            for medico in medicos:
+                medico_data = {
+                    'trabajador_id': medico['trabajador_id'],
+                    'nombre_completo': medico['medico_nombre_completo'],
+                    'display_text': medico['medico_display'],
+                    'es_principal': medico['Es_Principal'] == 1,
+                    'matricula': medico.get('Matricula', ''),
+                    'estado': medico.get('Estado', 'Activo')
+                }
+                medicos_qml.append(medico_data)
+            
+            # Si solo hay 1 médico, incluir flag para auto-selección
+            if len(medicos_qml) == 1:
+                medicos_qml[0]['auto_seleccionar'] = True
+                print(f"   ℹ️ Solo 1 médico disponible - Se auto-seleccionará: {medicos_qml[0]['display_text']}")
+            
+            self.medicosEspecialidadChanged.emit()
+            
+            return medicos_qml
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo médicos por especialidad: {e}")
+            self.operacionError.emit(f"Error cargando médicos: {str(e)}")
+            return []
+    
+    @Slot(result='QVariantList')
+    def obtener_especialidades_con_medicos(self):
+        """
+        Obtiene especialidades que tienen médicos activos disponibles
+        Para poblar el ComboBox de especialidades (solo las que tienen médicos)
+        
+        Returns:
+            Lista de especialidades en formato QVariantList para QML
+        """
+        try:
+            # Obtener especialidades desde el repository
+            especialidades = self.repository.get_especialidades_con_medicos()
+            
+            print(f"🏥 Especialidades con médicos disponibles: {len(especialidades)}")
+            
+            # Convertir a formato QML amigable
+            especialidades_qml = []
+            for esp in especialidades:
+                esp_data = {
+                    'especialidad_id': esp['especialidad_id'],
+                    'nombre': esp['especialidad_nombre'],
+                    'display_text': esp['especialidad_display'],
+                    'precio_normal': float(esp['Precio_Normal']),
+                    'precio_emergencia': float(esp['Precio_Emergencia']),
+                    'cantidad_medicos': esp['cantidad_medicos'],
+                    'medico_unico_id': esp.get('medico_unico_id'),  # Para auto-selección
+                    'medico_unico_nombre': esp.get('medico_unico_nombre', '')
+                }
+                especialidades_qml.append(esp_data)
+            
+            self.especialidadesFiltradaChanged.emit()
+            
+            return especialidades_qml
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo especialidades con médicos: {e}")
+            self.operacionError.emit(f"Error cargando especialidades: {str(e)}")
+            return []
+    
+    @Slot(int, int, int, int, str, str, result=bool)
+    def crear_consulta_completa(self, usuario_id: int, paciente_id: int, 
+                               especialidad_id: int, trabajador_id: int,
+                               detalles: str, tipo_consulta: str):
+        """
+        Crea una nueva consulta con médico asignado
+        
+        Args:
+            usuario_id: ID del usuario que registra
+            paciente_id: ID del paciente
+            especialidad_id: ID de la especialidad
+            trabajador_id: ID del médico que atiende (NUEVO)
+            detalles: Observaciones o diagnóstico
+            tipo_consulta: "Normal" o "Emergencia"
+            
+        Returns:
+            True si se creó exitosamente, False en caso contrario
+        """
+        try:
+            # Validaciones básicas
+            if usuario_id <= 0:
+                self.operacionError.emit("Usuario no válido")
+                return False
+            
+            if paciente_id <= 0:
+                self.operacionError.emit("Paciente no válido")
+                return False
+            
+            if especialidad_id <= 0:
+                self.operacionError.emit("Especialidad no válida")
+                return False
+            
+            if trabajador_id <= 0:
+                self.operacionError.emit("Debe seleccionar un médico")
+                return False
+            
+            if not detalles or len(detalles.strip()) < 5:
+                self.operacionError.emit("Los detalles deben tener al menos 5 caracteres")
+                return False
+            
+            # Crear la consulta usando el nuevo método del repository
+            consulta_id = self.repository.create_consultation_completa(
+                usuario_id=usuario_id,
+                paciente_id=paciente_id,
+                especialidad_id=especialidad_id,
+                trabajador_id=trabajador_id,
+                detalles=detalles.strip(),
+                tipo_consulta=tipo_consulta
+            )
+            
+            if consulta_id:
+                print(f"✅ Consulta creada exitosamente: ID {consulta_id}")
+                print(f"   - Paciente: {paciente_id}")
+                print(f"   - Especialidad: {especialidad_id}")
+                print(f"   - Médico: {trabajador_id}")
+                print(f"   - Tipo: {tipo_consulta}")
+                
+                self.operacionExitosa.emit("Consulta médica creada exitosamente")
+                
+                # Recargar datos
+                self.refrescar_datos()
+                
+                return True
+            else:
+                self.operacionError.emit("Error al crear la consulta")
+                return False
+                
+        except ClinicaBaseException as e:
+            print(f"❌ Error validación creando consulta: {e}")
+            self.operacionError.emit(str(e))
+            return False
+        except Exception as e:
+            print(f"❌ Error inesperado creando consulta: {e}")
+            self.operacionError.emit(f"Error inesperado: {str(e)}")
+            return False
+    
+    @Slot(int, result='QVariantMap')
+    def obtener_info_medico(self, trabajador_id: int):
+        """
+        Obtiene información detallada de un médico
+        
+        Args:
+            trabajador_id: ID del trabajador/médico
+            
+        Returns:
+            Diccionario con información del médico
+        """
+        try:
+            if trabajador_id <= 0:
+                return {}
+            
+            query = """
+            SELECT 
+                t.id,
+                t.Nombre,
+                t.Apellido_Paterno,
+                t.Apellido_Materno,
+                t.Matricula,
+                t.Especialidad,
+                t.Estado,
+                tt.Tipo as tipo_trabajador,
+                CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_completo
+            FROM Trabajadores t
+            INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            WHERE t.id = ?
+            """
+            
+            result = self.repository._execute_query(query, (trabajador_id,), fetch_one=True)
+            
+            if result:
+                return {
+                    'id': result['id'],
+                    'nombre_completo': result['nombre_completo'],
+                    'matricula': result.get('Matricula', ''),
+                    'especialidad': result.get('Especialidad', ''),
+                    'estado': result.get('Estado', 'Activo'),
+                    'tipo': result.get('tipo_trabajador', '')
+                }
+            
+            return {}
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo info de médico: {e}")
+            return {}
+    
+    @Slot(result='QVariantList')
+    def obtener_consultas_con_medicos(self):
+        """
+        Obtiene todas las consultas con información completa del médico
+        Para actualizar la tabla principal
+        
+        Returns:
+            Lista de consultas con todos los datos en formato QML
+        """
+        try:
+            # Obtener consultas con información completa del médico
+            consultas = self.repository.get_consultas_completas(limite=100)
+            
+            print(f"📋 Consultas con médicos obtenidas: {len(consultas)}")
+            
+            # Convertir a formato QML
+            consultas_qml = []
+            for consulta in consultas:
+                consulta_data = {
+                    'consulta_id': consulta['consulta_id'],
+                    'fecha': consulta['Fecha'],
+                    'tipo_consulta': consulta['Tipo_Consulta'],
+                    'detalles': consulta['Detalles'],
+                    
+                    # Paciente
+                    'paciente_id': consulta['paciente_id'],
+                    'paciente_nombre': consulta['paciente_nombre_completo'],
+                    'paciente_ci': consulta.get('paciente_ci', ''),
+                    
+                    # Especialidad
+                    'especialidad_id': consulta['especialidad_id'],
+                    'especialidad_nombre': consulta['especialidad_nombre'],
+                    
+                    # ✅ NUEVO: Médico
+                    'trabajador_id': consulta.get('trabajador_id'),
+                    'medico_nombre': consulta.get('medico_nombre_display', '(Sin asignar)'),
+                    
+                    # ✅ NUEVO: Display completo para columna
+                    'especialidad_doctor': consulta['especialidad_doctor_completo'],
+                    
+                    # Precio
+                    'precio': float(consulta.get('precio_aplicado', 0))
+                }
+                consultas_qml.append(consulta_data)
+            
+            self._consultasData = consultas_qml
+            self.consultasRecientesChanged.emit()
+            
+            return consultas_qml
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo consultas con médicos: {e}")
+            self.operacionError.emit(f"Error cargando consultas: {str(e)}")
+            return []
 
 # ===============================
 # REGISTRO PARA QML

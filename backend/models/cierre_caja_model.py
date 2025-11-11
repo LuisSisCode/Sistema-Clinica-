@@ -950,13 +950,16 @@ class CierreCajaModel(QObject):
                 self._cierre_completado = True
                 self.cierreCompletadoChanged.emit()
                 
-                # Recargar cierres del dÃ­a
+                # Recargar cierres del día
                 self.cargarCierresDelDia()
+                
+                # ✅ CORRECCIÓN: Usar QTimer.singleShot en lugar de Qt.callLater
+                QTimer.singleShot(500, self.limpiarDatosDespuesDelCierre)
                 
                 mensaje = f"Cierre completado - {self._hora_inicio} a {self._hora_fin}"
                 self.cierreCompletado.emit(True, mensaje)
                 self.operacionExitosa.emit("Cierre guardado en base de datos")
-                print(f"âœ… Cierre completado - Usuario: {self._usuario_actual_id}")
+                print(f"✅ Cierre completado - Usuario: {self._usuario_actual_id}")
             else:
                 raise Exception("Error guardando cierre en base de datos")
                 
@@ -964,9 +967,72 @@ class CierreCajaModel(QObject):
             error_msg = f"Error completando cierre: {str(e)}"
             self.cierreCompletado.emit(False, error_msg)
             self.operacionError.emit(error_msg)
-            print(f"âŒ {error_msg}")
+            print(f"❌ {error_msg}")
         finally:
             self._set_loading(False)
+
+    @Slot()
+    def limpiarDatosDespuesDelCierre(self):
+        """
+        ✅ Limpia TODOS los datos de ingresos y egresos después de completar el cierre
+        Prepara el sistema para un nuevo cierre de caja
+        """
+        try:
+            print("🧹 Limpiando datos después del cierre...")
+            
+            # ✅ Limpiar estructura completa de datos
+            self._datos_cierre = {
+                'ingresos': {
+                    'farmacia': [],
+                    'consultas': [],
+                    'laboratorio': [],
+                    'enfermeria': [],
+                    'ingresos_extras': [],
+                    'todos': []
+                },
+                'egresos': {
+                    'gastos': [],
+                    'todos': []
+                },
+                'resumen': {
+                    'total_farmacia': 0.0,
+                    'total_consultas': 0.0,
+                    'total_laboratorio': 0.0,
+                    'total_enfermeria': 0.0,
+                    'total_ingresos_extras': 0.0,
+                    'total_ingresos': 0.0,
+                    'total_egresos': 0.0,
+                    'saldo_teorico': 0.0,
+                    'transacciones_ingresos': 0,
+                    'transacciones_egresos': 0
+                }
+            }
+            
+            # Limpiar resumen estructurado
+            self._resumen_estructurado = {}
+            
+            # ✅ Resetear efectivo real a 0
+            self._efectivo_real = 0.0
+            self.efectivoRealChanged.emit()
+            
+            # ✅ Emitir TODAS las señales necesarias para actualizar la UI
+            self.datosChanged.emit()
+            self.resumenChanged.emit()
+            self.validacionChanged.emit()
+            
+            print("✅ Datos limpiados completamente:")
+            print(f"   - Ingresos: Bs 0.00")
+            print(f"   - Egresos: Bs 0.00")
+            print(f"   - Efectivo Real: Bs 0.00")
+            print("   - Listo para nuevo cierre")
+            
+            # Emitir señal de éxito
+            self.operacionExitosa.emit("Sistema listo para nuevo cierre de caja")
+            
+        except Exception as e:
+            error_msg = f"Error limpiando datos: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
     
     # ===============================
     # GENERACIÃ“N DE PDF
@@ -1384,8 +1450,35 @@ class CierreCajaModel(QObject):
             }
             
         except Exception as e:
-            print(f"âŒ Error calculando estadÃ­sticas de gastos: {e}")
+            print(f"X Error calculando estadÃ­sticas de gastos: {e}")
             return {}
+
+    @Slot()
+    def limpiarDatosDespuesDelCierre(self):
+        """
+        Limpia los datos de ingresos y egresos después de completar el cierre
+        Prepara el sistema para un nuevo cierre de caja
+        """
+        try:
+            print("🧹 Limpiando datos después del cierre...")
+            
+            # Limpiar datos internos
+            self._datos_cierre = {}
+            self._resumen_estructurado = {}
+            
+            # Resetear efectivo real
+            self._efectivo_real = 0.0
+            self.efectivoRealChanged.emit()
+            
+            # Emitir señales para actualizar la UI
+            self.datosChanged.emit()
+            self.resumenChanged.emit()
+            self.validacionChanged.emit()
+            
+            print("✅ Datos limpiados - Listo para nuevo cierre")
+            
+        except Exception as e:
+            print(f"❌ Error limpiando datos: {e}")
 # ===============================
 # REGISTRO PARA QML
 # ===============================

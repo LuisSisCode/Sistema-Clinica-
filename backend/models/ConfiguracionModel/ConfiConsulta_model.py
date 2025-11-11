@@ -147,7 +147,7 @@ class ConfiConsultaModel(QObject):
             
         except Exception as e:
             print(f"❌ Error refrescando datos: {e}")
-            self.errorOccurred.emit("Error", f"Error refrescando datos: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error refrescando datos: {str(e)}")
     
     @Slot(int, str, str, float, float, int, result=bool)
     def actualizarEspecialidad(self, especialidad_id: int, nombre: str = "", 
@@ -169,8 +169,7 @@ class ConfiConsultaModel(QObject):
                 kwargs['precio_normal'] = precio_normal
             if precio_emergencia >= 0:
                 kwargs['precio_emergencia'] = precio_emergencia
-            if Id_Medico >= 0:
-                kwargs['id_doctor'] = id_doctor if id_doctor > 0 else None
+            
             
             success = self.repository.update_especialidad(especialidad_id, **kwargs)
             
@@ -292,7 +291,7 @@ class ConfiConsultaModel(QObject):
             especialidad = self.repository.get_especialidad_by_id(especialidad_id)
             return especialidad if especialidad else {}
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo especialidad: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidad: {str(e)}")
             return {}
     
     @Slot(int, result=list)
@@ -301,7 +300,7 @@ class ConfiConsultaModel(QObject):
         try:
             return self.repository.get_especialidades_por_doctor(id_doctor)
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo especialidades por doctor: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidades por doctor: {str(e)}")
             return []
     
     @Slot(float, float, result=list)
@@ -310,16 +309,21 @@ class ConfiConsultaModel(QObject):
         try:
             return self.repository.get_especialidades_por_rango_precios(precio_min, precio_max)
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo especialidades por precio: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidades por precio: {str(e)}")
             return []
     
     @Slot(result=list)
     def obtenerDoctoresDisponibles(self) -> List[Dict[str, Any]]:
         """Obtiene lista de doctores disponibles"""
         try:
-            return self.repository.get_doctores_disponibles()
+            # ✅ CORREGIDO: Nombre correcto del método
+            return self.repository.get_medicos_disponibles()
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo doctores: {str(e)}")
+            import traceback
+            print(f"❌ Error obteniendo doctores disponibles:")
+            print(f"   Exception: {str(e)}")
+            print(f"   Traceback: {traceback.format_exc()}")
+            self.errorOccurred.emit("Error Doctores", f"Error obteniendo doctores: {str(e)}")
             return []
     
     # --- RECARGA DE DATOS ---
@@ -333,7 +337,7 @@ class ConfiConsultaModel(QObject):
             self.successMessage.emit("Datos recargados exitosamente")
             print("🔄 Datos de especialidades recargados desde QML")
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error recargando datos: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error recargando datos: {str(e)}")
         finally:
             self._set_loading(False)
     
@@ -344,7 +348,7 @@ class ConfiConsultaModel(QObject):
             self._cargar_especialidades()
             print("🔄 Especialidades recargadas")
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error recargando especialidades: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error recargando especialidades: {str(e)}")
     
     # --- UTILIDADES ---
     
@@ -372,7 +376,7 @@ class ConfiConsultaModel(QObject):
             return especialidades_formateadas
             
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo especialidades: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidades: {str(e)}")
             return [{'id': 0, 'text': 'Todas las especialidades', 'data': {}}]
     
     @Slot(str, int, result=bool)
@@ -391,7 +395,7 @@ class ConfiConsultaModel(QObject):
         try:
             return self.repository.get_especialidades_statistics()
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo estadísticas: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo estadísticas: {str(e)}")
             return {}
     
     @Slot(result='QVariantMap')
@@ -400,7 +404,7 @@ class ConfiConsultaModel(QObject):
         try:
             return self.repository.get_especialidades_summary()
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo resumen: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo resumen: {str(e)}")
             return {}
         
     @Slot(int, result=int)
@@ -409,7 +413,7 @@ class ConfiConsultaModel(QObject):
         try:
             return self.repository.count_consultas_asociadas(especialidad_id)
         except Exception as e:
-            self.errorOccurred.emit("Error", f"Error obteniendo consultas asociadas: {str(e)}")
+            self.errorOccurred.emit("Error Consultas", f"Error obteniendo consultas asociadas: {str(e)}")
             return 0
     
     # ===============================

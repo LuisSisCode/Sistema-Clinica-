@@ -789,18 +789,20 @@ class EnfermeriaRepository:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT 
-                        id,
-                        CONCAT(Nombre, ' ', Apellido_Paterno, ' ', ISNULL(Apellido_Materno, '')) as NombreCompleto,
-                        Nombre,
-                        Apellido_Paterno,
-                        ISNULL(Apellido_Materno, '') as Apellido_Materno,
-                        Id_Tipo_Trabajador,
-                        ISNULL(Matricula, '') as Matricula,
-                        ISNULL(Especialidad, '') as Especialidad
-                    FROM Trabajadores
-                    ORDER BY Nombre, Apellido_Paterno
-                """)
+                        SELECT 
+                            t.id,
+                            CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', ISNULL(t.Apellido_Materno, '')) as NombreCompleto,
+                            t.Nombre,
+                            t.Apellido_Paterno,
+                            ISNULL(t.Apellido_Materno, '') as Apellido_Materno,
+                            t.Id_Tipo_Trabajador,
+                            ISNULL(t.Matricula, '') as Matricula,
+                            ISNULL(t.Especialidad, '') as Especialidad
+                        FROM Trabajadores t
+                        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+                        WHERE tt.area_funcional = 'ENFERMERIA'
+                        ORDER BY t.Nombre, t.Apellido_Paterno
+                    """)
                 
                 trabajadores = []
                 for row in cursor.fetchall():

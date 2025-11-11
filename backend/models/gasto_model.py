@@ -267,7 +267,7 @@ class GastoModel(QObject):
     @Slot(int, float, int, str, int, str, result=bool) 
     def actualizarGasto(self, gasto_id: int, monto: float = 0, tipo_gasto_id: int = 0, 
                 descripcion: str = "", proveedor_id: int = -1, fecha_gasto: str = "") -> bool:
-        """Actualiza gasto existente - ACTUALIZADO CON proveedor_id"""
+        """Actualiza gasto existente - ACTUALIZADO CON proveedor_id Y HORA EXACTA"""
         try:
             # Verificar autenticación
             if not self._verificar_autenticacion():
@@ -296,12 +296,28 @@ class GastoModel(QObject):
             if proveedor_id != -1:
                 kwargs['proveedor_id'] = proveedor_id if proveedor_id > 0 else None
             
+            # ✅ CORRECCIÓN: AGREGAR HORA EXACTA AL ACTUALIZAR FECHA
             if fecha_gasto:
                 try:
-                    fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+                    # Parsear fecha seleccionada
+                    fecha_base = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+                    hora_actual = datetime.now()
+                    
+                    # Combinar fecha seleccionada con hora actual del sistema
+                    fecha_obj = fecha_base.replace(
+                        hour=hora_actual.hour,
+                        minute=hora_actual.minute,
+                        second=hora_actual.second,
+                        microsecond=hora_actual.microsecond
+                    )
+                    
                     kwargs['fecha'] = fecha_obj
+                    print(f"📅 Fecha actualizada con hora: {fecha_obj.strftime('%Y-%m-%d %H:%M:%S')}")
+                    
                 except Exception as e:
-                    print(f"Error convirtiendo fecha: {e}")
+                    print(f"❌ Error convirtiendo fecha: {e}")
+                    self.operacionError.emit(f"Error en formato de fecha: {str(e)}")
+                    return False
             
             success = self.repository.update_expense(gasto_id, **kwargs)
             
@@ -323,6 +339,9 @@ class GastoModel(QObject):
             error_msg = f"Error inesperado: {str(e)}"
             self.gastoActualizado.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
+            print(f"❌ Error actualizando gasto: {e}")
+            import traceback
+            traceback.print_exc()
             return False
         finally:
             self._set_loading(False)
@@ -1082,7 +1101,18 @@ class GastoModel(QObject):
             
             # Preparar fecha
             if fecha_gasto:
-                fecha_obj = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+                # ✅ PARSEAR FECHA Y AGREGAR HORA ACTUAL
+                fecha_base = datetime.strptime(fecha_gasto, '%Y-%m-%d')
+                hora_actual = datetime.now()
+                
+                # Combinar fecha seleccionada con hora actual
+                fecha_obj = fecha_base.replace(
+                    hour=hora_actual.hour,
+                    minute=hora_actual.minute,
+                    second=hora_actual.second,
+                    microsecond=hora_actual.microsecond
+                )
+                print(f"📅 Fecha con hora: {fecha_obj.strftime('%Y-%m-%d %H:%M:%S')}")
             else:
                 fecha_obj = datetime.now()
             

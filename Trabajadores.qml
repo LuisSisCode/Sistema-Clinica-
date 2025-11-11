@@ -20,22 +20,37 @@ Item {
     readonly property var trabajadorModel: appController.trabajador_model_instance
     
     // ===== COLORES MODERNOS =====
-    readonly property color primaryColor: "#3498DB"
-    readonly property color successColor: "#10B981"
-    readonly property color successColorLight: "#D1FAE5"
-    readonly property color dangerColor: "#E74C3C"
-    readonly property color dangerColorLight: "#FEE2E2"
-    readonly property color warningColor: "#f39c12"
-    readonly property color warningColorLight: "#FEF3C7"
-    readonly property color lightGrayColor: "#F8F9FA"
-    readonly property color textColor: "#2c3e50"
-    readonly property color textColorLight: "#6B7280"
-    readonly property color whiteColor: "#FFFFFF"
-    readonly property color borderColor: "#e0e0e0"
-    readonly property color accentColor: "#10B981"
-    readonly property color lineColor: "#D1D5DB" // Color para líneas verticales
-    readonly property color violetColor: "#9b59b6"
-    readonly property color infoColor: "#17a2b8"
+    readonly property string primaryColor: "#3498DB"
+    readonly property string successColor: "#10B981"
+    readonly property string successColorLight: "#D1FAE5"
+    readonly property string dangerColor: "#E74C3C"
+    readonly property string dangerColorLight: "#FEE2E2"
+    readonly property string warningColor: "#f39c12"
+    readonly property string warningColorLight: "#FEF3C7"
+    readonly property string lightGrayColor: "#F8F9FA"
+    readonly property string textColor: "#2c3e50"
+    readonly property string textColorLight: "#6B7280"
+    readonly property string whiteColor: "#FFFFFF"
+    readonly property string borderColor: "#e0e0e0"
+    readonly property string accentColor: "#10B981"
+    readonly property string lineColor: "#D1D5DB" // Color para líneas verticales
+    readonly property string violetColor: "#9b59b6"
+    readonly property string infoColor: "#17a2b8"
+
+    function obtenerIconoArea(areaFuncional) {
+        if (!areaFuncional) return '👷' // Por defecto para áreas NULL o no definidas
+        
+        const iconos = {
+            'MEDICO': '⚕️',
+            'LABORATORIO': '🔬',
+            'ENFERMERIA': '💉',
+            'ADMINISTRATIVO': '📋',
+            'FARMACIA': '💊'
+        }
+        
+        var areaUpper = areaFuncional.toString().toUpperCase().trim()
+        return iconos[areaUpper] || '👷'
+    }
 
     // ✅ PROPIEDADES REACTIVAS PARA COMBOS
     property var tiposParaFiltro: ["Todos los tipos"]
@@ -82,6 +97,10 @@ Item {
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
+
+    // ✅ PROPIEDADES ADICIONALES PARA DATOS DE TIPOS
+    property var tiposDataFiltro: []  // Agregar después de tiposParaFiltro
+    property var tiposDataCombo: []   // Agregar después de tiposParaCombo
     
     // ===== SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
     signal irAConfigPersonal()
@@ -101,62 +120,64 @@ Item {
         if (!trabajadorModel) {
             console.log("❌ TrabajadorModel no disponible")
             tiposParaFiltro = ["Todos los tipos"]
+            tiposDataFiltro = [{id: 0, nombre: "Todos los tipos"}]
             return
         }
         
         try {
-            // ✅ OBTENER TIPOS SIN VERIFICACIÓN DE TIPO
             var tipos = trabajadorModel.tiposTrabajador
             
-            console.log("   Tipos recibidos:", tipos)
-            console.log("   Tipo de datos:", typeof tipos)
-            console.log("   Tiene length?", tipos ? tipos.length : "NO")
-            
-            // ✅ VERIFICACIÓN SIMPLE: Solo checar que exista y tenga length > 0
             if (!tipos) {
                 console.log("❌ tipos es null/undefined")
                 tiposParaFiltro = ["Todos los tipos"]
+                tiposDataFiltro = [{id: 0, nombre: "Todos los tipos"}]
                 return
             }
-            
-            // ✅ VERIFICAR LENGTH (funciona con QVariant)
-            var length = tipos.length || 0
-            console.log("   Length detectado:", length)
-            
-            if (length === 0) {
-                console.log("❌ tipos.length es 0")
-                tiposParaFiltro = ["Todos los tipos"]
-                return
+        
+        var length = tipos.length || 0
+        
+        if (length === 0) {
+            console.log("❌ tipos.length es 0")
+            tiposParaFiltro = ["Todos los tipos"]
+            tiposDataFiltro = [{id: 0, nombre: "Todos los tipos"}]
+            return
+        }
+        
+        // ✅ CONSTRUIR LISTA CON ÁREA FUNCIONAL REAL
+        var nombres = ["Todos los tipos"]
+        var tiposData = []
+
+        tiposData.push({id: 0, nombre: "Todos los tipos"})
+
+        console.log("📋 Procesando", length, "tipos de trabajador:")
+        for (var i = 0; i < length; i++) {
+            var tipo = tipos[i]
+            if (tipo && tipo.Tipo) {
+                // ✅ USAR EL ÁREA FUNCIONAL REAL DE LA BASE DE DATOS
+                var areaFuncional = tipo.area_funcional || null
+                var icono = obtenerIconoArea(areaFuncional)
+                var nombreConIcono = icono + " " + tipo.Tipo
+                nombres.push(nombreConIcono)
+                tiposData.push({
+                    id: tipo.id, 
+                    nombre: tipo.Tipo,
+                    area_funcional: areaFuncional
+                })
+                console.log("   ", i + 1, "-", tipo.Tipo, 
+                          "(ID:", tipo.id, 
+                          "Área Funcional:", areaFuncional, 
+                          "Icono:", icono, ")")
             }
-            
-            // ✅ CONSTRUIR LISTA DIRECTAMENTE
-            var nombres = ["Todos los tipos"]
-            
-            console.log("   Iterando sobre", length, "tipos...")
-            for (var i = 0; i < length; i++) {
-                try {
-                    var tipo = tipos[i]
-                    console.log("   Tipo [" + i + "]:", JSON.stringify(tipo))
-                    
-                    if (tipo && tipo.Tipo) {
-                        nombres.push(tipo.Tipo)
-                        console.log("      ✅ Agregado:", tipo.Tipo)
-                    } else {
-                        console.log("      ⚠️ Tipo inválido:", tipo)
-                    }
-                } catch (err) {
-                    console.log("      ❌ Error en índice", i, ":", err)
-                }
-            }
-            
-            tiposParaFiltro = nombres
-            console.log("✅ Tipos cargados para filtro:", nombres.length - 1, "tipos")
-            console.log("   Lista completa:", JSON.stringify(nombres))
-            
+        }
+
+        tiposParaFiltro = nombres
+        tiposDataFiltro = tiposData
+        console.log("✅ Tipos cargados para filtro:", nombres.length - 1, "tipos")
+        
         } catch (error) {
             console.log("❌ ERROR en actualizarTiposParaFiltro:", error)
-            console.log("   Stack:", error.stack)
             tiposParaFiltro = ["Todos los tipos"]
+            tiposDataFiltro = [{id: 0, nombre: "Todos los tipos"}]
         }
     }
 
@@ -170,14 +191,8 @@ Item {
         }
         
         try {
-            // ✅ OBTENER TIPOS SIN VERIFICACIÓN DE TIPO
             var tipos = trabajadorModel.tiposTrabajador
             
-            console.log("   Tipos recibidos:", tipos)
-            console.log("   Tipo de datos:", typeof tipos)
-            console.log("   Tiene length?", tipos ? tipos.length : "NO")
-            
-            // ✅ VERIFICACIÓN SIMPLE
             if (!tipos) {
                 console.log("❌ tipos es null/undefined")
                 tiposParaCombo = ["Seleccionar tipo..."]
@@ -185,7 +200,6 @@ Item {
             }
             
             var length = tipos.length || 0
-            console.log("   Length detectado:", length)
             
             if (length === 0) {
                 console.log("❌ tipos.length es 0")
@@ -193,42 +207,78 @@ Item {
                 return
             }
             
-            // ✅ CONSTRUIR LISTA DIRECTAMENTE
+            // ✅ CONSTRUIR LISTA CON ÁREA FUNCIONAL REAL
             var nombres = ["Seleccionar tipo..."]
             
-            console.log("   Iterando sobre", length, "tipos...")
+            console.log("📋 Procesando tipos para combo:")
             for (var i = 0; i < length; i++) {
                 try {
                     var tipo = tipos[i]
-                    console.log("   Tipo [" + i + "]:", JSON.stringify(tipo))
-                    
                     if (tipo && tipo.Tipo) {
-                        nombres.push(tipo.Tipo)
-                        console.log("      ✅ Agregado:", tipo.Tipo)
-                    } else {
-                        console.log("      ⚠️ Tipo inválido:", tipo)
+                        // ✅ USAR EL ÁREA FUNCIONAL REAL DE LA BASE DE DATOS
+                        var areaFuncional = tipo.area_funcional || null
+                        var icono = obtenerIconoArea(areaFuncional)
+                        nombres.push(icono + " " + tipo.Tipo)
+                        console.log("   ", i + 1, "-", tipo.Tipo, 
+                                "(Área Funcional:", areaFuncional, 
+                                "Icono:", icono, ")")
                     }
                 } catch (err) {
-                    console.log("      ❌ Error en índice", i, ":", err)
+                    console.log("⚠️ Error procesando tipo en índice", i)
                 }
             }
             
             tiposParaCombo = nombres
             console.log("✅ Tipos cargados para combo:", nombres.length - 1, "tipos")
-            console.log("   Lista completa:", JSON.stringify(nombres))
             
         } catch (error) {
             console.log("❌ ERROR en actualizarTiposParaCombo:", error)
-            console.log("   Stack:", error.stack)
             tiposParaCombo = ["Seleccionar tipo..."]
         }
     }
 
-    // ✅ NUEVA FUNCIÓN HELPER PARA VERIFICAR SI EL MODELO ESTÁ LISTO
     function isModeloListo() {
-        return trabajadorModel && 
-               trabajadorModel.tiposTrabajador && 
-               trabajadorModel.tiposTrabajador.length > 0
+        if (!trabajadorModel) {
+            console.log("❌ TrabajadorModel no disponible")
+            return false
+        }
+        
+        // ✅ CORREGIDO: QVariantList de Qt NO pasa Array.isArray()
+        // pero sí tiene propiedad .length y se puede indexar
+        var tipos = trabajadorModel.tiposTrabajador
+        
+        // Verificar que existe y tiene elementos
+        if (!tipos) {
+            console.log("❌ Tipos es null/undefined")
+            return false
+        }
+        
+        // ✅ Verificar length directamente (funciona con QVariantList)
+        var length = tipos.length || 0
+        if (length === 0) {
+            console.log("❌ Tipos no disponibles o vacíos (length=0)")
+            return false
+        }
+        
+        // Verificar que el primer elemento sea un objeto válido
+        try {
+            var primerTipo = tipos[0]
+            if (!primerTipo || typeof primerTipo !== 'object') {
+                console.log("❌ Estructura de tipos inválida")
+                return false
+            }
+            
+            // Verificar que tenga la propiedad esperada
+            if (!primerTipo.hasOwnProperty('Tipo')) {
+                console.log("❌ Primer tipo no tiene propiedad 'Tipo'")
+                return false
+            }
+        } catch (e) {
+            console.log("❌ Error accediendo al primer tipo:", e)
+            return false
+        }
+        
+        return true
     }
 
     // ✅ FUNCIÓN HELPER PARA ACTUALIZACIÓN SEGURA DE COMBOS
@@ -238,10 +288,10 @@ Item {
             return
         }
         
-        // Actualizar ComboBoxes solo si están disponibles
+        // ✅ USAR LAS PROPIEDADES EXISTENTES EN LUGAR DE FUNCIONES FANTASMA
         try {
             if (filtroTipo && filtroTipo.model) {
-                var newModelFiltro = getTiposTrabajadoresNombres()
+                var newModelFiltro = tiposParaFiltro
                 if (JSON.stringify(filtroTipo.model) !== JSON.stringify(newModelFiltro)) {
                     filtroTipo.model = newModelFiltro
                     console.log("🔄 Filtro combo actualizado")
@@ -249,7 +299,7 @@ Item {
             }
             
             if (tipoTrabajadorCombo && tipoTrabajadorCombo.model) {
-                var newModelCombo = getTiposTrabajadoresParaCombo()
+                var newModelCombo = tiposParaCombo
                 if (JSON.stringify(tipoTrabajadorCombo.model) !== JSON.stringify(newModelCombo)) {
                     tipoTrabajadorCombo.model = newModelCombo
                     console.log("🔄 Tipo trabajador combo actualizado")
@@ -1077,7 +1127,7 @@ Item {
 
     // ✅ FUNCIÓN aplicarFiltros() MEJORADA CON VERIFICACIONES
     function aplicarFiltros() {
-        //console.log("🔍 Aplicando filtros...")
+        console.log("🔍 Aplicando filtros...")
         
         // ✅ VERIFICAR QUE TRABAJADORMODEL ESTÉ DISPONIBLE
         if (!trabajadorModel) {
@@ -1094,28 +1144,38 @@ Item {
         // Obtener trabajadores desde el modelo
         var trabajadores = trabajadorModel.trabajadores || []
         
+        console.log("📊 Total trabajadores a filtrar:", trabajadores.length)
+        console.log("🎯 Filtro tipo seleccionado:", tipoSeleccionado, "Texto búsqueda:", textoBusqueda)
+        
         for (var i = 0; i < trabajadores.length; i++) {
             var trabajador = trabajadores[i]
             var mostrar = true
             
-            // Filtro por tipo
-            if (tipoSeleccionado > 0 && mostrar && filtroTipo) {
-                var tipoNombre = filtroTipo.model[tipoSeleccionado]
-                if (trabajador.tipo_nombre !== tipoNombre) {
+            // ✅ CORREGIDO: Filtro por tipo - usar tipo_nombre en lugar de tipo_trabajador
+            if (tipoSeleccionado > 0 && tiposDataFiltro.length > tipoSeleccionado) {
+                var tipoData = tiposDataFiltro[tipoSeleccionado]
+                console.log("🔍 Filtrando por tipo:", tipoData.nombre, "vs trabajador:", trabajador.tipo_nombre)
+                
+                // ✅ COMPARAR CON tipo_nombre DEL TRABAJADOR (no tipo_trabajador)
+                if (trabajador.tipo_nombre !== tipoData.nombre) {
                     mostrar = false
+                    console.log("❌ Trabajador filtrado por tipo:", trabajador.nombre_completo)
                 }
             }
             
-            // Búsqueda por texto en nombre, especialidad o matrícula
-            if (textoBusqueda.length > 0 && mostrar) {
+            // ✅ Búsqueda por texto en nombre, especialidad o matrícula - SOLO SI AÚN MUESTRA
+            if (mostrar && textoBusqueda.length > 0) {
                 var nombreCompleto = trabajador.nombre_completo || ""
                 var especialidad = trabajador.Especialidad || ""
                 var matricula = trabajador.Matricula || ""
                 
-                if (!nombreCompleto.toLowerCase().includes(textoBusqueda) &&
-                    !especialidad.toLowerCase().includes(textoBusqueda) &&
-                    !matricula.toLowerCase().includes(textoBusqueda)) {
+                var nombreMatch = nombreCompleto.toLowerCase().includes(textoBusqueda)
+                var especialidadMatch = especialidad.toLowerCase().includes(textoBusqueda)
+                var matriculaMatch = matricula.toLowerCase().includes(textoBusqueda)
+                
+                if (!nombreMatch && !especialidadMatch && !matriculaMatch) {
                     mostrar = false
+                    console.log("❌ Trabajador filtrado por búsqueda:", trabajador.nombre_completo)
                 }
             }
             
@@ -1124,12 +1184,13 @@ Item {
                 var trabajadorFormateado = {
                     trabajadorId: trabajador.id.toString(),
                     nombreCompleto: trabajador.nombre_completo || "",
-                    tipoTrabajador: trabajador.tipo_nombre || "",
+                    tipoTrabajador: trabajador.tipo_nombre || "", // ✅ Usar tipo_nombre
                     especialidad: trabajador.Especialidad || "Sin especialidad",
                     matricula: trabajador.Matricula || "Sin matrícula",
-                    fechaRegistro: new Date().toISOString().split('T')[0]
+                    fechaRegistro: trabajador.fecha_registro || new Date().toISOString().split('T')[0]
                 }
                 trabajadoresListModel.append(trabajadorFormateado)
+                console.log("✅ Mostrando trabajador:", trabajador.nombre_completo, "- Tipo:", trabajador.tipo_nombre)
             }
         }
         
@@ -1980,79 +2041,6 @@ Item {
         }
     }
 
-    // ✅ TIMER DE DEBUG TEMPORAL
-    Timer {
-        id: debugTimer
-        interval: 3000  // 3 segundos después de cargar
-        repeat: false
-        running: false
-        
-        onTriggered: {
-            console.log("=" .repeat(60))
-            console.log("🔍 DEBUG MANUAL DE TIPOS DE TRABAJADOR")
-            console.log("=" .repeat(60))
-            
-            if (!trabajadorModel) {
-                console.log("❌ trabajadorModel no existe")
-                return
-            }
-            
-            console.log("✅ trabajadorModel existe:", trabajadorModel)
-            
-            // Test 1: Probar property directamente
-            console.log("\n📋 TEST 1: Property tiposTrabajador")
-            try {
-                var tipos1 = trabajadorModel.tiposTrabajador
-                console.log("   Resultado:", tipos1)
-                console.log("   Tipo:", typeof tipos1)
-                console.log("   Es null?", tipos1 === null)
-                console.log("   Es undefined?", tipos1 === undefined)
-                console.log("   Tiene length?", tipos1 ? tipos1.hasOwnProperty('length') : "N/A")
-                console.log("   Length:", tipos1 ? tipos1.length : "N/A")
-                
-                if (tipos1 && tipos1.length > 0) {
-                    console.log("   Primer elemento:", JSON.stringify(tipos1[0]))
-                }
-            } catch (e) {
-                console.log("   ❌ ERROR:", e)
-            }
-            
-            // Test 2: Probar método helper
-            console.log("\n📋 TEST 2: Método obtenerTiposTrabajadorParaQML")
-            try {
-                if (trabajadorModel.obtenerTiposTrabajadorParaQML) {
-                    var tipos2 = trabajadorModel.obtenerTiposTrabajadorParaQML()
-                    console.log("   Resultado:", tipos2)
-                    console.log("   Tipo:", typeof tipos2)
-                    console.log("   Length:", tipos2 ? tipos2.length : "N/A")
-                    
-                    if (tipos2 && tipos2.length > 0) {
-                        console.log("   Primer elemento:", JSON.stringify(tipos2[0]))
-                    }
-                } else {
-                    console.log("   ❌ Método no existe")
-                }
-            } catch (e) {
-                console.log("   ❌ ERROR:", e)
-            }
-            
-            // Test 3: Contador
-            console.log("\n📋 TEST 3: Método cantidadTiposDisponibles")
-            try {
-                if (trabajadorModel.cantidadTiposDisponibles) {
-                    var cantidad = trabajadorModel.cantidadTiposDisponibles()
-                    console.log("   Cantidad:", cantidad)
-                } else {
-                    console.log("   ❌ Método no existe")
-                }
-            } catch (e) {
-                console.log("   ❌ ERROR:", e)
-            }
-            
-            console.log("=" .repeat(60))
-        }
-    }
-
     // ===== INICIALIZACIÓN MEJORADA CON VERIFICACIONES DE TIMING =====
     Component.onCompleted: {
         console.log("💥 Módulo Trabajadores iniciado")
@@ -2066,8 +2054,7 @@ Item {
         
         console.log("✅ AppController disponible")
         
-        // ✅ INICIAR TIMER DE DEBUG
-        debugTimer.start()
+
         
         // ✅ FUNCIÓN DE INICIALIZACIÓN DIFERIDA CON REINTENTOS
         function inicializarModelo(reintentos) {

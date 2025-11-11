@@ -1,0 +1,53 @@
+# ═══════════════════════════════════════════════════════════════
+# DEPENDENCIAS - Sistema Clínica María Inmaculada v1.0
+# ═══════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────
+# Framework Qt para interfaz gráfica
+# ───────────────────────────────────────────────────────────────
+PySide6>=6.5.0
+
+# ───────────────────────────────────────────────────────────────
+# Base de datos
+# ───────────────────────────────────────────────────────────────
+pyodbc>=4.0.39
+
+# ───────────────────────────────────────────────────────────────
+# Generación de reportes PDF
+# ───────────────────────────────────────────────────────────────
+reportlab>=4.0.0
+
+# ───────────────────────────────────────────────────────────────
+# Manejo de imágenes
+# ───────────────────────────────────────────────────────────────
+Pillow>=10.0.0
+
+# ───────────────────────────────────────────────────────────────
+# Configuración y variables de entorno
+# ───────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ───────────────────────────────────────────────────────────────
+# Para crear el ejecutable
+# ───────────────────────────────────────────────────────────────
+pyinstaller>=6.0.0
+
+# ───────────────────────────────────────────────────────────────
+# NOTAS DE INSTALACIÓN
+# ───────────────────────────────────────────────────────────────
+# 1. Instalar todas las dependencias:
+#    pip install -r requirements.txt
+#
+# 2. En Windows, es posible que necesites:
+#    pip install --upgrade pip
+#    pip install --upgrade setuptools
+#
+# 3. Para SQL Server, instala el driver ODBC:
+#    https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server
+#
+# 4. Verificar instalación:
+#    python -c "import PySide6; print('PySide6 OK')"
+#    python -c "import pyodbc; print('pyodbc OK')"
+#    python -c "import reportlab; print('reportlab OK')"
+#
+# ═══════════════════════════════════════════════════════════════
