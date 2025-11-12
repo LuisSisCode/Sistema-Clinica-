@@ -713,52 +713,59 @@ class CierreCajaModel(QObject):
             return []
     @Slot()
     def generarPDFConsulta(self):
-        """Genera PDF de la consulta actual - VERSIÃ“N SIMPLIFICADA"""
+        """Genera PDF de la consulta actual - VERSIÓN MEJORADA CON RESPONSABLE"""
         
-        # âœ… VALIDACIÃ“N TEMPRANA
+        # ✅ VALIDACIÓN TEMPRANA
         if not self._datos_cierre:
             self.operacionError.emit("Debe consultar datos primero antes de generar PDF")
-            print("âŒ No hay datos consultados para generar PDF")
+            print("❌ No hay datos consultados para generar PDF")
             return
         
-        # âœ… PROTECCIÃ“N CONTRA CONCURRENCIA
-        if not self._safe_operation("GeneraciÃ³n de PDF"):
-            self.operacionError.emit("El sistema estÃ¡ ocupado. Espere un momento...")
+        # ✅ PROTECCIÓN CONTRA CONCURRENCIA
+        if not self._safe_operation("Generación de PDF"):
+            self.operacionError.emit("El sistema está ocupado. Espere un momento...")
             return
             
         try:
-            print("ðŸ”„ Generando PDF desde datos existentes...")
+            print("📤 Generando PDF desde datos existentes...")
             
-            # âœ… PREPARAR MOVIMIENTOS VALIDANDO ESTRUCTURA
+            # ✅ OBTENER INFORMACIÓN DEL USUARIO
+            usuario_nombre = getattr(self, '_usuario_actual_nombre', 'Sistema')
+            usuario_rol = getattr(self, '_usuario_actual_rol', 'Usuario')
+            print(f"👤 Usuario responsable para PDF: {usuario_nombre} ({usuario_rol})")
+            
+            # ✅ PREPARAR MOVIMIENTOS VALIDANDO ESTRUCTURA
             movimientos = self._preparar_movimientos_para_pdf(self._datos_cierre)
             
             if not movimientos or len(movimientos) == 0:
                 self.operacionError.emit("No hay movimientos para generar el PDF")
                 return
             
-            # Generar PDF
-            success, resultado = self._generar_pdf_arqueo(movimientos, self._datos_cierre)
+            # Generar PDF CON RESPONSABLE
+            success, resultado = self._generar_pdf_arqueo_con_responsable(
+                movimientos, self._datos_cierre, usuario_nombre, usuario_rol
+            )
             
             if success:
-                print(f"âœ… PDF generado exitosamente: {resultado}")
+                print(f"✅ PDF generado exitosamente: {resultado}")
                 self.pdfGenerado.emit(resultado)
                 self.operacionExitosa.emit("PDF generado correctamente")
             else:
                 error_msg = f"Error generando PDF: {resultado}"
-                print(f"âŒ {error_msg}")
+                print(f"❌ {error_msg}")
                 self.operacionError.emit(error_msg)
                 
         except Exception as e:
-            error_msg = f"Error durante generaciÃ³n de PDF: {str(e)}"
-            print(f"âŒ {error_msg}")
+            error_msg = f"Error durante generación de PDF: {str(e)}"
+            print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
             import traceback
             traceback.print_exc()
             
         finally:
-            # âœ… GARANTIZAR LIBERACIÃ“N DEL LOCK
+            # ✅ GARANTIZAR LIBERACIÓN DEL LOCK
             self._release_operation()
-            print("ðŸ”“ Lock liberado en generarPDFConsulta")
+            print("🔓 Lock liberado en generarPDFConsulta")
 
     def _safe_operation_with_timeout(self, operation_name: str = "OperaciÃ³n", timeout_ms: int = 3000):
         """Protege contra operaciones concurrentes CON TIMEOUT"""
