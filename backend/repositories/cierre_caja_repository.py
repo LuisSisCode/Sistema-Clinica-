@@ -103,7 +103,7 @@ class CierreCajaRepository(BaseRepository):
         SELECT 
             c.id,
             c.Fecha,
-            COALESCE(e.Precio_Normal, 0) as Total,
+            COALESCE(CASE WHEN c.Tipo_Consulta = 'Emergencia' THEN e.Precio_Emergencia ELSE e.Precio_Normal END, 0) as Total,
             0 as Descuento,
             c.Id_Usuario,
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
@@ -125,7 +125,7 @@ class CierreCajaRepository(BaseRepository):
         SELECT 
             l.id,
             l.Fecha,
-            COALESCE(ta.Precio_Normal, 0) as Total,
+            COALESCE(CASE WHEN l.Tipo = 'Emergencia' THEN ta.Precio_Emergencia ELSE ta.Precio_Normal END, 0) as Total,
             0 as Descuento,
             l.Id_RegistradoPor as Id_Usuario,
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
@@ -170,7 +170,7 @@ class CierreCajaRepository(BaseRepository):
         SELECT 
             e.id,
             e.Fecha,
-            (e.Cantidad * COALESCE(tp.Precio_Normal, 0)) as Total,
+            (e.Cantidad * COALESCE(CASE WHEN e.Tipo = 'Emergencia' THEN tp.Precio_Emergencia ELSE tp.Precio_Normal END, 0)) as Total,
             0 as Descuento,
             e.Id_RegistradoPor as Id_Usuario,
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
@@ -517,15 +517,49 @@ class CierreCajaRepository(BaseRepository):
         except Exception as e:
             print(f"âŒ Error generando datos PDF: {e}")
             return {}
-    
-    def get_cierres_semana_actual(self, fecha_referencia: str) -> List[Dict[str, Any]]:
-        """Obtiene cierres de toda la semana actual - VERSIÃ“N ROBUSTA"""
+        
+    def get_ultimo_cierre_general(self) -> Optional[Dict[str, Any]]:
+        """
+        ✅ NUEVO: Obtiene el ÚLTIMO cierre registrado en el sistema (de cualquier fecha)
+        """
         try:
-            print(f"ðŸ“… Iniciando consulta de cierres semana para: {fecha_referencia}")
+            query = """
+            SELECT TOP 1
+                cc.id,
+                cc.Fecha,
+                cc.HoraInicio,
+                cc.HoraFin,
+                cc.EfectivoReal,
+                cc.SaldoTeorico,
+                cc.Diferencia,
+                cc.FechaCierre,
+                cc.Observaciones,
+                CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario
+            FROM CierreCaja cc
+            LEFT JOIN Usuario u ON cc.IdUsuario = u.id
+            ORDER BY cc.Fecha DESC, cc.HoraFin DESC, cc.FechaCierre DESC
+            """
             
-            # âœ… VALIDAR FECHA DE ENTRADA
+            resultado = self._execute_query(query, (), fetch_one=True, use_cache=False)
+            
+            if resultado:
+                print(f"✅ Último cierre general encontrado")
+                return resultado
+            else:
+                print(f"ℹ️ No hay cierres previos en el sistema")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error obteniendo último cierre general: {e}")
+            return None
+    def get_cierres_semana_actual(self, fecha_referencia: str) -> List[Dict[str, Any]]:
+        """Obtiene cierres de toda la semana actual - VERSIÓN ROBUSTA"""
+        try:
+            print(f"📋 Iniciando consulta de cierres semana para: {fecha_referencia}")
+            
+            # ✅ VALIDAR FECHA DE ENTRADA
             if not fecha_referencia or fecha_referencia.strip() == "":
-                print("âŒ Fecha de referencia vacÃ­a")
+                print("❌ Fecha de referencia vacía")
                 return []
             
             fecha_sql = self._convertir_fecha_sql(fecha_referencia)
@@ -536,7 +570,7 @@ class CierreCajaRepository(BaseRepository):
             try:
                 fecha_obj = datetime.strptime(fecha_sql, "%Y-%m-%d")
             except ValueError as e:
-                print(f"âŒ Error parseando fecha: {e}")
+                print(f"❌ Error parseando fecha: {e}")
                 return []
             
             inicio_semana = fecha_obj - timedelta(days=fecha_obj.weekday())
@@ -563,9 +597,9 @@ class CierreCajaRepository(BaseRepository):
             ORDER BY cc.Fecha DESC, cc.FechaCierre DESC
             """
             
-            print(f"ðŸ“… Consultando desde {inicio_semana.strftime('%Y-%m-%d')} hasta {fin_semana.strftime('%Y-%m-%d')}")
+            print(f"📋 Consultando desde {inicio_semana.strftime('%Y-%m-%d')} hasta {fin_semana.strftime('%Y-%m-%d')}")
             
-            # âœ… EJECUTAR QUERY CON MANEJO DE ERRORES
+            # ✅ EJECUTAR QUERY CON MANEJO DE ERRORES
             try:
                 resultados = self._execute_query(
                     query, 
@@ -573,33 +607,50 @@ class CierreCajaRepository(BaseRepository):
                     use_cache=False
                 )
             except Exception as query_error:
-                print(f"âŒ Error ejecutando query: {query_error}")
-                return []  # âœ… RETORNAR LISTA VACÃA, NO None
+                print(f"❌ Error ejecutando query: {query_error}")
+                return []  # ✅ RETORNAR LISTA VACÍA, NO None
             
-            # âœ… VALIDAR RESULTADOS
+            # ✅ VALIDAR RESULTADOS
             if not resultados:
-                print("âš ï¸ No se encontraron cierres para esta semana")
+                print("ℹ️ No se encontraron cierres para esta semana")
                 return []
             
             if not isinstance(resultados, list):
-                print(f"âŒ Resultados no son una lista: {type(resultados)}")
+                print(f"❌ Resultados no son una lista: {type(resultados)}")
                 return []
             
-            # Procesar resultados en Python (mÃ¡s seguro)
+            # Procesar resultados en Python (más seguro)
             cierres_procesados = []
             
             for cierre in resultados:
-                # âœ… VALIDAR QUE CADA CIERRE SEA UN DICT
                 if not isinstance(cierre, dict):
-                    print(f"âš ï¸ Cierre no es dict, omitiendo: {type(cierre)}")
                     continue
                 
                 try:
+                    # ✅ CONVERTIR objetos datetime a strings
+                    fecha = cierre.get('Fecha')
+                    if hasattr(fecha, 'strftime'):
+                        fecha_str = fecha.strftime("%d/%m/%Y")
+                    else:
+                        fecha_str = str(fecha) if fecha else "--/--/----"
+                    
+                    hora_inicio = cierre.get('HoraInicio')
+                    if hasattr(hora_inicio, 'strftime'):
+                        hora_inicio_str = hora_inicio.strftime("%H:%M")
+                    else:
+                        hora_inicio_str = str(hora_inicio) if hora_inicio else "--:--"
+                    
+                    hora_fin = cierre.get('HoraFin') 
+                    if hasattr(hora_fin, 'strftime'):
+                        hora_fin_str = hora_fin.strftime("%H:%M")
+                    else:
+                        hora_fin_str = str(hora_fin) if hora_fin else "--:--"
+                    
                     cierre_procesado = {
                         'id': cierre.get('id'),
-                        'Fecha': cierre.get('Fecha'),
-                        'HoraInicio': cierre.get('HoraInicio'),
-                        'HoraFin': cierre.get('HoraFin'),
+                        'Fecha': fecha_str,  # ✅ Ya formateado como string
+                        'HoraInicio': hora_inicio_str,  # ✅ Ya formateado como string
+                        'HoraFin': hora_fin_str,  # ✅ Ya formateado como string
                         'EfectivoReal': cierre.get('EfectivoReal'),
                         'SaldoTeorico': cierre.get('SaldoTeorico'),
                         'Diferencia': cierre.get('Diferencia'),
@@ -610,49 +661,43 @@ class CierreCajaRepository(BaseRepository):
                     }
                     cierres_procesados.append(cierre_procesado)
                 except Exception as proc_error:
-                    print(f"âš ï¸ Error procesando cierre individual: {proc_error}")
-                    continue  # âœ… CONTINUAR CON EL SIGUIENTE
+                    print(f"❌ Error procesando cierre: {proc_error}")
+                    continue
             
-            print(f"âœ… Cierres procesados correctamente: {len(cierres_procesados)}")
+            print(f"✅ Cierres procesados correctamente: {len(cierres_procesados)}")
             return cierres_procesados
             
         except Exception as e:
-            print(f"âŒ ERROR CRÃTICO en get_cierres_semana_actual: {e}")
-            print(f"âŒ Tipo de error: {type(e).__name__}")
+            print(f"❌ ERROR CRÍTICO en get_cierres_semana_actual: {e}")
+            print(f"❌ Tipo de error: {type(e).__name__}")
             import traceback
             traceback.print_exc()
-            return []  # âœ… SIEMPRE RETORNAR LISTA, NUNCA None
+            return []   # ✅ Asegúrate de que esta línea esté correcta
     def _extraer_hora_cierre(self, fecha_cierre):
-        """Extrae la hora de cierre de forma segura - VERSIÃ“N MEJORADA"""
+        """Extrae la hora de cierre de forma segura - VERSIÓN MEJORADA"""
         try:
-            # âœ… VALIDAR QUE NO SEA None O VACÃO
-            if not fecha_cierre or fecha_cierre == "" or fecha_cierre == "None":
+            if not fecha_cierre:
                 return "--:--"
             
-            if isinstance(fecha_cierre, str):
-                # Intentar parsear la fecha
-                try:
-                    # Remover timezone si existe
-                    fecha_limpia = str(fecha_cierre).replace('Z', '+00:00')
-                    fecha_obj = datetime.fromisoformat(fecha_limpia)
-                    return fecha_obj.strftime("%H:%M")
-                except (ValueError, AttributeError):
-                    # Si falla, intentar extraer solo la parte de hora
-                    if ' ' in str(fecha_cierre):
-                        hora_parte = str(fecha_cierre).split(' ')[-1]
-                        if ':' in hora_parte:
-                            return hora_parte[:5]  # HH:MM
-                    return "--:--"
+            fecha_str = str(fecha_cierre)
             
-            elif hasattr(fecha_cierre, 'strftime'):
-                # Es un objeto datetime
-                return fecha_cierre.strftime("%H:%M")
+            # Manejar diferentes formatos de fecha/hora
+            if ' ' in fecha_str and ':' in fecha_str:
+                # Formato: "2025-01-15 14:30:25.123"
+                partes = fecha_str.split(' ')
+                if len(partes) >= 2:
+                    hora_parte = partes[1]
+                    hora_minutos = hora_parte.split(':')[:2]  # Tomar solo HH:MM
+                    return ':'.join(hora_minutos)
             
-            else:
-                return "--:--"
+            # Si es solo hora (HH:MM:SS)
+            if ':' in fecha_str:
+                partes = fecha_str.split(':')[:2]  # Tomar solo HH:MM
+                return ':'.join(partes)
                 
+            return "--:--"
         except Exception as e:
-            print(f"âš ï¸ Error extrayendo hora de cierre: {e}")
+            print(f"❌ Error extrayendo hora de cierre: {e}")
             return "--:--"
 
     def get_tipos_gastos(self) -> List[Dict[str, Any]]:

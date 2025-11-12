@@ -93,6 +93,7 @@ class EnfermeriaRepository:
                         e.Cantidad,
                         e.Fecha,
                         e.Tipo,
+                        e.Id_Procedimiento,
                         CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as NombrePaciente,
                         ISNULL(p.Cedula, '') as Cedula,
                         p.Nombre as pacienteNombre,
@@ -100,6 +101,7 @@ class EnfermeriaRepository:
                         ISNULL(p.Apellido_Materno, '') as pacienteApellidoM,
                         ISNULL(tp.Nombre, 'Procedimiento General') as TipoProcedimiento,
                         ISNULL(tp.Descripcion, '') as Descripcion,
+                        tp.id as TipoProcedimientoId, 
                         CASE 
                             WHEN e.Tipo = 'Emergencia' THEN ISNULL(tp.Precio_Emergencia, 0)
                             ELSE ISNULL(tp.Precio_Normal, 0)
@@ -184,9 +186,11 @@ class EnfermeriaRepository:
                 for row in cursor.fetchall():
                     procedimientos.append({
                         'procedimientoId': str(row.id),
+                        'idProcedimiento': row.Id_Procedimiento,
                         'paciente': row.NombrePaciente.strip(),
                         'cedula': row.Cedula,
                         'tipoProcedimiento': row.TipoProcedimiento,
+                        'tipoProcedimientoId': row.TipoProcedimientoId,
                         'descripcion': row.Descripcion,
                         'cantidad': row.Cantidad,
                         'tipo': row.Tipo,  # ✅ ESTE ES EL CAMPO CRÍTICO
@@ -385,6 +389,7 @@ class EnfermeriaRepository:
                         e.Cantidad,
                         e.Fecha,
                         e.Tipo,
+                        e.Id_Procedimiento,
                         CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as NombrePaciente,
                         ISNULL(p.Cedula, '') as Cedula,
                         ISNULL(tp.Nombre, 'Procedimiento General') as TipoProcedimiento,
@@ -442,6 +447,7 @@ class EnfermeriaRepository:
                 for row in cursor.fetchall():
                     procedimientos.append({
                         'procedimientoId': str(row.id),
+                        'idProcedimiento': row.Id_Procedimiento, 
                         'paciente': row.NombrePaciente.strip(),
                         'cedula': row.Cedula,
                         'tipoProcedimiento': row.TipoProcedimiento,
@@ -1089,12 +1095,12 @@ class EnfermeriaRepository:
             return []
 
     def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
-                                    apellido_materno: str = "", cedula: str = "") -> int:
-        """Busca paciente de forma inteligente antes de crear uno nuevo"""
+                                apellido_materno: str = "", cedula: str = "") -> int:
         try:
             # 1. Buscar por cédula si se proporciona
-            if cedula and len(cedula.strip()) >= 5:
-                paciente_existente = self.search_patient_by_cedula_exact(cedula.strip())
+            cedula_limpia = self._limpiar_cedula(cedula) if cedula else None  # ← LIMPIAR DESDE EL INICIO
+            if cedula_limpia:
+                paciente_existente = self.search_patient_by_cedula_exact(cedula_limpia)
                 if paciente_existente:
                     logger.info(f"Paciente encontrado por cédula: {paciente_existente['nombreCompleto']}")
                     return paciente_existente['id']
@@ -1124,7 +1130,7 @@ class EnfermeriaRepository:
                     nombre.strip(),
                     apellido_paterno.strip(),
                     apellido_materno.strip() if apellido_materno else None,
-                    cedula.strip() if cedula else None
+                    cedula_limpia  # ← USAR LA CÉDULA YA LIMPIA
                 ))
                 
                 cursor.execute("SELECT @@IDENTITY")
