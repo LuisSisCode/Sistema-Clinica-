@@ -2686,7 +2686,7 @@ Item {
             }
             
         } catch (error) {
-            console.log("❌ Error en eliminación:", error.message)
+            console.log("❌ Error en eliminacion: -- ", error.message)
             //mostrarNotificacion("Error", "Error eliminando gasto: " + error.message)
             return false
         }

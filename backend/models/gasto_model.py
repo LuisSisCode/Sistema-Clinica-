@@ -1148,6 +1148,85 @@ class GastoModel(QObject):
         finally:
             self._set_loading(False)
 
+    @Slot(int, result=bool)
+    def eliminarGasto(self, gasto_id: int) -> bool:
+        """Elimina un gasto - CON VERIFICACIÓN DE AUTENTICACIÓN"""
+        try:
+            # Verificar autenticación
+            if not self._verificar_autenticacion():
+                return False
+
+            # Verificar permisos para eliminar
+            if not self._puede_eliminar_gasto(gasto_id):
+                mensaje_error = "No tienes permisos para eliminar este gasto"
+                if not self._es_administrador():
+                    mensaje_error += " (solo puedes eliminar tus gastos dentro de 30 días)"
+                self.operacionError.emit(mensaje_error)
+                return False
+
+            self._set_loading(True)
+
+            print(f"🗑️ Eliminando gasto ID: {gasto_id} por usuario: {self._usuario_actual_id}")
+
+            success = self.repository.delete_expense(gasto_id)
+
+            if success:
+                self._cargar_gastos()
+
+                mensaje = "Gasto eliminado exitosamente"
+                self.gastoEliminado.emit(True, mensaje)
+                self.successMessage.emit(mensaje)
+
+                print(f"✅ Gasto eliminado por usuario {self._usuario_actual_id}")
+                return True
+            else:
+                error_msg = "Error eliminando gasto"
+                self.gastoEliminado.emit(False, error_msg)
+                return False
+
+        except Exception as e:
+            error_msg = f"Error inesperado: {str(e)}"
+            self.gastoEliminado.emit(False, error_msg)
+            self.errorOccurred.emit("Error crítico", error_msg)
+            print(f"❌ Error eliminando gasto: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+        finally:
+            self._set_loading(False)
+
+    def _puede_eliminar_gasto(self, gasto_id: int) -> bool:
+        """Verifica si el usuario puede eliminar el gasto"""
+        if self._es_administrador():
+            return True
+        
+        # Query simplificado solo para verificación
+        try:
+            query = "SELECT Id_RegistradoPor, Fecha FROM Gastos WHERE id = ?"
+            result = self.repository._execute_query(query, (gasto_id,), fetch_one=True)
+            
+            if not result:
+                return False
+            
+            # Verificar que sea el creador
+            if result.get('Id_RegistradoPor') != self._usuario_actual_id:
+                return False
+            
+            # Verificar que sea < 30 días
+            from datetime import datetime
+            fecha_creacion = result.get('Fecha')
+            if isinstance(fecha_creacion, str):
+                fecha_creacion = datetime.strptime(fecha_creacion[:10], '%Y-%m-%d')
+            elif not isinstance(fecha_creacion, datetime):
+                return False
+            
+            dias_transcurridos = (datetime.now() - fecha_creacion).days
+            return dias_transcurridos <= 30
+            
+        except Exception as e:
+            print(f"Error verificando permisos: {e}")
+            return False
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================
