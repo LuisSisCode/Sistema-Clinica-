@@ -19,7 +19,7 @@ class AuthModel(QObject):
         self._is_authenticated: bool = False
         print("🔐 AuthModel inicializado - Versión Simplificada")
         
-    # Properties para QML - EXISTENTES
+    # Properties para QML 
     @Property('QVariantMap', notify=currentUserChanged)
     def currentUser(self) -> Dict[str, Any]:
         return self._current_user.copy() if self._current_user else {}
@@ -279,19 +279,6 @@ class AuthModel(QObject):
             'is_medico': self.isMedico(),
             'user_data': self._current_user.copy() if self._current_user else {}
         }
-    
-    # Método adicional para debug
-    @Slot()
-    def debug_print_user(self):
-        """Imprime información del usuario actual para debug"""
-        print(f"🔍 DEBUG AuthModel:")
-        print(f"   Autenticado: {self._is_authenticated}")
-        print(f"   Usuario actual: {self._current_user}")
-        print(f"   Nombre: {self.userName}")
-        print(f"   Rol: {self.userRole}")
-        print(f"   Username: {self.userUsername}")
-        print(f"   Es Admin: {self.isAdmin()}")
-        print(f"   Es Médico: {self.isMedico()}")
 
 def register_auth_model():
     """Registra el AuthModel para uso en QML"""
