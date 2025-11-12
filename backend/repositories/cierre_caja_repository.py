@@ -552,127 +552,127 @@ class CierreCajaRepository(BaseRepository):
         except Exception as e:
             print(f"❌ Error obteniendo último cierre general: {e}")
             return None
-        def get_cierres_semana_actual(self, fecha_referencia: str) -> List[Dict[str, Any]]:
-            """Obtiene cierres de toda la semana actual - VERSIÓN ROBUSTA"""
+    def get_cierres_semana_actual(self, fecha_referencia: str) -> List[Dict[str, Any]]:
+        """Obtiene cierres de toda la semana actual - VERSIÓN ROBUSTA"""
+        try:
+            print(f"📋 Iniciando consulta de cierres semana para: {fecha_referencia}")
+            
+            # ✅ VALIDAR FECHA DE ENTRADA
+            if not fecha_referencia or fecha_referencia.strip() == "":
+                print("❌ Fecha de referencia vacía")
+                return []
+            
+            fecha_sql = self._convertir_fecha_sql(fecha_referencia)
+            
+            # Calcular inicio y fin de semana
+            from datetime import datetime, timedelta
+            
             try:
-                print(f"📋 Iniciando consulta de cierres semana para: {fecha_referencia}")
-                
-                # ✅ VALIDAR FECHA DE ENTRADA
-                if not fecha_referencia or fecha_referencia.strip() == "":
-                    print("❌ Fecha de referencia vacía")
-                    return []
-                
-                fecha_sql = self._convertir_fecha_sql(fecha_referencia)
-                
-                # Calcular inicio y fin de semana
-                from datetime import datetime, timedelta
+                fecha_obj = datetime.strptime(fecha_sql, "%Y-%m-%d")
+            except ValueError as e:
+                print(f"❌ Error parseando fecha: {e}")
+                return []
+            
+            inicio_semana = fecha_obj - timedelta(days=fecha_obj.weekday())
+            fin_semana = inicio_semana + timedelta(days=6)
+            
+            # SQL COMPATIBLE con todas las bases de datos
+            query = """
+            SELECT 
+                cc.id,
+                cc.Fecha,
+                cc.HoraInicio,
+                cc.HoraFin,
+                cc.EfectivoReal,
+                cc.SaldoTeorico,
+                cc.Diferencia,
+                cc.FechaCierre,
+                cc.Observaciones,
+                u.Nombre as NombreUsuario,
+                u.Apellido_Paterno as ApellidoUsuario,
+                cc.IdUsuario
+            FROM CierreCaja cc
+            LEFT JOIN Usuario u ON cc.IdUsuario = u.id
+            WHERE CAST(cc.Fecha AS DATE) BETWEEN ? AND ?
+            ORDER BY cc.Fecha DESC, cc.FechaCierre DESC
+            """
+            
+            print(f"📋 Consultando desde {inicio_semana.strftime('%Y-%m-%d')} hasta {fin_semana.strftime('%Y-%m-%d')}")
+            
+            # ✅ EJECUTAR QUERY CON MANEJO DE ERRORES
+            try:
+                resultados = self._execute_query(
+                    query, 
+                    (inicio_semana.strftime("%Y-%m-%d"), fin_semana.strftime("%Y-%m-%d")), 
+                    use_cache=False
+                )
+            except Exception as query_error:
+                print(f"❌ Error ejecutando query: {query_error}")
+                return []  # ✅ RETORNAR LISTA VACÍA, NO None
+            
+            # ✅ VALIDAR RESULTADOS
+            if not resultados:
+                print("ℹ️ No se encontraron cierres para esta semana")
+                return []
+            
+            if not isinstance(resultados, list):
+                print(f"❌ Resultados no son una lista: {type(resultados)}")
+                return []
+            
+            # Procesar resultados en Python (más seguro)
+            cierres_procesados = []
+            
+            for cierre in resultados:
+                if not isinstance(cierre, dict):
+                    continue
                 
                 try:
-                    fecha_obj = datetime.strptime(fecha_sql, "%Y-%m-%d")
-                except ValueError as e:
-                    print(f"❌ Error parseando fecha: {e}")
-                    return []
-                
-                inicio_semana = fecha_obj - timedelta(days=fecha_obj.weekday())
-                fin_semana = inicio_semana + timedelta(days=6)
-                
-                # SQL COMPATIBLE con todas las bases de datos
-                query = """
-                SELECT 
-                    cc.id,
-                    cc.Fecha,
-                    cc.HoraInicio,
-                    cc.HoraFin,
-                    cc.EfectivoReal,
-                    cc.SaldoTeorico,
-                    cc.Diferencia,
-                    cc.FechaCierre,
-                    cc.Observaciones,
-                    u.Nombre as NombreUsuario,
-                    u.Apellido_Paterno as ApellidoUsuario,
-                    cc.IdUsuario
-                FROM CierreCaja cc
-                LEFT JOIN Usuario u ON cc.IdUsuario = u.id
-                WHERE CAST(cc.Fecha AS DATE) BETWEEN ? AND ?
-                ORDER BY cc.Fecha DESC, cc.FechaCierre DESC
-                """
-                
-                print(f"📋 Consultando desde {inicio_semana.strftime('%Y-%m-%d')} hasta {fin_semana.strftime('%Y-%m-%d')}")
-                
-                # ✅ EJECUTAR QUERY CON MANEJO DE ERRORES
-                try:
-                    resultados = self._execute_query(
-                        query, 
-                        (inicio_semana.strftime("%Y-%m-%d"), fin_semana.strftime("%Y-%m-%d")), 
-                        use_cache=False
-                    )
-                except Exception as query_error:
-                    print(f"❌ Error ejecutando query: {query_error}")
-                    return []  # ✅ RETORNAR LISTA VACÍA, NO None
-                
-                # ✅ VALIDAR RESULTADOS
-                if not resultados:
-                    print("ℹ️ No se encontraron cierres para esta semana")
-                    return []
-                
-                if not isinstance(resultados, list):
-                    print(f"❌ Resultados no son una lista: {type(resultados)}")
-                    return []
-                
-                # Procesar resultados en Python (más seguro)
-                cierres_procesados = []
-                
-                for cierre in resultados:
-                    if not isinstance(cierre, dict):
-                        continue
+                    # ✅ CONVERTIR objetos datetime a strings
+                    fecha = cierre.get('Fecha')
+                    if hasattr(fecha, 'strftime'):
+                        fecha_str = fecha.strftime("%d/%m/%Y")
+                    else:
+                        fecha_str = str(fecha) if fecha else "--/--/----"
                     
-                    try:
-                        # ✅ CONVERTIR objetos datetime a strings
-                        fecha = cierre.get('Fecha')
-                        if hasattr(fecha, 'strftime'):
-                            fecha_str = fecha.strftime("%d/%m/%Y")
-                        else:
-                            fecha_str = str(fecha) if fecha else "--/--/----"
-                        
-                        hora_inicio = cierre.get('HoraInicio')
-                        if hasattr(hora_inicio, 'strftime'):
-                            hora_inicio_str = hora_inicio.strftime("%H:%M")
-                        else:
-                            hora_inicio_str = str(hora_inicio) if hora_inicio else "--:--"
-                        
-                        hora_fin = cierre.get('HoraFin') 
-                        if hasattr(hora_fin, 'strftime'):
-                            hora_fin_str = hora_fin.strftime("%H:%M")
-                        else:
-                            hora_fin_str = str(hora_fin) if hora_fin else "--:--"
-                        
-                        cierre_procesado = {
-                            'id': cierre.get('id'),
-                            'Fecha': fecha_str,  # ✅ Ya formateado como string
-                            'HoraInicio': hora_inicio_str,  # ✅ Ya formateado como string
-                            'HoraFin': hora_fin_str,  # ✅ Ya formateado como string
-                            'EfectivoReal': cierre.get('EfectivoReal'),
-                            'SaldoTeorico': cierre.get('SaldoTeorico'),
-                            'Diferencia': cierre.get('Diferencia'),
-                            'FechaCierre': cierre.get('FechaCierre'),
-                            'Observaciones': cierre.get('Observaciones'),
-                            'NombreUsuario': f"{cierre.get('NombreUsuario', '')} {cierre.get('ApellidoUsuario', '')}".strip(),
-                            'HoraCierre': self._extraer_hora_cierre(cierre.get('FechaCierre'))
-                        }
-                        cierres_procesados.append(cierre_procesado)
-                    except Exception as proc_error:
-                        print(f"❌ Error procesando cierre: {proc_error}")
-                        continue
-                
-                print(f"✅ Cierres procesados correctamente: {len(cierres_procesados)}")
-                return cierres_procesados
-                
-            except Exception as e:
-                print(f"❌ ERROR CRÍTICO en get_cierres_semana_actual: {e}")
-                print(f"❌ Tipo de error: {type(e).__name__}")
-                import traceback
-                traceback.print_exc()
-                return []   # ✅ Asegúrate de que esta línea esté correcta
+                    hora_inicio = cierre.get('HoraInicio')
+                    if hasattr(hora_inicio, 'strftime'):
+                        hora_inicio_str = hora_inicio.strftime("%H:%M")
+                    else:
+                        hora_inicio_str = str(hora_inicio) if hora_inicio else "--:--"
+                    
+                    hora_fin = cierre.get('HoraFin') 
+                    if hasattr(hora_fin, 'strftime'):
+                        hora_fin_str = hora_fin.strftime("%H:%M")
+                    else:
+                        hora_fin_str = str(hora_fin) if hora_fin else "--:--"
+                    
+                    cierre_procesado = {
+                        'id': cierre.get('id'),
+                        'Fecha': fecha_str,  # ✅ Ya formateado como string
+                        'HoraInicio': hora_inicio_str,  # ✅ Ya formateado como string
+                        'HoraFin': hora_fin_str,  # ✅ Ya formateado como string
+                        'EfectivoReal': cierre.get('EfectivoReal'),
+                        'SaldoTeorico': cierre.get('SaldoTeorico'),
+                        'Diferencia': cierre.get('Diferencia'),
+                        'FechaCierre': cierre.get('FechaCierre'),
+                        'Observaciones': cierre.get('Observaciones'),
+                        'NombreUsuario': f"{cierre.get('NombreUsuario', '')} {cierre.get('ApellidoUsuario', '')}".strip(),
+                        'HoraCierre': self._extraer_hora_cierre(cierre.get('FechaCierre'))
+                    }
+                    cierres_procesados.append(cierre_procesado)
+                except Exception as proc_error:
+                    print(f"❌ Error procesando cierre: {proc_error}")
+                    continue
+            
+            print(f"✅ Cierres procesados correctamente: {len(cierres_procesados)}")
+            return cierres_procesados
+            
+        except Exception as e:
+            print(f"❌ ERROR CRÍTICO en get_cierres_semana_actual: {e}")
+            print(f"❌ Tipo de error: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            return []   # ✅ Asegúrate de que esta línea esté correcta
     def _extraer_hora_cierre(self, fecha_cierre):
         """Extrae la hora de cierre de forma segura - VERSIÓN MEJORADA"""
         try:
