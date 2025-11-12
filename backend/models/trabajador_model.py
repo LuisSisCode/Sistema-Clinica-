@@ -314,14 +314,15 @@ class TrabajadorModel(QObject):
             if not self._tipos_trabajador:
                 return []
             
-            # ✅ CONVERTIR EXPLÍCITAMENTE A LISTA COMPATIBLE CON QML
+            # ✅ CONVERTIR EXPLÍCITAMENTE A LISTA COMPATIBLE CON QML INCLUYENDO area_funcional
             tipos_compatibles = []
             for tipo in self._tipos_trabajador:
                 tipo_compatible = {
                     'id': tipo.get('id', 0),
                     'Tipo': str(tipo.get('Tipo', '')),
                     'descripcion': str(tipo.get('descripcion', '')),
-                    'total_trabajadores': tipo.get('total_trabajadores', 0)
+                    'total_trabajadores': tipo.get('total_trabajadores', 0),
+                    'area_funcional': str(tipo.get('area_funcional', ''))  # ✅ INCLUIR area_funcional
                 }
                 tipos_compatibles.append(tipo_compatible)
             
@@ -1031,6 +1032,271 @@ class TrabajadorModel(QObject):
             return {}
 
     # ===============================
+    # SLOTS PARA GESTIÓN DE ESPECIALIDADES MÉDICAS
+    # ===============================
+    
+    # Señales específicas para especialidades
+    especialidadAsignada = Signal(bool, str)  # success, message
+    especialidadDesasignada = Signal(bool, str)
+    especialidadesActualizadas = Signal()  # Cuando cambian las especialidades de un médico
+    
+    @Slot(result='QVariantList')
+    def obtenerEspecialidadesDisponibles(self):
+        """
+        Obtiene todas las especialidades de la tabla Especialidad
+        Para mostrar en ComboBox al crear/editar médico
+        
+        Returns:
+            Lista de especialidades con id, Nombre, Precio_Normal, Precio_Emergencia
+        """
+        try:
+            print("🏥 Obteniendo especialidades disponibles...")
+            
+            # Importar EspecialidadRepository
+            from ..repositories.especialidad_repository import EspecialidadRepository
+            especialidad_repo = EspecialidadRepository()
+            
+            # Obtener todas las especialidades (no solo las que tienen médicos asignados)
+            query = """
+            SELECT 
+                id,
+                Nombre,
+                Detalles,
+                Precio_Normal,
+                Precio_Emergencia
+            FROM Especialidad
+            ORDER BY Nombre
+            """
+            
+            especialidades = especialidad_repo._execute_query(query)
+            
+            # Convertir a formato compatible con QML
+            especialidades_qml = []
+            for esp in especialidades:
+                esp_dict = {
+                    'id': esp.get('id', 0),
+                    'nombre': esp.get('Nombre', ''),
+                    'detalles': esp.get('Detalles', ''),
+                    'precio_normal': float(esp.get('Precio_Normal', 0)),
+                    'precio_emergencia': float(esp.get('Precio_Emergencia', 0))
+                }
+                especialidades_qml.append(esp_dict)
+            
+            print(f"✅ {len(especialidades_qml)} especialidades disponibles")
+            return especialidades_qml
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo especialidades: {e}")
+            import traceback
+            traceback.print_exc()
+            self.errorOccurred.emit("Error", f"Error obteniendo especialidades: {str(e)}")
+            return []
+    
+    @Slot(int, result='QVariantList')
+    def obtenerEspecialidadesDeMedico(self, medico_id: int):
+        """
+        Obtiene las especialidades asignadas a un médico específico
+        
+        Args:
+            medico_id: ID del trabajador médico
+            
+        Returns:
+            Lista de especialidades con id, nombre, es_principal, fecha_asignacion
+        """
+        try:
+            print(f"🔍 Obteniendo especialidades del médico ID: {medico_id}")
+            
+            # Usar el método existente del repository
+            medico = self.repository.get_medico_con_especialidades(medico_id)
+            
+            if not medico:
+                print(f"⚠️ Médico {medico_id} no encontrado o no es médico")
+                return []
+            
+            especialidades = medico.get('especialidades', [])
+            
+            # Convertir a formato compatible con QML
+            especialidades_qml = []
+            for esp in especialidades:
+                esp_dict = {
+                    'id': esp.get('id', 0),
+                    'nombre': esp.get('Nombre', ''),
+                    'detalles': esp.get('Detalles', ''),
+                    'precio_normal': float(esp.get('Precio_Normal', 0)),
+                    'precio_emergencia': float(esp.get('Precio_Emergencia', 0)),
+                    'es_principal': bool(esp.get('Es_Principal', False)),
+                    'fecha_asignacion': str(esp.get('Fecha_Asignacion', ''))
+                }
+                especialidades_qml.append(esp_dict)
+            
+            print(f"✅ {len(especialidades_qml)} especialidades asignadas al médico {medico_id}")
+            return especialidades_qml
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo especialidades del médico: {e}")
+            import traceback
+            traceback.print_exc()
+            self.errorOccurred.emit("Error", f"Error obteniendo especialidades: {str(e)}")
+            return []
+    
+    @Slot(int, int, bool, result=bool)
+    def asignarEspecialidadAMedico(self, trabajador_id: int, especialidad_id: int, es_principal: bool = False) -> bool:
+        """
+        Asigna una especialidad a un médico
+        
+        Args:
+            trabajador_id: ID del trabajador (debe ser médico con area_funcional='MEDICO')
+            especialidad_id: ID de la especialidad de la tabla Especialidad
+            es_principal: Si es la especialidad principal del médico (default: False)
+            
+        Returns:
+            True si se asignó correctamente, False en caso de error
+        """
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            self.especialidadAsignada.emit(False, "Usuario no autenticado")
+            return False
+        
+        try:
+            print(f"➕ Asignando especialidad {especialidad_id} al médico {trabajador_id}")
+            print(f"   Es principal: {es_principal}")
+            print(f"   Usuario: {self._usuario_actual_id}")
+            
+            # Usar el método existente del repository
+            success = self.repository.asignar_especialidad(
+                trabajador_id=trabajador_id,
+                especialidad_id=especialidad_id,
+                es_principal=es_principal
+            )
+            
+            if success:
+                mensaje = f"Especialidad asignada exitosamente al médico"
+                self.especialidadAsignada.emit(True, mensaje)
+                self.especialidadesActualizadas.emit()
+                self.successMessage.emit(mensaje)
+                
+                # Emitir señal global de actualización
+                self.global_signals.trabajadoresNecesitaActualizacion.emit(
+                    f"Especialidad asignada al médico ID {trabajador_id}"
+                )
+                
+                print(f"✅ Especialidad {especialidad_id} asignada al médico {trabajador_id}")
+                return True
+            else:
+                error_msg = "Error asignando especialidad"
+                self.especialidadAsignada.emit(False, error_msg)
+                self.errorOccurred.emit("Error", error_msg)
+                return False
+                
+        except ValidationError as ve:
+            error_msg = f"Error de validación: {ve.message}"
+            print(f"❌ {error_msg}")
+            self.especialidadAsignada.emit(False, error_msg)
+            self.errorOccurred.emit("Error de validación", error_msg)
+            return False
+            
+        except Exception as e:
+            error_msg = f"Error inesperado: {str(e)}"
+            print(f"❌ Error asignando especialidad: {e}")
+            import traceback
+            traceback.print_exc()
+            self.especialidadAsignada.emit(False, error_msg)
+            self.errorOccurred.emit("Error crítico", error_msg)
+            return False
+    
+    @Slot(int, int, result=bool)
+    def desasignarEspecialidadDeMedico(self, trabajador_id: int, especialidad_id: int) -> bool:
+        """
+        Desasigna (quita) una especialidad de un médico
+        
+        Args:
+            trabajador_id: ID del trabajador médico
+            especialidad_id: ID de la especialidad a desasignar
+            
+        Returns:
+            True si se desasignó correctamente, False en caso de error
+        """
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            self.especialidadDesasignada.emit(False, "Usuario no autenticado")
+            return False
+        
+        try:
+            print(f"➖ Desasignando especialidad {especialidad_id} del médico {trabajador_id}")
+            print(f"   Usuario: {self._usuario_actual_id}")
+            
+            # Usar el método existente del repository
+            success = self.repository.desasignar_especialidad(
+                trabajador_id=trabajador_id,
+                especialidad_id=especialidad_id
+            )
+            
+            if success:
+                mensaje = f"Especialidad desasignada exitosamente"
+                self.especialidadDesasignada.emit(True, mensaje)
+                self.especialidadesActualizadas.emit()
+                self.successMessage.emit(mensaje)
+                
+                # Emitir señal global de actualización
+                self.global_signals.trabajadoresNecesitaActualizacion.emit(
+                    f"Especialidad desasignada del médico ID {trabajador_id}"
+                )
+                
+                print(f"✅ Especialidad {especialidad_id} desasignada del médico {trabajador_id}")
+                return True
+            else:
+                error_msg = "Error desasignando especialidad"
+                self.especialidadDesasignada.emit(False, error_msg)
+                self.errorOccurred.emit("Error", error_msg)
+                return False
+                
+        except Exception as e:
+            error_msg = f"Error inesperado: {str(e)}"
+            print(f"❌ Error desasignando especialidad: {e}")
+            import traceback
+            traceback.print_exc()
+            self.especialidadDesasignada.emit(False, error_msg)
+            self.errorOccurred.emit("Error crítico", error_msg)
+            return False
+    
+    @Slot(int, result=bool)
+    def esTrabajadorMedico(self, trabajador_id: int) -> bool:
+        """
+        Verifica si un trabajador es médico (area_funcional='MEDICO')
+        
+        Args:
+            trabajador_id: ID del trabajador
+            
+        Returns:
+            True si es médico, False en caso contrario
+        """
+        try:
+            return self.repository.validate_worker_area(trabajador_id, 'MEDICO')
+        except Exception as e:
+            print(f"❌ Error verificando si es médico: {e}")
+            return False
+    
+    @Slot(int, result=str)
+    def obtenerAreaFuncionalDeTipo(self, tipo_id: int) -> str:
+        """
+        Obtiene el area_funcional de un tipo de trabajador
+        
+        Args:
+            tipo_id: ID del tipo de trabajador
+            
+        Returns:
+            String con el área funcional (MEDICO, ENFERMERIA, etc.) o cadena vacía
+        """
+        try:
+            for tipo in self._tipos_trabajador:
+                if tipo.get('id') == tipo_id:
+                    return tipo.get('area_funcional', '') or ''
+            return ''
+        except Exception as e:
+            print(f"❌ Error obteniendo área funcional: {e}")
+            return ''
+
+    # ===============================
     # MÉTODOS PRIVADOS
     # ===============================
     
@@ -1070,7 +1336,7 @@ class TrabajadorModel(QObject):
             raise e
     
     def _cargar_tipos_trabajador(self):
-        """Carga lista de tipos de trabajador desde el repository"""
+        """Carga lista de tipos de trabajador desde el repository - CON DEBUG MEJORADO"""
         try:
             tipos = self.repository.get_all_worker_types()
             
@@ -1081,22 +1347,26 @@ class TrabajadorModel(QObject):
             
             self._tipos_trabajador = tipos
             
-            # ✅ EMITIR SEÑAL SIEMPRE
-            self.tiposTrabajadorChanged.emit()
-            
-            # ✅ LOG DETALLADO
+            # ✅ DEBUG DETALLADO: Mostrar información completa de los tipos
             print(f"🏷️ Tipos de trabajador cargados: {len(self._tipos_trabajador)}")
             if self._tipos_trabajador:
-                print(f"   Tipos: {[t.get('Tipo', 'N/A') for t in self._tipos_trabajador[:3]]}")
+                for i, tipo in enumerate(self._tipos_trabajador):
+                    print(f"   {i+1}. ID: {tipo.get('id', 'N/A')}")
+                    print(f"      Tipo: '{tipo.get('Tipo', 'N/A')}'")
+                    print(f"      Área Funcional: '{tipo.get('area_funcional', 'NO DISPONIBLE')}'")
+                    print(f"      Descripción: '{tipo.get('descripcion', 'N/A')}'")
+                    print(f"      Total trabajadores: {tipo.get('total_trabajadores', 0)}")
+                    print(f"      ---")
             else:
                 print("   ⚠️ Lista de tipos está vacía")
-                
+                    
         except Exception as e:
             print(f"❌ Error cargando tipos de trabajador: {e}")
             import traceback
             traceback.print_exc()
             self._tipos_trabajador = []
-            # ✅ EMITIR SEÑAL INCLUSO SI FALLA (para limpiar UI)
+        finally:
+            # ✅ EMITIR SEÑAL SIEMPRE
             self.tiposTrabajadorChanged.emit()
     
     def _cargar_estadisticas(self):

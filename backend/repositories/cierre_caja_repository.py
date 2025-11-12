@@ -11,10 +11,10 @@ class CierreCajaRepository(BaseRepository):
     
     def __init__(self):
         super().__init__('CierreCaja', 'cierre_caja')
-        print("ðŸ’° CierreCajaRepository inicializado - Modo independiente")
+        print("💰 CierreCajaRepository inicializado - Modo independiente")
     
     # ===============================
-    # IMPLEMENTACIÃ“N ABSTRACTA REQUERIDA
+    # IMPLEMENTACIÓN ABSTRACTA REQUERIDA
     # ===============================
     
     def get_active(self) -> List[Dict[str, Any]]:
@@ -39,11 +39,11 @@ class CierreCajaRepository(BaseRepository):
         """
         try:
             if not fecha or not hora_inicio or not hora_fin:
-                print("âŒ ParÃ¡metros incompletos en get_datos_cierre_completo")
+                print("❌ Parámetros incompletos en get_datos_cierre_completo")
                 return self._estructura_vacia_cierre()
             
             if fecha.strip() == "" or hora_inicio.strip() == "" or hora_fin.strip() == "":
-                print("âŒ ParÃ¡metros vacÃ­os en get_datos_cierre_completo")
+                print("❌ Parámetros vacíos en get_datos_cierre_completo")
                 return self._estructura_vacia_cierre()
             
             fecha_sql = self._convertir_fecha_sql(fecha)
@@ -52,7 +52,7 @@ class CierreCajaRepository(BaseRepository):
             timestamp_inicio = f"{fecha_sql} {hora_inicio}:00.000"
             timestamp_fin = f"{fecha_sql} {hora_fin}:59.999"
             
-            print(f"ðŸ” Consultando datos de cierre: {timestamp_inicio} a {timestamp_fin}")
+            print(f"🔍 Consultando datos de cierre: {timestamp_inicio} a {timestamp_fin}")
             
             # Obtener todos los datos
             ingresos_farmacia = self._get_ingresos_farmacia(timestamp_inicio, timestamp_fin)
@@ -61,35 +61,43 @@ class CierreCajaRepository(BaseRepository):
             ingresos_enfermeria = self._get_ingresos_enfermeria(timestamp_inicio, timestamp_fin)
             ingresos_extras = self._get_ingresos_extras(timestamp_inicio, timestamp_fin) 
             egresos_gastos = self._get_egresos_gastos(timestamp_inicio, timestamp_fin)
-            
+            compras_farmacia = self._get_compras_farmacia(timestamp_inicio, timestamp_fin)  # ✅ NUEVO
+
             # Procesar y estructurar datos
             datos_procesados = self._procesar_datos_cierre(
                 ingresos_farmacia, ingresos_consultas, ingresos_laboratorio,
-                ingresos_enfermeria, ingresos_extras, egresos_gastos  # âœ… ORDEN CORRECTO
+                ingresos_enfermeria, ingresos_extras, egresos_gastos, compras_farmacia  # ✅ AÑADIDO
             )
             
-            print(f"âœ… Datos procesados - Ingresos: Bs {datos_procesados['resumen']['total_ingresos']:,.2f}")
+            print(f"✅ Datos procesados - Ingresos: Bs {datos_procesados['resumen']['total_ingresos']:,.2f}")
             return datos_procesados
             
         except Exception as e:
-            print(f"âŒ Error obteniendo datos de cierre: {e}")
+            print(f"❌ Error obteniendo datos de cierre: {e}")
             import traceback
             traceback.print_exc()
-            # âœ… RETORNAR ESTRUCTURA VÃLIDA EN LUGAR DE LANZAR EXCEPCIÃ“N
+            # ✅ RETORNAR ESTRUCTURA VÁLIDA EN LUGAR DE LANZAR EXCEPCIÓN
             return self._estructura_vacia_cierre()
     
     def _get_ingresos_farmacia(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
-        """Obtiene ingresos por ventas de farmacia"""
+        """Obtiene ingresos por ventas de farmacia CON DETALLES DE PRODUCTOS"""
         query = """
         SELECT 
             v.id,
             v.Fecha,
             v.Total,
-            0 as Descuento,
             v.Id_Usuario,
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
             'FARMACIA' as TipoIngreso,
-            'Venta de medicamentos y productos' as Descripcion
+            -- ✅ CORRECTO: Obtener productos vendidos a través de Lote
+            STUFF((
+                SELECT '; ' + p.Nombre + ' x' + CAST(dv.Cantidad_Unitario AS VARCHAR(10))
+                FROM DetallesVentas dv
+                INNER JOIN Lote l ON dv.Id_Lote = l.id
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                WHERE dv.Id_Venta = v.id
+                FOR XML PATH(''), TYPE
+            ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') as ProductosVendidos
         FROM Ventas v
         LEFT JOIN Usuario u ON v.Id_Usuario = u.id
         WHERE v.Fecha >= ? AND v.Fecha <= ?
@@ -98,7 +106,7 @@ class CierreCajaRepository(BaseRepository):
         return self._execute_query(query, (inicio, fin), use_cache=False)
 
     def _get_ingresos_consultas(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
-        """Obtiene ingresos por consultas mÃ©dicas"""
+        """Obtiene ingresos por consultas médicas"""
         query = """
         SELECT 
             c.id,
@@ -120,7 +128,7 @@ class CierreCajaRepository(BaseRepository):
         return self._execute_query(query, (inicio, fin), use_cache=False)
 
     def _get_ingresos_laboratorio(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
-        """Obtiene ingresos por anÃ¡lisis de laboratorio"""
+        """Obtiene ingresos por análisis de laboratorio"""
         query = """
         SELECT 
             l.id,
@@ -130,7 +138,7 @@ class CierreCajaRepository(BaseRepository):
             l.Id_RegistradoPor as Id_Usuario,
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
             'LABORATORIO' as TipoIngreso,
-            CONCAT('AnÃ¡lisis - ', ta.Nombre) as Descripcion,
+            CONCAT('Análisis - ', ta.Nombre) as Descripcion,
             CONCAT(p.Nombre, ' ', p.Apellido_Paterno) as NombrePaciente
         FROM Laboratorio l
         LEFT JOIN Usuario u ON l.Id_RegistradoPor = u.id
@@ -165,7 +173,7 @@ class CierreCajaRepository(BaseRepository):
         return self._execute_query(query, (inicio, fin), use_cache=False)
     
     def _get_ingresos_enfermeria(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
-        """Obtiene ingresos por procedimientos de enfermerÃ­a"""
+        """Obtiene ingresos por procedimientos de enfermería"""
         query = """
         SELECT 
             e.id,
@@ -189,7 +197,7 @@ class CierreCajaRepository(BaseRepository):
     def _get_ingresos_extras(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
         """Obtiene ingresos extras"""
         # Extraer solo la fecha del timestamp inicio
-        fecha_sql = inicio.split(' ')[0]  # "2025-10-07 08:00:00.000" â†’ "2025-10-07"
+        fecha_sql = inicio.split(' ')[0]  # "2025-10-07 08:00:00.000" → "2025-10-07"
         
         query = """
         SELECT 
@@ -208,27 +216,62 @@ class CierreCajaRepository(BaseRepository):
         """
         return self._execute_query(query, (fecha_sql,), use_cache=False)
     
+    def _get_compras_farmacia(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
+        """Obtiene compras de farmacia con detalles de productos"""
+        query = """
+        SELECT 
+            c.id,
+            c.Fecha,
+            c.Total,
+            c.Id_Usuario,
+            CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
+            'COMPRA_FARMACIA' as TipoEgreso,
+            prov.Nombre as NombreProveedor,
+            -- ✅ CORRECTO: Obtener productos comprados a través de Lote
+            STUFF((
+                SELECT '; ' + p.Nombre + ' x' + CAST(dc.Cantidad_Unitario AS VARCHAR(10))
+                FROM DetalleCompra dc
+                INNER JOIN Lote l ON dc.Id_Lote = l.id
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                WHERE dc.Id_Compra = c.id
+                FOR XML PATH(''), TYPE
+            ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') as ProductosComprados
+        FROM Compra c
+        LEFT JOIN Usuario u ON c.Id_Usuario = u.id
+        LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
+        WHERE c.Fecha >= ? AND c.Fecha <= ?
+        ORDER BY c.Fecha
+        """
+        return self._execute_query(query, (inicio, fin), use_cache=False)
+    
     def _procesar_datos_cierre(self, farmacia: List, consultas: List, laboratorio: List, 
-                            enfermeria: List, ingresos_extras: List, gastos: List) -> Dict[str, Any]: 
+                            enfermeria: List, ingresos_extras: List, gastos: List, 
+                            compras: List) -> Dict[str, Any]:  # ✅ AÑADIR compras
         
-        # Combinar todos los ingresos (AGREGAR INGRESOS EXTRAS)
+        # Combinar todos los ingresos
         ingresos = []
         ingresos.extend(farmacia)
         ingresos.extend(consultas)
         ingresos.extend(laboratorio)
         ingresos.extend(enfermeria)
-        ingresos.extend(ingresos_extras)  # NUEVO
+        ingresos.extend(ingresos_extras)
         
-        # Calcular totales (AGREGAR TOTAL INGRESOS EXTRAS)
+        # ✅ Combinar egresos (gastos + compras)
+        egresos = []
+        egresos.extend(gastos)
+        egresos.extend(compras)
+        
+        # Calcular totales
         total_farmacia = sum(float(item.get('Total', 0)) for item in farmacia)
         total_consultas = sum(float(item.get('Total', 0)) for item in consultas)
         total_laboratorio = sum(float(item.get('Total', 0)) for item in laboratorio)
         total_enfermeria = sum(float(item.get('Total', 0)) for item in enfermeria)
-        total_ingresos_extras = sum(float(item.get('Total', 0)) for item in ingresos_extras)  # NUEVO
+        total_ingresos_extras = sum(float(item.get('Total', 0)) for item in ingresos_extras)
         total_gastos = sum(float(item.get('Total', 0)) for item in gastos)
+        total_compras = sum(float(item.get('Total', 0)) for item in compras)  # ✅ NUEVO
         
         total_ingresos = total_farmacia + total_consultas + total_laboratorio + total_enfermeria + total_ingresos_extras  
-        total_egresos = total_gastos
+        total_egresos = total_gastos + total_compras  # ✅ INCLUIR COMPRAS
         saldo_teorico = total_ingresos - total_egresos
         
         # Estructura de datos completa
@@ -238,51 +281,56 @@ class CierreCajaRepository(BaseRepository):
                 'consultas': consultas,
                 'laboratorio': laboratorio,
                 'enfermeria': enfermeria,
-                'ingresos_extras': ingresos_extras,  # NUEVO
+                'ingresos_extras': ingresos_extras,
                 'todos': ingresos
             },
             'egresos': {
                 'gastos': gastos,
-                'todos': gastos
+                'compras': compras,  # ✅ NUEVO
+                'todos': egresos  # ✅ CAMBIO: ahora incluye gastos + compras
             },
             'resumen': {
                 'total_farmacia': round(total_farmacia, 2),
                 'total_consultas': round(total_consultas, 2),
                 'total_laboratorio': round(total_laboratorio, 2),
                 'total_enfermeria': round(total_enfermeria, 2),
-                'total_ingresos_extras': round(total_ingresos_extras, 2),  
+                'total_ingresos_extras': round(total_ingresos_extras, 2),
                 'total_ingresos': round(total_ingresos, 2),
-                'total_egresos': round(total_egresos, 2),
+                'total_gastos': round(total_gastos, 2),  # ✅ Separado
+                'total_compras': round(total_compras, 2),  # ✅ NUEVO
+                'total_egresos': round(total_egresos, 2),  # ✅ Suma de gastos + compras
                 'saldo_teorico': round(saldo_teorico, 2),
                 'transacciones_ingresos': len(ingresos),
-                'transacciones_egresos': len(gastos),
+                'transacciones_egresos': len(egresos),  # ✅ Total de egresos
                 'transacciones_farmacia': len(farmacia),
                 'transacciones_consultas': len(consultas),
                 'transacciones_laboratorio': len(laboratorio),
                 'transacciones_enfermeria': len(enfermeria),
-                'transacciones_ingresos_extras': len(ingresos_extras)  
+                'transacciones_ingresos_extras': len(ingresos_extras),
+                'transacciones_gastos': len(gastos),  # ✅ NUEVO
+                'transacciones_compras': len(compras)  # ✅ NUEVO
             },
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
     # ===============================
-    # GESTIÃ“N DE CIERRES GUARDADOS
+    # GESTIÓN DE CIERRES GUARDADOS
     # ===============================
     
     def verificar_cierre_previo(self, fecha: str, hora_inicio: str = None, hora_fin: str = None) -> bool:
-        """Verifica si ya existe un cierre para la fecha y horario especÃ­fico"""
+        """Verifica si ya existe un cierre para la fecha y horario específico"""
         try:
             fecha_sql = self._convertir_fecha_sql(fecha)
             
             if hora_inicio and hora_fin:
-                # Verificar por horario especÃ­fico - permite mÃºltiples cierres por dÃ­a
+                # Verificar por horario específico - permite múltiples cierres por día
                 query = """
                 SELECT COUNT(*) as count FROM CierreCaja 
                 WHERE CAST(Fecha AS DATE) = ? 
                 AND HoraInicio = ? AND HoraFin = ?
                 """
                 result = self._execute_query(query, (fecha_sql, hora_inicio, hora_fin), fetch_one=True, use_cache=False)
-                print(f"ðŸ” Verificando cierre previo para {fecha} {hora_inicio}-{hora_fin}: {result['count'] if result else 0}")
+                print(f"🔍 Verificando cierre previo para {fecha} {hora_inicio}-{hora_fin}: {result['count'] if result else 0}")
             else:
                 # Fallback: verificar solo por fecha (para compatibilidad)
                 query = "SELECT COUNT(*) as count FROM CierreCaja WHERE CAST(Fecha AS DATE) = ?"
@@ -290,7 +338,7 @@ class CierreCajaRepository(BaseRepository):
                 
             return result['count'] > 0 if result else False
         except Exception as e:
-            print(f"âŒ Error verificando cierre previo: {e}")
+            print(f"❌ Error verificando cierre previo: {e}")
             return False
     
     def guardar_cierre_caja(self, datos_cierre: Dict[str, Any]) -> bool:
@@ -319,12 +367,12 @@ class CierreCajaRepository(BaseRepository):
             success = affected_rows > 0
             
             if success:
-                print(f"âœ… Cierre guardado en BD - Efectivo: Bs {datos_cierre['EfectivoReal']:,.2f}")
+                print(f" -- Cierre guardado en BD - Efectivo: Bs {datos_cierre['EfectivoReal']:,.2f}")
             
             return success
             
         except Exception as e:
-            print(f"âŒ Error guardando cierre: {e}")
+            print(f"❌ Error guardando cierre: {e}")
             return False
     
     def get_cierres_por_fecha(self, fecha: str) -> List[Dict[str, Any]]:
@@ -350,19 +398,19 @@ class CierreCajaRepository(BaseRepository):
             """
             return self._execute_query(query, (fecha_sql,), use_cache=False)
         except Exception as e:
-            print(f"âŒ Error obteniendo cierres: {e}")
+            print(f"❌ Error obteniendo cierres: {e}")
             return []
         
     def get_ultimo_cierre_del_dia(self, fecha: str) -> Optional[Dict[str, Any]]:
         """
-        âœ… NUEVO: Obtiene el Ãºltimo cierre registrado para una fecha especÃ­fica
-        Usado para auto-gestiÃ³n inteligente de horarios
+        ✅ NUEVO: Obtiene el último cierre registrado para una fecha específica
+        Usado para auto-gestión inteligente de horarios
         
         Args:
             fecha: Fecha en formato DD/MM/YYYY
             
         Returns:
-            Dict con el Ãºltimo cierre del dÃ­a o None si no existe
+            Dict con el último cierre del día o None si no existe
         """
         try:
             fecha_sql = self._convertir_fecha_sql(fecha)
@@ -388,18 +436,18 @@ class CierreCajaRepository(BaseRepository):
             resultado = self._execute_query(query, (fecha_sql,), fetch_one=True, use_cache=False)
             
             if resultado:
-                print(f"âœ… Ãšltimo cierre encontrado: {resultado['HoraInicio']} - {resultado['HoraFin']}")
+                print(f"✅ Último cierre encontrado: {resultado['HoraInicio']} - {resultado['HoraFin']}")
                 return resultado
             else:
-                print(f"â„¹ï¸ No hay cierres previos para {fecha}")
+                print(f"ℹ️ No hay cierres previos para {fecha}")
                 return None
                 
         except Exception as e:
-            print(f"âŒ Error obteniendo Ãºltimo cierre del dÃ­a: {e}")
+            print(f"❌ Error obteniendo último cierre del día: {e}")
             return None
     
     def _estructura_vacia_cierre(self) -> Dict[str, Any]:
-        """âœ… NUEVO: Retorna estructura vacÃ­a pero vÃ¡lida para cierre"""
+        """✅ NUEVO: Retorna estructura vacía pero válida para cierre"""
         return {
             'ingresos': {
                 'farmacia': [],
@@ -411,6 +459,7 @@ class CierreCajaRepository(BaseRepository):
             },
             'egresos': {
                 'gastos': [],
+                'compras': [],  # ✅ AÑADIDO
                 'todos': []
             },
             'resumen': {
@@ -420,6 +469,8 @@ class CierreCajaRepository(BaseRepository):
                 'total_enfermeria': 0.0,
                 'total_ingresos_extras': 0.0,
                 'total_ingresos': 0.0,
+                'total_gastos': 0.0,  # ✅ AÑADIDO
+                'total_compras': 0.0,  # ✅ AÑADIDO
                 'total_egresos': 0.0,
                 'saldo_teorico': 0.0,
                 'transacciones_ingresos': 0,
@@ -428,7 +479,9 @@ class CierreCajaRepository(BaseRepository):
                 'transacciones_consultas': 0,
                 'transacciones_laboratorio': 0,
                 'transacciones_enfermeria': 0,
-                'transacciones_ingresos_extras': 0
+                'transacciones_ingresos_extras': 0,
+                'transacciones_gastos': 0,  # ✅ AÑADIDO
+                'transacciones_compras': 0  # ✅ AÑADIDO
             },
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -438,7 +491,7 @@ class CierreCajaRepository(BaseRepository):
     
     def validar_diferencia_permitida(self, efectivo_real: float, saldo_teorico: float, 
                                    limite: float = 50.0) -> Dict[str, Any]:
-        """Valida si la diferencia estÃ¡ dentro del lÃ­mite permitido"""
+        """Valida si la diferencia está dentro del límite permitido"""
         diferencia = efectivo_real - saldo_teorico
         diferencia_absoluta = abs(diferencia)
         
@@ -459,63 +512,45 @@ class CierreCajaRepository(BaseRepository):
         }
     
     # ===============================
-    # GENERACIÃ“N DE DATOS PARA PDF
+    # GENERACIÓN DE DATOS PARA PDF
     # ===============================
     
     def generar_datos_pdf_arqueo(self, fecha: str, hora_inicio: str, hora_fin: str,
-                                efectivo_real: float, observaciones: str = "") -> Dict[str, Any]:
-        """Genera datos estructurados para el PDF del arqueo"""
+                            efectivo_real: float, observaciones: str = "") -> Dict[str, Any]:
+        """Genera datos estructurados para el PDF del arqueo - VERSIÓN CORREGIDA"""
         try:
             # Obtener datos completos
             datos_cierre = self.get_datos_cierre_completo(fecha, hora_inicio, hora_fin)
             
-            # Estructura especÃ­fica para PDF
+            # ✅ CORRECCIÓN: Crear estructura plana con todos los datos necesarios
             datos_pdf = {
-                'encabezado': {
-                    'titulo': 'ARQUEO DE CAJA DIARIO',
-                    'fecha': fecha,
-                    'hora_inicio': hora_inicio,
-                    'hora_fin': hora_fin,
-                    'timestamp': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                },
-                'movimientos': {
-                    'ingresos': self._formatear_movimientos_pdf(datos_cierre['ingresos']['todos'], 'INGRESO'),
-                    'egresos': self._formatear_movimientos_pdf(datos_cierre['egresos']['todos'], 'EGRESO')
-                },
-                'resumen_por_concepto': {
-                    'farmacia': {
-                        'total': datos_cierre['resumen']['total_farmacia'],
-                        'transacciones': datos_cierre['resumen']['transacciones_farmacia']
-                    },
-                    'consultas': {
-                        'total': datos_cierre['resumen']['total_consultas'],
-                        'transacciones': datos_cierre['resumen']['transacciones_consultas']
-                    },
-                    'laboratorio': {
-                        'total': datos_cierre['resumen']['total_laboratorio'],
-                        'transacciones': datos_cierre['resumen']['transacciones_laboratorio']
-                    },
-                    'enfermeria': {
-                        'total': datos_cierre['resumen']['total_enfermeria'],
-                        'transacciones': datos_cierre['resumen']['transacciones_enfermeria']
-                    },
-                    'gastos': {
-                        'total': datos_cierre['resumen']['total_egresos'],
-                        'transacciones': datos_cierre['resumen']['transacciones_egresos']
-                    }
-                },
-                'arqueo': {
-                    'saldo_teorico': datos_cierre['resumen']['saldo_teorico'],
-                    'efectivo_real': efectivo_real,
-                    'diferencia': efectivo_real - datos_cierre['resumen']['saldo_teorico'],
-                    'observaciones': observaciones
-                }
+                # Datos básicos del cierre
+                'fecha': fecha,
+                'hora_inicio': hora_inicio,
+                'hora_fin': hora_fin,
+                'observaciones': observaciones,
+                
+                # ✅ INCLUIR EFECTIVO REAL EXPLÍCITAMENTE
+                'efectivo_real': efectivo_real,
+                
+                # Movimientos completos para el PDF
+                'movimientos_completos': datos_cierre['ingresos']['todos'] + datos_cierre['egresos']['todos'],
+                
+                # Resumen financiero
+                'total_ingresos': datos_cierre['resumen']['total_ingresos'],
+                'total_egresos': datos_cierre['resumen']['total_egresos'],
+                'saldo_teorico': datos_cierre['resumen']['saldo_teorico'],
+                'diferencia': efectivo_real - datos_cierre['resumen']['saldo_teorico'],
+                
+                # Timestamp
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
+            print(f"✅ Datos PDF preparados - Efectivo Real: Bs {efectivo_real:,.2f}")
             return datos_pdf
             
         except Exception as e:
-            print(f"âŒ Error generando datos PDF: {e}")
+            print(f"❌ Error generando datos PDF: {e}")
             return {}
         
     def get_ultimo_cierre_general(self) -> Optional[Dict[str, Any]]:
@@ -701,7 +736,7 @@ class CierreCajaRepository(BaseRepository):
             return "--:--"
 
     def get_tipos_gastos(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los tipos de gastos para clasificaciÃ³n"""
+        """Obtiene todos los tipos de gastos para clasificación"""
         query = """
         SELECT 
             id,
@@ -761,11 +796,11 @@ class CierreCajaRepository(BaseRepository):
         return self._execute_query(query, (fecha_inicio_sql, fecha_fin_sql), use_cache=False)
 
     def get_resumen_por_categorias(self, fecha: str, hora_inicio: str, hora_fin: str) -> Dict[str, Any]:
-        """Obtiene resumen organizado por categorÃ­as para el QML"""
+        """Obtiene resumen organizado por categorías para el QML"""
         try:
             datos_completos = self.get_datos_cierre_completo(fecha, hora_inicio, hora_fin)
             
-            # Organizar ingresos por categorÃ­a
+            # Organizar ingresos por categoría
             ingresos_por_categoria = [
                 {
                     'concepto': 'FARMACIA',
@@ -794,12 +829,17 @@ class CierreCajaRepository(BaseRepository):
                 }
             ]
             
-            # Organizar egresos - TODOS LOS GASTOS JUNTOS
+            # Organizar egresos - GASTOS Y COMPRAS SEPARADOS
             egresos_por_categoria = [
                 {
                     'concepto': 'GASTOS DEL DIA',
-                    'detalle': f'{datos_completos["resumen"]["transacciones_egresos"]} transacciones de gastos',
-                    'importe': datos_completos['resumen']['total_egresos']
+                    'detalle': f'{datos_completos["resumen"]["transacciones_gastos"]} transacciones de gastos',
+                    'importe': datos_completos['resumen']['total_gastos']
+                },
+                {
+                    'concepto': 'COMPRAS FARMACIA',
+                    'detalle': f'{datos_completos["resumen"]["transacciones_compras"]} transacciones de compras',
+                    'importe': datos_completos['resumen']['total_compras']
                 }
             ]
             
@@ -814,10 +854,10 @@ class CierreCajaRepository(BaseRepository):
             }
             
         except Exception as e:
-            print(f"âŒ Error generando resumen por categorÃ­as: {e}")
+            print(f"❌ Error generando resumen por categorías: {e}")
             import traceback
             traceback.print_exc()
-            # âœ… RETORNAR ESTRUCTURA VÃLIDA EN LUGAR DE DATOS VACÃOS INCORRECTOS
+            # ✅ RETORNAR ESTRUCTURA VÁLIDA EN LUGAR DE DATOS VACÍOS INCORRECTOS
             return {
                 'ingresos_por_categoria': [],
                 'egresos_por_categoria': [],
@@ -845,20 +885,20 @@ class CierreCajaRepository(BaseRepository):
         return movimientos_formateados
     
     # ===============================
-    # MÃ‰TODOS DE UTILIDAD
+    # MÉTODOS DE UTILIDAD
     # ===============================
     
     def _convertir_fecha_sql(self, fecha: str) -> str:
-        """Convierte fecha DD/MM/YYYY a YYYY-MM-DD - VERSIÃ“N VALIDADA"""
+        """Convierte fecha DD/MM/YYYY a YYYY-MM-DD - VERSIÓN VALIDADA"""
         try:
-            # âœ… VALIDAR ENTRADA
+            # ✅ VALIDAR ENTRADA
             if not fecha or fecha.strip() == "":
-                print("âš ï¸ Fecha vacÃ­a, usando fecha actual")
+                print("⚠️ Fecha vacía, usando fecha actual")
                 return datetime.now().strftime("%Y-%m-%d")
             
             fecha = fecha.strip()
             
-            # Si ya estÃ¡ en formato YYYY-MM-DD, retornarla
+            # Si ya está en formato YYYY-MM-DD, retornarla
             if '-' in fecha and len(fecha.split('-')[0]) == 4:
                 return fecha
             
@@ -866,35 +906,35 @@ class CierreCajaRepository(BaseRepository):
             if '/' in fecha:
                 partes = fecha.split('/')
                 
-                # âœ… VALIDAR QUE TENGA 3 PARTES
+                # ✅ VALIDAR QUE TENGA 3 PARTES
                 if len(partes) != 3:
-                    print(f"âš ï¸ Formato de fecha invÃ¡lido: {fecha}")
+                    print(f"⚠️ Formato de fecha inválido: {fecha}")
                     return datetime.now().strftime("%Y-%m-%d")
                 
                 dia, mes, anio = partes
                 
-                # âœ… VALIDAR QUE SEAN NÃšMEROS
+                # ✅ VALIDAR QUE SEAN NÚMEROS
                 try:
                     dia = int(dia)
                     mes = int(mes)
                     anio = int(anio)
                 except ValueError:
-                    print(f"âš ï¸ Fecha con valores no numÃ©ricos: {fecha}")
+                    print(f"⚠️ Fecha con valores no numéricos: {fecha}")
                     return datetime.now().strftime("%Y-%m-%d")
                 
-                # âœ… VALIDAR RANGOS
+                # ✅ VALIDAR RANGOS
                 if not (1 <= dia <= 31 and 1 <= mes <= 12 and 2020 <= anio <= 2030):
-                    print(f"âš ï¸ Fecha fuera de rango vÃ¡lido: {fecha}")
+                    print(f"⚠️ Fecha fuera de rango válido: {fecha}")
                     return datetime.now().strftime("%Y-%m-%d")
                 
                 return f"{anio:04d}-{mes:02d}-{dia:02d}"
             
             # Si no tiene formato reconocible, usar fecha actual
-            print(f"âš ï¸ Formato de fecha no reconocido: {fecha}")
+            print(f"⚠️ Formato de fecha no reconocido: {fecha}")
             return datetime.now().strftime("%Y-%m-%d")
             
         except Exception as e:
-            print(f"âŒ Error convirtiendo fecha: {e}")
+            print(f"❌ Error convirtiendo fecha: {e}")
             return datetime.now().strftime("%Y-%m-%d")
     
     def _formatear_fecha_hora(self, fecha_str: str) -> str:
@@ -906,16 +946,117 @@ class CierreCajaRepository(BaseRepository):
             return str(fecha_str)
         except:
             return str(fecha_str)
+        
+    def get_cierre_completo_con_efectivo(self, fecha: str, hora_inicio: str, hora_fin: str) -> Dict[str, Any]:
+        """
+        ✅ CORREGIDO: Obtiene datos completos del cierre INCLUYENDO el efectivo real guardado en BD
+        """
+        try:
+            print(f"🔍 Buscando cierre guardado: {fecha} {hora_inicio}-{hora_fin}")
+            
+            # 1. Obtener movimientos y cálculos
+            datos_movimientos = self.get_datos_cierre_completo(fecha, hora_inicio, hora_fin)
+            
+            # 2. Obtener el cierre guardado en BD para recuperar efectivo_real
+            cierre_guardado = self.get_cierre_por_rango_horario(fecha, hora_inicio, hora_fin)
+            
+            if cierre_guardado:
+                # ✅ Recuperar el efectivo real que fue guardado
+                efectivo_real_bd = float(cierre_guardado.get('EfectivoReal', 0))
+                diferencia_bd = float(cierre_guardado.get('Diferencia', 0))
+                
+                datos_movimientos['efectivo_real'] = efectivo_real_bd
+                datos_movimientos['diferencia'] = diferencia_bd
+                datos_movimientos['observaciones'] = cierre_guardado.get('Observaciones', '')
+                datos_movimientos['usuario_responsable'] = cierre_guardado.get('IdUsuario', 0)
+                
+                # Actualizar el resumen también
+                if 'resumen' in datos_movimientos:
+                    datos_movimientos['resumen']['efectivo_real'] = efectivo_real_bd
+                    datos_movimientos['resumen']['diferencia'] = diferencia_bd
+                
+                print(f"✅ Efectivo real recuperado de BD: Bs {efectivo_real_bd:,.2f}")
+                print(f"✅ Diferencia recuperada de BD: Bs {diferencia_bd:,.2f}")
+            else:
+                print("⚠️ No se encontró cierre guardado en BD")
+                # Mantener valores calculados (que estarán en 0)
+            
+            return datos_movimientos
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo cierre completo con efectivo: {e}")
+            import traceback
+            traceback.print_exc()
+            # En caso de error, devolver los datos sin efectivo real
+            return self.get_datos_cierre_completo(fecha, hora_inicio, hora_fin)
+
+    def get_cierre_por_rango_horario(self, fecha: str, hora_inicio: str, hora_fin: str) -> Optional[Dict[str, Any]]:
+        """
+        ✅ NUEVO: Obtiene UN cierre específico por fecha y rango horario
+        
+        Args:
+            fecha: Fecha en formato DD/MM/YYYY
+            hora_inicio: Hora de inicio HH:MM
+            hora_fin: Hora de fin HH:MM
+        
+        Returns:
+            Dict con datos del cierre o None si no existe
+        """
+        try:
+            fecha_sql = self._convertir_fecha_sql(fecha)
+            
+            # Construir timestamps para buscar el cierre exacto
+            timestamp_inicio = f"{fecha_sql} {hora_inicio}:00.000"
+            timestamp_fin = f"{fecha_sql} {hora_fin}:59.999"
+            
+            query = """
+            SELECT TOP 1
+                id,
+                Fecha,
+                HoraInicio,
+                HoraFin,
+                EfectivoReal,
+                SaldoTeorico,
+                Diferencia,
+                IdUsuario,
+                FechaCierre,
+                Observaciones
+            FROM CierreCaja
+            WHERE CAST(Fecha AS DATE) = CAST(? AS DATE)
+            AND HoraInicio = ?
+            AND HoraFin = ?
+            ORDER BY FechaCierre DESC
+            """
+            
+            resultado = self._execute_query(
+                query, 
+                (fecha_sql, hora_inicio, hora_fin),
+                use_cache=False
+            )
+            
+            if resultado and len(resultado) > 0:
+                cierre = resultado[0]
+                print(f"✅ Cierre encontrado: ID={cierre.get('id')}, EfectivoReal={cierre.get('EfectivoReal')}")
+                return cierre
+            else:
+                print(f"⚠️ No se encontró cierre para {fecha} {hora_inicio}-{hora_fin}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error buscando cierre por rango horario: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
-    # SIN CACHÃ‰ - todas las consultas son directas a BD
+    # SIN CACHÉ - todas las consultas son directas a BD
     def invalidar_cache_transaccion(self):
-        """MÃ©todo vacÃ­o - no usa cachÃ©"""
+        """Metodo vacío - no usa caché"""
         pass
     
     def refresh_cache_immediately(self):
-        """MÃ©todo vacÃ­o - no usa cachÃ©"""
+        """Metodo vacío - no usa caché"""
         pass
     
     def invalidar_cache_completo(self):
-        """MÃ©todo vacÃ­o - no usa cachÃ©"""
+        """Metodo vacío - no usa caché"""
         pass

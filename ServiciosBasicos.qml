@@ -2647,22 +2647,7 @@ Item {
             }
         }
         
-        // Función para crear proveedor
-        function crearProveedorAction() {
-            var nombre = nuevoProvNombre.text.trim()
-            
-            if (nombre.length < 3) {
-                showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
-                return
-            }
-            
-            // Crear proveedor solo con nombre
-            if (crearNuevoProveedorGasto(nombre)) {
-                showSuccessMessage("Proveedor creado: " + nombre)
-                nuevoProvNombre.text = ""
-                dialogoNuevoProveedor.close()
-            }
-        }
+        
         
         // Al abrir el diálogo, enfocar el campo de nombre
         onOpened: {
@@ -2826,4 +2811,21 @@ Item {
             }
         }
     }
+
+    // Función para crear proveedor
+        function crearProveedorAction() {
+            var nombre = nuevoProvNombre.text.trim()
+            
+            if (nombre.length < 3) {
+                showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
+                return
+            }
+            
+            // Crear proveedor solo con nombre
+            if (crearNuevoProveedorGasto(nombre)) {
+                showSuccessMessage("Proveedor creado: " + nombre)
+                nuevoProvNombre.text = ""
+                dialogoNuevoProveedor.close()
+            }
+        }
 }

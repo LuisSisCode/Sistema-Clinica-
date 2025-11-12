@@ -1281,6 +1281,10 @@ Item {
                 if (tipoTrabajadorCombo) tipoTrabajadorCombo.currentIndex = 0
                 workerForm.selectedTipoTrabajadorIndex = -1
             }
+
+            Qt.callLater(function() {
+                debugTiposTrabajador()
+            })
         }
         
         ColumnLayout {
@@ -1498,10 +1502,21 @@ Item {
                                         }
                                         
                                         onCurrentIndexChanged: {
+                                            console.log("🔄 Combo de tipo cambiado a índice:", currentIndex)
                                             if (currentIndex > 0) {
                                                 workerForm.selectedTipoTrabajadorIndex = currentIndex - 1
+                                                // ✅ DEBUG inmediato cuando cambia el tipo
+                                                var tipos = trabajadorModel ? trabajadorModel.tiposTrabajador : []
+                                                if (currentIndex - 1 < tipos.length) {
+                                                    var tipoSeleccionado = tipos[currentIndex - 1]
+                                                    console.log("🎯 Tipo seleccionado cambiado:")
+                                                    console.log("   Tipo:", tipoSeleccionado.Tipo)
+                                                    console.log("   Área:", "'" + (tipoSeleccionado.area_funcional || "NO DISPONIBLE") + "'")
+                                                    console.log("   Mostrar especialidades?", tipoSeleccionado.area_funcional === "MEDICO")
+                                                }
                                             } else {
                                                 workerForm.selectedTipoTrabajadorIndex = -1
+                                                console.log("🔘 Tipo seleccionado: Ninguno (índice 0)")
                                             }
                                         }
                                         
@@ -1581,6 +1596,68 @@ Item {
                                         padding: baseUnit
                                     }
                                 }
+                            }
+                        }
+
+                        // SECCIÓN DE ESPECIALIDADES MÉDICAS (Solo para médicos)
+                        // SECCIÓN DE ESPECIALIDADES MÉDICAS (Solo para médicos)
+                        EspecialidadesMedicasSection {
+                            id: especialidadesSection
+                            Layout.fillWidth: true
+                            
+                            // Props requeridas
+                            trabajadorModel: trabajadoresRoot.trabajadorModel
+                            trabajadorId: isEditMode && editingIndex >= 0 ? 
+                                        parseInt(trabajadoresListModel.get(editingIndex).trabajadorId) : -1
+                            isEditMode: workerForm.isEditMode || false
+                            
+                            // Props de estilo (heredadas del padre)
+                            baseUnit: trabajadoresRoot.baseUnit
+                            fontBaseSize: trabajadoresRoot.fontBaseSize
+                            primaryColor: trabajadoresRoot.primaryColor
+                            successColor: trabajadoresRoot.successColor
+                            dangerColor: trabajadoresRoot.dangerColor
+                            whiteColor: trabajadoresRoot.whiteColor
+                            textColor: trabajadoresRoot.textColor
+                            textColorLight: trabajadoresRoot.textColorLight
+                            
+                            // 🔍 MOSTRAR SOLO SI EL TIPO SELECCIONADO ES MÉDICO - CON DEBUG MEJORADO
+                            visible: {
+                                console.log("🔍 INICIO - Evaluando visibilidad de especialidades médicas...")
+                                console.log("   Combo currentIndex:", tipoTrabajadorCombo.currentIndex)
+                                
+                                if (tipoTrabajadorCombo.currentIndex <= 0) {
+                                    console.log("❌ No mostrar: Combo en índice", tipoTrabajadorCombo.currentIndex)
+                                    return false
+                                }
+                                
+                                // Obtener el área funcional del tipo seleccionado
+                                var tipos = trabajadorModel ? trabajadorModel.tiposTrabajador : []
+                                if (!tipos || tipos.length === 0) {
+                                    console.log("❌ No mostrar: Lista de tipos vacía o nula")
+                                    console.log("   Tipos disponible:", !!trabajadorModel, "Longitud:", tipos ? tipos.length : 0)
+                                    return false
+                                }
+                                
+                                var tipoIndex = tipoTrabajadorCombo.currentIndex - 1
+                                console.log("   Índice calculado:", tipoIndex, "de", tipos.length - 1)
+                                
+                                if (tipoIndex < 0 || tipoIndex >= tipos.length) {
+                                    console.log("❌ No mostrar: Índice fuera de rango", tipoIndex, "de", tipos.length)
+                                    return false
+                                }
+                                
+                                var tipoSeleccionado = tipos[tipoIndex]
+                                var areaFuncional = tipoSeleccionado.area_funcional || ""
+                                
+                                console.log("🔍 INFORMACIÓN DEL TIPO SELECCIONADO:")
+                                console.log("   Tipo:", tipoSeleccionado.Tipo)
+                                console.log("   ID:", tipoSeleccionado.id)
+                                console.log("   Área funcional:", "'" + areaFuncional + "'")
+                                console.log("   Es médico?", areaFuncional === "MEDICO")
+                                console.log("   Mostrar especialidades?", areaFuncional === "MEDICO")
+                                
+                                return areaFuncional === "MEDICO"
                             }
                         }
                         
@@ -1690,11 +1767,6 @@ Item {
                                 return
                             }
                             
-                            // ✅ DEBUG DE AUTENTICACIÓN
-                            console.log("🔍 Estado de autenticación:")
-                            console.log("   - trabajadorModel.usuario_actual_id:", trabajadorModel.usuario_actual_id || "undefined")
-                            console.log("   - trabajadorModel.esAdministrador():", trabajadorModel.esAdministrador ? trabajadorModel.esAdministrador() : "undefined")
-                            
                             // Obtener valores de forma segura
                             var nombre = nombreTrabajador && nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
                             var apellidoPat = apellidoPaterno && apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
@@ -1702,89 +1774,192 @@ Item {
                             var especialidad = especialidadField && especialidadField.text ? especialidadField.text.trim() : ""
                             var matricula = matriculaField && matriculaField.text ? matriculaField.text.trim() : ""
                             
-                            // Validaciones
-                            if (!nombre || nombre === "") {
-                                console.log("Error: Falta el nombre")
-                                return
-                            }
-                            
-                            if (!apellidoPat || apellidoPat === "") {
-                                console.log("Error: Falta el apellido paterno")
-                                return
-                            }
-                            
-                            if (workerForm.selectedTipoTrabajadorIndex < 0) {
-                                console.log("Error: Falta seleccionar tipo de trabajador")
+                            // Validar campos obligatorios
+                            if (!nombre || !apellidoPat || !apellidoMat) {
+                                console.error("❌ ERROR: Faltan campos obligatorios")
                                 return
                             }
                             
                             // Obtener ID del tipo de trabajador
-                            var tipos = trabajadorModel.tiposTrabajador || []
-                            if (tipos.length === 0) {
-                                console.error("❌ No hay tipos de trabajador disponibles")
+                            var tipoIndex = workerForm.selectedTipoTrabajadorIndex
+                            if (tipoIndex < 0) {
+                                console.error("❌ ERROR: Tipo de trabajador no seleccionado")
                                 return
                             }
                             
-                            var tipoTrabajadorId = tipos[workerForm.selectedTipoTrabajadorIndex].id
+                            var tipos = trabajadorModel.tiposTrabajador || []
+                            if (!tipos || tipos.length === 0 || tipoIndex >= tipos.length) {
+                                console.error("❌ ERROR: Lista de tipos de trabajador no disponible")
+                                return
+                            }
                             
-                            console.log("Datos a guardar:", {
-                                nombre: nombre,
-                                apellidoPaterno: apellidoPat,
-                                apellidoMaterno: apellidoMat,
-                                tipoTrabajadorId: tipoTrabajadorId,
-                                especialidad: especialidad,
-                                matricula: matricula
-                            })
+                            var tipoSeleccionado = tipos[tipoIndex]
+                            var idTipoTrabajador = tipoSeleccionado.id
                             
-                            // EJECUTAR OPERACIÓN Y MANEJAR RESULTADO
-                            var success = false
+                            console.log("📋 Datos del formulario:")
+                            console.log("   Nombre:", nombre, apellidoPat, apellidoMat)
+                            console.log("   Tipo:", tipoSeleccionado.Tipo, "(ID:", idTipoTrabajador, ")")
+                            console.log("   Especialidad descriptiva:", especialidad || "N/A")
+                            console.log("   Matrícula:", matricula || "N/A")
                             
+                            // ========================================
+                            // 📌 VERIFICAR SI ES MÉDICO Y HAY ESPECIALIDADES PENDIENTES
+                            // ========================================
+                            var esMedico = false
+                            var especialidadesPendientes = []
+                            
+                            // Verificar área funcional del tipo seleccionado
+                            if (tipoSeleccionado.area_funcional) {
+                                esMedico = (tipoSeleccionado.area_funcional === "MEDICO")
+                                console.log("🩺 Es médico:", esMedico, "- Área funcional:", tipoSeleccionado.area_funcional)
+                            }
+                            
+                            // Si es médico, obtener especialidades pendientes
+                            if (esMedico && especialidadesSection && especialidadesSection.visible) {
+                                especialidadesPendientes = especialidadesSection.obtenerEspecialidadesPendientes()
+                                console.log("📋 Especialidades pendientes a asignar:", especialidadesPendientes.length)
+                                
+                                if (especialidadesPendientes.length > 0) {
+                                    console.log("📝 Detalle de especialidades:")
+                                    for (var i = 0; i < especialidadesPendientes.length; i++) {
+                                        var esp = especialidadesPendientes[i]
+                                        console.log("   ", i+1, "-", esp.nombre, 
+                                                "(ID:", esp.id, ", Principal:", esp.es_principal, ")")
+                                    }
+                                }
+                            }
+                            // ========================================
+                            
+                            // MODO EDICIÓN
                             if (isEditMode && editingIndex >= 0) {
-                                // Actualizar trabajador existente
+                                console.log("🔄 Modo EDICIÓN - Actualizando trabajador...")
+                                
                                 var trabajadorData = trabajadoresListModel.get(editingIndex)
                                 var trabajadorId = parseInt(trabajadorData.trabajadorId)
                                 
-                                console.log("Actualizando trabajador ID:", trabajadorId)
-                                success = trabajadorModel.actualizarTrabajador(
+                                var success = trabajadorModel.actualizarTrabajador(
                                     trabajadorId,
-                                    nombre,
-                                    apellidoPat, 
-                                    apellidoMat,
-                                    tipoTrabajadorId,
-                                    especialidad,
-                                    matricula
-                                )
-                            } else {
-                                // Crear nuevo trabajador
-                                console.log("Creando nuevo trabajador...")
-                                success = trabajadorModel.crearTrabajador(
                                     nombre,
                                     apellidoPat,
                                     apellidoMat,
-                                    tipoTrabajadorId,
+                                    idTipoTrabajador,
                                     especialidad,
                                     matricula
                                 )
-                            }
-                            
-                            // SI LA OPERACIÓN FUE EXITOSA, ACTUALIZAR INMEDIATAMENTE
-                            if (success) {
-                                console.log("Operación exitosa - Actualizando UI inmediatamente")
+                                debugTrabajadorCompleto(trabajadorId)
                                 
-                                // Cerrar diálogo inmediatamente
-                                showNewWorkerDialog = false
-                                selectedRowIndex = -1
-                                isEditMode = false
-                                editingIndex = -1
-                                
-                                // FORZAR ACTUALIZACIÓN INMEDIATA
-                                Qt.callLater(function() {
-                                    console.log("Ejecutando actualización diferida...")
+                                if (success) {
+                                    console.log("✅ Trabajador actualizado exitosamente")
+                                    
+                                    // ========================================
+                                    // 📌 NUEVO: EN MODO EDICIÓN, ASIGNAR ESPECIALIDADES PENDIENTES
+                                    // ========================================
+                                    if (esMedico && especialidadesPendientes.length > 0) {
+                                        console.log("⚕️ Asignando especialidades al médico en modo edición...")
+                                        
+                                        // Asignar cada especialidad pendiente
+                                        for (var i = 0; i < especialidadesPendientes.length; i++) {
+                                            var esp = especialidadesPendientes[i]
+                                            
+                                            console.log("➕ Asignando especialidad:", esp.nombre, 
+                                                    "(ID:", esp.id, ", Principal:", esp.es_principal, ")")
+                                            
+                                            var asignacionExitosa = trabajadorModel.asignarEspecialidadAMedico(
+                                                trabajadorId,
+                                                esp.id,
+                                                esp.es_principal || false
+                                            )
+                                            
+                                            if (asignacionExitosa) {
+                                                console.log("   ✅ Especialidad", esp.nombre, "asignada")
+                                            } else {
+                                                console.error("   ❌ Error asignando especialidad", esp.nombre)
+                                            }
+                                        }
+                                        
+                                        console.log("✅ Proceso de asignación de especialidades completado")
+                                    }
+                                    // ========================================
+                                    
+                                    showNewWorkerDialog = false
+                                    isEditMode = false
+                                    editingIndex = -1
+                                    selectedRowIndex = -1
                                     actualizarInmediato()
-                                })
+                                } else {
+                                    console.error("❌ Error actualizando trabajador")
+                                }
+
                                 
-                            } else {
-                                console.log("Error en la operación")
+                            } 
+                            // MODO CREACIÓN
+                            else {
+                                console.log("➕ Modo CREACIÓN - Creando nuevo trabajador...")
+                                
+                                var success = trabajadorModel.crearTrabajador(
+                                    nombre,
+                                    apellidoPat,
+                                    apellidoMat,
+                                    idTipoTrabajador,
+                                    especialidad,
+                                    matricula
+                                )
+                                
+                                if (success) {
+                                    console.log("✅ Trabajador creado exitosamente")
+                                    
+                                    // ========================================
+                                    // 📌 NUEVO: SI ES MÉDICO, ASIGNAR ESPECIALIDADES
+                                    // ========================================
+                                    if (esMedico && especialidadesPendientes.length > 0) {
+                                        console.log("⚕️ Asignando especialidades al médico recién creado...")
+                                        
+                                        // Esperar un momento para que el trabajador se haya creado y cargado
+                                        // Luego obtener su ID del último trabajador en la lista
+                                        trabajadorModel.trabajadoresChanged.connect(function() {
+                                            var trabajadores = trabajadorModel.trabajadores || []
+                                            if (trabajadores.length > 0) {
+                                                // El último trabajador debería ser el recién creado
+                                                var ultimoTrabajador = trabajadores[trabajadores.length - 1]
+                                                var nuevoMedicoId = ultimoTrabajador.id
+                                                
+                                                console.log("🆔 ID del médico recién creado:", nuevoMedicoId)
+                                                
+                                                // Asignar cada especialidad pendiente
+                                                for (var i = 0; i < especialidadesPendientes.length; i++) {
+                                                    var esp = especialidadesPendientes[i]
+                                                    
+                                                    console.log("➕ Asignando especialidad:", esp.nombre, 
+                                                            "(ID:", esp.id, ", Principal:", esp.es_principal, ")")
+                                                    
+                                                    var asignacionExitosa = trabajadorModel.asignarEspecialidadAMedico(
+                                                        nuevoMedicoId,
+                                                        esp.id,
+                                                        esp.es_principal || false
+                                                    )
+                                                    
+                                                    if (asignacionExitosa) {
+                                                        console.log("   ✅ Especialidad", esp.nombre, "asignada")
+                                                    } else {
+                                                        console.error("   ❌ Error asignando especialidad", esp.nombre)
+                                                    }
+                                                }
+                                                
+                                                console.log("✅ Proceso de asignación de especialidades completado")
+                                                
+                                                // Desconectar la señal para evitar múltiples ejecuciones
+                                                trabajadorModel.trabajadoresChanged.disconnect(arguments.callee)
+                                            }
+                                        })
+                                    }
+                                    // ========================================
+                                    
+                                    showNewWorkerDialog = false
+                                    selectedRowIndex = -1
+                                    actualizarInmediato()
+                                } else {
+                                    console.error("❌ Error creando trabajador")
+                                }
                             }
                         }
                     }
@@ -2137,5 +2312,66 @@ Item {
         Qt.callLater(function() {
             inicializarModelo(0)
         })
+    }
+
+    // ✅ FUNCIÓN PARA DEBUG DE TIPOS
+    // ✅ FUNCIÓN MEJORADA PARA DEBUG DE TIPOS
+    function debugTiposTrabajador() {
+        console.log("🐛 DEBUG DETALLADO - Tipos de Trabajador:")
+        if (!trabajadorModel) {
+            console.log("   ❌ trabajadorModel no disponible")
+            return
+        }
+        
+        var tipos = trabajadorModel.tiposTrabajador
+        console.log("   📋 Total tipos en modelo:", tipos.length)
+        
+        if (tipos.length === 0) {
+            console.log("   ⚠️ No hay tipos disponibles")
+            return
+        }
+        
+        // Mostrar todos los tipos con sus áreas funcionales
+        for (var i = 0; i < tipos.length; i++) {
+            var tipo = tipos[i]
+            console.log("   " + (i + 1) + ". ID: " + tipo.id + 
+                    " | Tipo: '" + tipo.Tipo + 
+                    "' | Área: '" + (tipo.area_funcional || "NO DISPONIBLE") + "'")
+        }
+        
+        // Verificar combo actual
+        console.log("   🎯 COMBO ACTUAL:")
+        console.log("      Índice seleccionado:", tipoTrabajadorCombo.currentIndex)
+        
+        if (tipoTrabajadorCombo.currentIndex > 0) {
+            var tipoIndex = tipoTrabajadorCombo.currentIndex - 1
+            if (tipoIndex < tipos.length) {
+                var tipoActual = tipos[tipoIndex]
+                console.log("      Tipo seleccionado:", tipoActual.Tipo)
+                console.log("      Área funcional:", "'" + (tipoActual.area_funcional || "NO DISPONIBLE") + "'")
+                console.log("      Es médico?", tipoActual.area_funcional === "MEDICO")
+            } else {
+                console.log("      ❌ Índice fuera de rango")
+            }
+        } else {
+            console.log("      No hay tipo seleccionado")
+        }
+    }
+    // ✅ FUNCIÓN TEMPORAL PARA DEBUG DEL TRABAJADOR
+    function debugTrabajadorCompleto(trabajadorId) {
+        if (!trabajadorModel) {
+            console.log("❌ trabajadorModel no disponible")
+            return
+        }
+        
+        var trabajadorCompleto = trabajadorModel.obtenerTrabajadorPorId(trabajadorId)
+        console.log("🔍 DEBUG TRABAJADOR COMPLETO ID:", trabajadorId)
+        console.log("   Datos completos:", JSON.stringify(trabajadorCompleto))
+        
+        if (trabajadorCompleto && trabajadorCompleto.Id_Tipo_Trabajador) {
+            var areaFuncional = trabajadorModel.obtenerAreaFuncionalDeTipo(trabajadorCompleto.Id_Tipo_Trabajador)
+            console.log("   Área funcional del tipo:", "'" + areaFuncional + "'")
+            console.log("   Es médico?", areaFuncional === "MEDICO")
+        }
     }
 }

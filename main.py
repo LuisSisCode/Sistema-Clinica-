@@ -724,6 +724,16 @@ class AppController(QObject):
 
     @Slot(int, str, str)
     def set_usuario_autenticado(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
+        """✅ VERIFICAR QUE ESTE MÉTODO SE LLAMA CORRECTAMENTE"""
+        
+        # Log detallado
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🔐 ESTABLECIENDO USUARIO AUTENTICADO")
+        logger.info(f"{'='*60}")
+        logger.info(f"   ID: {usuario_id}")
+        logger.info(f"   Nombre: {usuario_nombre}")
+        logger.info(f"   Rol: {usuario_rol}")
+        logger.info(f"{'='*60}\n")
         
         # Establecer usuario inmediatamente
         self._usuario_autenticado_id = usuario_id
@@ -894,6 +904,7 @@ class AppController(QObject):
                 try:
                     self.cierre_caja_model.set_usuario_actual_con_rol(
                         self._usuario_autenticado_id,
+                        self._usuario_autenticado_nombre,  # ✅ NUEVO: Pasa el nombre
                         self._usuario_autenticado_rol
                     )
                     logger.info("✅ Usuario establecido en CierreCajaModel")
@@ -1688,16 +1699,23 @@ class AppController(QObject):
     @Slot(str, str, str, str, result=str)
     def generarReportePDF(self, datos_json, tipo_reporte, fecha_desde, fecha_hasta):
         """
-        ✅ MODIFICADO: Ahora establece el responsable antes de generar el PDF
+        ✅ MEJORADO: Mejor logging para verificar usuario
         """
         try:
             if not datos_json or datos_json.strip() == "":
                 if tipo_reporte != "9":
                     return ""
             
-            # ✅ NUEVO: Establecer responsable ANTES de generar PDF
-            usuario_nombre = self._usuario_autenticado_nombre or "Usuario Sistema"
-            usuario_rol = self._usuario_autenticado_rol or "Usuario"
+            # ✅ VERIFICAR QUE EL USUARIO ESTÉ DISPONIBLE
+            usuario_nombre = self._usuario_autenticado_nombre 
+            usuario_rol = self._usuario_autenticado_rol
+            
+            if not usuario_nombre or usuario_nombre == "":
+                logger.warning("⚠️ ADVERTENCIA: usuario_autenticado_nombre está vacío!")
+                usuario_nombre = "Usuario Sistema"
+                usuario_rol = "Usuario"
+            else:
+                logger.info(f"✅ Usuario autenticado detectado: {usuario_nombre} ({usuario_rol})")
             
             logger.info(f"\n{'='*60}")
             logger.info(f"📄 GENERANDO PDF CON RESPONSABLE")
@@ -1705,7 +1723,6 @@ class AppController(QObject):
             logger.info(f"   👤 Nombre: {usuario_nombre}")
             logger.info(f"   🔑 Rol: {usuario_rol}")
             logger.info(f"   📊 Tipo Reporte: {tipo_reporte}")
-            logger.info(f"   📅 Período: {fecha_desde} - {fecha_hasta}")
             logger.info(f"{'='*60}\n")
             
             # ✅ ESTABLECER RESPONSABLE EN EL GENERADOR

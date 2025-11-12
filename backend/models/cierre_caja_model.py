@@ -115,20 +115,21 @@ class CierreCajaModel(QObject):
             self._operation_lock = False
             self._pending_operations = 0
     
-    @Slot(int, str)
-    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
-        """Establece el usuario autenticado"""
+    @Slot(int, str, str)  # ✅ CAMBIADO: Ahora recibe 3 parámetros (id, nombre, rol)
+    def set_usuario_actual_con_rol(self, usuario_id: int, usuario_nombre: str, usuario_rol: str):
+        """Establece el usuario autenticado - ✅ CORREGIDO: Ahora recibe nombre"""
         try:
             if usuario_id > 0:
                 self._usuario_actual_id = usuario_id
+                self._usuario_actual_nombre = usuario_nombre  # ✅ NUEVO: Almacena el nombre
                 self._usuario_actual_rol = usuario_rol
-                print(f"ðŸ‘¤ Usuario establecido en CierreCaja: {usuario_id} ({usuario_rol})")
-                self.operacionExitosa.emit(f"Usuario {usuario_id} autenticado en mÃ³dulo de cierre")
+                print(f"👤 Usuario establecido en CierreCaja: {usuario_id} - {usuario_nombre} ({usuario_rol})")
+                self.operacionExitosa.emit(f"Usuario {usuario_nombre} autenticado en módulo de cierre")
             else:
-                self.operacionError.emit("ID de usuario invÃ¡lido")
+                self.operacionError.emit("ID de usuario inválido")
         except Exception as e:
-            print(f"âŒ Error estableciendo usuario: {e}")
-            self.operacionError.emit(f"Error de autenticaciÃ³n: {str(e)}")
+            print(f"❌ Error estableciendo usuario: {e}")
+            self.operacionError.emit(f"Error de autenticación: {str(e)}")
 
     @Slot()
     def resetOperationLock(self):
@@ -537,108 +538,176 @@ class CierreCajaModel(QObject):
             return False, error_msg
 
     def _preparar_movimientos_para_pdf(self, datos_cierre: Dict) -> List[Dict]:
-        """Convierte datos del repository al formato PDF - VERSIÃ“N VALIDADA"""
-        movimientos = []
-        
+        """
+        ✅ CORREGIDO: Accede a la estructura anidada correctamente
+        """
         try:
-            # âœ… VALIDAR ESTRUCTURA PRIMERO
-            if not isinstance(datos_cierre, dict):
-                print("âŒ datos_cierre no es un diccionario")
-                return []
+            movimientos = []
             
-            if 'ingresos' not in datos_cierre:
-                print("âŒ Falta clave 'ingresos' en datos_cierre")
-                return []
+            # ✅ Acceder a la estructura anidada
+            ingresos_dict = datos_cierre.get('ingresos', {})
+            egresos_dict = datos_cierre.get('egresos', {})
             
-            # âœ… PROCESAR INGRESOS CON VALIDACIÃ“N
-            ingresos = datos_cierre.get('ingresos', {})
-            
-            if not isinstance(ingresos, dict):
-                print("âŒ 'ingresos' no es un diccionario")
-                return []
-            
-            for categoria, items in ingresos.items():
-                if categoria == 'todos':
-                    continue
-                
-                # âœ… VALIDAR QUE items SEA UNA LISTA
-                if not isinstance(items, list):
-                    print(f"âš ï¸ items de categorÃ­a '{categoria}' no es lista, omitiendo")
-                    continue
-                
-                for item in items:
-                    # âœ… VALIDAR QUE item SEA UN DICT
+            # ✅ 1. CONSULTAS
+            consultas = ingresos_dict.get('consultas', [])
+            if isinstance(consultas, list):
+                print(f"📋 Procesando {len(consultas)} consultas para PDF")
+                for item in consultas:
                     if not isinstance(item, dict):
-                        print(f"âš ï¸ item en '{categoria}' no es dict, omitiendo")
                         continue
                     
                     movimiento = {
                         'id': item.get('id'),
                         'fecha': item.get('Fecha', ''),
                         'tipo': 'INGRESO',
-                        'categoria': categoria.upper(),
-                        'descripcion': item.get('Descripcion', item.get('TipoIngreso', '')),
+                        'categoria': 'CONSULTA',
+                        'descripcion': item.get('Descripcion', 'Consulta médica'),
+                        'paciente': item.get('NombrePaciente', '-'),
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0))
+                    }
+                    movimientos.append(movimiento)
+            
+            # ✅ 2. LABORATORIO
+            laboratorios = ingresos_dict.get('laboratorio', [])
+            if isinstance(laboratorios, list):
+                print(f"🔬 Procesando {len(laboratorios)} análisis de laboratorio para PDF")
+                for item in laboratorios:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'INGRESO',
+                        'categoria': 'LABORATORIO',
+                        'descripcion': item.get('Descripcion', 'Análisis de laboratorio'),
+                        'paciente': item.get('NombrePaciente', '-'),
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0))
+                    }
+                    movimientos.append(movimiento)
+            
+            # ✅ 3. ENFERMERÍA
+            enfermerias = ingresos_dict.get('enfermeria', [])
+            if isinstance(enfermerias, list):
+                print(f"🩹 Procesando {len(enfermerias)} procedimientos de enfermería para PDF")
+                for item in enfermerias:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'INGRESO',
+                        'categoria': 'ENFERMERIA',
+                        'descripcion': item.get('Descripcion', 'Procedimiento de enfermería'),
+                        'paciente': item.get('NombrePaciente', '-'),
                         'cantidad': item.get('Cantidad', 1),
                         'valor': float(item.get('Total', 0))
                     }
-                    
-                    # Campos especÃ­ficos segÃºn categorÃ­a
-                    if categoria == 'farmacia':
-                        movimiento['id_venta'] = item.get('id')
-                        movimiento['descripcion'] = item.get('Descripcion', 'Venta de medicamentos')
-                    
-                    elif categoria == 'consultas':
-                        movimiento['id_consulta'] = item.get('id')
-                        movimiento['especialidad'] = item.get('Descripcion', '').replace('Consulta - ', '')
-                        movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
-                        movimiento['doctor_nombre'] = item.get('NombreUsuario', '')
-                    
-                    elif categoria == 'laboratorio':
-                        movimiento['id_laboratorio'] = item.get('id')
-                        movimiento['analisis'] = item.get('Descripcion', '').replace('AnÃ¡lisis - ', '')
-                        movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
-                        movimiento['laboratorista'] = item.get('NombreUsuario', '')
-                    
-                    elif categoria == 'enfermeria':
-                        movimiento['id_enfermeria'] = item.get('id')
-                        movimiento['procedimiento'] = item.get('Descripcion', '').replace('Procedimiento - ', '')
-                        movimiento['paciente_nombre'] = item.get('NombrePaciente', '')
-                        movimiento['enfermero'] = item.get('NombreUsuario', '')
-                    
-                    elif categoria == 'ingresos_extras':
-                        movimiento['descripcion'] = item.get('Descripcion', 'Ingreso extra')
-                    
                     movimientos.append(movimiento)
             
-            # âœ… PROCESAR EGRESOS CON VALIDACIÃ“N
-            egresos = datos_cierre.get('egresos', {})
+            # ✅ 4. FARMACIA - CON PRODUCTOS DETALLADOS
+            ventas = ingresos_dict.get('farmacia', [])
+            if isinstance(ventas, list):
+                print(f"💊 Procesando {len(ventas)} ventas de farmacia para PDF")
+                for item in ventas:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    # ✅ NUEVO: Usar productos vendidos en lugar de descripción genérica
+                    productos_vendidos = item.get('ProductosVendidos', '')
+                    descripcion = productos_vendidos if productos_vendidos else 'Venta de medicamentos'
+                    
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'INGRESO',
+                        'categoria': 'FARMACIA',
+                        'descripcion': descripcion,  # ✅ Ahora contiene productos
+                        'productos': productos_vendidos,  # ✅ NUEVO campo
+                        'paciente': '-',
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0))
+                    }
+                    movimientos.append(movimiento)
             
-            if isinstance(egresos, dict) and 'todos' in egresos:
-                egresos_todos = egresos.get('todos', [])
-                
-                if isinstance(egresos_todos, list):
-                    for item in egresos_todos:
-                        if not isinstance(item, dict):
-                            continue
-                        
-                        movimiento = {
-                            'id': item.get('id'),
-                            'fecha': item.get('Fecha', ''),
-                            'tipo': 'EGRESO',
-                            'categoria': 'GASTOS',
-                            'descripcion': item.get('Descripcion', ''),
-                            'cantidad': 1,
-                            'valor': float(item.get('Total', 0)),
-                            'tipo_gasto': item.get('TipoEgreso', 'Gasto'),
-                            'proveedor': item.get('Proveedor', 'N/A')
-                        }
-                        movimientos.append(movimiento)
+            # ✅ 5. INGRESOS EXTRAS
+            extras = ingresos_dict.get('ingresos_extras', [])
+            if isinstance(extras, list):
+                print(f"💵 Procesando {len(extras)} ingresos extras para PDF")
+                for item in extras:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'INGRESO',
+                        'categoria': 'INGRESOS EXTRAS',
+                        'descripcion': item.get('Descripcion', 'Ingreso extra'),
+                        'paciente': '-',
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0))
+                    }
+                    movimientos.append(movimiento)
             
-            print(f"âœ… Movimientos preparados: {len(movimientos)} registros")
+            # ✅ 6. EGRESOS (GASTOS)
+            gastos = egresos_dict.get('gastos', [])
+            if isinstance(gastos, list):
+                print(f"💸 Procesando {len(gastos)} gastos para PDF")
+                for item in gastos:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'EGRESO',
+                        'categoria': 'GASTOS',
+                        'descripcion': item.get('Descripcion', ''),
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0)),
+                        'tipo_gasto': item.get('TipoEgreso', 'Gasto'),
+                        'proveedor': item.get('Proveedor', 'N/A')
+                    }
+                    movimientos.append(movimiento)
+            
+            # ✅ 7. COMPRAS DE FARMACIA (NUEVO)
+            compras = egresos_dict.get('compras', [])
+            if isinstance(compras, list):
+                print(f"📦 Procesando {len(compras)} compras de farmacia para PDF")
+                for item in compras:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    # Formatear productos comprados
+                    productos_comprados = item.get('ProductosComprados', '')
+                    descripcion = productos_comprados if productos_comprados else 'Compra de productos'
+                    
+                    movimiento = {
+                        'id': item.get('id'),
+                        'fecha': item.get('Fecha', ''),
+                        'tipo': 'EGRESO',
+                        'categoria': 'COMPRAS',
+                        'descripcion': descripcion,
+                        'productos': productos_comprados,  # ✅ NUEVO
+                        'cantidad': 1,
+                        'valor': float(item.get('Total', 0)),
+                        'tipo_gasto': 'COMPRAS DE FARMACIA',  # ✅ Identificador especial
+                        'proveedor': item.get('NombreProveedor', 'Sin proveedor')
+                    }
+                    movimientos.append(movimiento)
+
+            print(f"✅ Movimientos preparados: {len(movimientos)} registros")
+            print(f"   - Ingresos: {sum(1 for m in movimientos if m['tipo'] == 'INGRESO')}")
+            print(f"   - Egresos: {sum(1 for m in movimientos if m['tipo'] == 'EGRESO')}")
+            
             return movimientos
             
         except Exception as e:
-            print(f"âŒ Error preparando movimientos: {e}")
+            print(f"❌ Error preparando movimientos: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -768,7 +837,7 @@ class CierreCajaModel(QObject):
             # Convertir a JSON
             datos_json = json.dumps(datos_pdf, ensure_ascii=False, default=str)
             
-            print(f"ðŸ“„ Llamando a generar_reporte_pdf con tipo 9 (Arqueo)")
+            print(f" Llamando a generar_reporte_pdf con tipo 9 (Arqueo)")
             
             # âœ… LLAMAR AL GENERADOR
             filepath = generador.generar_reporte_pdf(
@@ -820,14 +889,17 @@ class CierreCajaModel(QObject):
     
     @Slot(str, str, str)
     def generarPDFCierreEspecifico(self, fecha: str, hora_inicio: str, hora_fin: str):
-        """Genera PDF de un cierre especÃ­fico ya guardado (para botÃ³n Ver Cierre)"""
+        """
+        ✅ CORREGIDO: Genera PDF de un cierre específico ya guardado con efectivo real de BD
+        ✅ MEJORADO: Pasa el usuario responsable al generador de PDF
+        """
         try:
-            print(f"ðŸ“„ Generando PDF especÃ­fico - Fecha: {fecha}, Horario: {hora_inicio}-{hora_fin}")
+            print(f"📄 Generando PDF específico - Fecha: {fecha}, Horario: {hora_inicio}-{hora_fin}")
             
             self._set_loading(True)
             
-            # Obtener datos del cierre especÃ­fico
-            datos_cierre = self.repository.get_datos_cierre_completo(
+            # ✅ CAMBIO CRÍTICO: Usar método que recupera efectivo_real de BD
+            datos_cierre = self.repository.get_cierre_completo_con_efectivo(
                 fecha, hora_inicio, hora_fin
             )
             
@@ -835,24 +907,128 @@ class CierreCajaModel(QObject):
                 self.operacionError.emit("No se encontraron datos para este cierre")
                 return
             
+            # ✅ Establecer el efectivo real recuperado de BD
+            self._efectivo_real = float(datos_cierre.get('efectivo_real', 0))
+            print(f"💰 Efectivo real recuperado para PDF: Bs {self._efectivo_real:,.2f}")
+            
+            # ✅ NUEVO: Obtener información del usuario responsable
+            usuario_nombre = getattr(self, '_usuario_actual_nombre', 'Sistema')
+            usuario_rol = getattr(self, '_usuario_actual_rol', 'Usuario')
+            
+            print(f"👤 Estableciendo responsable para PDF: {usuario_nombre} ({usuario_rol})")
+            
             # Preparar y generar PDF
             movimientos = self._preparar_movimientos_para_pdf(datos_cierre)
-            success, filepath = self._generar_pdf_arqueo(movimientos, datos_cierre)
+            
+            # ✅ PASA LA INFORMACIÓN DEL USUARIO AL GENERADOR DE PDF
+            success, filepath = self._generar_pdf_arqueo_con_responsable(
+                movimientos, datos_cierre, usuario_nombre, usuario_rol
+            )
             
             if success:
-                print(f"âœ… PDF generado: {filepath}")
+                print(f"✅ PDF generado: {filepath}")
                 self.pdfGenerado.emit(filepath)
-                #self._abrir_pdf_automaticamente(filepath)
                 self.operacionExitosa.emit("PDF generado correctamente")
             else:
                 self.operacionError.emit(f"Error generando PDF: {filepath}")
                 
         except Exception as e:
-            error_msg = f"Error en generarPDFCierreEspecifico: {str(e)}"
-            print(f"âŒ {error_msg}")
+            error_msg = f"Error generando PDF específico: {str(e)}"
+            print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
+            import traceback
+            traceback.print_exc()
         finally:
             self._set_loading(False)
+
+    def _generar_pdf_arqueo_con_responsable(self, movimientos: List[Dict], datos_cierre: Dict, 
+                                      usuario_nombre: str, usuario_rol: str) -> Tuple[bool, str]:
+        """Genera el PDF del arqueo de caja CON información del responsable"""
+        try:
+            # ✅ IMPORT CORRECTO 
+            try:
+                from generar_pdf import GeneradorReportesPDF
+            except ImportError:
+                try:
+                    from ..generar_pdf import GeneradorReportesPDF
+                except ImportError:
+                    error_msg = "No se pudo importar GeneradorReportesPDF"
+                    print(f"❌ {error_msg}")
+                    return False, error_msg
+            
+            import json
+            
+            print("✅ GeneradorReportesPDF importado correctamente")
+            
+            # Crear instancia del generador
+            generador = GeneradorReportesPDF()
+            
+            # ✅ ESTABLECER EL RESPONSABLE ANTES DE GENERAR
+            generador.set_responsable(usuario_nombre, usuario_rol)
+            print(f"✅ Responsable establecido en PDF: {usuario_nombre} ({usuario_rol})")
+            
+            # ✅ Validar que movimientos no esté vacío
+            if not movimientos or len(movimientos) == 0:
+                print("⚠️ No hay movimientos para generar PDF")
+                return False, "No hay datos de movimientos para generar el PDF"
+            
+            # ✅ Calcular diferencia explícitamente
+            saldo_teorico = datos_cierre.get('resumen', {}).get('saldo_teorico', 0)
+            diferencia_calculada = round(self._efectivo_real - saldo_teorico, 2)
+            
+            # Preparar datos completos para el PDF
+            datos_pdf = {
+                'movimientos_completos': movimientos,
+                'fecha': self._fecha_actual,
+                'hora_inicio': self._hora_inicio,
+                'hora_fin': self._hora_fin,
+                'hora_generacion': datetime.now().strftime("%H:%M:%S"),
+                'responsable': usuario_nombre,  # ✅ USA EL NOMBRE REAL
+                'numero_arqueo': f"ARQ-{datetime.now().strftime('%Y%m%d-%H%M')}",
+                'estado': 'COMPLETADO',
+                
+                # Resumen financiero
+                'total_ingresos': datos_cierre.get('resumen', {}).get('total_ingresos', 0),
+                'total_egresos': datos_cierre.get('resumen', {}).get('total_egresos', 0),
+                'saldo_teorico': saldo_teorico,
+                'efectivo_real': self._efectivo_real,
+                'diferencia': diferencia_calculada
+            }
+            
+            # Convertir a JSON
+            datos_json = json.dumps(datos_pdf, ensure_ascii=False, default=str)
+            
+            print(f"📤 Llamando a generar_reporte_pdf con tipo 9 (Arqueo) y responsable: {usuario_nombre}")
+            
+            # ✅ LLAMAR AL GENERADOR
+            filepath = generador.generar_reporte_pdf(
+                datos_json,
+                "9",
+                self._fecha_actual,
+                self._fecha_actual
+            )
+            
+            # ✅ VALIDAR RESULTADO
+            if filepath and os.path.exists(filepath):
+                print(f"✅ PDF generado exitosamente: {filepath}")
+                return True, filepath
+            else:
+                print("⚠️ PDF no generado o archivo no existe")
+                return False, "No se pudo generar el archivo PDF"
+                
+        except ImportError as e:
+            error_msg = f"Error importando generador PDF: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return False, error_msg
+            
+        except Exception as e:
+            error_msg = f"Error generando PDF: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return False, error_msg
         
     @Slot(str)
     def cambiarFecha(self, nueva_fecha: str):
@@ -861,7 +1037,7 @@ class CierreCajaModel(QObject):
             self._fecha_actual = nueva_fecha
             self.fechaActualChanged.emit()
             self._verificar_cierre_previo()
-            print(f"ðŸ“… Fecha cambiada a: {nueva_fecha}")
+            print(f" Fecha cambiada a: {nueva_fecha}")
         else:
             self.operacionError.emit("Formato de fecha invÃ¡lido (DD/MM/YYYY)")
     
@@ -913,7 +1089,7 @@ class CierreCajaModel(QObject):
             self._cierres_del_dia = cierres
             self.cierresDelDiaChanged.emit()
             
-            print(f"ðŸ“‹ Cierres del dÃ­a cargados: {len(cierres)}")
+            print(f" Cierres del dÃ­a cargados: {len(cierres)}")
             
         except Exception as e:
             print(f"âŒ Error cargando cierres del dÃ­a: {e}")
@@ -926,28 +1102,28 @@ class CierreCajaModel(QObject):
     def validarCierre(self) -> bool:
         """Valida si se puede realizar el cierre"""
         try:
-            print(f"ðŸ” VALIDACIÃ“N - Usuario autenticado: {self._verificar_autenticacion()}")
+            print(f" VALIDACION - Usuario autenticado: {self._verificar_autenticacion()}")
             if not self._verificar_autenticacion():
                 return False
             
-            print(f"ðŸ” VALIDACIÃ“N - Efectivo real: {self._efectivo_real}")
+            print(f" VALIDACION - Efectivo real: {self._efectivo_real}")
             if self._efectivo_real <= 0:
                 self.operacionError.emit("Debe ingresar el efectivo real contado")
                 return False
             
-            print(f"ðŸ” VALIDACIÃ“N - Datos cierre disponibles: {bool(self._datos_cierre)}")
+            print(f"VALIDACION - Datos cierre disponibles: {bool(self._datos_cierre)}")
             if not self._datos_cierre:
                 self.operacionError.emit("Debe consultar los datos antes de cerrar")
                 return False
             
             cierre_previo = self.repository.verificar_cierre_previo(self._fecha_actual, self._hora_inicio, self._hora_fin)
-            print(f"ðŸ” VALIDACIÃ“N - Cierre previo existe para {self._hora_inicio}-{self._hora_fin}: {cierre_previo}")
+            print(f"VALIDACION - Cierre previo existe para {self._hora_inicio}-{self._hora_fin}: {cierre_previo}")
             if cierre_previo:
                 self.operacionError.emit(f"Ya existe un cierre para el horario {self._hora_inicio}-{self._hora_fin}")
                 return False
             
             diferencia_abs = abs(self.diferencia)
-            print(f"ðŸ” VALIDACIÃ“N - Diferencia absoluta: {diferencia_abs}")
+            print(f" VALIDACION - Diferencia absoluta: {diferencia_abs}")
             if diferencia_abs > 1000.0:
                 self.operacionError.emit("Diferencia demasiado grande, verifique los datos")
                 return False
@@ -1077,7 +1253,7 @@ class CierreCajaModel(QObject):
     
     @Slot(result=str)
     def generarPDFArqueo(self) -> str:
-        """Genera PDF del arqueo con datos detallados"""
+        """Genera PDF del arqueo con datos detallados - ✅ CORREGIDO: Usa usuario autenticado"""
         try:
             if not self._verificar_autenticacion():
                 return ""
@@ -1089,6 +1265,24 @@ class CierreCajaModel(QObject):
             if not self._app_controller:
                 self.errorOccurred.emit("Error PDF", "Generador de PDF no disponible")
                 return ""
+            
+            # ✅ OBTENER USUARIO AUTENTICADO DESDE ESTE MODELO
+            usuario_nombre = getattr(self, '_usuario_actual_nombre', None)
+            usuario_rol = getattr(self, '_usuario_actual_rol', None)
+            
+            if not usuario_nombre:
+                # Fallback: intentar obtener del AppController
+                if hasattr(self._app_controller, '_usuario_autenticado_nombre'):
+                    usuario_nombre = self._app_controller._usuario_autenticado_nombre
+                    usuario_rol = self._app_controller._usuario_autenticado_rol
+                else:
+                    usuario_nombre = "Usuario Sistema"
+                    usuario_rol = "Usuario"
+            
+            print(f"👤 Estableciendo responsable para PDF: {usuario_nombre} ({usuario_rol})")
+            
+            # ✅ ESTABLECER RESPONSABLE EN EL GENERADOR DE PDF
+            self._app_controller.pdf_generator.set_responsable(usuario_nombre, usuario_rol)
             
             # Generar datos estructurados para PDF
             datos_pdf = self.repository.generar_datos_pdf_arqueo(
@@ -1116,7 +1310,7 @@ class CierreCajaModel(QObject):
             if ruta_pdf:
                 self.pdfGenerado.emit(ruta_pdf)
                 self.operacionExitosa.emit("PDF del arqueo generado correctamente")
-                print(f"ðŸ“„ PDF generado: {ruta_pdf}")
+                print(f"✅ PDF generado con responsable '{usuario_nombre}': {ruta_pdf}")
                 return ruta_pdf
             else:
                 self.errorOccurred.emit("Error PDF", "No se pudo generar el archivo")
@@ -1125,7 +1319,7 @@ class CierreCajaModel(QObject):
         except Exception as e:
             error_msg = f"Error generando PDF: {str(e)}"
             self.errorOccurred.emit("Error PDF", error_msg)
-            print(f"âŒ {error_msg}")
+            print(f"❌ {error_msg}")
             return ""
     
     # ===============================
@@ -1179,7 +1373,7 @@ class CierreCajaModel(QObject):
             if not self._verificar_autenticacion():
                 return
             
-            print("ðŸ“… Iniciando carga de cierres de semana...")
+            print("Iniciando carga de cierres de semana...")
             
             cierres_semana = self.repository.get_cierres_semana_actual(self._fecha_actual)
             
@@ -1187,7 +1381,7 @@ class CierreCajaModel(QObject):
             if cierres_semana is not None:
                 self._cierres_del_dia = cierres_semana
                 self.cierresDelDiaChanged.emit()
-                print(f"ðŸ“… Cierres de la semana cargados: {len(cierres_semana)}")
+                print(f" Cierres de la semana cargados: {len(cierres_semana)}")
             else:
                 # âœ… SI FALLA, LISTA VACÃA (NO ROMPER)
                 self._cierres_del_dia = []
@@ -1357,7 +1551,7 @@ class CierreCajaModel(QObject):
         âœ… NUEVO: Intenta reconectar automÃ¡ticamente
         """
         try:
-            print("ðŸ”„ Intentando reconexiÃ³n automÃ¡tica...")
+            print("Intentando reconexiÃ³n automÃ¡tica...")
             
             # Marcar como reconectado
             self._disconnected = False

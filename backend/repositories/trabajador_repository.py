@@ -418,20 +418,25 @@ class TrabajadorRepository(BaseRepository):
     
     @cached_query('tipos_trabajadores', ttl=1800)
     def get_all_worker_types(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los tipos de trabajadores"""
+        """Obtiene todos los tipos de trabajadores INCLUYENDO area_funcional"""
         query = """
-        SELECT tt.id, tt.Tipo, tt.descripcion, COUNT(t.id) as total_trabajadores
+        SELECT 
+            tt.id, 
+            tt.Tipo, 
+            tt.descripcion, 
+            tt.area_funcional,  -- ✅ AGREGAR ESTE CAMPO CRÍTICO
+            COUNT(t.id) as total_trabajadores
         FROM Tipo_Trabajadores tt
         LEFT JOIN Trabajadores t ON tt.id = t.Id_Tipo_Trabajador
-        GROUP BY tt.id, tt.Tipo, tt.descripcion
+        GROUP BY tt.id, tt.Tipo, tt.descripcion, tt.area_funcional  -- ✅ AGREGAR AL GROUP BY
         ORDER BY tt.Tipo
         """
         return self._execute_query(query)
         
     
     def get_worker_type_by_id(self, tipo_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene tipo de trabajador por ID"""
-        query = "SELECT * FROM Tipo_Trabajadores WHERE id = ?"
+        """Obtiene tipo de trabajador por ID INCLUYENDO area_funcional"""
+        query = "SELECT id, Tipo, descripcion, area_funcional FROM Tipo_Trabajadores WHERE id = ?"
         return self._execute_query(query, (tipo_id,), fetch_one=True)
     
     def get_worker_type_by_name(self, tipo_nombre: str) -> Optional[Dict[str, Any]]:
@@ -604,36 +609,33 @@ class TrabajadorRepository(BaseRepository):
     def get_medico_con_especialidades(self, trabajador_id: int) -> Optional[Dict[str, Any]]:
         """
         Obtiene médico específico con todas sus especialidades
-        Reemplaza funcionalidad de DoctorRepository.get_doctor_with_services()
+        Usa area_funcional para validar que sea médico - CORREGIDO
         """
-        # Verificar que sea médico
-        trabajador = self.get_by_id(trabajador_id)
-        if not trabajador:
-            return None
-        
-        # Verificar que sea tipo médico
-        tipo_query = """
-        SELECT tt.Tipo 
+        # Verificar que sea médico usando area_funcional
+        validate_query = """
+        SELECT 
+            t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+            t.Matricula, t.Especialidad as especialidad_descriptiva,
+            tt.Tipo as tipo_nombre, tt.area_funcional
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE t.id = ?
+        WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
         """
-        tipo_result = self._execute_query(tipo_query, (trabajador_id,), fetch_one=True)
         
-        if not tipo_result or 'Médico' not in tipo_result.get('Tipo', ''):
-            print(f"⚠️ Trabajador {trabajador_id} no es médico")
+        medico = self._execute_query(validate_query, (trabajador_id,), fetch_one=True)
+        
+        if not medico:
+            print(f"⚠️ Trabajador {trabajador_id} no es médico (no tiene área funcional 'MEDICO')")
             return None
+        
+        print(f"✅ Trabajador {trabajador_id} validado como médico - Área: {medico.get('area_funcional')}")
         
         # Obtener especialidades asignadas
         especialidades_query = """
         SELECT 
-            e.id,
-            e.Nombre,
-            e.Detalles,
-            e.Precio_Normal,
-            e.Precio_Emergencia,
-            te.Es_Principal,
-            te.Fecha_Asignacion
+            e.id, e.Nombre, e.Detalles,
+            e.Precio_Normal, e.Precio_Emergencia,
+            te.Es_Principal, te.Fecha_Asignacion
         FROM Trabajador_Especialidad te
         INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE te.Id_Trabajador = ?
@@ -641,23 +643,23 @@ class TrabajadorRepository(BaseRepository):
         """
         
         especialidades = self._execute_query(especialidades_query, (trabajador_id,))
-        trabajador['especialidades'] = especialidades
-        trabajador['total_especialidades'] = len(especialidades)
+        medico['especialidades'] = especialidades
+        medico['total_especialidades'] = len(especialidades)
         
         # Calcular estadísticas de precios
         if especialidades:
             precios_normales = [float(e['Precio_Normal']) for e in especialidades]
             precios_emergencia = [float(e['Precio_Emergencia']) for e in especialidades]
             
-            trabajador['precio_min_normal'] = min(precios_normales)
-            trabajador['precio_max_normal'] = max(precios_normales)
-            trabajador['precio_promedio_normal'] = sum(precios_normales) / len(precios_normales)
+            medico['precio_min_normal'] = min(precios_normales)
+            medico['precio_max_normal'] = max(precios_normales)
+            medico['precio_promedio_normal'] = sum(precios_normales) / len(precios_normales)
             
-            trabajador['precio_min_emergencia'] = min(precios_emergencia)
-            trabajador['precio_max_emergencia'] = max(precios_emergencia)
-            trabajador['precio_promedio_emergencia'] = sum(precios_emergencia) / len(precios_emergencia)
+            medico['precio_min_emergencia'] = min(precios_emergencia)
+            medico['precio_max_emergencia'] = max(precios_emergencia)
+            medico['precio_promedio_emergencia'] = sum(precios_emergencia) / len(precios_emergencia)
         
-        return trabajador
+        return medico
     
     def get_medicos_por_especialidad(self, especialidad_id: int) -> List[Dict[str, Any]]:
         """
@@ -680,23 +682,34 @@ class TrabajadorRepository(BaseRepository):
         return self._execute_query(query, (especialidad_id,))
     
     def asignar_especialidad(self, trabajador_id: int, especialidad_id: int, 
-                            es_principal: bool = False) -> bool:
+                        es_principal: bool = False) -> bool:
         """
         Asigna una especialidad a un médico
         
         Args:
-            trabajador_id: ID del trabajador (debe ser médico)
+            trabajador_id: ID del trabajador (debe ser médico con area_funcional='MEDICO')
             especialidad_id: ID de la especialidad a asignar
             es_principal: Si es la especialidad principal del médico
             
         Returns:
             True si se asignó correctamente
         """
-        # Validar que el trabajador existe y es médico
-        trabajador = self.get_medico_con_especialidades(trabajador_id)
-        if not trabajador:
+        # Validar que el trabajador existe y es médico usando área funcional
+        validate_query = """
+        SELECT COUNT(*) as count
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
+        """
+        
+        validation_result = self._execute_query(validate_query, (trabajador_id,), fetch_one=True)
+        
+        if not validation_result or validation_result['count'] == 0:
+            print(f"⚠️ Trabajador {trabajador_id} no es médico (validación por área funcional)")
             raise ValidationError("trabajador_id", trabajador_id, 
                                 "Trabajador no encontrado o no es médico")
+        
+        print(f"✅ Trabajador {trabajador_id} validado como médico para asignar especialidad")
         
         # Validar que la especialidad existe
         esp_query = "SELECT id FROM Especialidad WHERE id = ?"
@@ -711,8 +724,8 @@ class TrabajadorRepository(BaseRepository):
         WHERE Id_Trabajador = ? AND Id_Especialidad = ?
         """
         already_assigned = self._execute_query(check_query, 
-                                              (trabajador_id, especialidad_id), 
-                                              fetch_one=True)
+                                            (trabajador_id, especialidad_id), 
+                                            fetch_one=True)
         
         if already_assigned:
             print(f"⚠️ Especialidad {especialidad_id} ya está asignada al trabajador {trabajador_id}")
@@ -733,8 +746,8 @@ class TrabajadorRepository(BaseRepository):
         VALUES (?, ?, ?)
         """
         affected = self._execute_query(insert_query, 
-                                      (trabajador_id, especialidad_id, 1 if es_principal else 0),
-                                      fetch_all=False, use_cache=False)
+                                    (trabajador_id, especialidad_id, 1 if es_principal else 0),
+                                    fetch_all=False, use_cache=False)
         
         success = affected > 0
         if success:
@@ -773,7 +786,7 @@ class TrabajadorRepository(BaseRepository):
     def search_medicos(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Búsqueda de médicos por nombre, apellidos o matrícula
-        Reemplaza funcionalidad de DoctorRepository.search_doctors()
+        Usa area_funcional para filtrar solo médicos - CORREGIDO
         """
         if not search_term or len(search_term.strip()) < 2:
             return []
@@ -794,10 +807,10 @@ class TrabajadorRepository(BaseRepository):
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
         WHERE tt.area_funcional = 'MEDICO'
-          AND (t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? OR t.Apellido_Materno LIKE ? 
-               OR t.Matricula LIKE ? OR t.Especialidad LIKE ?)
+        AND (t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? OR t.Apellido_Materno LIKE ? 
+            OR t.Matricula LIKE ? OR t.Especialidad LIKE ?)
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
-                 t.Matricula, t.Especialidad, tt.Tipo
+                t.Matricula, t.Especialidad, tt.Tipo
         ORDER BY t.Nombre, t.Apellido_Paterno
         """
         

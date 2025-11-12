@@ -1559,17 +1559,19 @@ class GeneradorReportesPDF:
             return ["Continuar monitoreando la situación financiera de la institución."]
 
     # ============================================
-    # MÉTODOS PARA ARQUEO DE CAJA
+    # MÉTODOS PARA ARQUEO DE CAJA - MEJORADOS
     # ============================================
 
     def _crear_arqueo_caja_completo(self, datos, fecha_desde, fecha_hasta):
-        """Crea arqueo de caja con estructura mejorada"""
+        """
+        ✅ MEJORADO: Crea arqueo de caja con estructura detallada completa
+        """
         elementos = []
         
         try:
             print("📄 Iniciando creación de arqueo completo...")
             
-            # ✅ VALIDAR QUE datos NO SEA None O VACÍO
+            # ✅ VALIDAR DATOS
             if not datos:
                 print("❌ Datos de arqueo vacíos o None")
                 return [self._crear_mensaje_error()]
@@ -1577,16 +1579,14 @@ class GeneradorReportesPDF:
             # 1. TÍTULO
             elementos.extend(self._crear_titulo_arqueo_caja(fecha_desde))
             
-            # 2. EXTRAER DATOS SEGÚN ESTRUCTURA CON VALIDACIÓN
+            # 2. EXTRAER DATOS
             if isinstance(datos, dict):
                 movimientos = datos.get('movimientos_completos', [])
                 
-                # ✅ VALIDAR QUE movimientos SEA LISTA
                 if not isinstance(movimientos, list):
                     print(f"⚠️ movimientos_completos no es lista: {type(movimientos)}")
                     movimientos = []
                 
-                # ✅ EXTRAER RESUMEN CON VALORES POR DEFECTO
                 resumen = {
                     'total_ingresos': float(datos.get('total_ingresos', 0)),
                     'total_egresos': float(datos.get('total_egresos', 0)),
@@ -1597,45 +1597,49 @@ class GeneradorReportesPDF:
                 
                 hora_inicio = str(datos.get('hora_inicio', '08:00'))
                 hora_fin = str(datos.get('hora_fin', '18:00'))
+                responsable = datos.get('responsable', 'Sistema CMI')
                 
             elif isinstance(datos, list):
-                # Datos vienen como lista simple (fallback)
                 movimientos = datos
                 resumen = self._calcular_resumen_desde_movimientos(movimientos)
                 hora_inicio = '08:00'
                 hora_fin = '18:00'
+                responsable = 'Sistema CMI'
             else:
                 print(f"❌ Tipo de datos inesperado: {type(datos)}")
                 return [self._crear_mensaje_error()]
             
             print(f"📊 Movimientos a procesar: {len(movimientos)}")
             
-            # ✅ VALIDAR QUE HAYA MOVIMIENTOS
             if len(movimientos) == 0:
                 print("⚠️ No hay movimientos para procesar")
                 elementos.append(self._crear_mensaje_sin_movimientos())
                 return elementos
             
             # 3. INFO DEL CIERRE
-            try:
-                elementos.extend(self._crear_info_cierre_arqueo_mejorada(
-                    fecha_desde, hora_inicio, hora_fin, resumen
-                ))
+            elementos.extend(self._crear_info_cierre_arqueo_mejorada(
+                fecha_desde, hora_inicio, hora_fin, resumen
+            ))
+            elementos.append(Spacer(1, 6*mm))
+            
+            # 4. ✅ NUEVO: DESGLOSE DETALLADO DE INGRESOS
+            ingresos = [m for m in movimientos if m.get('tipo') == 'INGRESO']
+            if ingresos:
+                elementos.extend(self._crear_desglose_ingresos_detallado(ingresos))
                 elementos.append(Spacer(1, 6*mm))
-            except Exception as info_error:
-                print(f"⚠️ Error creando info cierre: {info_error}")
-                # Continuar sin info cierre
             
-            # 4. RESUMEN FINAL
-            try:
-                elementos.extend(self._crear_resumen_arqueo_fisico_mejorado(resumen))
-            except Exception as e:
-                print(f"⚠️ Error resumen final: {e}")
+            # 5. ✅ NUEVO: DESGLOSE DETALLADO DE EGRESOS
+            egresos = [m for m in movimientos if m.get('tipo') == 'EGRESO']
+            if egresos:
+                elementos.extend(self._crear_desglose_egresos_detallado(egresos))
+                elementos.append(Spacer(1, 6*mm))
             
-            # ✅ VALIDAR QUE HAYA ELEMENTOS PARA EL PDF
-            if len(elementos) == 0:
-                print("❌ No se crearon elementos para el PDF")
-                return [self._crear_mensaje_error()]
+            # 6. RESUMEN FINAL
+            elementos.extend(self._crear_resumen_arqueo_fisico_mejorado(resumen))
+            elementos.append(Spacer(1, 6*mm))
+            
+            # 7. ✅ NUEVO: SECCIÓN DE FIRMAS
+            elementos.extend(self._crear_seccion_firmas(responsable))
             
             print("✅ Arqueo completo creado exitosamente")
             return elementos
@@ -1645,6 +1649,497 @@ class GeneradorReportesPDF:
             import traceback
             traceback.print_exc()
             return [self._crear_mensaje_error()]
+
+    def _crear_desglose_ingresos_detallado(self, ingresos: List[Dict]) -> List:
+        """
+        ✅ NUEVO: Crea desglose detallado de ingresos por categoría
+        """
+        elementos = []
+        
+        try:
+            styles = getSampleStyleSheet()
+            titulo_style = ParagraphStyle(
+                'TituloSeccion',
+                parent=styles['Normal'],
+                fontSize=14,
+                fontName='Helvetica-Bold',
+                textColor=COLOR_VERDE_POSITIVO,
+                spaceAfter=8,
+                spaceBefore=4
+            )
+            
+            elementos.append(Paragraph("💰 DETALLE DE INGRESOS DEL DÍA", titulo_style))
+            
+            # Agrupar por categoría
+            categorias = {
+                'FARMACIA': [],
+                'CONSULTA': [],
+                'LABORATORIO': [],
+                'ENFERMERIA': [],
+                'INGRESOS EXTRAS': []
+            }
+            
+            for ingreso in ingresos:
+                categoria = ingreso.get('categoria', 'OTROS')
+                if categoria in categorias:
+                    categorias[categoria].append(ingreso)
+            
+            # Crear tabla para cada categoría con movimientos
+            for categoria, items in categorias.items():
+                if not items:
+                    continue
+                
+                # Subtítulo de categoría
+                subtitulo_style = ParagraphStyle(
+                    'SubtituloCategoria',
+                    parent=styles['Normal'],
+                    fontSize=11,
+                    fontName='Helvetica-Bold',
+                    textColor=COLOR_AZUL_PRINCIPAL,
+                    spaceAfter=4,
+                    spaceBefore=6
+                )
+                
+                icono = {
+                    'FARMACIA': '💊',
+                    'CONSULTA': '🩺',
+                    'LABORATORIO': '🔬',
+                    'ENFERMERIA': '🩹',
+                    'INGRESOS EXTRAS': '💵'
+                }.get(categoria, '📋')
+                
+                elementos.append(Paragraph(f"{icono} {categoria}", subtitulo_style))
+                
+                # ✅ TABLA ESPECIAL PARA FARMACIA
+                if categoria == 'FARMACIA':
+                    tabla_data = [["HORA", "PRODUCTOS VENDIDOS", "IMPORTE"]]
+                    
+                    total_categoria = 0
+                    for item in items:
+                        # Extraer hora
+                        fecha_completa = item.get('fecha', '')
+                        try:
+                            if isinstance(fecha_completa, str) and len(fecha_completa) > 10:
+                                partes = fecha_completa.split()
+                                if len(partes) >= 2:
+                                    hora = partes[1].split(':')[0] + ':' + partes[1].split(':')[1]
+                                else:
+                                    hora = fecha_completa[:5]
+                            else:
+                                hora = str(fecha_completa)[:5]
+                        except:
+                            hora = "-"
+                        
+                        # ✅ USAR PRODUCTOS EN LUGAR DE DESCRIPCIÓN GENÉRICA
+                        productos = item.get('productos', item.get('descripcion', 'Productos varios'))
+                        valor = float(item.get('valor', 0))
+                        
+                        # Formatear productos (cada producto en una línea)
+                        productos_formateados = productos.replace('; ', '<br/>- ') if productos else '-'
+                        if productos_formateados and not productos_formateados.startswith('-'):
+                            productos_formateados = '- ' + productos_formateados
+                        
+                        tabla_data.append([
+                            hora,
+                            Paragraph(productos_formateados, ParagraphStyle(
+                                'ProductosFarmacia',
+                                parent=styles['Normal'],
+                                fontSize=7,
+                                leading=9
+                            )),
+                            FormatUtils.formato_moneda(valor)
+                        ])
+                        
+                        total_categoria += valor
+                    
+                    # Fila de subtotal
+                    tabla_data.append([
+                        "", 
+                        f"SUBTOTAL {categoria}",
+                        FormatUtils.formato_moneda(total_categoria)
+                    ])
+                    
+                    # Crear tabla con anchos ajustados para farmacia
+                    tabla = Table(
+                        tabla_data,
+                        colWidths=[20*mm, 120*mm, 30*mm],  # Más espacio para productos
+                        repeatRows=1
+                    )
+                
+                else:
+                    # ✅ TABLA NORMAL PARA OTRAS CATEGORÍAS
+                    tabla_data = [["HORA", "DESCRIPCIÓN", "IMPORTE"]]
+                    
+                    total_categoria = 0
+                    for item in items:
+                        # Extraer hora
+                        fecha_completa = item.get('fecha', '')
+                        try:
+                            if isinstance(fecha_completa, str) and len(fecha_completa) > 10:
+                                partes = fecha_completa.split()
+                                if len(partes) >= 2:
+                                    hora = partes[1].split(':')[0] + ':' + partes[1].split(':')[1]
+                                else:
+                                    hora = fecha_completa[:5]
+                            else:
+                                hora = str(fecha_completa)[:5]
+                        except:
+                            hora = "-"
+                        
+                        descripcion = item.get('descripcion', 'Sin descripción')[:60]
+                        valor = float(item.get('valor', 0))
+                        
+                        tabla_data.append([
+                            hora,
+                            descripcion,
+                            FormatUtils.formato_moneda(valor)
+                        ])
+                        
+                        total_categoria += valor
+                    
+                    # Fila de subtotal
+                    tabla_data.append([
+                        "", 
+                        f"SUBTOTAL {categoria}",
+                        FormatUtils.formato_moneda(total_categoria)
+                    ])
+                    
+                    # Crear tabla con 3 columnas
+                    tabla = Table(
+                        tabla_data,
+                        colWidths=[20*mm, 100*mm, 30*mm],  # Más espacio para descripción
+                        repeatRows=1
+                    )
+                
+                # Estilos comunes para ambas tablas
+                estilos_tabla = [
+                    ('BACKGROUND', (0, 0), (-1, 0), COLOR_VERDE_POSITIVO),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    
+                    # Datos
+                    ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -2), 7),
+                    ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'),  # Última columna (importe) a la derecha
+                    
+                    # Subtotal
+                    ('BACKGROUND', (0, -1), (-1, -1), COLOR_GRIS_CLARO),
+                    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, -1), (-1, -1), 8),
+                    ('SPAN', (0, -1), (-2, -1)) if categoria == 'FARMACIA' else ('SPAN', (0, -1), (2, -1)),
+                    
+                    ('GRID', (0, 0), (-1, -2), 0.5, colors.grey),
+                    ('LINEBELOW', (0, -1), (-1, -1), 1, COLOR_VERDE_POSITIVO),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
+                    
+                    ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ]
+                
+                tabla.setStyle(TableStyle(estilos_tabla))
+                elementos.append(tabla)
+                elementos.append(Spacer(1, 3*mm))
+
+            return elementos
+            
+        except Exception as e:
+            print(f"❌ Error creando desglose de ingresos: {e}")
+            return []
+
+    def _crear_desglose_egresos_detallado(self, egresos: List[Dict]) -> List:
+        """
+        ✅ MEJORADO: Crea desglose detallado de egresos separando compras y gastos
+        """
+        elementos = []
+        
+        try:
+            styles = getSampleStyleSheet()
+            titulo_style = ParagraphStyle(
+                'TituloSeccion',
+                parent=styles['Normal'],
+                fontSize=14,
+                fontName='Helvetica-Bold',
+                textColor=COLOR_NARANJA_EGRESO,
+                spaceAfter=8,
+                spaceBefore=4
+            )
+            
+            elementos.append(Paragraph("💸 DETALLE DE EGRESOS DEL DÍA", titulo_style))
+            
+            # ✅ SEPARAR COMPRAS Y GASTOS
+            compras = [e for e in egresos if e.get('tipo_gasto') == 'COMPRAS DE FARMACIA']
+            gastos = [e for e in egresos if e.get('tipo_gasto') != 'COMPRAS DE FARMACIA']
+            
+            # ✅ 1. COMPRAS DE FARMACIA (si hay)
+            if compras:
+                subtitulo_style = ParagraphStyle(
+                    'SubtituloCompras',
+                    parent=styles['Normal'],
+                    fontSize=11,
+                    fontName='Helvetica-Bold',
+                    textColor=COLOR_AZUL_PRINCIPAL,
+                    spaceAfter=4,
+                    spaceBefore=6
+                )
+                
+                elementos.append(Paragraph("📦 COMPRAS DE FARMACIA", subtitulo_style))
+                
+                tabla_data = [["HORA", "PROVEEDOR", "PRODUCTOS", "IMPORTE"]]
+                
+                total_compras = 0
+                for item in compras:
+                    # Extraer hora
+                    fecha_completa = item.get('fecha', '')
+                    try:
+                        if isinstance(fecha_completa, str) and len(fecha_completa) > 10:
+                            partes = fecha_completa.split()
+                            if len(partes) >= 2:
+                                hora = partes[1].split(':')[0] + ':' + partes[1].split(':')[1]
+                            else:
+                                hora = fecha_completa[:5]
+                        else:
+                            hora = str(fecha_completa)[:5]
+                    except:
+                        hora = "-"
+                    
+                    proveedor = item.get('proveedor', 'Sin proveedor')[:30]
+                    productos = item.get('productos', item.get('descripcion', 'Productos varios'))
+                    valor = abs(float(item.get('valor', 0)))
+                    
+                    # Formatear productos
+                    productos_formateados = productos.replace('; ', '<br/>- ') if productos else '-'
+                    if productos_formateados and not productos_formateados.startswith('-'):
+                        productos_formateados = '- ' + productos_formateados
+                    
+                    tabla_data.append([
+                        hora,
+                        proveedor,
+                        Paragraph(productos_formateados, ParagraphStyle(
+                            'ProductosCompra',
+                            parent=styles['Normal'],
+                            fontSize=7,
+                            leading=9
+                        )),
+                        FormatUtils.formato_moneda(valor)
+                    ])
+                    
+                    total_compras += valor
+                
+                # Subtotal compras
+                tabla_data.append([
+                    "", 
+                    "TOTAL COMPRAS FARMACIA",
+                    "",
+                    FormatUtils.formato_moneda(total_compras)
+                ])
+                
+                tabla = Table(
+                    tabla_data,
+                    colWidths=[15*mm, 40*mm, 90*mm, 25*mm],
+                    repeatRows=1
+                )
+                
+                estilos_tabla = [
+                    ('BACKGROUND', (0, 0), (-1, 0), COLOR_NARANJA_EGRESO),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    
+                    ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -2), 7),
+                    ('ALIGN', (3, 1), (3, -1), 'RIGHT'),
+                    
+                    ('BACKGROUND', (0, -1), (-1, -1), COLOR_GRIS_CLARO),
+                    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, -1), (-1, -1), 8),
+                    ('SPAN', (0, -1), (2, -1)),
+                    
+                    ('GRID', (0, 0), (-1, -2), 0.5, colors.grey),
+                    ('LINEBELOW', (0, -1), (-1, -1), 1, COLOR_NARANJA_EGRESO),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
+                    
+                    ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ]
+                
+                tabla.setStyle(TableStyle(estilos_tabla))
+                elementos.append(tabla)
+                elementos.append(Spacer(1, 5*mm))
+            
+            # ✅ 2. OTROS GASTOS
+            if gastos:
+                # Agrupar gastos por tipo
+                tipos_gasto = {}
+                for gasto in gastos:
+                    # Extraer el tipo de gasto de la descripción (antes del " - ")
+                    descripcion = gasto.get('descripcion', 'GASTO')
+                    tipo = descripcion.split(' - ')[0] if ' - ' in descripcion else 'GASTO'
+                    
+                    if tipo not in tipos_gasto:
+                        tipos_gasto[tipo] = []
+                    tipos_gasto[tipo].append(gasto)
+                
+                for tipo_gasto, items in tipos_gasto.items():
+                    subtitulo_style = ParagraphStyle(
+                        'SubtituloGasto',
+                        parent=styles['Normal'],
+                        fontSize=11,
+                        fontName='Helvetica-Bold',
+                        textColor=COLOR_AZUL_PRINCIPAL,
+                        spaceAfter=4,
+                        spaceBefore=6
+                    )
+                    
+                    elementos.append(Paragraph(f"💸 {tipo_gasto}", subtitulo_style))
+                    
+                    tabla_data = [["HORA", "CONCEPTO", "PROVEEDOR", "DETALLE", "IMPORTE"]]
+                    
+                    total_tipo = 0
+                    for item in items:
+                        # Extraer hora
+                        fecha_completa = item.get('fecha', '')
+                        try:
+                            if isinstance(fecha_completa, str) and len(fecha_completa) > 10:
+                                partes = fecha_completa.split()
+                                if len(partes) >= 2:
+                                    hora = partes[1].split(':')[0] + ':' + partes[1].split(':')[1]
+                                else:
+                                    hora = fecha_completa[:5]
+                            else:
+                                hora = str(fecha_completa)[:5]
+                        except:
+                            hora = "-"
+                        
+                        descripcion = item.get('descripcion', 'Sin descripción')
+                        partes_desc = descripcion.split(' - ')
+                        concepto = partes_desc[0][:30] if partes_desc else descripcion[:30]
+                        detalle = partes_desc[1][:40] if len(partes_desc) > 1 else '-'
+                        
+                        proveedor = item.get('proveedor', 'N/A')[:25]
+                        valor = abs(float(item.get('valor', 0)))
+                        
+                        tabla_data.append([
+                            hora,
+                            concepto,
+                            proveedor,
+                            detalle,
+                            FormatUtils.formato_moneda(valor)
+                        ])
+                        
+                        total_tipo += valor
+                    
+                    # Subtotal
+                    tabla_data.append([
+                        "", 
+                        f"SUBTOTAL {tipo_gasto}",
+                        "",
+                        "",
+                        FormatUtils.formato_moneda(total_tipo)
+                    ])
+                    
+                    tabla = Table(
+                        tabla_data,
+                        colWidths=[15*mm, 40*mm, 35*mm, 55*mm, 25*mm],
+                        repeatRows=1
+                    )
+                    
+                    estilos_tabla = [
+                        ('BACKGROUND', (0, 0), (-1, 0), COLOR_NARANJA_EGRESO),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 8),
+                        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                        
+                        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+                        ('FONTSIZE', (0, 1), (-1, -2), 7),
+                        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),
+                        
+                        ('BACKGROUND', (0, -1), (-1, -1), COLOR_GRIS_CLARO),
+                        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, -1), (-1, -1), 8),
+                        ('SPAN', (0, -1), (3, -1)),
+                        
+                        ('GRID', (0, 0), (-1, -2), 0.5, colors.grey),
+                        ('LINEBELOW', (0, -1), (-1, -1), 1, COLOR_NARANJA_EGRESO),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, COLOR_GRIS_CLARO]),
+                        
+                        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                        ('TOPPADDING', (0, 0), (-1, -1), 4),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ]
+                    
+                    tabla.setStyle(TableStyle(estilos_tabla))
+                    elementos.append(tabla)
+                    elementos.append(Spacer(1, 3*mm))
+            
+            return elementos
+            
+        except Exception as e:
+            print(f"❌ Error creando desglose de egresos: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def _crear_seccion_firmas(self, responsable: str = "Sistema") -> List:
+        """
+        ✅ CORREGIDO: Crea sección de firmas usando el usuario autenticado
+        """
+        elementos = []
+        
+        try:
+            elementos.append(Spacer(1, 15*mm))
+            
+            # ✅ USAR EL USUARIO RESPONSABLE ESTABLECIDO (NO el parámetro por defecto)
+            nombre_responsable = self._usuario_responsable_nombre if self._usuario_responsable_nombre else "Sistema"
+            
+            # ✅ ACORTAR NOMBRE SI ES MUY LARGO
+            if len(nombre_responsable) > 25:
+                nombre_responsable = nombre_responsable[:25] + "..."
+            
+            # Tabla de firmas
+            firmas_data = [
+                ["", ""],
+                ["_" * 40, "_" * 40],
+                ["RESPONSABLE DE CAJA", "ADMINISTRADOR"],
+                [nombre_responsable, ""]  # ✅ AQUÍ SE USA EL NOMBRE REAL
+            ]
+            
+            tabla_firmas = Table(
+                firmas_data,
+                colWidths=[85*mm, 85*mm],
+                rowHeights=[10*mm, 3*mm, 8*mm, 6*mm]
+            )
+            
+            estilos_firmas = [
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+                ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 2), (-1, 2), 9),
+                ('FONTNAME', (0, 3), (-1, 3), 'Helvetica'),
+                ('FONTSIZE', (0, 3), (-1, 3), 8),
+                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_AZUL_PRINCIPAL),
+                ('LINEABOVE', (0, 1), (-1, 1), 1, colors.black),
+            ]
+            
+            tabla_firmas.setStyle(TableStyle(estilos_firmas))
+            elementos.append(tabla_firmas)
+            
+            return elementos
+            
+        except Exception as e:
+            print(f"❌ Error creando sección de firmas: {e}")
+            return []
 
     def _crear_titulo_arqueo_caja(self, fecha):
         """Título específico para arqueo de caja"""
@@ -1669,17 +2164,25 @@ class GeneradorReportesPDF:
         ]
 
     def _crear_info_cierre_arqueo_mejorada(self, fecha: str, hora_inicio: str, 
-                                       hora_fin: str, resumen: Dict) -> List:
-        """Info del cierre con datos del resumen"""
+                                   hora_fin: str, resumen: Dict) -> List:
+        """Info del cierre con datos del resumen - ✅ CORREGIDO: Evita texto cortado"""
         try:
+            # ✅ USAR EL USUARIO RESPONSABLE ESTABLECIDO (nombre más corto si es necesario)
+            responsable = self._usuario_responsable_nombre if self._usuario_responsable_nombre else "Sistema"
+            
+            # ✅ ACORTAR NOMBRE SI ES MUY LARGO PARA EVITAR CORTES
+            if len(responsable) > 20:
+                responsable = responsable[:20] + "..."
+            
             info_data = [
                 ["Fecha:", fecha, "Hora Inicio:", hora_inicio],
-                ["Responsable:", "Sistema CMI", "Hora Fin:", hora_fin],
+                ["Responsable:", responsable, "Hora Fin:", hora_fin],  # ✅ NOMBRE ACORTADO
                 ["Total Ingresos:", FormatUtils.formato_moneda(resumen.get('total_ingresos', 0)), 
                 "Total Egresos:", FormatUtils.formato_moneda(resumen.get('total_egresos', 0))]
             ]
             
-            tabla = Table(info_data, colWidths=[30*mm, 35*mm, 30*mm, 35*mm])
+            # ✅ AUMENTAR ANCHOS DE COLUMNAS PARA EVITAR CORTES
+            tabla = Table(info_data, colWidths=[25*mm, 40*mm, 25*mm, 40*mm])
             
             estilos = [
                 ('BACKGROUND', (0, 0), (-1, -1), COLOR_GRIS_CLARO),
@@ -1700,16 +2203,14 @@ class GeneradorReportesPDF:
             return []
 
     def _calcular_resumen_desde_movimientos(self, movimientos: List[Dict]) -> Dict:
-        """Calcula resumen financiero - VERSIÓN VALIDADA"""
+        """Calcula resumen financiero - VERSIÓN MEJORADA"""
         try:
-            # ✅ VALIDAR QUE movimientos SEA LISTA
             if not isinstance(movimientos, list):
-                print(f"❌ movimientos no es lista: {type(movimientos)}")
                 return {
                     'total_ingresos': 0.0,
                     'total_egresos': 0.0,
                     'saldo_teorico': 0.0,
-                    'efectivo_real': 0.0,
+                    'efectivo_real': 0.0,  # ✅ Mantener como 0, se sobreescribirá después
                     'diferencia': 0.0
                 }
             
@@ -1717,37 +2218,29 @@ class GeneradorReportesPDF:
             total_egresos = 0.0
             
             for mov in movimientos:
-                # ✅ VALIDAR QUE mov SEA DICT
                 if not isinstance(mov, dict):
                     continue
                 
                 try:
                     tipo = str(mov.get('tipo', '')).upper()
-                    
-                    # ✅ CONVERTIR valor CON VALIDACIÓN
-                    try:
-                        valor = float(mov.get('valor', 0))
-                    except (ValueError, TypeError):
-                        print(f"⚠️ Valor no numérico: {mov.get('valor')}")
-                        valor = 0.0
+                    valor = float(mov.get('valor', 0))
                     
                     if tipo == 'INGRESO':
                         total_ingresos += abs(valor)
                     elif tipo == 'EGRESO':
                         total_egresos += abs(valor)
-                        
-                except Exception as mov_error:
-                    print(f"⚠️ Error procesando movimiento: {mov_error}")
+                except:
                     continue
             
             saldo_teorico = total_ingresos - total_egresos
             
+            # ✅ NO calcular efectivo_real aquí - se obtendrá de los datos del cierre
             return {
                 'total_ingresos': round(total_ingresos, 2),
                 'total_egresos': round(total_egresos, 2),
                 'saldo_teorico': round(saldo_teorico, 2),
-                'efectivo_real': 0.0,
-                'diferencia': 0.0
+                'efectivo_real': 0.0,  # ✅ Se establecerá desde los datos externos
+                'diferencia': 0.0      # ✅ Se calculará después
             }
             
         except Exception as e:

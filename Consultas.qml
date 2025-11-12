@@ -3087,14 +3087,53 @@ Item {
     function guardarConsulta() {
         console.log("💾 Iniciando guardado de consulta...")
         
-        // 1. Validar paciente
-        if (pacienteSeleccionadoId <= 0) {
-            console.log("❌ Error: Paciente no seleccionado")
-            showNotification("Error", "Debe seleccionar un paciente")
+        // ✅ NUEVA LÓGICA: CREAR PACIENTE SI ES NUEVO
+        var pacienteIdFinal = pacienteSeleccionadoId
+        
+        // Si es un nuevo paciente (no encontrado en búsqueda), crearlo primero
+        if (campoBusquedaPaciente.pacienteNoEncontrado && !campoBusquedaPaciente.pacienteAutocompletado) {
+            console.log("🔄 Creando nuevo paciente antes de guardar consulta...")
+            
+            // Validar datos mínimos del nuevo paciente
+            if (nombrePaciente.text.length < 2 || apellidoPaterno.text.length < 2) {
+                console.log("❌ Error: Datos del paciente incompletos")
+                showNotification("Error", "Nombre y apellido paterno son obligatorios para nuevo paciente")
+                return false
+            }
+            
+            // Llamar al método para crear el paciente
+            pacienteIdFinal = consultaModel.buscar_o_crear_paciente_inteligente(
+                nombrePaciente.text.trim(),
+                apellidoPaterno.text.trim(),
+                apellidoMaterno.text.trim(),
+                cedulaPaciente.text.trim()
+            )
+            
+            console.log("🔍 DEBUG - Resultado creación paciente:", pacienteIdFinal)
+            
+            if (pacienteIdFinal <= 0) {
+                console.log("❌ Error creando paciente")
+                showNotification("Error", "No se pudo crear el paciente. Verifique los datos.")
+                return false
+            }
+            
+            console.log("✅ Nuevo paciente creado con ID:", pacienteIdFinal)
+            
+            // Actualizar el estado para marcar como paciente existente
+            pacienteSeleccionadoId = pacienteIdFinal
+            esPacienteExistente = true
+            campoBusquedaPaciente.pacienteNoEncontrado = false
+            campoBusquedaPaciente.pacienteAutocompletado = true
+        }
+        
+        // ✅ VALIDACIÓN CORREGIDA: Usar pacienteIdFinal en lugar de pacienteSeleccionadoId
+        if (pacienteIdFinal <= 0) {
+            console.log("❌ Error: Paciente no seleccionado o no creado")
+            showNotification("Error", "Debe seleccionar o crear un paciente")
             return false
         }
         
-        // 2. Validar especialidad - CORREGIDO
+        // 2. Validar especialidad
         if (consultationFormDialog.selectedEspecialidadIndex < 0) {
             console.log("❌ Error: Especialidad no seleccionada")
             showNotification("Error", "Debe seleccionar una especialidad")
@@ -3108,7 +3147,7 @@ Item {
             return false
         }
         
-        // 4. Validar detalles - CORREGIDO
+        // 4. Validar detalles
         var detalles = detallesConsulta.text.trim()
         if (detalles.length < 5) {
             console.log("❌ Error: Detalles insuficientes")
@@ -3116,10 +3155,10 @@ Item {
             return false
         }
         
-        // 5. Obtener tipo de consulta - CORREGIDO
+        // 5. Obtener tipo de consulta
         var tipoConsulta = consultationFormDialog.consultationType
         
-        // 6. Obtener ID de especialidad - CORREGIDO
+        // 6. Obtener ID de especialidad
         var especialidadId = -1
         if (consultationFormDialog.selectedEspecialidadIndex >= 0 && consultaModel && consultaModel.especialidades) {
             var especialidadSeleccionada = consultaModel.especialidades[consultationFormDialog.selectedEspecialidadIndex]
@@ -3127,8 +3166,8 @@ Item {
             console.log("🏥 Especialidad seleccionada ID:", especialidadId)
         }
         
-        console.log("📝 Datos de la consulta:")
-        console.log("   - Paciente ID:", pacienteSeleccionadoId)
+        console.log("📝 Datos finales de la consulta:")
+        console.log("   - Paciente ID:", pacienteIdFinal)
         console.log("   - Especialidad ID:", especialidadId)
         console.log("   - Médico ID:", medicoSeleccionadoId)
         console.log("   - Tipo:", tipoConsulta)
@@ -3138,7 +3177,7 @@ Item {
         // 7. Llamar al método del modelo
         var exito = consultaModel.crear_consulta_completa(
             appController.usuario_actual_id,
-            pacienteSeleccionadoId,
+            pacienteIdFinal,  // ✅ USAR pacienteIdFinal CORREGIDO
             especialidadId,
             medicoSeleccionadoId,
             detalles,
