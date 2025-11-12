@@ -792,89 +792,10 @@ class CierreCajaModel(QObject):
         return True
 
     def _generar_pdf_arqueo(self, movimientos: List[Dict], datos_cierre: Dict) -> Tuple[bool, str]:
-        """Genera el PDF del arqueo de caja - VERSIÃ“N CORREGIDA SIN sys.path"""
-        try:
-            # âœ… IMPORT CORRECTO SIN MODIFICAR sys.path
-            try:
-                from generar_pdf import GeneradorReportesPDF
-            except ImportError:
-                # âœ… Si falla, intentar ruta relativa
-                try:
-                    from ..generar_pdf import GeneradorReportesPDF
-                except ImportError:
-                    error_msg = "No se pudo importar GeneradorReportesPDF"
-                    print(f"âŒ {error_msg}")
-                    return False, error_msg
-            
-            import json
-            
-            print("âœ… GeneradorReportesPDF importado correctamente")
-            
-            # Crear instancia del generador
-            generador = GeneradorReportesPDF()
-            
-            # âœ… Validar que movimientos no estÃ© vacÃ­o
-            if not movimientos or len(movimientos) == 0:
-                print("âš ï¸ No hay movimientos para generar PDF")
-                return False, "No hay datos de movimientos para generar el PDF"
-            
-            # âœ… Calcular diferencia explÃ­citamente
-            saldo_teorico = datos_cierre.get('resumen', {}).get('saldo_teorico', 0)
-            diferencia_calculada = round(self._efectivo_real - saldo_teorico, 2)
-            
-            # Preparar datos completos para el PDF
-            datos_pdf = {
-                'movimientos_completos': movimientos,
-                'fecha': self._fecha_actual,
-                'hora_inicio': self._hora_inicio,
-                'hora_fin': self._hora_fin,
-                'hora_generacion': datetime.now().strftime("%H:%M:%S"),
-                'responsable': 'Sistema',
-                'numero_arqueo': f"ARQ-{datetime.now().strftime('%Y%m%d-%H%M')}",
-                'estado': 'COMPLETADO',
-                
-                # Resumen financiero
-                'total_ingresos': datos_cierre.get('resumen', {}).get('total_ingresos', 0),
-                'total_egresos': datos_cierre.get('resumen', {}).get('total_egresos', 0),
-                'saldo_teorico': saldo_teorico,
-                'efectivo_real': self._efectivo_real,
-                'diferencia': diferencia_calculada
-            }
-            
-            # Convertir a JSON
-            datos_json = json.dumps(datos_pdf, ensure_ascii=False, default=str)
-            
-            print(f" Llamando a generar_reporte_pdf con tipo 9 (Arqueo)")
-            
-            # âœ… LLAMAR AL GENERADOR
-            filepath = generador.generar_reporte_pdf(
-                datos_json,
-                "9",
-                self._fecha_actual,
-                self._fecha_actual
-            )
-            
-            # âœ… VALIDAR RESULTADO
-            if filepath and os.path.exists(filepath):
-                print(f"âœ… PDF generado exitosamente: {filepath}")
-                return True, filepath
-            else:
-                print("âš ï¸ PDF no generado o archivo no existe")
-                return False, "No se pudo generar el archivo PDF"
-                
-        except ImportError as e:
-            error_msg = f"Error importando generador PDF: {str(e)}"
-            print(f"âŒ {error_msg}")
-            import traceback
-            traceback.print_exc()
-            return False, error_msg
-            
-        except Exception as e:
-            error_msg = f"Error generando PDF: {str(e)}"
-            print(f"âŒ {error_msg}")
-            import traceback
-            traceback.print_exc()
-            return False, error_msg
+        """Alias para compatibilidad - usa el método mejorado"""
+        usuario_nombre = getattr(self, '_usuario_actual_nombre', 'Sistema')
+        usuario_rol = getattr(self, '_usuario_actual_rol', 'Usuario')
+        return self._generar_pdf_arqueo_con_responsable(movimientos, datos_cierre, usuario_nombre, usuario_rol)
         
     def _abrir_pdf_automaticamente(self, filepath: str):
         """Abre el PDF generado automÃ¡ticamente en el navegador"""
