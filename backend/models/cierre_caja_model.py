@@ -147,50 +147,68 @@ class CierreCajaModel(QObject):
         """Establece referencia al AppController para generaciÃ³n de PDFs"""
         self._app_controller = app_controller
         print("ðŸ”— AppController conectado para PDFs")
-
+    
+    def get_ultimo_cierre_general(self) -> Optional[Dict[str, Any]]:
+        """
+        ✅ Obtiene el ÚLTIMO cierre registrado en el sistema (de cualquier fecha)
+        """
+        try:
+            return self.repository.get_ultimo_cierre_general()
+        except Exception as e:
+            print(f"❌ Error en get_ultimo_cierre_general: {e}")
+            return None
     @Slot()
     def inicializarCamposAutomaticamente(self):
         """
-        âœ… FUNCIONALIDAD #1: Auto-gestiÃ³n inteligente de horarios
-        Inicializa fecha y horas automÃ¡ticamente al abrir el mÃ³dulo
+        ✅ FUNCIONALIDAD MEJORADA: Auto-gestión inteligente de horarios
+        Inicializa fecha y horas automáticamente al abrir el módulo
         """
         try:
-            print("ðŸ• Inicializando campos automÃ¡ticamente...")
+            print("🔄 Inicializando campos automáticamente...")
             
             # 1. FECHA ACTUAL (siempre HOY)
             fecha_hoy = datetime.now().strftime("%d/%m/%Y")
             self._fecha_actual = fecha_hoy
             self.fechaActualChanged.emit()
-            print(f"   ðŸ“… Fecha establecida: {fecha_hoy}")
+            print(f"   📅 Fecha establecida: {fecha_hoy}")
             
             # 2. HORA FIN (hora actual del sistema)
             hora_actual = datetime.now().strftime("%H:%M")
             self._hora_fin = hora_actual
             self.horaFinChanged.emit()
-            print(f"   ðŸ• Hora fin establecida: {hora_actual}")
+            print(f"   🕐 Hora fin establecida: {hora_actual}")
             
-            # 3. HORA INICIO (inteligente: buscar Ãºltimo cierre del dÃ­a)
-            ultimo_cierre = self.repository.get_ultimo_cierre_del_dia(fecha_hoy)
+            # ✅ CORRECCIÓN MEJORADA: Buscar el ÚLTIMO cierre de TODOS los días, no solo de hoy
+            ultimo_cierre = self.repository.get_ultimo_cierre_general()
             
             if ultimo_cierre and ultimo_cierre.get('HoraFin'):
-                # Usar la hora fin del Ãºltimo cierre como hora inicio del nuevo
+                # Usar la hora fin del último cierre como hora inicio del nuevo
                 hora_inicio_auto = self._formatear_hora_limpia(ultimo_cierre['HoraFin'])
                 self._hora_inicio = hora_inicio_auto
-                print(f"   âœ… Hora inicio auto-detectada del Ãºltimo cierre: {hora_inicio_auto}")
+                
+                # ✅ Si el último cierre fue de un día diferente, usar esa fecha
+                fecha_ultimo_cierre = ultimo_cierre.get('Fecha')
+                if fecha_ultimo_cierre and fecha_ultimo_cierre != fecha_hoy:
+                    # Convertir fecha de BD a formato DD/MM/YYYY si es necesario
+                    fecha_ultimo_formateada = self._convertir_fecha_visual(fecha_ultimo_cierre)
+                    print(f"   🔄 Último cierre fue el {fecha_ultimo_formateada}, usando esa fecha como referencia")
+                    # Podríamos considerar ajustar la fecha aquí si es necesario
+                else:
+                    print(f"   ✅ Hora inicio auto-detectada del último cierre: {hora_inicio_auto}")
             else:
-                # No hay cierre previo hoy, usar hora por defecto
+                # No hay cierre previo, usar hora por defecto
                 self._hora_inicio = "08:00"
-                print(f"   â„¹ï¸ Hora inicio por defecto (sin cierre previo): 08:00")
+                print(f"   ℹ️ Hora inicio por defecto (sin cierre previo): 08:00")
             
             self.horaInicioChanged.emit()
             
-            # Emitir seÃ±al de Ã©xito
-            self.operacionExitosa.emit("Campos inicializados automÃ¡ticamente")
-            print("âœ… InicializaciÃ³n automÃ¡tica completada")
+            # Emitir señal de éxito
+            self.operacionExitosa.emit("Campos inicializados automáticamente")
+            print("✅ Inicialización automática completada")
             
         except Exception as e:
             error_msg = f"Error inicializando campos: {str(e)}"
-            print(f"âŒ {error_msg}")
+            print(f"❌ {error_msg}")
             self.operacionError.emit(error_msg)
             
             # Establecer valores por defecto en caso de error
@@ -201,6 +219,25 @@ class CierreCajaModel(QObject):
             self.fechaActualChanged.emit()
             self.horaInicioChanged.emit()
             self.horaFinChanged.emit()
+
+    
+    def _convertir_fecha_visual(self, fecha_bd: str) -> str:
+        """Convierte fecha de BD (YYYY-MM-DD) a formato visual (DD/MM/YYYY)"""
+        try:
+            if not fecha_bd:
+                return datetime.now().strftime("%d/%m/%Y")
+            
+            if '/' in fecha_bd:
+                return fecha_bd  # Ya está en formato visual
+            
+            if '-' in fecha_bd:
+                partes = fecha_bd.split('-')
+                if len(partes) == 3:
+                    return f"{partes[2]}/{partes[1]}/{partes[0]}"
+            
+            return datetime.now().strftime("%d/%m/%Y")
+        except:
+            return datetime.now().strftime("%d/%m/%Y")
 
     def _formatear_hora_limpia(self, hora_raw) -> str:
         """

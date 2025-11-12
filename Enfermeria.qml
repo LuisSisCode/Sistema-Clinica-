@@ -1427,33 +1427,48 @@ Item {
         
         // FUNCIONES DEL DIÁLOGO
         function updatePrices() {
-            if (procedureFormDialog.selectedProcedureIndex >= 0 && tiposProcedimientos.length > 0) {
+            if (procedureFormDialog.selectedProcedureIndex >= 0 && 
+                procedureFormDialog.selectedProcedureIndex < tiposProcedimientos.length) {
+                
                 try {
                     var procedimiento = tiposProcedimientos[procedureFormDialog.selectedProcedureIndex]
                     
+                    console.log("💰 ACTUALIZANDO PRECIOS:")
+                    console.log("   - Procedimiento:", procedimiento.nombre)
+                    console.log("   - Tipo seleccionado:", procedureFormDialog.procedureType)
+                    console.log("   - Precio Normal:", procedimiento.precioNormal)
+                    console.log("   - Precio Emergencia:", procedimiento.precioEmergencia)
+                    
                     var precioUnitario = 0
                     if (procedureFormDialog.procedureType === "Emergencia") {
-                        precioUnitario = procedimiento.precioEmergencia || 0
+                        precioUnitario = parseFloat(procedimiento.precioEmergencia) || 0
+                        console.log("   - Usando precio EMERGENCIA:", precioUnitario)
                     } else {
-                        precioUnitario = procedimiento.precioNormal || 0
+                        precioUnitario = parseFloat(procedimiento.precioNormal) || 0
+                        console.log("   - Usando precio NORMAL:", precioUnitario)
                     }
                     
-                    var cantidadActual = parseInt(cantidadTextField.text) || 0
+                    var cantidadActual = parseInt(cantidadTextField.text) || 1
                     var precioTotal = precioUnitario * cantidadActual
                     
                     procedureFormDialog.calculatedUnitPrice = precioUnitario
                     procedureFormDialog.calculatedTotalPrice = precioTotal
+                    
+                    console.log("   - Cantidad:", cantidadActual)
+                    console.log("   - Precio Unitario:", precioUnitario)
+                    console.log("   - Precio Total:", precioTotal)
+                    
                 } catch (e) {
-                    console.log("Error calculando precios:", e)
+                    console.log("❌ Error calculando precios:", e)
                     procedureFormDialog.calculatedUnitPrice = 0.0
                     procedureFormDialog.calculatedTotalPrice = 0.0
                 }
             } else {
+                console.log("⚠️ No hay procedimiento seleccionado válido")
                 procedureFormDialog.calculatedUnitPrice = 0.0
                 procedureFormDialog.calculatedTotalPrice = 0.0
             }
-        }
-            
+        }  
         function loadEditData() {
             if (!isEditMode || !procedureFormDialog.procedimientoParaEditar) {
                 console.log("No hay datos para cargar en edición")
@@ -3651,14 +3666,31 @@ Item {
                 }
             }
             
-            // ✅ USAR LA FUNCIÓN CORRECTA PARA OBTENER DATOS DEL PACIENTE
+            // ✅ CORRECCIÓN CRÍTICA: Obtener el ID REAL del procedimiento
+            var procedimientoId = 0
+            if (procedureFormDialog.selectedProcedureIndex >= 0 && 
+                procedureFormDialog.selectedProcedureIndex < tiposProcedimientos.length) {
+                
+                var procedimientoSeleccionado = tiposProcedimientos[procedureFormDialog.selectedProcedureIndex]
+                procedimientoId = procedimientoSeleccionado.id || 0
+                
+                console.log("🔍 PROCEDIMIENTO SELECCIONADO:")
+                console.log("   - Índice:", procedureFormDialog.selectedProcedureIndex)
+                console.log("   - Nombre:", procedimientoSeleccionado.nombre)
+                console.log("   - ID Real:", procedimientoId)
+                console.log("   - Precio Normal:", procedimientoSeleccionado.precioNormal)
+                console.log("   - Precio Emergencia:", procedimientoSeleccionado.precioEmergencia)
+            } else {
+                console.log("❌ ERROR: Índice de procedimiento inválido:", procedureFormDialog.selectedProcedureIndex)
+            }
+            
             var datosPaciente = obtenerDatosPacienteParaProcedimiento()
             
             return {
                 paciente: datosPaciente.paciente,
                 cedula: datosPaciente.cedula,
-                esAnonimo: datosPaciente.esAnonimo,  // ✅ NUEVO CAMPO IMPORTANTE
-                idProcedimiento: procedureFormDialog.selectedProcedureIndex + 1,
+                esAnonimo: datosPaciente.esAnonimo,
+                idProcedimiento: procedimientoId,  // ✅ Usar ID REAL, no índice + 1
                 cantidad: parseInt(cantidadTextField.text) || 1,
                 tipo: procedureFormDialog.procedureType,
                 idTrabajador: trabajadorId,

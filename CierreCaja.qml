@@ -2291,84 +2291,86 @@ Item {
         }
     }
     
-    function formatearHorario(inicio, fin) {
-        if (!inicio || !fin) return "--:-- - --:--"
-        
-        try {
-            function extraerHoraMinuto(hora) {
-                if (!hora) return "--:--"
-                
-                let horaStr = hora.toString().trim()
-                let partes = horaStr.split(':')
-                
-                if (partes.length >= 2) {
-                    let horas = parseInt(partes[0]) || 0
-                    let minutos = parseInt(partes[1]) || 0
-                    
-                    return String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0')
-                }
-                
-                return "--:--"
-            }
-            
-            let inicioLimpio = extraerHoraMinuto(inicio)
-            let finLimpio = extraerHoraMinuto(fin)
-            
-            return inicioLimpio + " - " + finLimpio
-            
-        } catch (e) {
-            return "--:-- - --:--"
-        }
-    }
-
     function formatearFecha(fecha) {
         if (!fecha) return "--/--/----"
         
         try {
-            // Si viene como string de fecha
-            if (typeof fecha === 'string') {
-                // Si ya está en formato DD/MM/YYYY, devolverla
-                if (fecha.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
-                    return fecha
-                }
-                
-                // Si viene en formato YYYY-MM-DD, convertir a DD/MM/YYYY
-                if (fecha.match(/^\d{4}-\d{2}-\d{2}/)) {
-                    let partes = fecha.split('-')
-                    return partes[2] + '/' + partes[1] + '/' + partes[0]
-                }
+            let fechaStr = fecha.toString().trim()
+            console.log("🔍 Formateando fecha:", fechaStr)
+            
+            // Si ya está formateada, devolverla
+            if (fechaStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                return fechaStr
             }
             
-            // Si viene como Date object
-            if (fecha instanceof Date) {
-                let dia = String(fecha.getDate()).padStart(2, '0')
-                let mes = String(fecha.getMonth() + 1).padStart(2, '0')
-                let anio = fecha.getFullYear()
-                return dia + '/' + mes + '/' + anio
+            // Si viene como "2025-01-15", convertir
+            if (fechaStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                let partes = fechaStr.split('-')
+                return partes[2] + '/' + partes[1] + '/' + partes[0]
             }
             
-            return "--/--/----"
+            return fechaStr // Devolver tal cual si no reconocemos el formato
         } catch (e) {
+            console.log("❌ Error formateando fecha:", e)
             return "--/--/----"
         }
     }
 
+    function formatearHorario(inicio, fin) {
+        if (!inicio || !fin) return "--:-- - --:--"
+        
+        try {
+            let inicioStr = inicio.toString().trim()
+            let finStr = fin.toString().trim()
+            
+            // Si ya están en formato HH:MM, usarlos directamente
+            if (inicioStr.match(/^\d{1,2}:\d{2}$/) && finStr.match(/^\d{1,2}:\d{2}$/)) {
+                return inicioStr + " - " + finStr
+            }
+            
+            return inicioStr + " - " + finStr // Devolver tal cual
+        } catch (e) {
+            console.log("❌ Error formateando horario:", e)
+            return "--:-- - --:--"
+        }
+    }
     function formatearHora(hora) {
         if (!hora) return "--:--"
         
         try {
             let horaStr = hora.toString().trim()
-            let partes = horaStr.split(':')
             
-            if (partes.length >= 2) {
-                let horas = parseInt(partes[0]) || 0
-                let minutos = parseInt(partes[1]) || 0
-                
-                return String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0')
+            // Si ya está en formato HH:MM
+            if (horaStr.match(/^\d{1,2}:\d{2}$/)) {
+                return horaStr
+            }
+            
+            // Si viene como "2025-09-27 16:49:36.760" - extraer solo la hora
+            if (horaStr.indexOf(' ') > 0 && horaStr.indexOf(':') > 0) {
+                let partesTiempo = horaStr.split(' ')[1] // Toma "16:49:36.760"
+                if (partesTiempo) {
+                    let partesHora = partesTiempo.split(':')
+                    if (partesHora.length >= 2) {
+                        let hh = parseInt(partesHora[0]) || 0
+                        let mm = parseInt(partesHora[1]) || 0
+                        return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0')
+                    }
+                }
+            }
+            
+            // Si viene como "16:49:36.760" - tomar solo HH:MM
+            if (horaStr.indexOf(':') > 0) {
+                let partes = horaStr.split(':')
+                if (partes.length >= 2) {
+                    let hh = parseInt(partes[0]) || 0
+                    let mm = parseInt(partes[1]) || 0
+                    return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0')
+                }
             }
             
             return "--:--"
         } catch (e) {
+            console.log("❌ Error formateando hora:", e)
             return "--:--"
         }
     }
