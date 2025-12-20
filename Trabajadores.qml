@@ -2082,7 +2082,8 @@ Item {
                             wrapMode: Text.WordWrap
                             horizontalAlignment: Text.AlignHCenter
                             Layout.fillWidth: true
-                            Layout.maximumWidth: parent.width - baseUnit * 2
+                            Layout.leftMargin: baseUnit 
+                            Layout.rightMargin: baseUnit 
                             font.family: "Segoe UI, Arial, sans-serif"
                         }
                     }

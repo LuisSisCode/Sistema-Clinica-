@@ -497,6 +497,47 @@ class ConsultaModel(QObject):
             self.operacionError.emit(error_msg)
             return -1
         
+    @Slot(str, str, str, result='QVariantMap')
+    def validar_paciente_duplicado(self, nombre: str, apellido_paterno: str, apellido_materno: str = "") -> Dict[str, Any]:
+        """
+        ✅ Valida si ya existe un paciente con ese nombre completo
+        """
+        try:
+            if not nombre or not apellido_paterno:
+                return {'existe': False}
+            
+            # ✅ Buscar usando el repository correcto
+            pacientes = self.repository.buscar_paciente_por_nombre_completo(
+                nombre.strip(),
+                apellido_paterno.strip(),
+                apellido_materno.strip() if apellido_materno else ""
+            )
+            
+            if pacientes:
+                # Si retorna lista, tomar el primero
+                if isinstance(pacientes, list) and len(pacientes) > 0:
+                    paciente = pacientes[0]
+                else:
+                    paciente = pacientes
+                
+                # ✅ Manejar cédula NULL correctamente
+                cedula_display = paciente.get('Cedula', '')
+                if cedula_display is None or str(cedula_display).upper() == 'NULL' or cedula_display == '':
+                    cedula_display = "No proporcionado"
+                
+                return {
+                    'existe': True,
+                    'id': paciente['id'],
+                    'nombre_completo': f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')}".strip(),
+                    'cedula': cedula_display
+                }
+            
+            return {'existe': False}
+            
+        except Exception as e:
+            print(f"⚠️ Error validando duplicado: {e}")
+            return {'existe': False}
+    
     # Nuevos metodo para busqueda de pacientes
     @Slot(str, int, result='QVariantList')
     def buscar_paciente_unificado(self, termino_busqueda: str, limite: int = 5):
