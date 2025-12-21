@@ -10,12 +10,13 @@ from ..core.utils import (
     get_current_datetime, format_date_for_db, parse_date_from_str,
     get_date_range_query, validate_required_string, safe_float
 )
-
+from .paciente_repository import PacienteRepository 
 class ConsultaRepository(BaseRepository):
     """Repository para gestión de Consultas Médicas - CORREGIDO con nombres reales de BD"""
     
     def __init__(self):
         super().__init__('Consultas', 'consultas')
+        self.paciente_repo = PacienteRepository()
         print("🩺 ConsultaRepository inicializado con gestión de pacientes")
     
     # ===============================
@@ -91,82 +92,23 @@ class ConsultaRepository(BaseRepository):
         except Exception as e:
             print(f"⚠️ Error en búsqueda parcial por cédula: {e}")
             return []
+    def buscar_paciente_por_nombre_completo(self, nombre: str, apellido_paterno: str, 
+                                        apellido_materno: str = "") -> Optional[Dict[str, Any]]:
+        """
+        ✅ DELEGADO: Usa PacienteRepository para buscar pacientes
+        """
+        return self.paciente_repo.buscar_pacientes_por_nombre_exacto(
+            nombre, apellido_paterno, apellido_materno
+        )
     
     def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
-                              apellido_materno: str = "", cedula: str = "") -> int:
+                          apellido_materno: str = "", cedula: str = "") -> int:
         """
-        ✅ MÉTODO CORREGIDO - Busca paciente de forma inteligente antes de crear uno nuevo
-        
-        Estrategia de búsqueda:
-        1. Si hay cédula → buscar por cédula exacta
-        2. Si no encuentra por cédula o no hay cédula → buscar por nombre completo
-        3. Solo si no encuentra por ningún método → crear nuevo paciente
+        ✅ DELEGADO: Usa PacienteRepository para gestionar pacientes
         """
-        try:
-            nombre = nombre.strip()
-            apellido_paterno = apellido_paterno.strip()
-            apellido_materno = apellido_materno.strip()
-            cedula_clean = cedula.strip() if cedula else None
-            
-            # Validaciones básicas (sin cédula obligatoria)
-            if not nombre or len(nombre) < 2:
-                raise ValidationError("nombre", nombre, "Nombre es obligatorio")
-            if not apellido_paterno or len(apellido_paterno) < 2:
-                raise ValidationError("apellido_paterno", apellido_paterno, "Apellido paterno es obligatorio")
-            
-            print(f"🔍 Buscando paciente: {nombre} {apellido_paterno} {apellido_materno} - Cédula: {cedula_clean or 'N/A'}")
-            
-            # ✅ ESTRATEGIA 1: Buscar por cédula si existe y es válida
-            if cedula_clean and len(cedula_clean) >= 5:
-                print(f"📋 Buscando por cédula: {cedula_clean}")
-                existing_patient = self.search_patient_by_cedula_exact(cedula_clean)
-                if existing_patient:
-                    print(f"✅ Paciente encontrado por cédula: {existing_patient['nombre_completo']} (ID: {existing_patient['id']})")
-                    return existing_patient['id']
-                else:
-                    print(f"❌ No se encontró paciente con cédula: {cedula_clean}")
-            
-            # ✅ ESTRATEGIA 2: Buscar por nombre completo (NUEVA LÓGICA)
-            nombre_completo_busqueda = f"{nombre} {apellido_paterno} {apellido_materno}".strip()
-            print(f"👤 Buscando por nombre completo: '{nombre_completo_busqueda}'")
-            
-            # Usar el método existente de búsqueda por nombre
-            pacientes_por_nombre = self.search_patient_by_full_name(nombre_completo_busqueda, limite=10)
-            
-            if pacientes_por_nombre:
-                # ✅ BUSCAR COINCIDENCIA EXACTA O MUY SIMILAR
-                paciente_encontrado = self._encontrar_mejor_coincidencia_nombre(
-                    nombre, apellido_paterno, apellido_materno, pacientes_por_nombre
-                )
-                
-                if paciente_encontrado:
-                    print(f"✅ Paciente encontrado por nombre: {paciente_encontrado['nombre_completo']} (ID: {paciente_encontrado['id']})")
-                    return paciente_encontrado['id']
-            
-            print(f"❌ No se encontró paciente existente")
-            
-            # ✅ ESTRATEGIA 3: Crear nuevo paciente solo si no se encontró por ningún método
-            print(f"➕ Creando nuevo paciente: {nombre} {apellido_paterno} {apellido_materno}")
-            
-            query = """
-            INSERT INTO Pacientes (Nombre, Apellido_Paterno, Apellido_Materno, Cedula)
-            OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?)
-            """
-            
-            result = self._execute_query(query, (nombre, apellido_paterno, apellido_materno, cedula_clean), fetch_one=True)
-            patient_id = result['id'] if result else None
-            
-            if patient_id:
-                print(f"✅ Nuevo paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
-                return patient_id
-            else:
-                raise ValidationError("paciente", None, "Error creando paciente en base de datos")
-            
-        except Exception as e:
-            print(f"❌ Error gestionando paciente: {e}")
-            raise ValidationError("paciente", str(e), "Error creando/buscando paciente")
-    
+        return self.paciente_repo.buscar_o_crear_paciente_simple(
+            nombre, apellido_paterno, apellido_materno, cedula
+        )
     # ===============================
     # CRUD ESPECÍFICO - CORREGIDO
     # ===============================
