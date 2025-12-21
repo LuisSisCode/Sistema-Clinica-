@@ -438,12 +438,15 @@ class TrabajadorRepository(BaseRepository):
         query = """
         SELECT 
             t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-            t.Matricula, t.Especialidad as especialidad_descriptiva,
+            t.Matricula, ISNULL(STRING_AGG(e.Nombre, ', '), '') as especialidad_descriptiva,
             tt.Tipo as tipo_nombre, tt.area_funcional,
             CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_display
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, t.Matricula, tt.Tipo, tt.area_funcional
         """
         
         medico = self._execute_query(query, (medico_id,), fetch_one=True)
@@ -483,12 +486,14 @@ class TrabajadorRepository(BaseRepository):
         SELECT t.*, tt.Tipo as tipo_nombre, tt.area_funcional
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE tt.area_funcional = 'MEDICO'
           AND (
               t.Nombre LIKE ? OR 
               t.Apellido_Paterno LIKE ? OR 
               t.Apellido_Materno LIKE ? OR
-              t.Especialidad LIKE ? OR 
+              e.Nombre LIKE ? OR 
               t.Matricula LIKE ?
           )
         ORDER BY t.Apellido_Paterno, t.Nombre
@@ -789,7 +794,7 @@ class TrabajadorRepository(BaseRepository):
             t.Apellido_Paterno,
             t.Apellido_Materno,
             t.Matricula,
-            t.Especialidad as especialidad_descriptiva,
+            ISNULL(STRING_AGG(e.Nombre, ', '), '') as especialidad_descriptiva,
             tt.Tipo as tipo_trabajador,
             COUNT(DISTINCT te.Id_Especialidad) as total_especialidades,
             STRING_AGG(e.Nombre, ', ') as especialidades_nombres,
@@ -801,7 +806,7 @@ class TrabajadorRepository(BaseRepository):
         LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE tt.area_funcional = 'MEDICO'
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
-                 t.Matricula, t.Especialidad, tt.Tipo
+                 t.Matricula, tt.Tipo
         ORDER BY t.Nombre, t.Apellido_Paterno
         """
         return self._execute_query(query)
@@ -814,11 +819,14 @@ class TrabajadorRepository(BaseRepository):
         validate_query = """
         SELECT 
             t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-            t.Matricula, t.Especialidad as especialidad_descriptiva,
+            t.Matricula, ISNULL(STRING_AGG(e.Nombre, ', '), '') as especialidad_descriptiva,
             tt.Tipo as tipo_nombre, tt.area_funcional
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, t.Matricula, tt.Tipo, tt.area_funcional
         """
         
         medico = self._execute_query(validate_query, (trabajador_id,), fetch_one=True)
@@ -1075,10 +1083,12 @@ class TrabajadorRepository(BaseRepository):
         tipos_result = self._execute_query(tipos_query)
         
         especialidades_query = """
-        SELECT Especialidad, COUNT(*) as cantidad
-        FROM Trabajadores
-        WHERE Especialidad IS NOT NULL AND Especialidad != ''
-        GROUP BY Especialidad
+        SELECT e.Nombre as Especialidad, COUNT(DISTINCT t.id) as cantidad
+        FROM Especialidad e
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
+        WHERE e.Nombre IS NOT NULL AND e.Nombre != ''
+        GROUP BY e.id, e.Nombre
         ORDER BY cantidad DESC
         """
         especialidades_result = self._execute_query(especialidades_query)
@@ -1098,10 +1108,11 @@ class TrabajadorRepository(BaseRepository):
             tt.id,
             tt.Tipo,
             COUNT(t.id) as total_trabajadores,
-            COUNT(DISTINCT t.Especialidad) as especialidades_unicas,
+            COUNT(DISTINCT te.Id_Especialidad) as especialidades_unicas,
             AVG(CASE WHEN t.Matricula IS NOT NULL THEN 1 ELSE 0 END) * 100 as porcentaje_con_matricula
         FROM Tipo_Trabajadores tt
         LEFT JOIN Trabajadores t ON tt.id = t.Id_Tipo_Trabajador
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
         GROUP BY tt.id, tt.Tipo
         ORDER BY total_trabajadores DESC
         """
@@ -1155,7 +1166,7 @@ class TrabajadorRepository(BaseRepository):
             LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
             LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
             GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-                    t.Id_Tipo_Trabajador, t.Especialidad, t.Matricula,
+                    t.Id_Tipo_Trabajador, t.Matricula,
                     tt.Tipo, tt.descripcion
             ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
             """

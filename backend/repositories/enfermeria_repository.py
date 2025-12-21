@@ -790,7 +790,7 @@ class EnfermeriaRepository:
     # ===============================
     
     def obtener_trabajadores_enfermeria(self) -> List[Dict[str, Any]]:
-        """✅ CORREGIDO: Obtiene trabajadores con estructura completa para QML"""
+        """✅ CORREGIDO: Obtiene trabajadores con especialidades desde tabla Trabajador_Especialidad"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -803,10 +803,14 @@ class EnfermeriaRepository:
                             ISNULL(t.Apellido_Materno, '') as Apellido_Materno,
                             t.Id_Tipo_Trabajador,
                             ISNULL(t.Matricula, '') as Matricula,
-                            ISNULL(t.Especialidad, '') as Especialidad
+                            ISNULL(STRING_AGG(e.Nombre, ', '), '') as Especialidad
                         FROM Trabajadores t
                         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+                        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+                        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
                         WHERE tt.area_funcional = 'ENFERMERIA'
+                        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
+                                 t.Id_Tipo_Trabajador, t.Matricula
                         ORDER BY t.Nombre, t.Apellido_Paterno
                     """)
                 

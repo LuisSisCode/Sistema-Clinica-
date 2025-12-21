@@ -1955,8 +1955,8 @@ Item {
     Dialog {
         id: confirmDeleteDialog
         anchors.centerIn: parent
-        width: Math.min(parent.width * 0.9, 550)
-        height: Math.min(parent.height * 0.7, 600)
+        width: Math.min(parent.width * 0.6, 450)
+        height: 350
         modal: true
         closePolicy: Popup.NoAutoClose
         visible: showConfirmDeleteDialog
