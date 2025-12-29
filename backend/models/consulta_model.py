@@ -497,6 +497,47 @@ class ConsultaModel(QObject):
             self.operacionError.emit(error_msg)
             return -1
         
+    @Slot(str, str, str, result='QVariantMap')
+    def validar_paciente_duplicado(self, nombre: str, apellido_paterno: str, apellido_materno: str = "") -> Dict[str, Any]:
+        """
+        ✅ Valida si ya existe un paciente con ese nombre completo
+        """
+        try:
+            if not nombre or not apellido_paterno:
+                return {'existe': False}
+            
+            # ✅ Buscar usando el repository correcto
+            pacientes = self.repository.buscar_paciente_por_nombre_completo(
+                nombre.strip(),
+                apellido_paterno.strip(),
+                apellido_materno.strip() if apellido_materno else ""
+            )
+            
+            if pacientes:
+                # Si retorna lista, tomar el primero
+                if isinstance(pacientes, list) and len(pacientes) > 0:
+                    paciente = pacientes[0]
+                else:
+                    paciente = pacientes
+                
+                # ✅ Manejar cédula NULL correctamente
+                cedula_display = paciente.get('Cedula', '')
+                if cedula_display is None or str(cedula_display).upper() == 'NULL' or cedula_display == '':
+                    cedula_display = "No proporcionado"
+                
+                return {
+                    'existe': True,
+                    'id': paciente['id'],
+                    'nombre_completo': f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')}".strip(),
+                    'cedula': cedula_display
+                }
+            
+            return {'existe': False}
+            
+        except Exception as e:
+            print(f"⚠️ Error validando duplicado: {e}")
+            return {'existe': False}
+    
     # Nuevos metodo para busqueda de pacientes
     @Slot(str, int, result='QVariantList')
     def buscar_paciente_unificado(self, termino_busqueda: str, limite: int = 5):
@@ -1843,12 +1884,7 @@ class ConsultaModel(QObject):
     def obtener_info_medico(self, trabajador_id: int):
         """
         Obtiene información detallada de un médico
-        
-        Args:
-            trabajador_id: ID del trabajador/médico
-            
-        Returns:
-            Diccionario con información del médico
+        ✅ CORREGIDO: Sin usar campo Especialidad eliminado de Trabajadores
         """
         try:
             if trabajador_id <= 0:
@@ -1861,13 +1897,19 @@ class ConsultaModel(QObject):
                 t.Apellido_Paterno,
                 t.Apellido_Materno,
                 t.Matricula,
-                t.Especialidad,
-                t.Estado,
                 tt.Tipo as tipo_trabajador,
-                CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_completo
+                tt.area_funcional,
+                CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_completo,
+                -- ✅ Especialidades desde tabla intermedia
+                STRING_AGG(e.Nombre, ', ') as especialidades_nombres,
+                COUNT(DISTINCT te.Id_Especialidad) as total_especialidades
             FROM Trabajadores t
             INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+            LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
             WHERE t.id = ?
+            GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
+                    t.Matricula, tt.Tipo, tt.area_funcional
             """
             
             result = self.repository._execute_query(query, (trabajador_id,), fetch_one=True)
@@ -1877,9 +1919,10 @@ class ConsultaModel(QObject):
                     'id': result['id'],
                     'nombre_completo': result['nombre_completo'],
                     'matricula': result.get('Matricula', ''),
-                    'especialidad': result.get('Especialidad', ''),
-                    'estado': result.get('Estado', 'Activo'),
-                    'tipo': result.get('tipo_trabajador', '')
+                    'especialidades': result.get('especialidades_nombres', 'Sin especialidades'),
+                    'total_especialidades': result.get('total_especialidades', 0),
+                    'tipo': result.get('tipo_trabajador', ''),
+                    'area_funcional': result.get('area_funcional', '')
                 }
             
             return {}
@@ -1887,7 +1930,7 @@ class ConsultaModel(QObject):
         except Exception as e:
             print(f"❌ Error obteniendo info de médico: {e}")
             return {}
-    
+        
     @Slot(result='QVariantList')
     def obtener_consultas_con_medicos(self):
         """

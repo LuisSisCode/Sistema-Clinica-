@@ -8,7 +8,6 @@ Item {
     id: trabajadoresRoot
     objectName: "trabajadoresRoot"
     
-    // ACCESO A PROPIEDADES ADAPTATIVAS DEL MAIN
     readonly property real baseUnit: parent.baseUnit || Math.max(8, Screen.height / 100)
     readonly property real fontBaseSize: parent.fontBaseSize || Math.max(12, Screen.height / 70)
     readonly property real scaleFactor: parent.scaleFactor || Math.min(width / 1400, height / 900)
@@ -16,10 +15,8 @@ Item {
     property string trabajadorIdToDelete: ""
     property bool showConfirmDeleteDialog: false
     
-    // ✅ USAR INSTANCIA AUTENTICADA DEL APPCONTROLLER
     readonly property var trabajadorModel: appController.trabajador_model_instance
     
-    // ===== COLORES MODERNOS =====
     readonly property string primaryColor: "#3498DB"
     readonly property string successColor: "#10B981"
     readonly property string successColorLight: "#D1FAE5"
@@ -33,12 +30,12 @@ Item {
     readonly property string whiteColor: "#FFFFFF"
     readonly property string borderColor: "#e0e0e0"
     readonly property string accentColor: "#10B981"
-    readonly property string lineColor: "#D1D5DB" // Color para líneas verticales
+    readonly property string lineColor: "#D1D5DB"
     readonly property string violetColor: "#9b59b6"
     readonly property string infoColor: "#17a2b8"
 
     function obtenerIconoArea(areaFuncional) {
-        if (!areaFuncional) return '👷' // Por defecto para áreas NULL o no definidas
+        if (!areaFuncional) return '👷'
         
         const iconos = {
             'MEDICO': '⚕️',
@@ -52,25 +49,21 @@ Item {
         return iconos[areaUpper] || '👷'
     }
 
-    // ✅ PROPIEDADES REACTIVAS PARA COMBOS
     property var tiposParaFiltro: ["Todos los tipos"]
     property var tiposParaCombo: ["Seleccionar tipo..."]
 
-    // Propiedades de roles y permisos
     readonly property string usuarioActualRol: authModel ? authModel.userRole || "" : ""
     readonly property bool esAdministrador: usuarioActualRol === "Administrador" 
     readonly property bool esMedico: usuarioActualRol === "Médico"
 
-    // ✅ TIMER PARA ACTUALIZACIÓN AUTOMÁTICA
     Timer {
         id: updateTimer
-        interval: 500  // 500ms de delay
+        interval: 500
         repeat: false
         onTriggered: {
             console.log("⏰ Timer ejecutado - Aplicando filtros automáticamente")
             aplicarFiltros()
             
-            // Forzar layout del ListView
             if (trabajadoresListView) {
                 trabajadoresListView.forceLayout()
                 console.log("🔄 ListView forzadamente actualizado por timer")
@@ -78,34 +71,31 @@ Item {
         }
     }
     
-    // ✅ FUNCIÓN MEJORADA PARA INICIO INMEDIATO CON TIMER
     function actualizarInmediato() {
         console.log("🚀 Iniciando actualización inmediata...")
         
-        // Detener timer previo si está corriendo
         updateTimer.stop()
         
-        // Aplicar filtros inmediatamente
-        aplicarFiltros()
+        // ✅ RECARGAR DATOS DESDE LA BASE DE DATOS
+        if (trabajadorModel) {
+            console.log("🔄 Recargando trabajadores desde BD...")
+            trabajadorModel.recargarTrabajadores()
+        }
         
-        // Iniciar timer como backup
+        aplicarFiltros()
         updateTimer.start()
     }
     
-    // ===== PROPIEDADES PARA DIÁLOGOS =====
     property bool showNewWorkerDialog: false
     property bool isEditMode: false
     property int editingIndex: -1
     property int selectedRowIndex: -1
 
-    // ✅ PROPIEDADES ADICIONALES PARA DATOS DE TIPOS
-    property var tiposDataFiltro: []  // Agregar después de tiposParaFiltro
-    property var tiposDataCombo: []   // Agregar después de tiposParaCombo
+    property var tiposDataFiltro: []
+    property var tiposDataCombo: []
     
-    // ===== SEÑAL PARA NAVEGAR A CONFIGURACIÓN PERSONAL =====
     signal irAConfigPersonal()
     
-    // Distribución de columnas responsive
     readonly property real colId: 0.08
     readonly property real colNombre: 0.25
     readonly property real colTipo: 0.22
@@ -113,7 +103,6 @@ Item {
     readonly property real colMatricula: 0.15
     readonly property real colFecha: 0.10
 
-    // ===== FUNCIONES HELPER MEJORADAS CON VERIFICACIONES ROBUSTAS =====
     function actualizarTiposParaFiltro() {
         console.log("🔍 actualizarTiposParaFiltro - INICIO")
         
@@ -143,7 +132,6 @@ Item {
             return
         }
         
-        // ✅ CONSTRUIR LISTA CON ÁREA FUNCIONAL REAL
         var nombres = ["Todos los tipos"]
         var tiposData = []
 
@@ -153,7 +141,6 @@ Item {
         for (var i = 0; i < length; i++) {
             var tipo = tipos[i]
             if (tipo && tipo.Tipo) {
-                // ✅ USAR EL ÁREA FUNCIONAL REAL DE LA BASE DE DATOS
                 var areaFuncional = tipo.area_funcional || null
                 var icono = obtenerIconoArea(areaFuncional)
                 var nombreConIcono = icono + " " + tipo.Tipo
@@ -207,7 +194,6 @@ Item {
                 return
             }
             
-            // ✅ CONSTRUIR LISTA CON ÁREA FUNCIONAL REAL
             var nombres = ["Seleccionar tipo..."]
             
             console.log("📋 Procesando tipos para combo:")
@@ -215,7 +201,6 @@ Item {
                 try {
                     var tipo = tipos[i]
                     if (tipo && tipo.Tipo) {
-                        // ✅ USAR EL ÁREA FUNCIONAL REAL DE LA BASE DE DATOS
                         var areaFuncional = tipo.area_funcional || null
                         var icono = obtenerIconoArea(areaFuncional)
                         nombres.push(icono + " " + tipo.Tipo)
@@ -243,24 +228,19 @@ Item {
             return false
         }
         
-        // ✅ CORREGIDO: QVariantList de Qt NO pasa Array.isArray()
-        // pero sí tiene propiedad .length y se puede indexar
         var tipos = trabajadorModel.tiposTrabajador
         
-        // Verificar que existe y tiene elementos
         if (!tipos) {
             console.log("❌ Tipos es null/undefined")
             return false
         }
         
-        // ✅ Verificar length directamente (funciona con QVariantList)
         var length = tipos.length || 0
         if (length === 0) {
             console.log("❌ Tipos no disponibles o vacíos (length=0)")
             return false
         }
         
-        // Verificar que el primer elemento sea un objeto válido
         try {
             var primerTipo = tipos[0]
             if (!primerTipo || typeof primerTipo !== 'object') {
@@ -268,7 +248,6 @@ Item {
                 return false
             }
             
-            // Verificar que tenga la propiedad esperada
             if (!primerTipo.hasOwnProperty('Tipo')) {
                 console.log("❌ Primer tipo no tiene propiedad 'Tipo'")
                 return false
@@ -281,14 +260,12 @@ Item {
         return true
     }
 
-    // ✅ FUNCIÓN HELPER PARA ACTUALIZACIÓN SEGURA DE COMBOS
     function actualizarCombosSiEsNecesario() {
         if (!isModeloListo()) {
             console.log("🔄 Modelo aún no listo para actualizar combos")
             return
         }
         
-        // ✅ USAR LAS PROPIEDADES EXISTENTES EN LUGAR DE FUNCIONES FANTASMA
         try {
             if (filtroTipo && filtroTipo.model) {
                 var newModelFiltro = tiposParaFiltro
@@ -310,98 +287,193 @@ Item {
         }
     }
 
-    // MODELOS
+    function aplicarFiltros() {
+        console.log("🔍 Aplicando filtros...")
+        
+        if (!trabajadorModel) {
+            console.warn("⚠️ TrabajadorModel no disponible")
+            return
+        }
+        
+        trabajadoresListModel.clear()
+        
+        var textoBusqueda = campoBusqueda ? campoBusqueda.text.toLowerCase() : ""
+        var tipoSeleccionado = filtroTipo ? filtroTipo.currentIndex : 0
+        
+        var trabajadores = trabajadorModel.trabajadores || []
+        
+        console.log("📊 Total trabajadores a filtrar:", trabajadores.length)
+        console.log("🎯 Filtro tipo seleccionado:", tipoSeleccionado, "Texto búsqueda:", textoBusqueda)
+        
+        for (var i = 0; i < trabajadores.length; i++) {
+            var trabajador = trabajadores[i]
+            var mostrar = true
+            
+            if (tipoSeleccionado > 0 && tiposDataFiltro.length > tipoSeleccionado) {
+                var tipoData = tiposDataFiltro[tipoSeleccionado]
+                console.log("🔍 Filtrando por tipo:", tipoData.nombre, "vs trabajador:", trabajador.tipo_nombre)
+                
+                if (trabajador.tipo_nombre !== tipoData.nombre) {
+                    mostrar = false
+                    console.log("❌ Trabajador filtrado por tipo:", trabajador.nombre_completo)
+                }
+            }
+            
+            if (mostrar && textoBusqueda.length > 0) {
+                var nombreCompleto = trabajador.nombre_completo || ""
+                var matricula = trabajador.Matricula || ""
+                var especialidades = trabajador.especialidades_nombres || ""
+                
+                var nombreMatch = nombreCompleto.toLowerCase().includes(textoBusqueda)
+                var matriculaMatch = matricula.toLowerCase().includes(textoBusqueda)
+                var especialidadesMatch = especialidades.toLowerCase().includes(textoBusqueda)
+                
+                if (!nombreMatch && !matriculaMatch && !especialidadesMatch) {
+                    mostrar = false
+                    console.log("❌ Trabajador filtrado por búsqueda:", trabajador.nombre_completo)
+                }
+            }
+            
+            if (mostrar) {
+                var trabajadorFormateado = {
+                    trabajadorId: trabajador.id.toString(),
+                    nombreCompleto: trabajador.nombre_completo || "",
+                    tipoTrabajador: trabajador.tipo_nombre || "",
+                    especialidades_nombres: trabajador.especialidades_nombres || "",
+                    matricula: trabajador.Matricula || "Sin matrícula",
+                    fechaRegistro: trabajador.fecha_registro || new Date().toISOString().split('T')[0]
+                }
+                trabajadoresListModel.append(trabajadorFormateado)
+                console.log("✅ Mostrando trabajador:", trabajador.nombre_completo, "- Tipo:", trabajador.tipo_nombre)
+            }
+        }
+        
+        console.log("✅ Filtros aplicados - Mostrando:", trabajadoresListModel.count, "de", trabajadores.length)
+        
+        if (trabajadoresListView) {
+            trabajadoresListView.forceLayout()
+        }
+    }
+
+    function debugTiposTrabajador() {
+        console.log("🐛 DEBUG DETALLADO - Tipos de Trabajador:")
+        if (!trabajadorModel) {
+            console.log("   ❌ trabajadorModel no disponible")
+            return
+        }
+        
+        var tipos = trabajadorModel.tiposTrabajador
+        console.log("   📋 Total tipos en modelo:", tipos.length)
+        
+        if (tipos.length === 0) {
+            console.log("   ⚠️ No hay tipos disponibles")
+            return
+        }
+        
+        for (var i = 0; i < tipos.length; i++) {
+            var tipo = tipos[i]
+            console.log("   " + (i + 1) + ". ID: " + tipo.id + 
+                    " | Tipo: '" + tipo.Tipo + 
+                    "' | Área: '" + (tipo.area_funcional || "NO DISPONIBLE") + "'")
+        }
+        
+        console.log("   🎯 COMBO ACTUAL:")
+        console.log("      Índice seleccionado:", tipoTrabajadorCombo.currentIndex)
+        
+        if (tipoTrabajadorCombo.currentIndex > 0) {
+            var tipoIndex = tipoTrabajadorCombo.currentIndex - 1
+            if (tipoIndex < tipos.length) {
+                var tipoActual = tipos[tipoIndex]
+                console.log("      Tipo seleccionado:", tipoActual.Tipo)
+                console.log("      Área funcional:", "'" + (tipoActual.area_funcional || "NO DISPONIBLE") + "'")
+                console.log("      Es médico?", tipoActual.area_funcional === "MEDICO")
+            } else {
+                console.log("      ❌ Índice fuera de rango")
+            }
+        } else {
+            console.log("      No hay tipo seleccionado")
+        }
+    }
+
+    function debugTrabajadorCompleto(trabajadorId) {
+        if (!trabajadorModel) {
+            console.log("❌ trabajadorModel no disponible")
+            return
+        }
+        
+        var trabajadorCompleto = trabajadorModel.obtenerTrabajadorPorId(trabajadorId)
+        console.log("🔍 DEBUG TRABAJADOR COMPLETO ID:", trabajadorId)
+        console.log("   Datos completos:", JSON.stringify(trabajadorCompleto))
+        
+        if (trabajadorCompleto && trabajadorCompleto.Id_Tipo_Trabajador) {
+            var areaFuncional = trabajadorModel.obtenerAreaFuncionalDeTipo(trabajadorCompleto.Id_Tipo_Trabajador)
+            console.log("   Área funcional del tipo:", "'" + areaFuncional + "'")
+            console.log("   Es médico?", areaFuncional === "MEDICO")
+        }
+    }
+
     ListModel {
         id: trabajadoresListModel
     }
 
-    // ===== CONEXIONES MEJORADAS CON VERIFICACIÓN DE INSTANCIA Y TIMING =====
     Connections {
         target: trabajadorModel
-        enabled: trabajadorModel !== null
         
-        function onTiposTrabajadorChanged() {
-            console.log("🏷️ Signal: Tipos de trabajador actualizados:", trabajadorModel ? trabajadorModel.tiposTrabajador.length : 0)
-
-            // ✅ ACTUALIZAR AMBOS COMBOS INMEDIATAMENTE
-            actualizarTiposParaFiltro()
-            actualizarTiposParaCombo()
-
-            // ✅ FORZAR REFRESH DEL UI
-            Qt.callLater(function() {
-                if (filtroTipo) {
-                    filtroTipo.model = tiposParaFiltro
-                    console.log("📋 Filtro combo actualizado con", tiposParaFiltro.length, "items")
-                }
-                if (tipoTrabajadorCombo) {
-                    tipoTrabajadorCombo.model = tiposParaCombo
-                    console.log("📋 Tipo trabajador combo actualizado con", tiposParaCombo.length, "items")
-                }
-            })
-            }
-        
-        function onTrabajadorCreado(success, message) {
-            console.log("📋 Signal trabajadorCreado recibido:", success, message)
+        function onTrabajadorEliminado(success, mensaje) {
+            console.log("📡 Señal trabajadorEliminado recibida:", success, mensaje)
             
             if (success) {
-                // Cerrar diálogo
-                showNewWorkerDialog = false
+                showConfirmDeleteDialog = false
+                trabajadorIdToDelete = ""
                 selectedRowIndex = -1
-                isEditMode = false
-                editingIndex = -1
                 
-                // ✅ FORZAR ACTUALIZACIÓN INMEDIATA DEL LISTVIEW
-                if (trabajadoresListView) {
-                    trabajadoresListView.forceLayout()
-                    console.log("🔄 ListView actualizado forzadamente")
-                }
-                
-                // ✅ REFRESCAR MODELO INMEDIATAMENTE
-                if (trabajadorModel && trabajadorModel.refrescarDatosInmediato) {
-                    trabajadorModel.refrescarDatosInmediato()
-                }
+                actualizarInmediato()
+            } else {
+                confirmDeleteDialog.dialogMode = "info"
+                confirmDeleteDialog.infoMessage = mensaje
             }
         }
         
-        function onTrabajadorActualizado(success, message) {
+        function onTrabajadorActualizado(success, mensaje) {
+            console.log("📡 Señal trabajadorActualizado recibida:", success, mensaje)
             if (success) {
-                showNewWorkerDialog = false
-                selectedRowIndex = -1
-                isEditMode = false
-                editingIndex = -1
-                
-                // ✅ FORZAR ACTUALIZACIÓN TAMBIÉN PARA EDICIÓN
-                if (trabajadoresListView) {
-                    trabajadoresListView.forceLayout()
-                }
+                actualizarInmediato()
             }
-            console.log("Trabajador actualizado:", success, message)
         }
         
-        function onTrabajadorEliminado(success, message) {
+        function onTrabajadorCreado(success, mensaje) {
+            console.log("📡 Señal trabajadorCreado recibida:", success, mensaje)
             if (success) {
-                selectedRowIndex = -1
-                
-                // ✅ FORZAR ACTUALIZACIÓN PARA ELIMINACIÓN
-                if (trabajadoresListView) {
-                    trabajadoresListView.forceLayout()
-                }
+                actualizarInmediato()
             }
-            console.log("Trabajador eliminado:", success, message)
         }
         
-        function onErrorOccurred(title, message) {
-            console.error("Error en TrabajadorModel:", title, message)
+        // ✅ NUEVAS SEÑALES PARA ESPECIALIDADES
+        function onEspecialidadesActualizadas() {
+            console.log("📡 Señal especialidadesActualizadas recibida - Actualizando tabla")
+            actualizarInmediato()
+        }
+        
+        function onEspecialidadAsignada(success, mensaje) {
+            console.log("📡 Señal especialidadAsignada recibida:", success, mensaje)
+            if (success) {
+                actualizarInmediato()
+            }
+        }
+        
+        function onEspecialidadDesasignada(success, mensaje) {
+            console.log("📡 Señal especialidadDesasignada recibida:", success, mensaje)
+            if (success) {
+                actualizarInmediato()
+            }
         }
     }
 
-    // ===== LAYOUT PRINCIPAL RESPONSIVO =====
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: baseUnit * 4
         spacing: baseUnit * 3
         
-        // ===== CONTENIDO PRINCIPAL =====
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -414,10 +486,9 @@ Item {
                 anchors.fill: parent
                 spacing: 0
                 
-                // ===== HEADER MODERNO CON LOGOS =====
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: baseUnit * 12  // Aumentamos un poco la altura
+                    Layout.preferredHeight: baseUnit * 12
                     color: lightGrayColor
                     border.color: borderColor
                     border.width: 1
@@ -425,15 +496,13 @@ Item {
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: baseUnit * 2  // Márgenes más generosos
+                        anchors.margins: baseUnit * 2
                         spacing: baseUnit * 2
                         
-                        // SECCIÓN DEL LOGO Y TÍTULO
                         RowLayout {
                             Layout.alignment: Qt.AlignVCenter
                             spacing: baseUnit * 1.5
                             
-                            // Contenedor del icono con tamaño fijo
                             Rectangle {
                                 Layout.preferredWidth: baseUnit * 10
                                 Layout.preferredHeight: baseUnit * 10
@@ -458,7 +527,6 @@ Item {
                                 }
                             }
                             
-                            // Título
                             Label {
                                 Layout.alignment: Qt.AlignVCenter
                                 text: "Gestión de Trabajadores"
@@ -470,13 +538,11 @@ Item {
                             }
                         }
                         
-                        // ESPACIADOR FLEXIBLE
                         Item { 
                             Layout.fillWidth: true 
                             Layout.minimumWidth: baseUnit * 2
                         }
                         
-                        // BOTÓN NUEVO TRABAJADOR CON LOGO
                         Button {
                             id: newWorkerBtn
                             objectName: "newWorkerButton"
@@ -492,7 +558,6 @@ Item {
                                 radius: baseUnit * 1.2
                                 border.width: 0
                                 
-                                // Animación suave del color
                                 Behavior on color {
                                     ColorAnimation { duration: 150 }
                                 }
@@ -501,7 +566,6 @@ Item {
                             contentItem: RowLayout {
                                 spacing: baseUnit
                                 
-                                // Contenedor del icono del botón
                                 Rectangle {
                                     Layout.preferredWidth: baseUnit * 3
                                     Layout.preferredHeight: baseUnit * 3
@@ -519,7 +583,6 @@ Item {
                                         onStatusChanged: {
                                             if (status === Image.Error) {
                                                 console.log("Error cargando PNG del botón:", source)
-                                                // Mostrar un "+" si no hay icono
                                                 visible = false
                                                 fallbackText.visible = true
                                             } else if (status === Image.Ready) {
@@ -528,7 +591,6 @@ Item {
                                         }
                                     }
                                     
-                                    // Texto fallback si no hay icono
                                     Label {
                                         id: fallbackText
                                         anchors.centerIn: parent
@@ -540,7 +602,6 @@ Item {
                                     }
                                 }
                                 
-                                // Texto del botón
                                 Label {
                                     Layout.alignment: Qt.AlignVCenter
                                     text: "Nuevo Trabajador"
@@ -557,7 +618,6 @@ Item {
                                 showNewWorkerDialog = true
                             }
                             
-                            // Efecto hover mejorado
                             HoverHandler {
                                 id: buttonHover
                                 cursorShape: Qt.PointingHandCursor
@@ -566,7 +626,6 @@ Item {
                     }
                 }
                 
-                // ===== FILTROS ADAPTATIVOS =====
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: width < 1000 ? baseUnit * 16 : baseUnit * 8
@@ -598,11 +657,10 @@ Item {
                                 id: filtroTipo
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: baseUnit * 4
-                                model: tiposParaFiltro  // ✅ USAR PROPERTY REACTIVA
+                                model: tiposParaFiltro
                                 currentIndex: 0
                                 onCurrentIndexChanged: aplicarFiltros()
                                 
-                                // ✅ AGREGAR ACTUALIZACIÓN CUANDO CAMBIE EL MODELO
                                 onModelChanged: {
                                     console.log("📋 Modelo de filtro actualizado:", model.length, "items")
                                 }
@@ -643,7 +701,6 @@ Item {
                     }
                 }
                
-                // ===== TABLA MODERNA CON LÍNEAS VERTICALES =====
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -659,7 +716,6 @@ Item {
                         anchors.margins: 0
                         spacing: 0
                         
-                        // HEADER CON LÍNEAS VERTICALES
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: baseUnit * 5
@@ -674,7 +730,6 @@ Item {
                                 anchors.rightMargin: baseUnit * 1.5
                                 spacing: 0
                                 
-                                // ID COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colId
                                     Layout.fillHeight: true
@@ -697,7 +752,6 @@ Item {
                                     }
                                 }
                                 
-                                // NOMBRE COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colNombre
                                     Layout.fillHeight: true
@@ -720,7 +774,6 @@ Item {
                                     }
                                 }
                                 
-                                // TIPO COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colTipo
                                     Layout.fillHeight: true
@@ -743,14 +796,13 @@ Item {
                                     }
                                 }
                                 
-                                // ESPECIALIDAD COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colEspecialidad
                                     Layout.fillHeight: true
                                     
                                     Label {
                                         anchors.centerIn: parent
-                                        text: "ESPECIALIDAD"
+                                        text: "ESPECIALIDADES"
                                         font.bold: true
                                         font.pixelSize: fontBaseSize * 0.85
                                         font.family: "Segoe UI, Arial, sans-serif"
@@ -766,7 +818,6 @@ Item {
                                     }
                                 }
                                 
-                                // MATRÍCULA COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colMatricula
                                     Layout.fillHeight: true
@@ -789,7 +840,6 @@ Item {
                                     }
                                 }
                                 
-                                // FECHA COLUMN
                                 Item {
                                     Layout.preferredWidth: parent.width * colFecha
                                     Layout.fillHeight: true
@@ -807,7 +857,6 @@ Item {
                             }
                         }
                         
-                        // CONTENIDO DE TABLA CON SCROLL Y LÍNEAS VERTICALES
                         ScrollView {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -825,7 +874,6 @@ Item {
                                         return index % 2 === 0 ? whiteColor : "#FAFAFA"
                                     }
                                     
-                                    // Borde horizontal sutil
                                     Rectangle {
                                         anchors.bottom: parent.bottom
                                         anchors.left: parent.left
@@ -834,7 +882,6 @@ Item {
                                         color: borderColor
                                     }
                                     
-                                    // Borde vertical de selección
                                     Rectangle {
                                         anchors.left: parent.left
                                         anchors.top: parent.top
@@ -851,7 +898,6 @@ Item {
                                         anchors.rightMargin: baseUnit * 1.5
                                         spacing: 0
                                         
-                                        // ID COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colId
                                             Layout.fillHeight: true
@@ -875,7 +921,6 @@ Item {
                                             }
                                         }
                                         
-                                        // NOMBRE COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colNombre
                                             Layout.fillHeight: true
@@ -902,7 +947,6 @@ Item {
                                             }
                                         }
                                         
-                                        // TIPO COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colTipo
                                             Layout.fillHeight: true
@@ -931,7 +975,6 @@ Item {
                                             }
                                         }
                                         
-                                        // ESPECIALIDAD COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colEspecialidad
                                             Layout.fillHeight: true
@@ -942,8 +985,8 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 anchors.leftMargin: baseUnit
                                                 anchors.rightMargin: baseUnit
-                                                text: model.especialidad
-                                                color: textColorLight
+                                                text: model.especialidades_nombres || "Sin especialidades"
+                                                color: model.especialidades_nombres ? textColorLight : "#95a5a6"
                                                 font.bold: false
                                                 font.pixelSize: fontBaseSize * 0.85
                                                 font.family: "Segoe UI, Arial, sans-serif"
@@ -960,7 +1003,6 @@ Item {
                                             }
                                         }
                                         
-                                        // MATRÍCULA COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colMatricula
                                             Layout.fillHeight: true
@@ -987,7 +1029,6 @@ Item {
                                             }
                                         }
                                         
-                                        // FECHA COLUMN
                                         Item {
                                             Layout.preferredWidth: parent.width * colFecha
                                             Layout.fillHeight: true
@@ -1005,9 +1046,8 @@ Item {
                                         }
                                     }
                                     
-                                    // LÍNEAS VERTICALES CONTINUAS
                                     Repeater {
-                                        model: 5 // Número de líneas verticales (todas menos la última columna)
+                                        model: 5
                                         Rectangle {
                                             property real xPos: {
                                                 var w = parent.width - baseUnit * 3
@@ -1035,7 +1075,6 @@ Item {
                                         }
                                     }
                                     
-                                    // ===== BOTONES DE ACCIÓN MODERNOS CON ICONOS SVG =====
                                     RowLayout {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.right: parent.right
@@ -1072,7 +1111,6 @@ Item {
                                                 showNewWorkerDialog = true
                                             }
                                             
-                                            // Efecto hover
                                             onHoveredChanged: {
                                                 editIcon.opacity = hovered ? 0.7 : 1.0
                                             }
@@ -1107,10 +1145,9 @@ Item {
                                             onClicked: {
                                                 var trabajadorData = trabajadoresListModel.get(index)
                                                 trabajadorIdToDelete = trabajadorData.trabajadorId
+                                                confirmDeleteDialog.dialogMode = "confirm"
                                                 showConfirmDeleteDialog = true
                                             }
-                                            
-                                            // Efecto hover
                                             
                                             ToolTip.text: esAdministrador ? "Eliminar trabajador" : "Eliminar trabajador (solo administradores)"
                                             ToolTip.visible: hovered
@@ -1125,97 +1162,15 @@ Item {
         }
     }
 
-    // ✅ FUNCIÓN aplicarFiltros() MEJORADA CON VERIFICACIONES
-    function aplicarFiltros() {
-        console.log("🔍 Aplicando filtros...")
-        
-        // ✅ VERIFICAR QUE TRABAJADORMODEL ESTÉ DISPONIBLE
-        if (!trabajadorModel) {
-            console.warn("⚠️ TrabajadorModel no disponible")
-            return
-        }
-        
-        // Limpiar modelo actual
-        trabajadoresListModel.clear()
-        
-        var textoBusqueda = campoBusqueda ? campoBusqueda.text.toLowerCase() : ""
-        var tipoSeleccionado = filtroTipo ? filtroTipo.currentIndex : 0
-        
-        // Obtener trabajadores desde el modelo
-        var trabajadores = trabajadorModel.trabajadores || []
-        
-        console.log("📊 Total trabajadores a filtrar:", trabajadores.length)
-        console.log("🎯 Filtro tipo seleccionado:", tipoSeleccionado, "Texto búsqueda:", textoBusqueda)
-        
-        for (var i = 0; i < trabajadores.length; i++) {
-            var trabajador = trabajadores[i]
-            var mostrar = true
-            
-            // ✅ CORREGIDO: Filtro por tipo - usar tipo_nombre en lugar de tipo_trabajador
-            if (tipoSeleccionado > 0 && tiposDataFiltro.length > tipoSeleccionado) {
-                var tipoData = tiposDataFiltro[tipoSeleccionado]
-                console.log("🔍 Filtrando por tipo:", tipoData.nombre, "vs trabajador:", trabajador.tipo_nombre)
-                
-                // ✅ COMPARAR CON tipo_nombre DEL TRABAJADOR (no tipo_trabajador)
-                if (trabajador.tipo_nombre !== tipoData.nombre) {
-                    mostrar = false
-                    console.log("❌ Trabajador filtrado por tipo:", trabajador.nombre_completo)
-                }
-            }
-            
-            // ✅ Búsqueda por texto en nombre, especialidad o matrícula - SOLO SI AÚN MUESTRA
-            if (mostrar && textoBusqueda.length > 0) {
-                var nombreCompleto = trabajador.nombre_completo || ""
-                var especialidad = trabajador.Especialidad || ""
-                var matricula = trabajador.Matricula || ""
-                
-                var nombreMatch = nombreCompleto.toLowerCase().includes(textoBusqueda)
-                var especialidadMatch = especialidad.toLowerCase().includes(textoBusqueda)
-                var matriculaMatch = matricula.toLowerCase().includes(textoBusqueda)
-                
-                if (!nombreMatch && !especialidadMatch && !matriculaMatch) {
-                    mostrar = false
-                    console.log("❌ Trabajador filtrado por búsqueda:", trabajador.nombre_completo)
-                }
-            }
-            
-            if (mostrar) {
-                // Formatear datos para la vista con datos reales
-                var trabajadorFormateado = {
-                    trabajadorId: trabajador.id.toString(),
-                    nombreCompleto: trabajador.nombre_completo || "",
-                    tipoTrabajador: trabajador.tipo_nombre || "", // ✅ Usar tipo_nombre
-                    especialidad: trabajador.Especialidad || "Sin especialidad",
-                    matricula: trabajador.Matricula || "Sin matrícula",
-                    fechaRegistro: trabajador.fecha_registro || new Date().toISOString().split('T')[0]
-                }
-                trabajadoresListModel.append(trabajadorFormateado)
-                console.log("✅ Mostrando trabajador:", trabajador.nombre_completo, "- Tipo:", trabajador.tipo_nombre)
-            }
-        }
-        
-        console.log("✅ Filtros aplicados - Mostrando:", trabajadoresListModel.count, "de", trabajadores.length)
-        
-        // ✅ FORZAR ACTUALIZACIÓN DEL LISTVIEW
-        if (trabajadoresListView) {
-            trabajadoresListView.forceLayout()
-        }
-    }
-
-    // ===== DIÁLOGOS =====
-    
-    // Diálogo del formulario Modal - Bloqueado como Servicios Básicos
     Dialog {
         id: workerForm
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.95, 700)
         height: Math.min(parent.height * 0.95, 800)
-        // CORREGIDO: Remover la propiedad color directa del Dialog
         modal: true
         closePolicy: Popup.NoAutoClose
         visible: showNewWorkerDialog
         
-        // Remover el título por defecto
         title: ""
         
         property int selectedTipoTrabajadorIndex: -1
@@ -1226,7 +1181,6 @@ Item {
             border.color: "#DDD"
             border.width: 1
             
-            // Efecto de sombra simple
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -baseUnit
@@ -1238,30 +1192,38 @@ Item {
             }
         }
         
-        // Función para cargar datos en modo edición
         function loadEditData() {
             if (isEditMode && editingIndex >= 0 && trabajadorModel) {
                 var trabajadorData = trabajadoresListModel.get(editingIndex)
                 var trabajadorId = parseInt(trabajadorData.trabajadorId)
                 
-                // Obtener datos completos del modelo
                 var trabajadorCompleto = trabajadorModel.obtenerTrabajadorPorId(trabajadorId)
                 
                 if (trabajadorCompleto && Object.keys(trabajadorCompleto).length > 0) {
-                    // Cargar datos de forma segura
                     if (nombreTrabajador) nombreTrabajador.text = trabajadorCompleto.Nombre || ""
                     if (apellidoPaterno) apellidoPaterno.text = trabajadorCompleto.Apellido_Paterno || ""
                     if (apellidoMaterno) apellidoMaterno.text = trabajadorCompleto.Apellido_Materno || ""
-                    if (especialidadField) especialidadField.text = trabajadorCompleto.Especialidad || ""
                     if (matriculaField) matriculaField.text = trabajadorCompleto.Matricula || ""
                     
-                    // Buscar el tipo de trabajador correspondiente
                     var tipos = trabajadorModel.tiposTrabajador || []
                     for (var i = 0; i < tipos.length; i++) {
                         if (tipos[i].id === trabajadorCompleto.Id_Tipo_Trabajador) {
                             if (tipoTrabajadorCombo) tipoTrabajadorCombo.currentIndex = i + 1
                             workerForm.selectedTipoTrabajadorIndex = i
                             break
+                        }
+                    }
+                    
+                    if (especialidadesSection) {
+                        console.log("🩺 Cargando especialidades del trabajador ID:", trabajadorId)
+                        
+                        var especialidadesExistentes = trabajadorModel.obtenerEspecialidadesDeTrabajador(trabajadorId)
+                        console.log("📋 Especialidades encontradas:", especialidadesExistentes.length)
+                        
+                        if (especialidadesSection.cargarEspecialidadesExistentes) {
+                            especialidadesSection.cargarEspecialidadesExistentes(especialidadesExistentes)
+                        } else if (especialidadesSection.especialidades) {
+                            especialidadesSection.especialidades = especialidadesExistentes
                         }
                     }
                 }
@@ -1272,11 +1234,9 @@ Item {
             if (visible && isEditMode) {
                 loadEditData()
             } else if (visible && !isEditMode) {
-                // Limpiar formulario para nuevo trabajador
                 if (nombreTrabajador) nombreTrabajador.text = ""
                 if (apellidoPaterno) apellidoPaterno.text = ""
                 if (apellidoMaterno) apellidoMaterno.text = ""
-                if (especialidadField) especialidadField.text = ""
                 if (matriculaField) matriculaField.text = ""
                 if (tipoTrabajadorCombo) tipoTrabajadorCombo.currentIndex = 0
                 workerForm.selectedTipoTrabajadorIndex = -1
@@ -1291,7 +1251,6 @@ Item {
             anchors.fill: parent
             spacing: 0
             
-            // HEADER MEJORADO CON CIERRE
             Rectangle {
                 id: dialogHeader
                 Layout.fillWidth: true
@@ -1316,7 +1275,6 @@ Item {
                     font.family: "Segoe UI, Arial, sans-serif"
                 }
                 
-                // Botón de cerrar
                 Button {
                     anchors.right: parent.right
                     anchors.rightMargin: baseUnit * 2
@@ -1348,13 +1306,11 @@ Item {
                 }
             }
             
-            // CONTENIDO PRINCIPAL
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: "transparent"
                 
-                // SCROLLVIEW PRINCIPAL CON MÁRGENES ADECUADOS
                 ScrollView {
                     id: scrollView
                     anchors.fill: parent
@@ -1363,12 +1319,10 @@ Item {
                     anchors.bottomMargin: baseUnit * 10
                     clip: true
                     
-                    // CONTENEDOR PRINCIPAL DEL FORMULARIO
                     ColumnLayout {
                         width: scrollView.width - (baseUnit * 1)
                         spacing: baseUnit * 2
                         
-                        // DATOS PERSONALES
                         GroupBox {
                             Layout.fillWidth: true
                             title: "DATOS PERSONALES"
@@ -1457,7 +1411,6 @@ Item {
                             }
                         }
                         
-                        // INFORMACIÓN PROFESIONAL
                         GroupBox {
                             Layout.fillWidth: true
                             title: "INFORMACIÓN PROFESIONAL"
@@ -1476,7 +1429,6 @@ Item {
                                 width: parent.width
                                 spacing: baseUnit * 2
                                 
-                                // Tipo de Trabajador
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: baseUnit * 2
@@ -1494,9 +1446,8 @@ Item {
                                         Layout.fillWidth: true
                                         font.pixelSize: fontBaseSize
                                         font.family: "Segoe UI, Arial, sans-serif"
-                                        model: tiposParaCombo  // ✅ USAR PROPERTY REACTIVA
+                                        model: tiposParaCombo
                                         
-                                        // ✅ AGREGAR ACTUALIZACIÓN CUANDO CAMBIE EL MODELO
                                         onModelChanged: {
                                             console.log("📋 Modelo de tipo trabajador actualizado:", model.length, "items")
                                         }
@@ -1505,7 +1456,6 @@ Item {
                                             console.log("🔄 Combo de tipo cambiado a índice:", currentIndex)
                                             if (currentIndex > 0) {
                                                 workerForm.selectedTipoTrabajadorIndex = currentIndex - 1
-                                                // ✅ DEBUG inmediato cuando cambia el tipo
                                                 var tipos = trabajadorModel ? trabajadorModel.tiposTrabajador : []
                                                 if (currentIndex - 1 < tipos.length) {
                                                     var tipoSeleccionado = tipos[currentIndex - 1]
@@ -1539,36 +1489,6 @@ Item {
                                     }
                                 }
                                 
-                                // Especialidad
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: baseUnit * 2
-                                    
-                                    Label {
-                                        text: "Especialidad:"
-                                        font.bold: true
-                                        Layout.preferredWidth: baseUnit * 18
-                                        color: textColor
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                    }
-                                    
-                                    TextField {
-                                        id: especialidadField
-                                        Layout.fillWidth: true
-                                        placeholderText: "Especialidad del trabajador"
-                                        font.pixelSize: fontBaseSize
-                                        font.family: "Segoe UI, Arial, sans-serif"
-                                        background: Rectangle {
-                                            color: whiteColor
-                                            border.color: "#ddd"
-                                            border.width: 1
-                                            radius: baseUnit * 0.5
-                                        }
-                                        padding: baseUnit
-                                    }
-                                }
-                                
-                                // Matrícula
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: baseUnit * 2
@@ -1599,19 +1519,15 @@ Item {
                             }
                         }
 
-                        // SECCIÓN DE ESPECIALIDADES MÉDICAS (Solo para médicos)
-                        // SECCIÓN DE ESPECIALIDADES MÉDICAS (Solo para médicos)
                         EspecialidadesMedicasSection {
                             id: especialidadesSection
                             Layout.fillWidth: true
                             
-                            // Props requeridas
                             trabajadorModel: trabajadoresRoot.trabajadorModel
                             trabajadorId: isEditMode && editingIndex >= 0 ? 
                                         parseInt(trabajadoresListModel.get(editingIndex).trabajadorId) : -1
                             isEditMode: workerForm.isEditMode || false
                             
-                            // Props de estilo (heredadas del padre)
                             baseUnit: trabajadoresRoot.baseUnit
                             fontBaseSize: trabajadoresRoot.fontBaseSize
                             primaryColor: trabajadoresRoot.primaryColor
@@ -1621,7 +1537,6 @@ Item {
                             textColor: trabajadoresRoot.textColor
                             textColorLight: trabajadoresRoot.textColorLight
                             
-                            // 🔍 MOSTRAR SOLO SI EL TIPO SELECCIONADO ES MÉDICO - CON DEBUG MEJORADO
                             visible: {
                                 console.log("🔍 INICIO - Evaluando visibilidad de especialidades médicas...")
                                 console.log("   Combo currentIndex:", tipoTrabajadorCombo.currentIndex)
@@ -1631,7 +1546,6 @@ Item {
                                     return false
                                 }
                                 
-                                // Obtener el área funcional del tipo seleccionado
                                 var tipos = trabajadorModel ? trabajadorModel.tiposTrabajador : []
                                 if (!tipos || tipos.length === 0) {
                                     console.log("❌ No mostrar: Lista de tipos vacía o nula")
@@ -1661,7 +1575,6 @@ Item {
                             }
                         }
                         
-                        // INFORMACIÓN ADICIONAL (Opcional)
                         GroupBox {
                             Layout.fillWidth: true
                             title: "INFORMACIÓN ADICIONAL"
@@ -1690,7 +1603,6 @@ Item {
                 }
             }
             
-            // BOTONES INFERIORES
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: baseUnit * 8
@@ -1759,28 +1671,23 @@ Item {
                         }
                         
                         onClicked: {
-                            console.log("🔐 DEBUG AUTENTICACIÓN - Botón Guardar presionado...")
+                            console.log("💾 Botón Guardar/Actualizar presionado...")
                             
-                            // ✅ VERIFICAR TRABAJADORMODEL Y AUTENTICACIÓN
                             if (!trabajadorModel) {
                                 console.error("❌ ERROR: TrabajadorModel no disponible")
                                 return
                             }
                             
-                            // Obtener valores de forma segura
                             var nombre = nombreTrabajador && nombreTrabajador.text ? nombreTrabajador.text.trim() : ""
                             var apellidoPat = apellidoPaterno && apellidoPaterno.text ? apellidoPaterno.text.trim() : ""
                             var apellidoMat = apellidoMaterno && apellidoMaterno.text ? apellidoMaterno.text.trim() : ""
-                            var especialidad = especialidadField && especialidadField.text ? especialidadField.text.trim() : ""
                             var matricula = matriculaField && matriculaField.text ? matriculaField.text.trim() : ""
                             
-                            // Validar campos obligatorios
                             if (!nombre || !apellidoPat || !apellidoMat) {
                                 console.error("❌ ERROR: Faltan campos obligatorios")
                                 return
                             }
                             
-                            // Obtener ID del tipo de trabajador
                             var tipoIndex = workerForm.selectedTipoTrabajadorIndex
                             if (tipoIndex < 0) {
                                 console.error("❌ ERROR: Tipo de trabajador no seleccionado")
@@ -1795,42 +1702,23 @@ Item {
                             
                             var tipoSeleccionado = tipos[tipoIndex]
                             var idTipoTrabajador = tipoSeleccionado.id
+                            var esMedico = (tipoSeleccionado.area_funcional === "MEDICO")
                             
                             console.log("📋 Datos del formulario:")
                             console.log("   Nombre:", nombre, apellidoPat, apellidoMat)
                             console.log("   Tipo:", tipoSeleccionado.Tipo, "(ID:", idTipoTrabajador, ")")
-                            console.log("   Especialidad descriptiva:", especialidad || "N/A")
                             console.log("   Matrícula:", matricula || "N/A")
+                            console.log("   Es médico:", esMedico)
                             
-                            // ========================================
-                            // 📌 VERIFICAR SI ES MÉDICO Y HAY ESPECIALIDADES PENDIENTES
-                            // ========================================
-                            var esMedico = false
                             var especialidadesPendientes = []
                             
-                            // Verificar área funcional del tipo seleccionado
-                            if (tipoSeleccionado.area_funcional) {
-                                esMedico = (tipoSeleccionado.area_funcional === "MEDICO")
-                                console.log("🩺 Es médico:", esMedico, "- Área funcional:", tipoSeleccionado.area_funcional)
-                            }
-                            
-                            // Si es médico, obtener especialidades pendientes
                             if (esMedico && especialidadesSection && especialidadesSection.visible) {
-                                especialidadesPendientes = especialidadesSection.obtenerEspecialidadesPendientes()
-                                console.log("📋 Especialidades pendientes a asignar:", especialidadesPendientes.length)
-                                
-                                if (especialidadesPendientes.length > 0) {
-                                    console.log("📝 Detalle de especialidades:")
-                                    for (var i = 0; i < especialidadesPendientes.length; i++) {
-                                        var esp = especialidadesPendientes[i]
-                                        console.log("   ", i+1, "-", esp.nombre, 
-                                                "(ID:", esp.id, ", Principal:", esp.es_principal, ")")
-                                    }
+                                if (especialidadesSection.obtenerEspecialidadesPendientes) {
+                                    especialidadesPendientes = especialidadesSection.obtenerEspecialidadesPendientes()
                                 }
+                                console.log("📋 Especialidades pendientes:", especialidadesPendientes.length)
                             }
-                            // ========================================
                             
-                            // MODO EDICIÓN
                             if (isEditMode && editingIndex >= 0) {
                                 console.log("🔄 Modo EDICIÓN - Actualizando trabajador...")
                                 
@@ -1843,43 +1731,47 @@ Item {
                                     apellidoPat,
                                     apellidoMat,
                                     idTipoTrabajador,
-                                    especialidad,
                                     matricula
                                 )
-                                debugTrabajadorCompleto(trabajadorId)
                                 
                                 if (success) {
                                     console.log("✅ Trabajador actualizado exitosamente")
                                     
-                                    // ========================================
-                                    // 📌 NUEVO: EN MODO EDICIÓN, ASIGNAR ESPECIALIDADES PENDIENTES
-                                    // ========================================
-                                    if (esMedico && especialidadesPendientes.length > 0) {
-                                        console.log("⚕️ Asignando especialidades al médico en modo edición...")
+                                    if (esMedico) {
+                                        console.log("⚕️ Gestionando especialidades...")
                                         
-                                        // Asignar cada especialidad pendiente
-                                        for (var i = 0; i < especialidadesPendientes.length; i++) {
-                                            var esp = especialidadesPendientes[i]
-                                            
-                                            console.log("➕ Asignando especialidad:", esp.nombre, 
-                                                    "(ID:", esp.id, ", Principal:", esp.es_principal, ")")
-                                            
-                                            var asignacionExitosa = trabajadorModel.asignarEspecialidadAMedico(
-                                                trabajadorId,
-                                                esp.id,
-                                                esp.es_principal || false
-                                            )
-                                            
-                                            if (asignacionExitosa) {
-                                                console.log("   ✅ Especialidad", esp.nombre, "asignada")
-                                            } else {
-                                                console.error("   ❌ Error asignando especialidad", esp.nombre)
+                                        var especialidadesActuales = trabajadorModel.obtenerEspecialidadesDeTrabajador(trabajadorId)
+                                        if (especialidadesActuales && especialidadesActuales.length > 0) {
+                                            console.log("🗑️ Eliminando", especialidadesActuales.length, "especialidades antiguas")
+                                            for (var j = 0; j < especialidadesActuales.length; j++) {
+                                                trabajadorModel.removerEspecialidadDeMedico(
+                                                    trabajadorId,
+                                                    especialidadesActuales[j].id
+                                                )
                                             }
                                         }
                                         
-                                        console.log("✅ Proceso de asignación de especialidades completado")
+                                        if (especialidadesPendientes.length > 0) {
+                                            console.log("➕ Asignando", especialidadesPendientes.length, "especialidades nuevas")
+                                            for (var i = 0; i < especialidadesPendientes.length; i++) {
+                                                var esp = especialidadesPendientes[i]
+                                                
+                                                console.log("   Asignando:", esp.nombre, "(Principal:", esp.es_principal, ")")
+                                                
+                                                var asignacionExitosa = trabajadorModel.asignarEspecialidadAMedico(
+                                                    trabajadorId,
+                                                    esp.id,
+                                                    esp.es_principal || false
+                                                )
+                                                
+                                                if (asignacionExitosa) {
+                                                    console.log("   ✅ Especialidad asignada:", esp.nombre)
+                                                } else {
+                                                    console.error("   ❌ Error asignando:", esp.nombre)
+                                                }
+                                            }
+                                        }
                                     }
-                                    // ========================================
                                     
                                     showNewWorkerDialog = false
                                     isEditMode = false
@@ -1889,11 +1781,7 @@ Item {
                                 } else {
                                     console.error("❌ Error actualizando trabajador")
                                 }
-
-                                
-                            } 
-                            // MODO CREACIÓN
-                            else {
+                            } else {
                                 console.log("➕ Modo CREACIÓN - Creando nuevo trabajador...")
                                 
                                 var success = trabajadorModel.crearTrabajador(
@@ -1901,36 +1789,27 @@ Item {
                                     apellidoPat,
                                     apellidoMat,
                                     idTipoTrabajador,
-                                    especialidad,
                                     matricula
                                 )
                                 
                                 if (success) {
                                     console.log("✅ Trabajador creado exitosamente")
                                     
-                                    // ========================================
-                                    // 📌 NUEVO: SI ES MÉDICO, ASIGNAR ESPECIALIDADES
-                                    // ========================================
                                     if (esMedico && especialidadesPendientes.length > 0) {
                                         console.log("⚕️ Asignando especialidades al médico recién creado...")
                                         
-                                        // Esperar un momento para que el trabajador se haya creado y cargado
-                                        // Luego obtener su ID del último trabajador en la lista
                                         trabajadorModel.trabajadoresChanged.connect(function() {
                                             var trabajadores = trabajadorModel.trabajadores || []
                                             if (trabajadores.length > 0) {
-                                                // El último trabajador debería ser el recién creado
                                                 var ultimoTrabajador = trabajadores[trabajadores.length - 1]
                                                 var nuevoMedicoId = ultimoTrabajador.id
                                                 
                                                 console.log("🆔 ID del médico recién creado:", nuevoMedicoId)
                                                 
-                                                // Asignar cada especialidad pendiente
                                                 for (var i = 0; i < especialidadesPendientes.length; i++) {
                                                     var esp = especialidadesPendientes[i]
                                                     
-                                                    console.log("➕ Asignando especialidad:", esp.nombre, 
-                                                            "(ID:", esp.id, ", Principal:", esp.es_principal, ")")
+                                                    console.log("   Asignando:", esp.nombre, "(Principal:", esp.es_principal, ")")
                                                     
                                                     var asignacionExitosa = trabajadorModel.asignarEspecialidadAMedico(
                                                         nuevoMedicoId,
@@ -1939,20 +1818,17 @@ Item {
                                                     )
                                                     
                                                     if (asignacionExitosa) {
-                                                        console.log("   ✅ Especialidad", esp.nombre, "asignada")
+                                                        console.log("   ✅ Especialidad asignada:", esp.nombre)
                                                     } else {
-                                                        console.error("   ❌ Error asignando especialidad", esp.nombre)
+                                                        console.error("   ❌ Error asignando:", esp.nombre)
                                                     }
                                                 }
                                                 
-                                                console.log("✅ Proceso de asignación de especialidades completado")
-                                                
-                                                // Desconectar la señal para evitar múltiples ejecuciones
+                                                console.log("✅ Proceso de asignación completado")
                                                 trabajadorModel.trabajadoresChanged.disconnect(arguments.callee)
                                             }
                                         })
                                     }
-                                    // ========================================
                                     
                                     showNewWorkerDialog = false
                                     selectedRowIndex = -1
@@ -1968,18 +1844,127 @@ Item {
         }
     }
 
-    // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN
+    Rectangle {
+        id: toastNotification
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: baseUnit * 3
+        width: Math.min(parent.width * 0.9, 500)
+        height: toastLayout.implicitHeight + baseUnit * 2
+        radius: baseUnit * 0.8
+        visible: opacity > 0
+        opacity: 0
+        z: 9999
+        
+        property string mensaje: ""
+        property string tipo: "success"
+        
+        color: {
+            switch(tipo) {
+                case "success": return successColor
+                case "error": return dangerColor
+                case "warning": return warningColor
+                case "info": return infoColor
+                default: return successColor
+            }
+        }
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+        
+        function mostrar(msg, tipoMsg) {
+            mensaje = msg || ""
+            tipo = tipoMsg || "success"
+            opacity = 1
+            hideTimer.restart()
+        }
+        
+        function ocultar() {
+            opacity = 0
+        }
+        
+        Timer {
+            id: hideTimer
+            interval: 4000
+            repeat: false
+            onTriggered: toastNotification.ocultar()
+        }
+        
+        RowLayout {
+            id: toastLayout
+            anchors.fill: parent
+            anchors.margins: baseUnit * 1.5
+            spacing: baseUnit
+            
+            Label {
+                text: {
+                    switch(toastNotification.tipo) {
+                        case "success": return "✅"
+                        case "error": return "❌"
+                        case "warning": return "⚠️"
+                        case "info": return "ℹ️"
+                        default: return "✅"
+                    }
+                }
+                font.pixelSize: fontBaseSize * 1.5
+                color: whiteColor
+            }
+            
+            Label {
+                text: toastNotification.mensaje
+                font.pixelSize: fontBaseSize
+                color: whiteColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                font.family: "Segoe UI, Arial, sans-serif"
+            }
+            
+            Button {
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+                
+                background: Rectangle {
+                    color: parent.pressed ? "#40FFFFFF" : 
+                        (parent.hovered ? "#30FFFFFF" : "transparent")
+                    radius: 15
+                }
+                
+                contentItem: Label {
+                    text: "✕"
+                    color: whiteColor
+                    font.pixelSize: fontBaseSize * 1.2
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: toastNotification.ocultar()
+                
+                HoverHandler {
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: toastNotification.ocultar()
+        }
+    }
+
     Dialog {
         id: confirmDeleteDialog
         anchors.centerIn: parent
-        width: Math.min(parent.width * 0.9, 480)
-        height: Math.min(parent.height * 0.55, 320)
+        width: Math.min(parent.width * 0.6, 450)
+        height: 350
         modal: true
         closePolicy: Popup.NoAutoClose
         visible: showConfirmDeleteDialog
         
-        // Remover el título por defecto para usar nuestro diseño personalizado
         title: ""
+        
+        property string dialogMode: "confirm"
+        property string infoMessage: ""
         
         background: Rectangle {
             color: whiteColor
@@ -1987,7 +1972,6 @@ Item {
             border.color: "#e0e0e0"
             border.width: 1
             
-            // Sombra sutil
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -3
@@ -2003,11 +1987,10 @@ Item {
             anchors.fill: parent
             spacing: 0
             
-            // Header personalizado con ícono
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 75
-                color: "#fff5f5"
+                color: confirmDeleteDialog.dialogMode === "confirm" ? "#fff5f5" : warningColorLight
                 radius: baseUnit * 0.8
                 
                 Rectangle {
@@ -2022,18 +2005,17 @@ Item {
                     anchors.centerIn: parent
                     spacing: baseUnit * 2
                     
-                    // Ícono de advertencia
                     Rectangle {
                         Layout.preferredWidth: 45
                         Layout.preferredHeight: 45
-                        color: "#fee2e2"
+                        color: confirmDeleteDialog.dialogMode === "confirm" ? "#fee2e2" : warningColorLight
                         radius: 22
-                        border.color: "#fecaca"
+                        border.color: confirmDeleteDialog.dialogMode === "confirm" ? "#fecaca" : warningColor
                         border.width: 2
                         
                         Label {
                             anchors.centerIn: parent
-                            text: "⚠️"
+                            text: confirmDeleteDialog.dialogMode === "confirm" ? "⚠️" : "🛡️"
                             font.pixelSize: fontBaseSize * 1.8
                         }
                     }
@@ -2042,15 +2024,19 @@ Item {
                         spacing: baseUnit * 0.25
                         
                         Label {
-                            text: "Confirmar Eliminación"
+                            text: confirmDeleteDialog.dialogMode === "confirm" ? 
+                                "Confirmar Eliminación" : 
+                                "No se puede eliminar"
                             font.pixelSize: fontBaseSize * 1.3
                             font.bold: true
-                            color: "#dc2626"
+                            color: confirmDeleteDialog.dialogMode === "confirm" ? "#dc2626" : warningColor
                             Layout.alignment: Qt.AlignLeft
                         }
                         
                         Label {
-                            text: "Acción irreversible"
+                            text: confirmDeleteDialog.dialogMode === "confirm" ? 
+                                "Acción irreversible" : 
+                                "Registros protegidos"
                             font.pixelSize: fontBaseSize * 0.9
                             color: "#7f8c8d"
                             Layout.alignment: Qt.AlignLeft
@@ -2059,7 +2045,6 @@ Item {
                 }
             }
             
-            // Contenido principal
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -2068,35 +2053,64 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: baseUnit * 2
-                    spacing: baseUnit
+                    spacing: baseUnit * 1.5
                     
                     Item { Layout.preferredHeight: baseUnit * 0.5 }
                     
-                    Label {
-                        text: "¿Estás seguro de eliminar este trabajador?"
-                        font.pixelSize: fontBaseSize * 1.1
-                        font.bold: true
-                        color: textColor
-                        Layout.alignment: Qt.AlignHCenter
-                        wrapMode: Text.WordWrap
-                        horizontalAlignment: Text.AlignHCenter
-                        font.family: "Segoe UI, Arial, sans-serif"
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: baseUnit
+                        visible: confirmDeleteDialog.dialogMode === "confirm"
+                        
+                        Label {
+                            text: "¿Estás seguro de eliminar este trabajador?"
+                            font.pixelSize: fontBaseSize * 1.1
+                            font.bold: true
+                            color: textColor
+                            Layout.alignment: Qt.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.fillWidth: true
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
+                        
+                        Label {
+                            text: "Esta acción no se puede deshacer y el registro del trabajador se eliminará permanentemente."
+                            font.pixelSize: fontBaseSize
+                            color: "#6b7280"
+                            Layout.alignment: Qt.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.fillWidth: true
+                            Layout.leftMargin: baseUnit 
+                            Layout.rightMargin: baseUnit 
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
                     }
                     
-                    Label {
-                        text: "Esta acción no se puede deshacer y el registro del trabajador se eliminará permanentemente."
-                        font.pixelSize: fontBaseSize
-                        color: "#6b7280"
-                        Layout.alignment: Qt.AlignHCenter
-                        wrapMode: Text.WordWrap
-                        horizontalAlignment: Text.AlignHCenter
-                        Layout.maximumWidth: parent.width - baseUnit * 4
-                        font.family: "Segoe UI, Arial, sans-serif"
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: 200
+                        clip: true
+                        visible: confirmDeleteDialog.dialogMode === "info"
+                        
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                        ScrollBar.vertical.interactive: true
+                        
+                        Label {
+                            width: confirmDeleteDialog.width - baseUnit * 6
+                            text: confirmDeleteDialog.infoMessage
+                            font.pixelSize: fontBaseSize * 0.95
+                            color: textColor
+                            wrapMode: Text.WordWrap
+                            lineHeight: 1.5
+                            font.family: "Segoe UI, Arial, sans-serif"
+                        }
                     }
                     
                     Item { Layout.fillHeight: true }
                     
-                    // Botones mejorados
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: baseUnit * 3
@@ -2104,6 +2118,7 @@ Item {
                         Layout.topMargin: baseUnit
                         
                         Button {
+                            visible: confirmDeleteDialog.dialogMode === "confirm"
                             Layout.preferredWidth: 130
                             Layout.preferredHeight: 45
                             
@@ -2142,6 +2157,7 @@ Item {
                             onClicked: {
                                 showConfirmDeleteDialog = false
                                 trabajadorIdToDelete = ""
+                                confirmDeleteDialog.dialogMode = "confirm"
                             }
                             
                             HoverHandler {
@@ -2154,8 +2170,15 @@ Item {
                             Layout.preferredHeight: 45
                             
                             background: Rectangle {
-                                color: parent.pressed ? "#dc2626" : 
-                                    (parent.hovered ? "#ef4444" : "#f87171")
+                                color: {
+                                    if (confirmDeleteDialog.dialogMode === "confirm") {
+                                        return parent.pressed ? "#dc2626" : 
+                                            (parent.hovered ? "#ef4444" : "#f87171")
+                                    } else {
+                                        return parent.pressed ? "#2563eb" : 
+                                            (parent.hovered ? "#3b82f6" : primaryColor)
+                                    }
+                                }
                                 radius: baseUnit * 0.6
                                 border.width: 0
                                 
@@ -2168,14 +2191,14 @@ Item {
                                 spacing: baseUnit * 0.5
                                 
                                 Label {
-                                    text: "🗑️"
+                                    text: confirmDeleteDialog.dialogMode === "confirm" ? "🗑️" : "✓"
                                     color: whiteColor
                                     font.pixelSize: fontBaseSize * 0.9
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                                 
                                 Label {
-                                    text: "Eliminar"
+                                    text: confirmDeleteDialog.dialogMode === "confirm" ? "Eliminar" : "Entendido"
                                     color: whiteColor
                                     font.bold: true
                                     font.pixelSize: fontBaseSize
@@ -2185,25 +2208,21 @@ Item {
                             }
                             
                             onClicked: {
-                                console.log("🗑️ Confirmando eliminación de trabajador...")
-                                
-                                if (!trabajadorModel) {
-                                    console.error("❌ TrabajadorModel no disponible para eliminación")
-                                    return
-                                }
-                                
-                                var trabajadorId = parseInt(trabajadorIdToDelete)
-                                var success = trabajadorModel.eliminarTrabajador(trabajadorId)
-                                
-                                if (success) {
-                                    console.log("✅ Trabajador eliminado exitosamente")
-                                    selectedRowIndex = -1
+                                if (confirmDeleteDialog.dialogMode === "confirm") {
+                                    console.log("🗑️ Confirmando eliminación de trabajador...")
+                                    
+                                    if (!trabajadorModel) {
+                                        console.error("❌ TrabajadorModel no disponible para eliminación")
+                                        return
+                                    }
+                                    
+                                    var trabajadorId = parseInt(trabajadorIdToDelete)
+                                    trabajadorModel.eliminarTrabajador(trabajadorId)
                                 } else {
-                                    console.log("❌ Error eliminando trabajador")
+                                    showConfirmDeleteDialog = false
+                                    trabajadorIdToDelete = ""
+                                    confirmDeleteDialog.dialogMode = "confirm"
                                 }
-                                
-                                showConfirmDeleteDialog = false
-                                trabajadorIdToDelete = ""
                             }
                             
                             HoverHandler {
@@ -2216,22 +2235,17 @@ Item {
         }
     }
 
-    // ===== INICIALIZACIÓN MEJORADA CON VERIFICACIONES DE TIMING =====
     Component.onCompleted: {
         console.log("💥 Módulo Trabajadores iniciado")
         console.log("🔗 Señal irAConfigPersonal configurada para navegación")
         
-        // ✅ VERIFICAR DISPONIBILIDAD DE APPCONTROLLER Y TRABAJADORMODEL
         if (typeof appController === "undefined") {
             console.error("❌ CRÍTICO: appController no está disponible")
             return
         }
         
         console.log("✅ AppController disponible")
-        
 
-        
-        // ✅ FUNCIÓN DE INICIALIZACIÓN DIFERIDA CON REINTENTOS
         function inicializarModelo(reintentos) {
             reintentos = reintentos || 0
             const MAX_REINTENTOS = 5
@@ -2242,31 +2256,24 @@ Item {
                 actualizarTiposParaFiltro()
                 actualizarTiposParaCombo()
                 
-                // ✅ DEBUG DE AUTENTICACIÓN AL INICIO
                 console.log("🔍 Verificando autenticación inicial:")
                 console.log("   - trabajadorModel.usuario_actual_id:", trabajadorModel.usuario_actual_id || "undefined")
                 console.log("   - trabajadorModel.esAdministrador():", trabajadorModel.esAdministrador ? trabajadorModel.esAdministrador() : "undefined")
                 
-                // ✅ VERIFICAR SI LOS DATOS YA ESTÁN LISTOS
                 if (isModeloListo()) {
                     console.log("✅ Modelo ya está listo con", trabajadorModel.tiposTrabajador.length, "tipos")
                     
-                    // Configurar ComboBoxes inmediatamente
                     actualizarCombosSiEsNecesario()
-                    
-                    // Aplicar filtros inicial
                     aplicarFiltros()
                     
                     console.log("🎯 Inicialización completa inmediata")
                 } else {
                     console.log("🔄 Modelo disponible pero datos aún cargando, esperando...")
                     
-                    // Recargar datos para asegurar que estén actualizados
                     if (trabajadorModel.recargarDatos) {
                         trabajadorModel.recargarDatos()
                     }
                     
-                    // Timer para verificar cuando estén listos los datos
                     var checkTimer = Qt.createQmlObject(`
                         import QtQuick 2.15
                         Timer {
@@ -2281,15 +2288,11 @@ Item {
                                     
                                     console.log("✅ Datos finalmente listos -", trabajadorModel.tiposTrabajador.length, "tipos cargados")
                                     
-                                    // Configurar ComboBoxes
                                     actualizarCombosSiEsNecesario()
-                                    
-                                    // Aplicar filtros inicial
                                     aplicarFiltros()
                                     
                                     console.log("🎯 Inicialización completa diferida")
                                     
-                                    // Detener timer
                                     running = false
                                     destroy()
                                 }
@@ -2308,70 +2311,8 @@ Item {
             }
         }
         
-        // ✅ INICIALIZAR CON DELAY MÍNIMO
         Qt.callLater(function() {
             inicializarModelo(0)
         })
-    }
-
-    // ✅ FUNCIÓN PARA DEBUG DE TIPOS
-    // ✅ FUNCIÓN MEJORADA PARA DEBUG DE TIPOS
-    function debugTiposTrabajador() {
-        console.log("🐛 DEBUG DETALLADO - Tipos de Trabajador:")
-        if (!trabajadorModel) {
-            console.log("   ❌ trabajadorModel no disponible")
-            return
-        }
-        
-        var tipos = trabajadorModel.tiposTrabajador
-        console.log("   📋 Total tipos en modelo:", tipos.length)
-        
-        if (tipos.length === 0) {
-            console.log("   ⚠️ No hay tipos disponibles")
-            return
-        }
-        
-        // Mostrar todos los tipos con sus áreas funcionales
-        for (var i = 0; i < tipos.length; i++) {
-            var tipo = tipos[i]
-            console.log("   " + (i + 1) + ". ID: " + tipo.id + 
-                    " | Tipo: '" + tipo.Tipo + 
-                    "' | Área: '" + (tipo.area_funcional || "NO DISPONIBLE") + "'")
-        }
-        
-        // Verificar combo actual
-        console.log("   🎯 COMBO ACTUAL:")
-        console.log("      Índice seleccionado:", tipoTrabajadorCombo.currentIndex)
-        
-        if (tipoTrabajadorCombo.currentIndex > 0) {
-            var tipoIndex = tipoTrabajadorCombo.currentIndex - 1
-            if (tipoIndex < tipos.length) {
-                var tipoActual = tipos[tipoIndex]
-                console.log("      Tipo seleccionado:", tipoActual.Tipo)
-                console.log("      Área funcional:", "'" + (tipoActual.area_funcional || "NO DISPONIBLE") + "'")
-                console.log("      Es médico?", tipoActual.area_funcional === "MEDICO")
-            } else {
-                console.log("      ❌ Índice fuera de rango")
-            }
-        } else {
-            console.log("      No hay tipo seleccionado")
-        }
-    }
-    // ✅ FUNCIÓN TEMPORAL PARA DEBUG DEL TRABAJADOR
-    function debugTrabajadorCompleto(trabajadorId) {
-        if (!trabajadorModel) {
-            console.log("❌ trabajadorModel no disponible")
-            return
-        }
-        
-        var trabajadorCompleto = trabajadorModel.obtenerTrabajadorPorId(trabajadorId)
-        console.log("🔍 DEBUG TRABAJADOR COMPLETO ID:", trabajadorId)
-        console.log("   Datos completos:", JSON.stringify(trabajadorCompleto))
-        
-        if (trabajadorCompleto && trabajadorCompleto.Id_Tipo_Trabajador) {
-            var areaFuncional = trabajadorModel.obtenerAreaFuncionalDeTipo(trabajadorCompleto.Id_Tipo_Trabajador)
-            console.log("   Área funcional del tipo:", "'" + areaFuncional + "'")
-            console.log("   Es médico?", areaFuncional === "MEDICO")
-        }
     }
 }

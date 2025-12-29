@@ -190,6 +190,13 @@ Item {
             console.log(`${tipo}: ${mensaje}`)
         }
     }
+    function confirm(mensaje) {
+        console.log("CONFIRMACIÓN:", mensaje)
+        
+        // Por ahora retornar false para prevenir duplicados
+        showNotification("Advertencia", mensaje.replace(/\n/g, ' '))
+        return false
+    }
     // LAYOUT PRINCIPAL ADAPTATIVO
     ColumnLayout {
         anchors.fill: parent
@@ -3087,49 +3094,75 @@ Item {
     function guardarConsulta() {
         console.log("💾 Iniciando guardado de consulta...")
         
-        // ✅ NUEVA LÓGICA: CREAR PACIENTE SI ES NUEVO
+        // ✅ NUEVA LÓGICA: DETECTAR SI HAY PACIENTE O SI HAY DATOS PARA CREAR UNO
         var pacienteIdFinal = pacienteSeleccionadoId
         
-        // Si es un nuevo paciente (no encontrado en búsqueda), crearlo primero
-        if (campoBusquedaPaciente.pacienteNoEncontrado && !campoBusquedaPaciente.pacienteAutocompletado) {
-            console.log("🔄 Creando nuevo paciente antes de guardar consulta...")
+        // ✅ CORRECCIÓN: Verificar si hay datos de paciente llenos manualmente (sin usar búsqueda)
+        var hayDatosPacienteManuales = (nombrePaciente.text.trim().length >= 2 && 
+                                        apellidoPaterno.text.trim().length >= 2)
+        // ✅ Si campo de búsqueda está VACÍO y hay datos manuales → NUEVO PACIENTE
+        var campoBusquedaVacio = campoBusquedaPaciente.text.trim().length === 0
+        var necesitaCrearPaciente = (campoBusquedaVacio && hayDatosPacienteManuales && pacienteIdFinal <= 0)
+        
+        if (necesitaCrearPaciente) {
+            console.log("🔄 Validando nuevo paciente...")
+            console.log("   - Campo búsqueda vacío:", campoBusquedaVacio)
+            console.log("   - Datos manuales válidos:", hayDatosPacienteManuales)
             
             // Validar datos mínimos del nuevo paciente
-            if (nombrePaciente.text.length < 2 || apellidoPaterno.text.length < 2) {
+            if (nombrePaciente.text.trim().length < 2 || apellidoPaterno.text.trim().length < 2) {
                 console.log("❌ Error: Datos del paciente incompletos")
                 showNotification("Error", "Nombre y apellido paterno son obligatorios para nuevo paciente")
                 return false
             }
             
-            // Llamar al método para crear el paciente
-            pacienteIdFinal = consultaModel.buscar_o_crear_paciente_inteligente(
+            // ✅ VALIDAR DUPLICADOS POR NOMBRE COMPLETO
+            var validacion = consultaModel.validar_paciente_duplicado(
                 nombrePaciente.text.trim(),
                 apellidoPaterno.text.trim(),
-                apellidoMaterno.text.trim(),
-                cedulaPaciente.text.trim()
+                apellidoMaterno.text.trim()
             )
             
-            console.log("🔍 DEBUG - Resultado creación paciente:", pacienteIdFinal)
-            
-            if (pacienteIdFinal <= 0) {
-                console.log("❌ Error creando paciente")
-                showNotification("Error", "No se pudo crear el paciente. Verifique los datos.")
-                return false
+            if (validacion.existe) {
+                var mensaje = "Este paciente ya existe:\n\n" +
+                            "• Nombre: " + validacion.nombre_completo + "\n" +
+                            "• Cédula: " + validacion.cedula + "\n\n" +
+                            "¿Desea usar este paciente existente?"
+                
+                // Mostrar confirmación
+                if (!confirm(mensaje)) {
+                    console.log("Usuario canceló - paciente duplicado detectado")
+                    return false
+                }
+                
+                // Usuario confirmó, usar paciente existente
+                pacienteIdFinal = validacion.id
+                pacienteSeleccionadoId = validacion.id
+                esPacienteExistente = true
+                
+                console.log("✅ Usando paciente existente ID:", pacienteIdFinal)
+                
+                // Saltar a validaciones de consulta
+            } else {
+                // No existe duplicado, crear nuevo paciente
+                console.log("🔄 Creando nuevo paciente...")
+                
+                // Llamar al método para crear el paciente
+                pacienteIdFinal = consultaModel.buscar_o_crear_paciente_inteligente(
+                    nombrePaciente.text.trim(),
+                    apellidoPaterno.text.trim(),
+                    apellidoMaterno.text.trim(),
+                    cedulaPaciente.text.trim()
+                )
             }
-            
-            console.log("✅ Nuevo paciente creado con ID:", pacienteIdFinal)
-            
-            // Actualizar el estado para marcar como paciente existente
-            pacienteSeleccionadoId = pacienteIdFinal
-            esPacienteExistente = true
-            campoBusquedaPaciente.pacienteNoEncontrado = false
-            campoBusquedaPaciente.pacienteAutocompletado = true
         }
-        
-        // ✅ VALIDACIÓN CORREGIDA: Usar pacienteIdFinal en lugar de pacienteSeleccionadoId
+        // ✅ VALIDACIÓN FINAL: Verificar que tengamos un paciente válido
         if (pacienteIdFinal <= 0) {
             console.log("❌ Error: Paciente no seleccionado o no creado")
-            showNotification("Error", "Debe seleccionar o crear un paciente")
+            console.log("   - pacienteSeleccionadoId:", pacienteSeleccionadoId)
+            console.log("   - Nombre:", nombrePaciente.text)
+            console.log("   - Apellido:", apellidoPaterno.text)
+            showNotification("Error", "Debe seleccionar un paciente existente o llenar los datos del nuevo paciente")
             return false
         }
         
@@ -3177,7 +3210,7 @@ Item {
         // 7. Llamar al método del modelo
         var exito = consultaModel.crear_consulta_completa(
             appController.usuario_actual_id,
-            pacienteIdFinal,  // ✅ USAR pacienteIdFinal CORREGIDO
+            pacienteIdFinal,
             especialidadId,
             medicoSeleccionadoId,
             detalles,
@@ -3663,8 +3696,14 @@ Item {
                 
                 mostrarResultadosBusqueda = true
                 campoBusquedaPaciente.pacienteNoEncontrado = false
-                
-                console.log("Encontrados", resultados.length, "pacientes")
+
+                // ✅ Limpiar campos manuales cuando se usa búsqueda
+                nombrePaciente.text = ""
+                apellidoPaterno.text = ""
+                apellidoMaterno.text = ""
+                cedulaPaciente.text = ""
+
+                console.log("Encontrados", resultados.length, "pacientes - campos limpiados")
             } else {
                 console.log("No se encontraron pacientes para:", termino)
                 mostrarResultadosBusqueda = false

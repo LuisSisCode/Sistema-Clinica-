@@ -405,12 +405,14 @@ class TrabajadorModel(QObject):
     # SLOTS PARA OPERACIONES CRUD TRABAJADORES
     # ===============================
     
-    @Slot(str, str, str, int, str, str, result=bool)
+    @Slot(str, str, str, int, str, result=bool)
     def crearTrabajador(self, nombre: str, apellido_paterno: str, 
                 apellido_materno: str, tipo_trabajador_id: int,
-                especialidad: str = "", matricula: str = "") -> bool:
-        """Crea nuevo trabajador desde QML - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
-        # ✅ VERIFICAR AUTENTICACIÓN PRIMERO
+                matricula: str = "") -> bool:
+        """
+        Crea nuevo trabajador desde QML
+        ❌ ELIMINADO: parámetro especialidad
+        """
         if not self._verificar_autenticacion():
             self.trabajadorCreado.emit(False, "Usuario no autenticado")
             return False
@@ -425,18 +427,15 @@ class TrabajadorModel(QObject):
                 apellido_paterno=apellido_paterno.strip(),
                 apellido_materno=apellido_materno.strip(),
                 tipo_trabajador_id=tipo_trabajador_id,
-                usuario_id=self._usuario_actual_id,  # Agregar este parámetro
-                especialidad=especialidad.strip() if especialidad.strip() else None,
+                usuario_id=self._usuario_actual_id,
                 matricula=matricula.strip() if matricula.strip() else None
             )
             
             if trabajador_id:
-                # Carga inmediata y forzada de datos
                 self._cargar_trabajadores()
                 self._cargar_tipos_trabajador()
                 self._cargar_estadisticas()
                 
-                # Forzar aplicación de filtros actuales
                 self.aplicarFiltros(self._filtro_tipo, self._filtro_busqueda, 
                                 self._incluir_stats, self._filtro_area)
                 
@@ -447,7 +446,7 @@ class TrabajadorModel(QObject):
                 self.global_signals.trabajadoresNecesitaActualizacion.emit(
                     f"Trabajador creado: ID {trabajador_id}"
                 )
-                print(f"✅ Trabajador creado desde QML: {nombre} {apellido_paterno}, Usuario: {self._usuario_actual_id}")
+                print(f"✅ Trabajador creado desde QML: {nombre} {apellido_paterno}")
                 return True 
             else:
                 error_msg = "Error creando trabajador"
@@ -462,14 +461,15 @@ class TrabajadorModel(QObject):
             return False
         finally:
             self._set_loading(False)
-    
-    @Slot(int, str, str, str, int, str, str, result=bool)
+        
+    @Slot(int, str, str, str, int, str, result=bool)
     def actualizarTrabajador(self, trabajador_id: int, nombre: str = "", 
                             apellido_paterno: str = "", apellido_materno: str = "",
-                            tipo_trabajador_id: int = 0, especialidad: str = "", 
-                            matricula: str = "") -> bool:
-        """Actualiza trabajador existente - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
-        # ✅ VERIFICAR AUTENTICACIÓN
+                            tipo_trabajador_id: int = 0, matricula: str = "") -> bool:
+        """
+        Actualiza trabajador existente
+        ❌ ELIMINADO: parámetro especialidad
+        """
         if not self._verificar_autenticacion():
             self.trabajadorActualizado.emit(False, "Usuario no autenticado")
             return False
@@ -477,9 +477,8 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            print(f"🔄 Actualizando trabajador ID: {trabajador_id} por usuario: {self._usuario_actual_id}")
+            print(f"🔄 Actualizando trabajador ID: {trabajador_id}")
             
-            # Preparar argumentos solo con valores no vacíos
             kwargs = {}
             if nombre.strip():
                 kwargs['nombre'] = nombre.strip()
@@ -489,8 +488,6 @@ class TrabajadorModel(QObject):
                 kwargs['apellido_materno'] = apellido_materno.strip()
             if tipo_trabajador_id > 0:
                 kwargs['tipo_trabajador_id'] = tipo_trabajador_id
-            if especialidad.strip():
-                kwargs['especialidad'] = especialidad.strip()
             if matricula.strip():
                 kwargs['matricula'] = matricula.strip()
             
@@ -499,7 +496,7 @@ class TrabajadorModel(QObject):
             if success:
                 self._cargar_trabajadores()
                 
-                mensaje = f"Trabajador actualizado exitosamente  - ID: {trabajador_id}"
+                mensaje = f"Trabajador actualizado exitosamente - ID: {trabajador_id}"
                 self.trabajadorActualizado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
 
@@ -525,12 +522,11 @@ class TrabajadorModel(QObject):
     
     @Slot(int, result=bool)
     def eliminarTrabajador(self, trabajador_id: int) -> bool:
-        """Elimina trabajador desde QML - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
-        # ✅ VERIFICAR AUTENTICACIÓN
+        """Elimina trabajador con actualización completa"""
         if not self._verificar_autenticacion():
             self.trabajadorEliminado.emit(False, "Usuario no autenticado")
             return False
-        # Verificar permisos de administrador
+        
         if not self._es_administrador():
             error_msg = "Solo administradores pueden eliminar trabajadores"
             self.trabajadorEliminado.emit(False, error_msg)
@@ -539,44 +535,83 @@ class TrabajadorModel(QObject):
         try:
             self._set_loading(True)
             
-            print(f"🗑️ Eliminando trabajador ID: {trabajador_id} por usuario: {self._usuario_actual_id}")
+            print(f"🔍 Verificando trabajador ID: {trabajador_id}")
             
-            # Verificar que no tenga asignaciones de laboratorio
-            asignaciones = self.repository.get_worker_lab_assignments(trabajador_id)
-            if asignaciones:
-                self.warningMessage.emit(f"Trabajador tiene {len(asignaciones)} asignaciones de laboratorio activas")
+            verificacion = self.repository.verificar_puede_eliminar_trabajador(trabajador_id)
+            
+            if not verificacion['puede_eliminar']:
+                mensaje = verificacion['mensaje']
+                print(f"⚠️ No se puede eliminar: {', '.join(verificacion['registros_encontrados'])}")
+                self.trabajadorEliminado.emit(False, mensaje)
                 return False
             
+            print(f"🗑️ Eliminando trabajador ID: {trabajador_id}")
             success = self.repository.delete(trabajador_id)
             
             if success:
+                # ✅ Invalidar caché
+                self.repository.invalidate_worker_caches()
+                
+                # ✅ Recargar ANTES de aplicar filtros
                 self._cargar_trabajadores()
+                
+                # ✅ CRÍTICO: Actualizar filtrados DIRECTAMENTE
+                self._trabajadores_filtrados = self._trabajadores.copy()
+                
+                # ✅ Aplicar filtros actuales
+                trabajadores_filtrados = self._trabajadores.copy()
+                
+                if self._filtro_tipo > 0:
+                    trabajadores_filtrados = [
+                        t for t in trabajadores_filtrados
+                        if t.get('Id_Tipo_Trabajador') == self._filtro_tipo
+                    ]
+                
+                if self._filtro_busqueda.strip():
+                    buscar_lower = self._filtro_busqueda.lower()
+                    trabajadores_filtrados = [
+                        t for t in trabajadores_filtrados
+                        if (buscar_lower in t.get('Nombre', '').lower() or
+                            buscar_lower in t.get('Apellido_Paterno', '').lower() or
+                            buscar_lower in t.get('Apellido_Materno', '').lower())
+                    ]
+                
+                if self._filtro_area and self._filtro_area != "Todos":
+                    area_lower = self._filtro_area.lower()
+                    trabajadores_filtrados = [
+                        t for t in trabajadores_filtrados
+                        if area_lower in t.get('tipo_nombre', '').lower()
+                    ]
+                
+                self._trabajadores_filtrados = trabajadores_filtrados
+                
+                # ✅ Recargar tipos y stats
+                self._cargar_tipos_trabajador()
                 self._cargar_estadisticas()
                 
-                mensaje = f"Trabajador eliminado exitosamente - ID: {trabajador_id}"
+                # ✅ EMITIR señales en orden
+                self.trabajadoresChanged.emit()
+                
+                mensaje = "Trabajador eliminado exitosamente"
                 self.trabajadorEliminado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
-
-                self.global_signals.trabajadoresNecesitaActualizacion.emit(
-                    f"Trabajador eliminado: ID {trabajador_id}"
-                )
                 
-                print(f"🗑️ Trabajador eliminado desde QML: ID {trabajador_id}")
+                print(f"✅ Eliminado - Total: {len(self._trabajadores)}, Filtrados: {len(self._trabajadores_filtrados)}")
+                
                 return True
             else:
-                error_msg = "Error eliminando trabajador"
-                self.trabajadorEliminado.emit(False, error_msg)
-                self.errorOccurred.emit("Error de eliminación", error_msg)
+                self.trabajadorEliminado.emit(False, "Error eliminando trabajador")
                 return False
                 
         except Exception as e:
-            error_msg = f"Error inesperado: {str(e)}"
+            error_msg = f"Error: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
             self.trabajadorEliminado.emit(False, error_msg)
-            self.errorOccurred.emit("Error crítico", error_msg)
             return False
         finally:
             self._set_loading(False)
-
     # ===============================
     # SLOTS PARA OPERACIONES CRUD TIPOS
     # ===============================
@@ -725,7 +760,49 @@ class TrabajadorModel(QObject):
         finally:
             self._set_loading(False)
 
-    # ===============================
+    @Slot(int, result=list)
+    def obtenerEspecialidadesDeTrabajador(self, trabajador_id: int) -> List[Dict[str, Any]]:
+        try:
+            print(f"🔍 [MODEL] Solicitando especialidades del trabajador {trabajador_id}")
+            especialidades = self.repository.get_worker_specialties(trabajador_id)
+            
+            print(f"📊 [MODEL] Especialidades obtenidas: {len(especialidades)}")
+            
+            if especialidades:
+                print(f"📋 [MODEL] Detalle de especialidades:")
+                for i, esp in enumerate(especialidades):
+                    print(f"   {i+1}. ID={esp.get('id')}, Nombre='{esp.get('nombre')}', Principal={esp.get('es_principal')}")
+            else:
+                print(f"⚠️ [MODEL] No se encontraron especialidades para trabajador {trabajador_id}")
+            
+            return especialidades
+        except Exception as e:
+            print(f"❌ [MODEL] Error obteniendo especialidades: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+        
+    @Slot(int, int, result=bool)
+    def removerEspecialidadDeMedico(self, trabajador_id: int, especialidad_id: int) -> bool:
+        """
+        Remueve una especialidad de un trabajador médico
+        
+        Args:
+            trabajador_id: ID del trabajador
+            especialidad_id: ID de la especialidad a remover
+            
+        Returns:
+            True si se removió exitosamente
+        """
+        try:
+            success = self.repository.remove_worker_specialty(trabajador_id, especialidad_id)
+            if success:
+                print(f"✅ Especialidad {especialidad_id} removida del trabajador {trabajador_id}")
+            return success
+        except Exception as e:
+            print(f"❌ Error removiendo especialidad: {e}")
+            return False
+        # ===============================
     # SLOTS PARA BÚSQUEDA Y FILTROS
     # ===============================
     

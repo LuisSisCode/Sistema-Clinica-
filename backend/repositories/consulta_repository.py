@@ -10,12 +10,13 @@ from ..core.utils import (
     get_current_datetime, format_date_for_db, parse_date_from_str,
     get_date_range_query, validate_required_string, safe_float
 )
-
+from .paciente_repository import PacienteRepository 
 class ConsultaRepository(BaseRepository):
     """Repository para gestión de Consultas Médicas - CORREGIDO con nombres reales de BD"""
     
     def __init__(self):
         super().__init__('Consultas', 'consultas')
+        self.paciente_repo = PacienteRepository()
         print("🩺 ConsultaRepository inicializado con gestión de pacientes")
     
     # ===============================
@@ -91,82 +92,23 @@ class ConsultaRepository(BaseRepository):
         except Exception as e:
             print(f"⚠️ Error en búsqueda parcial por cédula: {e}")
             return []
+    def buscar_paciente_por_nombre_completo(self, nombre: str, apellido_paterno: str, 
+                                        apellido_materno: str = "") -> Optional[Dict[str, Any]]:
+        """
+        ✅ DELEGADO: Usa PacienteRepository para buscar pacientes
+        """
+        return self.paciente_repo.buscar_pacientes_por_nombre_exacto(
+            nombre, apellido_paterno, apellido_materno
+        )
     
     def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
-                              apellido_materno: str = "", cedula: str = "") -> int:
+                          apellido_materno: str = "", cedula: str = "") -> int:
         """
-        ✅ MÉTODO CORREGIDO - Busca paciente de forma inteligente antes de crear uno nuevo
-        
-        Estrategia de búsqueda:
-        1. Si hay cédula → buscar por cédula exacta
-        2. Si no encuentra por cédula o no hay cédula → buscar por nombre completo
-        3. Solo si no encuentra por ningún método → crear nuevo paciente
+        ✅ DELEGADO: Usa PacienteRepository para gestionar pacientes
         """
-        try:
-            nombre = nombre.strip()
-            apellido_paterno = apellido_paterno.strip()
-            apellido_materno = apellido_materno.strip()
-            cedula_clean = cedula.strip() if cedula else None
-            
-            # Validaciones básicas (sin cédula obligatoria)
-            if not nombre or len(nombre) < 2:
-                raise ValidationError("nombre", nombre, "Nombre es obligatorio")
-            if not apellido_paterno or len(apellido_paterno) < 2:
-                raise ValidationError("apellido_paterno", apellido_paterno, "Apellido paterno es obligatorio")
-            
-            print(f"🔍 Buscando paciente: {nombre} {apellido_paterno} {apellido_materno} - Cédula: {cedula_clean or 'N/A'}")
-            
-            # ✅ ESTRATEGIA 1: Buscar por cédula si existe y es válida
-            if cedula_clean and len(cedula_clean) >= 5:
-                print(f"📋 Buscando por cédula: {cedula_clean}")
-                existing_patient = self.search_patient_by_cedula_exact(cedula_clean)
-                if existing_patient:
-                    print(f"✅ Paciente encontrado por cédula: {existing_patient['nombre_completo']} (ID: {existing_patient['id']})")
-                    return existing_patient['id']
-                else:
-                    print(f"❌ No se encontró paciente con cédula: {cedula_clean}")
-            
-            # ✅ ESTRATEGIA 2: Buscar por nombre completo (NUEVA LÓGICA)
-            nombre_completo_busqueda = f"{nombre} {apellido_paterno} {apellido_materno}".strip()
-            print(f"👤 Buscando por nombre completo: '{nombre_completo_busqueda}'")
-            
-            # Usar el método existente de búsqueda por nombre
-            pacientes_por_nombre = self.search_patient_by_full_name(nombre_completo_busqueda, limite=10)
-            
-            if pacientes_por_nombre:
-                # ✅ BUSCAR COINCIDENCIA EXACTA O MUY SIMILAR
-                paciente_encontrado = self._encontrar_mejor_coincidencia_nombre(
-                    nombre, apellido_paterno, apellido_materno, pacientes_por_nombre
-                )
-                
-                if paciente_encontrado:
-                    print(f"✅ Paciente encontrado por nombre: {paciente_encontrado['nombre_completo']} (ID: {paciente_encontrado['id']})")
-                    return paciente_encontrado['id']
-            
-            print(f"❌ No se encontró paciente existente")
-            
-            # ✅ ESTRATEGIA 3: Crear nuevo paciente solo si no se encontró por ningún método
-            print(f"➕ Creando nuevo paciente: {nombre} {apellido_paterno} {apellido_materno}")
-            
-            query = """
-            INSERT INTO Pacientes (Nombre, Apellido_Paterno, Apellido_Materno, Cedula)
-            OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?)
-            """
-            
-            result = self._execute_query(query, (nombre, apellido_paterno, apellido_materno, cedula_clean), fetch_one=True)
-            patient_id = result['id'] if result else None
-            
-            if patient_id:
-                print(f"✅ Nuevo paciente creado: {nombre} {apellido_paterno} - ID: {patient_id}")
-                return patient_id
-            else:
-                raise ValidationError("paciente", None, "Error creando paciente en base de datos")
-            
-        except Exception as e:
-            print(f"❌ Error gestionando paciente: {e}")
-            raise ValidationError("paciente", str(e), "Error creando/buscando paciente")
-    
+        return self.paciente_repo.buscar_o_crear_paciente_simple(
+            nombre, apellido_paterno, apellido_materno, cedula
+        )
     # ===============================
     # CRUD ESPECÍFICO - CORREGIDO
     # ===============================
@@ -305,51 +247,46 @@ class ConsultaRepository(BaseRepository):
     # ===============================
     # CONSULTAS CON RELACIONES COMPLETAS - TOTALMENTE CORREGIDO
     # ===============================
-    def get_all_with_details(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Obtiene consultas con información completa - SQL SIMPLIFICADO"""
+
+    def get_all_with_details(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene todas las consultas con información completa
+        ✅ CORREGIDO: Sin usar campo Especialidad de Trabajadores
+        """
         query = """
         SELECT 
-            c.id, 
+            c.id,
             c.Fecha,
-            c.Detalles, 
-            c.Tipo_Consulta as tipo_consulta,
-            c.Id_trabajador,
-            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', ISNULL(p.Apellido_Materno, '')) as paciente_completo,
+            c.Tipo_Consulta,
+            -- ✅ Especialidad desde tabla Especialidad
+            e.Nombre as especialidad_nombre,
+            -- Paciente
+            CONCAT(p.Nombre, ' ', p.Apellido_Paterno, ' ', p.Apellido_Materno) as paciente_nombre_completo,
             p.Cedula as paciente_cedula,
-            ISNULL(e.Nombre, 'Sin especialidad') as especialidad_nombre,
-            ISNULL(e.Precio_Normal, 0) as Precio_Normal, 
-            ISNULL(e.Precio_Emergencia, 0) as Precio_Emergencia,
-            
-            CASE 
-                WHEN t.id IS NOT NULL THEN
-                    CONCAT(e.Nombre, ' - Dr. ', t.Nombre, ' ', t.Apellido_Paterno)
-                ELSE
-                    CONCAT(e.Nombre, ' - (Sin asignar)')
-            END AS especialidad_doctor,
-            
-            CASE 
-                WHEN c.Tipo_Consulta = 'Emergencia' THEN ISNULL(e.Precio_Emergencia, 0)
-                ELSE ISNULL(e.Precio_Normal, 0)
-            END as precio
+            -- Trabajador
+            CONCAT(t.Nombre, ' ', t.Apellido_Paterno, ' ', t.Apellido_Materno) as trabajador_nombre_completo,
+            t.Matricula as trabajador_matricula
         FROM Consultas c
-        LEFT JOIN Pacientes p ON c.Id_Paciente = p.id
-        LEFT JOIN Especialidad e ON c.Id_Especialidad = e.id
+        INNER JOIN Pacientes p ON c.Id_Paciente = p.id
+        INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
         LEFT JOIN Trabajadores t ON c.Id_Trabajador = t.id
         ORDER BY c.Fecha DESC
-        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
-        
-        result = self._execute_query(query, (limit,))
-        return result
+        return self._execute_query(query)
     
+
+
     def get_consultation_by_id_complete(self, consulta_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene consulta específica con información completa - ACTUALIZADO para Trabajadores"""
+        """
+        Obtiene consulta específica con información completa
+        ✅ CORREGIDO: Sin usar campo Especialidad de Trabajadores
+        """
         query = """
         SELECT 
             c.id, c.Fecha, 
             CAST(c.Detalles AS VARCHAR(MAX)) as Detalles,
             c.Tipo_Consulta as tipo_consulta,
-            c.Id_trabajador,
+            c.Id_Trabajador,
             
             -- Paciente (CON CÉDULA)
             p.id as paciente_id,
@@ -359,21 +296,20 @@ class ConsultaRepository(BaseRepository):
             p.Apellido_Materno as paciente_apellido_m,
             p.Cedula as paciente_cedula,
             
-            -- Especialidad/Servicio
+            -- Especialidad/Servicio (de la consulta)
             e.id as especialidad_id, 
             e.Nombre as especialidad_nombre, 
             e.Detalles as especialidad_detalles,
             e.Precio_Normal, 
             e.Precio_Emergencia,
             
-            -- Médicos asignados a esta especialidad (pueden ser varios)
-            STRING_AGG(
-                CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno, ' ', ISNULL(t.Apellido_Materno, '')),
-                ', '
-            ) as medicos_asignados,
-            STRING_AGG(CAST(t.id AS VARCHAR), ',') as medicos_ids,
-            STRING_AGG(t.Especialidad, ', ') as medicos_especialidades,
-            STRING_AGG(t.Matricula, ', ') as medicos_matriculas,
+            -- ✅ Médico que atendió la consulta
+            t.id as medico_id,
+            CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno, ' ', ISNULL(t.Apellido_Materno, '')) as medico_nombre_completo,
+            t.Matricula as medico_matricula,
+            
+            -- ✅ Especialidades del médico (desde tabla intermedia)
+            STRING_AGG(te_esp.Nombre, ', ') as medico_especialidades,
             
             -- Usuario que registró
             u.id as usuario_id,
@@ -383,8 +319,9 @@ class ConsultaRepository(BaseRepository):
         FROM Consultas c
         INNER JOIN Pacientes p ON c.Id_Paciente = p.id
         INNER JOIN Especialidad e ON c.Id_Especialidad = e.id
-        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
-        LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
+        LEFT JOIN Trabajadores t ON c.Id_Trabajador = t.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad te_esp ON te.Id_Especialidad = te_esp.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE c.id = ?
         GROUP BY 
@@ -394,10 +331,10 @@ class ConsultaRepository(BaseRepository):
             c.Id_Trabajador,
             p.id, p.Nombre, p.Apellido_Paterno, p.Apellido_Materno, p.Cedula,
             e.id, e.Nombre, e.Detalles, e.Precio_Normal, e.Precio_Emergencia,
+            t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, t.Matricula,
             u.id, u.Nombre, u.Apellido_Paterno, u.nombre_usuario
         """
         return self._execute_query(query, (consulta_id,), fetch_one=True)
-    
     # ===============================
     # BÚSQUEDAS POR FECHAS - CORREGIDO
     # ===============================

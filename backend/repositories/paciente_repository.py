@@ -11,6 +11,7 @@ from ..core.utils import (
     safe_int, calculate_percentage
 )
 
+
 class PacienteRepository(BaseRepository):
     """Repository para gestión de Pacientes - ACTUALIZADO sin campo Edad"""
     
@@ -29,39 +30,42 @@ class PacienteRepository(BaseRepository):
     # ===============================
     # CRUD ESPECÍFICO - SIN EDAD
     # ===============================
-    
     def create_patient(self, nombre: str, apellido_paterno: str, 
-                      apellido_materno: str, cedula: str) -> int:
-        """Crea nuevo paciente - SOLO con datos básicos obligatorios"""
+                  apellido_materno: str, cedula: str = None) -> int:
+        """
+        ✅ CORREGIDO: Crea nuevo paciente - Cédula OPCIONAL
+        Si no hay cédula, se guarda como NULL
+        """
         nombre = normalize_name(nombre.strip()) if nombre.strip() else "Sin nombre"
         apellido_paterno = normalize_name(apellido_paterno.strip()) if apellido_paterno.strip() else ""
         apellido_materno = normalize_name(apellido_materno.strip()) if apellido_materno.strip() else ""
         
-        # Validar cédula obligatoria
-        if not cedula or not cedula.strip():
-            raise ValidationError("cedula", cedula, "Cédula es obligatoria")
-        
-        cedula = cedula.strip()
-        if len(cedula) < 5:
-            raise ValidationError("cedula", cedula, "Cédula debe tener al menos 5 dígitos")
-        
-        # Verificar que no existe cédula duplicada
-        existing = self.search_by_cedula_exact(cedula)
-        if existing:
-            raise ValidationError("cedula", cedula, f"Ya existe paciente con cédula {cedula}")
+        # ✅ Cédula es opcional
+        cedula_clean = None
+        if cedula and cedula.strip():
+            cedula_clean = cedula.strip()
+            
+            if len(cedula_clean) < 5:
+                raise ValidationError("cedula", cedula_clean, "Cédula debe tener al menos 5 dígitos")
+            
+            # Verificar que no existe cédula duplicada
+            existing = self.search_by_cedula_exact(cedula_clean)
+            if existing:
+                raise ValidationError("cedula", cedula_clean, f"Ya existe paciente con cédula {cedula_clean}")
         
         patient_data = {
             'Nombre': nombre,
             'Apellido_Paterno': apellido_paterno,
             'Apellido_Materno': apellido_materno,
-            'Cedula': cedula
+            'Cedula': cedula_clean  # Puede ser None
         }
         
         patient_id = self.insert(patient_data)
-        print(f"👥 Paciente creado: {nombre} {apellido_paterno} - Cédula: {cedula} - ID: {patient_id}")
+        cedula_display = cedula_clean if cedula_clean else "No proporcionado"
+        print(f"👥 Paciente creado: {nombre} {apellido_paterno} - Cédula: {cedula_display} - ID: {patient_id}")
         
         return patient_id
-    
+   
     def update_patient(self, paciente_id: int, nombre: str = None, 
                       apellido_paterno: str = None, apellido_materno: str = None,
                       cedula: str = None) -> bool:
@@ -266,36 +270,57 @@ class PacienteRepository(BaseRepository):
     # ===============================
     
     def buscar_o_crear_paciente_simple(self, nombre: str, apellido_paterno: str, 
-                                      apellido_materno: str = "", cedula: str = None) -> int:
-        """Busca paciente similar o crea nuevo - SIN EDAD, cédula obligatoria"""
+                                  apellido_materno: str = "", cedula: str = None) -> int:
+        """
+        ✅ CORREGIDO: Valida duplicados por cédula Y nombre completo
+        Cédula opcional - Si no hay cédula, permite crear sin ella
+        """
         nombre = nombre.strip()
         apellido_paterno = apellido_paterno.strip() 
-        apellido_materno = apellido_materno.strip()
+        apellido_materno = apellido_materno.strip() if apellido_materno else ""
         
         if not nombre or len(nombre) < 2:
             raise ValidationError("nombre", nombre, "Nombre es obligatorio")
         if not apellido_paterno:
             apellido_paterno = "Sin apellido"
-        if not cedula or len(cedula.strip()) < 5:
-            raise ValidationError("cedula", cedula, "Cédula es obligatoria (mínimo 5 dígitos)")
+        
+        # ✅ Cédula es opcional ahora
+        cedula_clean = cedula.strip() if cedula else None
 
-        cedula_clean = cedula.strip()
+        # ✅ 1. Si hay cédula, buscar por cédula exacta
+        if cedula_clean and len(cedula_clean) >= 5:
+            existing_by_cedula = self.search_by_cedula_exact(cedula_clean)
+            if existing_by_cedula:
+                print(f"⚠️ Paciente encontrado por cédula: {cedula_clean} -> ID {existing_by_cedula['id']}")
+                return existing_by_cedula['id']
+        
+        # ✅ 2. Buscar por nombre completo exacto
+        existing_by_name = self.buscar_pacientes_por_nombre_exacto(nombre, apellido_paterno, apellido_materno)
+        if existing_by_name and len(existing_by_name) > 0:
+            print(f"⚠️ Paciente encontrado por nombre: {nombre} {apellido_paterno} {apellido_materno} -> ID {existing_by_name[0]['id']}")
+            return existing_by_name[0]['id']
 
-        # 1. Buscar por cédula exacta primero
-        existing_by_cedula = self.search_by_cedula_exact(cedula_clean)
-        if existing_by_cedula:
-            print(f"👤 Paciente encontrado por cédula: {cedula_clean} -> ID {existing_by_cedula['id']}")
-            return existing_by_cedula['id']
-
-        # 2. Crear nuevo paciente (ahora requiere cédula)
+        # ✅ 3. No existe duplicado - Crear nuevo paciente
         try:
-            paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, cedula_clean)
-            print(f"👤 Nuevo paciente: {nombre} {apellido_paterno} -> ID {paciente_id}")
+            # Si no hay cédula, se crea con NULL
+            if cedula_clean:
+                paciente_id = self.create_patient(nombre, apellido_paterno, apellido_materno, cedula_clean)
+            else:
+                # Crear sin cédula (modificar create_patient para aceptar None)
+                patient_data = {
+                    'Nombre': normalize_name(nombre),
+                    'Apellido_Paterno': normalize_name(apellido_paterno),
+                    'Apellido_Materno': normalize_name(apellido_materno) if apellido_materno else "",
+                    'Cedula': None  # NULL en base de datos
+                }
+                paciente_id = self.insert(patient_data)
+                
+            print(f"🆕 Nuevo paciente creado: {nombre} {apellido_paterno} -> ID {paciente_id}")
+            print(f"   - Cédula: {cedula_clean if cedula_clean else 'No proporcionado'}")
             return paciente_id
         except Exception as e:
             print(f"❌ Error creando paciente: {e}")
             raise
-
     def buscar_pacientes_por_nombre_exacto(self, nombre: str, apellido_paterno: str, apellido_materno: str = ""):
         """Busca pacientes con nombre exacto - SIN EDAD"""
         query = """

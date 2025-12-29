@@ -27,14 +27,12 @@ GroupBox {
     font.pixelSize: fontBaseSize
     font.family: "Segoe UI, Arial, sans-serif"
     padding: baseUnit * 1.5
-    visible: false  // Se mostrará dinámicamente cuando sea médico
+    visible: false
     
-    // Props requeridas
     property var trabajadorModel: null
     property int trabajadorId: -1
     property bool isEditMode: false
     
-    // Props de estilo (deben venir del padre)
     property real baseUnit: 8
     property real fontBaseSize: 12
     property string primaryColor: "#3498DB"
@@ -44,29 +42,25 @@ GroupBox {
     property string textColor: "#2c3e50"
     property string textColorLight: "#6B7280"
     
-    // Datos internos
     property var especialidadesDisponibles: []
     property var especialidadesAsignadas: []
-    property var especialidadesPendientes: []  // Para modo creación
+    property var especialidadesPendientes: []
     
     background: Rectangle {
-        color: "#E8F5E9"  // Verde claro para diferenciar sección médica
+        color: "#E8F5E9"
         border.color: successColor
         border.width: 2
         radius: baseUnit * 0.8
     }
     
-    // Cargar datos cuando se hace visible
     onVisibleChanged: {
         if (visible) {
+            console.log("👁️ EspecialidadesMedicasSection visible - Modo:", isEditMode ? "EDICIÓN" : "CREACIÓN")
+            console.log("   TrabajadorId:", trabajadorId)
+            
             cargarEspecialidadesDisponibles()
             
-            // Si está en modo edición, cargar especialidades asignadas
-            if (isEditMode && trabajadorId > 0) {
-                console.log("🔄 Cargando especialidades del médico existente ID:", trabajadorId)
-                cargarEspecialidadesAsignadas()
-            } else {
-                // En modo creación, limpiar lista
+            if (!isEditMode) {
                 console.log("🆕 Modo creación - limpiando especialidades")
                 especialidadesAsignadas = []
                 especialidadesPendientes = []
@@ -74,8 +68,16 @@ GroupBox {
             }
         }
     }
+    Connections {
+        target: trabajadorModel
+        function onEspecialidadesActualizadas() {
+            console.log("🔄 Señal recibida: especialidades actualizadas")
+            if (isEditMode && trabajadorId > 0) {
+                cargarEspecialidadesAsignadas()
+            }
+        }
+    }
     
-    // Función para cargar especialidades disponibles
     function cargarEspecialidadesDisponibles() {
         if (!trabajadorModel) {
             console.log("⚠️ TrabajadorModel no disponible")
@@ -87,7 +89,6 @@ GroupBox {
         especialidadesCombo.actualizarModelo()
     }
     
-    // Función para cargar especialidades asignadas (modo edición)
     function cargarEspecialidadesAsignadas() {
         if (!trabajadorModel || trabajadorId <= 0) {
             console.log("⚠️ No se puede cargar especialidades: médico no válido")
@@ -95,11 +96,40 @@ GroupBox {
         }
         
         console.log("🔍 Cargando especialidades asignadas al médico", trabajadorId)
-        especialidadesAsignadas = trabajadorModel.obtenerEspecialidadesDeMedico(trabajadorId)
+        especialidadesAsignadas = trabajadorModel.obtenerEspecialidadesDeTrabajador(trabajadorId)
         especialidadesListView.model = especialidadesAsignadas
     }
     
-    // Función para agregar especialidad (modo edición)
+    function cargarEspecialidadesExistentes(especialidadesArray) {
+        console.log("📥 [EspecialidadesMedicasSection] cargarEspecialidadesExistentes llamado")
+        console.log("   Array recibido:", JSON.stringify(especialidadesArray))
+        console.log("   Cantidad:", especialidadesArray ? especialidadesArray.length : 0)
+        
+        if (!especialidadesArray || especialidadesArray.length === 0) {
+            console.log("⚠️ Array de especialidades vacío o nulo")
+            especialidadesAsignadas = []
+            especialidadesPendientes = []
+            especialidadesListView.model = []
+            return
+        }
+        
+        if (isEditMode) {
+            especialidadesAsignadas = []
+            for (var i = 0; i < especialidadesArray.length; i++) {
+                especialidadesAsignadas.push(especialidadesArray[i])
+            }
+            especialidadesListView.model = especialidadesAsignadas
+            console.log("✅ Especialidades cargadas en modo EDICIÓN:", especialidadesAsignadas.length)
+        } else {
+            especialidadesPendientes = []
+            for (var j = 0; j < especialidadesArray.length; j++) {
+                especialidadesPendientes.push(especialidadesArray[j])
+            }
+            especialidadesListView.model = especialidadesPendientes
+            console.log("✅ Especialidades cargadas en modo CREACIÓN:", especialidadesPendientes.length)
+        }
+    }
+    
     function agregarEspecialidadDirecta() {
         if (especialidadesCombo.currentIndex <= 0) {
             console.log("⚠️ No se seleccionó especialidad")
@@ -111,7 +141,6 @@ GroupBox {
         
         console.log("➕ Agregando especialidad:", especialidadSeleccionada.nombre, "Principal:", esPrincipal)
         
-        // En modo edición: asignar directamente
         if (isEditMode && trabajadorId > 0) {
             var success = trabajadorModel.asignarEspecialidadAMedico(
                 trabajadorId,
@@ -120,20 +149,16 @@ GroupBox {
             )
             
             if (success) {
-                // Recargar lista
                 cargarEspecialidadesAsignadas()
                 especialidadesCombo.currentIndex = 0
                 checkboxPrincipal.checked = false
             }
         } else {
-            // En modo creación: agregar a lista pendiente
             agregarEspecialidadPendiente(especialidadSeleccionada, esPrincipal)
         }
     }
     
-    // Función para agregar a lista pendiente (modo creación)
     function agregarEspecialidadPendiente(especialidad, esPrincipal) {
-        // Verificar si ya está en la lista
         for (var i = 0; i < especialidadesPendientes.length; i++) {
             if (especialidadesPendientes[i].id === especialidad.id) {
                 console.log("⚠️ Especialidad ya agregada")
@@ -141,14 +166,12 @@ GroupBox {
             }
         }
         
-        // Si se marca como principal, quitar marca de otras
         if (esPrincipal) {
             for (var j = 0; j < especialidadesPendientes.length; j++) {
                 especialidadesPendientes[j].es_principal = false
             }
         }
         
-        // Agregar a lista
         var nuevaEspecialidad = {
             id: especialidad.id,
             nombre: especialidad.nombre,
@@ -165,12 +188,11 @@ GroupBox {
         console.log("✅ Especialidad agregada a lista pendiente:", especialidad.nombre)
     }
     
-    // Función para quitar especialidad
     function quitarEspecialidad(especialidadId, index) {
         console.log("➖ Quitando especialidad ID:", especialidadId)
         
         if (isEditMode && trabajadorId > 0) {
-            // En modo edición: desasignar directamente
+            // Usar desasignarEspecialidadDeMedico que SÍ emite señales
             var success = trabajadorModel.desasignarEspecialidadDeMedico(
                 trabajadorId,
                 especialidadId
@@ -180,14 +202,14 @@ GroupBox {
                 cargarEspecialidadesAsignadas()
             }
         } else {
-            // En modo creación: quitar de lista pendiente
             especialidadesPendientes.splice(index, 1)
             especialidadesListView.model = especialidadesPendientes
         }
     }
     
-    // Función pública para obtener especialidades pendientes
     function obtenerEspecialidadesPendientes() {
+        console.log("📤 obtenerEspecialidadesPendientes llamado")
+        console.log("   Especialidades pendientes:", especialidadesPendientes.length)
         return especialidadesPendientes
     }
     
@@ -195,7 +217,6 @@ GroupBox {
         width: parent.width
         spacing: baseUnit * 2
         
-        // INFO: Explicación
         Label {
             Layout.fillWidth: true
             text: isEditMode ? 
@@ -208,7 +229,6 @@ GroupBox {
             font.italic: true
         }
         
-        // SELECTOR DE ESPECIALIDAD
         RowLayout {
             Layout.fillWidth: true
             spacing: baseUnit * 1.5
@@ -227,7 +247,6 @@ GroupBox {
                 font.pixelSize: fontBaseSize
                 font.family: "Segoe UI, Arial, sans-serif"
                 
-                // Modelo dinámico
                 model: ["Seleccionar especialidad..."]
                 
                 function actualizarModelo() {
@@ -274,7 +293,6 @@ GroupBox {
             }
         }
         
-        // LISTA DE ESPECIALIDADES ASIGNADAS/PENDIENTES
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: baseUnit * 20
@@ -303,7 +321,13 @@ GroupBox {
                     clip: true
                     spacing: baseUnit * 0.5
                     
-                    model: isEditMode ? especialidadesAsignadas : especialidadesPendientes
+                    model: {
+                        if (isEditMode) {
+                            return especialidadesAsignadas
+                        } else {
+                            return especialidadesPendientes
+                        }
+                    }
                     
                     delegate: Rectangle {
                         width: especialidadesListView.width
@@ -367,7 +391,6 @@ GroupBox {
                         }
                     }
                     
-                    // Mensaje cuando está vacía
                     Label {
                         anchors.centerIn: parent
                         visible: especialidadesListView.count === 0
@@ -380,7 +403,6 @@ GroupBox {
             }
         }
         
-        // NOTA IMPORTANTE
         Label {
             Layout.fillWidth: true
             text: isEditMode ? 

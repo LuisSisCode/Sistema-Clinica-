@@ -341,6 +341,44 @@ class PacienteModel(QObject):
         except Exception as e:
             self.errorOccurred.emit("Error", f"Error obteniendo paciente por cédula: {str(e)}")
             return {}
+        
+    @Slot(str, str, str, result='QVariantMap')
+    def validar_paciente_duplicado(self, nombre: str, apellido_paterno: str, apellido_materno: str = "") -> Dict[str, Any]:
+        """
+        ✅ NUEVO: Valida si ya existe un paciente con ese nombre completo
+        Retorna: {existe: bool, paciente: {...}}
+        """
+        try:
+            if not nombre or not apellido_paterno:
+                return {'existe': False}
+            
+            # Buscar por nombre exacto
+            pacientes = self.repository.buscar_pacientes_por_nombre_exacto(
+                nombre.strip(),
+                apellido_paterno.strip(),
+                apellido_materno.strip() if apellido_materno else ""
+            )
+            
+            if pacientes and len(pacientes) > 0:
+                paciente = pacientes[0]  # Tomar el primero
+                
+                # ✅ Manejar cédula NULL correctamente
+                cedula_display = paciente.get('Cedula', '')
+                if cedula_display is None or str(cedula_display).upper() == 'NULL' or cedula_display == '':
+                    cedula_display = "No proporcionado"
+                
+                return {
+                    'existe': True,
+                    'id': paciente['id'],
+                    'nombre_completo': f"{paciente.get('Nombre', '')} {paciente.get('Apellido_Paterno', '')} {paciente.get('Apellido_Materno', '')}".strip(),
+                    'cedula': cedula_display
+                }
+            
+            return {'existe': False}
+            
+        except Exception as e:
+            print(f"⚠️ Error validando duplicado: {e}")
+            return {'existe': False}
     
     @Slot(str, result=bool)
     def validarCedulaUnica(self, cedula: str, excluir_id: int = 0) -> bool:
@@ -525,9 +563,6 @@ class PacienteModel(QObject):
             
         except Exception as e:
             print(f"❌ Error en desconexión {model_name}: {e}")
-    def emergency_disconnect(self):
-        """Desconexión de emergencia"""
-        generic_emergency_disconnect(self, self.__class__.__name__)
 # ===============================
 # REGISTRO PARA QML
 # ===============================

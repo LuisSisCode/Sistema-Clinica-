@@ -28,22 +28,10 @@ class TrabajadorRepository(BaseRepository):
     # ===============================
     
     def create_worker(self, nombre: str, apellido_paterno: str, apellido_materno: str,
-             tipo_trabajador_id: int, especialidad: str = None, 
-             matricula: str = None, usuario_id: int = None) -> int:
+         tipo_trabajador_id: int, matricula: str = None, usuario_id: int = None) -> int:
         """
         Crea nuevo trabajador con validaciones
-        
-        Args:
-            nombre: Nombre del trabajador
-            apellido_paterno: Apellido paterno
-            apellido_materno: Apellido materno
-            tipo_trabajador_id: ID del tipo de trabajador
-            especialidad: Especialidad del trabajador (opcional)
-            matricula: Matrícula profesional (opcional)
-            usuario_id: ID del usuario que crea el registro (opcional, para auditoría)
-            
-        Returns:
-            ID del trabajador creado
+        ❌ ELIMINADO: parámetro especialidad
         """
         # Validaciones
         nombre = validate_required_string(nombre, "nombre", 2)
@@ -55,7 +43,7 @@ class TrabajadorRepository(BaseRepository):
         if not self.worker_type_exists(tipo_trabajador_id):
             raise ValidationError("tipo_trabajador_id", tipo_trabajador_id, "Tipo de trabajador no existe")
         
-        # Crear trabajador
+        # Crear trabajador - ❌ SIN especialidad
         worker_data = {
             'Nombre': normalize_name(nombre),
             'Apellido_Paterno': normalize_name(apellido_paterno),
@@ -63,14 +51,10 @@ class TrabajadorRepository(BaseRepository):
             'Id_Tipo_Trabajador': tipo_trabajador_id
         }
         
-        # Agregar especialidad y matrícula si se proporcionan
-        if especialidad and especialidad.strip():
-            worker_data['Especialidad'] = especialidad.strip()
-        
+        # Agregar matrícula si se proporciona
         if matricula and matricula.strip():
             worker_data['Matricula'] = matricula.strip()
         
-        # OPCIONAL: Agregar usuario_id para auditoría si se proporciona
         if usuario_id:
             print(f"👤 Trabajador creado por usuario ID: {usuario_id}")
         
@@ -80,10 +64,12 @@ class TrabajadorRepository(BaseRepository):
         return worker_id
     
     def update_worker(self, trabajador_id: int, nombre: str = None, 
-                    apellido_paterno: str = None, apellido_materno: str = None,
-                    tipo_trabajador_id: int = None, especialidad: str = None, 
-                    matricula: str = None) -> bool:
-        """Actualiza trabajador existente con todas las columnas"""
+                apellido_paterno: str = None, apellido_materno: str = None,
+                tipo_trabajador_id: int = None, matricula: str = None) -> bool:
+        """
+        Actualiza trabajador existente
+        ❌ ELIMINADO: parámetro especialidad
+        """
         # Verificar existencia
         if not self.get_by_id(trabajador_id):
             raise ValidationError("trabajador_id", trabajador_id, "Trabajador no encontrado")
@@ -107,9 +93,6 @@ class TrabajadorRepository(BaseRepository):
                 raise ValidationError("tipo_trabajador_id", tipo_trabajador_id, "Tipo de trabajador no existe")
             update_data['Id_Tipo_Trabajador'] = tipo_trabajador_id
         
-        if especialidad is not None:
-            update_data['Especialidad'] = especialidad.strip() if especialidad.strip() else None
-        
         if matricula is not None:
             matricula_clean = matricula.strip() if matricula and matricula.strip() else None
             if matricula_clean and not self.validate_matricula_unique(matricula_clean, trabajador_id):
@@ -122,60 +105,113 @@ class TrabajadorRepository(BaseRepository):
         success = self.update(trabajador_id, update_data)
         if success:
             print(f"👷‍♂️ Trabajador actualizado: ID {trabajador_id}")
-        
+            # ✅ Invalidar caché para forzar recarga
+            self.invalidate_worker_caches()
+
         return success
-    
     # ===============================
     # CONSULTAS CON TIPOS
     # ===============================
     
     @cached_query('trabajadores_tipos', ttl=600)
     def get_all_with_types(self) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores con información de tipo, especialidad y matrícula"""
+        """
+        Obtiene trabajadores con información de tipo
+        ✅ CORREGIDO: Muestra especialidades desde Trabajador_Especialidad
+        """
         query = """
         SELECT t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-            t.Id_Tipo_Trabajador, t.Especialidad, t.Matricula,
-            tt.Tipo as tipo_nombre
+            t.Id_Tipo_Trabajador, t.Matricula,
+            tt.Tipo as tipo_nombre,
+            tt.area_funcional,
+            -- ✅ Especialidades desde tabla intermedia
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres,
+            COUNT(DISTINCT te.Id_Especialidad) as total_especialidades
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+                t.Id_Tipo_Trabajador, t.Matricula, tt.Tipo, tt.area_funcional
         ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
         """
         return self._execute_query(query)
-    
+
     def get_worker_with_type(self, trabajador_id: int) -> Optional[Dict[str, Any]]:
-        """Obtiene trabajador específico con información completa"""
+        """
+        Obtiene trabajador específico con información completa
+        ✅ CORREGIDO: Incluye especialidades desde Trabajador_Especialidad
+        """
         query = """
-        SELECT t.*, tt.Tipo as tipo_nombre
+        SELECT t.*, 
+            tt.Tipo as tipo_nombre,
+            tt.area_funcional,
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres,
+            COUNT(DISTINCT te.Id_Especialidad) as total_especialidades
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE t.id = ?
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+                t.Id_Tipo_Trabajador, t.Matricula, tt.Tipo, tt.area_funcional
         """
         return self._execute_query(query, (trabajador_id,), fetch_one=True)
-    
+
     # ===============================
     # BÚSQUEDAS ESPECÍFICAS
     # ===============================
+    def get_worker_specialties(self, trabajador_id: int) -> List[Dict[str, Any]]:
+        """
+        Obtiene las especialidades asignadas a un trabajador específico
         
+        Args:
+            trabajador_id: ID del trabajador
+            
+        Returns:
+            Lista de especialidades con información completa
+        """
+        query = """
+        SELECT 
+            e.id,
+            e.Nombre as nombre,
+            te.es_principal,
+            e.Detalles as detalles
+        FROM Trabajador_Especialidad te
+        INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE te.Id_Trabajador = ?
+        ORDER BY te.es_principal DESC, e.Nombre
+        """
+        return self._execute_query(query, (trabajador_id,))
+
     def search_workers(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Búsqueda por nombre, apellidos, tipo, especialidad o matrícula"""
+        """
+        Búsqueda por nombre, apellidos, tipo o matrícula
+        ❌ ELIMINADO: búsqueda por especialidad (ahora en tabla separada)
+        """
         if not search_term:
             return []
         
         search_term = f"%{search_term.strip()}%"
         
         query = """
-        SELECT t.*, tt.Tipo as tipo_nombre
+        SELECT DISTINCT t.*, tt.Tipo as tipo_nombre,
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? OR t.Apellido_Materno LIKE ?
-        OR tt.Tipo LIKE ? OR t.Especialidad LIKE ? OR t.Matricula LIKE ?
+        OR tt.Tipo LIKE ? OR t.Matricula LIKE ?
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+                t.Id_Tipo_Trabajador, t.Matricula, tt.Tipo
         ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
         OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         
         return self._execute_query(query, (search_term, search_term, search_term, 
-                                        search_term, search_term, search_term, limit))
-    
+                                        search_term, search_term, limit))
+
     def get_workers_by_type(self, tipo_trabajador_id: int) -> List[Dict[str, Any]]:
         """Obtiene trabajadores por tipo específico"""
         query = """
@@ -198,7 +234,36 @@ class TrabajadorRepository(BaseRepository):
         """
         return self._execute_query(query, (f"%{tipo_nombre}%",))
     
-    # ===============================
+    def remove_worker_specialty(self, trabajador_id: int, especialidad_id: int) -> bool:
+        """
+        Remueve una especialidad de un trabajador
+        
+        Args:
+            trabajador_id: ID del trabajador
+            especialidad_id: ID de la especialidad
+            
+        Returns:
+            True si se removió exitosamente
+        """
+        try:
+            query = """
+            DELETE FROM Trabajador_Especialidad
+            WHERE Id_Trabajador = ? AND Id_Especialidad = ?
+            """
+            # Usar _execute_query con fetch_all=False para DELETE
+            affected = self._execute_query(query, (trabajador_id, especialidad_id), 
+                                        fetch_all=False, use_cache=False)
+            
+            # Invalidar caché
+            self.invalidate_worker_caches()
+            
+            print(f"🗑️ Especialidad {especialidad_id} removida del trabajador {trabajador_id}")
+            return affected > 0
+            
+        except Exception as e:
+            print(f"❌ Error removiendo especialidad: {e}")
+            return False
+        # ===============================
     # CONSULTAS POR ÁREA DE TRABAJO
     # ===============================
     
@@ -270,36 +335,102 @@ class TrabajadorRepository(BaseRepository):
         """
         return self._execute_query(query, (area,))
     
-    def get_medicos_con_especialidades(self) -> List[Dict[str, Any]]:
-        """
-        Obtiene todos los médicos con sus especialidades asignadas
-        Usa area_funcional en lugar de filtros LIKE
-        """
-        query = """
-        SELECT 
-            t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-            t.Matricula, t.Especialidad as especialidad_descriptiva,
-            tt.Tipo as tipo_nombre,
-            CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_display,
-            (
-                SELECT STRING_AGG(e.Nombre, ', ')
-                FROM Trabajador_Especialidad te
-                INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
-                WHERE te.Id_Trabajador = t.id
-            ) as especialidades_asignadas,
-            (
-                SELECT COUNT(*)
-                FROM Trabajador_Especialidad te
-                WHERE te.Id_Trabajador = t.id
-            ) as total_especialidades
-        FROM Trabajadores t
-        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE tt.area_funcional = 'MEDICO'
-        ORDER BY t.Apellido_Paterno, t.Nombre
-        """
-        return self._execute_query(query)
     
     def get_medico_con_especialidades(self, medico_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene médico específico con todas sus especialidades asignadas
+        ✅ CORREGIDO: Sin usar campo Especialidad eliminado
+        
+        Args:
+            medico_id: ID del trabajador médico
+            
+        Returns:
+            Diccionario con datos del médico y sus especialidades, o None si no es médico
+        """
+        # ✅ Query principal SIN t.Especialidad
+        validate_query = """
+        SELECT 
+            t.id, 
+            t.Nombre, 
+            t.Apellido_Paterno, 
+            t.Apellido_Materno,
+            t.Matricula,
+            tt.Tipo as tipo_nombre, 
+            tt.area_funcional,
+            -- ✅ Crear nombre display en SQL
+            CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_display,
+            -- ✅ Agregar especialidades desde tabla intermedia
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+                t.Matricula, tt.Tipo, tt.area_funcional
+        """
+        
+        medico = self._execute_query(validate_query, (medico_id,), fetch_one=True)
+        
+        if not medico:
+            print(f"⚠️ Trabajador {medico_id} no es médico o no existe")
+            return None
+        
+        print(f"✅ Médico {medico_id} validado - Área: {medico.get('area_funcional')}")
+        
+        # Obtener especialidades detalladas
+        especialidades_query = """
+        SELECT 
+            e.id, 
+            e.Nombre, 
+            e.Detalles,
+            e.Precio_Normal, 
+            e.Precio_Emergencia,
+            te.Es_Principal, 
+            te.Fecha_Asignacion
+        FROM Trabajador_Especialidad te
+        INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE te.Id_Trabajador = ?
+        ORDER BY te.Es_Principal DESC, e.Nombre
+        """
+        
+        especialidades = self._execute_query(especialidades_query, (medico_id,))
+        medico['especialidades'] = especialidades
+        medico['total_especialidades'] = len(especialidades)
+        
+        # ✅ Calcular estadísticas de precios (útil para reportes)
+        if especialidades:
+            precios_normales = [float(e['Precio_Normal']) for e in especialidades]
+            precios_emergencia = [float(e['Precio_Emergencia']) for e in especialidades]
+            
+            medico['precio_min_normal'] = min(precios_normales)
+            medico['precio_max_normal'] = max(precios_normales)
+            medico['precio_promedio_normal'] = sum(precios_normales) / len(precios_normales)
+            
+            medico['precio_min_emergencia'] = min(precios_emergencia)
+            medico['precio_max_emergencia'] = max(precios_emergencia)
+            medico['precio_promedio_emergencia'] = sum(precios_emergencia) / len(precios_emergencia)
+            
+            # ✅ Identificar especialidad principal
+            especialidad_principal = next(
+                (e for e in especialidades if e.get('Es_Principal')), 
+                None
+            )
+            if especialidad_principal:
+                medico['especialidad_principal'] = especialidad_principal['Nombre']
+        else:
+            # Médico sin especialidades asignadas
+            medico['precio_min_normal'] = 0
+            medico['precio_max_normal'] = 0
+            medico['precio_promedio_normal'] = 0
+            medico['precio_min_emergencia'] = 0
+            medico['precio_max_emergencia'] = 0
+            medico['precio_promedio_emergencia'] = 0
+            medico['especialidad_principal'] = None
+        
+        return medico
+    
+    def get_medico_details(self, medico_id: int) -> Optional[Dict[str, Any]]:
         """
         Obtiene un médico específico con todas sus especialidades
         Usa area_funcional para validar que sea médico
@@ -307,12 +438,15 @@ class TrabajadorRepository(BaseRepository):
         query = """
         SELECT 
             t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-            t.Matricula, t.Especialidad as especialidad_descriptiva,
+            t.Matricula, ISNULL(STRING_AGG(e.Nombre, ', '), '') as especialidad_descriptiva,
             tt.Tipo as tipo_nombre, tt.area_funcional,
             CONCAT('Dr. ', t.Nombre, ' ', t.Apellido_Paterno) as nombre_display
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, t.Matricula, tt.Tipo, tt.area_funcional
         """
         
         medico = self._execute_query(query, (medico_id,), fetch_one=True)
@@ -352,12 +486,14 @@ class TrabajadorRepository(BaseRepository):
         SELECT t.*, tt.Tipo as tipo_nombre, tt.area_funcional
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE tt.area_funcional = 'MEDICO'
           AND (
               t.Nombre LIKE ? OR 
               t.Apellido_Paterno LIKE ? OR 
               t.Apellido_Materno LIKE ? OR
-              t.Especialidad LIKE ? OR 
+              e.Nombre LIKE ? OR 
               t.Matricula LIKE ?
           )
         ORDER BY t.Apellido_Paterno, t.Nombre
@@ -571,11 +707,80 @@ class TrabajadorRepository(BaseRepository):
         ORDER BY examenes_asignados, t.Nombre
         """
         return self._execute_query(query)
-    
+    def get_workers_by_especialidad_asignada(self, especialidad_nombre: str) -> List[Dict[str, Any]]:
+        """
+        ✅ NUEVO: Obtiene trabajadores que tienen una especialidad asignada específica
+        Reemplaza el método eliminado get_workers_by_specialty
+        """
+        query = """
+        SELECT DISTINCT t.*, tt.Tipo as tipo_nombre
+        FROM Trabajadores t
+        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        INNER JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        INNER JOIN Especialidad e ON te.Id_Especialidad = e.id
+        WHERE e.Nombre LIKE ?
+        ORDER BY t.Nombre, t.Apellido_Paterno
+        """
+        return self._execute_query(query, (f"%{especialidad_nombre}%",))
+
     # ===============================
     # MÉTODOS PARA MÉDICOS Y ESPECIALIDADES
     # ===============================
-    
+    def verificar_puede_eliminar_trabajador(self, trabajador_id: int) -> Dict[str, Any]:
+        """
+        Verifica si un trabajador puede ser eliminado (no tiene registros relacionados)
+        
+        Returns:
+            {
+                'puede_eliminar': bool,
+                'mensaje': str,
+                'registros_encontrados': []
+            }
+        """
+        registros_encontrados = []
+        
+        # Verificar Enfermería
+        query_enfermeria = "SELECT COUNT(*) as total FROM Enfermeria WHERE Id_Trabajador = ?"
+        result = self._execute_query(query_enfermeria, (trabajador_id,), fetch_one=True)
+        if result and result['total'] > 0:
+            registros_encontrados.append(f"{result['total']} registro(s) de enfermería")
+        
+        # Verificar Consultas
+        query_consultas = "SELECT COUNT(*) as total FROM Consultas WHERE Id_Trabajador = ?"
+        result = self._execute_query(query_consultas, (trabajador_id,), fetch_one=True)
+        if result and result['total'] > 0:
+            registros_encontrados.append(f"{result['total']} consulta(s) médica(s)")
+        
+        # Verificar Laboratorio
+        query_laboratorio = "SELECT COUNT(*) as total FROM Laboratorio WHERE Id_Trabajador = ?"
+        result = self._execute_query(query_laboratorio, (trabajador_id,), fetch_one=True)
+        if result and result['total'] > 0:
+            registros_encontrados.append(f"{result['total']} examen(es) de laboratorio")
+        
+        # Verificar Especialidades asignadas
+        query_especialidades = "SELECT COUNT(*) as total FROM Trabajador_Especialidad WHERE Id_Trabajador = ?"
+        result = self._execute_query(query_especialidades, (trabajador_id,), fetch_one=True)
+        if result and result['total'] > 0:
+            registros_encontrados.append(f"{result['total']} especialidad(es) asignada(s)")
+        
+        # Construir respuesta
+        if registros_encontrados:
+            mensaje = (
+                "Este trabajador no puede ser eliminado porque tiene datos registrados en el sistema:\n\n" +
+                "\n".join([f"• {registro}" for registro in registros_encontrados]) +
+                "\n\nPara mantener la integridad de la información, este trabajador debe permanecer en el sistema."
+            )
+            return {
+                'puede_eliminar': False,
+                'mensaje': mensaje,
+                'registros_encontrados': registros_encontrados
+            }
+        else:
+            return {
+                'puede_eliminar': True,
+                'mensaje': 'El trabajador puede ser eliminado',
+                'registros_encontrados': []
+            }
     @cached_query('medicos_especialidades', ttl=600)
     def get_medicos_con_especialidades(self) -> List[Dict[str, Any]]:
         """
@@ -589,7 +794,7 @@ class TrabajadorRepository(BaseRepository):
             t.Apellido_Paterno,
             t.Apellido_Materno,
             t.Matricula,
-            t.Especialidad as especialidad_descriptiva,
+            ISNULL(STRING_AGG(e.Nombre, ', '), '') as especialidad_descriptiva,
             tt.Tipo as tipo_trabajador,
             COUNT(DISTINCT te.Id_Especialidad) as total_especialidades,
             STRING_AGG(e.Nombre, ', ') as especialidades_nombres,
@@ -601,12 +806,11 @@ class TrabajadorRepository(BaseRepository):
         LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE tt.area_funcional = 'MEDICO'
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
-                 t.Matricula, t.Especialidad, tt.Tipo
+                 t.Matricula, tt.Tipo
         ORDER BY t.Nombre, t.Apellido_Paterno
         """
         return self._execute_query(query)
     
-    def get_medico_con_especialidades(self, trabajador_id: int) -> Optional[Dict[str, Any]]:
         """
         Obtiene médico específico con todas sus especialidades
         Usa area_funcional para validar que sea médico - CORREGIDO
@@ -615,11 +819,14 @@ class TrabajadorRepository(BaseRepository):
         validate_query = """
         SELECT 
             t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-            t.Matricula, t.Especialidad as especialidad_descriptiva,
+            t.Matricula, ISNULL(STRING_AGG(e.Nombre, ', '), '') as especialidad_descriptiva,
             tt.Tipo as tipo_nombre, tt.area_funcional
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE t.id = ? AND tt.area_funcional = 'MEDICO'
+        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, t.Matricula, tt.Tipo, tt.area_funcional
         """
         
         medico = self._execute_query(validate_query, (trabajador_id,), fetch_one=True)
@@ -772,9 +979,9 @@ class TrabajadorRepository(BaseRepository):
         WHERE Id_Trabajador = ? AND Id_Especialidad = ?
         """
         
-        affected = self._execute_query(delete_query, 
-                                      (trabajador_id, especialidad_id),
-                                      fetch_all=False, use_cache=False)
+        # Usar _execute_query con fetch_all=False para DELETE
+        affected = self._execute_query(delete_query, (trabajador_id, especialidad_id),
+                                    fetch_all=False, use_cache=False)
         
         success = affected > 0
         if success:
@@ -785,8 +992,8 @@ class TrabajadorRepository(BaseRepository):
     
     def search_medicos(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Búsqueda de médicos por nombre, apellidos o matrícula
-        Usa area_funcional para filtrar solo médicos - CORREGIDO
+        Búsqueda de médicos por nombre, apellidos, matrícula o especialidades asignadas
+        ✅ CORREGIDO: Busca en Trabajador_Especialidad, no en campo eliminado
         """
         if not search_term or len(search_term.strip()) < 2:
             return []
@@ -794,29 +1001,40 @@ class TrabajadorRepository(BaseRepository):
         search_term = f"%{search_term.strip()}%"
         
         query = """
-        SELECT TOP (?)
+        SELECT 
             t.id,
             t.Nombre,
             t.Apellido_Paterno,
             t.Apellido_Materno,
             t.Matricula,
-            t.Especialidad as especialidad_descriptiva,
             tt.Tipo as tipo_trabajador,
-            COUNT(DISTINCT te.Id_Especialidad) as total_especialidades
+            tt.area_funcional,
+            COUNT(DISTINCT te.Id_Especialidad) as total_especialidades,
+            STRING_AGG(e.Nombre, ', ') as especialidades_nombres
         FROM Trabajadores t
         INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
         LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
         WHERE tt.area_funcional = 'MEDICO'
-        AND (t.Nombre LIKE ? OR t.Apellido_Paterno LIKE ? OR t.Apellido_Materno LIKE ? 
-            OR t.Matricula LIKE ? OR t.Especialidad LIKE ?)
+        AND (
+            t.Nombre LIKE ? OR 
+            t.Apellido_Paterno LIKE ? OR 
+            t.Apellido_Materno LIKE ? OR
+            t.Matricula LIKE ? OR
+            -- ✅ Buscar en especialidades de la tabla correcta
+            e.Nombre LIKE ?
+        )
         GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno, 
-                t.Matricula, t.Especialidad, tt.Tipo
-        ORDER BY t.Nombre, t.Apellido_Paterno
+                t.Matricula, tt.Tipo, tt.area_funcional
+        ORDER BY t.Apellido_Paterno, t.Nombre
+        OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
         """
         
-        return self._execute_query(query, (limit, search_term, search_term, 
-                                        search_term, search_term, search_term))
-    
+        return self._execute_query(query, (
+            search_term, search_term, search_term, 
+            search_term, search_term,  # 5 parámetros para los LIKE
+            limit  # 6to parámetro para FETCH
+        ))
     # ===============================
     # VALIDACIONES Y UTILIDADES
     # ===============================
@@ -845,17 +1063,7 @@ class TrabajadorRepository(BaseRepository):
         """
         return self._execute_query(query, (matricula.strip(),), fetch_one=True)
     
-    def get_workers_by_specialty(self, especialidad: str) -> List[Dict[str, Any]]:
-        """Obtiene trabajadores por especialidad descriptiva"""
-        query = """
-        SELECT t.*, tt.Tipo as tipo_nombre
-        FROM Trabajadores t
-        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        WHERE t.Especialidad LIKE ?
-        ORDER BY tt.Tipo, t.Nombre
-        """
-        return self._execute_query(query, (f"%{especialidad}%",))
-    
+
     # ===============================
     # ESTADÍSTICAS Y REPORTES
     # ===============================
@@ -875,10 +1083,12 @@ class TrabajadorRepository(BaseRepository):
         tipos_result = self._execute_query(tipos_query)
         
         especialidades_query = """
-        SELECT Especialidad, COUNT(*) as cantidad
-        FROM Trabajadores
-        WHERE Especialidad IS NOT NULL AND Especialidad != ''
-        GROUP BY Especialidad
+        SELECT e.Nombre as Especialidad, COUNT(DISTINCT t.id) as cantidad
+        FROM Especialidad e
+        LEFT JOIN Trabajador_Especialidad te ON e.id = te.Id_Especialidad
+        LEFT JOIN Trabajadores t ON te.Id_Trabajador = t.id
+        WHERE e.Nombre IS NOT NULL AND e.Nombre != ''
+        GROUP BY e.id, e.Nombre
         ORDER BY cantidad DESC
         """
         especialidades_result = self._execute_query(especialidades_query)
@@ -898,10 +1108,11 @@ class TrabajadorRepository(BaseRepository):
             tt.id,
             tt.Tipo,
             COUNT(t.id) as total_trabajadores,
-            COUNT(DISTINCT t.Especialidad) as especialidades_unicas,
+            COUNT(DISTINCT te.Id_Especialidad) as especialidades_unicas,
             AVG(CASE WHEN t.Matricula IS NOT NULL THEN 1 ELSE 0 END) * 100 as porcentaje_con_matricula
         FROM Tipo_Trabajadores tt
         LEFT JOIN Trabajadores t ON tt.id = t.Id_Tipo_Trabajador
+        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
         GROUP BY tt.id, tt.Tipo
         ORDER BY total_trabajadores DESC
         """
@@ -943,33 +1154,27 @@ class TrabajadorRepository(BaseRepository):
     # ===============================
     
     def export_workers_data(self) -> List[Dict[str, Any]]:
-        """Exporta datos completos de trabajadores para backup"""
-        query = """
-        SELECT 
-            t.*,
-            tt.Tipo as tipo_nombre,
-            tt.descripcion as tipo_descripcion,
-            STRING_AGG(e.Nombre, '; ') as especialidades_asignadas
-        FROM Trabajadores t
-        INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
-        LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
-        LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
-        GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
-                 t.Id_Tipo_Trabajador, t.Especialidad, t.Matricula,
-                 tt.Tipo, tt.descripcion
-        ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
-        """
-        return self._execute_query(query)
-    
+            """Exporta datos completos de trabajadores para backup"""
+            query = """
+            SELECT 
+                t.*,
+                tt.Tipo as tipo_nombre,
+                tt.descripcion as tipo_descripcion,
+                STRING_AGG(e.Nombre, '; ') as especialidades_asignadas
+            FROM Trabajadores t
+            INNER JOIN Tipo_Trabajadores tt ON t.Id_Tipo_Trabajador = tt.id
+            LEFT JOIN Trabajador_Especialidad te ON t.id = te.Id_Trabajador
+            LEFT JOIN Especialidad e ON te.Id_Especialidad = e.id
+            GROUP BY t.id, t.Nombre, t.Apellido_Paterno, t.Apellido_Materno,
+                    t.Id_Tipo_Trabajador, t.Matricula,
+                    tt.Tipo, tt.descripcion
+            ORDER BY tt.Tipo, t.Nombre, t.Apellido_Paterno
+            """
+            return self._execute_query(query)
+        
     def import_workers_data(self, workers_data: List[Dict[str, Any]]) -> Dict[str, int]:
         """
-        Importa datos de trabajadores desde backup
-        
-        Args:
-            workers_data: Lista de trabajadores a importar
-            
-        Returns:
-            Diccionario con estadísticas de importación
+        ❌ CORREGIDO: Eliminar manejo de especialidad en import
         """
         stats = {
             'total': len(workers_data),
@@ -980,14 +1185,12 @@ class TrabajadorRepository(BaseRepository):
         
         for worker in workers_data:
             try:
-                # Verificar si existe por matrícula o por nombre completo
                 existing_worker = None
                 
                 if worker.get('Matricula'):
                     existing_worker = self.get_worker_by_matricula(worker['Matricula'])
                 
                 if not existing_worker:
-                    # Buscar por nombre completo
                     search_term = f"{worker.get('Nombre', '')} {worker.get('Apellido_Paterno', '')}"
                     results = self.search_workers(search_term, limit=5)
                     for result in results:
@@ -998,14 +1201,13 @@ class TrabajadorRepository(BaseRepository):
                             break
                 
                 if existing_worker:
-                    # Actualizar existente
+                    # Actualizar - ❌ SIN especialidad
                     success = self.update_worker(
                         existing_worker['id'],
                         nombre=worker.get('Nombre'),
                         apellido_paterno=worker.get('Apellido_Paterno'),
                         apellido_materno=worker.get('Apellido_Materno'),
                         tipo_trabajador_id=worker.get('Id_Tipo_Trabajador'),
-                        especialidad=worker.get('Especialidad'),
                         matricula=worker.get('Matricula')
                     )
                     if success:
@@ -1013,13 +1215,12 @@ class TrabajadorRepository(BaseRepository):
                     else:
                         stats['errores'] += 1
                 else:
-                    # Crear nuevo
+                    # Crear nuevo - ❌ SIN especialidad
                     worker_id = self.create_worker(
                         nombre=worker.get('Nombre', ''),
                         apellido_paterno=worker.get('Apellido_Paterno', ''),
                         apellido_materno=worker.get('Apellido_Materno', ''),
                         tipo_trabajador_id=worker.get('Id_Tipo_Trabajador'),
-                        especialidad=worker.get('Especialidad'),
                         matricula=worker.get('Matricula')
                     )
                     if worker_id:
