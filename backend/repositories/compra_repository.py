@@ -1113,3 +1113,122 @@ class CompraRepository(BaseRepository):
         """
         
         return self._execute_query(query, (proveedor_id,), fetch_one=True) or {}
+    # ===============================
+    # 🚀 SISTEMA FIFO 2.0 - MÉTODOS NUEVOS
+    # Usan procedimientos almacenados de SQL Server
+    # ===============================
+    
+    def registrar_compra_con_lotes(self, proveedor_id: int, usuario_id: int, detalles: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        🚀 FIFO 2.0: Registra compra usando procedimiento almacenado sp_Registrar_Compra_Con_Lotes
+        
+        Args:
+            proveedor_id: ID del proveedor
+            usuario_id: ID del usuario que realiza la compra
+            detalles: Lista de diccionarios con:
+                [
+                    {
+                        "Id_Producto": 1,
+                        "Cantidad": 10,
+                        "Precio": 25.50,
+                        "Fecha_Vencimiento": "2025-12-31"  # opcional
+                    },
+                    ...
+                ]
+        
+        Returns:
+            Dict con id_compra, total y mensaje de confirmación
+        """
+        try:
+            validate_required(proveedor_id, "proveedor_id")
+            validate_required(usuario_id, "usuario_id")
+            validate_required(detalles, "detalles")
+            
+            if not detalles:
+                raise CompraError("No se proporcionaron items para la compra")
+            
+            import json
+            detalles_json = json.dumps(detalles)
+            
+            print(f"🛒 Registrando compra con SP - Proveedor: {proveedor_id}, Items: {len(detalles)}")
+            print(f"📋 Detalles JSON: {detalles_json}")
+            
+            # Ejecutar procedimiento almacenado
+            query = """
+            DECLARE @Total DECIMAL(12,2), @IdCompra INT;
+            
+            EXEC sp_Registrar_Compra_Con_Lotes 
+                @Id_Proveedor = ?,
+                @Id_Usuario = ?,
+                @Detalles = ?,
+                @Total = @Total OUTPUT,
+                @Id_Compra = @IdCompra OUTPUT;
+            
+            SELECT @IdCompra as IdCompra, @Total as Total;
+            """
+            
+            # Ejecutar con use_cache=False para evitar problemas
+            result = self._execute_query(
+                query, 
+                (proveedor_id, usuario_id, detalles_json),
+                fetch_one=True,
+                use_cache=False
+            )
+            
+            if result and result.get('IdCompra'):
+                id_compra = result['IdCompra']
+                total = float(result['Total'])
+                
+                # Invalidar cachés
+                self._invalidate_cache_after_modification()
+                
+                print(f"✅ Compra registrada exitosamente - ID: {id_compra}, Total: ${total:.2f}")
+                print(f"   Lotes creados automáticamente por el SP")
+                
+                return {
+                    "id_compra": id_compra,
+                    "total": total,
+                    "mensaje": f"Compra {id_compra} registrada con creación automática de {len(detalles)} lotes",
+                    "sistema": "FIFO 2.0"
+                }
+            else:
+                raise CompraError("El procedimiento almacenado no retornó ID de compra")
+                
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Error en compra con SP: {error_msg}")
+            
+            # Fallback a método antiguo si está configurado
+            from .config_fifo import config_fifo
+            if config_fifo.AUTO_FALLBACK_TO_LEGACY:
+                print("🔙 Intentando con método legacy...")
+                try:
+                    # Convertir formato de detalles para método antiguo
+                    items_legacy = []
+                    for item in detalles:
+                        items_legacy.append({
+                            'codigo': self._get_codigo_producto(item['Id_Producto']),
+                            'cantidad_unitario': item['Cantidad'],
+                            'precio_unitario': item['Precio'],
+                            'fecha_vencimiento': item.get('Fecha_Vencimiento')
+                        })
+                    
+                    return self.crear_compra(proveedor_id, usuario_id, items_legacy)
+                    
+                except Exception as fallback_error:
+                    print(f"❌ Fallback también falló: {fallback_error}")
+            
+            raise CompraError(f"Error registrando compra: {error_msg}")
+    
+    def _get_codigo_producto(self, producto_id: int) -> str:
+        """Helper para obtener código de producto por ID"""
+        try:
+            result = self._execute_query(
+                "SELECT Codigo FROM Productos WHERE id = ?",
+                (producto_id,),
+                fetch_one=True,
+                use_cache=False
+            )
+            return result['Codigo'] if result else str(producto_id)
+        except:
+            return str(producto_id)

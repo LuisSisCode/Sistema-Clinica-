@@ -1,6 +1,9 @@
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
+import traceback
+
+from ..core.config_fifo import config_fifo
 
 from ..core.base_repository import BaseRepository
 from ..core.excepciones import (
@@ -22,7 +25,7 @@ class ProductoRepository(BaseRepository):
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0
-        ORDER BY p.Nombre
+        ORDER BY p.id DESC
         """
         return self._execute_query(query)
     
@@ -50,7 +53,7 @@ class ProductoRepository(BaseRepository):
             ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        ORDER BY p.Nombre
+        ORDER BY p.id DESC
         """
         return self._execute_query(query)
     
@@ -80,14 +83,12 @@ class ProductoRepository(BaseRepository):
             p.ID_Marca,
             m.Nombre as Marca_Nombre,
             m.Detalles as Marca_Detalles,
-            -- ✅ STOCK REAL CALCULADO DESDE LOTES (NO de tabla Productos)
             ISNULL((SELECT SUM(l.Cantidad_Unitario) 
                     FROM Lote l 
                     WHERE l.Id_Producto = p.id), 0) as Stock_Total,
             ISNULL((SELECT SUM(l.Cantidad_Unitario) 
                     FROM Lote l 
                     WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
-            -- ✅ INFORMACIÓN ADICIONAL DE LOTES
             (SELECT COUNT(*) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
@@ -96,7 +97,6 @@ class ProductoRepository(BaseRepository):
             WHERE l.Id_Producto = p.id 
             AND l.Cantidad_Unitario > 0 
             AND l.Fecha_Vencimiento IS NOT NULL) as Proxima_Vencimiento,
-            -- ✅ ESTADO DE STOCK
             CASE 
                 WHEN (SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id) = 0 
                 THEN 'AGOTADO'
@@ -840,3 +840,341 @@ class ProductoRepository(BaseRepository):
             print(f"❌ Error creando marca: {e}")
             traceback.print_exc()
             return -1
+    # ===============================
+    # 🚀 SISTEMA FIFO 2.0 - MÉTODOS NUEVOS
+    # Usan vistas y procedimientos almacenados de SQL Server
+    # ===============================
+    
+    def obtener_stock_actual(self) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene stock REAL directamente desde tabla Producto
+        Usa Stock_Unitario que se actualiza automáticamente con ventas/compras
+        """
+        try:
+            query = """
+            SELECT 
+                p.id, 
+                p.Codigo, 
+                p.Nombre,
+                m.Nombre as Marca,
+                p.Unidad_Medida,
+                p.Stock_Unitario as Stock_Real,  -- ✅ CAMBIO: Usar Stock_Unitario directamente
+                p.Stock_Minimo, 
+                p.Stock_Maximo,
+                p.Activo,
+                -- Calcular Estado_Stock basado en umbrales
+                CASE 
+                    WHEN p.Stock_Unitario <= 0 THEN 'CRÍTICO'
+                    WHEN p.Stock_Unitario <= p.Stock_Minimo THEN 'CRÍTICO'
+                    WHEN p.Stock_Unitario <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 'BAJO'
+                    ELSE 'NORMAL'
+                END as Estado_Stock,
+                -- Información de vencimiento desde lotes activos
+                (SELECT MIN(l.Fecha_Vencimiento) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                AND l.Cantidad_Unitario > 0 
+                AND l.Fecha_Vencimiento IS NOT NULL) as Proximo_Vencimiento,
+                (SELECT COUNT(*) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                AND l.Cantidad_Unitario > 0
+                AND l.Fecha_Vencimiento IS NOT NULL
+                AND DATEDIFF(day, GETDATE(), l.Fecha_Vencimiento) <= 60
+                AND DATEDIFF(day, GETDATE(), l.Fecha_Vencimiento) >= 0) as Lotes_Proximos_Vencer
+            FROM Productos p
+            LEFT JOIN Marca m ON p.ID_Marca = m.id
+            WHERE p.Activo = 1
+            ORDER BY 
+                CASE 
+                    WHEN p.Stock_Unitario <= 0 THEN 1
+                    WHEN p.Stock_Unitario <= p.Stock_Minimo THEN 1
+                    WHEN p.Stock_Unitario <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 2
+                    ELSE 3
+                END,
+                p.Nombre
+            """
+            
+            resultados = self._execute_query(query, use_cache=False)
+            print(f"📊 Stock actual obtenido: {len(resultados)} productos - Sistema FIFO 2.0")
+            
+            # Debug: Mostrar primeros 3 productos con stock
+            for i, prod in enumerate(resultados[:3]):
+                print(f"   🔍 {prod['Codigo']} - Stock: {prod['Stock_Real']} Estado: {prod['Estado_Stock']}")
+            
+            return resultados
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo stock actual: {e}")
+            traceback.print_exc()
+            return []
+    
+    def obtener_alertas_inventario(self) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene todas las alertas activas usando vista vw_Alertas_Inventario
+        ✅ COLUMNAS EXACTAS: Tipo_Alerta, id, Codigo, Nombre, Stock_Minimo, Stock_Real, Detalle
+        """
+        try:
+            query = """
+            SELECT 
+                Tipo_Alerta,
+                Codigo,
+                Nombre AS Producto,              -- ✅ Existe como "Nombre"
+                Stock_Minimo,
+                Stock_Real AS Stock_Actual,      -- ✅ Existe como "Stock_Real"
+                Detalle,
+                -- ✅ Campos que NO existen en la vista, se calculan:
+                CASE 
+                    WHEN Tipo_Alerta = 'STOCK BAJO' THEN 2
+                    WHEN Tipo_Alerta = 'PRODUCTO PRÓXIMO A VENCER' THEN 2
+                    WHEN Tipo_Alerta = 'PRODUCTO VENCIDO' THEN 3
+                    ELSE 1
+                END AS Prioridad
+            FROM vw_Alertas_Inventario
+            ORDER BY 
+                CASE 
+                    WHEN Tipo_Alerta = 'PRODUCTO VENCIDO' THEN 3
+                    WHEN Tipo_Alerta = 'PRODUCTO PRÓXIMO A VENCER' THEN 2
+                    WHEN Tipo_Alerta = 'STOCK BAJO' THEN 2
+                    ELSE 1
+                END DESC, 
+                Tipo_Alerta
+            """
+            
+            alertas = self._execute_query(query, use_cache=False)
+            
+            if alertas:
+                print(f"⚠️  {len(alertas)} alertas de inventario detectadas")
+                # Agrupar por tipo para logging
+                tipos = {}
+                for alerta in alertas:
+                    tipo = alerta['Tipo_Alerta']
+                    tipos[tipo] = tipos.get(tipo, 0) + 1
+                
+                for tipo, cantidad in tipos.items():
+                    print(f"   - {tipo}: {cantidad}")
+            else:
+                print("✅ No hay alertas de inventario")
+            
+            return alertas
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo alertas: {e}")
+            return []
+    
+    def obtener_lotes_activos_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene detalle de lotes activos usando vista vw_Lotes_Activos
+        ✅ COLUMNAS EXACTAS: id, Id_Producto, Codigo, Producto, Marca, Cantidad_Inicial, 
+                            Stock_Actual, Precio_Compra, Fecha_Compra, Fecha_Vencimiento,
+                            Dias_para_Vencer, Estado_Vencimiento, Estado_Lote, etc.
+        """
+        try:
+            if producto_id:
+                query = """
+                SELECT 
+                    id AS Id_Lote,                    -- ✅ Existe como "id"
+                    Id_Producto,
+                    Codigo AS Producto_Codigo,        -- ✅ Existe como "Codigo"
+                    Producto AS Producto_Nombre,      -- ✅ Ya es "Producto" (alias en vista)
+                    Marca,                            -- ✅ Existe
+                    Cantidad_Inicial,
+                    Stock_Actual AS Stock_Lote,       -- ✅ Existe como "Stock_Actual"
+                    Precio_Compra,
+                    Fecha_Compra,
+                    Fecha_Vencimiento,
+                    Dias_para_Vencer,
+                    Estado_Vencimiento,
+                    Estado_Lote,
+                    Id_Compra,
+                    Proveedor
+                FROM vw_Lotes_Activos
+                WHERE Id_Producto = ?
+                ORDER BY Dias_para_Vencer
+                """
+                params = (producto_id,)
+            else:
+                query = """
+                SELECT 
+                    id AS Id_Lote,                    
+                    Id_Producto,
+                    Codigo AS Producto_Codigo,        
+                    Producto AS Producto_Nombre,      
+                    Marca,                            
+                    Cantidad_Inicial,
+                    Stock_Actual AS Stock_Lote,       
+                    Precio_Compra,
+                    Fecha_Compra,
+                    Fecha_Vencimiento,
+                    Dias_para_Vencer,
+                    Estado_Vencimiento,
+                    Estado_Lote,
+                    Id_Compra,
+                    Proveedor
+                FROM vw_Lotes_Activos
+                ORDER BY Dias_para_Vencer
+                """
+                params = ()
+            
+            lotes = self._execute_query(query, params, use_cache=False)
+            print(f"📦 Lotes activos obtenidos: {len(lotes)} lotes - Sistema FIFO 2.0")
+            return lotes
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo lotes activos (vista): {e}")
+            # Fallback a método antiguo si está configurado
+            try:
+                from ..core.config_fifo import config_fifo
+                if config_fifo.AUTO_FALLBACK_TO_LEGACY and producto_id:
+                    print("🔙 Usando método legacy como fallback...")
+                    return self.get_lotes_producto(producto_id, solo_activos=True)
+            except:
+                pass
+            return []
+    
+    def obtener_costo_inventario(self) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene valorización del inventario usando vista vw_Costo_Inventario
+        ✅ COLUMNAS EXACTAS: id, Codigo, Nombre, Unidad_Medida, Lotes_Activos, Stock_Total,
+                            Costo_Promedio_Real, Valor_Inventario_Costo, Valor_Inventario_Venta,
+                            Ganancia_Potencial
+        """
+        try:
+            query = """
+            SELECT 
+                id AS Id_Producto,                          -- ✅ Existe como "id"
+                Codigo,                                     -- ✅ Existe
+                Nombre AS Producto,                         -- ✅ Existe como "Nombre"
+                Unidad_Medida,                              -- ✅ Existe
+                Stock_Total,                                -- ✅ Existe
+                Costo_Promedio_Real AS Costo_Promedio,      -- ✅ Existe
+                Valor_Inventario_Costo,                     -- ✅ Existe
+                Valor_Inventario_Venta,                     -- ✅ Existe
+                Ganancia_Potencial AS Margen_Potencial,     -- ✅ Existe
+                -- ✅ Porcentaje_Margen NO existe, se calcula:
+                CASE 
+                    WHEN Valor_Inventario_Costo > 0 
+                    THEN (Ganancia_Potencial / Valor_Inventario_Costo * 100)
+                    ELSE 0
+                END AS Porcentaje_Margen
+            FROM vw_Costo_Inventario
+            ORDER BY Valor_Inventario_Costo DESC
+            """
+            
+            valoracion = self._execute_query(query, use_cache=False)
+            
+            if valoracion:
+                total_costo = sum(item['Valor_Inventario_Costo'] or 0 for item in valoracion)
+                total_venta = sum(item['Valor_Inventario_Venta'] or 0 for item in valoracion)
+                print(f"💰 Valorización de inventario:")
+                print(f"   - Valor en costo: ${total_costo:,.2f}")
+                print(f"   - Valor en venta: ${total_venta:,.2f}")
+                print(f"   - Margen potencial: ${total_venta - total_costo:,.2f}")
+            
+            return valoracion
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo valorización inventario: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def obtener_rotacion_inventario(self, dias: int = 30) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene análisis de rotación de inventario usando vista vw_Rotacion_Inventario
+        ✅ COLUMNAS EXACTAS: id, Codigo, Nombre, Unidad_Medida, Unidades_Vendidas_30_Dias,
+                            Stock_Promedio, Indice_Rotacion, Dias_Inventario
+        """
+        try:
+            query = """
+            SELECT 
+                id AS Id_Producto,                                  -- ✅ Existe como "id"
+                Codigo,                                             -- ✅ Existe
+                Nombre AS Producto,                                 -- ✅ Existe como "Nombre"
+                Unidad_Medida,                                      -- ✅ Existe
+                Stock_Promedio AS Stock_Actual,                     -- ✅ Existe
+                Unidades_Vendidas_30_Dias AS Ventas_Periodo,        -- ✅ Existe
+                0 AS Compras_Periodo,                               -- ✅ NO EXISTE, poner 0
+                Dias_Inventario AS Dias_Stock,                      -- ✅ Existe
+                Indice_Rotacion,                                    -- ✅ Existe
+                -- ✅ Clasificacion NO existe, se calcula:
+                CASE 
+                    WHEN Indice_Rotacion >= 12 THEN 'A'
+                    WHEN Indice_Rotacion >= 6 THEN 'B'
+                    ELSE 'C'
+                END AS Clasificacion
+            FROM vw_Rotacion_Inventario
+            ORDER BY Indice_Rotacion DESC
+            """
+            
+            rotacion = self._execute_query(query, use_cache=False)
+            
+            if rotacion:
+                print(f"📈 Análisis de rotación (últimos {dias} días):")
+                clasificaciones = {}
+                for item in rotacion:
+                    clasif = item['Clasificacion']
+                    clasificaciones[clasif] = clasificaciones.get(clasif, 0) + 1
+                
+                for clasif, count in clasificaciones.items():
+                    print(f"   - {clasif}: {count} productos")
+            
+            return rotacion
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo rotación de inventario: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def obtener_dashboard_metricas(self) -> Dict[str, Any]:
+        """
+        🚀 FIFO 2.0: Obtiene métricas consolidadas para dashboard
+        ✅ CORREGIDO con columnas EXACTAS de cada vista
+        """
+        try:
+            metricas = {}
+            
+            # Alerta de stock crítico
+            query_critico = "SELECT COUNT(*) as total FROM vw_Stock_Actual WHERE Estado_Stock = 'CRÍTICO'"
+            result = self._execute_query(query_critico, fetch_one=True, use_cache=False)
+            metricas['stock_critico'] = result['total'] if result else 0
+            
+            # Lotes próximos a vencer (usando alertas)
+            query_vencer = "SELECT COUNT(*) as total FROM vw_Alertas_Inventario WHERE Tipo_Alerta = 'PRODUCTO PRÓXIMO A VENCER'"
+            result = self._execute_query(query_vencer, fetch_one=True, use_cache=False)
+            metricas['lotes_proximos_vencer'] = result['total'] if result else 0
+            
+            # Valor total del inventario
+            query_valor = "SELECT SUM(Valor_Inventario_Costo) as total FROM vw_Costo_Inventario"
+            result = self._execute_query(query_valor, fetch_one=True, use_cache=False)
+            metricas['valor_inventario'] = float(result['total']) if result and result['total'] else 0.0
+            
+            # Total de alertas
+            query_alertas = "SELECT COUNT(*) as total FROM vw_Alertas_Inventario"
+            result = self._execute_query(query_alertas, fetch_one=True, use_cache=False)
+            metricas['alertas_activas'] = result['total'] if result else 0
+            
+            # Top 5 productos con mejor rotación (COLUMNAS EXACTAS)
+            query_top = """
+            SELECT TOP 5 
+                Nombre AS Producto,              -- ✅ Existe como "Nombre"
+                Indice_Rotacion                  -- ✅ Existe
+            FROM vw_Rotacion_Inventario 
+            ORDER BY Indice_Rotacion DESC
+            """
+            metricas['top_rotacion'] = self._execute_query(query_top, use_cache=False)
+            
+            print(f"📊 Métricas dashboard obtenidas:")
+            print(f"   - Stock crítico: {metricas['stock_critico']}")
+            print(f"   - Próximos a vencer: {metricas['lotes_proximos_vencer']}")
+            print(f"   - Valor inventario: ${metricas['valor_inventario']:,.2f}")
+            print(f"   - Alertas activas: {metricas['alertas_activas']}")
+            
+            return metricas
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo métricas dashboard: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}

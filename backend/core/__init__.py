@@ -16,6 +16,7 @@ from .excepciones import (
     ValidationError, ExceptionHandler
 )
 from .base_repository import BaseRepository
+from .config_fifo import ConfigFIFO
 
 __all__ = [
     'DatabaseConnection',
@@ -23,7 +24,8 @@ __all__ = [
     'ClinicaBaseException', 'DatabaseConnectionError', 'DatabaseQueryError',
     'ProductoNotFoundError', 'StockInsuficienteError', 'VentaError', 'CompraError',
     'ValidationError', 'ExceptionHandler',
-    'BaseRepository'
+    'BaseRepository',
+    'ConfigFIFO',
 ]
 
 print("🔧 Core Backend cargado")

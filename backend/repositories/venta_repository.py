@@ -1565,3 +1565,259 @@ class VentaRepository(BaseRepository):
             'total_db': venta['Total'],
             'total_calculado': total_calculado
         }
+    # ===============================
+    # 🚀 SISTEMA FIFO 2.0 - MÉTODOS NUEVOS
+    # Usan procedimientos almacenados de SQL Server
+    # ===============================
+    
+    def registrar_venta_fifo(self, usuario_id: int, detalles: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        🚀 FIFO 2.0: Registra venta usando procedimiento almacenado sp_Vender_Producto_FIFO
+        
+        Args:
+            usuario_id: ID del usuario que realiza la venta
+            detalles: Lista de diccionarios con:
+                [
+                    {
+                        "Id_Producto": 1,
+                        "Cantidad": 3,
+                        "Precio_Venta": 35.00
+                    },
+                    ...
+                ]
+        
+        Returns:
+            Dict con id_venta, total y mensaje de confirmación
+        """
+        try:
+            validate_required(usuario_id, "usuario_id")
+            validate_required(detalles, "detalles")
+            
+            if not detalles:
+                raise VentaError("No se proporcionaron items para la venta")
+            
+            import json
+            detalles_json = json.dumps(detalles)
+            
+            print(f"💰 Registrando venta con FIFO automático - Usuario: {usuario_id}, Items: {len(detalles)}")
+            print(f"📋 Detalles JSON: {detalles_json}")
+            
+            # Ejecutar procedimiento almacenado
+            query = """
+            DECLARE @IdVenta INT, @Total DECIMAL(12,2);
+            
+            EXEC sp_Vender_Producto_FIFO 
+                @Id_Usuario = ?,
+                @Detalles = ?,
+                @Id_Venta = @IdVenta OUTPUT,
+                @Total_Venta = @Total OUTPUT;
+            
+            SELECT @IdVenta as IdVenta, @Total as Total;
+            """
+            
+            # Ejecutar con use_cache=False
+            result = self._execute_query(
+                query,
+                (usuario_id, detalles_json),
+                fetch_one=True,
+                use_cache=False
+            )
+            
+            if result and result.get('IdVenta'):
+                id_venta = result['IdVenta']
+                total = float(result['Total'])
+                
+                # Invalidar cachés completamente
+                self._invalidate_cache_after_modification()
+                self.invalidate_all_caches()
+                
+                # Invalidar también cachés de productos
+                if hasattr(self, 'producto_repo'):
+                    self.producto_repo.invalidate_all_caches()
+                
+                print(f"✅ Venta registrada exitosamente - ID: {id_venta}, Total: ${total:.2f}")
+                print(f"   FIFO aplicado automáticamente por el SP")
+                
+                return {
+                    "id_venta": id_venta,
+                    "total": total,
+                    "mensaje": f"Venta {id_venta} procesada con sistema FIFO automático",
+                    "sistema": "FIFO 2.0"
+                }
+            else:
+                raise VentaError("El procedimiento almacenado no retornó ID de venta")
+                
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Error en venta FIFO: {error_msg}")
+            
+            # Manejo específico de errores
+            if "Stock insuficiente" in error_msg:
+                # Extraer información del error
+                raise StockInsuficienteError(
+                    codigo_producto="Ver mensaje",
+                    stock_disponible=0,
+                    cantidad_solicitada=0
+                )
+            elif "Error en el procesamiento FIFO" in error_msg:
+                raise VentaError(f"Error en procesamiento FIFO: {error_msg}")
+            
+            # Fallback a método antiguo si está configurado
+            from .config_fifo import config_fifo
+            if config_fifo.AUTO_FALLBACK_TO_LEGACY:
+                print("🔙 Intentando con método legacy...")
+                try:
+                    # Convertir formato de detalles para método antiguo
+                    items_legacy = []
+                    for item in detalles:
+                        codigo = self._get_codigo_producto(item['Id_Producto'])
+                        items_legacy.append({
+                            'codigo': codigo,
+                            'cantidad': item['Cantidad'],
+                            'precio_venta': item['Precio_Venta']
+                        })
+                    
+                    # Aquí llamarías al método antiguo de crear venta
+                    # return self.crear_venta_legacy(usuario_id, items_legacy)
+                    print("⚠️  Método legacy no implementado en este ejemplo")
+                    
+                except Exception as fallback_error:
+                    print(f"❌ Fallback también falló: {fallback_error}")
+            
+            raise VentaError(f"Error registrando venta FIFO: {error_msg}")
+    
+    def obtener_margen_venta(self, venta_id: int) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene márgenes detallados de una venta usando sp_Obtener_Margen_Venta
+        
+        Args:
+            venta_id: ID de la venta
+        
+        Returns:
+            Lista con detalles de márgenes por producto
+        """
+        try:
+            validate_required(venta_id, "venta_id")
+            
+            print(f"💰 Obteniendo márgenes de venta ID: {venta_id}")
+            
+            query = "EXEC sp_Obtener_Margen_Venta @Id_Venta = ?"
+            
+            margenes = self._execute_query(query, (venta_id,), use_cache=False)
+            
+            if margenes:
+                # Calcular totales
+                total_margen = sum(m.get('Margen_Total', 0) or 0 for m in margenes)
+                total_venta = sum(m.get('Total_Venta', 0) or 0 for m in margenes)
+                total_costo = sum(m.get('Costo_Total', 0) or 0 for m in margenes)
+                
+                print(f"📊 Márgenes de venta {venta_id}:")
+                print(f"   - Total venta: ${total_venta:.2f}")
+                print(f"   - Costo total: ${total_costo:.2f}")
+                print(f"   - Margen total: ${total_margen:.2f}")
+                if total_costo > 0:
+                    print(f"   - % Margen: {(total_margen/total_costo*100):.2f}%")
+            else:
+                print(f"⚠️  No se encontraron márgenes para venta {venta_id}")
+            
+            return margenes
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo márgenes de venta: {e}")
+            return []
+    
+    def obtener_reporte_margenes_periodo(self, fecha_desde: str, fecha_hasta: str) -> Dict[str, Any]:
+        """
+        🚀 FIFO 2.0: Obtiene reporte consolidado de márgenes en un periodo
+        
+        Args:
+            fecha_desde: Fecha inicial (formato: 'YYYY-MM-DD')
+            fecha_hasta: Fecha final (formato: 'YYYY-MM-DD')
+        
+        Returns:
+            Dict con reporte consolidado de márgenes
+        """
+        try:
+            # Obtener ventas del periodo
+            query_ventas = """
+            SELECT id FROM Ventas
+            WHERE Fecha BETWEEN ? AND ?
+            ORDER BY Fecha
+            """
+            
+            ventas = self._execute_query(
+                query_ventas,
+                (fecha_desde, fecha_hasta),
+                use_cache=False
+            )
+            
+            if not ventas:
+                return {
+                    "total_ventas": 0,
+                    "total_vendido": 0.0,
+                    "total_costo": 0.0,
+                    "margen_total": 0.0,
+                    "porcentaje_margen": 0.0,
+                    "detalles_por_venta": []
+                }
+            
+            print(f"📊 Calculando márgenes para {len(ventas)} ventas del periodo...")
+            
+            detalles_ventas = []
+            total_vendido = 0.0
+            total_costo = 0.0
+            
+            for venta in ventas:
+                margenes = self.obtener_margen_venta(venta['id'])
+                if margenes:
+                    margen_venta = sum(m.get('Margen_Total', 0) or 0 for m in margenes)
+                    venta_total = sum(m.get('Total_Venta', 0) or 0 for m in margenes)
+                    costo_total = sum(m.get('Costo_Total', 0) or 0 for m in margenes)
+                    
+                    total_vendido += venta_total
+                    total_costo += costo_total
+                    
+                    detalles_ventas.append({
+                        "id_venta": venta['id'],
+                        "total_venta": venta_total,
+                        "costo_total": costo_total,
+                        "margen": margen_venta,
+                        "porcentaje_margen": (margen_venta/costo_total*100) if costo_total > 0 else 0
+                    })
+            
+            margen_total = total_vendido - total_costo
+            porcentaje_margen = (margen_total/total_costo*100) if total_costo > 0 else 0
+            
+            reporte = {
+                "periodo": f"{fecha_desde} a {fecha_hasta}",
+                "total_ventas": len(ventas),
+                "total_vendido": total_vendido,
+                "total_costo": total_costo,
+                "margen_total": margen_total,
+                "porcentaje_margen": porcentaje_margen,
+                "detalles_por_venta": detalles_ventas
+            }
+            
+            print(f"✅ Reporte de márgenes generado:")
+            print(f"   - Ventas: {len(ventas)}")
+            print(f"   - Total vendido: ${total_vendido:.2f}")
+            print(f"   - Margen: ${margen_total:.2f} ({porcentaje_margen:.2f}%)")
+            
+            return reporte
+            
+        except Exception as e:
+            print(f"❌ Error generando reporte de márgenes: {e}")
+            return {}
+    
+    def _get_codigo_producto(self, producto_id: int) -> str:
+        """Helper para obtener código de producto por ID"""
+        try:
+            result = self._execute_query(
+                "SELECT Codigo FROM Productos WHERE id = ?",
+                (producto_id,),
+                fetch_one=True,
+                use_cache=False
+            )
+            return result['Codigo'] if result else str(producto_id)
+        except:
+            return str(producto_id)

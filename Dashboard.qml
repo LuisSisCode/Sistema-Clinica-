@@ -27,26 +27,21 @@ ScrollView {
 
     readonly property color blueColor: "#005A9C"
 
-        
-    // 1. AGREGAR PROPIEDADES PARA DATOS REALES 
-    property var productosProximosVencer: []
-    property var productosVencidos: []
-    property bool datosVencimientosCargados: false
-
-    // CONEXIÓN CON MODELO REAL DE BD
-    property var dashboardModel: appController ? appController.dashboard_model_instance : null
+    // 🚀 PROPIEDADES PARA ALERTAS MEJORADAS
+    property var alertasInventario: []
+    property bool datosCargados: false
+    property string filtroAlertaActual: "TODOS"  // "TODOS", "VENCIDOS", "PRÓXIMO_A_VENCER", "STOCK_BAJO"
     
-    // Referencia al inventarioModel para obtener datos de vencimientos
+    // CONEXIÓN CON MODELOS
+    property var dashboardModel: appController ? appController.dashboard_model_instance : null
     property var inventarioModel: appController ? appController.inventario_model_instance : null
 
     // Sistema de filtrado jerárquico: Año -> Mes
     property string currentPeriodType: "mes" // "hoy", "semana", "mes", "año"
-    property int selectedMonth: new Date().getMonth() + 1  // Mes actual por defecto
-    property int selectedYear: new Date().getFullYear()    // Año actual por defecto
-    property date systemStartDate: new Date("2025-01-01") // Fecha de inicio del sistema
+    property int selectedMonth: new Date().getMonth() + 1
+    property int selectedYear: new Date().getFullYear()
+    property date systemStartDate: new Date("2025-01-01")
     
-    //signal productosProximosVencerChanged()
-    //signal productosVencidosChanged()
     // Funciones de utilidad para fechas
     function getCurrentDate() {
         return new Date()
@@ -67,7 +62,6 @@ ScrollView {
         return months[monthIndex]
     }
 
-    // 3. FUNCIÓN PARA FORMATEAR FECHA (agregar en las funciones de utilidad)
     function formatearFechaVencimiento(fechaStr) {
         if (!fechaStr) return "Sin fecha"
         
@@ -75,7 +69,6 @@ ScrollView {
             var fecha = new Date(fechaStr)
             var hoy = new Date()
             
-            // CORREGIDO: Resetear horas para comparación correcta
             hoy.setHours(0, 0, 0, 0)
             fecha.setHours(0, 0, 0, 0)
             
@@ -88,31 +81,28 @@ ScrollView {
             } else if (diferencia === 1) {
                 return "Vence mañana"
             } else if (diferencia <= 7) {
-                return "⚠️ Vence en " + diferencia + " días"
+                return "Vence en " + diferencia + " días"
             } else {
                 return "Vence en " + diferencia + " días"
             }
         } catch (e) {
-            console.log("Error formateando fecha:", e.toString())
             return fechaStr
         }
     }
     
-    // MODIFICADO: Función para generar meses del año seleccionado
     function getAvailableMonths() {
         var months = []
         var currentDate = getCurrentDate()
         var startYear = systemStartDate.getFullYear()
         var startMonth = systemStartDate.getMonth()
         
-        // Solo mostrar meses del año seleccionado
         var yearStart = (selectedYear === startYear) ? startMonth : 0
         var yearEnd = (selectedYear === currentDate.getFullYear()) ? currentDate.getMonth() : 11
         
         for (var month = yearStart; month <= yearEnd; month++) {
             months.push({
                 value: month + 1,
-                label: getMonthName(month)  // Solo el nombre del mes
+                label: getMonthName(month)
             })
         }
         return months
@@ -129,10 +119,9 @@ ScrollView {
                 label: year.toString()
             })
         }
-        return years.reverse() // Más recientes primero
+        return years.reverse()
     }
     
-    // MODIFICADO: Función para encontrar índice del mes actual
     function findCurrentMonthIndex() {
         var months = getAvailableMonths()
         for (var i = 0; i < months.length; i++) {
@@ -153,7 +142,6 @@ ScrollView {
         return 0
     }
     
-    // NUEVO: Función para actualizar meses cuando cambia el año
     function updateMonthsForSelectedYear() {
         var availableMonths = getAvailableMonths()
         if (availableMonths.length > 0) {
@@ -165,7 +153,6 @@ ScrollView {
         }
     }
     
-    // Función de filtrado actualizada
     function isDateInSelectedPeriod(dateString) {
         var itemDate = new Date(dateString)
         var today = getCurrentDate()
@@ -197,7 +184,7 @@ ScrollView {
         }
     }
 
-    // Funciones que ahora usan datos reales del modelo
+    // Funciones que usan datos reales del modelo
     function calculateFarmaciaTotal() {
         return dashboardModel ? dashboardModel.farmaciaTotal : 0
     }
@@ -218,7 +205,6 @@ ScrollView {
         return dashboardModel ? dashboardModel.serviciosBasicosTotal : 0
     }
     
-    // Calcular totales consolidados
     function calculateTotalIngresos() {
         return dashboardModel ? dashboardModel.totalIngresos : 0
     }
@@ -227,7 +213,6 @@ ScrollView {
         return dashboardModel ? dashboardModel.totalEgresos : 0
     }
     
-    // Función para obtener el nombre del período actual
     function getPeriodLabel() {
         if (!dashboardModel) return "CARGANDO..."
         
@@ -245,188 +230,122 @@ ScrollView {
         }
     }
 
-    // 2. FUNCIÓN PARA CARGAR PRODUCTOS POR VENCER (agregar en las funciones)
-    function cargarProductosVencimientos() {
+    // 🚀 FUNCIÓN SIMPLIFICADA PARA CARGAR ALERTAS
+    function cargarAlertas() {
         if (!inventarioModel) {
-            console.log("⚠️ InventarioModel no disponible para vencimientos")
+            datosCargados = false
             return
         }
         
         try {
-            console.log("📅 Cargando productos próximos a vencer...")
-            
-            // CORREGIDO: Limpiar arrays antes de cargar nuevos datos
-            productosProximosVencer = []
-            productosVencidos = []
-            
-            // 1. PRODUCTOS PRÓXIMOS A VENCER (60 días)
-            if (typeof inventarioModel.get_lotes_por_vencer === 'function') {
-                var lotesProximos = inventarioModel.get_lotes_por_vencer(60) || []
-                console.log("🔍 Lotes próximos obtenidos:", lotesProximos.length)
-                
-                var productosUnicos = {}
-                
-                for (var i = 0; i < lotesProximos.length; i++) {
-                    var lote = lotesProximos[i]
-                    
-                    // CORREGIDO: Verificar que el lote tenga datos válidos
-                    if (!lote || !lote.Codigo) {
-                        continue
-                    }
-                    
-                    // CORREGIDO: Calcular stock correctamente
-                    var stockLote = 0
-                    if (lote.Cantidad_Caja && lote.Cantidad_Unitario) {
-                        stockLote = (lote.Cantidad_Caja || 0) * (lote.Cantidad_Unitario || 0)
-                    } else if (lote.Stock_Unitario) {
-                        stockLote = lote.Stock_Unitario
-                    } else if (lote.Cantidad_Unitario) {
-                        stockLote = lote.Cantidad_Unitario
-                    } else {
-                        // Si no hay stock, skip este lote
-                        continue
-                    }
-                    
-                    if (stockLote > 0) {
-                        var codigo = lote.Codigo
-                        var diasParaVencer = lote.Dias_Para_Vencer || 0
-                        
-                        // CORREGIDO: Solo agregar si no está vencido
-                        if (diasParaVencer >= 0) {
-                            if (!productosUnicos[codigo]) {
-                                productosUnicos[codigo] = {
-                                    producto: lote.Producto_Nombre || lote.Nombre || codigo,
-                                    codigo: codigo,
-                                    cantidad: stockLote,
-                                    fecha: lote.Fecha_Vencimiento,
-                                    dias_para_vencer: diasParaVencer,
-                                    urgencia: (diasParaVencer <= 7) ? "urgent" : "normal"
-                                }
-                            } else {
-                                // Acumular stock y usar fecha más próxima
-                                productosUnicos[codigo].cantidad += stockLote
-                                if (diasParaVencer < productosUnicos[codigo].dias_para_vencer) {
-                                    productosUnicos[codigo].fecha = lote.Fecha_Vencimiento
-                                    productosUnicos[codigo].dias_para_vencer = diasParaVencer
-                                    productosUnicos[codigo].urgencia = (diasParaVencer <= 7) ? "urgent" : "normal"
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Convertir objeto a array
-                for (var codigo in productosUnicos) {
-                    productosProximosVencer.push(productosUnicos[codigo])
-                }
-                
-                console.log("✅ Productos próximos a vencer procesados:", productosProximosVencer.length)
-                
+            var alertas = inventarioModel.obtener_alertas_inventario()
+            if (alertas) {
+                alertasInventario = alertas
             } else {
-                console.log("⚠️ Método get_lotes_por_vencer no disponible")
+                alertasInventario = []
             }
-            
-            // 2. PRODUCTOS VENCIDOS
-            if (typeof inventarioModel.get_lotes_vencidos === 'function') {
-                var lotesVencidos = inventarioModel.get_lotes_vencidos() || []
-                console.log("🔍 Lotes vencidos obtenidos:", lotesVencidos.length)
-                
-                var vencidosUnicos = {}
-                
-                for (var j = 0; j < lotesVencidos.length; j++) {
-                    var loteVencido = lotesVencidos[j]
-                    
-                    // CORREGIDO: Verificar que el lote tenga datos válidos
-                    if (!loteVencido || !loteVencido.Codigo) {
-                        continue
-                    }
-                    
-                    // CORREGIDO: Calcular stock correctamente
-                    var stockVencido = 0
-                    if (loteVencido.Cantidad_Caja && loteVencido.Cantidad_Unitario) {
-                        stockVencido = (loteVencido.Cantidad_Caja || 0) * (loteVencido.Cantidad_Unitario || 0)
-                    } else if (loteVencido.Stock_Unitario) {
-                        stockVencido = loteVencido.Stock_Unitario
-                    } else if (loteVencido.Cantidad_Unitario) {
-                        stockVencido = loteVencido.Cantidad_Unitario
-                    } else {
-                        // Si no hay stock, skip este lote
-                        continue
-                    }
-                    
-                    if (stockVencido > 0) {
-                        var codigoVencido = loteVencido.Codigo
-                        var diasVencido = Math.abs(loteVencido.Dias_Vencido || loteVencido.Dias_Para_Vencer || 0)
-                        
-                        if (!vencidosUnicos[codigoVencido]) {
-                            vencidosUnicos[codigoVencido] = {
-                                producto: loteVencido.Producto_Nombre || loteVencido.Nombre || codigoVencido,
-                                codigo: codigoVencido,
-                                cantidad: stockVencido,
-                                fecha: loteVencido.Fecha_Vencimiento,
-                                dias_vencido: diasVencido,
-                                urgencia: "expired"
-                            }
-                        } else {
-                            vencidosUnicos[codigoVencido].cantidad += stockVencido
-                            // Usar el más vencido
-                            if (diasVencido > vencidosUnicos[codigoVencido].dias_vencido) {
-                                vencidosUnicos[codigoVencido].dias_vencido = diasVencido
-                            }
-                        }
-                    }
-                }
-                
-                // Convertir objeto a array
-                for (var codigoV in vencidosUnicos) {
-                    productosVencidos.push(vencidosUnicos[codigoV])
-                }
-                
-                console.log("🚨 Productos vencidos procesados:", productosVencidos.length)
-            } else {
-                console.log("⚠️ Método get_lotes_vencidos no disponible")
-            }
-            
-            // CORREGIDO: Marcar como cargado siempre, aunque no haya datos
-            datosVencimientosCargados = true
-            
-            // CORREGIDO: Mostrar resumen final
-            console.log("📊 Resumen vencimientos:")
-            console.log("   - Próximos a vencer:", productosProximosVencer.length)
-            console.log("   - Ya vencidos:", productosVencidos.length)
-            console.log("   - Total alertas:", productosProximosVencer.length + productosVencidos.length)
-            
-            // CORREGIDO: Forzar actualización de la UI
-            dashboardRoot.productosProximosVencerChanged()
-            dashboardRoot.productosVencidosChanged()
+            datosCargados = true
             
         } catch (error) {
-            console.log("❌ Error cargando vencimientos:", error.toString())
-            productosProximosVencer = []
-            productosVencidos = []
-            datosVencimientosCargados = false
+            alertasInventario = []
+            datosCargados = false
         }
     }
     
+    function filtrarAlertas(tipoFiltro) {
+        if (!alertasInventario || alertasInventario.length === 0) {
+            return []
+        }
+        
+        if (tipoFiltro === "TODOS") {
+            return alertasInventario
+        }
+        
+        var resultado = []
+        for (var i = 0; i < alertasInventario.length; i++) {
+            if (alertasInventario[i].Tipo_Alerta === tipoFiltro) {
+                resultado.push(alertasInventario[i])
+            }
+        }
+        return resultado
+    }
+    
+    function contarAlertasPorTipo(tipo) {
+        if (!alertasInventario || alertasInventario.length === 0) {
+            return 0
+        }
+        
+        var count = 0
+        for (var i = 0; i < alertasInventario.length; i++) {
+            if (alertasInventario[i].Tipo_Alerta === tipo) {
+                count++
+            }
+        }
+        return count
+    }
+    
+    function obtenerColorAlerta(tipoAlerta) {
+        switch(tipoAlerta) {
+            case "PRODUCTO VENCIDO":
+                return "#fef2f2"
+            case "PRODUCTO PRÓXIMO A VENCER":
+                return "#fffbeb"
+            case "STOCK BAJO":
+                return "#f0f9ff"
+            default:
+                return "#f3f4f6"
+        }
+    }
+    
+    function obtenerColorBorde(tipoAlerta) {
+        switch(tipoAlerta) {
+            case "PRODUCTO VENCIDO":
+                return "#ef4444"
+            case "PRODUCTO PRÓXIMO A VENCER":
+                return "#f59e0b"
+            case "STOCK BAJO":
+                return "#0ea5e9"
+            default:
+                return "#9ca3af"
+        }
+    }
+    
+    function obtenerIconoAlerta(tipoAlerta) {
+        switch(tipoAlerta) {
+            case "PRODUCTO VENCIDO":
+                return "🔴"
+            case "PRODUCTO PRÓXIMO A VENCER":
+                return "⚠️"
+            case "STOCK BAJO":
+                return "📦"
+            default:
+                return "ℹ️"
+        }
+    }
+    
+    function obtenerTextoEstado(tipoAlerta, detalle) {
+        if (tipoAlerta === "STOCK BAJO") {
+            return detalle || "Stock por debajo del mínimo"
+        }
+        return detalle || ""
+    }
 
-    // Signal para notificar cambios en el período
+    function navegarAProducto(codigoProducto) {
+        if (appController && typeof appController.navegarADetalleProducto === 'function') {
+            appController.navegarADetalleProducto(codigoProducto)
+        }
+    }
+
     signal periodChanged(string newPeriodType)
     
     Component.onCompleted: {
-        // Inicializar conexión con modelo
         if (dashboardModel) {
-            console.log("📊 Dashboard conectado con modelo de BD")
             dashboardModel.cambiarPeriodo(currentPeriodType)
-        } else {
-            console.log("⚠️ Dashboard model no disponible")
         }
         
-        // NUEVO: Cargar datos de vencimientos
+        // Cargar alertas solo una vez al inicio
         if (inventarioModel) {
-            console.log("📅 Cargando datos de vencimientos al inicializar...")
-            Qt.callLater(cargarProductosVencimientos)
-        } else {
-            console.log("⚠️ InventarioModel no disponible para vencimientos")
+            cargarAlertas()
         }
     }
     
@@ -475,7 +394,7 @@ ScrollView {
                     
                     Item { Layout.fillWidth: true }
                     
-                    // MODIFICADO: Filtro de período jerárquico
+                    // Filtro de período jerárquico
                     RowLayout {
                         spacing: 8
                         
@@ -507,8 +426,6 @@ ScrollView {
                                     periodChanged(currentPeriodType)
                                 }
                             }
-                            
-                            Behavior on color { ColorAnimation { duration: 200 } }
                         }
                         
                         // Botón Esta Semana
@@ -539,11 +456,9 @@ ScrollView {
                                     periodChanged(currentPeriodType)
                                 }
                             }
-                            
-                            Behavior on color { ColorAnimation { duration: 200 } }
                         }
                         
-                        // MODIFICADO: ComboBox Año (Primero en el flujo jerárquico)
+                        // ComboBox Año
                         ComboBox {
                             id: yearComboBox
                             width: 80
@@ -581,7 +496,7 @@ ScrollView {
                             }
                         }
                         
-                        // MODIFICADO: ComboBox Mes (Dependiente del año seleccionado)
+                        // ComboBox Mes
                         ComboBox {
                             id: monthComboBox
                             width: 120
@@ -643,31 +558,27 @@ ScrollView {
                         
                         onClicked: {
                             if (dashboardModel) {
-                                console.log("🔄 Refrescando datos manualmente...")
                                 dashboardModel.refrescarDatos()
+                            }
+                            if (inventarioModel) {
+                                cargarAlertas()
                             }
                         }
                         
                         ToolTip.visible: hovered
                         ToolTip.text: "Refrescar datos"
                         
-                        // Efecto hover
                         MouseArea {
                             anchors.fill: parent
                             hoverEnabled: true
                             onEntered: parent.scale = 1.1
                             onExited: parent.scale = 1.0
-                            onClicked: parent.clicked()
-                        }
-                        
-                        Behavior on scale {
-                            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
                         }
                     }
                 }
             }
             
-            // KPI Cards Grid (5 cards) - ACTUALIZADAS CON DATOS REALES
+            // KPI Cards Grid (5 cards) - INGRESOS
             GridLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: 40
@@ -680,7 +591,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Farmacia"
                     value: "Bs " + calculateFarmaciaTotal().toFixed(2)
-                    icon: "Resources/iconos/farmacia.png"  // Cambiar de "💊"
+                    icon: "Resources/iconos/farmacia.png"
                     cardColor: farmaciaColor
                     borderColor: farmaciaColor
                 }
@@ -689,7 +600,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Consultas"
                     value: "Bs " + calculateConsultasTotal().toFixed(2)
-                    icon: "Resources/iconos/Consulta.png"  // Cambiar de "🩺"
+                    icon: "Resources/iconos/Consulta.png"
                     cardColor: consultasColor
                     borderColor: consultasColor
                 }
@@ -698,7 +609,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Laboratorio"
                     value: "Bs " + calculateLaboratorioTotal().toFixed(2)
-                    icon: "Resources/iconos/Laboratorio.png"  // Cambiar de "🔬"
+                    icon: "Resources/iconos/Laboratorio.png"
                     cardColor: laboratorioColor
                     borderColor: laboratorioColor
                 }
@@ -707,7 +618,7 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Enfermería"
                     value: "Bs " + calculateEnfermeriaTotal().toFixed(2)
-                    icon: "Resources/iconos/Enfermeria.png"  // Cambiar de "👩‍⚕️"
+                    icon: "Resources/iconos/Enfermeria.png"
                     cardColor: enfermeriaColor
                     borderColor: enfermeriaColor
                 }
@@ -716,13 +627,13 @@ ScrollView {
                     Layout.fillWidth: true
                     title: "Servicios Básicos"
                     value: "Bs " + calculateServiciosBasicosTotal().toFixed(2)
-                    icon: "Resources/iconos/ServiciosBasicos.png"  // Cambiar de "⚡"
+                    icon: "Resources/iconos/ServiciosBasicos.png"
                     cardColor: serviciosColor
                     borderColor: serviciosColor
                 }
             }
             
-            // Main Content Grid (2 columns)
+            // Main Content Grid (3 columns)
             GridLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: 40
@@ -731,7 +642,7 @@ ScrollView {
                 columnSpacing: 32
                 rowSpacing: 32
                 
-                // Gráfico de líneas con áreas sombreadas - ACTUALIZADO
+                // Gráfico de líneas con áreas sombreadas
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -804,7 +715,6 @@ ScrollView {
                                 anchors.topMargin: 20
                                 anchors.bottomMargin: 40
                                 
-                                // Datos dinámicos basados en el período actual
                                 property var ingresosData: generateIngresosData()
                                 property var egresosData: generateEgresosData()
                                 property var labels: generateLabels()
@@ -814,28 +724,23 @@ ScrollView {
                                     var data = []
                                     var totalIngresos = calculateTotalIngresos()
                                     
-                                    // Generar datos basados en el período
                                     switch(currentPeriodType) {
                                         case "hoy":
-                                            // Datos por horas del día actual
                                             for (var i = 0; i < 24; i++) {
                                                 data.push(totalIngresos * (0.5 + Math.random() * 0.5) / 24)
                                             }
                                             break
                                         case "semana":
-                                            // Datos por días de la semana
                                             for (var i = 0; i < 7; i++) {
                                                 data.push(totalIngresos * (0.6 + Math.random() * 0.4) / 7)
                                             }
                                             break
                                         case "mes":
-                                            // Datos por semanas del mes
                                             for (var i = 0; i < 4; i++) {
                                                 data.push(totalIngresos * (0.7 + Math.random() * 0.3) / 4)
                                             }
                                             break
                                         case "año":
-                                            // Datos por meses del año
                                             for (var i = 0; i < 12; i++) {
                                                 data.push(totalIngresos * (0.6 + Math.random() * 0.4) / 12)
                                             }
@@ -890,12 +795,10 @@ ScrollView {
                                 
                                 function updateChart() {
                                     if (dashboardModel) {
-                                        // Usar datos reales del modelo
                                         ingresosData = dashboardModel.datosGraficoIngresos || []
                                         egresosData = dashboardModel.datosGraficoEgresos || []
                                         labels = generateLabels()
                                     } else {
-                                        // Fallback a datos simulados
                                         ingresosData = generateIngresosData()
                                         egresosData = generateEgresosData()
                                         labels = generateLabels()
@@ -917,7 +820,7 @@ ScrollView {
                                         return startY + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight
                                     }
                                     
-                                    // Dibujar líneas de cuadrícula horizontales
+                                    // Dibujar líneas de cuadrícula
                                     ctx.strokeStyle = "#f3f4f6"
                                     ctx.lineWidth = 1
                                     for (var i = 0; i <= 6; i++) {
@@ -1107,7 +1010,7 @@ ScrollView {
                                 }
                             }                           
                             
-                            // Tooltip actualizado
+                            // Tooltip
                             Rectangle {
                                 id: tooltip
                                 width: 140
@@ -1156,7 +1059,7 @@ ScrollView {
                     }
                 }                
                 
-                // SECCIÓN DE ALERTAS MEJORADA - RESPONSIVE
+                // 🚀 SECCIÓN DE ALERTAS CON PESTAÑAS MEJORADA (OCUPA 2 COLUMNAS)
                 Rectangle {
                     Layout.columnSpan: 2
                     Layout.fillWidth: true
@@ -1171,39 +1074,22 @@ ScrollView {
                         anchors.margins: 20
                         spacing: 16
                         
-                        // Header con controles
+                        // Header con estadísticas
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 16
+                            spacing: 20
                             
-                            RowLayout {
-                                spacing: 12
-                                
-                                Rectangle {
-                                    width: 32
-                                    height: 32
-                                    radius: 8
-                                    color: dangerColor
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "⚠"
-                                        color: whiteColor
-                                        font.pixelSize: 16
-                                        font.bold: true
-                                    }
-                                }
-                                
-                                Label {
-                                    text: "Alerta: Productos por Vencer"
-                                    color: textColor
-                                    font.pixelSize: 18
-                                    font.bold: true
-                                }
+                            // Título principal
+                            Label {
+                                text: "🔔 ALERTAS DE INVENTARIO"
+                                color: textColor
+                                font.pixelSize: 18
+                                font.bold: true
                             }
                             
                             Item { Layout.fillWidth: true }
                             
+                            // Botón de actualizar
                             Button {
                                 Layout.preferredWidth: 40
                                 Layout.preferredHeight: 40
@@ -1223,20 +1109,21 @@ ScrollView {
                                     verticalAlignment: Text.AlignVCenter
                                 }
                                 
-                                onClicked: cargarProductosVencimientos()
+                                onClicked: cargarAlertas()
                                 ToolTip.visible: hovered
-                                ToolTip.text: "Actualizar vencimientos"
+                                ToolTip.text: "Actualizar alertas"
                             }
                             
+                            // Contador total
                             Rectangle {
-                                Layout.preferredWidth: 80
+                                Layout.preferredWidth: 100
                                 Layout.preferredHeight: 36
                                 radius: 18
-                                color: dangerColor
+                                color: primaryColor
                                 
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "Total: " + (productosProximosVencer.length + productosVencidos.length)
+                                    text: alertasInventario.length + " alertas"
                                     color: whiteColor
                                     font.bold: true
                                     font.pixelSize: 12
@@ -1244,269 +1131,329 @@ ScrollView {
                             }
                         }
                         
-                        // Header de tabla responsive
-                        Rectangle {
+                        // 🎨 SISTEMA DE PESTAÑAS MEJORADO Y SIMPLIFICADO
+                        RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            color: backgroundGradient
-                            radius: 10
+                            Layout.preferredHeight: 0.25
+                            spacing: 8
                             
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 16
-                                anchors.rightMargin: 16
-                                spacing: 16
+                            // Tab: VENCIDOS
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 12
+                                color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#fee2e2" : "#f3f4f6"
+                                border.color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#ef4444" : "#e5e7eb"
+                                border.width: 2
                                 
-                                // Columna Producto - 40% del ancho
-                                Item {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: parent.width * 0.4
-                                    height: parent.height
-                                    
-                                    Label {
-                                        anchors.left: parent.left
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "PRODUCTO"
-                                        color: darkGrayColor
-                                        font.bold: true
-                                        font.pixelSize: 11
-                                        font.letterSpacing: 0.5
-                                    }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: filtroAlertaActual = "PRODUCTO VENCIDO"
                                 }
                                 
-                                // Columna Cantidad - 20% del ancho
-                                Item {
-                                    Layout.preferredWidth: parent.width * 0.2
-                                    height: parent.height
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 2
+                                    
+                                    Row {
+                                        spacing: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        
+                                        Label {
+                                            text: "🔴"
+                                            font.pixelSize: 10
+                                        }
+                                        
+                                        Label {
+                                            text: "VENCIDOS"
+                                            color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#dc2626" : textColor
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                    }
                                     
                                     Label {
-                                        anchors.centerIn: parent
-                                        text: "CANTIDAD"
-                                        color: darkGrayColor
-                                        font.bold: true
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: "(" + contarAlertasPorTipo("PRODUCTO VENCIDO") + ")"
+                                        color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#dc2626" : darkGrayColor
                                         font.pixelSize: 11
-                                        font.letterSpacing: 0.5
+                                        font.bold: true
                                     }
                                 }
+                            }
+                            
+                            // Tab: PRÓXIMOS A VENCER
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 12
+                                color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#fef3c7" : "#f3f4f6"
+                                border.color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#f59e0b" : "#e5e7eb"
+                                border.width: 2
                                 
-                                // Columna Estado - 40% del ancho
-                                Item {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: parent.width * 0.4
-                                    height: parent.height
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: filtroAlertaActual = "PRODUCTO PRÓXIMO A VENCER"
+                                }
+                                
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 2
+                                    
+                                    Row {
+                                        spacing: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        
+                                        Label {
+                                            text: "⚠️"
+                                            font.pixelSize: 14
+                                        }
+                                        
+                                        Label {
+                                            text: "PRÓX. VENCER"
+                                            color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#d97706" : textColor
+                                            font.bold: true
+                                            font.pixelSize: 13
+                                        }
+                                    }
                                     
                                     Label {
-                                        anchors.centerIn: parent
-                                        text: "ESTADO VENCIMIENTO"
-                                        color: darkGrayColor
-                                        font.bold: true
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: "(" + contarAlertasPorTipo("PRODUCTO PRÓXIMO A VENCER") + ")"
+                                        color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#d97706" : darkGrayColor
                                         font.pixelSize: 11
-                                        font.letterSpacing: 0.5
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                            
+                            // Tab: STOCK BAJO
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 12
+                                color: filtroAlertaActual === "STOCK BAJO" ? "#f0f9ff" : "#f3f4f6"
+                                border.color: filtroAlertaActual === "STOCK BAJO" ? "#0ea5e9" : "#e5e7eb"
+                                border.width: 2
+                                
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: filtroAlertaActual = "STOCK BAJO"
+                                }
+                                
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 2
+                                    
+                                    Row {
+                                        spacing: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        
+                                        Label {
+                                            text: "📦"
+                                            font.pixelSize: 14
+                                        }
+                                        
+                                        Label {
+                                            text: "STOCK BAJO"
+                                            color: filtroAlertaActual === "STOCK BAJO" ? "#0ea5e9" : textColor
+                                            font.bold: true
+                                            font.pixelSize: 13
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: "(" + contarAlertasPorTipo("STOCK BAJO") + ")"
+                                        color: filtroAlertaActual === "STOCK BAJO" ? "#0ea5e9" : darkGrayColor
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                            
+                            // Tab: TODOS
+                            Rectangle {
+                                Layout.preferredWidth: 100
+                                Layout.fillHeight: true
+                                radius: 12
+                                color: filtroAlertaActual === "TODOS" ? primaryColor : "#f3f4f6"
+                                border.color: filtroAlertaActual === "TODOS" ? primaryColor : "#e5e7eb"
+                                border.width: 2
+                                
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: filtroAlertaActual = "TODOS"
+                                }
+                                
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 2
+                                    
+                                    Row {
+                                        spacing: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        
+                                        Label {
+                                            text: "📋"
+                                            font.pixelSize: 14
+                                            color: filtroAlertaActual === "TODOS" ? whiteColor : textColor
+                                        }
+                                        
+                                        Label {
+                                            text: "TODOS"
+                                            color: filtroAlertaActual === "TODOS" ? whiteColor : textColor
+                                            font.bold: true
+                                            font.pixelSize: 13
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: "(" + alertasInventario.length + ")"
+                                        color: filtroAlertaActual === "TODOS" ? whiteColor : darkGrayColor
+                                        font.pixelSize: 11
+                                        font.bold: true
                                     }
                                 }
                             }
                         }
                         
-                        // Lista de productos responsive
-                        ListView {
+                        // Lista de Alertas Filtradas
+                        Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            clip: true
-                            spacing: 3
+                            color: "transparent"
                             
-                            model: {
-                                var alertasCombinadas = []
+                            ListView {
+                                id: alertasListView
+                                anchors.fill: parent
+                                clip: true
+                                spacing: 6
                                 
-                                // Productos vencidos
-                                for (var i = 0; i < productosVencidos.length; i++) {
-                                    alertasCombinadas.push({
-                                        producto: productosVencidos[i].producto,
-                                        codigo: productosVencidos[i].codigo,
-                                        cantidad: productosVencidos[i].cantidad + " unid.",
-                                        estado: "VENCIDO",
-                                        descripcion: "Hace " + (productosVencidos[i].dias_vencido || 0) + " días",
-                                        colorFondo: "#fef2f2",
-                                        colorBorde: "#ef4444",
-                                        icono: "💀"
-                                    })
-                                }
+                                model: filtrarAlertas(filtroAlertaActual)
                                 
-                                // Productos próximos a vencer
-                                for (var j = 0; j < productosProximosVencer.length; j++) {
-                                    var dias = productosProximosVencer[j].dias_para_vencer || 0
-                                    var esUrgente = dias <= 7
+                                delegate: Rectangle {
+                                    width: alertasListView.width
+                                    height: 85
+                                    color: obtenerColorAlerta(modelData.Tipo_Alerta)
+                                    radius: 8
+                                    border.color: obtenerColorBorde(modelData.Tipo_Alerta)
+                                    border.width: 2
                                     
-                                    alertasCombinadas.push({
-                                        producto: productosProximosVencer[j].producto,
-                                        codigo: productosProximosVencer[j].codigo,
-                                        cantidad: productosProximosVencer[j].cantidad + " unid.",
-                                        estado: dias === 0 ? "HOY" : (dias === 1 ? "MAÑANA" : "EN " + dias + " DÍAS"),
-                                        descripcion: formatearFechaVencimiento(productosProximosVencer[j].fecha),
-                                        colorFondo: esUrgente ? "#fef2f2" : "#fffbeb",
-                                        colorBorde: esUrgente ? "#f87171" : "#f59e0b",
-                                        icono: esUrgente ? "🚨" : "⚠️"
-                                    })
-                                }
-                                
-                                return alertasCombinadas
-                            }
-                            
-                            delegate: Rectangle {
-                                width: ListView.view.width
-                                height: 70
-                                color: modelData.colorFondo
-                                radius: 10
-                                border.color: modelData.colorBorde
-                                border.width: 1
-                                
-                                // Indicador lateral
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.bottom: parent.bottom
-                                    width: 4
-                                    color: modelData.colorBorde
-                                    radius: 2
-                                }
-                                
-                                // Contenido responsive
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 16
-                                    anchors.rightMargin: 16
-                                    anchors.topMargin: 8
-                                    anchors.bottomMargin: 8
-                                    spacing: 16
-                                    
-                                    // Columna Producto - 40%
-                                    Column {
-                                        Layout.fillWidth: true
-                                        Layout.preferredWidth: parent.width * 0.4
-                                        spacing: 4
-                                        
-                                        Label {
-                                            width: parent.width
-                                            text: modelData.producto
-                                            color: textColor
-                                            font.bold: true
-                                            font.pixelSize: 14
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 1
-                                        }
-                                        
-                                        Label {
-                                            width: parent.width
-                                            text: "Código: " + modelData.codigo
-                                            color: darkGrayColor
-                                            font.pixelSize: 11
-                                            elide: Text.ElideRight
-                                            opacity: 0.7
-                                        }
+                                    // Borde izquierdo coloreado
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: 6
+                                        color: obtenerColorBorde(modelData.Tipo_Alerta)
+                                        radius: 3
                                     }
                                     
-                                    // Columna Cantidad - 20%
-                                    Item {
-                                        Layout.preferredWidth: parent.width * 0.2
-                                        height: parent.height
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        anchors.leftMargin: 20
+                                        spacing: 16
                                         
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: Math.min(parent.width - 10, 100)
-                                            height: 30
-                                            radius: 15
-                                            color: whiteColor
-                                            border.color: modelData.colorBorde
-                                            border.width: 1
+                                        // Icono
+                                        Label {
+                                            Layout.preferredWidth: 32
+                                            text: obtenerIconoAlerta(modelData.Tipo_Alerta)
+                                            font.pixelSize: 24
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        
+                                        // Información del producto
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
                                             
                                             Label {
-                                                anchors.centerIn: parent
-                                                text: modelData.cantidad
+                                                text: modelData.Producto || modelData.Nombre || "Producto desconocido"
                                                 color: textColor
-                                                font.pixelSize: 12
                                                 font.bold: true
+                                                font.pixelSize: 14
                                                 elide: Text.ElideRight
                                             }
+                                            
+                                            Label {
+                                                text: modelData.Codigo
+                                                color: darkGrayColor
+                                                font.pixelSize: 12
+                                                elide: Text.ElideRight
+                                            }
+                                            
+                                            Label {
+                                                text: modelData.Detalle || obtenerTextoEstado(modelData.Tipo_Alerta, modelData.Detalle)
+                                                color: darkGrayColor
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                                visible: text !== ""
+                                            }
+                                            
+                                            Label {
+                                                text: modelData.Tipo_Alerta === "STOCK BAJO" ? 
+                                                    "Stock: " + (modelData.Stock_Actual || modelData.Stock_Real || 0) + 
+                                                    " (Mínimo: " + (modelData.Stock_Minimo || 0) + ")" : ""
+                                                color: darkGrayColor
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                                visible: text !== ""
+                                            }
+                                        }
+                                        
+                                        // Botón Ver Producto
+                                        Button {
+                                            Layout.preferredWidth: 120
+                                            Layout.preferredHeight: 36
+                                            text: "Ver Detalle"
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
+                                                radius: 6
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: navegarAProducto(modelData.Codigo)
                                         }
                                     }
                                     
-                                    // Columna Estado - 40%
-                                    Item {
-                                        Layout.fillWidth: true
-                                        Layout.preferredWidth: parent.width * 0.4
-                                        height: parent.height
-                                        
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: Math.min(parent.width - 20, 280)
-                                            height: 36
-                                            radius: 18
-                                            color: Qt.lighter(modelData.colorBorde, 1.8)
-                                            border.color: modelData.colorBorde
-                                            border.width: 1
-                                            
-                                            Row {
-                                                anchors.centerIn: parent
-                                                spacing: 8
-                                                padding: 8
-                                                
-                                                Label {
-                                                    text: modelData.icono
-                                                    font.pixelSize: 16
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                }
-                                                
-                                                Column {
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    spacing: 2
-                                                    
-                                                    Label {
-                                                        text: modelData.estado
-                                                        color: modelData.colorBorde
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                        elide: Text.ElideRight
-                                                    }
-                                                    
-                                                    Label {
-                                                        width: Math.min(implicitWidth, 180)
-                                                        text: modelData.descripcion
-                                                        color: Qt.darker(modelData.colorBorde, 1.3)
-                                                        font.pixelSize: 10
-                                                        elide: Text.ElideRight
-                                                    }
-                                                }
-                                            }
-                                        }
+                                    // Efecto hover
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onEntered: parent.scale = 1.01
+                                        onExited: parent.scale = 1.0
+                                        onClicked: navegarAProducto(modelData.Codigo)
+                                    }
+                                    
+                                    Behavior on scale {
+                                        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
                                     }
                                 }
                                 
-                                // Hover effect
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onEntered: parent.opacity = 0.9
-                                    onExited: parent.opacity = 1.0
-                                    cursorShape: Qt.PointingHandCursor
-                                }
-                                
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
-                            }
-                            
-                            // Estado sin datos
-                            Item {
-                                anchors.centerIn: parent
-                                visible: !datosVencimientosCargados || (productosProximosVencer.length === 0 && productosVencidos.length === 0)
-                                width: 320
-                                height: 160
-                                
+                                // Estado vacío
                                 Rectangle {
-                                    anchors.fill: parent
-                                    color: backgroundGradient
-                                    radius: 16
-                                    border.color: lightGrayColor
-                                    border.width: 2
+                                    anchors.centerIn: parent
+                                    width: 320
+                                    height: 160
+                                    color: "transparent"
+                                    visible: alertasListView.count === 0
                                     
                                     Column {
                                         anchors.centerIn: parent
@@ -1517,11 +1464,11 @@ ScrollView {
                                             width: 70
                                             height: 70
                                             radius: 35
-                                            color: lightGrayColor
+                                            color: datosCargados ? successColor : lightGrayColor
                                             
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: datosVencimientosCargados ? "✅" : "⏳"
+                                                text: datosCargados ? "✅" : "⏳"
                                                 font.pixelSize: 32
                                                 color: whiteColor
                                             }
@@ -1529,7 +1476,9 @@ ScrollView {
                                         
                                         Label {
                                             anchors.horizontalCenter: parent.horizontalCenter
-                                            text: datosVencimientosCargados ? "Sin productos próximos a vencer" : "Cargando..."
+                                            text: datosCargados ? 
+                                                "No hay alertas de tipo: " + filtroAlertaActual : 
+                                                "Cargando alertas..."
                                             color: darkGrayColor
                                             font.pixelSize: 16
                                             font.bold: true
@@ -1538,33 +1487,13 @@ ScrollView {
                                         Label {
                                             anchors.horizontalCenter: parent.horizontalCenter
                                             width: 280
-                                            text: datosVencimientosCargados ? "Todos los productos tienen fechas de vencimiento adecuadas" : "Verificando fechas de vencimiento..."
+                                            text: datosCargados ? 
+                                                "Todos los productos están en buen estado" : 
+                                                "Obteniendo información del inventario..."
                                             color: darkGrayColor
                                             font.pixelSize: 12
                                             horizontalAlignment: Text.AlignHCenter
                                             wrapMode: Text.WordWrap
-                                        }
-                                        
-                                        Button {
-                                            visible: datosVencimientosCargados && productosProximosVencer.length === 0
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            text: "Verificar Nuevamente"
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                                radius: 8
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 12
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: cargarProductosVencimientos()
                                         }
                                     }
                                 }
@@ -1576,42 +1505,7 @@ ScrollView {
         }
     }
     
-    // Conexiones para actualizar la gráfica cuando cambie el período
-    Connections {
-        target: dashboardRoot
-        function onPeriodChanged(newPeriodType) {
-            chartCanvas.updateChart()
-        }
-    }
-
-    Connections {
-        target: dashboardModel
-        function onDashboardUpdated() {
-            console.log("📊 Dashboard actualizado desde BD")
-            // Forzar actualización de la UI
-            if (chartCanvas) {
-                chartCanvas.updateChart()
-            }
-        }
-        function onErrorOccurred(mensaje) {
-            console.log("❌ Error en dashboard:", mensaje)
-        }
-    }
-
-    // 4. AGREGAR CONEXIONES (después de las conexiones existentes)
-    Connections {
-        target: inventarioModel
-        function onProductosChanged() {
-            console.log("📦 Productos actualizados - Recargando vencimientos")
-            Qt.callLater(cargarProductosVencimientos)
-        }
-        function onLotesChanged() {
-            console.log("📅 Lotes cambiaron - Actualizando vencimientos")
-            Qt.callLater(cargarProductosVencimientos)
-        }
-    }
-    
-    // Componentes
+    // Componentes reutilizables
     component KPICard: Rectangle {
         property string title: ""
         property string value: ""
@@ -1679,66 +1573,6 @@ ScrollView {
             hoverEnabled: true
             onEntered: parent.scale = 1.02
             onExited: parent.scale = 1.0
-        }
-    }
-    
-    Component {
-        id: alertDelegate
-        
-        Rectangle {
-            width: ListView.view.width
-            height: 48
-            color: model.urgencia === "urgent" ? 
-                   Qt.rgba(229/255, 115/255, 115/255, 0.1) : 
-                   Qt.rgba(255/255, 193/255, 7/255, 0.1)
-            radius: 8
-            
-            // Borde izquierdo coloreado
-            Rectangle {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: 4
-                color: model.urgencia === "urgent" ? "#E57373" : "#ffc107"
-                radius: 2
-            }
-            
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 16
-                
-                Label {
-                    Layout.preferredWidth: 120
-                    text: model.producto
-                    color: textColor
-                    font.pixelSize: 12
-                    elide: Text.ElideRight
-                }
-                
-                Label {
-                    Layout.preferredWidth: 80
-                    text: model.cantidad
-                    color: textColor
-                    font.pixelSize: 12
-                    elide: Text.ElideRight
-                }
-                
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 24
-                    radius: 12
-                    color: model.urgencia === "urgent" ? "#fee2e2" : "#fef3c7"
-                    
-                    Label {
-                        anchors.centerIn: parent
-                        text: model.fecha
-                        color: model.urgencia === "urgent" ? "#dc2626" : "#d97706"
-                        font.pixelSize: 10
-                        font.bold: true
-                    }
-                }
-            }
         }
     }
 }

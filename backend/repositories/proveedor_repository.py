@@ -34,7 +34,7 @@ class ProveedorRepository(BaseRepository):
         FROM Proveedor p
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
         GROUP BY p.id, p.Nombre, p.Direccion
-        ORDER BY p.Nombre ASC
+        ORDER BY p.id 
         """
         
         # ✅ FORZAR CONSULTA SIN CACHE PARA DATOS ACTUALES
@@ -354,7 +354,7 @@ class ProveedorRepository(BaseRepository):
         LEFT JOIN Compra c ON p.id = c.Id_Proveedor
         {where_clause}
         GROUP BY p.id, p.Nombre, p.Direccion
-        ORDER BY p.Nombre
+        ORDER BY p.id ASC
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
         """
         

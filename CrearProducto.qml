@@ -3,32 +3,40 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-// Dialog para crear/editar producto - SIN CAJAS - SOLO STOCK UNITARIO
-Dialog {
-    id: crearProductoDialog
+// ===============================================================================
+// CREAR PRODUCTO - FIFO 2.0 (DISEÑO MODAL CENTRADO)
+// ===============================================================================
+// Versión Rectangle con overlay semi-transparente + modal centrado
+// - Sin sombra (más simple y rápido)
+// - Click en overlay NO cierra (más seguro)
+// - Modal flotante de 900x550px centrado
+// ===============================================================================
+
+Rectangle {
+    id: overlayRoot
+    anchors.fill: parent
+    color: "#80000000"  // Overlay semi-transparente (negro 50%)
     
-    // Propiedades del Dialog
-    modal: true
-    dim: true
-    closePolicy: Popup.NoAutoClose
-    anchors.centerIn: parent
-    width: Math.min(parent.width * 0.9, 900)
-    height: Math.min(parent.height * 0.9, 550)
-    
-    // Propiedades de comunicación
+    // ===============================
+    // PROPIEDADES DE COMUNICACIÓN
+    // ===============================
     property var inventarioModel: null
     property var farmaciaData: null
     property bool modoEdicion: false
     property var productoData: null
     property var marcasModel: []
     
-    // Señales
+    // ===============================
+    // SEÑALES
+    // ===============================
     signal productoCreado(var producto)
     signal productoActualizado(var producto) 
     signal cancelarCreacion()
     signal volverALista() 
     
-    // Métricas del diseño
+    // ===============================
+    // MÉTRICAS DEL DISEÑO
+    // ===============================
     readonly property real baseSpacing: 12
     readonly property real cardPadding: 16
     readonly property real inputHeight: 40
@@ -36,7 +44,9 @@ Dialog {
     readonly property real headerHeight: 60
     readonly property real sectionSpacing: 12
     
-    // Colores
+    // ===============================
+    // COLORES (CONSERVADOS)
+    // ===============================
     readonly property color primaryBlue: "#2563EB"
     readonly property color successGreen: "#059669"
     readonly property color warningAmber: "#D97706"
@@ -47,52 +57,36 @@ Dialog {
     readonly property color white: "#FFFFFF"
     readonly property color borderColor: "#D1D5DB"
     
-    // Estados
+    // ===============================
+    // ESTADOS
+    // ===============================
     property bool showSuccessMessage: false
     property string successMessage: ""
     property bool showErrorMessage: false
     property string errorMessage: ""
     property bool marcasCargadas: false
     
-    // Datos del formulario - PRODUCTO
+    // ===============================
+    // DATOS DEL FORMULARIO - FIFO 2.0
+    // ===============================
     property string inputProductCode: ""
     property string inputProductName: ""
     property string inputProductDetails: ""
-    property real inputPurchasePrice: 0.0
-    property real inputSalePrice: 0.0
     property string inputMeasureUnit: "Tabletas"
     property string inputMarca: ""
+    property int inputStockMinimo: 10
+    property int inputStockMaximo: 100
 
-    // Datos del formulario - PRIMER LOTE SIN CAJAS
-    property string inputExpirationDate: ""
-    property bool inputNoExpiry: false
-    property int inputStockUnit: 0  // Solo stock unitario
-    property string inputSupplier: ""
-
-    // AGREGAR estas propiedades:
+    // ===============================
+    // PROPIEDADES DE MARCA
+    // ===============================
     property int marcaIdSeleccionada: 0
     property string marcaSeleccionadaNombre: ""
-
     property bool marcasListenerConnected: false
-    
-    onClosed: {
-        try {
-            // NO desconectar marcasChanged - mantener la conexión activa
-            // Solo limpiar mensajes
-            showSuccessMessage = false
-            showErrorMessage = false
-            if (successTimer.running) {
-                successTimer.stop()
-            }
-            if (errorTimer.running) {
-                errorTimer.stop()
-            }
-            console.log("🚪 Diálogo cerrado - estado limpiado (conexiones mantenidas)")
-        } catch (error) {
-            console.log("⚠️ Error limpiando al cerrar:", error)
-        }
-    }
 
+    // ===============================
+    // TIMERS
+    // ===============================
     Timer {
         id: successTimer
         interval: 3000
@@ -101,147 +95,16 @@ Dialog {
 
     Timer {
         id: errorTimer
-        interval: 5000
+        interval: 4000
         onTriggered: showErrorMessage = false
     }
 
-    // FUNCIONES
-    function cargarMarcasDisponibles() {
-        if (!inventarioModel) {
-            console.log("❌ inventarioModel no disponible")
-            marcasCargadas = false
-            return
-        }
-        
-        try {
-            console.log("📋 Iniciando carga de marcas...")
-            
-            // Forzar refresh de marcas
-            inventarioModel.refresh_marcas()
-            
-            // Esperar y obtener marcas actualizadas
-            Qt.callLater(function() {
-                var marcas = inventarioModel.marcasDisponibles
-                
-                if (marcas && marcas.length > 0) {
-                    marcasModel = marcas
-                    marcasCargadas = true
-                    console.log("✅ Marcas cargadas:", marcas.length)
-                    
-                    // Actualizar ComboBox
-                    if (marcaComboBox && typeof marcaComboBox.recargarMarcas === 'function') {
-                        marcaComboBox.recargarMarcas(marcas)
-                    }
-                } else {
-                    console.log("⚠️ No se pudieron cargar marcas")
-                    marcasModel = []
-                    marcasCargadas = false
-                }
-            })
-            
-        } catch (error) {
-            console.error("❌ Error al cargar marcas:", error)
-            marcasModel = []
-            marcasCargadas = false
-        }
-    }
-
-    function autoFormatDate(input) {
-        // Permitir solo números y guiones
-        var cleaned = input.replace(/[^\d\-]/g, '')
-        
-        // Si está vacío, permitirlo
-        if (cleaned.length === 0) {
-            return ""
-        }
-        
-        // Auto-agregar guiones para YYYY-MM-DD
-        if (cleaned.length === 4 && !cleaned.includes('-')) {
-            return cleaned + '-'
-        }
-        if (cleaned.length === 7 && cleaned.indexOf('-') === 4 && cleaned.lastIndexOf('-') === 4) {
-            return cleaned + '-'
-        }
-
-        if (cleaned.length > 10) {
-            cleaned = cleaned.substring(0, 10)
-        }
-        
-        return cleaned
-    }
-
-    function validateExpiryDate(dateStr) {
-        // Permitir vacío cuando inputNoExpiry es true
-        if (inputNoExpiry || dateStr === "" || dateStr === "Sin vencimiento") return true;
-        
-        // Validar formato YYYY-MM-DD
-        var regex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!regex.test(dateStr)) return false;
-        
-        var parts = dateStr.split('-');
-        var year = parseInt(parts[0], 10);
-        var month = parseInt(parts[1], 10);
-        var day = parseInt(parts[2], 10);
-        
-        if (month < 1 || month > 12) return false;
-        if (day < 1 || day > 31) return false;
-        if (year < 2020 || year > 2050) return false;
-        
-        // Validar días por mes
-        var daysInMonth = new Date(year, month, 0).getDate();
-        if (day > daysInMonth) return false;
-        
-        return true;
-    }
+    // ===============================
+    // FUNCIONES DE VALIDACIÓN
+    // ===============================
     
-    function formatearFechaParaBD() {
-        if (inputNoExpiry) {
-            return null  // Explícitamente null para sin vencimiento
-        }
-        if (!inputExpirationDate || inputExpirationDate.length === 0) {
-            return null  // También null si no hay fecha
-        }
-        return inputExpirationDate
-    }
-
     function generarCodigoAutomatico() {
         return "PROD" + String(Date.now()).slice(-6)
-    }
-
-    function validarPrecios() {
-        if (inputPurchasePrice <= 0) {
-            return {valido: false, mensaje: "El precio de compra debe ser mayor a 0"}
-        }
-        if (inputSalePrice <= 0) {
-            return {valido: false, mensaje: "El precio de venta debe ser mayor a 0"}
-        }
-        if (inputPurchasePrice > inputSalePrice) {
-            return {valido: false, mensaje: "El precio de compra no puede ser mayor al precio de venta"}
-        }
-        if (inputSalePrice < inputPurchasePrice * 1.1) {
-            return {valido: false, mensaje: "El precio de venta debe ser al menos 10% mayor al precio de compra para tener margen de ganancia"}
-        }
-        return {valido: true, mensaje: ""}
-    }
-
-    function validarStock() {
-        if (inputStockUnit < 0) {
-            return {valido: false, mensaje: "El stock no puede ser negativo"}
-        }
-        if (inputStockUnit > 100000) {
-            return {valido: false, mensaje: "El stock no puede ser mayor a 100,000 unidades"}
-        }
-        return {valido: true, mensaje: ""}
-    }
-
-    function validarFechaVencimiento() {
-        if (!inputNoExpiry && inputExpirationDate.length === 0) {
-            return {valido: false, mensaje: "Debe ingresar una fecha de vencimiento o marcar 'Sin vencimiento'"}
-        }
-        if (!inputNoExpiry && !validateExpiryDate(inputExpirationDate)) {
-            return {valido: false, mensaje: "Formato de fecha inválido. Use YYYY-MM-DD (ej: 2024-12-31)"}
-        }
-        return {valido: true, mensaje: ""}
     }
 
     function validarNombreProducto() {
@@ -285,18 +148,32 @@ Dialog {
         console.log("✅ Validación de marca exitosa")
         return {valido: true, mensaje: ""}
     }
-    
-    function guardarProducto() {
-        // Guard para prevenir errores
-        if (!crearProductoDialog || !crearProductoDialog.visible) {
-            return false
-        }
 
-        console.log("💾 Iniciando guardado de producto")
+    function validarStockMinimo() {
+        if (inputStockMinimo < 0) {
+            return {valido: false, mensaje: "El stock mínimo no puede ser negativo"}
+        }
+        return {valido: true, mensaje: ""}
+    }
+
+    function validarStockMaximo() {
+        if (inputStockMaximo < inputStockMinimo) {
+            return {valido: false, mensaje: "El stock máximo debe ser mayor al stock mínimo"}
+        }
+        return {valido: true, mensaje: ""}
+    }
+    
+    // ===============================
+    // FUNCIÓN GUARDAR PRODUCTO
+    // ===============================
+    function guardarProducto() {
+        console.log("💾 Iniciando guardado de producto FIFO 2.0")
         console.log("   - marcaIdSeleccionada:", marcaIdSeleccionada)
         console.log("   - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
+        console.log("   - stockMinimo:", inputStockMinimo)
+        console.log("   - stockMaximo:", inputStockMaximo)
 
-        // ✅ VALIDACIÓN CRÍTICA DE MARCA ANTES DE TODO
+        // ✅ VALIDACIÓN CRÍTICA DE MARCA
         if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
             console.log("❌ GUARDADO BLOQUEADO: Marca no seleccionada")
             showError("Debe seleccionar una marca válida para el producto")
@@ -306,15 +183,15 @@ Dialog {
             return false
         }
 
-        // Generar código automático si está vacío
-        if (inputProductCode.trim().length === 0) {
+        // Generar código automático si está vacío (solo en creación)
+        if (!modoEdicion && inputProductCode.trim().length === 0) {
             inputProductCode = generarCodigoAutomatico()
             if (codigoField) {
                 codigoField.text = inputProductCode
             }
         }
 
-        // Validaciones específicas con mensajes detallados
+        // Validaciones específicas
         var validacionNombre = validarNombreProducto()
         if (!validacionNombre.valido) {
             showError(validacionNombre.mensaje)
@@ -325,161 +202,123 @@ Dialog {
         var validacionMarca = validarMarca()
         if (!validacionMarca.valido) {
             showError(validacionMarca.mensaje)
-            if (marcaComboBox) marcaComboBox.forceActiveFocus()
             return false
         }
 
-        var validacionPrecios = validarPrecios()
-        if (!validacionPrecios.valido) {
-            showError(validacionPrecios.mensaje)
-            if (precioCompraField) precioCompraField.forceActiveFocus()
+        var validacionStockMin = validarStockMinimo()
+        if (!validacionStockMin.valido) {
+            showError(validacionStockMin.mensaje)
             return false
         }
 
-        // Validaciones solo para nuevo producto (no edición)
-        if (!modoEdicion) {
-            var validacionStock = validarStock()
-            if (!validacionStock.valido) {
-                showError(validacionStock.mensaje)
-                if (stockUnitarioField) stockUnitarioField.forceActiveFocus()
-                return false
-            }
-
-            var validacionFecha = validarFechaVencimiento()
-            if (!validacionFecha.valido) {
-                showError(validacionFecha.mensaje)
-                if (fechaVencimientoField) fechaVencimientoField.forceActiveFocus()
-                return false
-            }
+        var validacionStockMax = validarStockMaximo()
+        if (!validacionStockMax.valido) {
+            showError(validacionStockMax.mensaje)
+            return false
         }
 
-        // SIN CAJAS: producto solo con stock unitario
+        // ✅ CREAR OBJETO PRODUCTO FIFO 2.0
         var producto = {
             codigo: inputProductCode.trim(),
             nombre: inputProductName.trim(),
             detalles: inputProductDetails.trim(),
-            id_marca: marcaIdSeleccionada,      // ✅ ID numérico (IMPORTANTE)
-            marca: marcaSeleccionadaNombre,     // ✅ Nombre (para compatibilidad)
-            precio_compra: inputPurchasePrice,
-            precio_venta: inputSalePrice,
             unidad_medida: inputMeasureUnit,
-            stock_unitario: inputStockUnit,
-            fecha_vencimiento: formatearFechaParaBD(),
-            proveedor: inputSupplier.trim(),
-            sin_vencimiento: inputNoExpiry
+            marca_id: marcaIdSeleccionada,
+            marca: marcaSeleccionadaNombre,
+            stock_minimo: inputStockMinimo,
+            stock_maximo: inputStockMaximo
         }
 
-        console.log("📦 Producto a guardar:")
-        console.log("   - id_marca:", producto.id_marca, "(tipo:", typeof producto.id_marca, ")")
-        console.log("   - marca:", producto.marca)
+        console.log("📦 Producto a guardar:", JSON.stringify(producto))
+
+        // GUARDAR EN BASE DE DATOS
+        if (!inventarioModel) {
+            showError("Sistema no disponible")
+            return false
+        }
 
         try {
-            var mensajeExito = ""
-
+            var exito = false
+            
             if (modoEdicion) {
-                producto.id = productoData.id
-                mensajeExito = "Producto actualizado correctamente"
-
-                if (!inventarioModel) {
-                    showError("Error: Sistema no disponible")
-                    return false
-                }
-
-                var exito = inventarioModel.actualizar_producto(
-                    productoData.codigo,
-                    JSON.stringify(producto)
-                )
-
-                if (!exito) {
-                    showError("Error al actualizar producto en la base de datos")
+                console.log("✏️ Actualizando producto existente")
+                exito = inventarioModel.actualizar_producto(producto.codigo, JSON.stringify(producto))
+                
+                if (exito) {
+                    console.log("✅ Producto actualizado exitosamente")
+                    showMessage("Producto actualizado correctamente")
+                    productoActualizado(producto)
+                    
+                    Qt.callLater(function() {
+                        volverALista()
+                    })
+                } else {
+                    showError("Error al actualizar el producto")
                     return false
                 }
             } else {
-                mensajeExito = "Producto y primer lote creados correctamente"
-                var tipoVencimiento = inputNoExpiry ? " (sin vencimiento)" : ""
-                mensajeExito += tipoVencimiento
+                console.log("🆕 Creando nuevo producto")
+                exito = inventarioModel.crear_producto(JSON.stringify(producto))
+                
+                if (exito) {
+                    console.log("✅ Producto creado exitosamente")
+                    showMessage("Producto creado correctamente")
+                    productoCreado(producto)
+                    
+                    Qt.callLater(function() {
+                        volverALista()
+                    })
+                } else {
+                    showError("Error al crear el producto")
+                    return false
+                }
             }
-
-            showMessage(mensajeExito)
-            limpiarFormularioSeguro()
-
-            if (modoEdicion) {
-                productoActualizado(producto)
-                console.log("✅ Producto actualizado correctamente")
-            } else {
-                productoCreado(producto)
-                console.log("✅ Producto y primer lote creados correctamente")
-            }
-
-            Qt.callLater(function() {
-                close()
-            })
-
-            return true
-
+            
+            return exito
+            
         } catch (error) {
-            console.error("Error al guardar producto:", error)
-            showError("Error inesperado al guardar el producto: " + error)
+            console.log("❌ Error guardando producto:", error.toString())
+            showError("Error: " + error.toString())
             return false
         }
     }
-    
-    function limpiarFormularioSeguro() {
-    if (!crearProductoDialog) return;
-    
-    try {
-        console.log("🧹 Iniciando limpieza completa del formulario...")
-        
-        // ✅ CORRECCIÓN: Limpiar propiedades de marca PRIMERO
-        marcaIdSeleccionada = 0
-        marcaSeleccionadaNombre = ""
-        
-        // Limpiar otras propiedades
-        inputProductCode = ""
-        inputProductName = ""
-        inputProductDetails = ""
-        inputPurchasePrice = 0.0
-        inputSalePrice = 0.0
-        inputMeasureUnit = "Tabletas"
-        inputExpirationDate = ""
-        inputNoExpiry = false
-        inputStockUnit = 0
-        inputSupplier = ""
 
-        // ✅ CORRECCIÓN: Resetear ComboBox de marca
-        if (marcaComboBox && typeof marcaComboBox.reset === 'function') {
-            marcaComboBox.reset()
+    function limpiarFormularioSeguro() {
+        try {
+            inputProductCode = ""
+            inputProductName = ""
+            inputProductDetails = ""
+            inputMeasureUnit = "Tabletas"
+            inputStockMinimo = 10
+            inputStockMaximo = 100
+            marcaIdSeleccionada = 0
+            marcaSeleccionadaNombre = ""
+            
+            if (codigoField) codigoField.text = ""
+            if (nombreField) nombreField.text = ""
+            if (detallesField) detallesField.text = ""
+            if (stockMinimoField) stockMinimoField.text = "10"
+            if (stockMaximoField) stockMaximoField.text = "100"
+            if (unidadCombo) unidadCombo.currentIndex = 0
+            if (marcaComboBox) marcaComboBox.reset()
+            
+            showSuccessMessage = false
+            showErrorMessage = false
+            
+            console.log("🧹 Formulario limpiado")
+        } catch (error) {
+            console.log("⚠️ Error en limpieza:", error)
         }
-        
-        // Limpiar campos UI
-        if (codigoField) codigoField.text = ""
-        if (nombreField) nombreField.text = ""
-        if (detallesField) detallesField.text = ""
-        if (precioCompraField) precioCompraField.text = ""
-        if (precioVentaField) precioVentaField.text = ""
-        if (fechaVencimientoField) fechaVencimientoField.text = ""
-        if (stockUnitarioField) stockUnitarioField.text = ""
-        if (proveedorField) proveedorField.text = ""
-        
-        if (unidadCombo) unidadCombo.currentIndex = 0
-        
-        console.log("✅ Formulario limpiado exitosamente")
-        
-    } catch (error) {
-        console.log("⚠️ Error en limpieza:", error)
     }
-}
     
+    // ===============================
+    // MENSAJES
+    // ===============================
     function showMessage(mensaje) {
-        if (!crearProductoDialog || !crearProductoDialog.visible) {
-            console.log("📢 Mensaje:", mensaje)
-            return
-        }
-        
         try {
             successMessage = mensaje
             showSuccessMessage = true
-            showErrorMessage = false // Ocultar errores al mostrar éxito
+            showErrorMessage = false
             successTimer.restart()
             console.log("📢 Mostrando mensaje:", mensaje)
         } catch (error) {
@@ -488,1089 +327,750 @@ Dialog {
     }
 
     function showError(mensaje) {
-        if (!crearProductoDialog || !crearProductoDialog.visible) {
-            console.log("❌ Error:", mensaje)
+        try {
+            errorMessage = mensaje
+            showErrorMessage = true
+            showSuccessMessage = false
+            errorTimer.restart()
+            console.log("❌ Mostrando error:", mensaje)
+        } catch (error) {
+            console.log("⚠️ Error mostrando error:", error)
+        }
+    }
+
+    // ===============================
+    // FUNCIONES DE MARCAS
+    // ===============================
+    function cargarMarcasDisponibles() {
+        if (!inventarioModel) {
+            console.log("⚠️ No hay inventarioModel disponible para cargar marcas")
             return
         }
         
         try {
-            errorMessage = mensaje
-            showErrorMessage = true
-            showSuccessMessage = false // Ocultar éxito al mostrar error
-            errorTimer.restart()
-            console.log("❌ Mostrando error:", mensaje)
+            var marcasDisponibles = inventarioModel.marcasDisponibles || []
+            console.log("🏷️ Marcas disponibles cargadas:", marcasDisponibles.length)
+            marcasModel = marcasDisponibles
+            marcasCargadas = true
         } catch (error) {
-            console.log("⚠️ Error mostrando mensaje de error:", error)
+            console.log("❌ Error cargando marcas:", error)
         }
     }
 
-    function crearNuevaMarcaEnBackend(nombreMarca) {
-        if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
-            showError("Error: Sistema no disponible")
-            return
-        }
+    // ===============================
+    // INICIALIZACIÓN
+    // ===============================
+    function inicializarParaCrear() {
+        console.log("🆕 Inicializando para CREAR producto")
+        modoEdicion = false
+        limpiarFormularioSeguro()
+        cargarMarcasDisponibles()
+        
+        // Campos editables
+        if (codigoField) codigoField.readOnly = false
+    }
 
-        // Validar nombre
-        if (!nombreMarca || nombreMarca.trim().length < 2) {
-            showError("El nombre de la marca debe tener al menos 2 caracteres")
-            return
+    function inicializarParaEditar(producto) {
+        console.log("✏️ Inicializando para EDITAR producto:", producto.codigo)
+        modoEdicion = true
+        productoData = producto
+        
+        // Cargar datos del producto
+        inputProductCode = producto.codigo || ""
+        inputProductName = producto.nombre || ""
+        inputProductDetails = producto.detalles || ""
+        inputMeasureUnit = producto.unidad_medida || "Tabletas"
+        inputStockMinimo = producto.stock_minimo || 10
+        inputStockMaximo = producto.stock_maximo || 100
+        
+        marcaIdSeleccionada = producto.marca_id || 0
+        marcaSeleccionadaNombre = producto.marca || ""
+        
+        // Actualizar UI
+        if (codigoField) {
+            codigoField.text = inputProductCode
+            codigoField.readOnly = true  // Código no editable en modo edición
         }
-        
-        var nombreLimpio = nombreMarca.trim()
-        console.log("🏷️ Creando marca:", nombreLimpio)
-        
-        // Llamar método Python - AHORA RETORNA ID
-        var marcaId = inventarioModel.crear_marca_desde_qml(nombreLimpio)
-        
-        console.log("🔍 Resultado crear_marca_desde_qml:", marcaId)
-        
-        if (marcaId > 0) {
-            console.log("✅ Marca creada con ID:", marcaId)
-            
-            // Esperar a que se actualice el modelo
-            Qt.callLater(function() {
-                // Recargar marcas
-                cargarMarcasDisponibles()
-                
-                // Esperar un poco más y seleccionar la nueva marca
-                Qt.callLater(function() {
-                    if (marcaComboBox) {
-                        console.log("🎯 Seleccionando marca recién creada ID:", marcaId)
-                        marcaComboBox.setMarcaById(marcaId)
-                        
-                        // FORZAR actualización de propiedades
-                        marcaIdSeleccionada = marcaId
-                        marcaSeleccionadaNombre = nombreLimpio
-                    }
-                })
-            })
-            
-            showMessage("Marca creada: " + nombreLimpio)
-        } else if (marcaId === 0) {
-            showError("Ya existe una marca con ese nombre")
-        } else {
-            console.log("❌ Error creando marca")
-            showError("Error al crear la marca en la base de datos")
-        }
-    }
-    
-    function abrirCrearProducto(modo = false, datos = null) {
-        console.log("🚀 Abriendo CrearProducto - Modo edición:", modo)
-        
-        modoEdicion = modo
-        productoData = datos
-        
-        // Limpiar mensajes previos
-        showSuccessMessage = false
-        showErrorMessage = false
-        
-        // ✅ CORRECCIÓN: Limpiar selección de marca ANTES de abrir
-        marcaIdSeleccionada = 0
-        marcaSeleccionadaNombre = ""
-        if (marcaComboBox) {
-            marcaComboBox.reset()
-        }
-        
-        // Abrir diálogo PRIMERO
-        open()
-        
-        // ✅ CORRECCIÓN: Cargar marcas DESPUÉS de que el diálogo esté visible
-        Qt.callLater(function() {
-            cargarMarcasDisponibles()
-            
-            // Si es modo edición, cargar datos después de cargar marcas
-            if (modoEdicion && productoData) {
-                Qt.callLater(function() {
-                    cargarDatosProducto()
-                })
-            }
-        })
-    }
-    
-    function cargarDatosProducto() {
-        if (!productoData) return;
-        
-        console.log("📋 Cargando datos del producto:", JSON.stringify(productoData))
-        
-        // Asignar otras propiedades del producto
-        inputProductCode = productoData.codigo || ""
-        inputProductName = productoData.nombre || ""
-        inputProductDetails = productoData.detalles || ""
-        inputPurchasePrice = productoData.precio_compra || 0
-        inputSalePrice = productoData.precio_venta || 0
-        inputMeasureUnit = productoData.unidad_medida || "Tabletas"
-        
-        if (codigoField) codigoField.text = inputProductCode
         if (nombreField) nombreField.text = inputProductName
         if (detallesField) detallesField.text = inputProductDetails
-        if (precioCompraField) precioCompraField.text = inputPurchasePrice.toString()
-        if (precioVentaField) precioVentaField.text = inputSalePrice.toString()
+        if (stockMinimoField) stockMinimoField.text = inputStockMinimo.toString()
+        if (stockMaximoField) stockMaximoField.text = inputStockMaximo.toString()
         
+        // Buscar índice de unidad de medida
         if (unidadCombo) {
-            var unidadIndex = unidadCombo.model.indexOf(inputMeasureUnit)
-            if (unidadIndex >= 0) {
-                unidadCombo.currentIndex = unidadIndex
+            var unidades = ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
+            var indice = unidades.indexOf(inputMeasureUnit)
+            if (indice !== -1) {
+                unidadCombo.currentIndex = indice
             }
         }
-
-        // ✅ CORRECCIÓN MEJORADA: Carga de marca en edición
-        var marcaCargada = false
         
-        // PRIORIDAD 1: Usar ID_Marca si está disponible
-        if (productoData.ID_Marca || productoData.id_marca) {
-            var marcaId = productoData.ID_Marca || productoData.id_marca
-            var marcaNombre = productoData.Marca_Nombre || productoData.marca || ""
-            
-            console.log("🔍 Cargando marca por ID:", marcaId, "Nombre:", marcaNombre)
-            
-            marcaIdSeleccionada = marcaId
-            marcaSeleccionadaNombre = marcaNombre
-            
-            // Establecer en ComboBox inmediatamente
-            if (marcaComboBox) {
-                Qt.callLater(function() {
-                    marcaComboBox.forzarSeleccion(marcaId, marcaNombre)
-                })
-            }
-            
-            marcaCargada = true
-            console.log("✅ Marca cargada por ID:", marcaId, marcaNombre)
-        }
+        // Cargar marcas y seleccionar la correcta
+        cargarMarcasDisponibles()
         
-        // PRIORIDAD 2: Si no se pudo cargar por ID, intentar por nombre
-        if (!marcaCargada && productoData.marca) {
-            console.log("🔍 Intentando cargar marca por nombre:", productoData.marca)
-            // Aquí el ComboBox debería encontrar la marca por nombre cuando se carguen las marcas
-            marcaSeleccionadaNombre = productoData.marca
-        }
-        
-        if (!marcaCargada) {
-            console.log("⚠️ No se pudo cargar la marca del producto")
+        if (marcaComboBox && marcaIdSeleccionada > 0) {
+            Qt.callLater(function() {
+                marcaComboBox.forzarSeleccion(marcaIdSeleccionada, marcaSeleccionadaNombre)
+            })
         }
     }
 
-    // Header personalizado
-    header: Rectangle {
-        height: headerHeight
+    // ===============================
+    // MODAL CENTRADO
+    // ===============================
+    Rectangle {
+        id: modalContent
+        width: 900
+        height: 550
+        anchors.centerIn: parent
         color: white
         radius: 12
+        border.color: borderColor
+        border.width: 1
         
-        // Recortar esquinas inferiores para que solo las superiores sean redondeadas
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 12
-            color: white
-        }
-        
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 1
-            color: borderColor
-        }
-        
-        RowLayout {
+        // Detiene propagación de clicks al overlay
+        MouseArea {
             anchors.fill: parent
-            anchors.leftMargin: baseSpacing
-            anchors.rightMargin: baseSpacing
-            spacing: baseSpacing
-            
-            RowLayout {
-                spacing: 10
-                
-                Rectangle {
-                    width: 36
-                    height: 36
-                    color: modoEdicion ? warningAmber : primaryBlue
-                    radius: 8
-                    
-                    Text {
-                        anchors.centerIn: parent
-                        text: modoEdicion ? "✏" : "+"
-                        color: white
-                        font.pixelSize: 14
-                        font.bold: true
-                    }
-                }
-                
-                Column {
-                    spacing: 2
-                    
-                    Text {
-                        text: modoEdicion ? "Editar Producto" : "Nuevo Producto + Primer Lote"
-                        font.pixelSize: 18
-                        font.bold: true
-                        color: grayDark
-                    }
-                    
-                    Text {
-                        text: modoEdicion ? "Actualizar información del producto" : "Crear producto e inventario inicial (solo stock unitario)"
-                        font.pixelSize: 12
-                        color: grayMedium
-                    }
-                }
-            }
-            
-            Item { Layout.fillWidth: true }
-            
-            Button {
-                Layout.preferredWidth: 40
-                Layout.preferredHeight: 40
-                
-                background: Rectangle {
-                    color: parent.pressed ? "#E5E7EB" : "#F9FAFB"
-                    border.color: borderColor
-                    border.width: 1
-                    radius: 8
-                }
-                
-                contentItem: Text {
-                    text: "×"
-                    color: grayDark
-                    font.pixelSize: 18
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                
-                onClicked: {
-                    cancelarCreacion()
-                    close()
-                }
-            }
+            onClicked: {} // No hace nada, solo detiene propagación
         }
-    }
-
-    // Contenido principal
-    contentItem: Rectangle {
-        color: grayLight
         
-        ScrollView {
+        ColumnLayout {
             anchors.fill: parent
-            anchors.margins: baseSpacing
-            clip: true
+            spacing: 0
             
+            // ===============================
+            // HEADER (MEJORADO)
+            // ===============================
             Rectangle {
-                width: parent.width
-                height: allContent.height + cardPadding * 2
-                color: white
-                radius: 8
-                border.color: borderColor
-                border.width: 1
+                Layout.fillWidth: true
+                Layout.preferredHeight: headerHeight
+                color: "#2c3e50"
+                radius: 12
                 
-                ColumnLayout {
-                    id: allContent
-                    anchors.top: parent.top
+                // Redondear solo arriba
+                Rectangle {
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.margins: cardPadding
-                    spacing: 12
+                    anchors.bottom: parent.bottom
+                    height: 12
+                    color: parent.color
+                }
+                
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: cardPadding
+                    anchors.rightMargin: cardPadding
+                    spacing: baseSpacing
                     
-                    // Fila 1: Código, Nombre del Producto, Marca
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        
-                        // Código (ya no obligatorio)
-                        ColumnLayout {
-                            Layout.preferredWidth: 120
-                            spacing: 4
-                            
-                            Text {
-                                text: "Código (Opcional)"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: codigoField.activeFocus ? primaryBlue : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextEdit {
-                                    id: codigoField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextEdit.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    
-                                    onTextChanged: inputProductCode = text
-                                    
-                                    Text {
-                                        text: "Auto-generado"
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Nombre del Producto
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            
-                            Text {
-                                text: "Nombre del Producto *"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: nombreField.activeFocus ? primaryBlue : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextEdit {
-                                    id: nombreField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextEdit.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    
-                                    onTextChanged: inputProductName = text
-                                    
-                                    Text {
-                                        text: "Paracetamol 500mg"
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Marca
-                        // Marca con ComboBox Inteligente
-                        ColumnLayout {
-                            Layout.preferredWidth: 200
-                            spacing: 4
-                            
-                            Text {
-                                text: "Marca *"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            // Importar MarcaComboBox (asegúrate de tener el archivo en la misma carpeta)
-                            
-                            MarcaComboBox {
-                                id: marcaComboBox
-                                Layout.fillWidth: true
-                                marcasModel: inventarioModel ? inventarioModel.marcasDisponibles : []
-                                required: true
-
-                                onMarcaCambiada: function(marcaNombre, marcaId) {
-                                    console.log("📡 Señal recibida - Marca:", marcaNombre, "ID:", marcaId)
-                                    
-                                    // ✅ CORRECCIÓN: Actualizar propiedades del diálogo DIRECTAMENTE
-                                    crearProductoDialog.marcaIdSeleccionada = marcaId
-                                    crearProductoDialog.marcaSeleccionadaNombre = marcaNombre
-                                    
-                                    console.log("✅ Propiedades actualizadas - ID:", crearProductoDialog.marcaIdSeleccionada, 
-                                               "Nombre:", crearProductoDialog.marcaSeleccionadaNombre)
-                                    
-                                    // ✅ FORZAR reevaluación de validación
-                                    Qt.callLater(function() {
-                                        crearProductoDialog.calcularValidacion()
-                                    })
-                                }
-
-                                onNuevaMarcaCreada: function(nombreMarca) {
-                                    console.log("🆕 Solicitando crear marca:", nombreMarca)
-                                    
-                                    if (inventarioModel) {
-                                        // Llamar método Python - RETORNA ID DIRECTAMENTE
-                                        var nuevaMarcaId = inventarioModel.crear_marca_desde_qml(nombreMarca)
-                                        
-                                        console.log("🔍 Resultado crear_marca_desde_qml - ID:", nuevaMarcaId)
-                                        
-                                        if (nuevaMarcaId > 0) {
-                                            console.log("✅ Nueva marca creada con ID:", nuevaMarcaId)
-                                            
-                                            // ✅ CORRECCIÓN: USAR EL ID DIRECTAMENTE SIN BUSCAR
-                                            marcaIdSeleccionada = nuevaMarcaId
-                                            marcaSeleccionadaNombre = nombreMarca
-                                            
-                                            // Actualizar ComboBox inmediatamente
-                                            if (marcaComboBox) {
-                                                marcaComboBox.forzarSeleccion(nuevaMarcaId, nombreMarca)
-                                            }
-                                            
-                                            // Recargar lista de marcas en background (para futuras selecciones)
-                                            Qt.callLater(function() {
-                                                cargarMarcasDisponibles()
-                                            })
-                                            
-                                            showMessage("Marca creada: " + nombreMarca)
-                                            
-                                        } else if (nuevaMarcaId === 0) {
-                                            showError("Ya existe una marca con ese nombre")
-                                        } else {
-                                            console.log("❌ Error creando marca")
-                                            showError("Error al crear la marca en la base de datos")
-                                        }
-                                    } else {
-                                        console.log("❌ InventarioModel no disponible")
-                                    }
-                                }
-                            }
-                        }
+                    Rectangle {
+                        Layout.preferredWidth: 4
+                        Layout.fillHeight: true
+                        Layout.topMargin: 8
+                        Layout.bottomMargin: 8
+                        color: "#3498db"
+                        radius: 2
                     }
                     
-                    // Fila 2: Unidad, P. Compra, P. Venta, Fecha Vencimiento
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        
-                        // Unidad
-                        ColumnLayout {
-                            Layout.preferredWidth: 110
-                            spacing: 4
-                            
-                            Text {
-                                text: "Unidad"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            ComboBox {
-                                id: unidadCombo
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
-                                font.pixelSize: 11
-                                
-                                background: Rectangle {
-                                    color: white
-                                    border.color: parent.activeFocus ? primaryBlue : borderColor
-                                    border.width: 1
-                                    radius: 6
-                                }
-                                
-                                onCurrentTextChanged: inputMeasureUnit = currentText
-                                
-                                Component.onCompleted: {
-                                    currentIndex = 0
-                                    inputMeasureUnit = currentText
-                                }
-                            }
-                        }
-                        
-                        // Precio Compra
-                        ColumnLayout {
-                            Layout.preferredWidth: 100
-                            spacing: 4
-                            
-                            Text {
-                                text: "P. Compra *"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: precioCompraField.activeFocus ? successGreen : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextInput {
-                                    id: precioCompraField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    inputMethodHints: Qt.ImhFormattedNumbersOnly
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    
-                                    onTextChanged: {
-                                        var cleanText = text.replace(/[^0-9.]/g, '');
-                                        if (cleanText !== text) {
-                                            text = cleanText;
-                                        }
-                                        
-                                        inputPurchasePrice = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0;
-                                    }
-                                    
-                                    Text {
-                                        text: "0.00"
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Precio Venta
-                        ColumnLayout {
-                            Layout.preferredWidth: 100
-                            spacing: 4
-                            
-                            Text {
-                                text: "P. Venta *"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: precioVentaField.activeFocus ? primaryBlue : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextInput {
-                                    id: precioVentaField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    inputMethodHints: Qt.ImhFormattedNumbersOnly
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    
-                                    onTextChanged: {
-                                        var cleanText = text.replace(/[^0-9.]/g, '');
-                                        if (cleanText !== text) {
-                                            text = cleanText;
-                                        }
-                                        
-                                        inputSalePrice = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0;
-                                    }
-                                    
-                                    Text {
-                                        text: "0.00"
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Fecha Vencimiento con checkbox
-                        ColumnLayout {
-                            Layout.preferredWidth: 200
-                            spacing: 4
-                            visible: !modoEdicion
-                            
-                            Text {
-                                text: "Fecha Venc."
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            RowLayout {
-                                spacing: 4
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 120
-                                    Layout.preferredHeight: inputHeight
-                                    color: inputNoExpiry ? "#F5F5F5" : white
-                                    border.color: fechaVencimientoField.activeFocus ? warningAmber : borderColor
-                                    border.width: 1
-                                    radius: 6
-                                    
-                                    TextInput {
-                                        id: fechaVencimientoField
-                                        anchors.fill: parent
-                                        anchors.margins: 10
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        selectByMouse: true
-                                        font.pixelSize: 12
-                                        color: grayDark
-                                        inputMethodHints: Qt.ImhDigitsOnly
-                                        maximumLength: 10
-                                        enabled: !inputNoExpiry
-                                        
-                                        onTextChanged: {
-                                            if (!inputNoExpiry) {
-                                                var formatted = autoFormatDate(text)
-                                                if (formatted !== text) {
-                                                    text = formatted
-                                                }
-                                                inputExpirationDate = formatted
-                                            }
-                                        }
-                                        
-                                        Text {
-                                            text:"YYYY-MM-DD"
-                                            color: grayMedium
-                                            visible: !parent.text
-                                            font: parent.font
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-                                    }
-                                }
-                                
-                                CheckBox {
-                                    Layout.preferredWidth: 20
-                                    Layout.preferredHeight: inputHeight
-                                    checked: !inputNoExpiry
-                                    
-                                    indicator: Rectangle {
-                                        width: 16
-                                        height: 16
-                                        anchors.centerIn: parent
-                                        radius: 2
-                                        border.color: borderColor
-                                        border.width: 1
-                                        color: parent.checked ? primaryBlue : white
-                                        
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "✓"
-                                            color: white
-                                            font.pixelSize: 10
-                                            visible: parent.parent.checked
-                                        }
-                                    }
-                                    
-                                    contentItem: Item {}
-                                    
-                                    onCheckedChanged: {
-                                        inputNoExpiry = !checked
-                                        if (!checked) {
-                                            inputExpirationDate = ""
-                                            fechaVencimientoField.text = ""
-                                        }
-                                    }
-                                }
-                                
-                                Text {
-                                    text: "Con vencimiento"
-                                    font.pixelSize: 10
-                                    color: grayMedium
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                            }
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                    }
-                    
-                    // Fila 3: Solo Stock Unitario y Proveedor (SIN CAJAS)
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        visible: !modoEdicion
-                        
-                        // Stock 
-                        ColumnLayout {
-                            Layout.preferredWidth: 120
-                            spacing: 4
-                            
-                            Text {
-                                text: "Stock *"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: stockUnitarioField.activeFocus ? primaryBlue : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextInput {
-                                    id: stockUnitarioField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    inputMethodHints: Qt.ImhDigitsOnly
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    
-                                    onTextChanged: {
-                                        var cleanText = text.replace(/[^0-9]/g, '');
-                                        if (cleanText !== text) {
-                                            text = cleanText;
-                                        }
-                                        
-                                        inputStockUnit = text.length > 0 ? (parseInt(text) || 0) : 0;
-                                    }
-                                    
-                                    Text {
-                                        text: "0"
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                }
-                            }
-                        }
-
-                        // Proveedor
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            
-                            Text {
-                                text: "Proveedor (Opcional)"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: grayDark
-                            }
-                            
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: inputHeight
-                                color: white
-                                border.color: proveedorField.activeFocus ? primaryBlue : borderColor
-                                border.width: 1
-                                radius: 6
-                                
-                                TextInput {
-                                    id: proveedorField
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    selectByMouse: true
-                                    font.pixelSize: 12
-                                    color: grayDark
-                                    
-                                    onTextChanged: inputSupplier = text
-                                    
-                                    Text {
-                                        text: "Nombre del proveedor..."
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Fila 4: Descripción (fila completa)
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
+                    Column {
+                        spacing: 2
                         
                         Text {
-                            text: "Descripción (Opcional)"
-                            font.pixelSize: 12
+                            text: modoEdicion ? "✏️ Editar Producto" : "➕ Nuevo Producto"
+                            font.pixelSize: 18
                             font.bold: true
-                            color: grayDark
+                            color: "white"
                         }
                         
+                        Text {
+                            text: modoEdicion ? "Actualizar información del producto" : "Crear producto base (stock y precio en primera compra)"
+                            font.pixelSize: 12
+                            color: "white"
+                            opacity: 0.9
+                        }
+                    }
+                    
+                    Item { Layout.fillWidth: true }
+                    
+                    Button {
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? "#34495E" : "transparent"
+                            border.color: "white"
+                            border.width: 1
+                            radius: 8
+                        }
+                        
+                        contentItem: Text {
+                            text: "×"
+                            color: "white"
+                            font.pixelSize: 18
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            cancelarCreacion()
+                        }
+                    }
+                }
+            }
+
+            // ===============================
+            // CONTENIDO PRINCIPAL
+            // ===============================
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: grayLight
+                
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: baseSpacing
+                    clip: true
+                    
+                    Rectangle {
+                        width: parent.width
+                        height: allContent.height + cardPadding * 2
+                        color: white
+                        radius: 8
+                        border.color: borderColor
+                        border.width: 1
+                        
+                        ColumnLayout {
+                            id: allContent
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.margins: cardPadding
+                            spacing: 16
+                            
+                            // ===============================
+                            // ℹ️ BANNER INFORMATIVO FIFO 2.0
+                            // ===============================
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: bannerContent.height + 20
+                                color: "#EFF6FF"
+                                border.color: "#3B82F6"
+                                border.width: 2
+                                radius: 8
+                                visible: !modoEdicion
+                                
+                                ColumnLayout {
+                                    id: bannerContent
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.margins: 12
+                                    spacing: 8
+                                    
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        
+                                        Text {
+                                            text: "ℹ️"
+                                            font.pixelSize: 18
+                                            color: "#3B82F6"
+                                        }
+                                        
+                                        Text {
+                                            text: "INFORMACIÓN IMPORTANTE"
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            color: grayDark
+                                        }
+                                    }
+                                    
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: "• El stock se calculará automáticamente al registrar compras"
+                                        font.pixelSize: 12
+                                        color: grayDark
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: "• El precio de venta se definirá en la primera compra del producto"
+                                        font.pixelSize: 12
+                                        color: grayDark
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+                            
+                            // ===============================
+                            // FILA 1: Código, Nombre, Marca
+                            // ===============================
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                
+                                // CÓDIGO
+                                ColumnLayout {
+                                    Layout.preferredWidth: 120
+                                    spacing: 4
+                                    
+                                    Text {
+                                        text: "Código"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: grayDark
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: inputHeight
+                                        color: modoEdicion ? grayLight : white
+                                        border.color: codigoField.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 6
+                                        
+                                        TextEdit {
+                                            id: codigoField
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            verticalAlignment: TextEdit.AlignVCenter
+                                            selectByMouse: true
+                                            font.pixelSize: 12
+                                            color: grayDark
+                                            readOnly: modoEdicion
+                                            
+                                            onTextChanged: inputProductCode = text
+                                            
+                                            Text {
+                                                text: "Auto"
+                                                color: grayMedium
+                                                visible: !parent.text && !modoEdicion
+                                                font: parent.font
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // NOMBRE DEL PRODUCTO
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    
+                                    Text {
+                                        text: "Nombre del Producto *"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: grayDark
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: inputHeight
+                                        color: white
+                                        border.color: nombreField.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 6
+                                        
+                                        TextEdit {
+                                            id: nombreField
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            verticalAlignment: TextEdit.AlignVCenter
+                                            selectByMouse: true
+                                            font.pixelSize: 12
+                                            color: grayDark
+                                            
+                                            onTextChanged: inputProductName = text
+                                            
+                                            Text {
+                                                text: "Paracetamol 500mg"
+                                                color: grayMedium
+                                                visible: !parent.text
+                                                font: parent.font
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // MARCA
+                                ColumnLayout {
+                                    Layout.preferredWidth: 200
+                                    spacing: 4
+                                    
+                                    Text {
+                                        text: "Marca *"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: grayDark
+                                    }
+                                    
+                                    MarcaComboBox {
+                                        id: marcaComboBox
+                                        Layout.fillWidth: true
+                                        marcasModel: inventarioModel ? inventarioModel.marcasDisponibles : []
+                                        required: true
+
+                                        onMarcaCambiada: function(marcaNombre, marcaId) {
+                                            console.log("📡 Señal recibida - Marca:", marcaNombre, "ID:", marcaId)
+                                            overlayRoot.marcaIdSeleccionada = marcaId
+                                            overlayRoot.marcaSeleccionadaNombre = marcaNombre
+                                            console.log("✅ Propiedades actualizadas - ID:", overlayRoot.marcaIdSeleccionada, 
+                                                       "Nombre:", overlayRoot.marcaSeleccionadaNombre)
+                                        }
+
+                                        onNuevaMarcaCreada: function(nombreMarca) {
+                                            console.log("🆕 Solicitando crear marca:", nombreMarca)
+                                            if (inventarioModel) {
+                                                var nuevaMarcaId = inventarioModel.crear_marca_desde_qml(nombreMarca)
+                                                console.log("🔍 Resultado crear_marca_desde_qml - ID:", nuevaMarcaId)
+                                                
+                                                if (nuevaMarcaId > 0) {
+                                                    console.log("✅ Nueva marca creada con ID:", nuevaMarcaId)
+                                                    marcaIdSeleccionada = nuevaMarcaId
+                                                    marcaSeleccionadaNombre = nombreMarca
+                                                    
+                                                    if (marcaComboBox) {
+                                                        marcaComboBox.forzarSeleccion(nuevaMarcaId, nombreMarca)
+                                                    }
+                                                    
+                                                    Qt.callLater(function() {
+                                                        cargarMarcasDisponibles()
+                                                    })
+                                                    
+                                                    showMessage("Marca creada: " + nombreMarca)
+                                                } else if (nuevaMarcaId === 0) {
+                                                    console.log("⚠️ Marca ya existe")
+                                                    showError("Esta marca ya existe en el sistema")
+                                                } else {
+                                                    console.log("❌ Error creando marca")
+                                                    showError("Error al crear la marca")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // ===============================
+                            // FILA 2: Unidad, Stock Min/Max
+                            // ===============================
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                
+                                // UNIDAD DE MEDIDA
+                                ColumnLayout {
+                                    Layout.preferredWidth: 150
+                                    spacing: 4
+                                    
+                                    Text {
+                                        text: "Unidad de Medida"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: grayDark
+                                    }
+                                    
+                                    ComboBox {
+                                        id: unidadCombo
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: inputHeight
+                                        model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
+                                        
+                                        onCurrentTextChanged: {
+                                            inputMeasureUnit = currentText
+                                        }
+                                        
+                                        background: Rectangle {
+                                            color: white
+                                            border.color: parent.activeFocus ? primaryBlue : borderColor
+                                            border.width: 1
+                                            radius: 6
+                                        }
+                                    }
+                                }
+                                
+                                // STOCK MÍNIMO
+                                ColumnLayout {
+                                    Layout.preferredWidth: 120
+                                    spacing: 4
+                                    
+                                    Text {
+                                        text: "Stock Mínimo *"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: grayDark
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: inputHeight
+                                        color: white
+                                        border.color: stockMinimoField.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 6
+                                        
+                                        TextEdit {
+                                            id: stockMinimoField
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            verticalAlignment: TextEdit.AlignVCenter
+                                            selectByMouse: true
+                                            font.pixelSize: 12
+                                            color: grayDark
+                                            text: "10"
+                                            
+                                            onTextChanged: {
+                                                var valor = parseInt(text)
+                                                if (!isNaN(valor)) {
+                                                    inputStockMinimo = valor
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // STOCK MÁXIMO
+                                ColumnLayout {
+                                    Layout.preferredWidth: 120
+                                    spacing: 4
+                                    
+                                    Text {
+                                        text: "Stock Máximo *"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: grayDark
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: inputHeight
+                                        color: white
+                                        border.color: stockMaximoField.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 6
+                                        
+                                        TextEdit {
+                                            id: stockMaximoField
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            verticalAlignment: TextEdit.AlignVCenter
+                                            selectByMouse: true
+                                            font.pixelSize: 12
+                                            color: grayDark
+                                            text: "100"
+                                            
+                                            onTextChanged: {
+                                                var valor = parseInt(text)
+                                                if (!isNaN(valor)) {
+                                                    inputStockMaximo = valor
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                            }
+                            
+                            // ===============================
+                            // DETALLES DEL PRODUCTO
+                            // ===============================
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                
+                                Text {
+                                    text: "Detalles / Observaciones"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 80
+                                    color: white
+                                    border.color: detallesField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 6
+                                    
+                                    ScrollView {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        clip: true
+                                        
+                                        TextArea {
+                                            id: detallesField
+                                            selectByMouse: true
+                                            wrapMode: TextArea.Wrap
+                                            font.pixelSize: 12
+                                            color: grayDark
+                                            
+                                            onTextChanged: inputProductDetails = text
+                                            
+                                            background: Rectangle {
+                                                color: "transparent"
+                                            }
+                                            
+                                            placeholderText: "Información adicional del producto..."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===============================
+            // FOOTER (MEJORADO)
+            // ===============================
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 70
+                color: "#ecf0f1"
+                radius: 12
+                
+                // Redondear solo abajo
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: 12
+                    color: parent.color
+                }
+                
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: cardPadding
+                    spacing: baseSpacing
+                    
+                    // Mensajes
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        
                         Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 60
-                            color: white
-                            border.color: detallesField.activeFocus ? primaryBlue : borderColor
+                            anchors.fill: parent
+                            visible: showSuccessMessage
+                            color: "#D1FAE5"
+                            border.color: successGreen
                             border.width: 1
                             radius: 6
                             
-                            Flickable {
-                                id: flick
+                            RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: 8
-                                contentWidth: width
-                                contentHeight: detallesField.implicitHeight
-                                clip: true
+                                spacing: 8
                                 
-                                function ensureVisible(r) {
-                                    if (contentY >= r.y)
-                                        contentY = r.y;
-                                    else if (contentY+height <= r.y+r.height)
-                                        contentY = r.y+r.height-height;
+                                Text {
+                                    text: "✓"
+                                    color: successGreen
+                                    font.bold: true
+                                    font.pixelSize: 14
                                 }
                                 
-                                TextEdit {
-                                    id: detallesField
-                                    width: parent.width
-                                    height: Math.max(implicitHeight, 44)
-                                    wrapMode: TextEdit.Wrap
-                                    selectByMouse: true
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: successMessage
+                                    color: successGreen
                                     font.pixelSize: 12
-                                    color: grayDark
-                                    
-                                    onCursorRectangleChanged: flick.ensureVisible(cursorRectangle)
-                                    onTextChanged: inputProductDetails = text
-                                    
-                                    Text {
-                                        text: "Descripción detallada del medicamento..."
-                                        color: grayMedium
-                                        visible: !parent.text
-                                        font: parent.font
-                                    }
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: showErrorMessage
+                            color: "#FEE2E2"
+                            border.color: dangerRed
+                            border.width: 1
+                            radius: 6
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 8
+                                
+                                Text {
+                                    text: "⚠"
+                                    color: dangerRed
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                }
+                                
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: errorMessage
+                                    color: dangerRed
+                                    font.pixelSize: 12
+                                    wrapMode: Text.WordWrap
                                 }
                             }
                         }
                     }
                     
-                    // Botones de acción
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 20
-                        Layout.alignment: Qt.AlignCenter
-                        spacing: 12
+                    // Botón Cancelar
+                    Button {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
+                        text: "Cancelar"
                         
-                        Button {
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: buttonHeight
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#F3F4F6" : white
-                                border.color: borderColor
-                                border.width: 1
-                                radius: 8
-                            }
-                            
-                            contentItem: Text {
-                                text: "Cancelar"
-                                color: grayDark
-                                font.pixelSize: 14
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                limpiarFormularioSeguro()
-                                cancelarCreacion()
-                                volverALista() 
-                                close()
-                            }
+                        background: Rectangle {
+                            color: parent.pressed ? "#E5E7EB" : "#F3F4F6"
+                            border.color: borderColor
+                            border.width: 1
+                            radius: 6
                         }
                         
-                        Button {
-                            Layout.preferredWidth: modoEdicion ? 180 : 200
-                            Layout.preferredHeight: buttonHeight
-                            
-                            // ✅ BINDING MÁS EXPLÍCITO
-                            enabled: {
-                                var validacion = calcularValidacion()
-                                var marcasOk = marcasCargadas || (marcasModel && marcasModel.length > 0)
-                                return validacion && marcasOk
-                            }
-                            
-                            background: Rectangle {
-                                color: parent.enabled ? (parent.pressed ? "#1D4ED8" : primaryBlue) : "#E5E7EB"
-                                radius: 8
-                            }
-                            
-                            onEnabledChanged: {
-                                console.log("🔘 Botón Guardar enabled:", enabled)
-                                console.log("  - calcularValidacion():", calcularValidacion())
-                                console.log("  - marcasCargadas:", marcasCargadas)
-                            }
-                            
-                            contentItem: Text {
-                                text: modoEdicion ? "Actualizar Producto" : "Crear Producto + Lote"
-                                color: parent.parent.enabled ? white : grayMedium
-                                font.pixelSize: 14
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: guardarProducto()
+                        contentItem: Text {
+                            text: parent.text
+                            color: grayDark
+                            font.bold: true
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: {
+                            cancelarCreacion()
                         }
                     }
+                    
+                    // Botón Guardar
+                    Button {
+                        Layout.preferredWidth: 160
+                        Layout.preferredHeight: 40
+                        text: modoEdicion ? "💾 Guardar Cambios" : "➕ Crear Producto"
+                        
+                        background: Rectangle {
+                            color: parent.pressed ? "#1D4ED8" : primaryBlue
+                            radius: 6
+                        }
+                        
+                        contentItem: Text {
+                            text: parent.text
+                            color: white
+                            font.bold: true
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: guardarProducto()
+                    }
                 }
-            }
-        }
-    }
-
-    // Notificación de éxito
-    Rectangle {
-        anchors.centerIn: parent
-        anchors.verticalCenterOffset: 100
-        width: Math.min(parent.width - baseSpacing * 2, 350)
-        height: 40
-        color: successGreen
-        radius: 8
-        visible: showSuccessMessage
-        opacity: showSuccessMessage ? 1.0 : 0.0
-        z: 100
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 300 }
-        }
-        
-        Row {
-            anchors.centerIn: parent
-            spacing: 8
-            
-            Text {
-                text: "✓"
-                color: white
-                font.pixelSize: 14
-                font.bold: true
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            
-            Text {
-                text: successMessage
-                color: white
-                font.pixelSize: 12
-                font.bold: true
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-    }
-
-    // Notificación de error
-    Rectangle {
-        anchors.centerIn: parent
-        anchors.verticalCenterOffset: 100
-        width: Math.min(parent.width - baseSpacing * 2, 400)
-        height: 50
-        color: dangerRed
-        radius: 8
-        visible: showErrorMessage
-        opacity: showErrorMessage ? 1.0 : 0.0
-        z: 100
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 300 }
-        }
-        
-        Row {
-            anchors.centerIn: parent
-            spacing: 8
-            anchors.margins: 8
-            
-            Text {
-                text: "⚠"
-                color: white
-                font.pixelSize: 14
-                font.bold: true
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            
-            Text {
-                text: errorMessage
-                color: white
-                font.pixelSize: 12
-                font.bold: true
-                anchors.verticalCenter: parent.verticalCenter
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
             }
         }
     }
 
     Component.onCompleted: {
-        console.log("🎬 CrearProducto inicializado")
-        
-        if (inventarioModel) {
-            // Conectar SOLO SI NO ESTÁ CONECTADO
-            if (!marcasListenerConnected) {
-                try {
-                    inventarioModel.marcasChanged.connect(function() {
-                        console.log("📡 Señal marcasChanged recibida")
-                        cargarMarcasDisponibles()
-                    })
-                    marcasListenerConnected = true
-                    console.log("✅ Listener marcasChanged conectado")
-                } catch (error) {
-                    console.log("⚠️ Error conectando marcasChanged:", error)
-                }
-            }
-            
-            // Carga inicial
-            cargarMarcasDisponibles()
-        } else {
-            console.log("❌ InventarioModel no disponible en Component.onCompleted")
-        }
-    }
-
-    onOpened: {
-        Qt.callLater(function() {
-            if (nombreField) {
-                nombreField.forceActiveFocus()
-            }
-        })
-    }
-
-    function calcularValidacion() {
-        var nombreValido = inputProductName.length > 0
-        var precioCompraValido = inputPurchasePrice > 0
-        var precioVentaValido = inputSalePrice > 0
-        var marcaValida = marcaIdSeleccionada > 0
-        
-        console.log("🔍 VALIDACIÓN DETALLADA DE MARCA:")
-        console.log("  - marcaIdSeleccionada:", marcaIdSeleccionada)
-        console.log("  - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
-        console.log("  - marcasModel disponibles:", marcasModel ? marcasModel.length : 0)
-        
-        var basicValidation = nombreValido && precioCompraValido && precioVentaValido && marcaValida
-        
-        if (modoEdicion) {
-            console.log("  - MODO EDICIÓN: retorna", basicValidation)
-            return basicValidation
-        } else {
-            var stockValido = inputStockUnit >= 0
-            var fechaValida = inputNoExpiry || 
-                            (inputExpirationDate.length > 0 && validateExpiryDate(inputExpirationDate))
-            
-            console.log("  - stockValido:", stockValido, "(", inputStockUnit, ")")
-            console.log("  - inputNoExpiry:", inputNoExpiry)
-            console.log("  - inputExpirationDate:", inputExpirationDate)
-            console.log("  - fechaValida:", fechaValida)
-            
-            var resultado = basicValidation && stockValido && fechaValida
-            console.log("  - RESULTADO FINAL:", resultado)
-            
-            return resultado
-        }
-        debugMarcaEstado()
-    }
-
-    function debugMarcaEstado() {
-        console.log("=== DEBUG MARCA ===")
-        console.log("  - marcaIdSeleccionada:", marcaIdSeleccionada)
-        console.log("  - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
-        console.log("  - marcasModel length:", marcasModel ? marcasModel.length : 0)
-        console.log("  - marcasCargadas:", marcasCargadas)
-        console.log("  - calcularValidacion():", calcularValidacion())
-        console.log("===================")
+        console.log("🚀 CrearProducto.qml (Modal centrado) cargado")
+        console.log("   - InventarioModel:", !!inventarioModel)
+        console.log("   - FarmaciaData:", !!farmaciaData)
     }
 }

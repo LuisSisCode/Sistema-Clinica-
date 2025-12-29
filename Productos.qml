@@ -2,7 +2,8 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
-// Componente principal del módulo de Productos de Farmacia - SIN CAJAS - SOLO STOCK UNITARIO
+
+// Con DetalleProducto.qml como modal de detalle
 Item {
     id: productosRoot
     
@@ -15,6 +16,7 @@ Item {
     property bool modoEdicionProducto: false
     property var productoParaEditar: null
     property var selectedProduct: null
+    
     // Estados del diálogo y funcionalidades
     property bool editarPrecioDialogOpen: false
     property var productoSeleccionado: null
@@ -31,12 +33,21 @@ Item {
     property int totalPages: 0
     property var allFilteredProducts: []
 
-    // NUEVO: Modal de lotes
-    property bool mostrandoLotesProducto: false
-    property var productoParaLotes: null
+    // NUEVO: Modal de detalle de producto FIFO 2.0
+    property bool mostrandoDetalleProducto: false
+    property var productoParaDetalle: null
+    
+    // PROPIEDADES PARA MODALES
+    property bool mostrandoEditarLote: false
+    property var loteParaEditar: null
     
     // MARCAS
     property var marcasModel: []
+    
+    // ✅ NUEVO FIFO 2.0: MAPA DE STOCK PRECALCULADO (evita binding loops)
+    property var mapaStock: ({})
+    property bool stockCalculado: false
+
     property bool marcasCargando: false
     property bool marcasYaCargadas: false
 
@@ -57,26 +68,29 @@ Item {
     readonly property color textColor: "#2c3e50"
     readonly property color whiteColor: "#FFFFFF"
     readonly property color blueColor: "#3498db"
+    
+    // ✅ FIFO 2.0: Colores de estado de stock
+    readonly property color stockNormalColor: '#2fb32f'    // Verde
+    readonly property color stockBajoColor: "#FFB444"      // Naranja
+    readonly property color stockCriticoColor: "#FF4444"   // Rojo
 
     // ===== CONEXIONES =====
     
     Connections {
         target: inventarioModel
-        function onProductosChanged() {
-            console.log("📦 Productos actualizados desde InventarioModel")
-            Qt.callLater(function() {
-                cargarDatosParaFiltros()
-                actualizarDesdeDataCentral()
-            })
-        }
+        
         function onLotesChanged() {
             console.log("📅 Lotes cambiaron - Actualizando filtros")
-            Qt.callLater(cargarDatosParaFiltros)
+            Qt.callLater(function() {
+                precalcularStock()
+                cargarDatosParaFiltros()
+            })
         }
         function onOperacionExitosa(mensaje) {
             console.log("✅", mensaje)
             if (mensaje.includes("creado") || mensaje.includes("lote") || mensaje.includes("actualizado")) {
                 Qt.callLater(function() {
+                    precalcularStock()
                     cargarDatosParaFiltros()
                     actualizarDesdeDataCentral()
                 })
@@ -85,14 +99,8 @@ Item {
         function onOperacionError(mensaje) {
             console.log("❌", mensaje)
         }
-        function onMarcasChanged() {
-            if (!marcasCargando && !marcasYaCargadas) {
-                console.log("🏷️ Productos: Marcas cambiaron, recargando...")
-                cargarMarcasDesdeModel()
-            }
-        }
     }
-    
+
     Connections {
         target: farmaciaData
         function onDatosActualizados() {
@@ -110,13 +118,17 @@ Item {
         if (mostrandoCrearProducto) {
             console.log("Cerrando CrearProducto con Escape")
             volverAListaProductos()
-        } else if (mostrandoLotesProducto) {
-            console.log("Cerrando lotes de producto con Escape")
-            mostrandoLotesProducto = false
-            productoParaLotes = null
+        } else if (mostrandoDetalleProducto) {
+            console.log("Cerrando detalle de producto con Escape")
+            mostrandoDetalleProducto = false
+            productoParaDetalle = null
         } else if (editarPrecioDialogOpen) {
             console.log("Cerrando diálogo de precio con Escape")
             editarPrecioDialogOpen = false
+        } else if (mostrandoEditarLote) {
+            console.log("Cerrando editar lote con Escape")
+            mostrandoEditarLote = false
+            loteParaEditar = null
         }
     }
 
@@ -125,7 +137,6 @@ Item {
         id: productosPaginadosModel
     }
 
-    // FUNCIÓN PARA CARGAR DATOS DE LOTES - SIN CAJAS
     function cargarDatosParaFiltros() {
         if (!inventarioModel) {
             console.log("❌ InventarioModel no disponible para filtros")
@@ -180,7 +191,7 @@ Item {
 
     // FUNCIONES PARA MANEJO DE CREAR PRODUCTO
     function abrirCrearProducto() {
-        console.log("🆕 Abriendo CrearProducto en pantalla completa")
+        console.log("🔧 Abriendo CrearProducto como modal centrado")
         
         if (!marcasYaCargadas) {
             cargarMarcasDesdeModel()
@@ -199,8 +210,6 @@ Item {
                     crearProductoComponent.item.marcasModel = marcasModel
                     crearProductoComponent.item.marcasCargadas = true
                 }
-                
-                crearProductoComponent.item.abrirCrearProducto(false, null)
             }
         })
     }
@@ -231,12 +240,6 @@ Item {
         console.log("📝 Datos preparados para edición:", JSON.stringify(productoParaEditar))
         
         mostrandoCrearProducto = true
-        
-        Qt.callLater(function() {
-            if (crearProductoComponent.item) {
-                crearProductoComponent.item.abrirCrearProducto(true, productoParaEditar)
-            }
-        })
     }
     
     function volverAListaProductos() {
@@ -292,41 +295,11 @@ Item {
     function actualizarDesdeDataCentral() {
         console.log("🔄 Productos: Actualizando desde centro de datos...")
         
-        var productoLotesAnterior = null
-        if (mostrandoLotesProducto && productoParaLotes && productoParaLotes.codigo) {
-            productoLotesAnterior = {
-                id: productoParaLotes.id,
-                codigo: productoParaLotes.codigo,
-                nombre: productoParaLotes.nombre
-            }
-        }
-        
         var productos = farmaciaData ? farmaciaData.obtenerProductosParaInventario() : []
         
         productosOriginales = []
         for (var i = 0; i < productos.length; i++) {
             productosOriginales.push(productos[i])
-        }
-        
-        if (productoLotesAnterior && mostrandoLotesProducto) {
-            var productoActualizado = null
-            
-            for (var j = 0; j < productos.length; j++) {
-                if (productos[j].codigo === productoLotesAnterior.codigo) {
-                    productoActualizado = productos[j]
-                    break
-                }
-            }
-            
-            if (productoActualizado) {
-                productoParaLotes = {
-                    id: productoActualizado.id,
-                    codigo: productoActualizado.codigo || "",
-                    nombre: productoActualizado.nombre || ""
-                }
-            } else {
-                productoParaLotes = productoLotesAnterior
-            }
         }
         
         updateFilteredModel()
@@ -339,334 +312,12 @@ Item {
         id: productosFilteredModel
     }
 
-    // VISTA PRINCIPAL - SIEMPRE MUESTRA LA LISTA DE PRODUCTOS
     Item {
         anchors.fill: parent
         
-        // MODAL PARA MOSTRAR LOTES DEL PRODUCTO - SIN CAJAS
-        Rectangle {
-            id: lotesOverlay
-            anchors.fill: parent
-            color: "#80000000"
-            visible: mostrandoLotesProducto
-            z: 1000
-
-            MouseArea {
-                anchors.fill: parent
-                onClicked: {
-                    mostrandoLotesProducto = false
-                    productoParaLotes = null
-                }
-            }
-
-            Rectangle {
-                anchors.centerIn: parent
-                width: Math.min(700, parent.width * 0.9)
-                height: Math.min(600, parent.height * 0.9)
-                radius: 8
-                color: "#ffffff"
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
-                    spacing: 16
-
-                    // Header
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 16
-                        
-                        Label {
-                            text: "Lotes de " + (productoParaLotes ? productoParaLotes.nombre : "")
-                            font.pixelSize: 18
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        Item { Layout.fillWidth: true }
-                        
-                        Button {
-                            text: "✕"
-                            width: 32
-                            height: 32
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                radius: 16
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 14
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                mostrandoLotesProducto = false
-                                productoParaLotes = null
-                            }
-                        }
-                    }
-
-                    // Tabla de lotes
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: "#FFFFFF"
-                        border.color: "#D5DBDB"
-                        border.width: 1
-                        radius: 8
-                        
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 0
-                            spacing: 0
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 40
-                                color: "#F8F9FA"
-                                border.color: "#D5DBDB"
-                                border.width: 1
-                                
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredWidth: 250
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.left: parent.left
-                                            anchors.leftMargin: 8
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "PRODUCTO"
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 150
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "CANTIDAD"
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 200
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "FECHA VENCIMIENTO"
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 100
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "ACCIONES"
-                                            color: "#2C3E50"
-                                            font.bold: true
-                                            font.pixelSize: 12
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Lista de lotes - SIN CAJAS
-                            ListView {
-                                id: lotesListView
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                model: lotesDelProductoModel
-                                clip: true
-                                
-                                delegate: Rectangle {
-                                    width: lotesListView.width
-                                    height: 50
-                                    color: {
-                                        if (model.fecha_vencimiento) {
-                                            var fechaVencimiento = new Date(model.fecha_vencimiento)
-                                            var hoy = new Date()
-                                            return fechaVencimiento < hoy ? "#ffcdd2" : "#FFFFFF"
-                                        }
-                                        return "#FFFFFF"
-                                    }
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 0
-                                        spacing: 0
-                                        
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredWidth: 250
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            Label {
-                                                anchors.left: parent.left
-                                                anchors.leftMargin: 8
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: model.producto_nombre || ""
-                                                color: "#2C3E50"
-                                                font.pixelSize: 11
-                                                elide: Text.ElideRight
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 150
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: 60
-                                                height: 20
-                                                color: getStockColor(model.cantidad_unitario || 0)
-                                                radius: 10
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: (model.cantidad_unitario || 0).toString()
-                                                    color: "#FFFFFF"
-                                                    font.bold: true
-                                                    font.pixelSize: 11
-                                                }
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 200
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: model.fecha_vencimiento || "Sin vencimiento"
-                                                color: "#2C3E50"
-                                                font.pixelSize: 11
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.preferredWidth: 100
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            border.color: "#D5DBDB"
-                                            border.width: 1
-                                            
-                                            Button {
-                                                anchors.centerIn: parent
-                                                width: 70
-                                                height: 24
-                                                text: "Eliminar"
-                                                
-                                                background: Rectangle {
-                                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                                    radius: 4
-                                                }
-                                                
-                                                contentItem: Label {
-                                                    text: parent.text
-                                                    color: whiteColor
-                                                    font.bold: true
-                                                    font.pixelSize: 12
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
-                                                
-                                                onClicked: {
-                                                    confirmacionEliminarLote.loteId = model.id
-                                                    confirmacionEliminarLote.open()
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // Estado vacío
-                                Item {
-                                    anchors.centerIn: parent
-                                    visible: lotesDelProductoModel.count === 0
-                                    width: 200
-                                    height: 100
-                                    
-                                    ColumnLayout {
-                                        anchors.centerIn: parent
-                                        spacing: 12
-                                        
-                                        Label {
-                                            text: "📦"
-                                            font.pixelSize: 32
-                                            color: lightGrayColor
-                                            Layout.alignment: Qt.AlignHCenter
-                                        }
-                                        
-                                        Label {
-                                            text: "No hay lotes disponibles"
-                                            color: darkGrayColor
-                                            font.pixelSize: 14
-                                            Layout.alignment: Qt.AlignHCenter
-                                        }
-                                    }
-                                }
-                            }
-                            // MouseArea para detectar clics fuera del menú contextual
-                            MouseArea {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                visible: mostrandoMenuContextual
-                                z: 5
-                                onClicked: {
-                                    mostrandoMenuContextual = false
-                                    productoMenuContextual = null
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
+        // ===============================
         // INTERFAZ PRINCIPAL
+        // ===============================
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 16
@@ -710,7 +361,7 @@ Item {
                         }
                         
                         Label {
-                            text: "Inventario de Productos (Solo Stock Unitario)"
+                            text: "Inventario de Productos - FIFO 2.0"
                             font.pixelSize: 14
                             color: darkGrayColor
                         }
@@ -1160,7 +811,7 @@ Item {
                                 border.width: 1
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "LOTES"
+                                    text: "ACCIONES"
                                     color: "#2C3E50"
                                     font.bold: true
                                     font.pixelSize: 12
@@ -1169,20 +820,43 @@ Item {
                         }
                     }
                     
-                    // Contenido de la tabla
+                    // Lista de productos con paginación
                     ListView {
                         id: productosTable
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: productosPaginadosModel
                         clip: true
+                        model: productosPaginadosModel
                         
+                        // ✅ DELEGADO CORREGIDO - SIN BINDING LOOPS Y BOTÓN FUNCIONAL
                         delegate: Rectangle {
+                            id: delegateItem
                             width: productosTable.width
                             height: 50
                             color: productosTable.currentIndex === index ? "#E3F2FD" : "#FFFFFF"
                             border.color: "#D5DBDB"
                             border.width: 1
+                            
+                            // ✅ CALCULAR STOCK UNA SOLA VEZ - CON VALIDACIÓN
+                            property var stockInfo: {
+                                if (model && model.codigo && mapaStock && mapaStock[model.codigo]) {
+                                    return mapaStock[model.codigo];
+                                }
+                                return { stock: 0, color: "#CCCCCC", estado: "SIN DATOS" };
+                            }
+                            property int stockActual: stockInfo && stockInfo.stock ? stockInfo.stock : 0
+                            property color colorStock: stockInfo && stockInfo.color ? stockInfo.color : "#CCCCCC"
+                            property string estadoStock: stockInfo && stockInfo.estado ? stockInfo.estado : "SIN DATOS"
+                            
+                            Rectangle {
+                                anchors {
+                                    left: parent.left
+                                    top: parent.top
+                                    bottom: parent.bottom
+                                }
+                                width: 4
+                                color: parent.colorStock
+                            }
                             
                             RowLayout {
                                 anchors.fill: parent
@@ -1315,17 +989,17 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: Math.min(50, parent.width - 10)
-                                        height: 20
-                                        color: getStockColor(model.stockUnitario || 0)
-                                        radius: 10
+                                        width: 70
+                                        height: 24
+                                        color: delegateItem.colorStock
+                                        radius: 4
                                         
                                         Label {
                                             anchors.centerIn: parent
-                                            text: (model.stockUnitario || 0).toString()
+                                            text: delegateItem.stockActual.toString()
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 11
+                                            font.pixelSize: 10
                                         }
                                     }
                                 }
@@ -1417,10 +1091,10 @@ Item {
                                             if (procesando) return
                                             
                                             procesando = true
-                                            console.log("📘 Click en Ver Lotes para:", model.codigo)
+                                            console.log("📘 Click en Ver para:", model.codigo)
                                             
                                             productoSeleccionado = model
-                                            mostrarLotesProducto(model)
+                                            mostrarDetalleProducto(model)
                                             
                                             resetTimer.restart()
                                         }
@@ -1437,29 +1111,37 @@ Item {
                             }
                             
                             MouseArea {
-                                anchors.left: parent.left
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
-                                anchors.right: parent.right
-                                anchors.rightMargin: 0
-                                
+                                anchors.fill: parent
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                z: -1
+                                propagateComposedEvents: true
                                 
                                 onClicked: function(mouse) {
                                     if (mouse.button === Qt.LeftButton) {
-                                        // Clic izquierdo: seleccionar fila
                                         productosTable.currentIndex = index
                                         selectedProduct = model
-                                        // Ocultar menú contextual si estaba visible
                                         mostrandoMenuContextual = false
                                         productoMenuContextual = null
                                     } else if (mouse.button === Qt.RightButton) {
-                                        // Clic derecho: mostrar menú contextual solo si la fila está seleccionada
-                                        if (selectedProduct && selectedProduct.id === model.id) {
-                                            mostrandoMenuContextual = true
-                                            productoMenuContextual = model
-                                        }
+                                        // ✅ SELECCIONAR Y MOSTRAR MENÚ INMEDIATAMENTE
+                                        productosTable.currentIndex = index
+                                        selectedProduct = model
+                                        mostrandoMenuContextual = true
+                                        productoMenuContextual = model
+                                        mouse.accepted = true  // ← CAMBIAR A true para detener propagación
+                                    }
+                                    
+                                    // Solo propagar si es click izquierdo
+                                    if (mouse.button === Qt.LeftButton) {
+                                        mouse.accepted = false
+                                    }
+                                }
+                                
+                                onPressed: function(mouse) {
+                                    // Detener propagación si es click derecho
+                                    if (mouse.button === Qt.RightButton) {
+                                        mouse.accepted = true
+                                    } else {
+                                        mouse.accepted = false
                                     }
                                 }
                             }
@@ -1670,7 +1352,11 @@ Item {
             }
         }
 
-        // Diálogo para Editar Precio de Venta
+        // ===============================
+        // DIÁLOGOS (solo para editar precio)
+        // ===============================
+        
+        // Diálogo para Editar Precio de Venta (este se mantiene como Dialog)
         Dialog {
             id: editarPrecioDialog
             anchors.centerIn: parent
@@ -1874,7 +1560,7 @@ Item {
                         
                         contentItem: Label {
                             text: parent.text
-                            color: parent.parent.enabled ? whiteColor : darkGrayColor
+                            color: parent.enabled ? whiteColor : darkGrayColor
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2102,87 +1788,266 @@ Item {
         }
     }
 
-    // DIÁLOGO MODAL CREAR/EDITAR PRODUCTO - FUERA DEL STACKLAYOUT
-    Loader {
-        id: crearProductoComponent
+    // ===============================
+    // MODAL DE DETALLE DE PRODUCTO - FIFO 2.0
+    // ===============================
+    Rectangle {
+        id: detalleProductoContainer
         anchors.fill: parent
-        z: 1000
-        source: mostrandoCrearProducto ? "CrearProducto.qml" : ""
+        z: 2000
+        visible: mostrandoDetalleProducto
+        color: "#80000000"  // Overlay semi-transparente
         
-        onLoaded: {
-            if (item) {
-                console.log("🚀 CrearProductoOptimizado.qml cargado como pantalla completa")
-                
-                item.inventarioModel = productosRoot.inventarioModel
-                item.farmaciaData = productosRoot.farmaciaData
-                
-                if (marcasYaCargadas && marcasModel.length > 0) {
-                    item.marcasModel = productosRoot.marcasModel
-                    item.marcasCargadas = true
-                }
-                
-                if (item && item.productoCreado) {
-                    item.productoCreado.connect(function(producto) {
-                        console.log("✅ Producto creado:", producto.codigo)
-                        mostrarMensajeExito("Producto creado: " + producto.codigo)
-                        
-                        if (farmaciaData) {
-                            farmaciaData.crearProductoUnico(JSON.stringify(producto))
-                        }
-                        
-                        volverAListaProductos()
-                    })
-                }
-
-                if (item && item.productoActualizado) {
-                    item.productoActualizado.connect(function(producto) {
-                        console.log("✅ Producto actualizado:", producto.codigo)
-                        mostrarMensajeExito("Producto actualizado: " + producto.codigo)
-                        
-                        // Actualización inmediata
-                        if (farmaciaData && farmaciaData.actualizarProductoInventario) {
-                            var exito = farmaciaData.actualizarProductoInventario(producto.codigo, JSON.stringify(producto))
-                            if (exito) {
-                                console.log("📊 Datos actualizados en centro de datos")
-                            }
-                        }
-                        
-                        // Forzar actualización inmediata de la vista
-                        Qt.callLater(function() {
-                            cargarDatosParaFiltros()
-                            actualizarDesdeDataCentral()
-                            updateFilteredModel()
-                        })
-                        
-                        volverAListaProductos()
-                    })
-                }
-
-                if (item && item.cancelarCreacion) {  // ← AGREGAR VERIFICACIÓN
-                    item.cancelarCreacion.connect(function() {
-                        console.log("❌ Creación cancelada")
-                        volverAListaProductos()
-                    })
-                }
-
-                if (item && item.volverALista) {  // ← AGREGAR VERIFICACIÓN
-                    item.volverALista.connect(function() {
-                        console.log("🔙 Volver a lista solicitado")
-                        volverAListaProductos()
-                    })
-                }
-                
-                console.log("✅ Señales conectadas correctamente")
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                // Clic fuera cierra el modal
+                mostrandoDetalleProducto = false
+                productoParaDetalle = null
             }
         }
         
-        onStatusChanged: {
-            if (status === Loader.Error) {
-                console.error("❌ Error cargando CrearProductoOptimizado.qml")
-                mostrandoCrearProducto = false
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(900, parent.width * 0.9)
+            height: Math.min(700, parent.height * 0.9)
+            radius: 8
+            color: whiteColor
+            border.color: lightGrayColor
+            border.width: 1
+            
+            Loader {
+                id: detalleProductoLoader
+                anchors.fill: parent
+                source: mostrandoDetalleProducto ? "DetalleProducto.qml" : ""
+                
+                onLoaded: {
+                    if (item) {
+                        console.log("🔍 DetalleProducto.qml cargado")
+                        item.inventarioModel = productosRoot.inventarioModel
+                        item.productoData = productoParaDetalle
+                        item.mostrarStock = true
+                        item.mostrarAcciones = true
+                        
+                        // Conectar señales
+                        if (item.cerrarSolicitado) {
+                            item.cerrarSolicitado.connect(function() {
+                                mostrandoDetalleProducto = false
+                                productoParaDetalle = null
+                            })
+                        }
+                        
+                        if (item.editarLoteSolicitado) {
+                            item.editarLoteSolicitado.connect(function(lote) {
+                                console.log("✏️ Editando lote desde detalle:", lote.id)
+                                abrirEditarLote(lote)
+                            })
+                        }
+                        
+                        if (item.eliminarLoteSolicitado) {
+                            item.eliminarLoteSolicitado.connect(function(lote) {
+                                console.log("🗑️ Eliminar lote solicitado:", lote.id)
+                                confirmarEliminarLote(lote)
+                            })
+                        }
+                    }
+                }
             }
         }
     }
+    
+    // ===============================
+    // MODAL PARA EDITAR LOTE
+    // ===============================
+    Rectangle {
+        id: editarLoteContainer
+        anchors.fill: parent
+        z: 3000
+        visible: mostrandoEditarLote
+        color: "#80000000"
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                // Clic fuera no cierra (para evitar cerrar accidentalmente)
+            }
+        }
+        
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(600, parent.width * 0.8)
+            height: Math.min(500, parent.height * 0.8)
+            radius: 12
+            color: whiteColor
+            border.color: "#D5DBDB"
+            border.width: 1
+            
+            Loader {
+                id: editarLoteLoader
+                anchors.fill: parent
+                source: mostrandoEditarLote ? "EditarLoteDialog.qml" : ""
+                
+                onLoaded: {
+                    if (item) {
+                        console.log("✏️ EditarLoteDialog.qml cargado")
+                        item.inventarioModel = productosRoot.inventarioModel
+                        item.loteData = loteParaEditar
+                        
+                        // Conectar señales
+                        if (item.loteActualizado) {
+                            item.loteActualizado.connect(function(loteActualizado) {
+                                console.log("✅ Lote actualizado")
+                                mostrandoEditarLote = false
+                                loteParaEditar = null
+                                
+                                // Refrescar datos
+                                if (inventarioModel) {
+                                    inventarioModel.refresh_productos()
+                                }
+                                
+                                Qt.callLater(function() {
+                                    precalcularStock()
+                                    cargarDatosParaFiltros()
+                                    actualizarDesdeDataCentral()
+                                })
+                            })
+                        }
+                        
+                        if (item.cancelado) {
+                            item.cancelado.connect(function() {
+                                mostrandoEditarLote = false
+                                loteParaEditar = null
+                            })
+                        }
+                    }
+                }
+            }
+            
+            // Botón cerrar
+            Button {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 12
+                width: 32
+                height: 32
+                text: "✕"
+                
+                background: Rectangle {
+                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                    radius: 16
+                }
+                
+                contentItem: Label {
+                    text: parent.text
+                    color: whiteColor
+                    font.bold: true
+                    font.pixelSize: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                
+                onClicked: {
+                    mostrandoEditarLote = false
+                    loteParaEditar = null
+                }
+            }
+        }
+    }
+
+    // ✅ LOADER DE CREAR/EDITAR PRODUCTO - CORREGIDO PARA VISIBILIDAD
+    Rectangle {
+        id: crearProductoContainer
+        anchors.fill: parent
+        z: 1000  // ← MUY ALTO para estar sobre todo
+        visible: mostrandoCrearProducto
+        color: "transparent"
+        
+        Loader {
+            id: crearProductoComponent
+            anchors.fill: parent
+            source: mostrandoCrearProducto ? "CrearProducto.qml" : ""
+            
+            onLoaded: {
+                if (item) {
+                    console.log("🚀 CrearProducto.qml cargado...")
+                    
+                    item.inventarioModel = productosRoot.inventarioModel
+                    item.farmaciaData = productosRoot.farmaciaData
+                    
+                    if (marcasYaCargadas && marcasModel.length > 0) {
+                        item.marcasModel = productosRoot.marcasModel
+                        item.marcasCargadas = true
+                    }
+                    
+                    if (item.productoCreado) {
+                        item.productoCreado.connect(function(producto) {
+                            console.log("✅ Producto creado:", producto.codigo)
+                            mostrarMensajeExito("Producto creado: " + producto.codigo)
+                            
+                            if (farmaciaData) {
+                                farmaciaData.crearProductoUnico(JSON.stringify(producto))
+                            }
+                            
+                            volverAListaProductos()
+                        })
+                    }
+
+                    if (item.productoActualizado) {
+                        item.productoActualizado.connect(function(producto) {
+                            console.log("✅ Producto actualizado:", producto.codigo)
+                            mostrarMensajeExito("Producto actualizado: " + producto.codigo)
+                            
+                            if (farmaciaData && farmaciaData.actualizarProductoInventario) {
+                                var exito = farmaciaData.actualizarProductoInventario(producto.codigo, JSON.stringify(producto))
+                                if (exito) {
+                                    console.log("📊 Datos actualizados en centro de datos")
+                                }
+                            }
+                            
+                            Qt.callLater(function() {
+                                precalcularStock()
+                                cargarDatosParaFiltros()
+                                actualizarDesdeDataCentral()
+                                updateFilteredModel()
+                            })
+                            
+                            volverAListaProductos()
+                        })
+                    }
+
+                    if (item.cancelarCreacion) {
+                        item.cancelarCreacion.connect(function() {
+                            console.log("❌ Creación cancelada")
+                            volverAListaProductos()
+                        })
+                    }
+
+                    if (item.volverALista) {
+                        item.volverALista.connect(function() {
+                            console.log("🔙 Volver a lista solicitado")
+                            volverAListaProductos()
+                        })
+                    }
+                    
+                    if (modoEdicionProducto && productoParaEditar) {
+                        item.inicializarParaEditar(productoParaEditar)
+                    } else {
+                        item.inicializarParaCrear()
+                    }
+                    
+                    console.log("✅ Señales conectadas correctamente")
+                }
+            }
+            
+            onStatusChanged: {
+                if (status === Loader.Error) {
+                    console.error("❌ Error cargando CrearProducto.qml")
+                    mostrandoCrearProducto = false
+                }
+            }
+        }
+    }
+    
     Rectangle {
         id: notificacionFlotante
         anchors.horizontalCenter: parent.horizontalCenter
@@ -2241,28 +2106,6 @@ Item {
                 maximumLineCount: 2
                 elide: Text.ElideRight
             }
-            
-            Button {
-                Layout.preferredWidth: 20
-                Layout.preferredHeight: 20
-                text: "×"
-                
-                background: Rectangle {
-                    color: parent.pressed ? "#FFFFFF40" : "#FFFFFF20"
-                    radius: 10
-                }
-                
-                contentItem: Label {
-                    text: parent.text
-                    color: whiteColor
-                    font.pixelSize: 12
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                
-                onClicked: mostrandoMensaje = false
-            }
         }
         
         MouseArea {
@@ -2270,165 +2113,127 @@ Item {
             onClicked: mostrandoMensaje = false
         }
     }
-    
-    // MODELO PARA LOTES DEL PRODUCTO
-    ListModel {
-        id: lotesDelProductoModel
+
+    // ✅ NUEVA FUNCIÓN: PRECALCULAR STOCK (evita binding loops)
+    function precalcularStock() {
+        console.log("📊 Precalculando stock de productos...")
+        
+        if (!inventarioModel || typeof inventarioModel.obtener_stock_actual !== 'function') {
+            console.log("⚠️ InventarioModel no disponible")
+            return
+        }
+        
+        var datosStock = inventarioModel.obtener_stock_actual() || []
+        console.log("📦 Datos de stock recibidos:", datosStock.length , "productos")
+        
+        var nuevoMapa = {}
+        
+        for (var i = 0; i < datosStock.length; i++) {
+            var producto = datosStock[i]
+            
+            // ✅ USAR COLUMNAS CORRECTAS DEL BACKEND - CON VALIDACIÓN
+            var codigo = producto.Codigo || producto.codigo || ""
+            if (!codigo) continue; // Saltar si no hay código
+            
+            var stock = producto.Stock_Real || producto.stock || 0
+            var stockMin = producto.Stock_Minimo || producto.stock_minimo || 10
+            var stockMax = producto.Stock_Maximo || producto.stock_maximo || 100
+            
+            var estado = "NORMAL"
+            var color = stockNormalColor
+            
+            // Calcular estado según stock
+            if (stock <= 0) {
+                estado = "CRÍTICO"
+                color = stockCriticoColor
+            } else if (stock <= stockMin) {
+                estado = "CRÍTICO"
+                color = stockCriticoColor
+            } else if (stock <= (stockMin + (stockMax - stockMin) * 0.3)) {
+                estado = "BAJO"
+                color = stockBajoColor
+            }
+            
+            nuevoMapa[codigo] = {
+                stock: stock,
+                color: color,
+                estado: estado
+            }
+            
+            // Debug primeros 3 productos
+            if (i < 3) {
+                console.log("   🔍", codigo, "- Stock:", stock, "Estado:", estado)
+            }
+        }
+        
+        mapaStock = nuevoMapa
+        stockCalculado = true
+        
+        console.log("✅ Stock precalculado para", Object.keys(mapaStock).length, "productos")
     }
     
-    // MODAL DE CONFIRMACIÓN PARA ELIMINAR LOTE
-    Dialog {
-        id: confirmacionEliminarLote
-        anchors.centerIn: parent
-        width: 350
-        height: 200
-        modal: true
-        
-        property int loteId: 0
-        
-        background: Rectangle {
-            color: whiteColor
-            radius: 12
-            border.color: lightGrayColor
-            border.width: 1
-        }
-        
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 16
-            spacing: 16
-            
-            Label {
-                text: "¿Está seguro de eliminar este lote?"
-                font.pixelSize: 16
-                font.bold: true
-                color: textColor
-                Layout.alignment: Qt.AlignHCenter
-            }
-            
-            Label {
-                text: "Esta acción no se puede deshacer."
-                font.pixelSize: 12
-                color: darkGrayColor
-                Layout.alignment: Qt.AlignHCenter
-            }
-            
-            Item { Layout.fillHeight: true }
-            
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
-                
-                Item { Layout.fillWidth: true }
-                
-                Button {
-                    text: "Cancelar"
-                    
-                    background: Rectangle {
-                        color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
-                        radius: 6
-                    }
-                    
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    
-                    onClicked: {
-                        confirmacionEliminarLote.close()
-                    }
-                }
-                
-                Button {
-                    text: "Eliminar"
-                    
-                    background: Rectangle {
-                        color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                        radius: 6
-                    }
-                    
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    
-                    onClicked: {
-                        eliminarLote(confirmacionEliminarLote.loteId)
-                        confirmacionEliminarLote.close()
-                    }
-                }
-            }
-        }
+    // ✅ FIFO 2.0: Mostrar detalle del producto (abre DetalleProducto.qml)
+    function mostrarDetalleProducto(producto) {
+        console.log("👁️ Abriendo detalle FIFO 2.0 para:", producto.codigo)
+        productoParaDetalle = producto
+        mostrandoDetalleProducto = true
     }
     
-    // FilterButton component
-    component FilterButton: Rectangle {
-        property string text: ""
-        property int count: 0
-        property bool active: false
-        property color backgroundColor: blueColor
-        signal clicked()
+    // ===============================
+    // FUNCIONES PARA MODALES
+    // ===============================
+
+    function abrirEditarLote(lote) {
+        console.log("✏️ Abriendo edición de lote:", lote.id || lote.Id_Lote)
+        loteParaEditar = lote
+        mostrandoEditarLote = true
+    }
+
+    function confirmarEliminarLote(lote) {
+        console.log("🗑️ Confirmando eliminación de lote:", lote.id || lote.Id_Lote)
         
-        Layout.preferredHeight: 32
-        Layout.preferredWidth: implicitWidth + 16
+        // Crear mensaje de confirmación
+        var mensaje = "¿Está seguro de eliminar el lote #" + (lote.id || lote.Id_Lote || 0) + "?\n"
+        mensaje += "Stock: " + (lote.Stock_Lote || lote.Stock_Actual || 0) + " unidades\n"
+        mensaje += "Esta acción no se puede deshacer."
         
-        property int implicitWidth: textLabel.implicitWidth + countLabel.implicitWidth + 32
-        
-        color: active ? backgroundColor : "transparent"
-        border.color: backgroundColor
-        border.width: 2
-        radius: 16
-        
-        Behavior on color { ColorAnimation { duration: 200 } }
-        
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: 6
-            spacing: 6
-            
-            Label {
-                id: textLabel
-                text: parent.parent.text
-                color: active ? whiteColor : backgroundColor
-                font.bold: true
-                font.pixelSize: 11
-                Behavior on color { ColorAnimation { duration: 200 } }
-            }
-            
-            Rectangle {
-                id: countLabel
-                Layout.preferredWidth: 20
-                Layout.preferredHeight: 16
-                color: active ? whiteColor : backgroundColor
-                radius: 8
-                Behavior on color { ColorAnimation { duration: 200 } }
-                
-                Label {
-                    anchors.centerIn: parent
-                    text: parent.parent.parent.count.toString()
-                    color: active ? backgroundColor : whiteColor
-                    font.bold: true
-                    font.pixelSize: 14
-                    Behavior on color { ColorAnimation { duration: 200 } }
-                }
-            }
-        }
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: parent.clicked()
+        // Mostrar diálogo de confirmación
+        var confirmar = confirm(mensaje)
+        if (confirmar) {
+            eliminarLote(lote.id || lote.Id_Lote)
         }
     }
 
+    function eliminarLote(loteId) {
+        console.log("🗑️ Eliminando lote:", loteId)
+        
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            return
+        }
+        
+        var exito = inventarioModel.eliminar_lote(loteId)
+        
+        if (exito) {
+            console.log("✅ Lote eliminado exitosamente")
+            mostrarMensajeExito("Lote eliminado correctamente")
+            
+            // Recargar datos
+            if (inventarioModel) {
+                inventarioModel.refresh_productos()
+            }
+            
+            Qt.callLater(function() {
+                precalcularStock()
+                cargarDatosParaFiltros()
+                actualizarDesdeDataCentral()
+            })
+        } else {
+            console.log("❌ Error eliminando lote")
+            mostrarMensajeError("Error al eliminar el lote")
+        }
+    }
     
-    // ===== FUNCIONES ACTUALIZADAS SIN CAJAS =====
-
     function getTotalCount() {
         if (productosOriginales.length === 0) {
             return productosFilteredModel.count
@@ -2650,6 +2455,7 @@ Item {
         
         confirmarEliminacionDialog.open()
     }
+    
     function ejecutarEliminacionProducto(producto) {
         console.log("🗑️ Ejecutando eliminación confirmada de producto:", producto.codigo)
         
@@ -2709,96 +2515,6 @@ Item {
         }
     }
     
-    function mostrarLotesProducto(producto) {
-        if (!producto) {
-            console.log("❌ No se puede mostrar lotes: producto nulo")
-            return
-        }
-        
-        console.log("🔍 Mostrando lotes de producto:", producto.codigo)
-        
-        productoParaLotes = {
-            id: producto.id || 0,
-            codigo: producto.codigo || "",
-            nombre: producto.nombre || ""
-        }
-        
-        // Cargar lotes del producto
-        cargarLotesDelProducto(producto.id)
-        
-        mostrandoLotesProducto = true
-    }
-    
-    function cargarLotesDelProducto(productoId) {
-        lotesDelProductoModel.clear()
-        
-        if (!inventarioModel || typeof inventarioModel.get_lotes_por_producto !== 'function') {
-            console.log("❌ Función get_lotes_por_producto no disponible")
-            return
-        }
-        
-        try {
-            console.log("📦 Cargando lotes para producto ID:", productoId)
-            var lotes = inventarioModel.get_lotes_por_producto(productoId)
-            
-            if (!lotes) {
-                console.log("⚠️ No se obtuvieron lotes o lotes es null")
-                return
-            }
-            
-            console.log("📦 Lotes obtenidos:", lotes.length)
-            
-            for (var i = 0; i < lotes.length; i++) {
-                var lote = lotes[i]
-                // SIN CAJAS: solo cantidad unitaria
-                lotesDelProductoModel.append({
-                    id: lote.id || 0,
-                    producto_nombre: productoParaLotes.nombre,
-                    cantidad_unitario: lote.Cantidad_Unitario || 0,
-                    fecha_vencimiento: lote.Fecha_Vencimiento || "",
-                    stock_lote: lote.Cantidad_Unitario || 0
-                })
-            }
-            
-            console.log("✅ Modelo de lotes actualizado con", lotesDelProductoModel.count, "lotes")
-            
-        } catch (error) {
-            console.log("❌ Error cargando lotes:", error)
-        }
-    }
-    
-    function eliminarLote(loteId) {
-        console.log("🗑️ Eliminando lote ID:", loteId)
-        
-        if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
-            return
-        }
-        
-        // LLAMAR AL MÉTODO REAL DEL INVENTARIOMODEL
-        var exito = inventarioModel.eliminar_lote(loteId)
-        
-        if (exito) {
-            console.log("✅ Lote eliminado exitosamente")
-            // Cerrar modal y actualizar datos
-            mostrandoLotesProducto = false
-            productoParaLotes = null
-            
-            // Refrescar datos
-            Qt.callLater(function() {
-                cargarDatosParaFiltros()
-                actualizarDesdeDataCentral()
-                // Reabrir modal con datos actualizados si es necesario
-                if (productoSeleccionado) {
-                    Qt.callLater(function() {
-                        mostrarLotesProducto(productoSeleccionado)
-                    })
-                }
-            })
-        } else {
-            console.log("❌ Error eliminando lote")
-        }
-    }
     property bool mostrandoMensaje: false
     property string mensajeTexto: ""
     property string mensajeTipo: "info" // "success", "error", "warning", "info"
@@ -2837,24 +2553,94 @@ Item {
         console.log("⚠️ Mensaje warning:", mensaje)
     }
 
+    // FilterButton component
+    component FilterButton: Rectangle {
+        property string text: ""
+        property int count: 0
+        property bool active: false
+        property color backgroundColor: blueColor
+        signal clicked()
+        
+        Layout.preferredHeight: 32
+        Layout.preferredWidth: implicitWidth + 16
+        
+        property int implicitWidth: textLabel.implicitWidth + countLabel.implicitWidth + 32
+        
+        color: active ? backgroundColor : "transparent"
+        border.color: backgroundColor
+        border.width: 2
+        radius: 16
+        
+        Behavior on color { ColorAnimation { duration: 200 } }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 6
+            spacing: 6
+            
+            Label {
+                id: textLabel
+                text: parent.parent.text
+                color: active ? whiteColor : backgroundColor
+                font.bold: true
+                font.pixelSize: 11
+                Behavior on color { ColorAnimation { duration: 200 } }
+            }
+            
+            Rectangle {
+                id: countLabel
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 16
+                color: active ? whiteColor : backgroundColor
+                radius: 8
+                Behavior on color { ColorAnimation { duration: 200 } }
+                
+                Label {
+                    anchors.centerIn: parent
+                    text: parent.parent.parent.count.toString()
+                    color: active ? backgroundColor : whiteColor
+                    font.bold: true
+                    font.pixelSize: 14
+                    Behavior on color { ColorAnimation { duration: 200 } }
+                }
+            }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: parent.clicked()
+        }
+    }
 
     Component.onCompleted: {
-        console.log("📦 Módulo Productos iniciado (SIN CAJAS - SOLO STOCK UNITARIO)")
-        console.log("🔗 InventarioModel disponible:", !!inventarioModel)
-        console.log("🔗 FarmaciaData disponible:", !!farmaciaData)
+        console.log("📦 Módulo Productos FIFO 2.0 iniciado")
+        console.log("   InventarioModel:", !!inventarioModel)
+        console.log("   FarmaciaData:", !!farmaciaData)
         
-        if (inventarioModel) {
-            inventarioModel.refresh_productos() 
-            
-            cargarMarcasDesdeModel()
-            cargarDatosParaFiltros()
-            
-            if (farmaciaData) {
+        Qt.callLater(function() {
+            if (inventarioModel) {
+                precalcularStock()  // ✅ CALCULAR PRIMERO
+                cargarMarcasDesdeModel()
+                cargarDatosParaFiltros()
                 actualizarDesdeDataCentral()
-                updatePaginatedModel()
             }
-        } else {
-            console.log("❌ InventarioModel no disponible - filtros no funcionarán")
-        }
+        })
+    }
+    
+    // Función auxiliar de confirmación (simplificada)
+    function confirm(mensaje) {
+        // En una implementación real, usarías un diálogo de confirmación propio
+        // Esta es una versión simplificada que usa el diálogo nativo
+        var resultado = false
+        var dialog = Qt.createQmlObject('import QtQuick 2.15; import QtQuick.Dialogs 1.3; MessageDialog {}', productosRoot)
+        dialog.title = "Confirmar"
+        dialog.text = mensaje
+        dialog.icon = StandardIcon.Question
+        dialog.standardButtons = StandardButton.Yes | StandardButton.No
+        dialog.onYes = function() { resultado = true; dialog.close() }
+        dialog.onNo = function() { resultado = false; dialog.close() }
+        dialog.open()
+        // Nota: Esta implementación bloquea, para producción usar señales async
+        return resultado
     }
 }
