@@ -1017,6 +1017,35 @@ class ProductoRepository(BaseRepository):
                 params = ()
             
             lotes = self._execute_query(query, params, use_cache=False)
+            
+            # ✅ CONVERTIR FECHAS A STRING PARA QML
+            for lote in lotes:
+                # Convertir Fecha_Vencimiento
+                if lote.get('Fecha_Vencimiento'):
+                    try:
+                        fecha = lote['Fecha_Vencimiento']
+                        if hasattr(fecha, 'strftime'):
+                            lote['Fecha_Vencimiento'] = fecha.strftime('%Y-%m-%d')
+                        else:
+                            lote['Fecha_Vencimiento'] = str(fecha)
+                    except:
+                        lote['Fecha_Vencimiento'] = ""
+                else:
+                    lote['Fecha_Vencimiento'] = ""
+                
+                # Convertir Fecha_Compra
+                if lote.get('Fecha_Compra'):
+                    try:
+                        fecha = lote['Fecha_Compra']
+                        if hasattr(fecha, 'strftime'):
+                            lote['Fecha_Compra'] = fecha.strftime('%Y-%m-%d')
+                        else:
+                            lote['Fecha_Compra'] = str(fecha)
+                    except:
+                        lote['Fecha_Compra'] = ""
+                else:
+                    lote['Fecha_Compra'] = ""
+            
             print(f"📦 Lotes activos obtenidos: {len(lotes)} lotes - Sistema FIFO 2.0")
             return lotes
             

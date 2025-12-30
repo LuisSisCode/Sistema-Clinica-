@@ -75,7 +75,6 @@ class InventarioModel(QObject):
         # Timer para actualización automática
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update)
-        self.update_timer.start(30000)  # 30 segundos
         
         # ✅ NUEVO: Timer de debounce para evitar signal loops
         self._debounce_timer = QTimer()

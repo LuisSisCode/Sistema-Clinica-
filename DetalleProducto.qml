@@ -902,8 +902,29 @@ Rectangle {
                                                     }
                                                     
                                                     onClicked: {
-                                                        console.log("Editando lote:", loteActual.Id_Lote || loteActual.id)
-                                                        editarLoteSolicitado(loteActual)
+                                                        // ✅ Capturar el objeto lote en una variable local
+                                                        var loteParaEditar = {
+                                                            "Id_Lote": loteActual.Id_Lote || loteActual.id,
+                                                            "id": loteActual.Id_Lote || loteActual.id,
+                                                            "Stock_Lote": loteActual.Stock_Lote || loteActual.Stock_Actual,
+                                                            "Stock": loteActual.Stock_Lote || loteActual.Stock_Actual,
+                                                            "Precio_Compra": loteActual.Precio_Compra,
+                                                            "PrecioCompra": loteActual.Precio_Compra,
+                                                            "Fecha_Vencimiento": loteActual.Fecha_Vencimiento || "",
+                                                            "FechaVencimiento": loteActual.Fecha_Vencimiento || "",
+                                                            "Cantidad_Inicial": loteActual.Cantidad_Inicial || loteActual.Stock_Lote,
+                                                            "Producto_Nombre": loteActual.Producto_Nombre || productoData.nombre,
+                                                            "Producto": loteActual.Producto_Nombre || productoData.nombre,
+                                                            "Fecha_Compra": loteActual.Fecha_Compra || "",
+                                                            "Estado_Lote": loteActual.Estado_Lote || "",
+                                                            "Estado_Vencimiento": loteActual.Estado_Vencimiento || "",
+                                                            "Dias_para_Vencer": loteActual.Dias_para_Vencer
+                                                        }
+                                                        
+                                                        console.log("Editando lote:", loteParaEditar.Id_Lote)
+                                                        console.log("📦 Datos del lote:", JSON.stringify(loteParaEditar))
+                                                        
+                                                        editarLoteSolicitado(loteParaEditar)
                                                     }
                                                 }
                                                 

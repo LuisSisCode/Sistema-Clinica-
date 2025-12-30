@@ -341,7 +341,7 @@ Rectangle {
         }
     }
     
-    // PROPIEDADES PÚBLICAS (mantener las existentes)
+    // ========== PROPIEDADES PÚBLICAS ==========
     property var inventarioModel: null
     property var loteData: null
     property bool modoEdicion: false
@@ -349,10 +349,10 @@ Rectangle {
     signal loteActualizado(var lote)
     signal cancelado()
     
-    // COLORES
+    // ========== COLORES ==========
     readonly property color dangerColor: "#e74c3c"
     
-    // PROPIEDADES DE DATOS
+    // ========== PROPIEDADES DE DATOS ==========
     property int loteId: 0
     property string productoNombre: ""
     property int cantidadInicial: 0
@@ -365,27 +365,214 @@ Rectangle {
     property bool errorVisible: false
     property string mensajeError: ""
     
-    // FUNCIONES (mantener las existentes)
+    // ========== TIMER PARA AUTO-OCULTAR ERRORES ==========
+    Timer {
+        id: errorTimer
+        interval: 5000
+        running: false
+        repeat: false
+        onTriggered: {
+            errorVisible = false
+            mensajeError = ""
+        }
+    }
+    
+    // ========== FUNCIONES ==========
+    
     function cargarDatosLote(lote) {
-        // ... (mantener función existente)
+        console.log("📦 Cargando datos del lote:", JSON.stringify(lote))
+        
+        try {
+            // ✅ CONVERSIÓN EXPLÍCITA A TIPOS JAVASCRIPT NATIVOS
+            var idLote = parseInt(lote.Id_Lote || lote.id || 0)
+            var stock = parseInt(lote.Stock_Lote || lote.Stock || lote.Stock_Actual || 0)
+            var precio = parseFloat(lote.Precio_Compra || lote.PrecioCompra || 0)
+            var cantInicial = parseInt(lote.Cantidad_Inicial || stock)
+            
+            // ✅ Convertir nombre de producto a string FORZADAMENTE
+            var prodNombre = lote.Producto_Nombre || lote.Producto || ""
+            prodNombre = String(prodNombre)
+            
+            // ✅ MANEJO ESPECIAL DE FECHA (puede ser datetime.date de Python)
+            var fechaVenc = lote.Fecha_Vencimiento || lote.FechaVencimiento || ""
+            
+            // Verificar si es un objeto (datetime de Python)
+            if (typeof fechaVenc === "object" && fechaVenc !== null) {
+                // Es un objeto datetime, intentar convertir
+                try {
+                    // Si tiene método toString, usarlo
+                    if (fechaVenc.toString && typeof fechaVenc.toString === "function") {
+                        fechaVenc = fechaVenc.toString()
+                    } else {
+                        fechaVenc = ""
+                    }
+                } catch (e) {
+                    console.log("⚠️ Error convirtiendo fecha objeto:", e)
+                    fechaVenc = ""
+                }
+            }
+            
+            // Convertir a string y limpiar
+            fechaVenc = String(fechaVenc).trim()
+            
+            // Limpiar valores no válidos
+            if (fechaVenc === "" || 
+                fechaVenc === "null" || 
+                fechaVenc === "undefined" || 
+                fechaVenc.includes("QVariant") || 
+                fechaVenc.includes("PySide") ||
+                fechaVenc.includes("datetime")) {
+                fechaVenc = ""
+            }
+            
+            // ✅ Asignar a las PROPIEDADES del componente
+            loteId = idLote
+            productoNombre = prodNombre
+            cantidadInicial = cantInicial
+            precioCompra = precio
+            stockActual = stock
+            
+            // ✅ Asignar fecha
+            if (fechaVenc === "") {
+                fechaVencimiento = ""
+                noVencimiento = true
+            } else {
+                fechaVencimiento = fechaVenc
+                noVencimiento = false
+            }
+            
+            // ✅ Asignar a los TEXTFIELDS
+            precioCompraField.text = precio.toString()
+            stockActualField.text = stock.toString()
+            fechaVencimientoField.text = fechaVencimiento
+            
+            console.log("✅ Datos del lote cargados correctamente")
+            console.log("   - Lote ID:", loteId)
+            console.log("   - Producto:", productoNombre)
+            console.log("   - Stock:", stockActual + "/" + cantInicial)
+            console.log("   - Precio:", precioCompra)
+            console.log("   - Fecha:", fechaVencimiento || "Sin vencimiento")
+            
+        } catch (error) {
+            console.log("❌ Error cargando datos:", error.toString())
+        }
     }
     
     function validarFormulario() {
-        // ... (mantener función existente)
+        // Validar precio de compra
+        if (precioCompraField.text === "" || parseFloat(precioCompraField.text) <= 0) {
+            mostrarError("El precio de compra debe ser mayor a 0")
+            return false
+        }
+        
+        // Validar stock
+        if (stockActualField.text === "" || parseInt(stockActualField.text) < 0) {
+            mostrarError("El stock no puede ser negativo")
+            return false
+        }
+        
+        // Validar que el stock no exceda la cantidad inicial
+        if (parseInt(stockActualField.text) > cantidadInicial) {
+            mostrarError("El stock no puede ser mayor a la cantidad inicial (" + cantidadInicial + ")")
+            return false
+        }
+        
+        // Validar fecha de vencimiento si no está marcado "sin vencimiento"
+        if (!noVencimientoCheck.checked) {
+            if (fechaVencimientoField.text === "") {
+                mostrarError("Debe ingresar una fecha de vencimiento o marcar 'Sin vencimiento'")
+                return false
+            }
+            
+            // Validar formato de fecha (YYYY-MM-DD)
+            var fechaRegex = /^\d{4}-\d{2}-\d{2}$/
+            if (!fechaRegex.test(fechaVencimientoField.text)) {
+                mostrarError("El formato de la fecha debe ser YYYY-MM-DD")
+                return false
+            }
+        }
+        
+        return true
     }
     
     function guardarCambios() {
-        // ... (mantener función existente)
+        console.log("💾 Iniciando guardado de cambios...")
+        
+        // Validar formulario
+        if (!validarFormulario()) {
+            console.log("❌ Validación fallida")
+            return
+        }
+        
+        if (!inventarioModel) {
+            mostrarError("Error: InventarioModel no disponible")
+            return
+        }
+        
+        if (guardando) {
+            console.log("⚠️ Ya hay un guardado en proceso")
+            return
+        }
+        
+        guardando = true
+        
+        try {
+            // Preparar datos actualizados
+            var datosActualizados = {
+                "id_lote": loteId,
+                "stock": parseInt(stockActualField.text),
+                "precio_compra": parseFloat(precioCompraField.text),
+                "fecha_vencimiento": noVencimientoCheck.checked ? null : fechaVencimientoField.text
+            }
+            
+            console.log("📤 Enviando datos:", JSON.stringify(datosActualizados))
+            
+            // Llamar al backend
+            var resultado = inventarioModel.actualizar_lote(
+                datosActualizados.id_lote,
+                datosActualizados.stock,
+                datosActualizados.precio_compra,
+                datosActualizados.fecha_vencimiento
+            )
+            
+            if (resultado) {
+                console.log("✅ Lote actualizado exitosamente")
+                loteActualizado(datosActualizados)
+            } else {
+                console.log("❌ Error al actualizar lote")
+                mostrarError("Error al actualizar el lote. Verifique los datos e intente nuevamente.")
+            }
+            
+        } catch (error) {
+            console.log("❌ Error en guardarCambios:", error.toString())
+            mostrarError("Error inesperado: " + error.toString())
+        } finally {
+            guardando = false
+        }
     }
     
     function mostrarError(mensaje) {
-        // ... (mantener función existente)
+        mensajeError = mensaje
+        errorVisible = true
+        
+        // Auto-ocultar después de 5 segundos
+        errorTimer.restart()
     }
     
+    // ========== INICIALIZACIÓN ==========
+    onLoteDataChanged: {
+        console.log("📦 loteData cambió:", loteData ? "con datos" : "null")
+        if (loteData) {
+            console.log("✅ Cargando datos del lote...")
+            cargarDatosLote(loteData)
+        }
+    }
     Component.onCompleted: {
-        console.log("✏️ EditarLoteDialog.qml (rediseñado) cargado")
+        console.log("✏️ EditarLoteDialog.qml cargado")
         if (loteData) {
             cargarDatosLote(loteData)
+        } else {
+            console.log("⚠️ No se recibieron datos de lote")
         }
     }
 }

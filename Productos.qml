@@ -75,29 +75,11 @@ Item {
     readonly property color stockCriticoColor: "#FF4444"   // Rojo
 
     // ===== CONEXIONES =====
-    
     Connections {
         target: inventarioModel
-        
-        function onLotesChanged() {
-            console.log("📅 Lotes cambiaron - Actualizando filtros")
-            Qt.callLater(function() {
-                precalcularStock()
-                cargarDatosParaFiltros()
-            })
-        }
-        function onOperacionExitosa(mensaje) {
-            console.log("✅", mensaje)
-            if (mensaje.includes("creado") || mensaje.includes("lote") || mensaje.includes("actualizado")) {
-                Qt.callLater(function() {
-                    precalcularStock()
-                    cargarDatosParaFiltros()
-                    actualizarDesdeDataCentral()
-                })
-            }
-        }
-        function onOperacionError(mensaje) {
-            console.log("❌", mensaje)
+        function onProductosChanged() {
+            console.log("🔄 Productos actualizados desde BD")
+            actualizarDesdeDataCentral()
         }
     }
 
@@ -413,14 +395,6 @@ Item {
                     
                     onClicked: {
                         abrirCrearProducto()
-                    }
-                    
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onEntered: parent.scale = 1.02
-                        onExited: parent.scale = 1.0
-                        onClicked: parent.clicked()
                     }
                     
                     Behavior on scale {
@@ -1798,15 +1772,6 @@ Item {
         visible: mostrandoDetalleProducto
         color: "#80000000"  // Overlay semi-transparente
         
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                // Clic fuera cierra el modal
-                mostrandoDetalleProducto = false
-                productoParaDetalle = null
-            }
-        }
-        
         Rectangle {
             anchors.centerIn: parent
             width: Math.min(900, parent.width * 0.9)
@@ -1847,7 +1812,7 @@ Item {
                         if (item.eliminarLoteSolicitado) {
                             item.eliminarLoteSolicitado.connect(function(lote) {
                                 console.log("🗑️ Eliminar lote solicitado:", lote.id)
-                                confirmarEliminarLote(lote)
+                                eliminarLote(lote)  // Llama directamente a eliminarLote
                             })
                         }
                     }
@@ -1866,13 +1831,6 @@ Item {
         visible: mostrandoEditarLote
         color: "#80000000"
         
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                // Clic fuera no cierra (para evitar cerrar accidentalmente)
-            }
-        }
-        
         Rectangle {
             anchors.centerIn: parent
             width: Math.min(600, parent.width * 0.8)
@@ -1890,9 +1848,10 @@ Item {
                 onLoaded: {
                     if (item) {
                         console.log("✏️ EditarLoteDialog.qml cargado")
+                        console.log("🔍 loteParaEditar ANTES de asignar:", JSON.stringify(loteParaEditar))
                         item.inventarioModel = productosRoot.inventarioModel
                         item.loteData = loteParaEditar
-                        
+                        console.log("🔍 item.loteData DESPUÉS de asignar:", JSON.stringify(item.loteData))
                         // Conectar señales
                         if (item.loteActualizado) {
                             item.loteActualizado.connect(function(loteActualizado) {
@@ -2185,33 +2144,26 @@ Item {
 
     function abrirEditarLote(lote) {
         console.log("✏️ Abriendo edición de lote:", lote.id || lote.Id_Lote)
+        console.log("📦 Objeto lote completo:", JSON.stringify(lote))
+        
+        // ✅ Asignar PRIMERO el lote
         loteParaEditar = lote
-        mostrandoEditarLote = true
+        
+        // ✅ Esperar un frame antes de mostrar el diálogo
+        Qt.callLater(function() {
+            mostrandoEditarLote = true
+        })
     }
 
-    function confirmarEliminarLote(lote) {
-        console.log("🗑️ Confirmando eliminación de lote:", lote.id || lote.Id_Lote)
-        
-        // Crear mensaje de confirmación
-        var mensaje = "¿Está seguro de eliminar el lote #" + (lote.id || lote.Id_Lote || 0) + "?\n"
-        mensaje += "Stock: " + (lote.Stock_Lote || lote.Stock_Actual || 0) + " unidades\n"
-        mensaje += "Esta acción no se puede deshacer."
-        
-        // Mostrar diálogo de confirmación
-        var confirmar = confirm(mensaje)
-        if (confirmar) {
-            eliminarLote(lote.id || lote.Id_Lote)
-        }
-    }
-
-    function eliminarLote(loteId) {
-        console.log("🗑️ Eliminando lote:", loteId)
+    function eliminarLote(lote) {
+        console.log("🗑️ Eliminando lote:", lote.id || lote.Id_Lote)
         
         if (!inventarioModel) {
             console.log("❌ InventarioModel no disponible")
             return
         }
         
+        var loteId = lote.id || lote.Id_Lote
         var exito = inventarioModel.eliminar_lote(loteId)
         
         if (exito) {
@@ -2625,22 +2577,5 @@ Item {
                 actualizarDesdeDataCentral()
             }
         })
-    }
-    
-    // Función auxiliar de confirmación (simplificada)
-    function confirm(mensaje) {
-        // En una implementación real, usarías un diálogo de confirmación propio
-        // Esta es una versión simplificada que usa el diálogo nativo
-        var resultado = false
-        var dialog = Qt.createQmlObject('import QtQuick 2.15; import QtQuick.Dialogs 1.3; MessageDialog {}', productosRoot)
-        dialog.title = "Confirmar"
-        dialog.text = mensaje
-        dialog.icon = StandardIcon.Question
-        dialog.standardButtons = StandardButton.Yes | StandardButton.No
-        dialog.onYes = function() { resultado = true; dialog.close() }
-        dialog.onNo = function() { resultado = false; dialog.close() }
-        dialog.open()
-        // Nota: Esta implementación bloquea, para producción usar señales async
-        return resultado
     }
 }
