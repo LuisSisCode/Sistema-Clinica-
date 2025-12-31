@@ -143,7 +143,9 @@ Item {
         }
         function onProductosChanged() {
             console.log("📦 Productos actualizados desde BD")
-            datosActualizados()
+            // ✅ CORRECCIÓN PROBLEMA #2: Ya no emitimos signal intermedio
+            // Productos.qml escucha directamente productosChanged de inventarioModel
+            // Esto evita el doble refresh que causaba actualizaciones excesivas
         }
         function onSearchResultsChanged() {
             console.log("🔍 Resultados de búsqueda BD actualizados")

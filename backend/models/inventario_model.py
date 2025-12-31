@@ -618,13 +618,14 @@ class InventarioModel(QObject):
 
             print(f"🎯 Usando marca final - ID: {id_marca}")
 
+            # ✅ CORRECCIÓN PROBLEMA #1: Usar .get() con valor por defecto
             # Preparar datos del producto
             datos_producto = {
                 'Codigo': codigo_producto,
                 'Nombre': datos['nombre'],
                 'Detalles': datos.get('detalles', ''),
-                'Precio_compra': float(datos['precio_compra']),
-                'Precio_venta': float(datos['precio_venta']),
+                'Precio_compra': float(datos.get('precio_compra', 0)),  # ✅ CORREGIDO
+                'Precio_venta': float(datos.get('precio_venta', 0)),    # ✅ CORREGIDO
                 'Unidad_Medida': datos.get('unidad_medida', 'Tabletas'),
                 'ID_Marca': id_marca,
                 'Fecha_Venc': self._procesar_fecha_vencimiento(fecha_vencimiento)
@@ -998,23 +999,29 @@ class InventarioModel(QObject):
             # Parsear datos
             datos = json.loads(lote_json)
             
-            # Procesar fecha si existe
-            if 'fecha_vencimiento' in datos:
-                datos['Fecha_Vencimiento'] = self._procesar_fecha_vencimiento(datos['fecha_vencimiento'])
-                del datos['fecha_vencimiento']
+            # ✅ MAPEAR NOMBRES DE QML A SQL
+            datos_sql = {}
             
-            # Procesar cantidad si existe
-            if 'cantidad_unitario' in datos:
-                datos['Cantidad_Unitario'] = int(datos['cantidad_unitario'])
-                del datos['cantidad_unitario']
+            # Stock
+            if 'stock' in datos:
+                datos_sql['Cantidad_Unitario'] = int(datos['stock'])
+            
+            # Precio de compra
+            if 'precio_compra' in datos:
+                datos_sql['Precio_Compra'] = float(datos['precio_compra'])
+            
+            # Fecha de vencimiento
+            if 'fecha_vencimiento' in datos and datos['fecha_vencimiento']:
+                datos_sql['Fecha_Vencimiento'] = self._procesar_fecha_vencimiento(datos['fecha_vencimiento'])
             
             # Actualizar lote
-            exito = safe_execute(self.producto_repo.actualizar_lote, lote_id, datos)
+            exito = safe_execute(self.producto_repo.actualizar_lote, lote_id, datos_sql)
             
             if exito:
-                # Refrescar datos
+                # ✅ CORRECCIÓN PROBLEMA #2: Un solo refresh consolidado
+                # refresh_productos() ya recarga lotes internamente
                 self.refresh_productos()
-                self._cargar_lotes_activos()
+                # ✅ ELIMINADO: self._cargar_lotes_activos() - era redundante
                 
                 self.operacionExitosa.emit(f"Lote actualizado: ID {lote_id}")
                 print(f"🔧 Lote actualizado - ID: {lote_id}, Usuario: {self._usuario_actual_id}")
@@ -1604,7 +1611,10 @@ class InventarioModel(QObject):
             self.loadingChanged.emit()
 
     def _validar_datos_producto(self, datos: dict) -> bool:
-        """Valida datos de producto antes de guardar"""
+        """
+        ✅ CORRECCIÓN PROBLEMA #1: Validación condicional de precios
+        Permite crear productos con precio 0 (se definen en módulo de Compras)
+        """
         # Validaciones básicas
         if not datos.get('codigo') and not datos.get('nombre'):
             raise ValueError("Debe especificar al menos un nombre para el producto")
@@ -1612,14 +1622,23 @@ class InventarioModel(QObject):
         if not datos.get('nombre') or len(datos['nombre'].strip()) < 3:
             raise ValueError("Nombre debe tener al menos 3 caracteres")
         
-        if datos.get('precio_compra', 0) <= 0:
-            raise ValueError("Precio de compra debe ser mayor a 0")
-        
-        if datos.get('precio_venta', 0) <= 0:
-            raise ValueError("Precio de venta debe ser mayor a 0")
-        
-        if datos.get('precio_venta', 0) <= datos.get('precio_compra', 0):
-            raise ValueError("Precio de venta debe ser mayor al precio de compra")
+        # ✅ VALIDACIÓN CONDICIONAL: Permitir precio 0 solo al crear productos nuevos
+        # Los precios se definirán en el módulo de Compras (primera compra)
+        precio_compra = datos.get('precio_compra', 0)
+        precio_venta = datos.get('precio_venta', 0)
+
+        # Si ambos precios son 0, es un producto nuevo sin precios definidos (OK)
+        # Si alguno es > 0, entonces AMBOS deben ser válidos
+        if precio_compra > 0 or precio_venta > 0:
+            # Al menos un precio fue especificado, validar ambos
+            if precio_compra <= 0:
+                raise ValueError("Si especifica precio de venta, debe especificar precio de compra válido")
+            
+            if precio_venta <= 0:
+                raise ValueError("Si especifica precio de compra, debe especificar precio de venta válido")
+            
+            if precio_venta <= precio_compra:
+                raise ValueError("Precio de venta debe ser mayor al precio de compra")
         
         return True
     

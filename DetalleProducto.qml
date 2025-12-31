@@ -15,6 +15,11 @@ Rectangle {
     // ===============================
     
     property var productoData: null
+
+    // Cachés para detectar cambios
+    property string codigoCache: ""
+    property string nombreCache: ""
+
     property bool mostrarStock: true
     property bool mostrarAcciones: true
     property var inventarioModel: null
@@ -51,16 +56,21 @@ Rectangle {
     signal cerrarSolicitado()
     signal editarLoteSolicitado(var lote)
     signal eliminarLoteSolicitado(var lote)
+    signal loteActualizadoEnDialog()
     
     // ===============================
     // FUNCIONES
     // ===============================
     
     function cargarDatosProducto() {
-        if (!productoData || !inventarioModel) {
-            console.log("❌ No se pueden cargar datos")
+        console.log("🔍 cargarDatosProducto() llamado - productoData:", productoData ? "EXISTS" : "NULL")
+    
+        if (!productoData) {
+            console.log("⚠️ No se pueden cargar datos - productoData es null")
             return
         }
+        
+        console.log("🔄 Cargando datos del producto:", productoData.codigo)
         
         loadingLotes = true
         
@@ -201,14 +211,36 @@ Rectangle {
         }
         
         try {
-            var precio = parseFloat(nuevoPrecio)
+            // Limpiar y formatear el precio
+            var precioTexto = nuevoPrecio.toString();
             
+            // Reemplazar coma por punto para parseFloat
+            precioTexto = precioTexto.replace(',', '.');
+            
+            // Asegurarse de que solo haya un punto decimal
+            var partes = precioTexto.split('.');
+            if (partes.length > 2) {
+                // Si hay múltiples puntos, tomar solo el primero como parte entera
+                precioTexto = partes[0] + '.' + partes.slice(1).join('');
+            }
+            
+            // Convertir a número
+            var precio = parseFloat(precioTexto);
+            
+            // Validaciones adicionales
             if (isNaN(precio) || precio <= 0) {
-                console.log("❌ Precio inválido")
+                console.log("❌ Precio inválido:", nuevoPrecio, "convertido a:", precio)
+                
+                // Mostrar mensaje de error (opcional)
+                // Podrías agregar un tooltip o mensaje temporal
+                
                 return false
             }
             
-            console.log("💰 Actualizando precio de venta a:", precio)
+            // Asegurar 2 decimales
+            precio = parseFloat(precio.toFixed(2));
+            
+            console.log("💰 Actualizando precio de venta a:", precio, "de entrada:", nuevoPrecio)
             
             var resultado = inventarioModel.actualizar_precio_venta(productoData.codigo, precio)
             
@@ -232,6 +264,15 @@ Rectangle {
             console.log("❌ Error:", error.toString())
             return false
         }
+    }
+
+    function formatearNumero(numero, decimales) {
+        if (isNaN(numero) || numero === null || numero === undefined) {
+            return "0.00";
+        }
+        
+        var num = parseFloat(numero);
+        return num.toLocaleString(Qt.locale("es_ES"), 'f', decimales || 2);
     }
     
     // FUNCIONES PARA DIÁLOGO DE CONFIRMACIÓN
@@ -277,10 +318,22 @@ Rectangle {
         console.log("  - InventarioModel disponible:", !!inventarioModel)
     }
     
+    onLoteActualizadoEnDialog: {
+        console.log("🔄 Señal recibida: lote actualizado, recargando datos")
+        cargarDatosProducto()
+    }
+    
     onProductoDataChanged: {
-        if (productoData && inventarioModel && !datosInicialmenteCargados) {
-            console.log("📦 Producto asignado por primera vez:", productoData.codigo)
-            datosInicialmenteCargados = true
+        // ✅ CORRECCIÓN PROBLEMA #3: Guardar datos en cache y permitir refreshes
+        console.log("📦 productoData cambió:", productoData ? productoData.codigo : "NULL")
+        if (productoData) {
+            codigoCache = productoData.codigo || ""
+            nombreCache = productoData.nombre || ""
+            
+            if (!datosInicialmenteCargados) {
+                console.log("📦 Producto asignado por primera vez:", productoData.codigo)
+                datosInicialmenteCargados = true
+            }
             Qt.callLater(cargarDatosProducto)
         }
     }
@@ -345,14 +398,14 @@ Rectangle {
                         spacing: 2
                         
                         Label {
-                            text: productoData ? productoData.nombre : "Detalle de Producto"
+                            text: nombreCache || (productoData ? productoData.nombre : "Detalle de Producto")
                             font.pixelSize: 18
                             font.bold: true
                             color: "white"
                         }
                         
                         Label {
-                            text: productoData ? "Código: " + productoData.codigo : ""
+                            text: codigoCache ? "Código: " + codigoCache : (productoData ? "Código: " + productoData.codigo : "")
                             font.pixelSize: 12
                             color: "white"
                             opacity: 0.9
@@ -449,27 +502,51 @@ Rectangle {
                                         spacing: 8
                                         
                                         Label {
-                                            text: "Bs " + precioVenta.toFixed(2)
+                                            text: "Bs " + formatearPrecioParaMostrar(precioVenta)
                                             font.pixelSize: 20
                                             font.bold: true
                                             color: "#2c3e50"
                                             visible: !editandoPrecio
                                         }
-                                        
+                                        // Precio Venta
                                         TextField {
                                             id: precioVentaField
                                             Layout.preferredWidth: 140
                                             Layout.preferredHeight: 40
-                                            text: precioVenta.toFixed(2)
+                                            text: editandoPrecio ? (precioVenta > 0 ? precioVenta.toFixed(2) : "") : ""
                                             font.pixelSize: 16
                                             visible: editandoPrecio
                                             
-                                            validator: DoubleValidator {
-                                                bottom: 0.01
-                                                top: 999999.99
-                                                decimals: 2
-                                                notation: DoubleValidator.StandardNotation
+                                            // Permitir solo números, punto y coma
+                                            inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                            
+                                            // Procesar entrada para manejar comas
+                                            onTextChanged: {
+                                                if (!editandoPrecio || text === "") return;
+                                                
+                                                // Reemplazar comas por puntos
+                                                var cleanText = text.replace(',', '.');
+                                                
+                                                // Eliminar múltiples puntos decimales
+                                                var dotCount = (cleanText.match(/\./g) || []).length;
+                                                if (dotCount > 1) {
+                                                    var parts = cleanText.split('.');
+                                                    cleanText = parts[0] + '.' + parts.slice(1).join('');
+                                                }
+                                                
+                                                // Si el texto limpio es diferente, actualizarlo
+                                                if (cleanText !== text) {
+                                                    text = cleanText;
+                                                }
                                             }
+                                            
+                                            // Al recibir foco, seleccionar todo el texto
+                                            onActiveFocusChanged: {
+                                                if (activeFocus && editandoPrecio) {
+                                                    selectAll();
+                                                }
+                                            }
+                                            
                                             
                                             background: Rectangle {
                                                 color: "white"
@@ -500,13 +577,46 @@ Rectangle {
                                             onClicked: {
                                                 if (editandoPrecio) {
                                                     // Guardar
-                                                    if (actualizarPrecioVenta(precioVentaField.text)) {
-                                                        editandoPrecio = false
+                                                    var precioTexto = precioVentaField.text.trim();
+                                                    
+                                                    console.log("📝 Texto a guardar:", precioTexto);
+                                                    
+                                                    if (precioTexto === "" || precioTexto === "." || precioTexto === ",") {
+                                                        console.log("❌ Precio vacío o inválido");
+                                                        return;
+                                                    }
+                                                    
+                                                    // Convertir a número (manejar comas)
+                                                    precioTexto = precioTexto.replace(',', '.');
+                                                    
+                                                    // Validar que sea un número válido
+                                                    var precioNum = parseFloat(precioTexto);
+                                                    if (isNaN(precioNum) || precioNum <= 0) {
+                                                        console.log("❌ Número inválido:", precioTexto);
+                                                        return;
+                                                    }
+                                                    
+                                                    // Formatear a 2 decimales
+                                                    precioNum = parseFloat(precioNum.toFixed(2));
+                                                    
+                                                    if (actualizarPrecioVenta(precioNum)) {
+                                                        console.log("✅ Guardado exitoso, nuevo precio:", precioNum);
+                                                        editandoPrecio = false;
+                                                    } else {
+                                                        console.log("❌ Error al guardar");
                                                     }
                                                 } else {
                                                     // Editar
-                                                    editandoPrecio = true
-                                                    precioVentaField.forceActiveFocus()
+                                                    console.log("✏️ Iniciando edición. Precio actual:", precioVenta);
+                                                    editandoPrecio = true;
+                                                    
+                                                    // Usar setTimeout para asegurar que el TextField esté visible
+                                                    Qt.callLater(function() {
+                                                        if (precioVentaField) {
+                                                            precioVentaField.forceActiveFocus();
+                                                            precioVentaField.selectAll();
+                                                        }
+                                                    });
                                                 }
                                             }
                                         }
@@ -630,7 +740,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 
                                 Label {
-                                    text: "📦 LOTES ACTIVOS (FIFO 2.0)"
+                                    text: "📦 LOTES ACTIVOS"
                                     font.pixelSize: 14
                                     font.bold: true
                                     color: "#2c3e50"
@@ -990,275 +1100,12 @@ Rectangle {
                     Item { Layout.fillHeight: true }
                 }
             }
-            
-            // ========== FOOTER ==========
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 70
-                color: "#ecf0f1"
-                radius: 12
-                
-                // Redondear solo abajo
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    height: 12
-                    color: parent.color
-                }
-                
-                RowLayout {
-                    anchors.centerIn: parent
-                    spacing: 12
-                    
-                    Button {
-                        text: "Editar Producto"
-                        Layout.preferredWidth: 140
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.hovered ? "#2980b9" : "#3498db"
-                        }
-                        
-                        contentItem: Text {
-                            text: parent.text
-                            font.pixelSize: 14
-                            font.bold: true
-                            color: "white"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            if (productoData) {
-                                editarSolicitado(productoData)
-                            }
-                        }
-                    }
-                    
-                    Button {
-                        text: "Eliminar Producto"
-                        Layout.preferredWidth: 140
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.hovered ? "#c0392b" : "#e74c3c"
-                        }
-                        
-                        contentItem: Text {
-                            text: parent.text
-                            font.pixelSize: 14
-                            font.bold: true
-                            color: "white"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            if (productoData) {
-                                eliminarSolicitado(productoData)
-                            }
-                        }
-                    }
-                    
-                    Button {
-                        text: "Cerrar"
-                        Layout.preferredWidth: 120
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.hovered ? "#7f8c8d" : "#95a5a6"
-                        }
-                        
-                        contentItem: Text {
-                            text: parent.text
-                            font.pixelSize: 14
-                            font.bold: true
-                            color: "white"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            cerrarSolicitado()
-                        }
-                    }
-                }
-            }
         }
     }
-    
-    // ===============================
-    // DIÁLOGO DE CONFIRMACIÓN INTEGRADO
-    // ===============================
-    Rectangle {
-        id: dialogoConfirmacion
-        anchors.fill: parent
-        visible: mostrandoConfirmacion
-        z: 2000
-        color: "#80000000"
-        
-        Rectangle {
-            anchors.centerIn: parent
-            width: 450
-            height: 280
-            radius: 12
-            color: "white"
-            
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 16
-                
-                // Header con icono de advertencia
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    
-                    Rectangle {
-                        width: 40
-                        height: 40
-                        color: "#f39c12"
-                        radius: 20
-                        
-                        Label {
-                            anchors.centerIn: parent
-                            text: "⚠️"
-                            font.pixelSize: 20
-                            color: "white"
-                        }
-                    }
-                    
-                    Label {
-                        text: confirmacionTitulo
-                        font.pixelSize: 18
-                        font.bold: true
-                        color: "#2c3e50"
-                        Layout.fillWidth: true
-                    }
-                    
-                    Button {
-                        text: "✕"
-                        width: 32
-                        height: 32
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker("#ecf0f1", 1.2) : "#ecf0f1"
-                            radius: 16
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: "#7f8c8d"
-                            font.bold: true
-                            font.pixelSize: 14
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            cerrarConfirmacion()
-                        }
-                    }
-                }
-                
-                // Mensaje principal
-                Label {
-                    Layout.fillWidth: true
-                    text: confirmacionMensaje
-                    font.pixelSize: 14
-                    color: "#2c3e50"
-                    wrapMode: Text.WordWrap
-                }
-                
-                // Detalles del mensaje
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 80
-                    color: "#f8f9fa"
-                    radius: 6
-                    border.color: "#dee2e6"
-                    border.width: 1
-                    
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        clip: true
-                        
-                        Label {
-                            width: parent.width
-                            text: confirmacionDetalle
-                            font.pixelSize: 12
-                            color: "#7f8c8d"
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-                
-                // Botones
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    Button {
-                        text: "Cancelar"
-                        Layout.preferredWidth: 100
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker("#95a5a6", 1.2) : "#95a5a6"
-                            radius: 6
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: 14
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            cerrarConfirmacion()
-                        }
-                    }
-                    
-                    Button {
-                        text: "Confirmar"
-                        Layout.preferredWidth: 100
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker("#e74c3c", 1.2) : "#e74c3c"
-                            radius: 6
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: 14
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            if (confirmacionCallback) {
-                                confirmacionCallback()
-                            }
-                            cerrarConfirmacion()
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
-                }
-            }
-        }
+
+    // Agrega esta función cerca de las otras funciones
+    function formatearPrecioParaMostrar(precio) {
+        if (!precio || precio <= 0) return "0.00";
+        return parseFloat(precio).toFixed(2);
     }
 }

@@ -74,22 +74,45 @@ Item {
     readonly property color stockBajoColor: "#FFB444"      // Naranja
     readonly property color stockCriticoColor: "#FF4444"   // Rojo
 
+    property bool _actualizandoDatos: false
+
     // ===== CONEXIONES =====
     Connections {
         target: inventarioModel
         function onProductosChanged() {
-            console.log("🔄 Productos actualizados desde BD")
-            actualizarDesdeDataCentral()
-        }
-    }
-
-    Connections {
-        target: farmaciaData
-        function onDatosActualizados() {
-            console.log("=== DATOS ACTUALIZADOS SIGNAL ===")
-            cargarDatosParaFiltros()
-            actualizarDesdeDataCentral()
-            console.log("=== FIN DATOS ACTUALIZADOS ===")
+            if (_actualizandoDatos) {
+                console.log("⚠️ Ya hay actualización en curso, ignorando signal duplicado")
+                return
+            }
+            
+            console.log("🔄 Productos actualizados desde BD - Refrescando interfaz")
+            
+            // ✅ PRESERVAR el CÓDIGO del producto, no la referencia al objeto
+            var codigoProductoActual = null
+            if (mostrandoDetalleProducto && productoParaDetalle) {
+                codigoProductoActual = productoParaDetalle.codigo
+                console.log("💾 Guardando código de producto:", codigoProductoActual)
+            }
+            
+            Qt.callLater(function() {
+                cargarDatosParaFiltros()
+                actualizarDesdeDataCentral()
+                
+                // ✅ RESTAURAR productoData buscando el producto actualizado por código
+                if (mostrandoDetalleProducto && codigoProductoActual && detalleProductoLoader.item) {
+                    console.log("🔍 Buscando producto actualizado:", codigoProductoActual)
+                    
+                    // Buscar el producto en el array actualizado
+                    for (var i = 0; i < productosOriginales.length; i++) {
+                        if (productosOriginales[i].codigo === codigoProductoActual) {
+                            console.log("✅ Producto encontrado, restaurando productoData")
+                            productoParaDetalle = productosOriginales[i]
+                            detalleProductoLoader.item.productoData = productosOriginales[i]
+                            break
+                        }
+                    }
+                }
+            })
         }
     }
 
@@ -175,38 +198,29 @@ Item {
     function abrirCrearProducto() {
         console.log("🔧 Abriendo CrearProducto como modal centrado")
         
+        // ✅ CARGAR MARCAS PRIMERO
         if (!marcasYaCargadas) {
             cargarMarcasDesdeModel()
         }
         
         modoEdicionProducto = false
         productoParaEditar = null
-        mostrandoCrearProducto = true
         
-        Qt.callLater(function() {
-            if (crearProductoComponent.item) {
-                crearProductoComponent.item.inventarioModel = inventarioModel
-                crearProductoComponent.item.farmaciaData = farmaciaData
-                
-                if (marcasYaCargadas && marcasModel.length > 0) {
-                    crearProductoComponent.item.marcasModel = marcasModel
-                    crearProductoComponent.item.marcasCargadas = true
-                }
-            }
-        })
+        // ✅ ABRIR MODAL (el onLoaded del Loader asignará las marcas)
+        mostrandoCrearProducto = true
     }
 
-    
     function abrirEditarProducto(producto) {
         console.log("🔧 Abriendo edición de producto:", producto.codigo)
         
+        // ✅ CARGAR MARCAS PRIMERO
         if (!marcasYaCargadas) {
             cargarMarcasDesdeModel()
         }
         
         modoEdicionProducto = true
         
-        // ✅ CORREGIR LA PREPARACIÓN DE DATOS
+        // ✅ PREPARAR DATOS
         productoParaEditar = {
             id: producto.id,
             codigo: producto.codigo || "",
@@ -221,6 +235,7 @@ Item {
         
         console.log("📝 Datos preparados para edición:", JSON.stringify(productoParaEditar))
         
+        // ✅ ABRIR MODAL (el onLoaded del Loader asignará las marcas)
         mostrandoCrearProducto = true
     }
     
@@ -275,8 +290,21 @@ Item {
     }
 
     function actualizarDesdeDataCentral() {
-        console.log("🔄 Productos: Actualizando desde centro de datos...")
+        // ✅ Prevenir re-entrada
+        if (_actualizandoDatos) {
+            console.log("⏭️ Actualización ya en curso, omitiendo")
+            return
+        }
         
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            return
+        }
+        
+        _actualizandoDatos = true  
+        console.log("🔧 Productos: Actualizando desde centro de datos...")
+        
+        // ✅ CARGAR PRODUCTOS DESDE farmaciaData
         var productos = farmaciaData ? farmaciaData.obtenerProductosParaInventario() : []
         
         productosOriginales = []
@@ -287,6 +315,11 @@ Item {
         updateFilteredModel()
         
         console.log("✅ Productos actualizados desde centro de datos:", productos.length)
+        
+        // ✅ Liberar flag después de completar
+        Qt.callLater(function() {
+            _actualizandoDatos = false
+        })
     }
 
     // Modelo que se sincroniza con datos centrales
@@ -491,8 +524,9 @@ Item {
                 Item { Layout.fillWidth: true }
                 
                 RowLayout {
+    
                     spacing: 12
-                    
+
                     Rectangle {
                         Layout.preferredWidth: 280
                         Layout.preferredHeight: 36
@@ -512,21 +546,40 @@ Item {
                                 color: darkGrayColor
                             }
                             
-                            TextField {
-                                id: searchField
+                            // ALTERNATIVA: TextEdit configurado para una línea
+                            Item {
+                                id: searchContainer
                                 Layout.fillWidth: true
-                                placeholderText: "Buscar por nombre o código..."
-                                font.pixelSize: 12
-                                color: textColor
+                                Layout.preferredHeight: 20
                                 
-                                background: Rectangle {
-                                    color: "transparent"
-                                }
-                                
-                                onTextChanged: {
-                                    searchText = text
-                                    console.log("🔍 Búsqueda:", searchText)
-                                    updateFilteredModel()
+                                TextEdit {
+                                    id: searchField
+                                    anchors.fill: parent
+                                    //verticalAlignment: TextEdit.AlignVCenter
+                                    selectByMouse: true
+                                    font.pixelSize: 12
+                                    color: textColor
+                                    
+                                    // IMPORTANTE: Configurar para una sola línea
+                                    clip: true
+                                    wrapMode: TextEdit.NoWrap
+                                    
+                                    onTextChanged: {
+                                        searchText = text
+                                        console.log("🔍 Búsqueda:", searchText)
+                                        updateFilteredModel()
+                                    }
+                                    
+                                    // Placeholder mejor posicionado
+                                    Text {
+                                        text: "Buscar por nombre o código..."
+                                        color: grayMedium
+                                        visible: !parent.text
+                                        font: parent.font
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 0
+                                    }
                                 }
                             }
                             
@@ -535,7 +588,7 @@ Item {
                                 text: "✕"
                                 
                                 background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(lightGrayColor, 1.2) : lightGrayColor
+                                    color: lightGrayColor
                                     radius: 4
                                     width: 20
                                     height: 20
@@ -553,6 +606,7 @@ Item {
                                     searchField.text = ""
                                     searchText = ""
                                     updateFilteredModel()
+                                    searchField.focus = false  // Quitar foco
                                 }
                             }
                         }
@@ -1849,35 +1903,10 @@ Item {
                     if (item) {
                         console.log("✏️ EditarLoteDialog.qml cargado")
                         console.log("🔍 loteParaEditar ANTES de asignar:", JSON.stringify(loteParaEditar))
-                        item.inventarioModel = productosRoot.inventarioModel
+                        item.inventarioModel = inventarioModel
                         item.loteData = loteParaEditar
                         console.log("🔍 item.loteData DESPUÉS de asignar:", JSON.stringify(item.loteData))
-                        // Conectar señales
-                        if (item.loteActualizado) {
-                            item.loteActualizado.connect(function(loteActualizado) {
-                                console.log("✅ Lote actualizado")
-                                mostrandoEditarLote = false
-                                loteParaEditar = null
-                                
-                                // Refrescar datos
-                                if (inventarioModel) {
-                                    inventarioModel.refresh_productos()
-                                }
-                                
-                                Qt.callLater(function() {
-                                    precalcularStock()
-                                    cargarDatosParaFiltros()
-                                    actualizarDesdeDataCentral()
-                                })
-                            })
-                        }
-                        
-                        if (item.cancelado) {
-                            item.cancelado.connect(function() {
-                                mostrandoEditarLote = false
-                                loteParaEditar = null
-                            })
-                        }
+                        // ❌ NO conectar señales aquí
                     }
                 }
             }
@@ -1933,9 +1962,11 @@ Item {
                     item.inventarioModel = productosRoot.inventarioModel
                     item.farmaciaData = productosRoot.farmaciaData
                     
-                    if (marcasYaCargadas && marcasModel.length > 0) {
-                        item.marcasModel = productosRoot.marcasModel
+                    // ✅ CRÍTICO: Asignar marcasModel DIRECTAMENTE desde inventarioModel
+                    if (inventarioModel && inventarioModel.marcasDisponibles) {
+                        item.marcasModel = inventarioModel.marcasDisponibles
                         item.marcasCargadas = true
+                        console.log("🏷️ Marcas asignadas directamente:", inventarioModel.marcasDisponibles.length)
                     }
                     
                     if (item.productoCreado) {
@@ -2006,7 +2037,29 @@ Item {
             }
         }
     }
-    
+    Connections {
+        target: editarLoteLoader.item
+        enabled: editarLoteLoader.item !== null
+        
+        function onLoteActualizado(datosActualizados) {
+            console.log("✅ Lote actualizado, recargando DetalleProducto")
+            
+            // ✅ SIMPLIFICADO: Solo validar que el loader exista
+            if (detalleProductoLoader.item && detalleProductoLoader.item.cargarDatosProducto) {
+                detalleProductoLoader.item.cargarDatosProducto()
+            }
+            
+            // Cerrar el diálogo de edición
+            mostrandoEditarLote = false
+            loteParaEditar = null
+        }
+        
+        function onCancelado() {
+            console.log("❌ Edición de lote cancelada")
+            mostrandoEditarLote = false
+            loteParaEditar = null
+        }
+    }
     Rectangle {
         id: notificacionFlotante
         anchors.horizontalCenter: parent.horizontalCenter

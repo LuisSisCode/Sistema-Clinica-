@@ -226,7 +226,9 @@ Rectangle {
             marca_id: marcaIdSeleccionada,
             marca: marcaSeleccionadaNombre,
             stock_minimo: inputStockMinimo,
-            stock_maximo: inputStockMaximo
+            stock_maximo: inputStockMaximo,
+            precio_compra: 0.0,
+            precio_venta: 0.0
         }
 
         console.log("📦 Producto a guardar:", JSON.stringify(producto))
@@ -383,13 +385,32 @@ Rectangle {
         inputStockMinimo = producto.stock_minimo || 10
         inputStockMaximo = producto.stock_maximo || 100
         
-        marcaIdSeleccionada = producto.marca_id || 0
-        marcaSeleccionadaNombre = producto.marca || ""
+        // ✅ CORREGIR: Buscar marca_id si solo viene el nombre
+        var marcaNombre = producto.marca || ""
+        var marcaId = producto.marca_id || 0
+        
+        // Si no hay marca_id pero SÍ hay nombre de marca, buscarlo
+        if (marcaId === 0 && marcaNombre && marcasModel && marcasModel.length > 0) {
+            console.log("🔍 Buscando marca_id para:", marcaNombre)
+            for (var i = 0; i < marcasModel.length; i++) {
+                var marca = marcasModel[i]
+                if (marca && (marca.nombre === marcaNombre || marca.Nombre === marcaNombre)) {
+                    marcaId = marca.id || 0
+                    console.log("✅ Marca encontrada - ID:", marcaId)
+                    break
+                }
+            }
+        }
+        
+        marcaIdSeleccionada = marcaId
+        marcaSeleccionadaNombre = marcaNombre
+        
+        console.log("🏷️ Marca para edición - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
         
         // Actualizar UI
         if (codigoField) {
             codigoField.text = inputProductCode
-            codigoField.readOnly = true  // Código no editable en modo edición
+            codigoField.readOnly = true
         }
         if (nombreField) nombreField.text = inputProductName
         if (detallesField) detallesField.text = inputProductDetails
@@ -410,11 +431,13 @@ Rectangle {
         
         if (marcaComboBox && marcaIdSeleccionada > 0) {
             Qt.callLater(function() {
+                console.log("🎯 Llamando a forzarSeleccion:", marcaIdSeleccionada, marcaSeleccionadaNombre)
                 marcaComboBox.forzarSeleccion(marcaIdSeleccionada, marcaSeleccionadaNombre)
             })
+        } else {
+            console.log("⚠️ No se puede forzar selección - ID:", marcaIdSeleccionada)
         }
     }
-
     // ===============================
     // MODAL CENTRADO
     // ===============================
@@ -899,7 +922,7 @@ Rectangle {
                                     
                                     ScrollView {
                                         anchors.fill: parent
-                                        anchors.margins: 10
+                                        anchors.margins: 5
                                         clip: true
                                         
                                         TextArea {
@@ -915,7 +938,12 @@ Rectangle {
                                                 color: "transparent"
                                             }
                                             
-                                            placeholderText: "Información adicional del producto..."
+                                            Text {
+                                                text: "Información adicional del producto..."
+                                                color: grayMedium
+                                                visible: !parent.text
+                                                font: parent.font
+                                            }
                                         }
                                     }
                                 }

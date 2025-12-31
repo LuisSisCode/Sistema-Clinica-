@@ -621,7 +621,6 @@ class ProductoRepository(BaseRepository):
         except Exception as e:
             raise Exception(f"Error eliminando lote: {str(e)}")
     
-    @ExceptionHandler.handle_exception
     def actualizar_lote(self, lote_id: int, datos: dict) -> bool:
         """Actualiza un lote específico"""
         validate_required(lote_id, "lote_id")
@@ -637,7 +636,8 @@ class ProductoRepository(BaseRepository):
             
             producto_id = lote_info['Id_Producto']
             
-            campos_permitidos = ['Cantidad_Unitario', 'Fecha_Vencimiento']
+            # ✅ AGREGAR Precio_Compra A CAMPOS PERMITIDOS
+            campos_permitidos = ['Cantidad_Unitario', 'Fecha_Vencimiento', 'Precio_Compra']
             campos_update = []
             valores = []
             
