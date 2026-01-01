@@ -82,7 +82,6 @@ class EnfermeriaModel(QObject):
             # ✅ AUTENTICACIÓN CON ROL
             self._usuario_actual_id = 0
             self._usuario_actual_rol = ""  # ✅ NUEVO: Almacenar rol del usuario
-            print("🩹 EnfermeriaModel inicializado - Esperando autenticación")
             
             # Propiedades de paginación
             self._currentPage = 0
@@ -105,8 +104,6 @@ class EnfermeriaModel(QObject):
             
             # Inicialización inmediata
             self._inicializar_datos()
-            
-            logger.info("✅ EnfermeriaModel con restricciones de seguridad inicializado correctamente")
             
         except Exception as e:
             logger.error(f"❌ Error inicializando EnfermeriaModel: {e}")
@@ -1552,11 +1549,9 @@ class EnfermeriaModel(QObject):
         try:
             import json
             
-            print(f"🔍 DEBUG: Iniciando búsqueda para '{termino}'")
             
             # Detectar tipo
             tipo = self.detectar_tipo_busqueda(termino)
-            print(f"🔍 DEBUG: Tipo detectado: {tipo}")
             
             # Realizar búsqueda
             resultados = self.buscar_paciente_unificado(termino, 5)
@@ -1569,7 +1564,6 @@ class EnfermeriaModel(QObject):
             }
             
             resultado_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
-            print(f"🔍 DEBUG: Resultado completo:\n{resultado_json}")
             
             return resultado_json
             

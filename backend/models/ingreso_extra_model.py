@@ -53,9 +53,7 @@ class IngresoExtraModel(QObject):
     def _cargar_datos_iniciales(self):
         """Carga los datos iniciales del modelo"""
         try:
-            print("📊 IngresoExtraModel: Cargando datos iniciales...")
             self.cargar_ingresos()
-            print("✅ IngresoExtraModel: Datos iniciales cargados")
         except Exception as e:
             error_msg = f"Error cargando datos iniciales: {str(e)}"
             print(f"❌ {error_msg}")
@@ -65,23 +63,11 @@ class IngresoExtraModel(QObject):
     def cargar_ingresos(self):
         """✅ NUEVO: Carga todos los ingresos extras"""
         try:
-            print("📋 Cargando ingresos extras desde BD...")
             
             success, result = self.repository.obtener_todos_ingresos_extras()
             
             if success:
                 self._ingresos = result
-                print(f"✅ Ingresos extras cargados: {len(self._ingresos)}")
-                
-                # Debug detallado
-                if len(self._ingresos) == 0:
-                    print("⚠️ La tabla IngresosExtras está vacía (sin registros)")
-                else:
-                    print(f"📊 Primeros ingresos:")
-                    for i, ingreso in enumerate(self._ingresos[:3]):  # Mostrar primeros 3
-                        print(f"   {i+1}. ID: {ingreso.get('id')}, "
-                              f"Descripción: {ingreso.get('descripcion')}, "
-                              f"Monto: {ingreso.get('monto')}")
                 
                 self.ingresosActualizados.emit()
                 return True
@@ -105,7 +91,6 @@ class IngresoExtraModel(QObject):
     def set_usuario_actual_con_rol(self, usuario_id: int, usuario_rol: str):
         """Establece el usuario autenticado actual con su rol"""
         try:
-            print(f"👤 Usuario establecido en IngresoExtraModel: ID={usuario_id}, Rol={usuario_rol}")
             self._usuario_actual_id = usuario_id
             self._usuario_actual_rol = usuario_rol
             self.datosCambiados.emit()
@@ -126,11 +111,6 @@ class IngresoExtraModel(QObject):
     def agregar_ingreso_extra(self, descripcion: str, monto: float, fecha: str) -> bool:
         """✅ MEJORADO: Agrega un nuevo ingreso extra con debug"""
         try:
-            print(f"➕ Intentando agregar ingreso extra:")
-            print(f"   Descripción: {descripcion}")
-            print(f"   Monto: {monto}")
-            print(f"   Fecha: {fecha}")
-            print(f"   Usuario ID: {self._usuario_actual_id}")
             
             # Validación de usuario
             if self._usuario_actual_id <= 0:

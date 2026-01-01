@@ -31,9 +31,6 @@ class VentaRepository(BaseRepository):
         # ✅ CORREGIDO: Usar use_cache=False para obtener datos frescos
         resultado = self._execute_query(query, use_cache=False)
         
-        if resultado:
-            print(f"🛠 DEBUG: Primera venta: {resultado[0]}")
-        
         return resultado
     
     # ✅ NUEVO: Método para buscar productos directamente de tabla Productos
@@ -715,15 +712,12 @@ class VentaRepository(BaseRepository):
         """
         ✅ NUEVO: Valida y prepara un item usando datos directos de tabla Productos
         """
-        print(f"🔍 DEBUG: _validar_y_preparar_item_desde_productos recibió: {item} (tipo: {type(item)})")
         
         try:
             # Validaciones básicas
             codigo = item.get('codigo', '').strip()
             cantidad = item.get('cantidad', 0)
             precio = item.get('precio')
-            
-            print(f"🔍 DEBUG: Valores extraídos - codigo: {codigo}, cantidad: {cantidad}, precio: {precio}")
             
             validate_required(codigo, "codigo")
             validate_positive_number(cantidad, "cantidad")
@@ -733,8 +727,6 @@ class VentaRepository(BaseRepository):
             if not producto:
                 raise ProductoNotFoundError(codigo=codigo)
             
-            print(f"🔍 DEBUG: Producto encontrado: {producto['id']} - {producto['Nombre']}")
-            
             # ✅ VERIFICAR STOCK DIRECTAMENTE DE PRODUCTO
             stock_disponible = producto['Stock_Unitario'] or 0
             if stock_disponible < cantidad:
@@ -743,9 +735,6 @@ class VentaRepository(BaseRepository):
                     stock_disponible, 
                     cantidad
                 )
-            
-            print(f"🔍 DEBUG: Stock disponible: {stock_disponible}, solicitado: {cantidad}")
-            
             # Usar precio del producto si no se especifica
             if precio is None:
                 precio = float(producto['Precio_venta'])
@@ -764,7 +753,6 @@ class VentaRepository(BaseRepository):
                 'stock_disponible': stock_disponible
             }
             
-            print(f"🔍 DEBUG: Item preparado exitosamente: {item_preparado}")
             return item_preparado
             
         except Exception as e:

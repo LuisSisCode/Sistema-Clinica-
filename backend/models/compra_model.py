@@ -1,6 +1,7 @@
 """
-CompraModel - ACTUALIZADO con autenticación estandarizada
+CompraModel - ACTUALIZADO con autenticación estandarizada + FIFO 2.0
 Migrado del patrón sin autenticación al patrón de ConsultaModel
+✅ NUEVO: Integración completa con sistema FIFO 2.0
 """
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, Qt
@@ -19,7 +20,7 @@ from ..core.excepciones import (
 
 class CompraModel(QObject):
     """
-    Model QObject para gestión de compras con auto-creación de lotes - ACTUALIZADO con autenticación
+    Model QObject para gestión de compras con auto-creación de lotes - ACTUALIZADO con autenticación + FIFO 2.0
     Conecta directamente con QML mediante Signals/Slots/Properties
     """
     
@@ -92,10 +93,9 @@ class CompraModel(QObject):
         # Cargar datos iniciales
         self._cargar_compras_recientes()
         
-        print(f"🔍 DEBUG: Compras cargadas en __init__: {len(self._compras_recientes)}")
         self._cargar_proveedores()
         self._cargar_estadisticas()
-        print("📦 CompraModel inicializado con autenticación estandarizada")
+        print("📦 CompraModel inicializado con autenticación estandarizada + FIFO 2.0")
     
     # ===============================
     # ✅ MÉTODO REQUERIDO PARA APPCONTROLLER
@@ -594,6 +594,283 @@ class CompraModel(QObject):
             self.operacionError.emit(f"Error creando compra: {str(e)}")
             return False
     
+    # ===============================
+    # 🚀 NUEVOS SLOTS PARA FIFO 2.0
+    # ===============================
+    
+    @Slot(int, int, str, result='QVariant')
+    def registrar_compra_fifo_v2(self, proveedor_id: int, usuario_id: int, detalles_json: str):
+        """
+        🚀 FIFO 2.0: Registra compra usando procedimiento almacenado sp_Registrar_Compra_Con_Lotes
+        
+        Este método reemplaza el flujo legacy y usa el SP que maneja automáticamente:
+        - Creación de compra
+        - Creación de lotes con FIFO
+        - Actualización de precio base en primera compra
+        
+        Args:
+            proveedor_id: ID del proveedor
+            usuario_id: ID del usuario (debe ser usuario autenticado)
+            detalles_json: JSON con estructura:
+                [
+                    {
+                        "Id_Producto": 1,
+                        "Cantidad": 100,
+                        "Precio": 25.50,
+                        "Fecha_Vencimiento": "2025-12-31",  # opcional
+                        "Precio_Venta": 35.00  # solo si es primera compra
+                    },
+                    ...
+                ]
+        
+        Returns:
+            Dict: {
+                "id_compra": int,
+                "total": float,
+                "mensaje": str,
+                "sistema": "FIFO 2.0",
+                "exito": bool
+            }
+        """
+        # ✅ VERIFICAR AUTENTICACIÓN
+        if not self._verificar_autenticacion():
+            return {"exito": False, "mensaje": "Usuario no autenticado"}
+        
+        # Validar que el usuario sea el autenticado
+        if usuario_id != self._usuario_actual_id:
+            self.operacionError.emit("ID de usuario no coincide con usuario autenticado")
+            return {"exito": False, "mensaje": "Usuario no autorizado"}
+        
+        if proveedor_id <= 0:
+            self.operacionError.emit("Proveedor inválido")
+            return {"exito": False, "mensaje": "Proveedor inválido"}
+        
+        if not detalles_json or detalles_json.strip() == "":
+            self.operacionError.emit("No hay productos en la compra")
+            return {"exito": False, "mensaje": "No hay productos"}
+        
+        self._set_procesando_compra(True)
+        
+        try:
+            print(f"🚀 FIFO 2.0 - Registrando compra - Proveedor: {proveedor_id}, Usuario: {usuario_id}")
+            
+            # Parsear JSON
+            detalles = json.loads(detalles_json)
+            
+            if not detalles or len(detalles) == 0:
+                raise CompraError("Lista de productos vacía")
+            
+            # Validar estructura de cada item
+            for i, detalle in enumerate(detalles):
+                if 'Id_Producto' not in detalle:
+                    raise ValueError(f"Item {i+1}: falta Id_Producto")
+                if 'Cantidad' not in detalle or detalle['Cantidad'] <= 0:
+                    raise ValueError(f"Item {i+1}: Cantidad inválida")
+                if 'Precio_Unitario' not in detalle or detalle['Precio_Unitario'] <= 0:
+                    raise ValueError(f"Item {i+1}: Precio_Unitario inválido")
+                
+                # Si tiene Precio_Venta, validar que sea mayor al precio de compra
+                if 'Precio_Venta' in detalle:
+                    if detalle['Precio_Venta'] <= detalle['Precio_Unitario']:
+                        raise ValueError(
+                            f"Item {i+1}: Precio de venta (Bs{detalle['Precio_Venta']}) debe ser mayor al precio de compra (Bs{detalle['Precio_Unitario']})"
+                        )
+            
+            print(f"📋 Validación OK - {len(detalles)} productos a procesar")
+            
+            # Llamar al repository que usa el SP
+            resultado = safe_execute(
+                self.compra_repo.registrar_compra_con_lotes,
+                proveedor_id,
+                usuario_id,
+                detalles
+            )
+            
+            if resultado and resultado.get('id_compra'):
+                id_compra = resultado['id_compra']
+                total = resultado['total']
+                
+                print(f"✅ FIFO 2.0 - Compra registrada - ID: {id_compra}, Total: Bs{total:.2f}")
+                
+                # Limpiar items de compra actual
+                self.limpiar_items_compra()
+                
+                # Actualizar datos locales
+                QTimer.singleShot(0, self._update_all_data_after_purchase)
+                
+                # Emitir signals
+                self.compraCreada.emit(id_compra, total)
+                self.operacionExitosa.emit(f"Compra #{id_compra} registrada: Bs{total:.2f} (FIFO 2.0)")
+                
+                return {
+                    "exito": True,
+                    "id_compra": id_compra,
+                    "total": total,
+                    "mensaje": resultado.get('mensaje', 'Compra registrada exitosamente'),
+                    "sistema": "FIFO 2.0"
+                }
+            else:
+                raise CompraError("El procedimiento almacenado no retornó datos válidos")
+                
+        except json.JSONDecodeError as e:
+            error_msg = f"Error en formato JSON: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return {"exito": False, "mensaje": error_msg}
+            
+        except ValueError as e:
+            error_msg = str(e)
+            print(f"❌ Validación: {error_msg}")
+            self.operacionError.emit(error_msg)
+            return {"exito": False, "mensaje": error_msg}
+            
+        except Exception as e:
+            error_msg = f"Error registrando compra FIFO 2.0: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return {"exito": False, "mensaje": error_msg}
+            
+        finally:
+            self._set_procesando_compra(False)
+    
+    @Slot(int, result=bool)
+    def es_primera_compra_producto(self, producto_id: int):
+        """
+        🚀 FIFO 2.0: Detecta si es la primera compra de un producto
+        
+        Un producto es "primera compra" si NO tiene precio de venta definido (Precio_venta IS NULL)
+        
+        Args:
+            producto_id: ID del producto a verificar
+        
+        Returns:
+            bool: True si es primera compra (sin precio venta), False si ya tiene precio
+        """
+        if producto_id <= 0:
+            return False
+        
+        try:
+            # Consultar precio de venta actual
+            query = "SELECT Precio_venta FROM Productos WHERE id = ?"
+            resultado = safe_execute(
+                self.producto_repo._execute_query,
+                query,
+                (producto_id,),
+                fetch_one=True,
+                use_cache=False
+            )
+            
+            if not resultado:
+                print(f"⚠️ Producto {producto_id} no encontrado")
+                return False
+            
+            precio_venta = resultado.get('Precio_venta')
+            
+            # Es primera compra si Precio_venta es NULL o 0
+            es_primera = precio_venta is None or precio_venta == 0
+            
+            print(f"🔍 Producto {producto_id} - Precio venta: {precio_venta} - ¿Primera compra?: {es_primera}")
+            
+            return es_primera
+            
+        except Exception as e:
+            print(f"❌ Error verificando primera compra: {str(e)}")
+            self.operacionError.emit(f"Error verificando producto: {str(e)}")
+            return False
+    
+    @Slot(int, result='QVariant')
+    def obtener_datos_precio_producto(self, producto_id: int):
+        """
+        🚀 FIFO 2.0: Obtiene información de precio de un producto
+        
+        Args:
+            producto_id: ID del producto
+        
+        Returns:
+            Dict: {
+                "Precio_Venta": float o None,
+                "es_primera": bool,
+                "tiene_stock": bool,
+                "stock_actual": int,
+                "codigo": str,
+                "nombre": str
+            }
+        """
+        if producto_id <= 0:
+            return {
+                "Precio_Venta": None,
+                "es_primera": True,
+                "tiene_stock": False,
+                "stock_actual": 0,
+                "error": "ID inválido"
+            }
+        
+        try:
+            # Obtener datos completos del producto
+            query = """
+            SELECT 
+                p.id,
+                p.Codigo,
+                p.Nombre,
+                p.Precio_venta,
+                ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                        FROM Lote l 
+                        WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            FROM Productos p
+            WHERE p.id = ?
+            """
+            
+            resultado = safe_execute(
+                self.producto_repo._execute_query,
+                query,
+                (producto_id,),
+                fetch_one=True,
+                use_cache=False
+            )
+            
+            if not resultado:
+                return {
+                    "Precio_Venta": None,
+                    "es_primera": True,
+                    "tiene_stock": False,
+                    "stock_actual": 0,
+                    "error": "Producto no encontrado"
+                }
+            
+            precio_venta = resultado.get('Precio_venta')
+            stock_total = resultado.get('Stock_Total', 0)
+            
+            es_primera = precio_venta is None or precio_venta == 0
+            tiene_stock = stock_total > 0
+            
+            datos = {
+                "Precio_Venta": float(precio_venta) if precio_venta else None,
+                "es_primera": es_primera,
+                "tiene_stock": tiene_stock,
+                "stock_actual": int(stock_total),
+                "codigo": resultado.get('Codigo', ''),
+                "nombre": resultado.get('Nombre', '')
+            }
+            
+            print(f"💰 Datos precio producto {producto_id}: {datos}")
+            
+            return datos
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo datos de precio: {str(e)}")
+            self.operacionError.emit(f"Error obteniendo datos: {str(e)}")
+            return {
+                "Precio_Venta": None,
+                "es_primera": True,
+                "tiene_stock": False,
+                "stock_actual": 0,
+                "error": str(e)
+            }
+    
+    # ===============================
+    # FIN SLOTS FIFO 2.0
+    # ===============================
+    
     @Slot(int, str, result=bool)
     def compra_rapida_json(self, proveedor_id: int, items_json: str):
         """Procesa compra rápida desde JSON - ✅ CON VERIFICACIÓN DE AUTENTICACIÓN"""
@@ -681,6 +958,11 @@ class CompraModel(QObject):
     # SLOTS PARA QML - CONSULTAS (SIN VERIFICACIÓN - LECTURA)
     # ===============================
     
+    @Slot(int, result='QVariantMap')
+    def get_compra_completa(self, compra_id: int):
+        """Obtiene compra con todos sus detalles"""
+        return self.compra_repo.get_compra_completa(compra_id)
+
     @Slot(int, result='QVariant')
     def get_compra_detalle(self, compra_id: int):
         """Obtiene detalle completo de una compra CON INFORMACIÓN DE PRODUCTOS - SIN VERIFICACIÓN (solo lectura)"""
@@ -795,8 +1077,7 @@ class CompraModel(QObject):
             # Crear texto resumen para mostrar en tabla
             if len(productos) <= 2:
                 # Mostrar todos si son 2 o menos
-                nombres = [p.get('Producto_Nombre', 'Sin nombre') for p in productos]
-                productos_texto = ', '.join(nombres)
+                productos_texto = ', '.join([p.get('Producto_Nombre', 'Sin nombre') for p in productos])
             else:
                 # Mostrar primeros 2 + "... y X más"
                 primeros_dos = [p.get('Producto_Nombre', 'Sin nombre') for p in productos[:2]]
@@ -1181,55 +1462,32 @@ class CompraModel(QObject):
             return f"{parts[2]}-{parts[1]}-{parts[0]}"
         return fecha_str
 
-    def aplicar_filtro_proveedor(self, proveedor_filtro: str):
-        """Aplica filtro por proveedor"""
-        self._filtro_proveedor = proveedor_filtro
-        print(f"🏢 Filtro proveedor aplicado: {proveedor_filtro}")
-        self._aplicar_filtros_compras()
-
-    def emergency_disconnect(self):
-        """Desconexión de emergencia para CompraModel"""
+    def disconnect_all(self):
+        """Limpia conexiones y detiene timers antes de cerrar"""
         try:
-            print("🚨 CompraModel: Iniciando desconexión de emergencia...")
+            print("🔌 Desconectando CompraModel...")
             
-            # Detener timer
-            if hasattr(self, 'update_timer') and self.update_timer.isActive():
+            # Detener timer de auto-update
+            if hasattr(self, 'update_timer') and self.update_timer:
                 self.update_timer.stop()
-                print("   ⏹️ Update timer detenido")
+                print("⏱️ Timer de auto-update detenido")
             
-            # Establecer estado shutdown
-            self._loading = False
-            self._procesando_compra = False
+            # Limpiar referencias
+            self._proveedor_model_ref = None
+            self._inventario_model_ref = None
             
-            # Desconectar todas las señales
-            signals_to_disconnect = [
-                'comprasRecientesChanged', 'compraActualChanged', 'proveedoresChanged',
-                'historialComprasChanged', 'estadisticasChanged', 'topProductosCompradosChanged',
-                'compraCreada', 'proveedorCreado', 'operacionExitosa', 'operacionError',
-                'loadingChanged', 'procesandoCompraChanged', 'itemsCompraCambiado',
-                'proveedorCompraCompletada', 'proveedorDatosActualizados', 'filtrosChanged'
-            ]
+            # Desconectar signals si es posible
+            try:
+                self.proveedorCompraCompletada.disconnect()
+            except:
+                pass
             
-            for signal_name in signals_to_disconnect:
-                if hasattr(self, signal_name):
-                    try:
-                        getattr(self, signal_name).disconnect()
-                    except:
-                        pass
+            try:
+                self.proveedorDatosActualizados.disconnect()
+            except:
+                pass
             
-            # Limpiar datos
-            self._compras_recientes = []
-            self._compra_actual = {}
-            self._proveedores = []
-            self._items_compra = []
-            self._datos_originales = {}  # Limpiar datos edición
-            self._items_originales = []
-            
-            # Anular repositories
-            self.compra_repo = None
-            self.producto_repo = None
-            
-            print("✅ CompraModel: Desconexión de emergencia completada")
+            print("✅ CompraModel desconectado correctamente")
             
         except Exception as e:
             print(f"❌ Error en desconexión CompraModel: {e}")

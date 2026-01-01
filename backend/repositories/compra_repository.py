@@ -8,6 +8,7 @@ from ..core.excepciones import (
     ExceptionHandler, validate_required, validate_positive_number
 )
 from .producto_repository import ProductoRepository
+from ..core.config_fifo import config_fifo
 
 class CompraRepository(BaseRepository):
     """Repository para compras con creación automática de lotes"""
@@ -84,22 +85,45 @@ class CompraRepository(BaseRepository):
         
         # Detalles de la compra - CORREGIDO SIN CAJAS
         detalles_query = """
-        SELECT 
-            dc.*,
-            l.Fecha_Vencimiento,
-            p.Codigo as Producto_Codigo,
-            p.Nombre as Producto_Nombre,
-            m.Nombre as Marca_Nombre,
-            dc.Cantidad_Unitario as Cantidad_Total,
-            dc.Precio_Unitario as Subtotal,
-            dc.Precio_Unitario as Costo_Total
-        FROM DetalleCompra dc
-        INNER JOIN Lote l ON dc.Id_Lote = l.id
-        INNER JOIN Productos p ON l.Id_Producto = p.id
-        LEFT JOIN Marca m ON p.ID_Marca = m.id
-        WHERE dc.Id_Compra = ?
-        ORDER BY dc.id
-        """
+            SELECT 
+                dc.*,
+                l.Fecha_Vencimiento,
+                p.Codigo as Producto_Codigo,
+                p.Nombre as Producto_Nombre,
+                m.Nombre as Marca_Nombre,
+                dc.Cantidad_Unitario as Cantidad_Total,
+                
+                -- ✅ NUEVO: Precio unitario de compra
+                dc.Precio_Unitario as Precio_Unitario_Compra,
+                
+                -- Costo total del producto
+                dc.Precio_Unitario as Subtotal,
+                dc.Precio_Unitario as Costo_Total,
+                
+                -- ✅ NUEVO: Precio de venta actual del producto
+                p.Precio_venta as Precio_Venta_Actual,
+                
+                -- ✅ NUEVO: Calcular margen de ganancia
+                CASE 
+                    WHEN p.Precio_venta IS NOT NULL AND dc.Precio_Unitario > 0
+                    THEN ((p.Precio_venta - dc.Precio_Unitario) / dc.Precio_Unitario) * 100
+                    ELSE 0
+                END AS Margen_Porcentaje,
+                
+                -- ✅ NUEVO: Ganancia unitaria
+                CASE 
+                    WHEN p.Precio_venta IS NOT NULL
+                    THEN (p.Precio_venta - dc.Precio_Unitario)
+                    ELSE 0
+                END AS Ganancia_Unitaria
+                
+            FROM DetalleCompra dc
+            INNER JOIN Lote l ON dc.Id_Lote = l.id
+            INNER JOIN Productos p ON l.Id_Producto = p.id
+            LEFT JOIN Marca m ON p.ID_Marca = m.id
+            WHERE dc.Id_Compra = ?
+            ORDER BY dc.id
+            """
         detalles = self._execute_query(detalles_query, (compra_id,))
         
         compra['detalles'] = detalles
@@ -173,9 +197,14 @@ class CompraRepository(BaseRepository):
                 try:
                     item_preparado = self._validar_y_preparar_item(item)
                     items_preparados.append(item_preparado)
-                    # CORREGIDO: No multiplicar, precio_unitario YA es el costo total
-                    total_compra += Decimal(str(item_preparado['precio_unitario']))
-                    print(f"  ✅ Item {i+1}: {item_preparado['codigo']} - ${item_preparado['precio_unitario']}")
+                    
+                    # ✅ CORREGIDO: Calcular costo total = precio_unitario × cantidad
+                    precio_unit = Decimal(str(item_preparado['precio_unitario']))
+                    cantidad = Decimal(str(item_preparado['cantidad_unitario']))
+                    costo_total_item = precio_unit * cantidad
+                    total_compra += costo_total_item
+                    
+                    print(f"  ✅ Item {i+1}: {item_preparado['codigo']} - {cantidad}u × Bs{precio_unit} = Bs{costo_total_item}")
                 except Exception as e:
                     raise CompraError(f"Error en item {i+1} ({item.get('codigo', 'sin código')}): {str(e)}")
             
@@ -417,8 +446,7 @@ class CompraRepository(BaseRepository):
         validate_positive_number(precio_unitario, "precio_unitario")
         
         if cantidad_unitario <= 0:
-            raise ValidationError("cantidad_unitario", cantidad_unitario, 
-                                "Debe especificar cantidad unitaria mayor a 0")
+            raise ValueError(f"Cantidad unitaria debe ser mayor a 0 (recibido: {cantidad_unitario})")
 
         # VALIDACIÓN DE FECHA CORREGIDA - MANEJO SEGURO DE None Y STRINGS
         fecha_vencimiento_bd = None
@@ -437,8 +465,7 @@ class CompraRepository(BaseRepository):
                     fecha_vencimiento_bd = fecha_clean
                     print(f"✅ Fecha válida establecida: {fecha_vencimiento_bd}")
                 except ValueError:
-                    raise ValidationError("fecha_vencimiento", fecha_clean, 
-                                        "Formato debe ser YYYY-MM-DD")
+                    raise ValueError(f"Fecha vencimiento debe tener formato YYYY-MM-DD (recibido: '{fecha_clean}')")
             else:
                 print(f"📅 Producto sin vencimiento (fecha vacía o especial)")
         else:
@@ -466,7 +493,7 @@ class CompraRepository(BaseRepository):
             'producto_nombre': producto['Nombre'],
             'cantidad_unitario': cantidad_unitario,
             'cantidad_total': cantidad_total,
-            'precio_unitario': precio_unitario,  # COSTO TOTAL del producto
+            'precio_unitario': precio_unitario,  # ✅ PRECIO POR UNIDAD de compra
             'fecha_vencimiento': fecha_vencimiento_bd,  # None o fecha válida
             'producto': producto,
             'sin_vencimiento': fecha_vencimiento_bd is None
@@ -513,9 +540,10 @@ class CompraRepository(BaseRepository):
         # 3. Crear nuevo lote - SIN CANTIDAD_CAJA
         lote_id = None
         try:
-            precio_por_unidad = item['precio_unitario'] / item['cantidad_total'] if item['cantidad_total'] > 0 else 0
+            # ✅ CORREGIDO: precio_unitario YA es el precio por unidad, no dividir
+            precio_por_unidad = item['precio_unitario']
             
-            print(f"💰 Creando lote - Precio unitario calculado: {precio_por_unidad}")
+            print(f"💰 Creando lote - Precio unitario: Bs{precio_por_unidad} × {item['cantidad_unitario']}u = Bs{precio_por_unidad * item['cantidad_unitario']}")
             
             lote_id = self.producto_repo.aumentar_stock_compra(
                 producto_id=item['producto_id'],
@@ -540,7 +568,7 @@ class CompraRepository(BaseRepository):
                 'Id_Compra': compra_id,
                 'Id_Lote': lote_id,
                 'Cantidad_Unitario': item['cantidad_unitario'],
-                'Precio_Unitario': item['precio_unitario']  # COSTO TOTAL del producto
+                'Precio_Unitario': item['precio_unitario']  # ✅ PRECIO POR UNIDAD de compra
             }
             
             # Query SIN Cantidad_Caja
@@ -1175,31 +1203,45 @@ class CompraRepository(BaseRepository):
                 use_cache=False
             )
             
-            if result and result.get('IdCompra'):
-                id_compra = result['IdCompra']
-                total = float(result['Total'])
-                
-                # Invalidar cachés
-                self._invalidate_cache_after_modification()
-                
-                print(f"✅ Compra registrada exitosamente - ID: {id_compra}, Total: ${total:.2f}")
-                print(f"   Lotes creados automáticamente por el SP")
-                
-                return {
-                    "id_compra": id_compra,
-                    "total": total,
-                    "mensaje": f"Compra {id_compra} registrada con creación automática de {len(detalles)} lotes",
-                    "sistema": "FIFO 2.0"
-                }
+            # ✅ CORREGIDO: result puede ser int, tuple o dict dependiendo del driver
+            if result:
+                # Intentar obtener valores de diferentes formas
+                try:
+                    if isinstance(result, dict):
+                        id_compra = result.get('IdCompra') or result.get('id_compra')
+                        total = float(result.get('Total') or result.get('total') or 0)
+                    elif isinstance(result, (tuple, list)) and len(result) >= 2:
+                        id_compra = result[0]
+                        total = float(result[1])
+                    else:
+                        raise CompraError(f"Formato de resultado inesperado: {type(result)}")
+                    
+                    if not id_compra:
+                        raise CompraError("El procedimiento almacenado no retornó ID de compra")
+                    
+                    # Invalidar cachés
+                    self._invalidate_cache_after_modification()
+                    
+                    print(f"✅ Compra registrada exitosamente - ID: {id_compra}, Total: ${total:.2f}")
+                    print(f"   Lotes creados automáticamente por el SP")
+                    
+                    return {
+                        "id_compra": id_compra,
+                        "total": total,
+                        "mensaje": f"Compra {id_compra} registrada con creación automática de {len(detalles)} lotes",
+                        "sistema": "FIFO 2.0"
+                    }
+                except (KeyError, IndexError, TypeError) as parse_error:
+                    raise CompraError(f"Error procesando resultado del SP: {parse_error}, resultado: {result}")
             else:
-                raise CompraError("El procedimiento almacenado no retornó ID de compra")
+                raise CompraError("El procedimiento almacenado no retornó resultados")
                 
         except Exception as e:
             error_msg = str(e)
             print(f"❌ Error en compra con SP: {error_msg}")
             
             # Fallback a método antiguo si está configurado
-            from .config_fifo import config_fifo
+            
             if config_fifo.AUTO_FALLBACK_TO_LEGACY:
                 print("🔙 Intentando con método legacy...")
                 try:
@@ -1209,16 +1251,27 @@ class CompraRepository(BaseRepository):
                         items_legacy.append({
                             'codigo': self._get_codigo_producto(item['Id_Producto']),
                             'cantidad_unitario': item['Cantidad'],
-                            'precio_unitario': item['Precio'],
+                            'precio_unitario': item['Precio_Unitario'],  # ✅ CORREGIDO
                             'fecha_vencimiento': item.get('Fecha_Vencimiento')
                         })
                     
-                    return self.crear_compra(proveedor_id, usuario_id, items_legacy)
+                    # Llamar al método legacy
+                    resultado_legacy = self.crear_compra(proveedor_id, usuario_id, items_legacy)
+                    
+                    # ✅ CORREGIDO: Transformar resultado legacy al formato esperado
+                    if resultado_legacy:
+                        print(f"✅ Fallback legacy exitoso - ID: {resultado_legacy.get('id')}")
+                        return {
+                            "id_compra": resultado_legacy.get('id'),  # ← Transformar 'id' a 'id_compra'
+                            "total": float(resultado_legacy.get('Total', 0)),  # ← Transformar 'Total' a 'total'
+                            "mensaje": f"Compra {resultado_legacy.get('id')} registrada con método legacy ({len(detalles)} items)",
+                            "sistema": "Legacy (fallback)"
+                        }
                     
                 except Exception as fallback_error:
                     print(f"❌ Fallback también falló: {fallback_error}")
             
-            raise CompraError(f"Error registrando compra: {error_msg}")
+            raise CompraError(f"El procedimiento almacenado no retornó datos válidos")
     
     def _get_codigo_producto(self, producto_id: int) -> str:
         """Helper para obtener código de producto por ID"""

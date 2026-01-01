@@ -136,8 +136,6 @@ Item {
         var tiposData = []
 
         tiposData.push({id: 0, nombre: "Todos los tipos"})
-
-        console.log("📋 Procesando", length, "tipos de trabajador:")
         for (var i = 0; i < length; i++) {
             var tipo = tipos[i]
             if (tipo && tipo.Tipo) {
@@ -150,10 +148,6 @@ Item {
                     nombre: tipo.Tipo,
                     area_funcional: areaFuncional
                 })
-                console.log("   ", i + 1, "-", tipo.Tipo, 
-                          "(ID:", tipo.id, 
-                          "Área Funcional:", areaFuncional, 
-                          "Icono:", icono, ")")
             }
         }
 
@@ -196,7 +190,6 @@ Item {
             
             var nombres = ["Seleccionar tipo..."]
             
-            console.log("📋 Procesando tipos para combo:")
             for (var i = 0; i < length; i++) {
                 try {
                     var tipo = tipos[i]
@@ -204,9 +197,6 @@ Item {
                         var areaFuncional = tipo.area_funcional || null
                         var icono = obtenerIconoArea(areaFuncional)
                         nombres.push(icono + " " + tipo.Tipo)
-                        console.log("   ", i + 1, "-", tipo.Tipo, 
-                                "(Área Funcional:", areaFuncional, 
-                                "Icono:", icono, ")")
                     }
                 } catch (err) {
                     console.log("⚠️ Error procesando tipo en índice", i)
@@ -344,7 +334,6 @@ Item {
                     fechaRegistro: trabajador.fecha_registro || new Date().toISOString().split('T')[0]
                 }
                 trabajadoresListModel.append(trabajadorFormateado)
-                console.log("✅ Mostrando trabajador:", trabajador.nombre_completo, "- Tipo:", trabajador.tipo_nombre)
             }
         }
         
@@ -355,45 +344,6 @@ Item {
         }
     }
 
-    function debugTiposTrabajador() {
-        console.log("🐛 DEBUG DETALLADO - Tipos de Trabajador:")
-        if (!trabajadorModel) {
-            console.log("   ❌ trabajadorModel no disponible")
-            return
-        }
-        
-        var tipos = trabajadorModel.tiposTrabajador
-        console.log("   📋 Total tipos en modelo:", tipos.length)
-        
-        if (tipos.length === 0) {
-            console.log("   ⚠️ No hay tipos disponibles")
-            return
-        }
-        
-        for (var i = 0; i < tipos.length; i++) {
-            var tipo = tipos[i]
-            console.log("   " + (i + 1) + ". ID: " + tipo.id + 
-                    " | Tipo: '" + tipo.Tipo + 
-                    "' | Área: '" + (tipo.area_funcional || "NO DISPONIBLE") + "'")
-        }
-        
-        console.log("   🎯 COMBO ACTUAL:")
-        console.log("      Índice seleccionado:", tipoTrabajadorCombo.currentIndex)
-        
-        if (tipoTrabajadorCombo.currentIndex > 0) {
-            var tipoIndex = tipoTrabajadorCombo.currentIndex - 1
-            if (tipoIndex < tipos.length) {
-                var tipoActual = tipos[tipoIndex]
-                console.log("      Tipo seleccionado:", tipoActual.Tipo)
-                console.log("      Área funcional:", "'" + (tipoActual.area_funcional || "NO DISPONIBLE") + "'")
-                console.log("      Es médico?", tipoActual.area_funcional === "MEDICO")
-            } else {
-                console.log("      ❌ Índice fuera de rango")
-            }
-        } else {
-            console.log("      No hay tipo seleccionado")
-        }
-    }
 
     function debugTrabajadorCompleto(trabajadorId) {
         if (!trabajadorModel) {
@@ -1242,9 +1192,6 @@ Item {
                 workerForm.selectedTipoTrabajadorIndex = -1
             }
 
-            Qt.callLater(function() {
-                debugTiposTrabajador()
-            })
         }
         
         ColumnLayout {

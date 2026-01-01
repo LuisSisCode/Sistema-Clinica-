@@ -110,20 +110,16 @@ Item {
             }
             comprasPaginadasModel.append(compraQML)
         }
-        
-        
     }
     
-    // Función para obtener detalles de una compra
     function obtenerDetallesCompra(compraId) {
-        if (!compraModel) return
-        
         console.log("🔍 Obteniendo detalles mejorados para compra:", compraId)
         
         // Limpiar modelo antes de cargar nuevos datos
         detallesCompraModel.clear()
         
-        var detalleCompra = compraModel.get_compra_detalle(compraId)
+        // ✅ NOMBRE CORRECTO DEL MÉTODO
+        var detalleCompra = compraModel.get_compra_completa(compraId)
         console.log("📋 Detalle completo recibido:", JSON.stringify(detalleCompra))
         
         if (detalleCompra && detalleCompra.detalles) {
@@ -132,14 +128,36 @@ Item {
             
             for (var i = 0; i < items.length; i++) {
                 var item = items[i]
+                
+                // ✅ CALCULAR valores correctamente
+                var precioUnit = item.Precio_Unitario_Compra || 0
+                var cantidad = item.Cantidad_Total || 0
+                var costoTotal = precioUnit * cantidad  // ✅ CORREGIDO: Calcular total
+                
                 detallesCompraModel.append({
-                    codigo: item.codigo || "",
-                    nombre: item.nombre || "Producto no encontrado",
-                    marca: item.marca || "Sin marca",
-                    cantidad_unitario: item.cantidad_unitario || 0,
-                    cantidad_total: item.cantidad_total || 0,
-                    costo_total: item.costo_total || item.precio_unitario || item.subtotal || 0,
-                    fecha_vencimiento: item.fecha_vencimiento || "Sin fecha"
+                    codigo: item.Producto_Codigo || "",
+                    nombre: item.Producto_Nombre || "Producto no encontrado",
+                    marca: item.Marca_Nombre || "Sin marca",
+                    
+                    // ✅ NUEVO: Número de lote
+                    numero_lote: "L" + (item.Id_Lote || 0),
+                    
+                    // ✅ Precio unitario
+                    precio_unitario: precioUnit,
+                    
+                    // Cantidades
+                    cantidad_unitario: cantidad,
+                    cantidad_total: cantidad,
+                    
+                    // ✅ CORREGIDO: Costo total calculado
+                    costo_total: costoTotal,
+                    
+                    // ✅ Precio venta y ganancia
+                    precio_venta_actual: item.Precio_Venta_Actual || 0,
+                    ganancia_unitaria: item.Ganancia_Unitaria || 0,
+                    margen_porcentaje: item.Margen_Porcentaje || 0,
+                    
+                    fecha_vencimiento: item.Fecha_Vencimiento || "Sin fecha"
                 })
             }
             console.log("📦 Items procesados en modal:", detallesCompraModel.count)
@@ -162,6 +180,7 @@ Item {
             console.log("❌ Error cargando compra para edición")
         }
     }
+    
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
@@ -520,7 +539,7 @@ Item {
                                     }
                                 }
                                 
-                                // NUEVA COLUMNA: PRODUCTOS
+                                // NUEVA COLUMNA: PRODUCTOS - Mejorada visualmente
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.minimumWidth: 250
@@ -535,23 +554,25 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         spacing: 8
                                         
-                                        // Ícono de productos
+                                        // Badge de cantidad mejorado
                                         Rectangle {
-                                            Layout.preferredWidth: 20
-                                            Layout.preferredHeight: 20
-                                            color: "#27AE60"
-                                            radius: 10
+                                            Layout.preferredWidth: 28
+                                            Layout.preferredHeight: 28
+                                            color: "#2196F3"
+                                            radius: 14
+                                            border.color: "#1976D2"
+                                            border.width: 1
                                             
                                             Label {
                                                 anchors.centerIn: parent
                                                 text: model.total_productos || 0
                                                 color: "#FFFFFF"
                                                 font.bold: true
-                                                font.pixelSize: 10
+                                                font.pixelSize: 12
                                             }
                                         }
                                         
-                                        // Texto de productos
+                                        // Texto de productos mejorado
                                         Label {
                                             text: model.productos_texto || "Sin productos"
                                             color: "#2C3E50"
@@ -939,7 +960,7 @@ Item {
         MouseArea {
             anchors.fill: parent
             onClicked: {
-                showPurchaseDetailsDialog = false
+                // No hacer nada - bloquear interacción con elementos detrás
             }
         }
     }
@@ -947,7 +968,7 @@ Item {
     Rectangle {
         id: modalContainer
         anchors.centerIn: parent
-        width: Math.min(1000, parent.width * 0.95)  // Aumentado para nueva columna
+        width: Math.min(1300, parent.width * 0.95)  // Aumentado para nuevas columnas
         height: Math.min(600, parent.height * 0.9)
         
         visible: showPurchaseDetailsDialog
@@ -982,7 +1003,6 @@ Item {
                         Layout.preferredHeight: 50
                         color: "#3498DB"
                         radius: 25
-                        
                     }
                     
                     ColumnLayout {
@@ -1041,7 +1061,7 @@ Item {
                 }
             }
             
-            // Tabla de productos COMPLETAMENTE CORREGIDA
+            // Tabla de productos COMPLETAMENTE CORREGIDA CON NUEVAS COLUMNAS
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -1054,7 +1074,7 @@ Item {
                     anchors.fill: parent
                     spacing: 0
                     
-                    // Header de tabla mejorado
+                    // Header de tabla mejorado CON NUEVAS COLUMNAS
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 45
@@ -1112,6 +1132,38 @@ Item {
                                 }
                             }
                             
+                            // ✅ COLUMNA LOTE (AGREGADA DESPUÉS DE MARCA)
+                            Rectangle {
+                                Layout.preferredWidth: 70
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "LOTE"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            // NUEVA COLUMNA: PRECIO UNITARIO
+                            Rectangle {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "P. UNIT"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
                             Rectangle {
                                 Layout.preferredWidth: 80
                                 Layout.fillHeight: true
@@ -1142,6 +1194,54 @@ Item {
                                 }
                             }
                             
+                            // NUEVA COLUMNA: PRECIO VENTA
+                            Rectangle {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "P. VENTA"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            // ✅ COLUMNA GANANCIA (AGREGADA DESPUÉS DE P. VENTA)
+                            Rectangle {
+                                Layout.preferredWidth: 90
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "GANANCIA"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
+                            // NUEVA COLUMNA: MARGEN
+                            Rectangle {
+                                Layout.preferredWidth: 90
+                                Layout.fillHeight: true
+                                color: "#34495E"
+                                border.color: "#2C3E50"
+                                border.width: 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "MARGEN"
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                }
+                            }
+                            
                             Rectangle {
                                 Layout.preferredWidth: 110
                                 Layout.fillHeight: true
@@ -1159,7 +1259,7 @@ Item {
                         }
                     }
                     
-                    // Contenido scrolleable mejorado
+                    // Contenido scrolleable mejorado CON NUEVAS COLUMNAS
                     ScrollView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -1241,6 +1341,40 @@ Item {
                                         }
                                     }
                                     
+                                    // ✅ COLUMNA LOTE (AGREGADA DESPUÉS DE MARCA)
+                                    Rectangle {
+                                        Layout.preferredWidth: 70
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: model.numero_lote || "N/A"
+                                            color: "#8E44AD"
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                        }
+                                    }
+                                    
+                                    // NUEVA COLUMNA: PRECIO UNITARIO
+                                    Rectangle {
+                                        Layout.preferredWidth: 80
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "Bs " + (model.precio_unitario || 0).toFixed(2)
+                                            color: "#3498DB"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+                                    }
+                                    
                                     // UNIDADES
                                     Rectangle {
                                         Layout.preferredWidth: 80
@@ -1266,7 +1400,7 @@ Item {
                                         }
                                     }
                                     
-                                    // COSTO TOTAL - NUEVA SECCIÓN AGREGADA
+                                    // COSTO TOTAL
                                     Rectangle {
                                         Layout.preferredWidth: 90
                                         Layout.fillHeight: true
@@ -1287,6 +1421,98 @@ Item {
                                                 color: "#FFFFFF"
                                                 font.bold: true
                                                 font.pixelSize: 10
+                                            }
+                                        }
+                                    }
+                                    
+                                    // NUEVA COLUMNA: PRECIO VENTA
+                                    Rectangle {
+                                        Layout.preferredWidth: 80
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: model.precio_venta_actual > 0 ? ("Bs " + model.precio_venta_actual.toFixed(2)) : "N/A"
+                                            color: "#27AE60"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+                                    }
+                                    
+                                    // ✅ COLUMNA GANANCIA (AGREGADA DESPUÉS DE P. VENTA)
+                                    Rectangle {
+                                        Layout.preferredWidth: 90
+                                        Layout.fillHeight: true
+                                        color: model.ganancia_unitaria > 0 ? "#E8F5E9" : "#FFEBEE"
+                                        border.color: "#D5DBDB"
+                                        border.width: 1
+                                        
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            
+                                            Label {
+                                                text: "Bs " + (model.ganancia_unitaria || 0).toFixed(2)
+                                                color: model.ganancia_unitaria > 0 ? "#2E7D32" : "#C62828"
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                            
+                                            Label {
+                                                text: "× " + (model.cantidad_unitario || 0)
+                                                color: "#666"
+                                                font.pixelSize: 9
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                        }
+                                    }
+                                    
+                                    // NUEVA COLUMNA: MARGEN
+                                    Rectangle {
+                                        Layout.preferredWidth: 90
+                                        Layout.fillHeight: true
+                                        color: {
+                                            var margen = model.margen_porcentaje || 0
+                                            if (margen >= 50) return "#E8F5E9"      // Verde claro
+                                            if (margen >= 30) return "#FFF3E0"      // Naranja claro
+                                            return "#FFEBEE"                         // Rojo claro
+                                        }
+                                        border.color: {
+                                            var margen = model.margen_porcentaje || 0
+                                            if (margen >= 50) return "#4CAF50"      // Verde
+                                            if (margen >= 30) return "#FF9800"      // Naranja
+                                            return "#F44336"                         // Rojo
+                                        }
+                                        border.width: 2
+                                        
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 4
+                                            
+                                            Label {
+                                                text: {
+                                                    var margen = model.margen_porcentaje || 0
+                                                    if (margen >= 50) return "✅"
+                                                    if (margen >= 30) return "⚠️"
+                                                    return "❌"
+                                                }
+                                                font.pixelSize: 12
+                                            }
+                                            
+                                            Label {
+                                                text: (model.margen_porcentaje || 0).toFixed(0) + "%"
+                                                color: {
+                                                    var margen = model.margen_porcentaje || 0
+                                                    if (margen >= 50) return "#2E7D32"
+                                                    if (margen >= 30) return "#E65100"
+                                                    return "#C62828"
+                                                }
+                                                font.bold: true
+                                                font.pixelSize: 11
                                             }
                                         }
                                     }
@@ -1343,98 +1569,150 @@ Item {
                                 }
                             }
                         }
-                        MouseArea {
-                            anchors.fill: parent
-                            visible: mostrandoMenuContextual
-                            z: 5
-                            onClicked: {
-                                mostrandoMenuContextual = false
-                                compraMenuContextual = null
-                            }
-                        }
+                        
                     }
                 }
             }
             
-            // RESUMEN CORREGIDO
+            // ✅ FOOTER MEJORADO CON 4 SECCIONES
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                color: "#2C3E50"
-                radius: 8
+                Layout.preferredHeight: 80
+                color: "#34495E"
                 
                 RowLayout {
                     anchors.fill: parent
                     anchors.margins: 16
-                    spacing: 30
+                    spacing: 20
                     
-                    // Total productos
-                    RowLayout {
-                        spacing: 8
-                        
-                        Rectangle {
-                            width: 30
-                            height: 30
-                            color: "#3498DB"
-                            radius: 15
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "📦"
-                                font.pixelSize: 14
-                            }
-                        }
+                    // PRODUCTOS
+                    Rectangle {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 50
+                        color: "#2C3E50"
+                        radius: 8
                         
                         ColumnLayout {
-                            spacing: 2
+                            anchors.centerIn: parent
+                            spacing: 4
                             
                             Label {
-                                text: "Productos:"
+                                text: "📦 PRODUCTOS"
                                 color: "#BDC3C7"
-                                font.pixelSize: 11
+                                font.pixelSize: 10
+                                Layout.alignment: Qt.AlignHCenter
                             }
                             
                             Label {
                                 text: detallesCompraModel.count.toString()
-                                color: "#FFFFFF"
+                                color: "#3498DB"
                                 font.bold: true
-                                font.pixelSize: 14
+                                font.pixelSize: 18
+                                Layout.alignment: Qt.AlignHCenter
                             }
                         }
                     }
-             
-                    // Total compra (CORREGIDO)
-                    RowLayout {
-                        spacing: 8
-                        
-                        Rectangle {
-                            width: 35
-                            height: 35
-                            color: "#27AE60"
-                            radius: 17
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "💰"
-                                font.pixelSize: 16
-                            }
-                        }
+                    
+                    // TOTAL GASTADO
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 50
+                        color: "#E74C3C"
+                        radius: 8
                         
                         ColumnLayout {
-                            spacing: 2
+                            anchors.centerIn: parent
+                            spacing: 4
                             
                             Label {
-                                text: "TOTAL GASTADO:"
-                                color: "#BDC3C7"
-                                font.pixelSize: 12
-                                font.bold: true
+                                text: "💸 TOTAL GASTADO"
+                                color: "#FFFFFF"
+                                font.pixelSize: 10
+                                Layout.alignment: Qt.AlignHCenter
                             }
                             
                             Label {
-                                text: "Bs" + (selectedPurchase ? selectedPurchase.total.toFixed(2) : "0.00")
+                                text: {
+                                    var total = 0
+                                    for (var i = 0; i < detallesCompraModel.count; i++) {
+                                        total += detallesCompraModel.get(i).costo_total || 0
+                                    }
+                                    return "Bs " + total.toFixed(2)
+                                }
                                 color: "#FFFFFF"
                                 font.bold: true
-                                font.pixelSize: 16
+                                font.pixelSize: 20
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                        }
+                    }
+                    
+                    // GANANCIA TOTAL
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 50
+                        color: "#27AE60"
+                        radius: 8
+                        
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 4
+                            
+                            Label {
+                                text: "💰 GANANCIA TOTAL"
+                                color: "#FFFFFF"
+                                font.pixelSize: 10
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                            
+                            Label {
+                                text: {
+                                    var ganancia = 0
+                                    for (var i = 0; i < detallesCompraModel.count; i++) {
+                                        var item = detallesCompraModel.get(i)
+                                        ganancia += (item.ganancia_unitaria || 0) * (item.cantidad_unitario || 0)
+                                    }
+                                    return "Bs " + ganancia.toFixed(2)
+                                }
+                                color: "#FFFFFF"
+                                font.bold: true
+                                font.pixelSize: 20
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                        }
+                    }
+                    
+                    // MARGEN PROMEDIO
+                    Rectangle {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 50
+                        color: "#F39C12"
+                        radius: 8
+                        
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 4
+                            
+                            Label {
+                                text: "📊 MARGEN"
+                                color: "#FFFFFF"
+                                font.pixelSize: 10
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                            
+                            Label {
+                                text: {
+                                    var total = 0
+                                    var count = detallesCompraModel.count
+                                    for (var i = 0; i < count; i++) {
+                                        total += detallesCompraModel.get(i).margen_porcentaje || 0
+                                    }
+                                    return (count > 0 ? (total / count) : 0).toFixed(0) + "%"
+                                }
+                                color: "#FFFFFF"
+                                font.bold: true
+                                font.pixelSize: 18
+                                Layout.alignment: Qt.AlignHCenter
                             }
                         }
                     }
@@ -1464,7 +1742,7 @@ Item {
         id: deleteConfirmDialog
         anchors.centerIn: parent
         width: 400
-        height: 200
+        height: 300
         
         visible: showDeleteConfirmDialog
         z: 2001
@@ -1598,22 +1876,32 @@ Item {
         }
     }
 
-    // SISTEMA DE NOTIFICACIÓN VISUAL - Agregar antes de Component.onCompleted
+    // 🚀 SISTEMA DE NOTIFICACIÓN MEJORADO - FIFO 2.0
     Rectangle {
         id: notificationToast
-        anchors.centerIn: parent
-        anchors.right: parent.right
-        anchors.margins: 20
-        anchors.topMargin: 80
-        width: 300
-        height: 50
-        color: "#27ae60"
-        radius: 8
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottomMargin: 80
+        width: 400
+        height: 80
+        color: notificationToast.notificationType === "fifo" ? "#2196F3" : "#27ae60"
+        radius: 12
         visible: false
         opacity: 0
         z: 2000
         
         property string notificationText: ""
+        property string notificationType: "success"  // "success", "fifo", "error"
+        property string notificationSubtext: ""
+        
+        // Sombra simple con Rectangle
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 4
+            color: "#40000000"
+            radius: 12
+            z: -1
+        }
         
         Behavior on opacity {
             NumberAnimation { duration: 300 }
@@ -1621,45 +1909,59 @@ Item {
         
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 8
+            anchors.margins: 16
+            spacing: 12
             
             Rectangle {
-                width: 20
-                height: 20
+                Layout.preferredWidth: 40
+                Layout.preferredHeight: 40
                 color: "#ffffff"
-                radius: 10
+                radius: 20
                 
                 Label {
                     anchors.centerIn: parent
-                    text: "✓"
-                    color: "#27ae60"
-                    font.bold: true
-                    font.pixelSize: 12
+                    text: notificationToast.notificationType === "fifo" ? "🚀" : "✅"
+                    font.pixelSize: 20
                 }
             }
             
-            Label {
-                text: notificationToast.notificationText
-                color: "#ffffff"
-                font.bold: true
-                font.pixelSize: 12
+            ColumnLayout {
                 Layout.fillWidth: true
-                wrapMode: Text.WordWrap
+                spacing: 4
+                
+                Label {
+                    text: notificationToast.notificationText
+                    color: "#ffffff"
+                    font.bold: true
+                    font.pixelSize: 14
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+                
+                Label {
+                    visible: notificationToast.notificationSubtext !== ""
+                    text: notificationToast.notificationSubtext
+                    color: "#E3F2FD"
+                    font.pixelSize: 11
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
             }
         }
         
         Timer {
             id: hideNotificationTimer
-            interval: 3000
+            interval: 4000
             onTriggered: {
                 notificationToast.opacity = 0
                 notificationToast.visible = false
             }
         }
         
-        function showToast(message) {
+        function showToast(message, subtext, type) {
             notificationText = message
+            notificationSubtext = subtext || ""
+            notificationType = type || "success"
             visible = true
             opacity = 1
             hideNotificationTimer.restart()
@@ -1672,15 +1974,31 @@ Item {
     }
     
     // FUNCIÓN DE NOTIFICACIÓN (agregar si no existe)
-    function showNotification(message, type) {
-        console.log(`[${type.toUpperCase()}] ${message}`)
+    function showNotification(message, subtext, type) {
+        console.log(`[${(type || 'success').toUpperCase()}] ${message}`)
         if (notificationToast) {
-            notificationToast.showToast(message)
+            notificationToast.showToast(message, subtext || "", type || "success")
         }
     }
-    // Conexiones con el modelo
+    
+    // 🚀 Conexiones mejoradas con el modelo
     Connections {
         target: compraModel
+        
+        // 🚀 NUEVO: Detectar compras FIFO 2.0
+        function onCompraCreada(compraId, total) {
+            console.log("🚀 Nueva compra creada - ID:", compraId, "Total:", total)
+            
+            // Mostrar notificación FIFO 2.0
+            showNotification(
+                `Compra #${compraId} registrada exitosamente`,
+                `Total: Bs${total.toFixed(2)} - Sistema FIFO 2.0`,
+                "fifo"
+            )
+            
+            // Actualizar lista
+            Qt.callLater(actualizarPaginacionCompras)
+        }
         
         function onOperacionExitosa(mensaje) {
             if (mensaje.includes("compra") || mensaje.includes("eliminad")) {
@@ -1690,7 +2008,6 @@ Item {
         }
         
         function onComprasRecientesChanged() {
-
             actualizarPaginacionCompras()
         }
     }

@@ -126,7 +126,6 @@ class IngresoExtraRepository(BaseRepository):
             cursor.close()
             conn.close()
             
-            print(f"✅ Obtenidos {len(result)} ingresos extras")
             
             # Debug de los primeros registros
             if len(result) > 0:

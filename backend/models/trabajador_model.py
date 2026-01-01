@@ -65,14 +65,10 @@ class TrabajadorModel(QObject):
         self._usuario_actual_rol = ""
         self._debug_calls = []  # Log de llamadas
         
-        print(f"🆔 NUEVA INSTANCIA TrabajadorModel: {self._instance_id}")
-        
         # Repository en lugar de service
         self.repository = TrabajadorRepository()
         self.global_signals = get_global_signals()
         self._conectar_senales_globales()
-        
-        print(f"🔍 TrabajadorModel.__init__: _usuario_actual_id={self._usuario_actual_id}, _usuario_actual_rol='{self._usuario_actual_rol}'")
         
         # Filtros activos
         self._filtro_tipo: int = 0
@@ -82,7 +78,6 @@ class TrabajadorModel(QObject):
         
         # Configuración inicial
         self._cargar_datos_iniciales()
-        print("👷‍♂️ TrabajadorModel inicializado con debug simple")
 
     # ===============================
     # MÉTODOS DE DEBUG
@@ -1426,16 +1421,6 @@ class TrabajadorModel(QObject):
             
             # ✅ DEBUG DETALLADO: Mostrar información completa de los tipos
             print(f"🏷️ Tipos de trabajador cargados: {len(self._tipos_trabajador)}")
-            if self._tipos_trabajador:
-                for i, tipo in enumerate(self._tipos_trabajador):
-                    print(f"   {i+1}. ID: {tipo.get('id', 'N/A')}")
-                    print(f"      Tipo: '{tipo.get('Tipo', 'N/A')}'")
-                    print(f"      Área Funcional: '{tipo.get('area_funcional', 'NO DISPONIBLE')}'")
-                    print(f"      Descripción: '{tipo.get('descripcion', 'N/A')}'")
-                    print(f"      Total trabajadores: {tipo.get('total_trabajadores', 0)}")
-                    print(f"      ---")
-            else:
-                print("   ⚠️ Lista de tipos está vacía")
                     
         except Exception as e:
             print(f"❌ Error cargando tipos de trabajador: {e}")

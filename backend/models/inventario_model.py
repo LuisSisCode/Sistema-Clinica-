@@ -86,7 +86,6 @@ class InventarioModel(QObject):
         self._cargar_datos_iniciales()
         self._setup_venta_listener()
         
-        print("🏪 InventarioModel CORREGIDO inicializado - CRUD COMPLETO - SOLO STOCK UNITARIO")
     
     # ===============================
     # MÉTODO REQUERIDO PARA APPCONTROLLER
@@ -1498,8 +1497,6 @@ class InventarioModel(QObject):
                         'detalles': marca_detalles   # Para QML
                     }
                     marcas_normalizadas.append(marca_normalizada)
-            
-            print(f"🏷️ Marcas cargadas desde BD: {len(marcas_normalizadas)}")
             
             # Debug: Mostrar primeras 3 marcas
             if marcas_normalizadas:

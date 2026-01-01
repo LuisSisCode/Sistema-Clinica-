@@ -623,7 +623,6 @@ class AppController(QObject):
             if self.ingreso_extra_model:
                 if hasattr(self.ingreso_extra_model, 'errorOcurrido'):
                     self.ingreso_extra_model.errorOcurrido.connect(self._on_model_error)
-                logger.info("✅ IngresoExtraModel conectado")
             # ===== CONEXIONES DE ERRORES Y ÉXITOS - VERSIÓN SEGURA =====
             models_with_errors = [
                 self.inventario_model, self.venta_model, self.compra_model,
@@ -2107,7 +2106,6 @@ class AuthAppController(QObject):
                     if os.path.exists(icon_path):
                         from PySide6.QtGui import QIcon
                         window.setIcon(QIcon(icon_path))
-                        logger.info(f"✅ Icono de ventana establecido: {icon_path}")
                         icon_loaded = True
                         break
                 

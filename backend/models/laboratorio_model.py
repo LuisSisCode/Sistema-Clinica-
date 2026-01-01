@@ -177,7 +177,6 @@ class LaboratorioModel(QObject):
             self.global_signals.trabajadoresNecesitaActualizacion.connect(self._actualizar_trabajadores_desde_signal)
             self.global_signals.tiposTrabajadoresModificados.connect(self._actualizar_trabajadores_desde_signal)
             
-            print("Señales globales conectadas en LaboratorioModel")
         except Exception as e:
             print(f"Error conectando señales globales en LaboratorioModel: {e}")
     

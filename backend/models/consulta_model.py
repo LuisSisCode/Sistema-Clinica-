@@ -1225,8 +1225,6 @@ class ConsultaModel(QObject):
                 # Si ya está formateado DD/MM/YYYY
                 if '/' in fecha and len(fecha) == 10:
                     return fecha
-            
-            print(f"🔍 DEBUG: Tipo de fecha no reconocido: {type(fecha)} - Valor: {fecha}")
             return "Sin fecha"
             
         except Exception as e:

@@ -378,7 +378,6 @@ class LoginBackend(QObject):
             return []
         
         users = self.db.get_test_users()
-        print(f"📋 Obtenidos {len(users)} usuarios de la base de datos")
         return users
     
     @Slot(result='QVariant')
