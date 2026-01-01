@@ -336,12 +336,14 @@ class DashboardModel(QObject):
             inicio = inicio.replace(hour=0, minute=0, second=0, microsecond=0)
             fin = inicio + timedelta(days=7)
         elif self._periodo_actual == "mes":
-            # Mes específico seleccionado
-            inicio = datetime(self._ano_seleccionado, self._mes_seleccionado, 1)
+            # ✅ CORREGIDO: Siempre usa día 1 para calcular rangos de mes
+            inicio = datetime(self._ano_seleccionado, self._mes_seleccionado, 1, 0, 0, 0, 0)
+            
+            # Calcular el primer día del mes siguiente
             if self._mes_seleccionado == 12:
-                fin = datetime(self._ano_seleccionado + 1, 1, 1)
+                fin = datetime(self._ano_seleccionado + 1, 1, 1, 0, 0, 0, 0)
             else:
-                fin = datetime(self._ano_seleccionado, self._mes_seleccionado + 1, 1)
+                fin = datetime(self._ano_seleccionado, self._mes_seleccionado + 1, 1, 0, 0, 0, 0)
         elif self._periodo_actual == "año":
             # Año completo seleccionado
             inicio = datetime(self._ano_seleccionado, 1, 1)
@@ -356,7 +358,6 @@ class DashboardModel(QObject):
         
         print(f"📅 Rango calculado: {inicio.strftime('%Y-%m-%d')} a {fin.strftime('%Y-%m-%d')}")
         return inicio, fin
-    
     # ===============================
     # ACTUALIZACIÓN POR MÓDULO - CON VALIDACIÓN DE REPOSITORIOS
     # ===============================
