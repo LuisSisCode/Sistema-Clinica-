@@ -343,9 +343,42 @@ ScrollView {
             dashboardModel.cambiarPeriodo(currentPeriodType)
         }
         
-        // Cargar alertas solo una vez al inicio
+        // Intentar cargar alertas inmediatamente
         if (inventarioModel) {
+            console.log("📢 InventarioModel disponible - Cargando alertas")
             cargarAlertas()
+        } else {
+            console.log("⏳ InventarioModel no listo - Esperando signal productosChanged")
+        }
+    }
+    
+    // ✅ NUEVO: Listener para cuando inventarioModel esté listo
+    Connections {
+        target: inventarioModel
+        
+        function onProductosChanged() {
+            // Cargar alertas cuando los productos estén listos
+            if (!datosCargados && inventarioModel) {
+                console.log("📢 Productos actualizados - Cargando alertas automáticamente")
+                cargarAlertas()
+            }
+        }
+    }
+    
+    // ✅ NUEVO: Timer de respaldo si Connections falla
+    Timer {
+        id: alertasRetryTimer
+        interval: 2000  // 2 segundos
+        running: !datosCargados && inventarioModel !== null
+        repeat: true
+        triggeredOnStart: false
+        onTriggered: {
+            console.log("⏱️ Reintentando cargar alertas...")
+            cargarAlertas()
+            if (datosCargados) {
+                stop()  // Detener cuando ya cargó
+                console.log("✅ Alertas cargadas - Timer detenido")
+            }
         }
     }
     

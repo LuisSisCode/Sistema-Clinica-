@@ -33,19 +33,29 @@ class CompraRepository(BaseRepository):
         return self._execute_query(query)
     
     def get_compras_con_detalles(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
-        """Obtiene compras con sus detalles en período específico - CORREGIDO"""
+        """✅ CORREGIDO: Obtiene compras con filtro de fechas preciso (solo el período solicitado)"""
         where_clause = ""
         params = []
         
         if fecha_desde and fecha_hasta:
-            where_clause = "WHERE c.Fecha BETWEEN ? AND ?"
+            # ✅ CORRECCIÓN: Usar >= y < en lugar de BETWEEN
+            # Esto asegura que solo se incluyan fechas del período exacto
+            where_clause = """
+            WHERE CAST(c.Fecha AS DATE) >= CAST(? AS DATE)
+              AND CAST(c.Fecha AS DATE) < CAST(? AS DATE)
+            """
             params = [fecha_desde, fecha_hasta]
+            print(f"📅 Filtro de compras: {fecha_desde} a {fecha_hasta} (exclusivo)")
         elif fecha_desde:
-            where_clause = "WHERE c.Fecha >= ?"
+            where_clause = "WHERE CAST(c.Fecha AS DATE) >= CAST(? AS DATE)"
             params = [fecha_desde]
+            print(f"📅 Filtro de compras: desde {fecha_desde}")
         elif fecha_hasta:
-            where_clause = "WHERE c.Fecha <= ?"
+            where_clause = "WHERE CAST(c.Fecha AS DATE) < CAST(? AS DATE)"
             params = [fecha_hasta]
+            print(f"📅 Filtro de compras: hasta {fecha_hasta} (exclusivo)")
+        else:
+            print("⚠️ Sin filtro de fechas - retornando TODAS las compras")
         
         query = f"""
         SELECT 
@@ -65,7 +75,20 @@ class CompraRepository(BaseRepository):
         GROUP BY c.id, c.Fecha, c.Total, p.Nombre, p.Direccion, u.Nombre, u.Apellido_Paterno
         ORDER BY c.Fecha DESC
         """
-        return self._execute_query(query, tuple(params))
+        
+        resultado = self._execute_query(query, tuple(params))
+        
+        # ✅ Log de verificación
+        if resultado:
+            print(f"✅ Compras filtradas: {len(resultado)} compras encontradas")
+            if len(resultado) > 0:
+                primera_fecha = resultado[0].get('Fecha', '')
+                ultima_fecha = resultado[-1].get('Fecha', '')
+                print(f"   📅 Rango real: {ultima_fecha} a {primera_fecha}")
+        else:
+            print(f"⚠️ No se encontraron compras en el período")
+        
+        return resultado
     
     def get_compra_completa(self, compra_id: int) -> Dict[str, Any]:
         """Obtiene compra con todos sus detalles - CORREGIDO SIN CAJAS"""
@@ -1162,15 +1185,14 @@ class CompraRepository(BaseRepository):
             
             print(f"🛒 Registrando compra con SP - Proveedor: {proveedor_id}, Items: {len(detalles)}")
             
-            # ✅ VERIFICACIÓN MEJORADA: Por proveedor en últimos 5 SEGUNDOS
-            # Detecta duplicados incluso con clics de milisegundos
+            # ✅ VERIFICACIÓN SIMPLIFICADA: Solo por proveedor en últimos 30 segundos
+            # Esto evita compras duplicadas muy rápidas
             duplicado_query = """
-            SELECT TOP 1 id, Fecha,
-                   DATEDIFF(MILLISECOND, Fecha, GETDATE()) as DiferenciaMS
+            SELECT TOP 1 id 
             FROM Compra 
             WHERE Id_Proveedor = ? 
                 AND Id_Usuario = ?
-                AND DATEDIFF(SECOND, Fecha, GETDATE()) <= 5
+                AND DATEDIFF(SECOND, Fecha, GETDATE()) <= 30
             ORDER BY Fecha DESC
             """
             
@@ -1182,9 +1204,7 @@ class CompraRepository(BaseRepository):
             )
             
             if duplicado:
-                diferencia_ms = duplicado.get('DiferenciaMS', 0)
-                print(f"🚫 DUPLICADO DETECTADO: Última compra hace {diferencia_ms}ms")
-                raise CompraError(f"⚠️ Ya registró una compra hace {diferencia_ms}ms. Espere al menos 5 segundos.")
+                raise CompraError(f"⚠️ Ya hay una compra reciente del proveedor {proveedor_id}. Espere unos segundos antes de intentar nuevamente.")
             
             # Ejecutar procedimiento almacenado
             query = """

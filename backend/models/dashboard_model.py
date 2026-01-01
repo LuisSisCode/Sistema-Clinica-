@@ -16,6 +16,7 @@ try:
     from backend.repositories.consulta_repository import ConsultaRepository
     from backend.repositories.laboratorio_repository import LaboratorioRepository
     from backend.repositories.enfermeria_repository import EnfermeriaRepository
+    from backend.repositories.compra_repository import CompraRepository  # ✅ NUEVO
     from backend.core.database_conexion import DatabaseConnection
 except ImportError:
     # Fallback para importaciones relativas
@@ -26,6 +27,7 @@ except ImportError:
         from ..repositories.consulta_repository import ConsultaRepository
         from ..repositories.laboratorio_repository import LaboratorioRepository
         from ..repositories.enfermeria_repository import EnfermeriaRepository
+        from ..repositories.compra_repository import CompraRepository  # ✅ NUEVO
         from ..core.database_conexion import DatabaseConnection
     except ImportError as e:
         print(f"❌ Error importando repositorios: {e}")
@@ -79,6 +81,7 @@ class DashboardModel(QObject):
             self.laboratorio_repo = LaboratorioRepository()
             # CORREGIDO: Usar DatabaseConnection para EnfermeriaRepository
             self.enfermeria_repo = EnfermeriaRepository(DatabaseConnection())
+            self.compra_repo = CompraRepository()  # ✅ Para calcular egresos
             print("📊 Repositorios inicializados correctamente")
         except Exception as e:
             print(f"⚠️ Error inicializando repositorios: {e}")
@@ -89,6 +92,7 @@ class DashboardModel(QObject):
             self.consulta_repo = None
             self.laboratorio_repo = None
             self.enfermeria_repo = None
+            self.compra_repo = None
         
         # Estado interno
         self._periodo_actual = "mes"  # hoy, semana, mes, año
@@ -100,7 +104,7 @@ class DashboardModel(QObject):
         self._consultas_total = 0.00
         self._laboratorio_total = 0.00
         self._enfermeria_total = 0.00
-        self._servicios_basicos_total = 0.00
+        self._servicios_basicos_total = 0.00  # ✅ Incluirá gastos + compras
         
         self._grafico_ingresos = []
         self._grafico_egresos = []
@@ -157,7 +161,7 @@ class DashboardModel(QObject):
     
     @Property(float, notify=dashboardUpdated)
     def totalEgresos(self):
-        """Total consolidado de egresos"""
+        """Total consolidado de egresos (gastos + compras)"""
         return round(self._servicios_basicos_total, 2)
     
     @Property(float, notify=dashboardUpdated)
@@ -302,7 +306,7 @@ class DashboardModel(QObject):
             self._actualizar_consultas_data(fecha_inicio, fecha_fin)
             self._actualizar_laboratorio_data(fecha_inicio, fecha_fin)
             self._actualizar_enfermeria_data(fecha_inicio, fecha_fin)
-            self._actualizar_servicios_basicos_data(fecha_inicio, fecha_fin)
+            self._actualizar_servicios_basicos_data(fecha_inicio, fecha_fin)  # ✅ Incluye gastos + compras
             
             # Actualizar gráficos y alertas
             self._actualizar_datos_grafico(fecha_inicio, fecha_fin)
@@ -320,12 +324,15 @@ class DashboardModel(QObject):
         ahora = datetime.now()
         
         if self._periodo_actual == "hoy":
-            inicio = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
+            # ✅ Usar año/mes seleccionado, no fecha actual
+            fecha_base = datetime(self._ano_seleccionado, self._mes_seleccionado, datetime.now().day)
+            inicio = fecha_base.replace(hour=0, minute=0, second=0, microsecond=0)
             fin = inicio + timedelta(days=1)
         elif self._periodo_actual == "semana":
-            # Semana actual (lunes a domingo)
-            dias_desde_lunes = ahora.weekday()
-            inicio = ahora - timedelta(days=dias_desde_lunes)
+            # ✅ Usar año/mes seleccionado para calcular la semana
+            fecha_base = datetime(self._ano_seleccionado, self._mes_seleccionado, datetime.now().day)
+            dias_desde_lunes = fecha_base.weekday()
+            inicio = fecha_base - timedelta(days=dias_desde_lunes)
             inicio = inicio.replace(hour=0, minute=0, second=0, microsecond=0)
             fin = inicio + timedelta(days=7)
         elif self._periodo_actual == "mes":
@@ -556,35 +563,58 @@ class DashboardModel(QObject):
             self.enfermeriaDataChanged.emit()
     
     def _actualizar_servicios_basicos_data(self, fecha_inicio: datetime, fecha_fin: datetime):
-        """CORREGIDO: Sincronizar con CierreCaja"""
+        """✅ CORREGIDO: Calcula egresos totales (gastos + compras)"""
         try:
-            if not self.gasto_repo:
-                print("⚠️ GastoRepository no disponible")
-                self._servicios_basicos_total = 0.00
-                self.serviciosBasicosDataChanged.emit()
-                return
+            total_gastos = 0.00
+            total_compras = 0.00
+            
+            # 1. Sumar GASTOS (servicios básicos)
+            if self.gasto_repo:
+                print(f"🔍 Dashboard - Buscando gastos entre {fecha_inicio.strftime('%Y-%m-%d')} y {fecha_fin.strftime('%Y-%m-%d')}")
+                gastos = self.gasto_repo.get_expenses_by_date_range(fecha_inicio, fecha_fin)
                 
-            print(f"🔍 Dashboard - Buscando gastos entre {fecha_inicio.strftime('%Y-%m-%d')} y {fecha_fin.strftime('%Y-%m-%d')}")
+                for gasto in gastos:
+                    monto = float(gasto.get('Monto', 0))
+                    if monto > 0:
+                        total_gastos += monto
+                
+                print(f"⚡ Dashboard - Gastos calculados: Bs {total_gastos:.2f} ({len(gastos)} gastos)")
+            else:
+                print("⚠️ GastoRepository no disponible")
             
-            # CORREGIDO: Usar el mismo método que CierreCaja
-            gastos = self.gasto_repo.get_expenses_by_date_range(fecha_inicio, fecha_fin)
+            # 2. Sumar COMPRAS
+            if self.compra_repo:
+                print(f"🔍 Dashboard - Buscando compras entre {fecha_inicio.strftime('%Y-%m-%d')} y {fecha_fin.strftime('%Y-%m-%d')}")
+                
+                # Usar get_compras_con_detalles con el campo correcto
+                compras = self.compra_repo.get_compras_con_detalles(
+                    fecha_desde=fecha_inicio.strftime('%Y-%m-%d'),
+                    fecha_hasta=fecha_fin.strftime('%Y-%m-%d')
+                )
+                
+                for compra in compras:
+                    # ✅ CORREGIDO: El campo es "Compra_Total", no "Total"
+                    monto = float(compra.get('Compra_Total', 0))
+                    if monto > 0:
+                        total_compras += monto
+                
+                print(f"📦 Dashboard - Compras calculadas: Bs {total_compras:.2f} ({len(compras)} compras)")
+            else:
+                print("⚠️ CompraRepository no disponible")
             
-            total = 0.00
-            for gasto in gastos:
-                monto = float(gasto.get('Monto', 0))
-                if monto > 0:  # Validar que el monto sea válido
-                    total += monto
+            # 3. Sumar TODO
+            total_egresos = total_gastos + total_compras
+            print(f"💰 Dashboard - EGRESOS TOTALES: Bs {total_egresos:.2f} (Gastos: {total_gastos:.2f} + Compras: {total_compras:.2f})")
             
-            print(f"⚡ Dashboard - Servicios Básicos calculados: Bs {total:.2f} ({len(gastos)} gastos)")
-            
-            if total != self._servicios_basicos_total:
-                self._servicios_basicos_total = round(total, 2)
+            if total_egresos != self._servicios_basicos_total:
+                self._servicios_basicos_total = round(total_egresos, 2)
                 self.serviciosBasicosDataChanged.emit()
                 
         except Exception as e:
-            print(f"❌ Error actualizando servicios básicos en dashboard: {e}")
+            print(f"❌ Error actualizando egresos en dashboard: {e}")
             self._servicios_basicos_total = 0.00
             self.serviciosBasicosDataChanged.emit()
+    
     
     def _actualizar_datos_grafico(self, fecha_inicio: datetime, fecha_fin: datetime):
         """Actualiza datos para gráficos de tendencias"""
