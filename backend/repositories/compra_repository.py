@@ -1,6 +1,8 @@
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
+import hashlib
+import json
 
 from ..core.base_repository import BaseRepository
 from ..core.excepciones import (
@@ -1141,31 +1143,11 @@ class CompraRepository(BaseRepository):
         """
         
         return self._execute_query(query, (proveedor_id,), fetch_one=True) or {}
-    # ===============================
-    # 🚀 SISTEMA FIFO 2.0 - MÉTODOS NUEVOS
-    # Usan procedimientos almacenados de SQL Server
-    # ===============================
-    
+   
     def registrar_compra_con_lotes(self, proveedor_id: int, usuario_id: int, detalles: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         🚀 FIFO 2.0: Registra compra usando procedimiento almacenado sp_Registrar_Compra_Con_Lotes
-        
-        Args:
-            proveedor_id: ID del proveedor
-            usuario_id: ID del usuario que realiza la compra
-            detalles: Lista de diccionarios con:
-                [
-                    {
-                        "Id_Producto": 1,
-                        "Cantidad": 10,
-                        "Precio": 25.50,
-                        "Fecha_Vencimiento": "2025-12-31"  # opcional
-                    },
-                    ...
-                ]
-        
-        Returns:
-            Dict con id_compra, total y mensaje de confirmación
+        ✅ VERSIÓN CORREGIDA - SIN VERIFICACIÓN PREVIA CON HASH
         """
         try:
             validate_required(proveedor_id, "proveedor_id")
@@ -1179,7 +1161,30 @@ class CompraRepository(BaseRepository):
             detalles_json = json.dumps(detalles)
             
             print(f"🛒 Registrando compra con SP - Proveedor: {proveedor_id}, Items: {len(detalles)}")
-            print(f"📋 Detalles JSON: {detalles_json}")
+            
+            # ✅ VERIFICACIÓN MEJORADA: Por proveedor en últimos 5 SEGUNDOS
+            # Detecta duplicados incluso con clics de milisegundos
+            duplicado_query = """
+            SELECT TOP 1 id, Fecha,
+                   DATEDIFF(MILLISECOND, Fecha, GETDATE()) as DiferenciaMS
+            FROM Compra 
+            WHERE Id_Proveedor = ? 
+                AND Id_Usuario = ?
+                AND DATEDIFF(SECOND, Fecha, GETDATE()) <= 5
+            ORDER BY Fecha DESC
+            """
+            
+            duplicado = self._execute_query(
+                duplicado_query,
+                (proveedor_id, usuario_id),
+                fetch_one=True,
+                use_cache=False
+            )
+            
+            if duplicado:
+                diferencia_ms = duplicado.get('DiferenciaMS', 0)
+                print(f"🚫 DUPLICADO DETECTADO: Última compra hace {diferencia_ms}ms")
+                raise CompraError(f"⚠️ Ya registró una compra hace {diferencia_ms}ms. Espere al menos 5 segundos.")
             
             # Ejecutar procedimiento almacenado
             query = """
@@ -1203,10 +1208,10 @@ class CompraRepository(BaseRepository):
                 use_cache=False
             )
             
-            # ✅ CORREGIDO: result puede ser int, tuple o dict dependiendo del driver
+            # ✅ CORREGIDO: Manejo seguro del resultado
             if result:
-                # Intentar obtener valores de diferentes formas
                 try:
+                    # Obtener valores de forma segura
                     if isinstance(result, dict):
                         id_compra = result.get('IdCompra') or result.get('id_compra')
                         total = float(result.get('Total') or result.get('total') or 0)
@@ -1214,25 +1219,70 @@ class CompraRepository(BaseRepository):
                         id_compra = result[0]
                         total = float(result[1])
                     else:
-                        raise CompraError(f"Formato de resultado inesperado: {type(result)}")
+                        # Si no podemos obtener los valores, intentar con query separada
+                        raise ValueError("Formato de resultado inesperado")
                     
-                    if not id_compra:
-                        raise CompraError("El procedimiento almacenado no retornó ID de compra")
+                    if not id_compra or id_compra <= 0:
+                        raise CompraError("El procedimiento almacenado no retornó ID de compra válido")
+                    
+                    # ✅ AHORA SÍ: Calcular hash DESPUÉS de crear la compra
+                    import hashlib
+                    compra_hash = hashlib.md5(
+                        json.dumps({
+                            'proveedor_id': proveedor_id,
+                            'usuario_id': usuario_id,
+                            'detalles': detalles,
+                            'timestamp': datetime.now().isoformat()
+                        }, sort_keys=True).encode()
+                    ).hexdigest()
+                    
+                    # Actualizar hash en la compra recién creada
+                    update_hash_query = "UPDATE Compra SET Compra_Hash = ? WHERE id = ?"
+                    self._execute_query(
+                        update_hash_query,
+                        (compra_hash, id_compra),
+                        fetch_all=False,
+                        use_cache=False
+                    )
                     
                     # Invalidar cachés
                     self._invalidate_cache_after_modification()
                     
-                    print(f"✅ Compra registrada exitosamente - ID: {id_compra}, Total: ${total:.2f}")
-                    print(f"   Lotes creados automáticamente por el SP")
+                    print(f"✅ Compra registrada exitosamente - ID: {id_compra}, Total: ${total:.2f}, Hash: {compra_hash}")
                     
                     return {
+                        "exito": True,
                         "id_compra": id_compra,
                         "total": total,
-                        "mensaje": f"Compra {id_compra} registrada con creación automática de {len(detalles)} lotes",
+                        "mensaje": f"Compra {id_compra} registrada exitosamente",
                         "sistema": "FIFO 2.0"
                     }
-                except (KeyError, IndexError, TypeError) as parse_error:
-                    raise CompraError(f"Error procesando resultado del SP: {parse_error}, resultado: {result}")
+                    
+                except Exception as parse_error:
+                    print(f"❌ Error procesando resultado del SP: {parse_error}")
+                    # Intentar obtener el último ID insertado como fallback
+                    last_id_query = "SELECT MAX(id) as last_id FROM Compra WHERE Id_Proveedor = ? AND Id_Usuario = ?"
+                    last_result = self._execute_query(
+                        last_id_query,
+                        (proveedor_id, usuario_id),
+                        fetch_one=True,
+                        use_cache=False
+                    )
+                    
+                    if last_result and last_result.get('last_id'):
+                        id_compra = last_result['last_id']
+                        total = sum(item.get('Precio_Unitario', 0) * item.get('Cantidad', 0) for item in detalles)
+                        
+                        print(f"⚠️ Usando fallback - Último ID: {id_compra}")
+                        return {
+                            "exito": True,
+                            "id_compra": id_compra,
+                            "total": total,
+                            "mensaje": f"Compra {id_compra} registrada (fallback)",
+                            "sistema": "FIFO 2.0 (fallback)"
+                        }
+                    else:
+                        raise CompraError("No se pudo determinar el ID de la compra creada")
             else:
                 raise CompraError("El procedimiento almacenado no retornó resultados")
                 
@@ -1240,39 +1290,10 @@ class CompraRepository(BaseRepository):
             error_msg = str(e)
             print(f"❌ Error en compra con SP: {error_msg}")
             
-            # Fallback a método antiguo si está configurado
-            
-            if config_fifo.AUTO_FALLBACK_TO_LEGACY:
-                print("🔙 Intentando con método legacy...")
-                try:
-                    # Convertir formato de detalles para método antiguo
-                    items_legacy = []
-                    for item in detalles:
-                        items_legacy.append({
-                            'codigo': self._get_codigo_producto(item['Id_Producto']),
-                            'cantidad_unitario': item['Cantidad'],
-                            'precio_unitario': item['Precio_Unitario'],  # ✅ CORREGIDO
-                            'fecha_vencimiento': item.get('Fecha_Vencimiento')
-                        })
-                    
-                    # Llamar al método legacy
-                    resultado_legacy = self.crear_compra(proveedor_id, usuario_id, items_legacy)
-                    
-                    # ✅ CORREGIDO: Transformar resultado legacy al formato esperado
-                    if resultado_legacy:
-                        print(f"✅ Fallback legacy exitoso - ID: {resultado_legacy.get('id')}")
-                        return {
-                            "id_compra": resultado_legacy.get('id'),  # ← Transformar 'id' a 'id_compra'
-                            "total": float(resultado_legacy.get('Total', 0)),  # ← Transformar 'Total' a 'total'
-                            "mensaje": f"Compra {resultado_legacy.get('id')} registrada con método legacy ({len(detalles)} items)",
-                            "sistema": "Legacy (fallback)"
-                        }
-                    
-                except Exception as fallback_error:
-                    print(f"❌ Fallback también falló: {fallback_error}")
-            
-            raise CompraError(f"El procedimiento almacenado no retornó datos válidos")
-    
+            # ❌ **IMPORTANTE**: NO usar fallback legacy automático
+            # Esto podría causar más duplicaciones
+            raise CompraError(f"Error registrando compra: {error_msg}")
+
     def _get_codigo_producto(self, producto_id: int) -> str:
         """Helper para obtener código de producto por ID"""
         try:
@@ -1285,3 +1306,43 @@ class CompraRepository(BaseRepository):
             return result['Codigo'] if result else str(producto_id)
         except:
             return str(producto_id)
+        
+    
+    def verificar_compra_duplicada(self, proveedor_id: int, items: List[Dict[str, Any]], ventana_segundos: int = 5) -> bool:
+        """
+        ✅ VERSIÓN CORREGIDA - Usa la columna Compra_Hash
+        """
+        try:
+            
+            # Calcular hash de la compra actual
+            compra_hash = hashlib.md5(
+                json.dumps({
+                    'proveedor_id': proveedor_id,
+                    'items': items
+                }, sort_keys=True).encode()
+            ).hexdigest()
+            
+            # Buscar compras idénticas recientes
+            query = """
+            SELECT TOP 1 id 
+            FROM Compra 
+            WHERE Compra_Hash = ?
+                AND DATEDIFF(SECOND, Fecha, GETDATE()) <= ?
+            """
+            
+            resultado = self._execute_query(
+                query, 
+                (compra_hash, ventana_segundos),
+                fetch_one=True,
+                use_cache=False
+            )
+            
+            if resultado:
+                print(f"⚠️ Compra duplicada detectada - Hash: {compra_hash}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando duplicado: {str(e)}")
+            return False

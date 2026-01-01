@@ -151,20 +151,24 @@ Item {
         onTriggered: showSuccessMessage = false
     }
 
-    // ✅ Timer para resetear botón después de compra
+    // ✅ Timer para resetear botón después de compra (AHORA TAMBIÉN RESETEA CONTADOR)
     Timer {
         id: resetButtonTimer
         interval: 2000
         onTriggered: {
             completarCompraButton.text = modoEdicion ? "💾 Guardar Cambios" : "📦 Completar Compra"
             procesandoCompra = false
-            // ✅ Re-calcular enabled del botón
+            // ✅ RE-CALCULAR enabled del botón
             completarCompraButton.enabled = Qt.binding(function() {
                 return !procesandoCompra &&
                     (providerCombo ? providerCombo.currentIndex > 0 : false) && 
                     (compraModel ? compraModel.items_en_compra > 0 : false) &&
                     productoEditandoIndex < 0
             })
+            
+            // ✅ **CORRECCIÓN IMPORTANTE**: RESETEAR CONTADOR SOLO DESPUÉS DE COMPLETAR TODO EL PROCESO
+            contadorClics = 0
+            console.log("🔄 Contador de clics reseteado (compra completada)")
         }
     }
     // ============================================================================
@@ -560,7 +564,7 @@ Item {
         inputCantidad = 0
         inputPrecioTotalCompra = 0.0
         inputPrecioUnitarioCalculado = 0.0
-        inputMargenPorcentaje = 100.0
+        inputMargenPorcentaje: 100.0
         inputPrecioVentaSugerido = 0.0
         inputPrecioVentaFinal = 0.0
         inputGananciaUnitaria = 0.0
@@ -574,7 +578,9 @@ Item {
         productoEditandoIndex = -1
         esPrimeraCompra = false
 
-        contadorClics = 0
+        // ❌ **CORRECCIÓN CRÍTICA**: NO resetear contadorClics aquí
+        // El contador se resetea solo cuando se completa la compra o se cancela
+        // contadorClics = 0  // ❌ ELIMINADO PARA EVITAR DUPLICACIONES
         
         if (productCodeField) productCodeField.text = ""
         if (cantidadField) cantidadField.text = "" 
@@ -1016,7 +1022,7 @@ Item {
                 }
                 
                 Label {
-                    text: "💡 Para gestionar proveedores, usa Farmacia → Proveedores"
+                    text: "💡 Para gestiónar proveedores, usa Farmacia → Proveedores"
                     color: "#666"
                     font.pixelSize: fontSmall
                     font.italic: true
@@ -2036,12 +2042,14 @@ Item {
                             console.log("✅ Compra ejecutada exitosamente")
                             Qt.callLater(function() {
                                 completarCompraButton.text = modoEdicion ? "✅ ¡Actualizado!" : "✅ ¡Completado!"
+                                // ✅ INICIAR TIMER PARA RESETEO COMPLETO
+                                resetButtonTimer.restart()
                             })
                         } else {
                             console.log("❌ Error en compra - Reactivando botón")
                             completarCompraButton.enabled = true
                             completarCompraButton.text = modoEdicion ? "💾 Guardar Cambios" : "📦 Completar Compra"
-                            contadorClics = 0  // Reset del contador
+                            contadorClics = 0  // Reset del contador solo en error
                         }
                     }
                 }

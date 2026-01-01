@@ -636,6 +636,7 @@ class CompraModel(QObject):
         if not self._verificar_autenticacion():
             return {"exito": False, "mensaje": "Usuario no autenticado"}
         
+        
         # Validar que el usuario sea el autenticado
         if usuario_id != self._usuario_actual_id:
             self.operacionError.emit("ID de usuario no coincide con usuario autenticado")
