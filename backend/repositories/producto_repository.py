@@ -964,10 +964,11 @@ class ProductoRepository(BaseRepository):
     
     def obtener_lotes_activos_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
         """
-        🚀 FIFO 2.0: Obtiene detalle de lotes activos usando vista vw_Lotes_Activos
+        🚀 FIFO 2.0: Obtiene detalle de lotes activos Y vencidos usando vista vw_Lotes_Activos
         ✅ COLUMNAS EXACTAS: id, Id_Producto, Codigo, Producto, Marca, Cantidad_Inicial, 
                             Stock_Actual, Precio_Compra, Fecha_Compra, Fecha_Vencimiento,
                             Dias_para_Vencer, Estado_Vencimiento, Estado_Lote, etc.
+        ✅ AHORA INCLUYE: Lotes activos + lotes vencidos (sin filtro de stock)
         """
         try:
             if producto_id:
@@ -990,9 +991,31 @@ class ProductoRepository(BaseRepository):
                     Proveedor
                 FROM vw_Lotes_Activos
                 WHERE Id_Producto = ?
-                ORDER BY Dias_para_Vencer
+                UNION ALL
+                SELECT 
+                    l.id AS Id_Lote,
+                    l.Id_Producto,
+                    p.Codigo AS Producto_Codigo,
+                    p.Nombre AS Producto_Nombre,
+                    m.Nombre AS Marca,
+                    l.Cantidad_Unitario AS Cantidad_Inicial,
+                    l.Cantidad_Unitario AS Stock_Lote,
+                    l.Precio_Compra,
+                    l.Fecha_Compra,
+                    l.Fecha_Vencimiento,
+                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                    'VENCIDO' AS Estado_Vencimiento,
+                    'VENCIDO' AS Estado_Lote,
+                    NULL AS Id_Compra,
+                    NULL AS Proveedor
+                FROM Lote l
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                LEFT JOIN Marca m ON p.ID_Marca = m.id
+                WHERE l.Id_Producto = ?
+                AND l.Fecha_Vencimiento < GETDATE()
+                ORDER BY Dias_para_Vencer, Estado_Lote DESC
                 """
-                params = (producto_id,)
+                params = (producto_id, producto_id)
             else:
                 query = """
                 SELECT 
@@ -1012,7 +1035,28 @@ class ProductoRepository(BaseRepository):
                     Id_Compra,
                     Proveedor
                 FROM vw_Lotes_Activos
-                ORDER BY Dias_para_Vencer
+                UNION ALL
+                SELECT 
+                    l.id AS Id_Lote,
+                    l.Id_Producto,
+                    p.Codigo AS Producto_Codigo,
+                    p.Nombre AS Producto_Nombre,
+                    m.Nombre AS Marca,
+                    l.Cantidad_Unitario AS Cantidad_Inicial,
+                    l.Cantidad_Unitario AS Stock_Lote,
+                    l.Precio_Compra,
+                    l.Fecha_Compra,
+                    l.Fecha_Vencimiento,
+                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                    'VENCIDO' AS Estado_Vencimiento,
+                    'VENCIDO' AS Estado_Lote,
+                    NULL AS Id_Compra,
+                    NULL AS Proveedor
+                FROM Lote l
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                LEFT JOIN Marca m ON p.ID_Marca = m.id
+                WHERE l.Fecha_Vencimiento < GETDATE()
+                ORDER BY Dias_para_Vencer, Estado_Lote DESC
                 """
                 params = ()
             
@@ -1046,17 +1090,17 @@ class ProductoRepository(BaseRepository):
                 else:
                     lote['Fecha_Compra'] = ""
             
-            print(f"📦 Lotes activos obtenidos: {len(lotes)} lotes - Sistema FIFO 2.0")
+            print(f"📦 Lotes obtenidos: {len(lotes)} lotes (activos + vencidos) - Sistema FIFO 2.0")
             return lotes
             
         except Exception as e:
-            print(f"❌ Error obteniendo lotes activos (vista): {e}")
+            print(f"❌ Error obteniendo lotes (vista): {e}")
             # Fallback a método antiguo si está configurado
             try:
                 from ..core.config_fifo import config_fifo
                 if config_fifo.AUTO_FALLBACK_TO_LEGACY and producto_id:
                     print("🔙 Usando método legacy como fallback...")
-                    return self.get_lotes_producto(producto_id, solo_activos=True)
+                    return self.get_lotes_producto(producto_id, solo_activos=False)
             except:
                 pass
             return []
