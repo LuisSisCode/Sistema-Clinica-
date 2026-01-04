@@ -47,6 +47,11 @@ Rectangle {
     // CONTROL DE CARGA INICIAL
     property bool datosInicialmenteCargados: false
     
+    // PROPIEDADES PARA ÚLTIMA VENTA
+    property string ultimaVentaFecha: ""
+    property real ultimaVentaCantidad: 0
+    property bool cargandoUltimaVenta: false
+    
     // ===============================
     // SEÑALES
     // ===============================
@@ -83,6 +88,11 @@ Rectangle {
             // 2. Cargar datos de precios y márgenes
             cargarPreciosYMargenes()
             
+            // 3. Si no hay stock, cargar última venta
+            if (productoData.stockUnitario === 0 || productoData.stock === 0) {
+                cargarUltimaVenta()
+            }
+            
         } catch (error) {
             console.log("❌ Error cargando datos:", error.toString())
         } finally {
@@ -99,23 +109,19 @@ Rectangle {
         try {
             console.log("📦 Cargando lotes FIFO 2.0 para producto ID:", productoData.id)
             
-            // Llamar a método FIFO 2.0
-            var lotes = inventarioModel.obtener_lotes_activos_vista(productoData.id)
+            // ✅ CAMBIO: Usar método que devuelve TODOS los lotes (activos + agotados)
+            var lotes = inventarioModel.get_lotes_producto_fifo(productoData.id)
             
-            if (lotes) {
+            if (lotes && lotes.length > 0) {
                 lotesData = lotes
                 lotesLoaded = true
                 
                 console.log("✅ Lotes cargados:", lotes.length)
-                
-                // Debug: mostrar estructura de lotes
-                if (lotes.length > 0) {
-                    console.log("   Primer lote:", JSON.stringify(lotes[0]))
-                }
+                console.log("   Primer lote:", JSON.stringify(lotes[0]))
             } else {
                 lotesData = []
                 lotesLoaded = true
-                console.log("⚠️ No se obtuvieron lotes")
+                console.log("⚠️ No hay lotes para este producto")
             }
             
         } catch (error) {
@@ -132,18 +138,32 @@ Rectangle {
             // Precio de venta desde productoData
             precioVenta = productoData.precioVenta || productoData.Precio_venta || 0.0
             
-            // Obtener costo promedio desde vw_Costo_Inventario
-            var valoracion = inventarioModel.obtener_costo_inventario()
-            
-            if (valoracion) {
-                for (var i = 0; i < valoracion.length; i++) {
-                    var item = valoracion[i]
-                    if (item.Id_Producto === productoData.id || item.Codigo === productoData.codigo) {
-                        costoPromedio = item.Costo_Promedio || 0.0
-                        console.log("💰 Costo promedio encontrado:", costoPromedio)
-                        break
+            // ✅ NUEVO: Calcular costo promedio desde los lotes cargados
+            if (lotesData && lotesData.length > 0) {
+                var sumaCostos = 0
+                var totalUnidades = 0
+                
+                for (var i = 0; i < lotesData.length; i++) {
+                    var lote = lotesData[i]
+                    var stock = lote.Stock_Lote || 0
+                    var precio = lote.Precio_Compra || 0
+                    
+                    if (stock > 0) {
+                        sumaCostos += (stock * precio)
+                        totalUnidades += stock
                     }
                 }
+                
+                if (totalUnidades > 0) {
+                    costoPromedio = sumaCostos / totalUnidades
+                    console.log("💰 Costo promedio calculado desde lotes:", costoPromedio)
+                } else {
+                    costoPromedio = 0
+                    console.log("⚠️ No hay stock en lotes para calcular costo")
+                }
+            } else {
+                costoPromedio = 0
+                console.log("⚠️ No hay lotes para calcular costo promedio")
             }
             
             // Calcular margen
@@ -161,7 +181,37 @@ Rectangle {
             console.log("   - Margen:", margenActual, "(", porcentajeMargen.toFixed(1), "%)")
             
         } catch (error) {
-            console.log("❌ Error cargando precios:", error.toString())
+            console.log("❌ Error calculando precios:", error.toString())
+        }
+    }
+
+    function cargarUltimaVenta() {
+        if (!productoData || !productoData.id) {
+            return
+        }
+        
+        cargandoUltimaVenta = true
+        ultimaVentaFecha = ""
+        ultimaVentaCantidad = 0
+        
+        try {
+            console.log("🔍 Buscando última venta para producto ID:", productoData.id)
+            
+            // Llamar al backend para obtener última venta
+            var resultado = inventarioModel.get_ultima_venta_producto(productoData.id)
+            
+            if (resultado && resultado.Fecha_Venta) {
+                ultimaVentaFecha = resultado.Fecha_Venta
+                ultimaVentaCantidad = resultado.Cantidad_Total || 0
+                console.log("✅ Última venta encontrada:", ultimaVentaFecha, "- Cantidad:", ultimaVentaCantidad)
+            } else {
+                console.log("⚠️ No hay historial de ventas para este producto")
+            }
+            
+        } catch (error) {
+            console.log("❌ Error cargando última venta:", error.toString())
+        } finally {
+            cargandoUltimaVenta = false
         }
     }
     
@@ -878,9 +928,24 @@ Rectangle {
                                 delegate: Rectangle {
                                     width: lotesListView.width
                                     height: 45
-                                    color: index % 2 === 0 ? "#ffffff" : "#f8f9fa"
-                                    border.color: "#dee2e6"
+                                    // ✅ Color diferente para lotes agotados
+                                    color: {
+                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                        if (stock === 0) {
+                                            return "#f0f0f0"  // Gris claro para agotados
+                                        } else {
+                                            return index % 2 === 0 ? "#ffffff" : "#f8f9fa"
+                                        }
+                                    }
+                                    border.color: {
+                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                        return stock === 0 ? "#cccccc" : "#dee2e6"
+                                    }
                                     border.width: 1
+                                    opacity: {
+                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                        return stock === 0 ? 0.6 : 1.0  // Opacidad reducida para agotados
+                                    }
                                     
                                     property var loteActual: modelData
                                     
@@ -907,12 +972,28 @@ Rectangle {
                                             Layout.preferredWidth: 80
                                             Layout.fillHeight: true
                                             color: "transparent"
-                                            Label {
+                                            
+                                            Rectangle {
                                                 anchors.centerIn: parent
-                                                text: (loteActual.Stock_Lote || loteActual.Stock_Actual || 0).toString()
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                                color: "#28a745"
+                                                width: 70
+                                                height: 24
+                                                radius: 12
+                                                // ✅ Color distintivo para stock agotado
+                                                color: {
+                                                    var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                                    return stock === 0 ? "#757575" : "#28a745"
+                                                }
+                                                
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: {
+                                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                                        return stock === 0 ? "AGOTADO" : stock.toString()
+                                                    }
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    color: "#ffffff"
+                                                }
                                             }
                                         }
                                         
@@ -990,6 +1071,11 @@ Rectangle {
                                             RowLayout {
                                                 anchors.centerIn: parent
                                                 spacing: 6
+                                                // ✅ Ocultar botones en lotes agotados
+                                                visible: {
+                                                    var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                                    return stock > 0
+                                                }
                                                 
                                                 // Botón Editar
                                                 Button {
@@ -1063,6 +1149,19 @@ Rectangle {
                                                     }
                                                 }
                                             }
+                                            
+                                            // ✅ Mensaje para lotes agotados
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Historial"
+                                                font.pixelSize: 11
+                                                font.italic: true
+                                                color: "#999999"
+                                                visible: {
+                                                    var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
+                                                    return stock === 0
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1071,25 +1170,59 @@ Rectangle {
                                 Rectangle {
                                     anchors.centerIn: parent
                                     width: parent.width
-                                    height: 150
+                                    height: 200
                                     color: "transparent"
                                     visible: lotesListView.count === 0
                                     
                                     ColumnLayout {
                                         anchors.centerIn: parent
-                                        spacing: 12
+                                        spacing: 20
                                         
-                                        Label {
+                                        // Ícono
+                                        Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             text: lotesLoaded ? "📦" : "⏳"
-                                            font.pixelSize: 48
+                                            font.pixelSize: 64
+                                            color: "#7f8c8d"
                                         }
                                         
-                                        Label {
+                                        // Título
+                                        Text {
                                             Layout.alignment: Qt.AlignHCenter
-                                            text: lotesLoaded ? "No hay lotes" : "Cargando lotes..."
-                                            font.pixelSize: 14
-                                            color: "#7f8c8d"
+                                            text: lotesLoaded ? "Sin lotes disponibles" : "Cargando lotes..."
+                                            font.pixelSize: 16
+                                            font.bold: true
+                                            color: lotesLoaded ? "#e74c3c" : "#7f8c8d"
+                                        }
+                                        
+                                        // Mensaje explicativo (SIN BOTONES, solo texto)
+                                        Text {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            Layout.preferredWidth: 400
+                                            text: {
+                                                if (!lotesLoaded) return ""
+                                                
+                                                if (productoData && (productoData.stockUnitario === 0 || productoData.stock === 0)) {
+                                                    // Producto sin stock - verificar si tiene historial de ventas
+                                                    if (ultimaVentaFecha) {
+                                                        return "Este producto está agotado.\n\nÚltima venta registrada:\n" + 
+                                                               ultimaVentaFecha + " (" + ultimaVentaCantidad + " unidades)\n\n" +
+                                                               "Realice una nueva compra para registrar lotes."
+                                                    } else {
+                                                        return "Este producto nunca ha sido comprado.\n\n" +
+                                                               "No hay historial de lotes registrados.\n\n" +
+                                                               "Realice la primera compra desde el módulo de Compras."
+                                                    }
+                                                } else {
+                                                    return "No hay lotes registrados para este producto."
+                                                }
+                                            }
+                                            font.pixelSize: 13
+                                            color: "#95a5a6"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            wrapMode: Text.WordWrap
+                                            visible: lotesLoaded
+                                            lineHeight: 1.4
                                         }
                                     }
                                 }

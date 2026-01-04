@@ -856,7 +856,6 @@ Item {
                         clip: true
                         model: productosPaginadosModel
                         
-                        // ✅ DELEGADO CORREGIDO - SIN BINDING LOOPS Y BOTÓN FUNCIONAL
                         delegate: Rectangle {
                             id: delegateItem
                             width: productosTable.width
@@ -2614,6 +2613,60 @@ Item {
         MouseArea {
             anchors.fill: parent
             onClicked: parent.clicked()
+        }
+    }
+
+    function cargarPreciosYMargenes() {
+        if (!productoData) return
+        
+        try {
+            // Precio de venta desde productoData
+            precioVenta = productoData.precioVenta || productoData.Precio_venta || 0.0
+            
+            // ✅ NUEVO: Calcular costo promedio desde los lotes cargados
+            if (lotesData && lotesData.length > 0) {
+                var sumaCostos = 0
+                var totalUnidades = 0
+                
+                for (var i = 0; i < lotesData.length; i++) {
+                    var lote = lotesData[i]
+                    var stock = lote.Stock_Lote || 0
+                    var precio = lote.Precio_Compra || 0
+                    
+                    if (stock > 0) {
+                        sumaCostos += (stock * precio)
+                        totalUnidades += stock
+                    }
+                }
+                
+                if (totalUnidades > 0) {
+                    costoPromedio = sumaCostos / totalUnidades
+                    console.log("💰 Costo promedio calculado desde lotes:", costoPromedio)
+                } else {
+                    costoPromedio = 0
+                    console.log("⚠️ No hay stock en lotes para calcular costo")
+                }
+            } else {
+                costoPromedio = 0
+                console.log("⚠️ No hay lotes para calcular costo promedio")
+            }
+            
+            // Calcular margen
+            if (precioVenta > 0 && costoPromedio > 0) {
+                margenActual = precioVenta - costoPromedio
+                porcentajeMargen = (margenActual / costoPromedio) * 100
+            } else {
+                margenActual = 0
+                porcentajeMargen = 0
+            }
+            
+            console.log("📊 Precios y márgenes:")
+            console.log("   - Precio venta:", precioVenta)
+            console.log("   - Costo promedio:", costoPromedio)
+            console.log("   - Margen:", margenActual, "(", porcentajeMargen.toFixed(1), "%)")
+            
+        } catch (error) {
+            console.log("❌ Error calculando precios:", error.toString())
         }
     }
 

@@ -156,6 +156,115 @@ class ProductoRepository(BaseRepository):
         """
         return self._execute_query(query, (producto_id,))
     
+    def get_lotes_producto_completo_fifo(self, producto_id: int) -> List[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene TODOS los lotes de un producto
+        Incluye: activos (stock>0), agotados (stock=0), vencidos
+        
+        Args:
+            producto_id: ID del producto
+            
+        Returns:
+            Lista de lotes ordenados por fecha de vencimiento (FIFO)
+        """
+        validate_required(producto_id, "producto_id")
+        
+        query = """
+        SELECT 
+            l.id as Id_Lote,
+            l.Id_Producto,
+            l.Id_Compra,
+            l.Cantidad_Unitario as Stock_Lote,
+            l.Cantidad_Unitario as Cantidad_Inicial,
+            l.Precio_Compra,
+            l.Fecha_Compra,
+            l.Fecha_Vencimiento,
+            p.Codigo as Producto_Codigo,
+            p.Nombre as Producto_Nombre,
+            m.Nombre as Marca,
+            prov.Nombre as Proveedor,
+            DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) as Dias_para_Vencer,
+            CASE 
+                WHEN l.Cantidad_Unitario = 0 THEN 'AGOTADO'
+                WHEN l.Fecha_Vencimiento < GETDATE() THEN 'VENCIDO'
+                ELSE 'ACTIVO'
+            END as Estado_Lote,
+            CASE 
+                WHEN l.Fecha_Vencimiento < GETDATE() THEN 'VENCIDO'
+                WHEN l.Fecha_Vencimiento <= DATEADD(DAY, 30, GETDATE()) THEN 'PRÓXIMO A VENCER'
+                ELSE 'VIGENTE'
+            END as Estado_Vencimiento
+        FROM Lote l
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        LEFT JOIN Compra c ON l.Id_Compra = c.id
+        LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
+        WHERE l.Id_Producto = ?
+        ORDER BY 
+            CASE WHEN l.Cantidad_Unitario > 0 THEN 0 ELSE 1 END,
+            l.Fecha_Vencimiento ASC,
+            l.id ASC
+        """
+        
+        try:
+            resultado = self._execute_query(query, (producto_id,), use_cache=False) or []
+            
+            if resultado:
+                print(f"📦 Lotes del producto {producto_id}: {len(resultado)} lotes")
+                for lote in resultado[:3]:  # Mostrar primeros 3
+                    print(f"   - Lote #{lote.get('Id_Lote')} | Stock: {lote.get('Stock_Lote')} | Estado: {lote.get('Estado_Lote')}")
+            else:
+                print(f"⚠️ Producto {producto_id} sin lotes registrados")
+            
+            return resultado
+        except Exception as e:
+            print(f"❌ Error obteniendo lotes completos del producto {producto_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def get_ultima_venta_producto(self, producto_id: int) -> Optional[Dict[str, Any]]:
+        """
+        🚀 FIFO 2.0: Obtiene información de la última venta de un producto
+        
+        Args:
+            producto_id: ID del producto
+            
+        Returns:
+            Dict con fecha, cantidad y precio de la última venta, o None si nunca se vendió
+        """
+        validate_required(producto_id, "producto_id")
+        
+        query = """
+        SELECT TOP 1
+            v.Fecha as Fecha_Venta,
+            v.id as Id_Venta,
+            SUM(dv.Cantidad_Unitario) as Cantidad_Total,
+            AVG(dv.Precio_Unitario) as Precio_Promedio,
+            u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
+        FROM DetallesVentas dv
+        INNER JOIN Ventas v ON dv.Id_Venta = v.id
+        INNER JOIN Lote l ON dv.Id_Lote = l.id
+        INNER JOIN Usuario u ON v.Id_Usuario = u.id
+        WHERE l.Id_Producto = ?
+        GROUP BY v.id, v.Fecha, u.Nombre, u.Apellido_Paterno
+        ORDER BY v.Fecha DESC
+        """
+        
+        try:
+            resultado = self._execute_query(query, (producto_id,), fetch_one=True, use_cache=False)
+            
+            if resultado:
+                # Formatear fecha para mostrar
+                fecha_venta = resultado.get('Fecha_Venta')
+                if isinstance(fecha_venta, datetime):
+                    resultado['Fecha_Venta'] = fecha_venta.strftime('%d/%m/%Y %H:%M')
+            
+            return resultado
+        except Exception as e:
+            print(f"❌ Error obteniendo última venta del producto {producto_id}: {e}")
+            return None
+    
     def get_lotes_por_vencer(self, dias_adelante: int = 90) -> List[Dict[str, Any]]:
         """Obtiene lotes que vencen en X días"""
         query = """

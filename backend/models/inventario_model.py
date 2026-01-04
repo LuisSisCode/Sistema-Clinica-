@@ -1944,8 +1944,6 @@ class InventarioModel(QObject):
             self._alertas = alertas
             self.alertasChanged.emit()
             
-            print(f"🔔 Alertas inventario obtenidas: {len(alertas)} alertas")
-            
             # Debug: mostrar distribución por tipo
             tipos = {}
             for alerta in alertas:
@@ -1999,6 +1997,90 @@ class InventarioModel(QObject):
             print(f"❌ Error obteniendo lotes activos: {e}")
             self.operacionError.emit(f"Error obteniendo lotes: {str(e)}")
             return []
+
+    @Slot(int, result='QVariant')
+    def get_lotes_producto_fifo(self, producto_id: int):
+        """
+        🚀 FIFO 2.0: Obtiene TODOS los lotes de un producto (activos + agotados + vencidos)
+        
+        Args:
+            producto_id: ID del producto
+            
+        Returns:
+            Lista de lotes con estructura completa para el detalle del producto
+        """
+        try:
+            if producto_id <= 0:
+                return []
+            
+            # Llamar al repository para obtener TODOS los lotes
+            lotes = safe_execute(
+                self.producto_repo.get_lotes_producto_completo_fifo,
+                producto_id
+            ) or []
+            
+            print(f"📦 Lotes obtenidos: {len(lotes)} lotes (activos + vencidos + bajo stock + agotados) - Sistema FIFO 2.0")
+            
+            if lotes:
+                # Contar por estado de vencimiento
+                estados_vencimiento = {}
+                for lote in lotes:
+                    estado = lote.get('Estado_Vencimiento', 'DESCONOCIDO')
+                    estados_vencimiento[estado] = estados_vencimiento.get(estado, 0) + 1
+                
+                print(f"📦 Lotes del producto {producto_id}: {len(lotes)} lotes")
+                for estado, count in estados_vencimiento.items():
+                    print(f"   - {estado}: {count} lotes")
+            
+            return lotes
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo lotes del producto {producto_id}: {e}")
+            self.operacionError.emit(f"Error obteniendo lotes: {str(e)}")
+            return []
+
+    @Slot(int, result='QVariant')
+    def get_ultima_venta_producto(self, producto_id: int):
+        """
+        🚀 FIFO 2.0: Obtiene la última venta registrada de un producto
+        
+        Args:
+            producto_id: ID del producto
+            
+        Returns:
+            Dict con información de la última venta o None si nunca se vendió
+            {
+                'Fecha_Venta': str,        # Formato: "03/01/2026 21:01"
+                'Id_Venta': int,
+                'Cantidad_Total': int,
+                'Precio_Promedio': float,
+                'Vendedor': str
+            }
+        """
+        try:
+            if producto_id <= 0:
+                print("⚠️ ID de producto inválido para obtener última venta")
+                return None
+            
+            ultima_venta = safe_execute(
+                self.producto_repo.get_ultima_venta_producto,
+                producto_id
+            )
+            
+            if ultima_venta:
+                print(f"📊 Última venta producto {producto_id}:")
+                print(f"   - Fecha: {ultima_venta.get('Fecha_Venta')}")
+                print(f"   - Cantidad: {ultima_venta.get('Cantidad_Total')} unidades")
+                print(f"   - Vendedor: {ultima_venta.get('Vendedor')}")
+            else:
+                print(f"⚠️ Producto {producto_id} sin historial de ventas")
+            
+            return ultima_venta
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo última venta del producto {producto_id}: {e}")
+            self.operacionError.emit(f"Error obteniendo última venta: {str(e)}")
+            return None
 
     @Slot(result='QVariant')
     def obtener_costo_inventario(self):
