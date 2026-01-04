@@ -956,8 +956,7 @@ class ProductoRepository(BaseRepository):
     
     def obtener_stock_actual(self) -> List[Dict[str, Any]]:
         """
-        🚀 FIFO 2.0: Obtiene stock REAL directamente desde tabla Producto
-        Usa Stock_Unitario que se actualiza automáticamente con ventas/compras
+        🚀 FIFO 2.0: Obtiene stock REAL calculado desde lotes
         """
         try:
             query = """
@@ -967,38 +966,32 @@ class ProductoRepository(BaseRepository):
                 p.Nombre,
                 m.Nombre as Marca,
                 p.Unidad_Medida,
-                p.Stock_Unitario as Stock_Real,  -- ✅ CAMBIO: Usar Stock_Unitario directamente
+                -- ✅ CALCULAR STOCK DESDE LOTES (no usar Stock_Unitario)
+                ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                        FROM Lote l 
+                        WHERE l.Id_Producto = p.id), 0) as Stock_Real,
                 p.Stock_Minimo, 
                 p.Stock_Maximo,
                 p.Activo,
-                -- Calcular Estado_Stock basado en umbrales
+                -- Calcular Estado_Stock basado en stock real de lotes
                 CASE 
-                    WHEN p.Stock_Unitario <= 0 THEN 'CRÍTICO'
-                    WHEN p.Stock_Unitario <= p.Stock_Minimo THEN 'CRÍTICO'
-                    WHEN p.Stock_Unitario <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 'BAJO'
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= 0 THEN 'CRÍTICO'
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo THEN 'CRÍTICO'
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 'BAJO'
                     ELSE 'NORMAL'
                 END as Estado_Stock,
-                -- Información de vencimiento desde lotes activos
+                -- Información de vencimiento
                 (SELECT MIN(l.Fecha_Vencimiento) 
                 FROM Lote l 
                 WHERE l.Id_Producto = p.id 
-                AND l.Cantidad_Unitario > 0 
-                AND l.Fecha_Vencimiento IS NOT NULL) as Proximo_Vencimiento,
-                (SELECT COUNT(*) 
-                FROM Lote l 
-                WHERE l.Id_Producto = p.id 
-                AND l.Cantidad_Unitario > 0
-                AND l.Fecha_Vencimiento IS NOT NULL
-                AND DATEDIFF(day, GETDATE(), l.Fecha_Vencimiento) <= 60
-                AND DATEDIFF(day, GETDATE(), l.Fecha_Vencimiento) >= 0) as Lotes_Proximos_Vencer
+                AND l.Cantidad_Unitario > 0) as Proximo_Vencimiento
             FROM Productos p
             LEFT JOIN Marca m ON p.ID_Marca = m.id
             WHERE p.Activo = 1
             ORDER BY 
                 CASE 
-                    WHEN p.Stock_Unitario <= 0 THEN 1
-                    WHEN p.Stock_Unitario <= p.Stock_Minimo THEN 1
-                    WHEN p.Stock_Unitario <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 2
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= 0 THEN 1
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo THEN 1
                     ELSE 3
                 END,
                 p.Nombre
@@ -1007,14 +1000,11 @@ class ProductoRepository(BaseRepository):
             resultados = self._execute_query(query, use_cache=False)
             print(f"📊 Stock actual obtenido: {len(resultados)} productos - Sistema FIFO 2.0")
             
-            # Debug: Mostrar primeros 3 productos con stock
-            for i, prod in enumerate(resultados[:3]):
-                print(f"   🔍 {prod['Codigo']} - Stock: {prod['Stock_Real']} Estado: {prod['Estado_Stock']}")
-            
             return resultados
             
         except Exception as e:
             print(f"❌ Error obteniendo stock actual: {e}")
+            import traceback
             traceback.print_exc()
             return []
     
