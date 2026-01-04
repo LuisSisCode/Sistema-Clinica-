@@ -2106,6 +2106,12 @@ Item {
         var datosStock = inventarioModel.obtener_stock_actual() || []
         console.log("📦 Datos de stock recibidos:", datosStock.length , "productos")
         
+        // ✅ NUEVO DEBUG: Ver TODOS los códigos recibidos
+        console.log("📋 Códigos recibidos:")
+        for (var j = 0; j < datosStock.length; j++) {
+            console.log("   -", datosStock[j].Codigo || datosStock[j].codigo, "| Stock:", datosStock[j].Stock_Real || datosStock[j].stock)
+        }
+        
         var nuevoMapa = {}
         
         for (var i = 0; i < datosStock.length; i++) {
@@ -2115,7 +2121,7 @@ Item {
             var codigo = producto.Codigo || producto.codigo || ""
             if (!codigo) continue; // Saltar si no hay código
             
-            var stock = producto.Stock_Real || producto.stock || 0
+            var stock = producto.Stock_Real || producto.Stock_Total || producto.stock || 0
             var stockMin = producto.Stock_Minimo || producto.stock_minimo || 10
             var stockMax = producto.Stock_Maximo || producto.stock_maximo || 100
             

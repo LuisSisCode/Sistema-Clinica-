@@ -259,6 +259,18 @@ class CompraRepository(BaseRepository):
                     print(f"  📦 Procesando item {i+1}/{len(items_preparados)}: {item['codigo']}")
                     lote_info = self._procesar_item_con_lote(compra_id, item)
                     lotes_creados.append(lote_info)
+                    
+                    # ✅ AUTO-ACTIVAR PRODUCTO al recibir stock
+                    producto_id = item['producto_id']
+                    auto_activar_query = """
+                    UPDATE Productos 
+                    SET Activo = 1 
+                    WHERE id = ? 
+                    AND Activo = 0
+                    """
+                    self._execute_query(auto_activar_query, (producto_id,), fetch_all=False, use_cache=False)
+                    print(f"  ✅ Producto {producto_id} auto-activado al recibir stock")
+                    
                     print(f"  ✅ Item {i+1} procesado - Lote: {lote_info['lote_id']}")
                     
                 except Exception as item_error:

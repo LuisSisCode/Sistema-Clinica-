@@ -1710,11 +1710,13 @@ class InventarioModel(QObject):
                 
                 # Precios - múltiples nomenclaturas
                 'precioCompra': safe_float(
+                    producto_raw.get('Precio_Compra') or   # ✅ CORREGIDO: Mayúscula
                     producto_raw.get('Precio_compra') or 
                     producto_raw.get('precio_compra') or 
                     producto_raw.get('precioCompra', 0)
                 ),
                 'Precio_compra': safe_float(
+                    producto_raw.get('Precio_Compra') or   # ✅ CORREGIDO: Mayúscula
                     producto_raw.get('Precio_compra') or 
                     producto_raw.get('precio_compra', 0)
                 ),

@@ -5,6 +5,7 @@ from PySide6.QtQml import qmlRegisterType
 from ...repositories.ConfiguracionRepositor import ConfiConsultaRepository
 from ...core.excepciones import ExceptionHandler, ValidationError
 from ...core.Signals_manager import get_global_signals
+
 class ConfiConsultaModel(QObject):
     """
     Model QObject para gestión de configuración de especialidades/consultas en QML
@@ -88,11 +89,10 @@ class ConfiConsultaModel(QObject):
     
     # --- OPERACIONES CRUD ESPECIALIDADES ---
     
-    @Slot(str, str, float, float, int, result=bool)
+    @Slot(str, str, float, float, result=bool)
     def crearEspecialidad(self, nombre: str, detalles: str = "", 
-                         precio_normal: float = 0.0, precio_emergencia: float = 0.0,
-                         Id_Medico: int = 0) -> bool:
-        """Crea nueva especialidad desde QML"""
+                         precio_normal: float = 0.0, precio_emergencia: float = 0.0) -> bool:
+        """Crea nueva especialidad desde QML (SIN asignación de médico)"""
         try:
             self._set_loading(True)
             
@@ -100,8 +100,7 @@ class ConfiConsultaModel(QObject):
                 nombre=nombre.strip(),
                 detalles=detalles.strip() if detalles.strip() else None,
                 precio_normal=precio_normal,
-                precio_emergencia=precio_emergencia,
-                Id_Medico=Id_Medico if Id_Medico > 0 else None
+                precio_emergencia=precio_emergencia
             )
             
             if especialidad_id:
@@ -129,6 +128,7 @@ class ConfiConsultaModel(QObject):
             error_msg = f"Error inesperado: {str(e)}"
             self.especialidadCreada.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
+            print(f"❌ Error creando especialidad: {e}")
             return False
         finally:
             self._set_loading(False)
@@ -149,11 +149,11 @@ class ConfiConsultaModel(QObject):
             print(f"❌ Error refrescando datos: {e}")
             self.errorOccurred.emit("Error Consultas", f"Error refrescando datos: {str(e)}")
     
-    @Slot(int, str, str, float, float, int, result=bool)
+    @Slot(int, str, str, float, float, result=bool)
     def actualizarEspecialidad(self, especialidad_id: int, nombre: str = "", 
                               detalles: str = "", precio_normal: float = -1,
-                              precio_emergencia: float = -1, Id_Medico: int = -1) -> bool:
-        """Actualiza especialidad existente desde QML"""
+                              precio_emergencia: float = -1) -> bool:
+        """Actualiza especialidad existente desde QML (SIN asignación de médico)"""
         try:
             self._set_loading(True)
             
@@ -169,7 +169,6 @@ class ConfiConsultaModel(QObject):
                 kwargs['precio_normal'] = precio_normal
             if precio_emergencia >= 0:
                 kwargs['precio_emergencia'] = precio_emergencia
-            
             
             success = self.repository.update_especialidad(especialidad_id, **kwargs)
             
@@ -192,6 +191,7 @@ class ConfiConsultaModel(QObject):
             error_msg = f"Error inesperado: {str(e)}"
             self.especialidadActualizada.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
+            print(f"❌ Error actualizando especialidad: {e}")
             return False
         finally:
             self._set_loading(False)
@@ -224,6 +224,7 @@ class ConfiConsultaModel(QObject):
             error_msg = f"Error inesperado: {str(e)}"
             self.especialidadEliminada.emit(False, error_msg)
             self.errorOccurred.emit("Error crítico", error_msg)
+            print(f"❌ Error eliminando especialidad: {e}")
             return False
         finally:
             self._set_loading(False)
@@ -245,8 +246,7 @@ class ConfiConsultaModel(QObject):
                 especialidades_filtradas = [
                     e for e in especialidades_filtradas
                     if (buscar_lower in e.get('Nombre', '').lower() or
-                        buscar_lower in str(e.get('Detalles', '')).lower() or
-                        buscar_lower in str(e.get('nombre_doctor', '')).lower())
+                        buscar_lower in str(e.get('Detalles', '')).lower())
                 ]
             
             self._especialidades_filtradas = especialidades_filtradas
@@ -294,15 +294,6 @@ class ConfiConsultaModel(QObject):
             self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidad: {str(e)}")
             return {}
     
-    @Slot(int, result=list)
-    def obtenerEspecialidadesPorDoctor(self, id_doctor: int) -> List[Dict[str, Any]]:
-        """Obtiene especialidades asignadas a un doctor"""
-        try:
-            return self.repository.get_especialidades_por_doctor(id_doctor)
-        except Exception as e:
-            self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidades por doctor: {str(e)}")
-            return []
-    
     @Slot(float, float, result=list)
     def obtenerEspecialidadesPorRangoPrecios(self, precio_min: float, precio_max: float) -> List[Dict[str, Any]]:
         """Obtiene especialidades por rango de precios"""
@@ -310,20 +301,6 @@ class ConfiConsultaModel(QObject):
             return self.repository.get_especialidades_por_rango_precios(precio_min, precio_max)
         except Exception as e:
             self.errorOccurred.emit("Error Consultas", f"Error obteniendo especialidades por precio: {str(e)}")
-            return []
-    
-    @Slot(result=list)
-    def obtenerDoctoresDisponibles(self) -> List[Dict[str, Any]]:
-        """Obtiene lista de doctores disponibles"""
-        try:
-            # ✅ CORREGIDO: Nombre correcto del método
-            return self.repository.get_medicos_disponibles()
-        except Exception as e:
-            import traceback
-            print(f"❌ Error obteniendo doctores disponibles:")
-            print(f"   Exception: {str(e)}")
-            print(f"   Traceback: {traceback.format_exc()}")
-            self.errorOccurred.emit("Error Doctores", f"Error obteniendo doctores: {str(e)}")
             return []
     
     # --- RECARGA DE DATOS ---
@@ -439,8 +416,6 @@ class ConfiConsultaModel(QObject):
             for especialidad in especialidades:
                 if not especialidad.get('Detalles'):
                     especialidad['Detalles'] = 'Sin detalles'
-                if not especialidad.get('nombre_doctor'):
-                    especialidad['nombre_doctor'] = 'Sin doctor asignado'
             
             self._especialidades = especialidades
             self._especialidades_filtradas = especialidades.copy()
