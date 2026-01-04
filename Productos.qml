@@ -1833,7 +1833,7 @@ Item {
             color: whiteColor
             border.color: lightGrayColor
             border.width: 1
-            
+                        
             Loader {
                 id: detalleProductoLoader
                 anchors.fill: parent
@@ -1866,6 +1866,14 @@ Item {
                             item.eliminarLoteSolicitado.connect(function(lote) {
                                 console.log("🗑️ Eliminar lote solicitado:", lote.id)
                                 eliminarLote(lote)  // Llama directamente a eliminarLote
+                            })
+                        }
+                        
+                        // ✅ AGREGAR: Conectar señal de actualización de lote
+                        if (item.loteActualizadoEnDialog) {
+                            item.loteActualizadoEnDialog.connect(function() {
+                                console.log("🔄 Señal recibida: lote actualizado en diálogo")
+                                // Esto ya debería recargar automáticamente
                             })
                         }
                     }
@@ -2200,6 +2208,14 @@ Item {
             // Recargar datos
             if (inventarioModel) {
                 inventarioModel.refresh_productos()
+            }
+            
+            // ✅ CRÍTICO: Recargar DetalleProducto si está visible
+            if (mostrandoDetalleProducto && detalleProductoLoader.item) {
+                console.log("🔄 Forzando recarga de DetalleProducto después de eliminar lote")
+                Qt.callLater(function() {
+                    detalleProductoLoader.item.cargarDatosProducto()
+                })
             }
             
             Qt.callLater(function() {
