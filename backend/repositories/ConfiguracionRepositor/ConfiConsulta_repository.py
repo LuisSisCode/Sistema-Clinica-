@@ -27,55 +27,107 @@ class ConfiConsultaRepository(BaseRepository):
     # CRUD ESPECÍFICO - ESPECIALIDADES
     # ===============================
     
-    def create_especialidad(self, nombre: str, detalles: str = None, 
-                           precio_normal: float = 0.0, precio_emergencia: float = 0.0) -> int:
+    def create_especialidad(self, nombre: str, detalles: str = None,
+                      precio_normal: float = 0, precio_emergencia: float = 0) -> int:
         """
         Crea nueva especialidad con validaciones
-        ACTUALIZADO: Ya no usa Id_Doctor (siempre NULL)
-        
-        Args:
-            nombre: Nombre de la especialidad
-            detalles: Descripción de la especialidad
-            precio_normal: Precio para consulta normal
-            precio_emergencia: Precio para consulta de emergencia
-            
-        Returns:
-            ID de la especialidad creada
+        SIN columna Id_Doctor (no existe en la tabla)
         """
         # Validaciones
-        nombre = validate_required_string(nombre, "nombre", 2)
-        validate_required(nombre, "nombre")
+        nombre = validate_required_string(nombre, "nombre", 3)
         
-        # Verificar que el nombre no exista
+        if precio_normal < 0:
+            raise ValidationError("precio_normal", precio_normal, 
+                                "El precio normal debe ser mayor o igual a 0")
+        
+        if precio_emergencia < 0:
+            raise ValidationError("precio_emergencia", precio_emergencia, 
+                                "El precio de emergencia debe ser mayor o igual a 0")
+        
+        if precio_emergencia < precio_normal:
+            raise ValidationError("precio_emergencia", precio_emergencia,
+                                "Precio de emergencia debe ser mayor o igual al normal")
+        
+        # Verificar nombre único
         if self.especialidad_name_exists(nombre):
             raise ValidationError("nombre", nombre, "La especialidad ya existe")
         
-        # Validar precios
-        if precio_normal < 0:
-            raise ValidationError("precio_normal", precio_normal, "El precio normal debe ser mayor o igual a 0")
+        # Preparar datos
+        nombre_normalizado = normalize_name(nombre)
+        detalles_procesados = detalles.strip() if detalles else None
         
-        if precio_emergencia < 0:
-            raise ValidationError("precio_emergencia", precio_emergencia, "El precio de emergencia debe ser mayor o igual a 0")
+        print(f"📝 Creando especialidad:")
+        print(f"   Nombre: {nombre_normalizado}")
+        print(f"   Detalles: {detalles_procesados}")
+        print(f"   Precio Normal: {precio_normal}")
+        print(f"   Precio Emergencia: {precio_emergencia}")
         
-        # Crear especialidad (Id_Doctor siempre NULL - ahora usa Trabajador_Especialidad)
-        especialidad_data = {
-            'Nombre': normalize_name(nombre),
-            'Precio_Normal': precio_normal,
-            'Precio_Emergencia': precio_emergencia,
-            'Id_Doctor': None  # Ya no se usa - se mantiene por compatibilidad de esquema
-        }
+        # 🔧 INSERT SIN Id_Doctor
+        conn = None
+        cursor = None
         
-        # Agregar detalles si se proporciona
-        if detalles and detalles.strip():
-            especialidad_data['Detalles'] = detalles.strip()
-        else:
-            especialidad_data['Detalles'] = None
-        
-        especialidad_id = self.insert(especialidad_data)
-        print(f"🏥 Especialidad creada: {nombre} - ID: {especialidad_id}")
-        
-        return especialidad_id
-    
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Query SIN Id_Doctor
+            insert_query = """
+            INSERT INTO Especialidad (Nombre, Detalles, Precio_Normal, Precio_Emergencia)
+            OUTPUT INSERTED.id
+            VALUES (?, ?, ?, ?)
+            """
+            
+            params = (
+                nombre_normalizado,
+                detalles_procesados,
+                precio_normal,
+                precio_emergencia
+            )
+            
+            print(f"🔍 Ejecutando INSERT:")
+            print(f"   Params: {params}")
+            
+            # Ejecutar INSERT
+            cursor.execute(insert_query, params)
+            
+            # Obtener el ID insertado
+            result = cursor.fetchone()
+            
+            if result:
+                especialidad_id = result[0]
+                conn.commit()
+                
+                print(f"✅ Especialidad creada exitosamente: {nombre_normalizado} - ID: {especialidad_id}")
+                
+                # Invalidar cachés
+                self.invalidate_especialidades_caches()
+                
+                return especialidad_id
+            else:
+                conn.rollback()
+                print(f"❌ Error: fetchone() retornó None")
+                return None
+                
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"❌ Error crítico creando especialidad: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e
+            
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+
     def update_especialidad(self, especialidad_id: int, nombre: str = None, 
                            detalles: str = None, precio_normal: float = None,
                            precio_emergencia: float = None) -> bool:

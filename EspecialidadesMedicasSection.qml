@@ -2,23 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-/**
- * COMPONENTE: Sección de Especialidades Médicas
- * 
- * Este componente se muestra solo cuando el tipo de trabajador seleccionado
- * tiene area_funcional='MEDICO' y permite:
- * - Seleccionar especialidades de la tabla Especialidad
- * - Marcar una como principal
- * - Ver lista de especialidades asignadas
- * - Quitar especialidades
- * 
- * PROPS REQUERIDAS:
- * - trabajadorModel: Instancia del TrabajadorModel
- * - trabajadorId: ID del trabajador médico (si está en modo edición)
- * - isEditMode: Boolean que indica si está en modo edición
- * - baseUnit: Unidad base para tamaños
- * - fontBaseSize: Tamaño base de fuente
- */
+
 GroupBox {
     id: especialidadesSection
     Layout.fillWidth: true
