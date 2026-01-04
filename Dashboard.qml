@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Controls 2.15
 import QtQuick.Controls.Universal 2.15
 import QtQuick.Layouts 1.15
 import ClinicaApp 1.0
@@ -283,7 +284,32 @@ ScrollView {
         }
         return count
     }
-    
+
+    function obtenerDatosAgrupados(filtro) {
+        if (!alertasInventario || alertasInventario.length === 0) return []
+        
+        var productos = {}
+        
+        for (var i = 0; i < alertasInventario.length; i++) {
+            var alerta = alertasInventario[i]
+            if (filtro !== "TODOS" && alerta.Tipo_Alerta !== filtro) continue
+            
+            var codigo = alerta.Codigo || "SIN_COD"
+            var nombre = alerta.Producto || alerta.Nombre || "Producto sin nombre"
+            
+            if (!productos[codigo]) {
+                productos[codigo] = {
+                    codigo: codigo,
+                    nombre: nombre,
+                    alertas: []
+                }
+            }
+            productos[codigo].alertas.push(alerta)
+        }
+        
+        return Object.values(productos)
+    }
+
     function obtenerColorAlerta(tipoAlerta) {
         switch(tipoAlerta) {
             case "PRODUCTO VENCIDO":
@@ -308,6 +334,44 @@ ScrollView {
             default:
                 return "#9ca3af"
         }
+    }
+    
+  
+    
+    function obtenerColor(tipo) {
+        switch(tipo) {
+            case "PRODUCTO VENCIDO": return "#ef4444"
+            case "PRODUCTO PRÓXIMO A VENCER": return "#f59e0b"
+            case "STOCK BAJO": return "#eab308"
+            default: return "#6b7280"
+        }
+    }
+    
+    function obtenerBg(tipo) {
+        switch(tipo) {
+            case "PRODUCTO VENCIDO": return "#fef2f2"
+            case "PRODUCTO PRÓXIMO A VENCER": return "#fffbeb"
+            case "STOCK BAJO": return "#fef3c7"
+            default: return "#f3f4f6"
+        }
+    }
+    
+    function obtenerIcono(tipo) {
+        switch(tipo) {
+            case "PRODUCTO VENCIDO": return "⚠️"
+            case "PRODUCTO PRÓXIMO A VENCER": return "⏰"
+            case "STOCK BAJO": return "📦"
+            default: return "ℹ️"
+        }
+    }
+    
+    function formatearAlerta(alerta) {
+        var tipo = alerta.Tipo_Alerta
+        if (tipo === "STOCK BAJO") {
+            return "Stock Bajo (Quedan " + (alerta.Stock_Actual || 0) + ")"
+        }
+        var detalle = alerta.Detalle || ""
+        return detalle.length > 35 ? detalle.substring(0, 35) + "..." : detalle
     }
     
     function obtenerIconoAlerta(tipoAlerta) {
@@ -353,31 +417,62 @@ ScrollView {
     }
     
     // ✅ NUEVO: Listener para cuando inventarioModel esté listo
+    // ✅ LISTENER PARA ALERTAS - CARGA DATOS REALES
     Connections {
         target: inventarioModel
         
         function onProductosChanged() {
-            // Cargar alertas cuando los productos estén listos
-            if (!datosCargados && inventarioModel) {
-                console.log("📢 Productos actualizados - Cargando alertas automáticamente")
-                cargarAlertas()
+            console.log("📦 Productos actualizados - Cargando alertas")
+            cargarAlertas()
+        }
+
+        function onAertasChanged() {
+            console.log("🔔 Signal alertasChanged del modelo - Actualizando vista")
+            if (inventarioModel && inventarioModel.alertas) {
+                alertasInventario = inventarioModel.alertas
+                datosCargados = true
+                console.log("✅ ALERTAS CARGADAS: " + alertasInventario.length + " alertas")
+                for (var i = 0; i < alertasInventario.length; i++) {
+                    console.log("   - " + alertasInventario[i].Tipo_Alerta + ": " + alertasInventario[i].Producto)
+                }
+                alertasRetryTimer.stop()
             }
         }
     }
     
-    // ✅ NUEVO: Timer de respaldo si Connections falla
+    // ✅ TIMER: CARGAR ALERTAS SI NO SE CARGARON AUTOMÁTICAMENTE
     Timer {
         id: alertasRetryTimer
-        interval: 2000  // 2 segundos
-        running: !datosCargados && inventarioModel !== null
+        interval: 1000
+        running: true
         repeat: true
-        triggeredOnStart: false
+        triggeredOnStart: true
+        
         onTriggered: {
-            console.log("⏱️ Reintentando cargar alertas...")
-            cargarAlertas()
-            if (datosCargados) {
-                stop()  // Detener cuando ya cargó
+            if (inventarioModel && (!alertasInventario || alertasInventario.length === 0)) {
+                console.log("⏱️ Cargando alertas del modelo...")
+                inventarioModel.obtener_alertas_inventario()
+            } else if (alertasInventario && alertasInventario.length > 0) {
                 console.log("✅ Alertas cargadas - Timer detenido")
+                stop()
+            }
+        }
+    }
+
+    Timer {
+        id: autoRefreshAlertas
+        interval: 5000
+        running: true
+        repeat: true
+        
+        onTriggered: {
+            if (inventarioModel) {
+                console.log("🔄 Auto-refreshing alertas...")
+                var nuevasAlertas = inventarioModel.obtener_alertas_inventario()
+                if (nuevasAlertas) {
+                    alertasInventario = nuevasAlertas
+                    console.log("✅ Alertas actualizadas: " + alertasInventario.length)
+                }
             }
         }
     }
@@ -1092,448 +1187,286 @@ ScrollView {
                     }
                 }                
                 
-                // 🚀 SECCIÓN DE ALERTAS CON PESTAÑAS MEJORADA (OCUPA 2 COLUMNAS)
                 Rectangle {
                     Layout.columnSpan: 2
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 420
+                    Layout.preferredHeight: 520
                     color: whiteColor
                     radius: 16
                     border.color: lightGrayColor
                     border.width: 1
-                    
+
+                    property string filtroAlertaActual: "TODOS"
+
+
+
+
+
+
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 20
                         spacing: 16
-                        
-                        // Header con estadísticas
+
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 20
-                            
-                            // Título principal
                             Label {
                                 text: "🔔 ALERTAS DE INVENTARIO"
                                 color: textColor
                                 font.pixelSize: 18
                                 font.bold: true
                             }
-                            
                             Item { Layout.fillWidth: true }
                             
-                            // Botón de actualizar
-                            Button {
-                                Layout.preferredWidth: 40
-                                Layout.preferredHeight: 40
+                            RoundButton {
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
                                 text: "🔄"
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
-                                    radius: 20
+                                onClicked: {
+                                    if (inventarioModel) inventarioModel.obtener_alertas_inventario()
                                 }
-                                
-                                contentItem: Label {
+                                background: Rectangle { 
+                                    color: "#f1f5f9"
+                                    radius: 16 
+                                }
+                                contentItem: Label { 
                                     text: parent.text
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 14
                                     horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: cargarAlertas()
-                                ToolTip.visible: hovered
-                                ToolTip.text: "Actualizar alertas"
-                            }
-                            
-                            // Contador total
-                            Rectangle {
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 36
-                                radius: 18
-                                color: primaryColor
-                                
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: alertasInventario.length + " alertas"
-                                    color: whiteColor
-                                    font.bold: true
-                                    font.pixelSize: 12
+                                    verticalAlignment: Text.AlignVCenter 
                                 }
                             }
                         }
-                        
-                        // 🎨 SISTEMA DE PESTAÑAS MEJORADO Y SIMPLIFICADO
+
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 0.25
-                            spacing: 8
+                            spacing: 10
                             
-                            // Tab: VENCIDOS
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 12
-                                color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#fee2e2" : "#f3f4f6"
-                                border.color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#ef4444" : "#e5e7eb"
-                                border.width: 2
+                            Repeater {
+                                model: [
+                                    { tag: "PRODUCTO VENCIDO", label: "VENCIDOS", color: "#ef4444", bg: "#fef2f2" },
+                                    { tag: "PRODUCTO PRÓXIMO A VENCER", label: "PRÓX. VENCER", color: "#f59e0b", bg: "#fffbeb" },
+                                    { tag: "STOCK BAJO", label: "STOCK BAJO", color: "#eab308", bg: "#fef3c7" },
+                                    { tag: "TODOS", label: "TODOS", color: primaryColor, bg: "#f8fafc" }
+                                ]
                                 
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: filtroAlertaActual = "PRODUCTO VENCIDO"
-                                }
-                                
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 2
+                                delegate: Rectangle {
+                                    width: 120
+                                    height: 40
+                                    radius: 8
+                                    color: filtroAlertaActual === modelData.tag ? modelData.bg : "#f1f5f9"
+                                    border.color: filtroAlertaActual === modelData.tag ? modelData.color : "#e2e8f0"
+                                    border.width: 1
                                     
-                                    Row {
+                                    RowLayout {
+                                        anchors.centerIn: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
                                         spacing: 6
-                                        anchors.horizontalCenter: parent.horizontalCenter
                                         
                                         Label {
-                                            text: "🔴"
-                                            font.pixelSize: 10
+                                            text: modelData.tag === "PRODUCTO VENCIDO" ? "⚠️" :
+                                                modelData.tag === "PRODUCTO PRÓXIMO A VENCER" ? "⏰" :
+                                                modelData.tag === "STOCK BAJO" ? "📦" : "👥"
+                                            font.pixelSize: 12
                                         }
                                         
                                         Label {
-                                            text: "VENCIDOS"
-                                            color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#dc2626" : textColor
+                                            text: modelData.label
+                                            color: filtroAlertaActual === modelData.tag ? modelData.color : darkGrayColor
                                             font.bold: true
                                             font.pixelSize: 10
                                         }
-                                    }
-                                    
-                                    Label {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: "(" + contarAlertasPorTipo("PRODUCTO VENCIDO") + ")"
-                                        color: filtroAlertaActual === "PRODUCTO VENCIDO" ? "#dc2626" : darkGrayColor
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                    }
-                                }
-                            }
-                            
-                            // Tab: PRÓXIMOS A VENCER
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 12
-                                color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#fef3c7" : "#f3f4f6"
-                                border.color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#f59e0b" : "#e5e7eb"
-                                border.width: 2
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: filtroAlertaActual = "PRODUCTO PRÓXIMO A VENCER"
-                                }
-                                
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 2
-                                    
-                                    Row {
-                                        spacing: 6
-                                        anchors.horizontalCenter: parent.horizontalCenter
                                         
                                         Label {
-                                            text: "⚠️"
-                                            font.pixelSize: 14
-                                        }
-                                        
-                                        Label {
-                                            text: "PRÓX. VENCER"
-                                            color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#d97706" : textColor
-                                            font.bold: true
-                                            font.pixelSize: 13
+                                            text: "(" + (modelData.tag === "TODOS" ? alertasInventario.length : contarAlertasPorTipo(modelData.tag)) + ")"
+                                            color: "#94a3b8"
+                                            font.pixelSize: 9
                                         }
                                     }
                                     
-                                    Label {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: "(" + contarAlertasPorTipo("PRODUCTO PRÓXIMO A VENCER") + ")"
-                                        color: filtroAlertaActual === "PRODUCTO PRÓXIMO A VENCER" ? "#d97706" : darkGrayColor
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                    }
-                                }
-                            }
-                            
-                            // Tab: STOCK BAJO
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 12
-                                color: filtroAlertaActual === "STOCK BAJO" ? "#f0f9ff" : "#f3f4f6"
-                                border.color: filtroAlertaActual === "STOCK BAJO" ? "#0ea5e9" : "#e5e7eb"
-                                border.width: 2
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: filtroAlertaActual = "STOCK BAJO"
-                                }
-                                
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 2
-                                    
-                                    Row {
-                                        spacing: 6
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        
-                                        Label {
-                                            text: "📦"
-                                            font.pixelSize: 14
-                                        }
-                                        
-                                        Label {
-                                            text: "STOCK BAJO"
-                                            color: filtroAlertaActual === "STOCK BAJO" ? "#0ea5e9" : textColor
-                                            font.bold: true
-                                            font.pixelSize: 13
-                                        }
-                                    }
-                                    
-                                    Label {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: "(" + contarAlertasPorTipo("STOCK BAJO") + ")"
-                                        color: filtroAlertaActual === "STOCK BAJO" ? "#0ea5e9" : darkGrayColor
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                    }
-                                }
-                            }
-                            
-                            // Tab: TODOS
-                            Rectangle {
-                                Layout.preferredWidth: 100
-                                Layout.fillHeight: true
-                                radius: 12
-                                color: filtroAlertaActual === "TODOS" ? primaryColor : "#f3f4f6"
-                                border.color: filtroAlertaActual === "TODOS" ? primaryColor : "#e5e7eb"
-                                border.width: 2
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: filtroAlertaActual = "TODOS"
-                                }
-                                
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 2
-                                    
-                                    Row {
-                                        spacing: 6
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        
-                                        Label {
-                                            text: "📋"
-                                            font.pixelSize: 14
-                                            color: filtroAlertaActual === "TODOS" ? whiteColor : textColor
-                                        }
-                                        
-                                        Label {
-                                            text: "TODOS"
-                                            color: filtroAlertaActual === "TODOS" ? whiteColor : textColor
-                                            font.bold: true
-                                            font.pixelSize: 13
-                                        }
-                                    }
-                                    
-                                    Label {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: "(" + alertasInventario.length + ")"
-                                        color: filtroAlertaActual === "TODOS" ? whiteColor : darkGrayColor
-                                        font.pixelSize: 11
-                                        font.bold: true
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: filtroAlertaActual = modelData.tag
                                     }
                                 }
                             }
                         }
-                        
-                        // Lista de Alertas Filtradas
+
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            color: "transparent"
+                            height: 36
+                            color: "#f8fafc"
+                            radius: 6
                             
-                            ListView {
-                                id: alertasListView
+                            RowLayout {
                                 anchors.fill: parent
-                                clip: true
-                                spacing: 6
+                                anchors.leftMargin: 16
+                                anchors.rightMargin: 16
+                                spacing: 12
                                 
-                                model: filtrarAlertas(filtroAlertaActual)
-                                
-                                delegate: Rectangle {
-                                    width: alertasListView.width
-                                    height: 85
-                                    color: obtenerColorAlerta(modelData.Tipo_Alerta)
-                                    radius: 8
-                                    border.color: obtenerColorBorde(modelData.Tipo_Alerta)
-                                    border.width: 2
-                                    
-                                    // Borde izquierdo coloreado
-                                    Rectangle {
-                                        anchors.left: parent.left
-                                        anchors.top: parent.top
-                                        anchors.bottom: parent.bottom
-                                        width: 6
-                                        color: obtenerColorBorde(modelData.Tipo_Alerta)
-                                        radius: 3
-                                    }
-                                    
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 16
-                                        anchors.leftMargin: 20
-                                        spacing: 16
+                                Label {
+                                    text: "PRODUCTO"
+                                    Layout.preferredWidth: 200
+                                    font.bold: true
+                                    color: "#94a3b8"
+                                    font.pixelSize: 11
+                                }
+                                Label {
+                                    text: "ALERTAS POR LOTE"
+                                    Layout.fillWidth: true
+                                    font.bold: true
+                                    color: "#94a3b8"
+                                    font.pixelSize: 11
+                                }
+                                Label {
+                                    text: "ACCIONES"
+                                    Layout.preferredWidth: 50
+                                    horizontalAlignment: Text.AlignRight
+                                    font.bold: true
+                                    color: "#94a3b8"
+                                    font.pixelSize: 11
+                                }
+                            }
+                        }
+
+                        ListView {
+                            id: vistaAgrupada
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            spacing: 8
+                            
+                            model: obtenerDatosAgrupados(filtroAlertaActual)
+
+                            delegate: Rectangle {
+                                width: vistaAgrupada.width
+                                height: colInfo.height + 24
+                                color: "white"
+                                radius: 8
+                                border.color: "#e2e8f0"
+                                border.width: 1
+
+                                property var producto: modelData
+
+                                RowLayout {
+                                    id: colInfo
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.margins: 12
+                                    spacing: 15
+
+                                    ColumnLayout {
+                                        Layout.preferredWidth: 200
+                                        Layout.alignment: Qt.AlignTop
+                                        spacing: 4
                                         
-                                        // Icono
                                         Label {
-                                            Layout.preferredWidth: 32
-                                            text: obtenerIconoAlerta(modelData.Tipo_Alerta)
-                                            font.pixelSize: 24
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                        
-                                        // Información del producto
-                                        ColumnLayout {
+                                            text: producto.nombre
+                                            font.bold: true
+                                            color: textColor
+                                            font.pixelSize: 13
                                             Layout.fillWidth: true
-                                            spacing: 4
-                                            
-                                            Label {
-                                                text: modelData.Producto || modelData.Nombre || "Producto desconocido"
-                                                color: textColor
-                                                font.bold: true
-                                                font.pixelSize: 14
-                                                elide: Text.ElideRight
-                                            }
-                                            
-                                            Label {
-                                                text: modelData.Codigo
-                                                color: darkGrayColor
-                                                font.pixelSize: 12
-                                                elide: Text.ElideRight
-                                            }
-                                            
-                                            Label {
-                                                text: modelData.Detalle || obtenerTextoEstado(modelData.Tipo_Alerta, modelData.Detalle)
-                                                color: darkGrayColor
-                                                font.pixelSize: 11
-                                                elide: Text.ElideRight
-                                                visible: text !== ""
-                                            }
-                                            
-                                            Label {
-                                                text: modelData.Tipo_Alerta === "STOCK BAJO" ? 
-                                                    "Stock: " + (modelData.Stock_Actual || modelData.Stock_Real || 0) + 
-                                                    " (Mínimo: " + (modelData.Stock_Minimo || 0) + ")" : ""
-                                                color: darkGrayColor
-                                                font.pixelSize: 11
-                                                elide: Text.ElideRight
-                                                visible: text !== ""
-                                            }
+                                            elide: Text.ElideRight
                                         }
+                                        Label {
+                                            text: "ID: " + producto.codigo
+                                            color: darkGrayColor
+                                            font.pixelSize: 11
+                                        }
+                                    }
+
+                                    Column {
+                                        Layout.fillWidth: true
+                                        spacing: 6
                                         
-                                        // Botón Ver Producto
-                                        Button {
-                                            Layout.preferredWidth: 120
-                                            Layout.preferredHeight: 36
-                                            text: "Ver Detalle"
+                                        Repeater {
+                                            model: producto.alertas
                                             
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker(primaryColor, 1.2) : primaryColor
+                                            delegate: Rectangle {
+                                                property var alerta: modelData
+                                                width: parent.width
+                                                height: 40
                                                 radius: 6
+                                                color: obtenerBg(alerta.Tipo_Alerta)
+                                                border.color: obtenerColor(alerta.Tipo_Alerta)
+                                                border.width: 1.5
+                                                
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 10
+                                                    anchors.rightMargin: 10
+                                                    spacing: 12
+                                                    
+                                                    Label {
+                                                        text: obtenerIcono(alerta.Tipo_Alerta)
+                                                        font.pixelSize: 13
+                                                    }
+                                                    
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 3
+                                                        
+                                                        Label {
+                                                            text: {
+                                                                var tipo = alerta.Tipo_Alerta
+                                                                if (tipo === "STOCK BAJO") {
+                                                                    return "<b>STOCK BAJO</b>"
+                                                                } else {
+                                                                    var numeroLote = alerta.Detalle.match(/#\d+/)?.[0]?.replace("#", "") || "N/A"
+                                                                    return "<b>Lote #" + numeroLote + " : " + tipo + "</b>"
+                                                                }
+                                                            }
+                                                            textFormat: Text.RichText
+                                                            color: obtenerColor(alerta.Tipo_Alerta)
+                                                            font.pixelSize: 11
+                                                            font.bold: true
+                                                        }
+                                                        
+                                                        Label {
+                                                            text: {
+                                                                var tipo = alerta.Tipo_Alerta
+                                                                if (tipo === "STOCK BAJO") {
+                                                                    return "Quedan: " + (alerta.Stock_Actual || 0) + " unidades | Mínimo: " + (alerta.Minimo || 0)
+                                                                } else {
+                                                                    var fecha = alerta.Detalle.match(/\d{2}\/\d{2}\/\d{4}/)?.[0] || ""
+                                                                    return "Fecha: " + fecha
+                                                                }
+                                                            }
+                                                            color: obtenerColor(alerta.Tipo_Alerta)
+                                                            font.pixelSize: 9
+                                                        }
+                                                    }
+                                                }
                                             }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 11
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: navegarAProducto(modelData.Codigo)
                                         }
-                                    }
-                                    
-                                    // Efecto hover
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onEntered: parent.scale = 1.01
-                                        onExited: parent.scale = 1.0
-                                        onClicked: navegarAProducto(modelData.Codigo)
-                                    }
-                                    
-                                    Behavior on scale {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
                                     }
                                 }
-                                
-                                // Estado vacío
-                                Rectangle {
+                            }
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                visible: vistaAgrupada.count === 0
+                                width: parent.width - 20
+                                height: 80
+                                radius: 8
+                                color: "#f8fafc"
+                                border.color: "#e2e8f0"
+                                border.width: 1
+
+                                Label {
                                     anchors.centerIn: parent
-                                    width: 320
-                                    height: 160
-                                    color: "transparent"
-                                    visible: alertasListView.count === 0
-                                    
-                                    Column {
-                                        anchors.centerIn: parent
-                                        spacing: 16
-                                        
-                                        Rectangle {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            width: 70
-                                            height: 70
-                                            radius: 35
-                                            color: datosCargados ? successColor : lightGrayColor
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: datosCargados ? "✅" : "⏳"
-                                                font.pixelSize: 32
-                                                color: whiteColor
-                                            }
-                                        }
-                                        
-                                        Label {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            text: datosCargados ? 
-                                                "No hay alertas de tipo: " + filtroAlertaActual : 
-                                                "Cargando alertas..."
-                                            color: darkGrayColor
-                                            font.pixelSize: 16
-                                            font.bold: true
-                                        }
-                                        
-                                        Label {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            width: 280
-                                            text: datosCargados ? 
-                                                "Todos los productos están en buen estado" : 
-                                                "Obteniendo información del inventario..."
-                                            color: darkGrayColor
-                                            font.pixelSize: 12
-                                            horizontalAlignment: Text.AlignHCenter
-                                            wrapMode: Text.WordWrap
-                                        }
-                                    }
+                                    text: "✅ No hay alertas de inventario"
+                                    color: "#64748b"
+                                    font.pixelSize: 14
+                                    font.bold: true
                                 }
                             }
                         }
                     }
                 }
+
             }
         }
     }
