@@ -1982,7 +1982,7 @@ class InventarioModel(QObject):
             if producto_id > 0:
                 print(f"📦 Lotes del producto {producto_id}: {len(lotes)} lotes")
             else:
-                print(f"📦 Lotes activos totales: {len(lotes)} lotes")
+                print(f"📦 Lotes totales: {len(lotes)} lotes")
             
             # Debug: mostrar estados de vencimiento
             estados = {}

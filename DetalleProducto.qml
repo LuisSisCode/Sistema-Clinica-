@@ -198,7 +198,7 @@ Rectangle {
         var diasNum = parseInt(dias)
         
         if (isNaN(diasNum)) return "---"
-        if (diasNum < 0) return "VENCIDO"
+        if (diasNum < 0) return "HACE " + Math.abs(diasNum) + (Math.abs(diasNum) === 1 ? " día" : " días")
         if (diasNum === 0) return "HOY"
         if (diasNum === 1) return "1 día"
         return diasNum + " días"
@@ -708,7 +708,7 @@ Rectangle {
                             }
                             
                             Label {
-                                text: "Lotes Activos:"
+                                text: "Lotes:"
                                 font.pixelSize: 12
                                 color: "#7f8c8d"
                             }
@@ -740,7 +740,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 
                                 Label {
-                                    text: "📦 LOTES ACTIVOS"
+                                    text: "📦 LOTES"
                                     font.pixelSize: 14
                                     font.bold: true
                                     color: "#2c3e50"
@@ -1087,7 +1087,7 @@ Rectangle {
                                         
                                         Label {
                                             Layout.alignment: Qt.AlignHCenter
-                                            text: lotesLoaded ? "No hay lotes activos" : "Cargando lotes..."
+                                            text: lotesLoaded ? "No hay lotes" : "Cargando lotes..."
                                             font.pixelSize: 14
                                             color: "#7f8c8d"
                                         }

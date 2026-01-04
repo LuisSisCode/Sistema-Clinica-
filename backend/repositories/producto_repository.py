@@ -131,7 +131,7 @@ class ProductoRepository(BaseRepository):
         WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
             FROM Lote l WHERE l.Id_Producto = p.id) <= ?
         ORDER BY (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
-                FROM Lote l WHERE l.Id_Producto = p.id) ASC
+                FROM Lote l WHERE l.Id_Producto = p.id)
         """
         return self._execute_query(query, (stock_minimo,), use_cache=False)
     
@@ -913,6 +913,7 @@ class ProductoRepository(BaseRepository):
         """
         🚀 FIFO 2.0: Obtiene todas las alertas activas usando vista vw_Alertas_Inventario
         ✅ COLUMNAS EXACTAS: Tipo_Alerta, id, Codigo, Nombre, Stock_Minimo, Stock_Real, Detalle
+        ✅ INCLUYE: Productos activos + lotes vencidos + lotes bajo stock (sin filtro de cantidad)
         """
         try:
             query = """
@@ -931,13 +932,35 @@ class ProductoRepository(BaseRepository):
                     ELSE 1
                 END AS Prioridad
             FROM vw_Alertas_Inventario
+            UNION ALL
+            SELECT 
+                'PRODUCTO VENCIDO' AS Tipo_Alerta,
+                p.Codigo,
+                p.Nombre AS Producto,
+                p.Stock_Minimo,
+                l.Cantidad_Unitario AS Stock_Actual,
+                CONCAT('Lote vencido desde: ', FORMAT(l.Fecha_Vencimiento, 'yyyy-MM-dd')) AS Detalle,
+                3 AS Prioridad
+            FROM Lote l
+            INNER JOIN Productos p ON l.Id_Producto = p.id
+            WHERE l.Fecha_Vencimiento < GETDATE()
+            AND l.Cantidad_Unitario > 0
+            UNION ALL
+            SELECT 
+                'STOCK BAJO' AS Tipo_Alerta,
+                p.Codigo,
+                p.Nombre AS Producto,
+                p.Stock_Minimo,
+                l.Cantidad_Unitario AS Stock_Actual,
+                CONCAT('Lote con stock bajo: ', l.Cantidad_Unitario, ' unidades') AS Detalle,
+                2 AS Prioridad
+            FROM Lote l
+            INNER JOIN Productos p ON l.Id_Producto = p.id
+            WHERE l.Cantidad_Unitario > 0 
+            AND l.Cantidad_Unitario <= p.Stock_Minimo
+            AND l.Fecha_Vencimiento >= GETDATE()
             ORDER BY 
-                CASE 
-                    WHEN Tipo_Alerta = 'PRODUCTO VENCIDO' THEN 3
-                    WHEN Tipo_Alerta = 'PRODUCTO PRÓXIMO A VENCER' THEN 2
-                    WHEN Tipo_Alerta = 'STOCK BAJO' THEN 2
-                    ELSE 1
-                END DESC, 
+                Prioridad DESC, 
                 Tipo_Alerta
             """
             
@@ -960,27 +983,28 @@ class ProductoRepository(BaseRepository):
             
         except Exception as e:
             print(f"❌ Error obteniendo alertas: {e}")
+            traceback.print_exc()
             return []
     
     def obtener_lotes_activos_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
         """
-        🚀 FIFO 2.0: Obtiene detalle de lotes activos Y vencidos usando vista vw_Lotes_Activos
+        🚀 FIFO 2.0: Obtiene detalle de lotes activos, vencidos y bajo stock usando vista vw_Lotes_Activos
         ✅ COLUMNAS EXACTAS: id, Id_Producto, Codigo, Producto, Marca, Cantidad_Inicial, 
                             Stock_Actual, Precio_Compra, Fecha_Compra, Fecha_Vencimiento,
                             Dias_para_Vencer, Estado_Vencimiento, Estado_Lote, etc.
-        ✅ AHORA INCLUYE: Lotes activos + lotes vencidos (sin filtro de stock)
+        ✅ AHORA INCLUYE: Lotes activos + lotes vencidos + lotes bajo stock + lotes con stock 0
         """
         try:
             if producto_id:
                 query = """
                 SELECT 
-                    id AS Id_Lote,                    -- ✅ Existe como "id"
+                    id AS Id_Lote,                    
                     Id_Producto,
-                    Codigo AS Producto_Codigo,        -- ✅ Existe como "Codigo"
-                    Producto AS Producto_Nombre,      -- ✅ Ya es "Producto" (alias en vista)
-                    Marca,                            -- ✅ Existe
+                    Codigo AS Producto_Codigo,        
+                    Producto AS Producto_Nombre,      
+                    Marca,                            
                     Cantidad_Inicial,
-                    Stock_Actual AS Stock_Lote,       -- ✅ Existe como "Stock_Actual"
+                    Stock_Actual AS Stock_Lote,       
                     Precio_Compra,
                     Fecha_Compra,
                     Fecha_Vencimiento,
@@ -1013,9 +1037,54 @@ class ProductoRepository(BaseRepository):
                 LEFT JOIN Marca m ON p.ID_Marca = m.id
                 WHERE l.Id_Producto = ?
                 AND l.Fecha_Vencimiento < GETDATE()
+                UNION ALL
+                SELECT 
+                    l.id AS Id_Lote,
+                    l.Id_Producto,
+                    p.Codigo AS Producto_Codigo,
+                    p.Nombre AS Producto_Nombre,
+                    m.Nombre AS Marca,
+                    l.Cantidad_Unitario AS Cantidad_Inicial,
+                    l.Cantidad_Unitario AS Stock_Lote,
+                    l.Precio_Compra,
+                    l.Fecha_Compra,
+                    l.Fecha_Vencimiento,
+                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                    'BAJO STOCK' AS Estado_Vencimiento,
+                    'BAJO STOCK' AS Estado_Lote,
+                    NULL AS Id_Compra,
+                    NULL AS Proveedor
+                FROM Lote l
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                LEFT JOIN Marca m ON p.ID_Marca = m.id
+                WHERE l.Id_Producto = ?
+                AND l.Cantidad_Unitario < p.Stock_Minimo
+                AND l.Cantidad_Unitario > 0
+                UNION ALL
+                SELECT 
+                    l.id AS Id_Lote,
+                    l.Id_Producto,
+                    p.Codigo AS Producto_Codigo,
+                    p.Nombre AS Producto_Nombre,
+                    m.Nombre AS Marca,
+                    l.Cantidad_Unitario AS Cantidad_Inicial,
+                    l.Cantidad_Unitario AS Stock_Lote,
+                    l.Precio_Compra,
+                    l.Fecha_Compra,
+                    l.Fecha_Vencimiento,
+                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                    'AGOTADO' AS Estado_Vencimiento,
+                    'AGOTADO' AS Estado_Lote,
+                    NULL AS Id_Compra,
+                    NULL AS Proveedor
+                FROM Lote l
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                LEFT JOIN Marca m ON p.ID_Marca = m.id
+                WHERE l.Id_Producto = ?
+                AND l.Cantidad_Unitario = 0
                 ORDER BY Dias_para_Vencer, Estado_Lote DESC
                 """
-                params = (producto_id, producto_id)
+                params = (producto_id, producto_id, producto_id, producto_id)
             else:
                 query = """
                 SELECT 
@@ -1056,6 +1125,49 @@ class ProductoRepository(BaseRepository):
                 INNER JOIN Productos p ON l.Id_Producto = p.id
                 LEFT JOIN Marca m ON p.ID_Marca = m.id
                 WHERE l.Fecha_Vencimiento < GETDATE()
+                UNION ALL
+                SELECT 
+                    l.id AS Id_Lote,
+                    l.Id_Producto,
+                    p.Codigo AS Producto_Codigo,
+                    p.Nombre AS Producto_Nombre,
+                    m.Nombre AS Marca,
+                    l.Cantidad_Unitario AS Cantidad_Inicial,
+                    l.Cantidad_Unitario AS Stock_Lote,
+                    l.Precio_Compra,
+                    l.Fecha_Compra,
+                    l.Fecha_Vencimiento,
+                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                    'BAJO STOCK' AS Estado_Vencimiento,
+                    'BAJO STOCK' AS Estado_Lote,
+                    NULL AS Id_Compra,
+                    NULL AS Proveedor
+                FROM Lote l
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                LEFT JOIN Marca m ON p.ID_Marca = m.id
+                WHERE l.Cantidad_Unitario < p.Stock_Minimo
+                AND l.Cantidad_Unitario > 0
+                UNION ALL
+                SELECT 
+                    l.id AS Id_Lote,
+                    l.Id_Producto,
+                    p.Codigo AS Producto_Codigo,
+                    p.Nombre AS Producto_Nombre,
+                    m.Nombre AS Marca,
+                    l.Cantidad_Unitario AS Cantidad_Inicial,
+                    l.Cantidad_Unitario AS Stock_Lote,
+                    l.Precio_Compra,
+                    l.Fecha_Compra,
+                    l.Fecha_Vencimiento,
+                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                    'AGOTADO' AS Estado_Vencimiento,
+                    'AGOTADO' AS Estado_Lote,
+                    NULL AS Id_Compra,
+                    NULL AS Proveedor
+                FROM Lote l
+                INNER JOIN Productos p ON l.Id_Producto = p.id
+                LEFT JOIN Marca m ON p.ID_Marca = m.id
+                WHERE l.Cantidad_Unitario = 0
                 ORDER BY Dias_para_Vencer, Estado_Lote DESC
                 """
                 params = ()
@@ -1090,7 +1202,7 @@ class ProductoRepository(BaseRepository):
                 else:
                     lote['Fecha_Compra'] = ""
             
-            print(f"📦 Lotes obtenidos: {len(lotes)} lotes (activos + vencidos) - Sistema FIFO 2.0")
+            print(f"📦 Lotes obtenidos: {len(lotes)} lotes (activos + vencidos + bajo stock + agotados) - Sistema FIFO 2.0")
             return lotes
             
         except Exception as e:
@@ -1104,7 +1216,6 @@ class ProductoRepository(BaseRepository):
             except:
                 pass
             return []
-    
     def obtener_costo_inventario(self) -> List[Dict[str, Any]]:
         """
         🚀 FIFO 2.0: Obtiene valorización del inventario usando vista vw_Costo_Inventario
@@ -1199,55 +1310,3 @@ class ProductoRepository(BaseRepository):
             import traceback
             traceback.print_exc()
             return []
-    
-    def obtener_dashboard_metricas(self) -> Dict[str, Any]:
-        """
-        🚀 FIFO 2.0: Obtiene métricas consolidadas para dashboard
-        ✅ CORREGIDO con columnas EXACTAS de cada vista
-        """
-        try:
-            metricas = {}
-            
-            # Alerta de stock crítico
-            query_critico = "SELECT COUNT(*) as total FROM vw_Stock_Actual WHERE Estado_Stock = 'CRÍTICO'"
-            result = self._execute_query(query_critico, fetch_one=True, use_cache=False)
-            metricas['stock_critico'] = result['total'] if result else 0
-            
-            # Lotes próximos a vencer (usando alertas)
-            query_vencer = "SELECT COUNT(*) as total FROM vw_Alertas_Inventario WHERE Tipo_Alerta = 'PRODUCTO PRÓXIMO A VENCER'"
-            result = self._execute_query(query_vencer, fetch_one=True, use_cache=False)
-            metricas['lotes_proximos_vencer'] = result['total'] if result else 0
-            
-            # Valor total del inventario
-            query_valor = "SELECT SUM(Valor_Inventario_Costo) as total FROM vw_Costo_Inventario"
-            result = self._execute_query(query_valor, fetch_one=True, use_cache=False)
-            metricas['valor_inventario'] = float(result['total']) if result and result['total'] else 0.0
-            
-            # Total de alertas
-            query_alertas = "SELECT COUNT(*) as total FROM vw_Alertas_Inventario"
-            result = self._execute_query(query_alertas, fetch_one=True, use_cache=False)
-            metricas['alertas_activas'] = result['total'] if result else 0
-            
-            # Top 5 productos con mejor rotación (COLUMNAS EXACTAS)
-            query_top = """
-            SELECT TOP 5 
-                Nombre AS Producto,              -- ✅ Existe como "Nombre"
-                Indice_Rotacion                  -- ✅ Existe
-            FROM vw_Rotacion_Inventario 
-            ORDER BY Indice_Rotacion DESC
-            """
-            metricas['top_rotacion'] = self._execute_query(query_top, use_cache=False)
-            
-            print(f"📊 Métricas dashboard obtenidas:")
-            print(f"   - Stock crítico: {metricas['stock_critico']}")
-            print(f"   - Próximos a vencer: {metricas['lotes_proximos_vencer']}")
-            print(f"   - Valor inventario: ${metricas['valor_inventario']:,.2f}")
-            print(f"   - Alertas activas: {metricas['alertas_activas']}")
-            
-            return metricas
-            
-        except Exception as e:
-            print(f"❌ Error obteniendo métricas dashboard: {e}")
-            import traceback
-            traceback.print_exc()
-            return {}
