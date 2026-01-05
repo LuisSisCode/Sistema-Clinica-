@@ -16,7 +16,7 @@ try:
     from backend.repositories.consulta_repository import ConsultaRepository
     from backend.repositories.laboratorio_repository import LaboratorioRepository
     from backend.repositories.enfermeria_repository import EnfermeriaRepository
-    from backend.repositories.compra_repository import CompraRepository  # ✅ NUEVO
+    from backend.repositories.compra_repository import CompraRepository 
     from backend.core.database_conexion import DatabaseConnection
 except ImportError:
     # Fallback para importaciones relativas
