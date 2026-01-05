@@ -1833,7 +1833,7 @@ Item {
             color: whiteColor
             border.color: lightGrayColor
             border.width: 1
-            
+                        
             Loader {
                 id: detalleProductoLoader
                 anchors.fill: parent
@@ -1868,6 +1868,14 @@ Item {
                                 eliminarLote(lote)  // Llama directamente a eliminarLote
                             })
                         }
+                        
+                        // ✅ AGREGAR: Conectar señal de actualización de lote
+                        if (item.loteActualizadoEnDialog) {
+                            item.loteActualizadoEnDialog.connect(function() {
+                                console.log("🔄 Señal recibida: lote actualizado en diálogo")
+                                // Esto ya debería recargar automáticamente
+                            })
+                        }
                     }
                 }
             }
@@ -1882,7 +1890,7 @@ Item {
         anchors.fill: parent
         z: 3000
         visible: mostrandoEditarLote
-        color: "#80000000"
+        color: "#80000000" // Fondo oscuro semi-transparente
         
         Rectangle {
             anchors.centerIn: parent
@@ -1890,9 +1898,10 @@ Item {
             height: Math.min(500, parent.height * 0.8)
             radius: 12
             color: whiteColor
-            border.color: "#D5DBDB"
-            border.width: 1
-            
+            // Quitamos el borde externo para que no choque con el diseño del diálogo
+            border.width: 0 
+            clip: true // Asegura que el contenido del Loader respete el radio de las esquinas
+
             Loader {
                 id: editarLoteLoader
                 anchors.fill: parent
@@ -1901,41 +1910,9 @@ Item {
                 onLoaded: {
                     if (item) {
                         console.log("✏️ EditarLoteDialog.qml cargado")
-                        console.log("🔍 loteParaEditar ANTES de asignar:", JSON.stringify(loteParaEditar))
                         item.inventarioModel = inventarioModel
                         item.loteData = loteParaEditar
-                        console.log("🔍 item.loteData DESPUÉS de asignar:", JSON.stringify(item.loteData))
-                        // ❌ NO conectar señales aquí
                     }
-                }
-            }
-            
-            // Botón cerrar
-            Button {
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: 12
-                width: 32
-                height: 32
-                text: "✕"
-                
-                background: Rectangle {
-                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                    radius: 16
-                }
-                
-                contentItem: Label {
-                    text: parent.text
-                    color: whiteColor
-                    font.bold: true
-                    font.pixelSize: 14
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                
-                onClicked: {
-                    mostrandoEditarLote = false
-                    loteParaEditar = null
                 }
             }
         }
@@ -2231,6 +2208,14 @@ Item {
             // Recargar datos
             if (inventarioModel) {
                 inventarioModel.refresh_productos()
+            }
+            
+            // ✅ CRÍTICO: Recargar DetalleProducto si está visible
+            if (mostrandoDetalleProducto && detalleProductoLoader.item) {
+                console.log("🔄 Forzando recarga de DetalleProducto después de eliminar lote")
+                Qt.callLater(function() {
+                    detalleProductoLoader.item.cargarDatosProducto()
+                })
             }
             
             Qt.callLater(function() {
