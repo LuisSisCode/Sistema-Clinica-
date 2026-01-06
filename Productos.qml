@@ -12,7 +12,7 @@ Item {
     property var inventarioModel: parent.inventarioModel
     
     // ESTADO PRINCIPAL: controla qué vista mostrar
-    property bool mostrandoCrearProducto: false
+    // ❌ DESHABILITADO EN V2.0 - Productos se crean solo en Compras
     property bool modoEdicionProducto: false
     property var productoParaEditar: null
     property var selectedProduct: null
@@ -22,8 +22,6 @@ Item {
     property var productoSeleccionado: null
     property int currentFilter: 0
     property string searchText: ""
-    property bool mostrandoMenuContextual: false
-    property var productoMenuContextual: null
     property var productosOriginales: []
     property var fechaActual: new Date()
     
@@ -56,6 +54,13 @@ Item {
     property var lotesVencidos: []
     property var productosConLotesBajoStock: []
     property bool datosLotesCargados: false
+
+    // 🆕 V2.0: Confirmación de eliminación
+    property var productoParaEliminar: null
+    property bool confirmDialogVisible: false
+    property string confirmDialogTitle: ""
+    property string confirmDialogMessage: ""
+    property string confirmDialogAccion: ""
 
     // Propiedades de colores
     readonly property color primaryColor: "#273746"
@@ -120,9 +125,9 @@ Item {
     Keys.onEscapePressed: {
         console.log("Tecla Escape presionada en Productos.qml")
         
-        if (mostrandoCrearProducto) {
-            console.log("Cerrando CrearProducto con Escape")
-            volverAListaProductos()
+        if (modoEdicionProducto) {
+            console.log("Cerrando EditarProducto con Escape")
+            cerrarEditarProducto()
         } else if (mostrandoDetalleProducto) {
             console.log("Cerrando detalle de producto con Escape")
             mostrandoDetalleProducto = false
@@ -134,6 +139,9 @@ Item {
             console.log("Cerrando editar lote con Escape")
             mostrandoEditarLote = false
             loteParaEditar = null
+        } else if (confirmDialogVisible) {
+            console.log("Cerrando diálogo de confirmación con Escape")
+            confirmDialogVisible = false
         }
     }
 
@@ -194,24 +202,12 @@ Item {
         }
     }
 
-    // FUNCIONES PARA MANEJO DE CREAR PRODUCTO
-    function abrirCrearProducto() {
-        console.log("🔧 Abriendo CrearProducto como modal centrado")
-        
-        // ✅ CARGAR MARCAS PRIMERO
-        if (!marcasYaCargadas) {
-            cargarMarcasDesdeModel()
-        }
-        
-        modoEdicionProducto = false
-        productoParaEditar = null
-        
-        // ✅ ABRIR MODAL (el onLoaded del Loader asignará las marcas)
-        mostrandoCrearProducto = true
-    }
+    // ========================================
+    // 🆕 FUNCIONES V2.0 - EDITAR Y ELIMINAR
+    // ========================================
 
     function abrirEditarProducto(producto) {
-        console.log("🔧 Abriendo edición de producto:", producto.codigo)
+        console.log("✏️ Abriendo edición de producto:", producto.codigo)
         
         // ✅ CARGAR MARCAS PRIMERO
         if (!marcasYaCargadas) {
@@ -230,25 +226,76 @@ Item {
             precio_venta: producto.precioVenta || 0,   
             stockUnitario: producto.stockUnitario || 0,
             marca: producto.idMarca || "",              
-            unidad_medida: producto.unidadMedida || "Tabletas"
+            unidad_medida: producto.unidadMedida || "Tabletas",
+            stockMinimo: producto.stockMinimo || 10
         }
         
         console.log("📝 Datos preparados para edición:", JSON.stringify(productoParaEditar))
-        
-        // ✅ ABRIR MODAL (el onLoaded del Loader asignará las marcas)
-        mostrandoCrearProducto = true
     }
     
-    function volverAListaProductos() {
-        console.log("🔙 Volviendo a lista de productos")
-        mostrandoCrearProducto = false
+    function cerrarEditarProducto() {
+        console.log("❌ Cerrando edición de producto")
         modoEdicionProducto = false
         productoParaEditar = null
+    }
+
+    function productoActualizado(producto) {
+        console.log("✅ Producto actualizado:", producto.codigo || producto.Codigo)
+        cerrarEditarProducto()
         
-        Qt.callLater(function() {
-            cargarDatosParaFiltros()
-            actualizarDesdeDataCentral()
-        })
+        // Refrescar datos
+        if (inventarioModel && typeof inventarioModel.refresh_productos === 'function') {
+            inventarioModel.refresh_productos()
+        }
+        
+        mostrarMensajeExito("Producto actualizado correctamente")
+    }
+
+    function confirmarEliminarProducto(producto) {
+        console.log("🗑️ Confirmar eliminación de:", producto.codigo)
+        
+        productoParaEliminar = producto
+        confirmDialogTitle = "¿Eliminar Producto?"
+        confirmDialogMessage = "¿Está seguro de eliminar el producto '" + producto.nombre + "'?\n\n" +
+                              "Código: " + producto.codigo + "\n" +
+                              "Esta acción es PERMANENTE.\n\n" +
+                              "⚠️ Solo se puede eliminar si NO tiene ventas registradas."
+        confirmDialogAccion = "eliminar_producto"
+        confirmDialogVisible = true
+    }
+
+    function eliminarProductoConfirmado() {
+        if (!productoParaEliminar) {
+            console.error("❌ No hay producto para eliminar")
+            return
+        }
+        
+        console.log("🗑️ Eliminando producto:", productoParaEliminar.codigo)
+        
+        if (inventarioModel && typeof inventarioModel.eliminar_producto === 'function') {
+            var resultado = inventarioModel.eliminar_producto(productoParaEliminar.codigo)
+            
+            if (resultado) {
+                console.log("✅ Producto eliminado exitosamente")
+                mostrarMensajeExito("Producto eliminado correctamente")
+                
+                // Refrescar datos
+                Qt.callLater(function() {
+                    cargarDatosParaFiltros()
+                    actualizarDesdeDataCentral()
+                    updateFilteredModel()
+                })
+            } else {
+                console.error("❌ Error al eliminar producto")
+                mostrarMensajeError("Error al eliminar el producto. Verifique que no tenga ventas registradas.")
+            }
+        } else {
+            console.error("❌ Función eliminar_producto no disponible en inventarioModel")
+            mostrarMensajeError("Función de eliminación no disponible")
+        }
+        
+        productoParaEliminar = null
+        confirmDialogVisible = false
     }
 
     function cargarMarcasDesdeModel() {
@@ -376,7 +423,7 @@ Item {
                         }
                         
                         Label {
-                            text: "Inventario de Productos - FIFO 2.0"
+                            text: "Inventario de Productos - V2.0"
                             font.pixelSize: 14
                             color: darkGrayColor
                         }
@@ -385,6 +432,8 @@ Item {
 
                 Item { Layout.fillWidth: true }
                 
+                // ❌ DESHABILITADO EN V2.0 - Productos se crean solo en Compras
+                /*
                 Button {
                     Layout.preferredWidth: 200
                     Layout.preferredHeight: 60
@@ -434,6 +483,7 @@ Item {
                         NumberAnimation { duration: 100 }
                     }
                 }
+                */
                 
                 Rectangle {
                     Layout.preferredWidth: 130
@@ -656,7 +706,7 @@ Item {
                     anchors.margins: 0
                     spacing: 0
                     
-                    // Header de la tabla - SIN STOCK CAJA - RESPONSIVA
+                    // Header de la tabla - AJUSTADO PARA BOTONES MÁS COMPACTOS
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
@@ -669,9 +719,9 @@ Item {
                             spacing: 0
                             
                             Rectangle {
-                                Layout.preferredWidth: 50
-                                Layout.minimumWidth: 50
-                                Layout.maximumWidth: 50
+                                Layout.preferredWidth: 40  // Reducido de 50
+                                Layout.minimumWidth: 40
+                                Layout.maximumWidth: 40
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -686,9 +736,9 @@ Item {
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 80
-                                Layout.minimumWidth: 80
-                                Layout.maximumWidth: 80
+                                Layout.preferredWidth: 70  // Reducido de 80
+                                Layout.minimumWidth: 70
+                                Layout.maximumWidth: 70
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -704,8 +754,8 @@ Item {
                             
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 150
-                                Layout.preferredWidth: 200
+                                Layout.minimumWidth: 180  // Aumentado de 150
+                                Layout.preferredWidth: 220  // Aumentado de 200
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -723,8 +773,8 @@ Item {
                             
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 120
-                                Layout.preferredWidth: 180
+                                Layout.minimumWidth: 140  // Aumentado de 120
+                                Layout.preferredWidth: 180  // Mantenido
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -741,9 +791,9 @@ Item {
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 120
-                                Layout.minimumWidth: 100
-                                Layout.maximumWidth: 140
+                                Layout.preferredWidth: 100  // Reducido de 120
+                                Layout.minimumWidth: 90   // Reducido de 100
+                                Layout.maximumWidth: 110  // Reducido de 140
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -753,16 +803,16 @@ Item {
                                     text: "PRECIO COMPRA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 11
+                                    font.pixelSize: 10  // Reducido de 11
                                     horizontalAlignment: Text.AlignHCenter
                                     wrapMode: Text.WordWrap
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 120
-                                Layout.minimumWidth: 100
-                                Layout.maximumWidth: 140
+                                Layout.preferredWidth: 100  // Reducido de 120
+                                Layout.minimumWidth: 90   // Reducido de 100
+                                Layout.maximumWidth: 110  // Reducido de 140
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -772,16 +822,16 @@ Item {
                                     text: "PRECIO VENTA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 11
+                                    font.pixelSize: 10  // Reducido de 11
                                     horizontalAlignment: Text.AlignHCenter
                                     wrapMode: Text.WordWrap
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 80
-                                Layout.minimumWidth: 70
-                                Layout.maximumWidth: 90
+                                Layout.preferredWidth: 70  // Reducido de 80
+                                Layout.minimumWidth: 60   // Reducido de 70
+                                Layout.maximumWidth: 75   // Reducido de 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -791,14 +841,14 @@ Item {
                                     text: "STOCK"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11  // Reducido de 12
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 80
-                                Layout.minimumWidth: 70
-                                Layout.maximumWidth: 90
+                                Layout.preferredWidth: 70  // Reducido de 80
+                                Layout.minimumWidth: 60   // Reducido de 70
+                                Layout.maximumWidth: 75   // Reducido de 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -808,14 +858,14 @@ Item {
                                     text: "UNIDAD"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 11
+                                    font.pixelSize: 10  // Reducido de 11
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100
-                                Layout.minimumWidth: 90
-                                Layout.maximumWidth: 120
+                                Layout.preferredWidth: 90  // Reducido de 100
+                                Layout.minimumWidth: 80   // Reducido de 90
+                                Layout.maximumWidth: 100  // Reducido de 120
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -825,14 +875,15 @@ Item {
                                     text: "MARCA"
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11  // Reducido de 12
                                 }
                             }
 
+                            // === HEADER ACCIONES V2.0 - AUMENTADO ===
                             Rectangle {
-                                Layout.preferredWidth: 80
-                                Layout.minimumWidth: 70
-                                Layout.maximumWidth: 90
+                                Layout.preferredWidth: 300  // Aumentado de 240
+                                Layout.minimumWidth: 250    // Aumentado de 200
+                                Layout.maximumWidth: 300    // Aumentado de 260
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -891,9 +942,9 @@ Item {
                                 spacing: 0
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 50
-                                    Layout.minimumWidth: 50
-                                    Layout.maximumWidth: 50
+                                    Layout.preferredWidth: 40  // Reducido de 50
+                                    Layout.minimumWidth: 40
+                                    Layout.maximumWidth: 40
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -902,15 +953,15 @@ Item {
                                         anchors.centerIn: parent
                                         text: model.id ? model.id.toString() : ""
                                         color: "#2C3E50"
-                                        font.pixelSize: 12
+                                        font.pixelSize: 11  // Reducido de 12
                                         font.bold: true
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.minimumWidth: 80
-                                    Layout.maximumWidth: 80
+                                    Layout.preferredWidth: 70  // Reducido de 80
+                                    Layout.minimumWidth: 70
+                                    Layout.maximumWidth: 70
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -920,14 +971,14 @@ Item {
                                         text: model.codigo || ""
                                         color: "#3498DB"
                                         font.bold: true
-                                        font.pixelSize: 12
+                                        font.pixelSize: 11  // Reducido de 12
                                     }
                                 }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.minimumWidth: 150
-                                    Layout.preferredWidth: 200
+                                    Layout.minimumWidth: 180  // Aumentado de 150
+                                    Layout.preferredWidth: 220  // Aumentado de 200
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -949,8 +1000,8 @@ Item {
                                 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.minimumWidth: 120
-                                    Layout.preferredWidth: 180
+                                    Layout.minimumWidth: 140  // Aumentado de 120
+                                    Layout.preferredWidth: 180  // Mantenido
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -970,9 +1021,9 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 120
-                                    Layout.minimumWidth: 100
-                                    Layout.maximumWidth: 140
+                                    Layout.preferredWidth: 100  // Reducido de 120
+                                    Layout.minimumWidth: 90   // Reducido de 100
+                                    Layout.maximumWidth: 110  // Reducido de 140
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -982,15 +1033,15 @@ Item {
                                         text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
                                         color: "#27AE60"
                                         font.bold: true
-                                        font.pixelSize: 11
+                                        font.pixelSize: 10  // Reducido de 11
                                         horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 120
-                                    Layout.minimumWidth: 100
-                                    Layout.maximumWidth: 140
+                                    Layout.preferredWidth: 100  // Reducido de 120
+                                    Layout.minimumWidth: 90   // Reducido de 100
+                                    Layout.maximumWidth: 110  // Reducido de 140
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1000,15 +1051,15 @@ Item {
                                         text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
                                         color: "#F39C12"
                                         font.bold: true
-                                        font.pixelSize: 11
+                                        font.pixelSize: 10  // Reducido de 11
                                         horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.minimumWidth: 70
-                                    Layout.maximumWidth: 90
+                                    Layout.preferredWidth: 70  // Reducido de 80
+                                    Layout.minimumWidth: 60   // Reducido de 70
+                                    Layout.maximumWidth: 75   // Reducido de 90
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1016,8 +1067,8 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 70
-                                        height: 24
+                                        width: 60  // Reducido de 70
+                                        height: 22  // Reducido de 24
                                         color: delegateItem.colorStock
                                         radius: 4
                                         
@@ -1026,15 +1077,15 @@ Item {
                                             text: delegateItem.stockActual.toString()
                                             color: "#FFFFFF"
                                             font.bold: true
-                                            font.pixelSize: 10
+                                            font.pixelSize: 9  // Reducido de 10
                                         }
                                     }
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.minimumWidth: 70
-                                    Layout.maximumWidth: 90
+                                    Layout.preferredWidth: 70  // Reducido de 80
+                                    Layout.minimumWidth: 60   // Reducido de 70
+                                    Layout.maximumWidth: 75   // Reducido de 90
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1042,7 +1093,7 @@ Item {
                                     
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: Math.min(60, parent.width - 10)
+                                        width: Math.min(55, parent.width - 10)  // Reducido de 60
                                         height: 14
                                         color: "#9b59b6"
                                         radius: 7
@@ -1059,9 +1110,9 @@ Item {
                                 }
                                 
                                 Rectangle {
-                                    Layout.preferredWidth: 100
-                                    Layout.minimumWidth: 90
-                                    Layout.maximumWidth: 120
+                                    Layout.preferredWidth: 90  // Reducido de 100
+                                    Layout.minimumWidth: 80   // Reducido de 90
+                                    Layout.maximumWidth: 100  // Reducido de 120
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
@@ -1076,62 +1127,106 @@ Item {
                                         text: model.idMarca || "N/A"
                                         color: "#34495e"
                                         font.bold: true
-                                        font.pixelSize: 11
+                                        font.pixelSize: 10  // Reducido de 11
                                         horizontalAlignment: Text.AlignHCenter
                                         elide: Text.ElideRight
                                     }
                                 }
 
+                                // === BOTONES DE ACCIÓN V2.0 - MÁS COMPACTOS ===
                                 Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.minimumWidth: 70
-                                    Layout.maximumWidth: 90
+                                    Layout.preferredWidth: 300  // Aumentado de 240
+                                    Layout.minimumWidth: 250    // Aumentado de 200
+                                    Layout.maximumWidth: 300    // Aumentado de 260
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
                                     border.width: 1
                                     
-                                    Button {
+                                    RowLayout {
                                         anchors.centerIn: parent
-                                        width: Math.min(70, parent.width - 10)
-                                        height: 28
-                                        text: "Ver"
+                                        spacing: 10  // Aumentado de 6
                                         
-                                        property bool procesando: false
-                                        
-                                        background: Rectangle {
-                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                                            radius: 4
-                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                        // Botón VER - MÁS COMPACTO
+                                        Button {
+                                            width: 40  // Reducido de 65
+                                            height: 26  // Reducido de 28
+                                            text: "👁️ Ver"
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker("#3498db", 1.2) : "#3498db"
+                                                radius: 4
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 9  // Reducido de 10
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: {
+                                                console.log("📘 Ver producto:", model.codigo)
+                                                productoSeleccionado = model
+                                                mostrarDetalleProducto(model)
+                                            }
                                         }
                                         
-                                        contentItem: Label {
-                                            text: parent.text
-                                            color: whiteColor
-                                            font.bold: true
-                                            font.pixelSize: 10
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
+                                        // Botón EDITAR - MÁS COMPACTO
+                                        Button {
+                                            width: 30  // Reducido de 70
+                                            height: 26  // Reducido de 28
+                                            text: "✏️ Editar"
+                                            
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker('#c612f3', 1.2) : '#9416ad'
+                                                radius: 4
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
+                                            
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 9  // Reducido de 10
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            onClicked: {
+                                                console.log("✏️ Editar producto:", model.codigo)
+                                                abrirEditarProducto(model)
+                                            }
                                         }
                                         
-                                        onClicked: {
-                                            if (procesando) return
+                                        // Botón ELIMINAR - MÁS COMPACTO
+                                        Button {
+                                            width: 10  // Reducido de 75
+                                            height: 10  // Reducido de 28
+                                            text: "🗑️ Eliminar"
                                             
-                                            procesando = true
-                                            console.log("📘 Click en Ver para:", model.codigo)
+                                            background: Rectangle {
+                                                color: parent.pressed ? Qt.darker("#e74c3c", 1.2) : "#e74c3c"
+                                                radius: 4
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
                                             
-                                            productoSeleccionado = model
-                                            mostrarDetalleProducto(model)
+                                            contentItem: Label {
+                                                text: parent.text
+                                                color: whiteColor
+                                                font.bold: true
+                                                font.pixelSize: 9  // Reducido de 10
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
                                             
-                                            resetTimer.restart()
-                                        }
-                                        
-                                        Timer {
-                                            id: resetTimer
-                                            interval: 500
-                                            running: false
-                                            repeat: false
-                                            onTriggered: parent.procesando = false
+                                            onClicked: {
+                                                console.log("🗑️ Eliminar producto:", model.codigo)
+                                                confirmarEliminarProducto(model)
+                                            }
                                         }
                                     }
                                 }
@@ -1139,127 +1234,10 @@ Item {
                             
                             MouseArea {
                                 anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                propagateComposedEvents: true
-                                
-                                onClicked: function(mouse) {
-                                    if (mouse.button === Qt.LeftButton) {
-                                        productosTable.currentIndex = index
-                                        selectedProduct = model
-                                        mostrandoMenuContextual = false
-                                        productoMenuContextual = null
-                                    } else if (mouse.button === Qt.RightButton) {
-                                        // ✅ SELECCIONAR Y MOSTRAR MENÚ INMEDIATAMENTE
-                                        productosTable.currentIndex = index
-                                        selectedProduct = model
-                                        mostrandoMenuContextual = true
-                                        productoMenuContextual = model
-                                        mouse.accepted = true  // ← CAMBIAR A true para detener propagación
-                                    }
-                                    
-                                    // Solo propagar si es click izquierdo
-                                    if (mouse.button === Qt.LeftButton) {
-                                        mouse.accepted = false
-                                    }
-                                }
-                                
-                                onPressed: function(mouse) {
-                                    // Detener propagación si es click derecho
-                                    if (mouse.button === Qt.RightButton) {
-                                        mouse.accepted = true
-                                    } else {
-                                        mouse.accepted = false
-                                    }
-                                }
-                            }
-                            
-                            // Botones superpuestos del menú contextual
-                            Rectangle {
-                                anchors.fill: parent
-                                color: "transparent"
-                                visible: mostrandoMenuContextual && productoMenuContextual && productoMenuContextual.id === model.id
-                                z: 10
-                                
-                                // Cuadro contenedor estilo menú contextual - altura reducida
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 120
-                                    height: 50
-                                    color: "#F8F9FA"
-                                    border.width: 0
-                                    radius: 4
-                                    
-                                    // Sombra sutil
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        anchors.topMargin: 2
-                                        anchors.leftMargin: 2
-                                        color: "#00000015"
-                                        radius: 4
-                                        z: -1
-                                    }
-                                    
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 0
-                                        spacing: 0
-                                        
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 25
-                                            color: editarHover.containsMouse ? "#E3F2FD" : "transparent"
-                                            radius: 0
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "Editar"
-                                                color: editarHover.containsMouse ? "#1976D2" : "#2C3E50"
-                                                font.pixelSize: 11
-                                                font.weight: Font.Medium
-                                            }
-                                            
-                                            MouseArea {
-                                                id: editarHover
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                onClicked: {
-                                                    console.log("Editando producto:", model.codigo)
-                                                    abrirEditarProducto(model)
-                                                    mostrandoMenuContextual = false
-                                                    productoMenuContextual = null
-                                                    selectedProduct = null
-                                                }
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 25
-                                            color: eliminarHover.containsMouse ? "#FFEBEE" : "transparent"
-                                            radius: 0
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "Eliminar"
-                                                color: eliminarHover.containsMouse ? "#D32F2F" : "#2C3E50"
-                                                font.pixelSize: 11
-                                                font.weight: Font.Medium
-                                            }
-                                            
-                                            MouseArea {
-                                                id: eliminarHover
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                onClicked: {
-                                                    console.log("Eliminando producto:", model.codigo)
-                                                    eliminarProducto(model)
-                                                    mostrandoMenuContextual = false
-                                                    productoMenuContextual = null
-                                                    selectedProduct = null
-                                                }
-                                            }
-                                        }
-                                    }
+                                acceptedButtons: Qt.LeftButton
+                                onClicked: {
+                                    productosTable.currentIndex = index
+                                    selectedProduct = model
                                 }
                             }
                         }
@@ -1609,208 +1587,136 @@ Item {
             }
         }
         
-        // DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN - MEJORADO
+        // ===================================================
+        // DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN V2.0
+        // ===================================================
         Dialog {
-            id: confirmarEliminacionDialog
-            anchors.centerIn: parent
-            width: Math.min(400, parent.width * 0.8)
-            height: Math.min(350, parent.height * 0.6)
+            id: confirmDialog
+            visible: confirmDialogVisible
             modal: true
-            visible: false
-            z: 1500
-            
-            property var productoAEliminar: null
+            anchors.centerIn: parent
+            width: Math.min(parent.width * 0.8, 500)
+            height: Math.min(parent.height * 0.5, 300)
             
             background: Rectangle {
                 color: whiteColor
-                radius: 16
+                radius: 12
                 border.color: lightGrayColor
                 border.width: 1
                 
-                // Sombra
                 Rectangle {
                     anchors.fill: parent
-                    anchors.topMargin: 3
-                    anchors.leftMargin: 3
-                    color: "#00000020"
-                    radius: 16
+                    anchors.topMargin: 2
+                    anchors.leftMargin: 2
+                    color: "#00000015"
+                    radius: 12
                     z: -1
                 }
             }
             
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 16
+            header: Rectangle {
+                color: "#F8F9FA"
+                height: 50
+                radius: 12
                 
-                // Header con icono de advertencia
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 16
-                    
-                    Rectangle {
-                        width: 48
-                        height: 48
-                        color: dangerColor
-                        radius: 24
-                        
-                        Label {
-                            anchors.centerIn: parent
-                            text: "⚠️"
-                            font.pixelSize: 24
-                        }
-                    }
-                    
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: "¿Eliminar Producto?"
-                            font.pixelSize: 18
-                            font.bold: true
-                            color: textColor
-                        }
-                        
-                        Label {
-                            text: "Esta acción no se puede deshacer"
-                            font.pixelSize: 12
-                            color: darkGrayColor
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
+                Label {
+                    anchors.centerIn: parent
+                    text: confirmDialogTitle
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: textColor
                 }
+            }
+            
+            contentItem: ColumnLayout {
+                spacing: 15
                 
-                // Información del producto
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 80
-                    color: "#FEF2F2"
-                    radius: 8
-                    border.color: "#FECACA"
-                    border.width: 1
-                    
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 6
-                        
-                        Label {
-                            text: "Producto: " + (confirmarEliminacionDialog.productoAEliminar ? confirmarEliminacionDialog.productoAEliminar.nombre : "")
-                            font.bold: true
-                            font.pixelSize: 14
-                            color: textColor
-                        }
-                        
-                        Label {
-                            text: "Código: " + (confirmarEliminacionDialog.productoAEliminar ? confirmarEliminacionDialog.productoAEliminar.codigo : "")
-                            font.pixelSize: 12
-                            color: darkGrayColor
-                        }
-                        
-                        Label {
-                            text: "Stock actual: " + (confirmarEliminacionDialog.productoAEliminar ? confirmarEliminacionDialog.productoAEliminar.stockUnitario : "0") + " unidades"
-                            font.pixelSize: 12
-                            color: dangerColor
-                            font.bold: confirmarEliminacionDialog.productoAEliminar && confirmarEliminacionDialog.productoAEliminar.stockUnitario > 0
-                        }
-                    }
-                }
-                
-                // Advertencia si tiene stock
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 40
-                    color: "#FEF3C7"
-                    radius: 6
-                    border.color: "#FDE68A"
-                    border.width: 1
-                    visible: confirmarEliminacionDialog.productoAEliminar && confirmarEliminacionDialog.productoAEliminar.stockUnitario > 0
+                    Layout.preferredHeight: 48
+                    color: "transparent"
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 8
-                        spacing: 8
+                        spacing: 12
                         
-                        Label {
-                            text: "⚠️"
-                            font.pixelSize: 16
-                        }
-                        
-                        Label {
-                            text: "ADVERTENCIA: Este producto tiene stock disponible"
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#92400E"
-                            Layout.fillWidth: true
-                        }
-                    }
-                }
-                
-                Item { Layout.fillHeight: true }
-                
-                // Botones - CENTRADOS Y MEJOR DISEÑO
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    Button {
-                        Layout.preferredWidth: 100
-                        Layout.preferredHeight: 40
-                        text: "Cancelar"
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
-                            radius: 8
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: whiteColor
-                            font.bold: true
-                            font.pixelSize: 12
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            confirmarEliminacionDialog.close()
-                            confirmarEliminacionDialog.productoAEliminar = null
-                        }
-                    }
-                    
-                    Button {
-                        Layout.preferredWidth: 120
-                        Layout.preferredHeight: 40
-                        text: "SÍ, Eliminar"
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                            radius: 8
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: whiteColor
-                            font.bold: true
-                            font.pixelSize: 12
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            if (confirmarEliminacionDialog.productoAEliminar) {
-                                ejecutarEliminacionProducto(confirmarEliminacionDialog.productoAEliminar)
+                        Rectangle {
+                            width: 40
+                            height: 40
+                            color: "#FEF2F2"
+                            radius: 20
+                            
+                            Label {
+                                anchors.centerIn: parent
+                                text: "⚠️"
+                                font.pixelSize: 20
+                                color: dangerColor
                             }
-                            confirmarEliminacionDialog.close()
-                            confirmarEliminacionDialog.productoAEliminar = null 
+                        }
+                        
+                        Label {
+                            Layout.fillWidth: true
+                            text: confirmDialogMessage
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 13
+                            color: textColor
                         }
                     }
-                    
-                    Item { Layout.fillWidth: true }
                 }
+            }
+            
+            footer: DialogButtonBox {
+                alignment: Qt.AlignCenter
+                
+                Button {
+                    text: "Cancelar"
+                    DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(darkGrayColor, 1.2) : darkGrayColor
+                        radius: 6
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+                
+                Button {
+                    text: "Eliminar"
+                    DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                        radius: 6
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: whiteColor
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+            
+            onAccepted: {
+                console.log("✅ Acción confirmada:", confirmDialogAccion)
+                
+                if (confirmDialogAccion === "eliminar_producto") {
+                    eliminarProductoConfirmado()
+                }
+            }
+            
+            onRejected: {
+                console.log("❌ Acción cancelada")
+                confirmDialogVisible = false
+                productoParaEliminar = null
             }
         }
     }
@@ -1918,25 +1824,47 @@ Item {
         }
     }
 
-    // ✅ LOADER DE CREAR/EDITAR PRODUCTO - CORREGIDO PARA VISIBILIDAD
+    // ✅ LOADER DE EDITAR PRODUCTO - V2.0 (solo para edición)
     Rectangle {
-        id: crearProductoContainer
+        id: editarProductoContainer
         anchors.fill: parent
-        z: 1000  // ← MUY ALTO para estar sobre todo
-        visible: mostrandoCrearProducto
+        z: 1000
+        visible: modoEdicionProducto
         color: "transparent"
         
         Loader {
-            id: crearProductoComponent
+            id: crearProductoLoader
             anchors.fill: parent
-            source: mostrandoCrearProducto ? "CrearProducto.qml" : ""
+            active: false
+            
+            sourceComponent: modoEdicionProducto ? crearProductoComponent : null
+            
+            Component {
+                id: crearProductoComponent
+                
+                CrearProducto {
+                    anchors.fill: parent
+                    
+                    inventarioModel: productosRoot.inventarioModel
+                    farmaciaData: productosRoot.farmaciaData
+                    modoEdicion: modoEdicionProducto
+                    productoData: productoParaEditar
+                    
+                    onProductoActualizado: function(producto) {
+                        console.log("📦 Producto actualizado:", producto.codigo || producto.Codigo)
+                        productoActualizado(producto)
+                    }
+                    
+                    onCancelarCreacion: {
+                        console.log("❌ Edición cancelada")
+                        cerrarEditarProducto()
+                    }
+                }
+            }
             
             onLoaded: {
                 if (item) {
-                    console.log("🚀 CrearProducto.qml cargado...")
-                    
-                    item.inventarioModel = productosRoot.inventarioModel
-                    item.farmaciaData = productosRoot.farmaciaData
+                    console.log("🚀 CrearProducto.qml cargado en modo edición...")
                     
                     // ✅ CRÍTICO: Asignar marcasModel DIRECTAMENTE desde inventarioModel
                     if (inventarioModel && inventarioModel.marcasDisponibles) {
@@ -1945,74 +1873,14 @@ Item {
                         console.log("🏷️ Marcas asignadas directamente:", inventarioModel.marcasDisponibles.length)
                     }
                     
-                    if (item.productoCreado) {
-                        item.productoCreado.connect(function(producto) {
-                            console.log("✅ Producto creado:", producto.codigo)
-                            mostrarMensajeExito("Producto creado: " + producto.codigo)
-                            
-                            if (farmaciaData) {
-                                farmaciaData.crearProductoUnico(JSON.stringify(producto))
-                            }
-                            
-                            volverAListaProductos()
-                        })
-                    }
-
-                    if (item.productoActualizado) {
-                        item.productoActualizado.connect(function(producto) {
-                            console.log("✅ Producto actualizado:", producto.codigo)
-                            mostrarMensajeExito("Producto actualizado: " + producto.codigo)
-                            
-                            if (farmaciaData && farmaciaData.actualizarProductoInventario) {
-                                var exito = farmaciaData.actualizarProductoInventario(producto.codigo, JSON.stringify(producto))
-                                if (exito) {
-                                    console.log("📊 Datos actualizados en centro de datos")
-                                }
-                            }
-                            
-                            Qt.callLater(function() {
-                                precalcularStock()
-                                cargarDatosParaFiltros()
-                                actualizarDesdeDataCentral()
-                                updateFilteredModel()
-                            })
-                            
-                            volverAListaProductos()
-                        })
-                    }
-
-                    if (item.cancelarCreacion) {
-                        item.cancelarCreacion.connect(function() {
-                            console.log("❌ Creación cancelada")
-                            volverAListaProductos()
-                        })
-                    }
-
-                    if (item.volverALista) {
-                        item.volverALista.connect(function() {
-                            console.log("🔙 Volver a lista solicitado")
-                            volverAListaProductos()
-                        })
-                    }
-                    
                     if (modoEdicionProducto && productoParaEditar) {
                         item.inicializarParaEditar(productoParaEditar)
-                    } else {
-                        item.inicializarParaCrear()
                     }
-                    
-                    console.log("✅ Señales conectadas correctamente")
-                }
-            }
-            
-            onStatusChanged: {
-                if (status === Loader.Error) {
-                    console.error("❌ Error cargando CrearProducto.qml")
-                    mostrandoCrearProducto = false
                 }
             }
         }
     }
+    
     Connections {
         target: editarLoteLoader.item
         enabled: editarLoteLoader.item !== null
@@ -2036,6 +1904,7 @@ Item {
             loteParaEditar = null
         }
     }
+    
     Rectangle {
         id: notificacionFlotante
         anchors.horizontalCenter: parent.horizontalCenter
@@ -2430,71 +2299,6 @@ Item {
             console.log("❌ Función actualizarPrecioVentaProducto no disponible")
         }
     }
-        
-    function eliminarProducto(producto) {
-        console.log("🗑️ Iniciando proceso de eliminación de producto:", producto.codigo)
-        
-        // Validar que el producto existe
-        if (!producto || !producto.codigo) {
-            console.log("❌ Producto inválido para eliminar")
-            return
-        }
-        
-        // Mostrar diálogo de confirmación
-        confirmarEliminacionDialog.productoAEliminar = {
-            id: producto.id,
-            codigo: producto.codigo,
-            nombre: producto.nombre,
-            stockUnitario: producto.stockUnitario || 0
-        }
-        
-        confirmarEliminacionDialog.open()
-    }
-    
-    function ejecutarEliminacionProducto(producto) {
-        console.log("🗑️ Ejecutando eliminación confirmada de producto:", producto.codigo)
-        
-        if (!inventarioModel) {
-            console.log("❌ InventarioModel no disponible")
-            mostrarMensajeError("Error: Sistema no disponible")
-            return
-        }
-        
-        try {
-            
-            // Llamar al método de InventarioModel
-            var exito = inventarioModel.eliminar_producto(producto.codigo)
-                if (typeof inventarioModel.eliminar_producto !== 'function') {
-                console.log("❌ Método eliminar_producto no disponible en InventarioModel")
-                mostrarMensajeError("Función de eliminación no disponible")
-                return
-            }
-            if (exito) {
-                console.log("✅ Producto eliminado exitosamente del InventarioModel")
-                mostrarMensajeExito("Producto eliminado: " + producto.codigo)
-                
-                // Actualizar interfaz inmediatamente
-                Qt.callLater(function() {
-                    cargarDatosParaFiltros()
-                    actualizarDesdeDataCentral()
-                    updateFilteredModel()
-                    
-                    // Ocultar menú contextual
-                    mostrandoMenuContextual = false
-                    productoMenuContextual = null
-                    selectedProduct = null
-                })
-                
-            } else {
-                console.log("❌ No se pudo eliminar el producto")
-                mostrarMensajeError("No se pudo eliminar el producto")
-            }
-            
-        } catch (error) {
-            console.log("❌ Error durante eliminación:", error)
-            mostrarMensajeError("Error eliminando producto: " + error.toString())
-        }
-    }
     
     function obtenerMarcasModel() {
         return marcasModel
@@ -2662,7 +2466,7 @@ Item {
     }
 
     Component.onCompleted: {
-        console.log("📦 Módulo Productos FIFO 2.0 iniciado")
+        console.log("📦 Módulo Productos FIFO 2.0 V2.0 iniciado")
         console.log("   InventarioModel:", !!inventarioModel)
         console.log("   FarmaciaData:", !!farmaciaData)
         

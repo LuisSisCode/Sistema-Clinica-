@@ -50,7 +50,11 @@ Rectangle {
     signal editarSolicitado(var producto)
     signal eliminarSolicitado(var producto)
     signal cerrarSolicitado()
+<<<<<<< HEAD
     signal abrirCompraOriginal(int compraId)  // 🆕 Abrir compra del lote
+=======
+    signal productoActualizado(var producto)  // 🆕 NUEVO: Para notificar cambios
+>>>>>>> 93f3f522294a2fa4900a04a94bab279d606a2a2b
     // ✅ V2.0: SEÑALES DE EDICIÓN/ELIMINACIÓN DE LOTES ELIMINADAS
     
     // ===============================
@@ -138,7 +142,7 @@ Rectangle {
                 
                 for (var i = 0; i < lotesData.length; i++) {
                     var lote = lotesData[i]
-                    var stock = lote.Stock_Lote || 0
+                    var stock = lote.Stock_Lote || lote.Stock_Actual || 0
                     var precio = lote.Precio_Compra || 0
                     
                     if (stock > 0) {
@@ -274,6 +278,14 @@ Rectangle {
             if (resultado) {
                 precioVenta = precio
                 console.log("✅ Precio actualizado exitosamente")
+                
+                // 🆕 Emitir signal para notificar cambio
+                if (productoData) {
+                    productoData.precioVenta = precio
+                    productoData.Precio_venta = precio
+                    productoActualizado(productoData)
+                }
+                
                 return true
             } else {
                 console.log("❌ Error actualizando precio")
@@ -293,6 +305,11 @@ Rectangle {
         
         var num = parseFloat(numero);
         return num.toLocaleString(Qt.locale("es_ES"), 'f', decimales || 2);
+    }
+    
+    function formatearPrecioParaMostrar(precio) {
+        if (!precio || precio <= 0) return "0.00";
+        return parseFloat(precio).toFixed(2);
     }
     
     // ===============================
@@ -1135,208 +1152,22 @@ Rectangle {
                                     }
                                 }
                             }
+                            
+                            // Nota informativa sobre solo lectura
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.topMargin: 12
+                                text: "ℹ️ Solo lectura. Para editar lotes, ir a Compras > Historial de Compras"
+                                font.pixelSize: 11
+                                font.italic: true
+                                color: "#6c757d"
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
+                            }
                         }
                     }
                     
                     Item { Layout.fillHeight: true }
-                }
-            }
-        }
-    }
-    // Agrega esta función cerca de las otras funciones
-    function formatearPrecioParaMostrar(precio) {
-        if (!precio || precio <= 0) return "0.00";
-        return parseFloat(precio).toFixed(2);
-    }
-
-
-    // ===============================
-    // DIÁLOGO DE CONFIRMACIÓN (FALTANTE)
-    // ===============================
-    Rectangle {
-        id: dialogoConfirmacionOverlay
-        anchors.fill: parent
-        color: "#80000000"
-        visible: mostrandoConfirmacion
-        z: 2000
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                // No hacer nada - solo para bloquear interacción con fondo
-            }
-        }
-        
-        Rectangle {
-            anchors.centerIn: parent
-            width: Math.min(500, parent.width * 0.85)
-            height: Math.min(350, parent.height * 0.7)
-            radius: 12
-            color: "white"
-            border.color: "#dee2e6"
-            border.width: 1
-            
-            // Sombra
-            Rectangle {
-                anchors.fill: parent
-                anchors.topMargin: 3
-                anchors.leftMargin: 3
-                color: "#00000020"
-                radius: 12
-                z: -1
-            }
-            
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 24
-                spacing: 16
-                
-                // Header con icono de advertencia
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 16
-                    
-                    Rectangle {
-                        Layout.preferredWidth: 50
-                        Layout.preferredHeight: 50
-                        color: "#e74c3c"
-                        radius: 25
-                        
-                        Label {
-                            anchors.centerIn: parent
-                            text: "⚠️"
-                            font.pixelSize: 24
-                        }
-                    }
-                    
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: confirmacionTitulo
-                            font.pixelSize: 18
-                            font.bold: true
-                            color: "#2c3e50"
-                        }
-                        
-                        Label {
-                            text: "Esta acción no se puede deshacer"
-                            font.pixelSize: 12
-                            color: "#7f8c8d"
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
-                }
-                
-                // Línea separadora
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: "#dee2e6"
-                }
-                
-                // Mensaje principal
-                Label {
-                    Layout.fillWidth: true
-                    text: confirmacionMensaje
-                    font.pixelSize: 14
-                    font.bold: true
-                    color: "#2c3e50"
-                    wrapMode: Text.WordWrap
-                }
-                
-                // Detalle
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 100
-                    color: "#f8f9fa"
-                    radius: 8
-                    border.color: "#dee2e6"
-                    border.width: 1
-                    
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        clip: true
-                        
-                        TextArea {
-                            anchors.fill: parent
-                            text: confirmacionDetalle
-                            readOnly: true
-                            wrapMode: Text.WordWrap
-                            font.pixelSize: 12
-                            color: "#495057"
-                            background: Rectangle {
-                                color: "transparent"
-                            }
-                        }
-                    }
-                }
-                
-                // Espacio flexible
-                Item { Layout.fillHeight: true }
-                
-                // Botones
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    
-                    Item { Layout.fillWidth: true }
-                    
-                    Button {
-                        text: "Cancelar"
-                        Layout.preferredWidth: 120
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? "#6c757d" : "#adb5bd"
-                            radius: 6
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: 12
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            cerrarConfirmacion()
-                        }
-                    }
-                    
-                    Button {
-                        text: "Sí, Eliminar"
-                        Layout.preferredWidth: 120
-                        Layout.preferredHeight: 40
-                        
-                        background: Rectangle {
-                            color: parent.pressed ? "#c0392b" : "#e74c3c"
-                            radius: 6
-                        }
-                        
-                        contentItem: Label {
-                            text: parent.text
-                            color: "white"
-                            font.bold: true
-                            font.pixelSize: 12
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        
-                        onClicked: {
-                            // Ejecutar callback de confirmación
-                            if (confirmacionCallback) {
-                                confirmacionCallback()
-                            }
-                            cerrarConfirmacion()
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
                 }
             }
         }
