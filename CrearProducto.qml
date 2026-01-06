@@ -442,14 +442,16 @@ Rectangle {
     // MODAL CENTRADO
     // ===============================
     Rectangle {
-        id: modalContent
-        width: 900
-        height: 550
-        anchors.centerIn: parent
-        color: white
-        radius: 12
-        border.color: borderColor
-        border.width: 1
+            id: modalContent
+            width: Math.min(1000, parent.width * 0.95)
+            height: Math.min(750, parent.height * 0.92)
+            x: (parent.width - width) / 2
+            y: (parent.height - height) / 2
+            color: white
+            radius: 12
+            border.color: borderColor
+            border.width: 1
+            z: 10001
         
         // Detiene propagación de clicks al overlay
         MouseArea {
@@ -554,359 +556,68 @@ Rectangle {
                     anchors.margins: baseSpacing
                     clip: true
                     
-                    Rectangle {
-                        width: parent.width
-                        height: allContent.height + cardPadding * 2
-                        color: white
-                        radius: 8
-                        border.color: borderColor
-                        border.width: 1
+                    ColumnLayout {
+                        width: parent.width - 20
+                        spacing: 16
                         
-                        ColumnLayout {
-                            id: allContent
-                            anchors.top: parent.top
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.margins: cardPadding
-                            spacing: 16
+                        // ===============================
+                        // ℹ️ BANNER INFORMATIVO FIFO 2.0
+                        // ===============================
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 70
+                            color: "#EFF6FF"
+                            border.color: "#3B82F6"
+                            border.width: 2
+                            radius: 8
+                            visible: !modoEdicion
                             
-                            // ===============================
-                            // ℹ️ BANNER INFORMATIVO FIFO 2.0
-                            // ===============================
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: bannerContent.height + 20
-                                color: "#EFF6FF"
-                                border.color: "#3B82F6"
-                                border.width: 2
-                                radius: 8
-                                visible: !modoEdicion
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 6
                                 
-                                ColumnLayout {
-                                    id: bannerContent
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.margins: 12
+                                RowLayout {
+                                    Layout.fillWidth: true
                                     spacing: 8
                                     
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 8
-                                        
-                                        Text {
-                                            text: "ℹ️"
-                                            font.pixelSize: 18
-                                            color: "#3B82F6"
-                                        }
-                                        
-                                        Text {
-                                            text: "INFORMACIÓN IMPORTANTE"
-                                            font.pixelSize: 13
-                                            font.bold: true
-                                            color: grayDark
-                                        }
+                                    Text {
+                                        text: "ℹ️"
+                                        font.pixelSize: 18
                                     }
                                     
                                     Text {
-                                        Layout.fillWidth: true
-                                        text: "• El stock se calculará automáticamente al registrar compras"
-                                        font.pixelSize: 12
-                                        color: grayDark
-                                        wrapMode: Text.WordWrap
-                                    }
-                                    
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: "• El precio de venta se definirá en la primera compra del producto"
-                                        font.pixelSize: 12
-                                        color: grayDark
-                                        wrapMode: Text.WordWrap
-                                    }
-                                }
-                            }
-                            
-                            // ===============================
-                            // FILA 1: Código, Nombre, Marca
-                            // ===============================
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-                                
-                                // CÓDIGO
-                                ColumnLayout {
-                                    Layout.preferredWidth: 120
-                                    spacing: 4
-                                    
-                                    Text {
-                                        text: "Código"
+                                        text: "IMPORTANTE"
                                         font.pixelSize: 12
                                         font.bold: true
                                         color: grayDark
                                     }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: inputHeight
-                                        color: modoEdicion ? grayLight : white
-                                        border.color: codigoField.activeFocus ? primaryBlue : borderColor
-                                        border.width: 1
-                                        radius: 6
-                                        
-                                        TextEdit {
-                                            id: codigoField
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            verticalAlignment: TextEdit.AlignVCenter
-                                            selectByMouse: true
-                                            font.pixelSize: 12
-                                            color: grayDark
-                                            readOnly: modoEdicion
-                                            
-                                            onTextChanged: inputProductCode = text
-                                            
-                                            Text {
-                                                text: "Auto"
-                                                color: grayMedium
-                                                visible: !parent.text && !modoEdicion
-                                                font: parent.font
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                        }
-                                    }
                                 }
                                 
-                                // NOMBRE DEL PRODUCTO
-                                ColumnLayout {
+                                Text {
                                     Layout.fillWidth: true
-                                    spacing: 4
-                                    
-                                    Text {
-                                        text: "Nombre del Producto *"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        color: grayDark
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: inputHeight
-                                        color: white
-                                        border.color: nombreField.activeFocus ? primaryBlue : borderColor
-                                        border.width: 1
-                                        radius: 6
-                                        
-                                        TextEdit {
-                                            id: nombreField
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            verticalAlignment: TextEdit.AlignVCenter
-                                            selectByMouse: true
-                                            font.pixelSize: 12
-                                            color: grayDark
-                                            
-                                            onTextChanged: inputProductName = text
-                                            
-                                            Text {
-                                                text: "Paracetamol 500mg"
-                                                color: grayMedium
-                                                visible: !parent.text
-                                                font: parent.font
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // MARCA
-                                ColumnLayout {
-                                    Layout.preferredWidth: 200
-                                    spacing: 4
-                                    
-                                    Text {
-                                        text: "Marca *"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        color: grayDark
-                                    }
-                                    
-                                    MarcaComboBox {
-                                        id: marcaComboBox
-                                        Layout.fillWidth: true
-                                        marcasModel: inventarioModel ? inventarioModel.marcasDisponibles : []
-                                        required: true
-
-                                        onMarcaCambiada: function(marcaNombre, marcaId) {
-                                            console.log("📡 Señal recibida - Marca:", marcaNombre, "ID:", marcaId)
-                                            overlayRoot.marcaIdSeleccionada = marcaId
-                                            overlayRoot.marcaSeleccionadaNombre = marcaNombre
-                                            console.log("✅ Propiedades actualizadas - ID:", overlayRoot.marcaIdSeleccionada, 
-                                                       "Nombre:", overlayRoot.marcaSeleccionadaNombre)
-                                        }
-
-                                        onNuevaMarcaCreada: function(nombreMarca) {
-                                            console.log("🆕 Solicitando crear marca:", nombreMarca)
-                                            if (inventarioModel) {
-                                                var nuevaMarcaId = inventarioModel.crear_marca_desde_qml(nombreMarca)
-                                                console.log("🔍 Resultado crear_marca_desde_qml - ID:", nuevaMarcaId)
-                                                
-                                                if (nuevaMarcaId > 0) {
-                                                    console.log("✅ Nueva marca creada con ID:", nuevaMarcaId)
-                                                    marcaIdSeleccionada = nuevaMarcaId
-                                                    marcaSeleccionadaNombre = nombreMarca
-                                                    
-                                                    if (marcaComboBox) {
-                                                        marcaComboBox.forzarSeleccion(nuevaMarcaId, nombreMarca)
-                                                    }
-                                                    
-                                                    Qt.callLater(function() {
-                                                        cargarMarcasDisponibles()
-                                                    })
-                                                    
-                                                    showMessage("Marca creada: " + nombreMarca)
-                                                } else if (nuevaMarcaId === 0) {
-                                                    console.log("⚠️ Marca ya existe")
-                                                    showError("Esta marca ya existe en el sistema")
-                                                } else {
-                                                    console.log("❌ Error creando marca")
-                                                    showError("Error al crear la marca")
-                                                }
-                                            }
-                                        }
-                                    }
+                                    text: "El stock se calculará en la primera compra • El precio de venta se define al comprar"
+                                    font.pixelSize: 11
+                                    color: grayDark
+                                    wrapMode: Text.WordWrap
                                 }
                             }
+                        }
+                        
+                        // ===============================
+                        // FILA 1: Código, Nombre, Marca
+                        // ===============================
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
                             
-                            // ===============================
-                            // FILA 2: Unidad, Stock Min/Max
-                            // ===============================
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-                                
-                                // UNIDAD DE MEDIDA
-                                ColumnLayout {
-                                    Layout.preferredWidth: 150
-                                    spacing: 4
-                                    
-                                    Text {
-                                        text: "Unidad de Medida"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        color: grayDark
-                                    }
-                                    
-                                    ComboBox {
-                                        id: unidadCombo
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: inputHeight
-                                        model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
-                                        
-                                        onCurrentTextChanged: {
-                                            inputMeasureUnit = currentText
-                                        }
-                                        
-                                        background: Rectangle {
-                                            color: white
-                                            border.color: parent.activeFocus ? primaryBlue : borderColor
-                                            border.width: 1
-                                            radius: 6
-                                        }
-                                    }
-                                }
-                                
-                                // STOCK MÍNIMO
-                                ColumnLayout {
-                                    Layout.preferredWidth: 120
-                                    spacing: 4
-                                    
-                                    Text {
-                                        text: "Stock Mínimo *"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        color: grayDark
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: inputHeight
-                                        color: white
-                                        border.color: stockMinimoField.activeFocus ? primaryBlue : borderColor
-                                        border.width: 1
-                                        radius: 6
-                                        
-                                        TextEdit {
-                                            id: stockMinimoField
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            verticalAlignment: TextEdit.AlignVCenter
-                                            selectByMouse: true
-                                            font.pixelSize: 12
-                                            color: grayDark
-                                            text: "10"
-                                            
-                                            onTextChanged: {
-                                                var valor = parseInt(text)
-                                                if (!isNaN(valor)) {
-                                                    inputStockMinimo = valor
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // STOCK MÁXIMO
-                                ColumnLayout {
-                                    Layout.preferredWidth: 120
-                                    spacing: 4
-                                    
-                                    Text {
-                                        text: "Stock Máximo *"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                        color: grayDark
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: inputHeight
-                                        color: white
-                                        border.color: stockMaximoField.activeFocus ? primaryBlue : borderColor
-                                        border.width: 1
-                                        radius: 6
-                                        
-                                        TextEdit {
-                                            id: stockMaximoField
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            verticalAlignment: TextEdit.AlignVCenter
-                                            selectByMouse: true
-                                            font.pixelSize: 12
-                                            color: grayDark
-                                            text: "100"
-                                            
-                                            onTextChanged: {
-                                                var valor = parseInt(text)
-                                                if (!isNaN(valor)) {
-                                                    inputStockMaximo = valor
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                Item { Layout.fillWidth: true }
-                            }
-                            
-                            // ===============================
-                            // DETALLES DEL PRODUCTO
-                            // ===============================
+                            // CÓDIGO
                             ColumnLayout {
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: 130
                                 spacing: 4
                                 
                                 Text {
-                                    text: "Detalles / Observaciones"
+                                    text: "Código"
                                     font.pixelSize: 12
                                     font.bold: true
                                     color: grayDark
@@ -914,36 +625,283 @@ Rectangle {
                                 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 80
-                                    color: white
-                                    border.color: detallesField.activeFocus ? primaryBlue : borderColor
+                                    Layout.preferredHeight: inputHeight
+                                    color: modoEdicion ? grayLight : white
+                                    border.color: codigoField.activeFocus ? primaryBlue : borderColor
                                     border.width: 1
                                     radius: 6
                                     
-                                    ScrollView {
+                                    TextInput {
+                                        id: codigoField
                                         anchors.fill: parent
-                                        anchors.margins: 5
-                                        clip: true
+                                        anchors.margins: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 11
+                                        color: grayDark
+                                        readOnly: modoEdicion
                                         
-                                        TextArea {
-                                            id: detallesField
-                                            selectByMouse: true
-                                            wrapMode: TextArea.Wrap
-                                            font.pixelSize: 12
-                                            color: grayDark
+                                        onTextChanged: inputProductCode = text
+                                        
+                                        Text {
+                                            text: "Auto"
+                                            color: grayMedium
+                                            visible: !parent.text && !modoEdicion
+                                            font.pixelSize: 11
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // NOMBRE DEL PRODUCTO
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                
+                                Text {
+                                    text: "Nombre del Producto *"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: nombreField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 6
+                                    
+                                    TextInput {
+                                        id: nombreField
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 11
+                                        color: grayDark
+                                        
+                                        onTextChanged: inputProductName = text
+                                        
+                                        Text {
+                                            text: "Ej: Paracetamol 500mg"
+                                            color: grayMedium
+                                            visible: !parent.text
+                                            font.pixelSize: 11
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // MARCA
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 4
+                                
+                                Text {
+                                    text: "Marca *"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                MarcaComboBox {
+                                    id: marcaComboBox
+                                    Layout.fillWidth: true
+                                    marcasModel: inventarioModel ? inventarioModel.marcasDisponibles : []
+                                    required: true
+
+                                    onMarcaCambiada: function(marcaNombre, marcaId) {
+                                        overlayRoot.marcaIdSeleccionada = marcaId
+                                        overlayRoot.marcaSeleccionadaNombre = marcaNombre
+                                    }
+
+                                    onNuevaMarcaCreada: function(nombreMarca) {
+                                        if (inventarioModel) {
+                                            var nuevaMarcaId = inventarioModel.crear_marca_desde_qml(nombreMarca)
                                             
-                                            onTextChanged: inputProductDetails = text
-                                            
-                                            background: Rectangle {
-                                                color: "transparent"
+                                            if (nuevaMarcaId > 0) {
+                                                marcaIdSeleccionada = nuevaMarcaId
+                                                marcaSeleccionadaNombre = nombreMarca
+                                                
+                                                if (marcaComboBox) {
+                                                    marcaComboBox.forzarSeleccion(nuevaMarcaId, nombreMarca)
+                                                }
+                                                
+                                                Qt.callLater(function() {
+                                                    cargarMarcasDisponibles()
+                                                })
+                                                
+                                                showMessage("Marca creada: " + nombreMarca)
                                             }
-                                            
-                                            Text {
-                                                text: "Información adicional del producto..."
-                                                color: grayMedium
-                                                visible: !parent.text
-                                                font: parent.font
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ===============================
+                        // FILA 2: Unidad, Stock Min/Max
+                        // ===============================
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+                            
+                            // UNIDAD DE MEDIDA
+                            ColumnLayout {
+                                Layout.preferredWidth: 150
+                                spacing: 4
+                                
+                                Text {
+                                    text: "Unidad de Medida"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                ComboBox {
+                                    id: unidadCombo
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
+                                    
+                                    onCurrentTextChanged: {
+                                        inputMeasureUnit = currentText
+                                    }
+                                    
+                                    background: Rectangle {
+                                        color: white
+                                        border.color: parent.activeFocus ? primaryBlue : borderColor
+                                        border.width: 1
+                                        radius: 6
+                                    }
+                                }
+                            }
+                            
+                            // STOCK MÍNIMO
+                            ColumnLayout {
+                                Layout.preferredWidth: 120
+                                spacing: 4
+                                
+                                Text {
+                                    text: "Stock Mínimo *"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: stockMinimoField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 6
+                                    
+                                    TextInput {
+                                        id: stockMinimoField
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 11
+                                        color: grayDark
+                                        text: "10"
+                                        validator: IntValidator { bottom: 0 }
+                                        
+                                        onTextChanged: {
+                                            var valor = parseInt(text)
+                                            if (!isNaN(valor)) {
+                                                inputStockMinimo = valor
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // STOCK MÁXIMO
+                            ColumnLayout {
+                                Layout.preferredWidth: 120
+                                spacing: 4
+                                
+                                Text {
+                                    text: "Stock Máximo *"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: grayDark
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: inputHeight
+                                    color: white
+                                    border.color: stockMaximoField.activeFocus ? primaryBlue : borderColor
+                                    border.width: 1
+                                    radius: 6
+                                    
+                                    TextInput {
+                                        id: stockMaximoField
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        selectByMouse: true
+                                        font.pixelSize: 11
+                                        color: grayDark
+                                        text: "100"
+                                        validator: IntValidator { bottom: 0 }
+                                        
+                                        onTextChanged: {
+                                            var valor = parseInt(text)
+                                            if (!isNaN(valor)) {
+                                                inputStockMaximo = valor
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Item { Layout.fillWidth: true }
+                        }
+                        
+                        // ===============================
+                        // DETALLES DEL PRODUCTO
+                        // ===============================
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            
+                            Text {
+                                text: "Detalles / Observaciones"
+                                font.pixelSize: 12
+                                font.bold: true
+                                color: grayDark
+                            }
+                            
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 80
+                                color: white
+                                border.color: detallesField.activeFocus ? primaryBlue : borderColor
+                                border.width: 1
+                                radius: 6
+                                
+                                ScrollView {
+                                    anchors.fill: parent
+                                    anchors.margins: 5
+                                    clip: true
+                                    
+                                    TextArea {
+                                        id: detallesField
+                                        selectByMouse: true
+                                        wrapMode: TextArea.Wrap
+                                        font.pixelSize: 11
+                                        color: grayDark
+                                        
+                                        onTextChanged: inputProductDetails = text
+                                        
+                                        background: Rectangle {
+                                            color: "transparent"
                                         }
                                     }
                                 }
@@ -954,93 +912,20 @@ Rectangle {
             }
 
             // ===============================
-            // FOOTER (MEJORADO)
+            // FOOTER
             // ===============================
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 70
-                color: "#ecf0f1"
+                Layout.preferredHeight: 65
+                color: "#F9FAFB"
                 radius: 12
-                
-                // Redondear solo abajo
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    height: 12
-                    color: parent.color
-                }
                 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: cardPadding
-                    spacing: baseSpacing
+                    anchors.margins: 12
+                    spacing: 12
                     
-                    // Mensajes
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        
-                        Rectangle {
-                            anchors.fill: parent
-                            visible: showSuccessMessage
-                            color: "#D1FAE5"
-                            border.color: successGreen
-                            border.width: 1
-                            radius: 6
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
-                                
-                                Text {
-                                    text: "✓"
-                                    color: successGreen
-                                    font.bold: true
-                                    font.pixelSize: 14
-                                }
-                                
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: successMessage
-                                    color: successGreen
-                                    font.pixelSize: 12
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-                        
-                        Rectangle {
-                            anchors.fill: parent
-                            visible: showErrorMessage
-                            color: "#FEE2E2"
-                            border.color: dangerRed
-                            border.width: 1
-                            radius: 6
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
-                                
-                                Text {
-                                    text: "⚠"
-                                    color: dangerRed
-                                    font.bold: true
-                                    font.pixelSize: 14
-                                }
-                                
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: errorMessage
-                                    color: dangerRed
-                                    font.pixelSize: 12
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-                        }
-                    }
+                    Item { Layout.fillWidth: true }
                     
                     // Botón Cancelar
                     Button {
@@ -1059,14 +944,12 @@ Rectangle {
                             text: parent.text
                             color: grayDark
                             font.bold: true
-                            font.pixelSize: 13
+                            font.pixelSize: 12
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
                         
-                        onClicked: {
-                            cancelarCreacion()
-                        }
+                        onClicked: cancelarCreacion()
                     }
                     
                     // Botón Guardar
@@ -1084,7 +967,7 @@ Rectangle {
                             text: parent.text
                             color: white
                             font.bold: true
-                            font.pixelSize: 13
+                            font.pixelSize: 12
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }

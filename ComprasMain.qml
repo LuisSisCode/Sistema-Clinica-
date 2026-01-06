@@ -135,7 +135,9 @@ Item {
             var crearCompraItem = crearCompraComponent.createObject(stackView, {
                 "inventarioModel": inventarioModel,
                 "ventaModel": ventaModel,
-                "compraModel": compraModel
+                "compraModel": compraModel,
+                // 🆕 Pasar referencia a la función de crear producto
+                "abrirModalCrearProductoFunction": comprasMainRoot.abrirModalCrearProducto
             });
             
             if (crearCompraItem) {
@@ -185,6 +187,74 @@ Item {
             }
         }
     }
+
+    // 🆕 FUNCIÓN PARA ABRIR MODAL DE CREAR PRODUCTO
+    function abrirModalCrearProducto(nombreProducto) {
+        console.log("🚀 ComprasMain: Abriendo modal CrearProducto para:", nombreProducto)
+        
+        var crearProductoComponent = Qt.createComponent("CrearProducto.qml")
+        
+        if (crearProductoComponent.status === Component.Ready) {
+            var modal = crearProductoComponent.createObject(comprasMainRoot, {
+                "inventarioModel": inventarioModel,
+                "farmaciaData": null,
+                "visible": true,
+                "anchors.fill": comprasMainRoot,
+                "anchors.margins": 0,
+                "z": 10001
+            })
+            
+            if (modal) {
+                if (nombreProducto && nombreProducto.trim().length > 0) {
+                    modal.inputProductName = nombreProducto
+                    modal.inputProductCode = ""
+                    console.log("📝 Nombre pre-llenado:", nombreProducto)
+                }
+                
+                modal.modoEdicion = false
+                
+                modal.productoCreado.connect(function(producto) {
+                    console.log("✅ Producto creado desde compras:", producto.nombre)
+                    
+                    var currentItem = stackView.currentItem
+                    if (currentItem && currentItem.seleccionarProductoExistente) {
+                        Qt.callLater(function() {
+                            currentItem.seleccionarProductoExistente(
+                                producto.id || 0,
+                                producto.codigo || "",
+                                producto.nombre || nombreProducto
+                            )
+                        })
+                    }
+                    
+                    modal.destroy()
+                })
+                
+                modal.productoActualizado.connect(function(producto) {
+                    console.log("📝 Producto actualizado:", producto.nombre)
+                    modal.destroy()
+                })
+                
+                modal.cancelarCreacion.connect(function() {
+                    console.log("❌ Creación de producto cancelada")
+                    modal.destroy()
+                })
+                
+                modal.volverALista.connect(function() {
+                    console.log("🔙 Volver a lista")
+                    modal.destroy()
+                })
+                
+                console.log("✅ Modal CrearProducto abierto")
+            } else {
+                console.log("❌ Error al crear modal CrearProducto")
+            }
+        } else {
+            console.log("❌ Error al cargar CrearProducto.qml:", crearProductoComponent.errorString())
+        }
+    }
+
+
     // ✅ NUEVA FUNCIÓN PARA EDITAR COMPRA
     function irAEditarCompra(compraId) {
         console.log("📝 ComprasMain: Navegando a Editar Compra ID:", compraId)

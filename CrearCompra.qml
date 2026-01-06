@@ -23,6 +23,7 @@ Item {
     // Señales para comunicación
     signal compraCompletada()
     signal cancelarCompra()
+    signal solicitarCrearProducto(string nombreProducto)
     
     // SISTEMA DE MÉTRICAS COMPACTO
     readonly property real scaleFactor: Math.min(width / 1400, height / 900)
@@ -73,6 +74,12 @@ Item {
     property bool showProductDropdown: false
     property bool showComparisonPanel: false
     property bool mostrarAyuda: false  // 🆕 Oculto por defecto para ahorrar espacio
+    property bool mostrarButtonCrearProducto: false  // 🆕 Mostrar botón "Crear Nuevo"
+    property bool mostrarFormularioProducto: false   // 🆕 ❌ OBSOLETO - ELIMINAR ESTA LÍNEA
+    property bool formularioActivo: false            // 🆕 ✅ NUEVO: Indica si hay producto seleccionado
+    property var productoSeleccionado: ({})          // 🆕 Datos del producto actual
+    property bool permitirActualizarPrecio: false    // 🆕 Checkbox: actualizar precio venta
+
     property bool procesandoCompra: false
     property int contadorClics: 0 
     
@@ -102,6 +109,12 @@ Item {
     property bool esPrimeraCompra: false
     property bool precioModificadoManualmente: false   // Flag para saber si usuario editó precio
     
+    // 🆕 Propiedad para recibir función de crear producto
+    property var abrirModalCrearProductoFunction: null
+
+    // 🆕 Estado para mostrar que se está creando producto
+    property bool creandoProducto: false
+
     // Lista temporal de productos
     ListModel {
         id: temporaryProductsModel
@@ -299,6 +312,7 @@ Item {
         
         if (!inventarioModel || texto.length < 2) {
             showProductDropdown = false
+            mostrarButtonCrearProducto = false  // 🆕 Ocultar botón
             return
         }
         
@@ -326,53 +340,131 @@ Item {
                 }
                 
                 showProductDropdown = true
+                mostrarButtonCrearProducto = false  // 🆕 Ocultar botón si hay resultados
                 isNewProduct = false
             } else {
                 showProductDropdown = false
+                mostrarButtonCrearProducto = true  // 🆕 ✅ MOSTRAR BOTÓN SI NO HAY RESULTADOS
                 isNewProduct = true
                 inputProductName = ""
             }
         })
     }
 
-    // Seleccionar producto existente con detección de primera compra
     function seleccionarProductoExistente(productoId, codigo, nombre) {
+        console.log("📍 Producto seleccionado - ID:", productoId, "Código:", codigo, "Nombre:", nombre)
+        
+        // 🆕 Resetear estado de creación
+        creandoProducto = false
+        
+        // ✅ ESTABLECER datos del producto
         inputProductCode = codigo
         inputProductName = nombre
         inputProductId = productoId
         isNewProduct = false
         
-        showProductDropdown = false
-        productCodeField.text = nombre
+        // ✅ ACTIVAR formulario
+        formularioActivo = true
         
-        // Obtener datos de precio del producto
+        // ✅ Cerrar dropdowns
+        showProductDropdown = false
+        mostrarButtonCrearProducto = false
+        
+        // ✅ Obtener datos del producto (primera compra?)
         if (compraModel && productoId > 0) {
             var datosProducto = compraModel.obtener_datos_precio_producto(productoId)
             
-            console.log("📊 Datos producto:", JSON.stringify(datosProducto))
-            
             if (datosProducto) {
                 esPrimeraCompra = datosProducto.es_primera || false
-                
-                // ✅ NUEVO: Resetear flag cuando se selecciona producto
                 precioModificadoManualmente = false
                 
                 if (esPrimeraCompra) {
                     console.log("🆕 Primera compra de producto:", nombre)
                     showSuccess("⚠️ Primera compra: Define precio de venta (100% margen sugerido)")
                 } else {
-                    console.log("♻️ Compra subsiguiente - Precio venta actual: Bs" + (datosProducto.Precio_Venta || 0).toFixed(2))
+                    console.log("♻️ Compra subsiguiente - Usar precio existente")
                 }
             }
         }
         
+        // ✅ Enfocar campo de cantidad
         Qt.callLater(function() {
             if (cantidadField) {
                 cantidadField.focus = true
+                cantidadField.selectAll()
             }
         })
         
         showSuccess("Producto seleccionado: " + nombre)
+    }
+
+    // 🆕 FUNCIÓN: Mostrar formulario con datos del producto
+    function mostrarFormularioProductoSeleccionado() {
+        console.log("📋 Mostrando formulario para:", inputProductName)
+        mostrarFormularioProducto = true
+        mostrarButtonCrearProducto = false
+        
+        // Guardar referencia del producto
+        productoSeleccionado = {
+            id: inputProductId,
+            codigo: inputProductCode,
+            nombre: inputProductName,
+            precioVentaActual: esPrimeraCompra ? 0 : (compraModel ? compraModel.obtener_precio_venta(inputProductId) : 0),
+            stockActual: 0  // Se obtendría del backend si es necesario
+        }
+    }
+    
+    // 🆕 FUNCIÓN: Limpiar formulario de compra
+    function limpiarFormularioCompra() {
+        console.log("🧹 Limpiando formulario de compra")
+        mostrarFormularioProducto = false
+        permitirActualizarPrecio = false
+        clearProductFields()
+    }
+
+    function limpiarSeleccionProducto() {
+        console.log("🧹 Limpiando selección de producto")
+    
+        // ✅ Desactivar formulario
+        formularioActivo = false
+        
+        // ✅ Limpiar datos del producto
+        inputProductId = 0
+        inputProductCode = ""
+        inputProductName = ""
+        isNewProduct = true
+        esPrimeraCompra = false
+        
+        // ✅ Limpiar campos
+        if (cantidadField) cantidadField.text = ""
+        if (precioTotalField) precioTotalField.text = ""
+        if (precioVentaField) precioVentaField.text = ""
+        if (expiryField) expiryField.text = ""
+        
+        // ✅ Resetear cálculos
+        inputCantidad = 0
+        inputPrecioTotalCompra = 0.0
+        inputPrecioUnitarioCalculado = 0.0
+        inputPrecioVentaSugerido = 0.0
+        inputPrecioVentaFinal = 0.0
+        inputGananciaUnitaria = 0.0
+        inputGananciaTotal = 0.0
+        inputMargenRealPorcentaje = 0.0
+        precioModificadoManualmente = false
+        
+        // ✅ Cerrar dropdowns
+        showProductDropdown = false
+        mostrarButtonCrearProducto = false
+        
+        // ✅ Enfocar campo de búsqueda
+        Qt.callLater(function() {
+            if (productCodeField) {
+                productCodeField.focus = true
+                productCodeField.selectAll()
+            }
+        })
+        
+        showSuccess("Selección cancelada - Busca otro producto")
     }
     
     // Agregar o actualizar producto
@@ -735,6 +827,61 @@ Item {
         successTimer.restart()
     }
 
+    // 🆕 FUNCIÓN DE FALLBACK: Crear modal directamente
+    function crearModalCrearProductoDirecto(nombreProducto) {
+        console.log("🎯 Creando modal CrearProducto directamente...")
+        
+        var crearProductoComponent = Qt.createComponent("CrearProducto.qml")
+        
+        if (crearProductoComponent.status === Component.Ready) {
+            // Crear modal como hijo de crearCompraRoot (no su parent)
+            var modal = crearProductoComponent.createObject(crearCompraRoot, {
+                "inventarioModel": inventarioModel,
+                "anchors.fill": crearCompraRoot,
+                "visible": true,
+                "anchors.margins": 0,
+                "z": 10000
+            })
+            
+            if (modal) {
+                // Pre-llenar nombre si se proporcionó
+                if (nombreProducto && nombreProducto.trim().length > 0) {
+                    modal.inputProductName = nombreProducto
+                }
+                
+                // Conectar señales
+                modal.productoCreado.connect(function(producto) {
+                    console.log("✅ Producto creado directamente:", producto.nombre)
+                    
+                    // 🆕 IMPORTANTE: Actualizar el campo actual con el nuevo producto
+                    Qt.callLater(function() {
+                        // Forzar selección del producto recién creado
+                        seleccionarProductoExistente(
+                            producto.id || 0,
+                            producto.codigo || "",
+                            producto.nombre || nombreProducto
+                        )
+                    })
+                    
+                    modal.destroy()
+                })
+                
+                modal.cancelarCreacion.connect(function() {
+                    console.log("❌ Creación cancelada")
+                    modal.destroy()
+                })
+                
+                console.log("✅ Modal creado directamente")
+            } else {
+                console.log("❌ Error al crear modal")
+                showSuccess("Error: No se pudo abrir el formulario de producto")
+            }
+        } else {
+            console.log("❌ Error al cargar componente:", crearProductoComponent.errorString())
+            showSuccess("Error: Sistema de productos no disponible")
+        }
+    }
+
     // ============================================================================
     // INTERFAZ MEJORADA + INDICADORES EDUCATIVOS
     // ============================================================================
@@ -1039,55 +1186,64 @@ Item {
             anchors.right: parent.right
             anchors.margins: spacing8
             anchors.topMargin: spacing4
-            height: esPrimeraCompra ? 320 : 210  // ✅ Ajustado para que quepa el botón
+            height: {
+                if (formularioActivo) {
+                    return esPrimeraCompra ? 320 : 240
+                } else if (mostrarButtonCrearProducto) {
+                    return 105  // Más alto cuando hay botón
+                } else {
+                    return 80   // Solo búsqueda
+                }
+            }
             color: productoEditandoIndex >= 0 ? "#FFF9C4" : "#F8F9FA"
             radius: radiusMedium
-            border.color: productoEditandoIndex >= 0 ? "#F39C12" : "#D5DBDB"
-            border.width: 1
+            border.color: {  // 🆕 COLOR DINÁMICO
+                if (productoEditandoIndex >= 0) return "#F39C12"
+                if (formularioActivo) return "#2196F3"
+                return "#D5DBDB"
+            }
+            border.width: formularioActivo ? 2 : 1  // 🆕 Más grueso cuando está activo
             
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: spacing12
-                spacing: spacing8  // Más compacto
+                spacing: spacing8
                 
-                // FILA 1: BÚSQUEDA
-                RowLayout {
+                // ============================================
+                // SECCIÓN 1: BÚSQUEDA DE PRODUCTO
+                // ============================================
+                Rectangle {
                     Layout.fillWidth: true
-                    spacing: spacing8
+                    Layout.preferredHeight: 50
+                    visible: !formularioActivo  // 🆕 SOLO visible cuando NO hay producto seleccionado
+                    color: "#FFFFFF"
+                    border.color: productCodeField.activeFocus ? blueColor : darkGrayColor
+                    border.width: productCodeField.activeFocus ? 2 : 1
+                    radius: radiusMedium
                     
                     ColumnLayout {
-                        Layout.fillWidth: true
+                        anchors.fill: parent
+                        anchors.margins: 8
                         spacing: 4
                         
                         Label {
-                            text: productoEditandoIndex >= 0 ? "EDITANDO PRODUCTO" : "1️⃣ BUSCAR PRODUCTO"
-                            color: productoEditandoIndex >= 0 ? "#E67E22" : textColor
+                            text: "1️⃣ BUSCAR PRODUCTO EXISTENTE"
+                            color: textColor
                             font.bold: true
                             font.pixelSize: fontSmall
                         }
                         
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 45  // Aumentado
-                            color: "#ffffff"
-                            border.color: productCodeField.activeFocus ? blueColor : darkGrayColor
-                            border.width: productCodeField.activeFocus ? 2 : 1
-                            radius: radiusMedium
-                            opacity: productoEditandoIndex >= 0 ? 0.5 : 1.0
+                        RowLayout {
+                            spacing: 8
                             
                             TextInput {
                                 id: productCodeField
-                                anchors.fill: parent
-                                anchors.margins: 12
-                                
+                                Layout.fillWidth: true
                                 text: inputProductName.length > 0 ? inputProductName : inputProductCode
                                 enabled: productoEditandoIndex < 0
-                                
-                                font.pixelSize: fontMedium  // Aumentado
+                                font.pixelSize: fontMedium
                                 color: "#000000"
                                 verticalAlignment: Text.AlignVCenter
-                                
-                                clip: true
                                 selectByMouse: true
                                 
                                 onTextChanged: {
@@ -1108,370 +1264,6 @@ Item {
                                         isNewProduct = true
                                     }
                                 }
-                            }
-                            
-                            Text {
-                                anchors.left: parent.left
-                                anchors.leftMargin: 12
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "Escribe nombre o código del producto..."
-                                color: "#999999"
-                                font.pixelSize: fontSmall
-                                visible: productCodeField.text.length === 0
-                            }
-                        }
-                    }
-                }
-                
-                // FILA 2: CANTIDAD Y PRECIO TOTAL - CAMPOS MÁS GRANDES
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: spacing12
-                    
-                    // CANTIDAD - CAMPO MÁS GRANDE
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: "2️⃣ Cantidad Unidades"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        Rectangle {
-                            width: 140  // Aumentado
-                            height: 40  // Aumentado
-                            color: "#ffffff"
-                            border.color: cantidadField.activeFocus ? blueColor : darkGrayColor
-                            border.width: cantidadField.activeFocus ? 2 : 1
-                            radius: radiusSmall
-                            
-                            TextInput {
-                                id: cantidadField
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                
-                                text: inputCantidad > 0 ? inputCantidad.toString() : ""
-                                
-                                validator: IntValidator { bottom: 0 }
-                                
-                                font.pixelSize: fontLarge  // Aumentado
-                                font.bold: true
-                                color: "#000000"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                
-                                clip: true
-                                selectByMouse: true
-                                
-                                onTextChanged: {
-                                    inputCantidad = text.length > 0 ? (parseInt(text) || 0) : 0
-                                    calcularPreciosAutomaticos()
-                                }
-                            }
-                            
-                            Text {
-                                anchors.centerIn: parent
-                                text: "0"
-                                color: "#999999"
-                                font.pixelSize: fontSmall
-                                visible: cantidadField.text.length === 0
-                            }
-                        }
-                    }
-                    
-                    // PRECIO TOTAL COMPRA - CAMPO MÁS GRANDE
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: "3️⃣ Precio TOTAL Compra"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        Rectangle {
-                            width: 180  // Aumentado
-                            height: 40  // Aumentado
-                            color: "#FFF3E0"
-                            border.color: precioTotalField.activeFocus ? "#FF6F00" : "#FFB74D"
-                            border.width: precioTotalField.activeFocus ? 2 : 1
-                            radius: radiusSmall
-                            
-                            TextInput {
-                                id: precioTotalField
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                
-                                text: inputPrecioTotalCompra > 0 ? inputPrecioTotalCompra.toString() : ""
-                                
-                                validator: RegularExpressionValidator {
-                                    regularExpression: /^\d*\.?\d{0,2}$/
-                                }
-                                
-                                font.pixelSize: fontLarge  // Aumentado
-                                font.bold: true
-                                color: "#E65100"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                
-                                clip: true
-                                selectByMouse: true
-                                
-                                onTextChanged: {
-                                    inputPrecioTotalCompra = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
-                                    calcularPreciosAutomaticos()
-                                }
-                            }
-                            
-                            Text {
-                                anchors.centerIn: parent
-                                text: "Bs 0.00"
-                                color: "#FFAB91"
-                                font.pixelSize: fontSmall
-                                visible: precioTotalField.text.length === 0
-                            }
-                        }
-                    }
-                    
-                    // PRECIO UNITARIO CALCULADO (READ-ONLY) - CAMPO MÁS GRANDE
-                    ColumnLayout {
-                        visible: inputPrecioUnitarioCalculado > 0
-                        spacing: 4
-                        
-                        Label {
-                            text: "📊 Precio Unitario"
-                            color: "#1565C0"
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        Rectangle {
-                            width: 130  // Aumentado
-                            height: 40  // Aumentado
-                            color: "#E3F2FD"
-                            border.color: "#2196F3"
-                            border.width: 2
-                            radius: radiusSmall
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "Bs " + inputPrecioUnitarioCalculado.toFixed(2)
-                                color: "#1565C0"
-                                font.bold: true
-                                font.pixelSize: fontMedium  // Aumentado
-                            }
-                        }
-                    }
-                    
-                    // FECHA VENCIMIENTO - MEJORADA SIN noExpiryCheckbox
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: "Vencimiento"
-                            color: darkGrayColor
-                            font.pixelSize: fontSmall
-                            font.bold: true
-                        }
-                        
-                        RowLayout {
-                            spacing: 4
-                            
-                            Rectangle {
-                                Layout.preferredWidth: 100  // Aumentado
-                                Layout.preferredHeight: 40  // Aumentado
-                                color: inputNoExpiry ? "#F5F5F5" : "#ffffff"
-                                border.color: {
-                                    if (inputNoExpiry) return "#E0E0E0"
-                                    if (expiryField.activeFocus) return "#9C27B0"
-                                    if (inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) return dangerColor
-                                    return darkGrayColor
-                                }
-                                border.width: expiryField.activeFocus ? 2 : 1
-                                radius: radiusSmall
-                                
-                                TextInput {
-                                    id: expiryField
-                                    anchors.fill: parent
-                                    anchors.margins: 8
-                                    
-                                    text: inputExpiryDate
-                                    enabled: !inputNoExpiry
-                                    
-                                    font.pixelSize: fontMedium  // Aumentado
-                                    color: "#000000"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    
-                                    clip: true
-                                    selectByMouse: true
-                                    
-                                    onTextChanged: {
-                                        if (!inputNoExpiry) {
-                                            inputExpiryDate = text
-                                        }
-                                    }
-                                }
-                                
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "AAAA-MM-DD"
-                                    color: "#999999"
-                                    font.pixelSize: fontSmall
-                                    visible: expiryField.text.length === 0 && !inputNoExpiry
-                                }
-                            }
-
-                            // Checkbox personalizado sin variable noExpiryCheckbox
-                            Rectangle {
-                                width: 24
-                                height: 24
-                                radius: 4
-                                border.color: darkGrayColor
-                                border.width: 1
-                                color: !inputNoExpiry ? successColor : whiteColor
-                                
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "✓"
-                                    color: whiteColor
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                    visible: !inputNoExpiry
-                                }
-                                
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: {
-                                        inputNoExpiry = !inputNoExpiry
-                                        if (inputNoExpiry) {
-                                            inputExpiryDate = ""
-                                            expiryField.text = ""
-                                        }
-                                    }
-                                }
-                            }  
-                            
-                            Text {
-                                text: "Con venc."
-                                font.pixelSize: 10
-                                color: darkGrayColor
-                                Layout.alignment: Qt.AlignVCenter
-                            }
-                        }
-                    }
-                }
-                
-                // 🆕 FILA 3: PRECIO DE VENTA (SOLO PRIMERA COMPRA) - CAMPOS MÁS GRANDES
-                RowLayout {
-                    Layout.fillWidth: true
-                    visible: esPrimeraCompra
-                    spacing: spacing12
-                    
-                    // PRECIO VENTA SUGERIDO - CAMPO MÁS GRANDE
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: "4️⃣ Precio Venta Sugerido (100% margen)"
-                            color: "#E65100"
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        Rectangle {
-                            width: 150  // Aumentado
-                            height: 40  // Aumentado
-                            color: "#FFE0B2"
-                            border.color: "#FF6F00"
-                            border.width: 2
-                            radius: radiusSmall
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "Bs " + inputPrecioVentaSugerido.toFixed(2)
-                                color: "#BF360C"
-                                font.bold: true
-                                font.pixelSize: fontLarge  // Aumentado
-                            }
-                        }
-                    }
-                    
-                    Label {
-                        text: "→"
-                        font.pixelSize: 20
-                        color: "#FF6F00"
-                    }
-                    
-                    // PRECIO VENTA FINAL (EDITABLE) - CAMPO MÁS GRANDE
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: "✏️ Precio Venta Final"
-                            color: "#E65100"
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        Rectangle {
-                            width: 150  // Aumentado
-                            height: 40  // Aumentado
-                            color: "#ffffff"
-                            border.color: precioVentaField.activeFocus ? "#4CAF50" : "#FF6F00"
-                            border.width: precioVentaField.activeFocus ? 3 : 2
-                            radius: radiusSmall
-                            
-                            TextInput {
-                                id: precioVentaField
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                
-                                // ✅ MEJORADO: Usar el sugerido hasta que usuario empiece a escribir
-                                text: {
-                                    if (precioModificadoManualmente && inputPrecioVentaFinal > 0) {
-                                        return inputPrecioVentaFinal.toFixed(2)
-                                    }
-                                    if (inputPrecioVentaSugerido > 0) {
-                                        return inputPrecioVentaSugerido.toFixed(2)
-                                    }
-                                    return ""
-                                }
-                                
-                                validator: RegularExpressionValidator {
-                                    regularExpression: /^\d*\.?\d{0,2}$/
-                                }
-                                
-                                font.pixelSize: fontLarge  // ✅ Más grande
-                                font.bold: true
-                                color: "#E65100"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                
-                                clip: true
-                                selectByMouse: true
-                                
-                                onTextChanged: {
-                                    if (activeFocus) {  // ✅ Solo marcar si usuario está escribiendo
-                                        precioModificadoManualmente = true
-                                    }
-                                    
-                                    inputPrecioVentaFinal = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
-                                    
-                                    // Recalcular ganancia con el nuevo precio
-                                    if (inputPrecioUnitarioCalculado > 0) {
-                                        inputGananciaUnitaria = inputPrecioVentaFinal - inputPrecioUnitarioCalculado
-                                        inputGananciaTotal = inputGananciaUnitaria * inputCantidad
-                                        inputMargenRealPorcentaje = (inputGananciaUnitaria / inputPrecioUnitarioCalculado) * 100
-                                    }
-                                    
-                                    console.log("💰 Cálculos: Unit:", inputPrecioUnitarioCalculado.toFixed(2),
-                                                "Venta:", inputPrecioVentaFinal.toFixed(2),
-                                                "Margen:", inputMargenRealPorcentaje.toFixed(1) + "%")
-                                }
                                 
                                 onFocusChanged: {
                                     if (focus) {
@@ -1480,181 +1272,722 @@ Item {
                                 }
                             }
                             
-                            Text {
-                                anchors.centerIn: parent
-                                text: "Bs 0.00"
-                                color: "#FFAB91"
-                                font.pixelSize: fontSmall
-                                visible: precioVentaField.text.length === 0
+                            Button {
+                                Layout.preferredWidth: 30
+                                Layout.preferredHeight: 30
+                                visible: productCodeField.text.length > 0
+                                
+                                background: Rectangle {
+                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
+                                    radius: 15
+                                }
+                                
+                                contentItem: Label {
+                                    text: "✕"
+                                    color: whiteColor
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    productCodeField.text = ""
+                                    inputProductCode = ""
+                                    inputProductName = ""
+                                    showProductDropdown = false
+                                    mostrarButtonCrearProducto = false
+                                }
                             }
                         }
-                    }
-                    
-                    // GANANCIA CALCULADA - CAMPO MÁS GRANDE
-                    Rectangle {
-                        visible: inputGananciaUnitaria > 0
-                        Layout.preferredWidth: 220  // Aumentado
-                        Layout.preferredHeight: 55  // Aumentado
-                        color: inputMargenRealPorcentaje >= 15 ? "#E8F5E9" : "#FFEBEE"
-                        border.color: inputMargenRealPorcentaje >= 15 ? "#4CAF50" : "#F44336"
-                        border.width: 2
-                        radius: radiusSmall
                         
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: 2
-                            
-                            Label {
-                                text: "💰 GANANCIA"
-                                color: inputMargenRealPorcentaje >= 15 ? "#2E7D32" : "#C62828"
-                                font.pixelSize: 10
-                                font.bold: true
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            
-                            Label {
-                                text: "Bs " + inputGananciaUnitaria.toFixed(2) + " × " + inputCantidad
-                                color: inputMargenRealPorcentaje >= 15 ? "#4CAF50" : "#F44336"
-                                font.pixelSize: fontMedium  // Aumentado
-                                font.bold: true
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            
-                            Label {
-                                text: "= Bs " + inputGananciaTotal.toFixed(2) + " (" + inputMargenRealPorcentaje.toFixed(0) + "%)"
-                                color: inputMargenRealPorcentaje >= 15 ? "#2E7D32" : "#C62828"
-                                font.pixelSize: fontSmall
-                                font.bold: true
-                                Layout.alignment: Qt.AlignHCenter
-                            }
+                        Text {
+                            text: "Escribe nombre o código del producto..."
+                            color: "#999999"
+                            font.pixelSize: fontSmall
+                            visible: productCodeField.text.length === 0
                         }
                     }
                 }
                 
-                // ✅ NUEVO: Advertencia de pérdida
+                // 🆕 BOTÓN CREAR NUEVO PRODUCTO (Aparece si no hay resultados)
                 Rectangle {
-                    visible: esPrimeraCompra && inputMargenRealPorcentaje < 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 50
-                    color: "#FFEBEE"
-                    border.color: "#F44336"
+                    Layout.preferredHeight: mostrarButtonCrearProducto ? 45 : 0
+                    visible: mostrarButtonCrearProducto && !formularioActivo
+                    color: "#FFF3E0"
+                    border.color: "#FF6F00"
                     border.width: 2
                     radius: radiusMedium
+                    clip: true
                     
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: spacing8
                         spacing: spacing8
                         
-                        Rectangle {
-                            Layout.preferredWidth: 30
-                            Layout.preferredHeight: 30
-                            color: "#F44336"
-                            radius: 15
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: "⚠️"
-                                font.pixelSize: 16
-                            }
+                        Label {
+                            text: "❌ Producto no encontrado"
+                            color: "#E65100"
+                            font.bold: true
+                            font.pixelSize: fontSmall
+                            Layout.fillWidth: true
                         }
                         
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
+                        // 🆕 ACTUALIZAR EL BOTÓN "CREAR NUEVO PRODUCTO"
+                        Button {
+                            text: creandoProducto ? "⏳ Creando..." : "➕ Crear Nuevo Producto"
+                            Layout.preferredHeight: 35
                             
-                            Label {
-                                text: "ADVERTENCIA: Precio de venta MENOR que precio de compra"
-                                color: "#C62828"
-                                font.bold: true
-                                font.pixelSize: fontSmall
+                            background: Rectangle {
+                                color: parent.pressed ? "#E65100" : (creandoProducto ? "#FFB74D" : "#FF6F00")
+                                radius: radiusSmall
                             }
                             
-                            Label {
-                                text: "Estás perdiendo Bs " + Math.abs(inputGananciaUnitaria).toFixed(2) + " por unidad (" + Math.abs(inputMargenRealPorcentaje).toFixed(1) + "%)"
-                                color: "#D32F2F"
+                            contentItem: Label {
+                                text: parent.text
+                                color: "#ffffff"
+                                font.bold: true
                                 font.pixelSize: fontSmall
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            
+                            onClicked: {
+                                console.log("🔓 Botón: Crear Nuevo Producto clickeado")
+                                
+                                if (creandoProducto) {
+                                    console.log("⏳ Ya se está creando un producto, espera...")
+                                    return
+                                }
+                                
+                                var nombreProducto = productCodeField.text.trim()
+                                
+                                if (nombreProducto.length === 0) {
+                                    showSuccess("✏️ Escribe el nombre del producto primero")
+                                    Qt.callLater(function() {
+                                        if (productCodeField) {
+                                            productCodeField.focus = true
+                                            productCodeField.selectAll()
+                                        }
+                                    })
+                                    return
+                                }
+                                
+                                if (nombreProducto.length < 2) {
+                                    showSuccess("⚠️ El nombre debe tener al menos 2 caracteres")
+                                    return
+                                }
+                                
+                                console.log("🆕 Iniciando creación de producto:", nombreProducto)
+                                
+                                // 🆕 Mostrar estado de "creando"
+                                creandoProducto = true
+                                mostrarButtonCrearProducto = false
+                                
+                                // Emitir señal
+                                crearCompraRoot.solicitarCrearProducto(nombreProducto)
+                                
+                                // 🆕 Timer para resetear estado si algo falla
+                                Qt.callLater(function() {
+                                    var resetTimer = Qt.createQmlObject('import QtQuick 2.15; Timer { interval: 5000; running: true }', 
+                                                                    crearCompraRoot, "resetTimer")
+                                    resetTimer.triggered.connect(function() {
+                                        if (creandoProducto) {
+                                            console.log("⚠️ Reset estado creandoProducto (timeout)")
+                                            creandoProducto = false
+                                            mostrarButtonCrearProducto = true
+                                        }
+                                        resetTimer.destroy()
+                                    })
+                                })
                             }
                         }
                     }
                 }
                 
-                // FILA 4: BOTONES
-                RowLayout {
+                // ============================================
+                // SECCIÓN 2: FORMULARIO DE COMPRA (cuando hay producto seleccionado)
+                // ============================================
+                Rectangle {
+                    id: formularioCompra
                     Layout.fillWidth: true
-                    spacing: spacing8
+                    Layout.preferredHeight: formularioActivo ? (esPrimeraCompra ? 340 : 270) : 0
+                    visible: formularioActivo
+                    color: "#F5F7FA"
+                    border.color: "#2196F3"
+                    border.width: 2
+                    radius: 12
                     
-                    Item { Layout.fillWidth: true }
-                    
-                    // BOTÓN AGREGAR
-                    Rectangle {
-                        Layout.preferredWidth: 155
-                        Layout.preferredHeight: 48
-                        color: {
-                            var baseEnabled = inputProductCode.length > 0 && 
-                                        inputProductName.length > 0 && 
-                                        inputCantidad > 0 &&
-                                        inputPrecioTotalCompra > 0 &&
-                                        (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+                        
+                        // ============================================
+                        // CABECERA DEL FORMULARIO
+                        // ============================================
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
                             
-                            if (esPrimeraCompra) {
-                                baseEnabled = baseEnabled && inputPrecioVentaFinal > 0 && inputPrecioVentaFinal > inputPrecioUnitarioCalculado
+                            Rectangle {
+                                Layout.preferredWidth: 44
+                                Layout.preferredHeight: 44
+                                color: "#2196F3"
+                                radius: 22
+                                
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "📦"
+                                    font.pixelSize: 18
+                                }
                             }
                             
-                            if (!baseEnabled) return darkGrayColor
-                            return productoEditandoIndex >= 0 ? blueColor : successColor
-                        }
-                        radius: radiusMedium
-                        
-                        Label {
-                            anchors.centerIn: parent
-                            text: productoEditandoIndex >= 0 ? "✏️ Actualizar" : "➕ Agregar"
-                            color: whiteColor
-                            font.bold: true
-                            font.pixelSize: fontMedium
-                        }
-                        
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: {
-                                var baseEnabled = inputProductCode.length > 0 && 
-                                            inputProductName.length > 0 && 
-                                            inputCantidad > 0 &&
-                                            inputPrecioTotalCompra > 0 &&
-                                            (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
+                            ColumnLayout {
+                                spacing: 4
                                 
-                                if (esPrimeraCompra) {
-                                    return baseEnabled && inputPrecioVentaFinal > 0 && inputPrecioVentaFinal > inputPrecioUnitarioCalculado
+                                Label {
+                                    text: inputProductName || "Producto sin nombre"
+                                    color: "#1565C0"
+                                    font.bold: true
+                                    font.pixelSize: fontMedium
                                 }
                                 
-                                return baseEnabled
+                                Label {
+                                    text: "Código: " + inputProductCode
+                                    color: "#666666"
+                                    font.pixelSize: fontSmall
+                                }
                             }
-                            onClicked: addProductToPurchase()
+                            
+                            Item { Layout.fillWidth: true }
+                            
+                            Button {
+                                text: "✕"
+                                Layout.preferredWidth: 36
+                                Layout.preferredHeight: 36
+                                
+                                background: Rectangle {
+                                    color: parent.hovered ? "#F0F0F0" : "#F5F5F5"
+                                    border.color: parent.hovered ? "#E57373" : "#BDBDBD"
+                                    border.width: 1
+                                    radius: 8
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: parent.hovered ? "#E57373" : "#999999"
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: limpiarSeleccionProducto()
+                            }
                         }
-                    }
-                    
-                    // Botón Cancelar edición
-                    Rectangle {
-                        visible: productoEditandoIndex >= 0
-                        Layout.preferredWidth: 80
-                        Layout.preferredHeight: buttonHeight
-                        color: warningColor
-                        radius: radiusSmall
                         
-                        Label {
-                            anchors.centerIn: parent
-                            text: "❌ Cancelar"
-                            color: whiteColor
-                            font.bold: true
-                            font.pixelSize: fontSmall
+                        // ============================================
+                        // FILA 1: CANTIDAD Y PRECIO TOTAL
+                        // ============================================
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 16
+                            
+                            // CANTIDAD
+                            ColumnLayout {
+                                spacing: 6
+                                Layout.preferredWidth: 160
+                                
+                                Label {
+                                    text: "Cantidad Unidades"
+                                    color: "#212121"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 44
+                                    color: "#FFFFFF"
+                                    border.color: cantidadField.activeFocus ? "#2196F3" : "#BDBDBD"
+                                    border.width: cantidadField.activeFocus ? 2 : 1
+                                    radius: 8
+                                    
+                                    TextInput {
+                                        id: cantidadField
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        
+                                        text: inputCantidad > 0 ? inputCantidad.toString() : ""
+                                        validator: IntValidator { bottom: 0 }
+                                        font.pixelSize: fontLarge
+                                        font.bold: true
+                                        color: "#000000"
+                                        horizontalAlignment: Text.AlignCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        selectByMouse: true
+                                        
+                                        onTextChanged: {
+                                            inputCantidad = text.length > 0 ? (parseInt(text) || 0) : 0
+                                            calcularPreciosAutomaticos()
+                                        }
+                                        
+                                        onFocusChanged: {
+                                            if (focus) selectAll()
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // PRECIO TOTAL
+                            ColumnLayout {
+                                spacing: 6
+                                Layout.fillWidth: true
+                                
+                                Label {
+                                    text: "Precio TOTAL que pagaste"
+                                    color: "#212121"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 44
+                                    color: "#FFF8F0"
+                                    border.color: precioTotalField.activeFocus ? "#FF6F00" : "#FFB74D"
+                                    border.width: precioTotalField.activeFocus ? 2 : 1
+                                    radius: 8
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 6
+                                        
+                                        Label {
+                                            text: "Bs"
+                                            font.bold: true
+                                            color: "#E65100"
+                                            font.pixelSize: fontMedium
+                                        }
+                                        
+                                        TextInput {
+                                            id: precioTotalField
+                                            Layout.fillWidth: true
+                                            
+                                            text: inputPrecioTotalCompra > 0 ? inputPrecioTotalCompra.toString() : ""
+                                            validator: RegularExpressionValidator { regularExpression: /^\d*\.?\d{0,2}$/ }
+                                            font.pixelSize: fontMedium
+                                            font.bold: true
+                                            color: "#E65100"
+                                            horizontalAlignment: Text.AlignCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            selectByMouse: true
+                                            
+                                            onTextChanged: {
+                                                inputPrecioTotalCompra = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
+                                                calcularPreciosAutomaticos()
+                                            }
+                                            
+                                            onFocusChanged: {
+                                                if (focus) selectAll()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                         
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: cancelarEdicionProducto()
+                        // ============================================
+                        // FILA 2: PRECIO UNITARIO Y VENCIMIENTO
+                        // ============================================
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 16
+                            
+                            // PRECIO UNITARIO (READ-ONLY)
+                            ColumnLayout {
+                                spacing: 6
+                                visible: inputPrecioUnitarioCalculado > 0
+                                Layout.preferredWidth: 160
+                                
+                                Label {
+                                    text: "Precio Unitario"
+                                    color: "#1565C0"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 44
+                                    color: "#E3F2FD"
+                                    border.color: "#2196F3"
+                                    border.width: 2
+                                    radius: 8
+                                    
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "Bs " + inputPrecioUnitarioCalculado.toFixed(2)
+                                        color: "#1565C0"
+                                        font.bold: true
+                                        font.pixelSize: fontMedium
+                                    }
+                                }
+                            }
+                            
+                            // VENCIMIENTO
+                            ColumnLayout {
+                                spacing: 6
+                                Layout.fillWidth: true
+                                
+                                Label {
+                                    text: "Vencimiento"
+                                    color: "#212121"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                RowLayout {
+                                    spacing: 8
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 180
+                                        Layout.preferredHeight: 44
+                                        color: inputNoExpiry ? "#F5F5F5" : "#FFFFFF"
+                                        border.color: {
+                                            if (inputNoExpiry) return "#E0E0E0"
+                                            if (expiryField.activeFocus) return "#9C27B0"
+                                            if (inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) return "#E57373"
+                                            return "#BDBDBD"
+                                        }
+                                        border.width: expiryField.activeFocus ? 2 : 1
+                                        radius: 8
+                                        
+                                        TextInput {
+                                            id: expiryField
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            
+                                            text: inputExpiryDate
+                                            enabled: !inputNoExpiry
+                                            font.pixelSize: fontSmall
+                                            color: "#000000"
+                                            horizontalAlignment: Text.AlignCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            selectByMouse: true
+                                            
+                                            onTextChanged: {
+                                                if (!inputNoExpiry) {
+                                                    inputExpiryDate = text
+                                                }
+                                            }
+                                        }
+                                        
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "AAAA-MM-DD"
+                                            color: "#999999"
+                                            font.pixelSize: 11
+                                            visible: expiryField.text.length === 0 && !inputNoExpiry
+                                        }
+                                    }
+                                    
+                                    // Checkbox
+                                    RowLayout {
+                                        spacing: 6
+                                        
+                                        Rectangle {
+                                            width: 28
+                                            height: 28
+                                            radius: 6
+                                            border.color: "#BDBDBD"
+                                            border.width: 1
+                                            color: !inputNoExpiry ? "#4CAF50" : "#FFFFFF"
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "✓"
+                                                color: "#FFFFFF"
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                visible: !inputNoExpiry
+                                            }
+                                            
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: {
+                                                    inputNoExpiry = !inputNoExpiry
+                                                    if (inputNoExpiry) {
+                                                        inputExpiryDate = ""
+                                                        expiryField.text = ""
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        Label {
+                                            text: "Sin venc."
+                                            font.pixelSize: fontSmall
+                                            color: "#666666"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ============================================
+                        // SECCIÓN: PRIMERA COMPRA (Si aplica)
+                        // ============================================
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: esPrimeraCompra && inputPrecioUnitarioCalculado > 0 ? 90 : 0
+                            visible: esPrimeraCompra && inputPrecioUnitarioCalculado > 0
+                            color: "#FFF3E0"
+                            border.color: "#FF6F00"
+                            border.width: 2
+                            radius: 8
+                            clip: true
+                            
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 8
+                                
+                                Label {
+                                    text: "⚠️ PRIMERA COMPRA - Define Precio de Venta"
+                                    color: "#E65100"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                RowLayout {
+                                    spacing: 12
+                                    
+                                    ColumnLayout {
+                                        spacing: 4
+                                        Layout.preferredWidth: 140
+                                        
+                                        Label {
+                                            text: "Sugerido (100%)"
+                                            color: "#666666"
+                                            font.pixelSize: 10
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 36
+                                            color: "#FFE0B2"
+                                            border.color: "#FF6F00"
+                                            border.width: 1
+                                            radius: 6
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Bs " + inputPrecioVentaSugerido.toFixed(2)
+                                                color: "#BF360C"
+                                                font.bold: true
+                                                font.pixelSize: fontSmall
+                                            }
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        text: "→"
+                                        font.pixelSize: 18
+                                        color: "#FF6F00"
+                                    }
+                                    
+                                    ColumnLayout {
+                                        spacing: 4
+                                        Layout.fillWidth: true
+                                        
+                                        Label {
+                                            text: "Precio Final"
+                                            color: "#212121"
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 36
+                                            color: "#FFFFFF"
+                                            border.color: precioVentaField.activeFocus ? "#4CAF50" : "#FF6F00"
+                                            border.width: precioVentaField.activeFocus ? 2 : 1
+                                            radius: 6
+                                            
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: 6
+                                                spacing: 4
+                                                
+                                                Label {
+                                                    text: "Bs"
+                                                    font.bold: true
+                                                    color: "#E65100"
+                                                    font.pixelSize: fontSmall
+                                                }
+                                                
+                                                TextInput {
+                                                    id: precioVentaField
+                                                    Layout.fillWidth: true
+                                                    
+                                                    text: {
+                                                        if (precioModificadoManualmente && inputPrecioVentaFinal > 0) {
+                                                            return inputPrecioVentaFinal.toFixed(2)
+                                                        }
+                                                        if (inputPrecioVentaSugerido > 0) {
+                                                            return inputPrecioVentaSugerido.toFixed(2)
+                                                        }
+                                                        return ""
+                                                    }
+                                                    
+                                                    validator: RegularExpressionValidator { regularExpression: /^\d*\.?\d{0,2}$/ }
+                                                    font.pixelSize: fontSmall
+                                                    font.bold: true
+                                                    color: "#E65100"
+                                                    horizontalAlignment: Text.AlignCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    selectByMouse: true
+                                                    
+                                                    onTextChanged: {
+                                                        if (activeFocus) {
+                                                            precioModificadoManualmente = true
+                                                        }
+                                                        inputPrecioVentaFinal = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
+                                                        calcularPreciosAutomaticos()
+                                                    }
+                                                    
+                                                    onFocusChanged: {
+                                                        if (focus) selectAll()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        visible: inputGananciaUnitaria > 0
+                                        Layout.preferredWidth: 120
+                                        Layout.preferredHeight: 50
+                                        color: inputMargenRealPorcentaje >= 50 ? "#E8F5E9" : 
+                                            inputMargenRealPorcentaje >= 30 ? "#FFF3E0" : "#FFEBEE"
+                                        border.color: inputMargenRealPorcentaje >= 50 ? "#4CAF50" : 
+                                                    inputMargenRealPorcentaje >= 30 ? "#FF9800" : "#F44336"
+                                        border.width: 2
+                                        radius: 6
+                                        
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            
+                                            Label {
+                                                text: "💰"
+                                                font.pixelSize: 14
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                            
+                                            Label {
+                                                text: "Bs " + inputGananciaUnitaria.toFixed(2)
+                                                color: inputMargenRealPorcentaje >= 50 ? "#2E7D32" : 
+                                                    inputMargenRealPorcentaje >= 30 ? "#E65100" : "#C62828"
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                            
+                                            Label {
+                                                text: "(" + inputMargenRealPorcentaje.toFixed(0) + "%)"
+                                                color: inputMargenRealPorcentaje >= 50 ? "#2E7D32" : 
+                                                    inputMargenRealPorcentaje >= 30 ? "#E65100" : "#C62828"
+                                                font.pixelSize: 9
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ============================================
+                        // BOTONES DE ACCIÓN
+                        // ============================================
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+                            
+                            Item { Layout.fillWidth: true }
+                            
+                            Button {
+                                text: "❌ Cancelar"
+                                Layout.preferredWidth: 130
+                                Layout.preferredHeight: 42
+                                
+                                background: Rectangle {
+                                    color: parent.hovered ? "#E8E8E8" : "#F5F5F5"
+                                    border.color: parent.hovered ? "#BDBDBD" : "#D0D0D0"
+                                    border.width: 1
+                                    radius: 8
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: "#666666"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: limpiarSeleccionProducto()
+                            }
+                            
+                            Button {
+                                text: productoEditandoIndex >= 0 ? "✏️ Actualizar" : "✅ Agregar a compra"
+                                Layout.preferredHeight: 42
+                                Layout.minimumWidth: 180
+                                Layout.fillWidth: true
+                                
+                                enabled: {
+                                    var baseEnabled = inputProductCode.length > 0 && 
+                                                inputProductName.length > 0 && 
+                                                inputCantidad > 0 &&
+                                                inputPrecioTotalCompra > 0 &&
+                                                (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
+                                    
+                                    if (esPrimeraCompra) {
+                                        return baseEnabled && inputPrecioVentaFinal > 0 && inputPrecioVentaFinal > inputPrecioUnitarioCalculado
+                                    }
+                                    
+                                    return baseEnabled
+                                }
+                                
+                                background: Rectangle {
+                                    color: parent.enabled ? (parent.hovered ? "#1976D2" : "#2196F3") : "#BDBDBD"
+                                    radius: 8
+                                }
+                                
+                                contentItem: Label {
+                                    text: parent.text
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                onClicked: {
+                                    if (addProductToPurchase()) {
+                                        limpiarSeleccionProducto()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+
             }
         }
         
@@ -2141,32 +2474,26 @@ Item {
 
     Component.onCompleted: {
         console.log("✅ CrearCompra.qml inicializado - FIFO 2.0 con cálculos automáticos")
+        console.log("📦 Modelos disponibles:", !!compraModel, !!inventarioModel)
         
-        if (!compraModel || !inventarioModel) {
-            console.log("⚠️ Models no disponibles aún")
-            
-            Qt.callLater(function() {
-                if (compraModel) {
-                    console.log("✅ CompraModel disponible en retry")
-                    updateProviderNames()
-                    
-                    if (compraModel.modo_edicion) {
-                        cargarDatosEdicion()
-                    }
-                }
-            })
-        } else {
-            console.log("✅ Models conectados correctamente")
-            
+        // Cargar proveedores con retraso para asegurar que están disponibles
+        Qt.callLater(function() {
+            console.log("🔄 Intentando cargar proveedores...")
             if (compraModel) {
+                console.log("📊 Proveedores en modelo:", compraModel.proveedores ? compraModel.proveedores.length : "0")
                 compraModel.force_refresh_proveedores()
-                Qt.callLater(updateProviderNames)
+                
+                // Actualizar lista de proveedores después de cargar
+                Qt.callLater(function() {
+                    updateProviderNames()
+                    console.log("✅ Proveedores actualizados, cantidad:", providerNames.length)
+                }, 500)
                 
                 if (compraModel.modo_edicion) {
-                    Qt.callLater(cargarDatosEdicion)
+                    Qt.callLater(cargarDatosEdicion, 800)
                 }
             }
-        }
+        }, 100)
         
         var fechaActual = new Date()
         var dia = fechaActual.getDate().toString().padStart(2, '0')
@@ -2181,6 +2508,18 @@ Item {
         Qt.callLater(function() {
             if (productCodeField) {
                 productCodeField.focus = true
+            }
+        })
+        // 🔗 CONECTAR SEÑAL PARA CREAR PRODUCTO
+        crearCompraRoot.solicitarCrearProducto.connect(function(nombreProducto) {
+            console.log("📢 Señal recibida: solicitarCrearProducto")
+            
+            if (abrirModalCrearProductoFunction && typeof abrirModalCrearProductoFunction === "function") {
+                console.log("✅ Abriendo modal CrearProducto")
+                abrirModalCrearProductoFunction(nombreProducto)
+            } else {
+                console.log("⚠️ Usando fallback")
+                crearModalCrearProductoDirecto(nombreProducto)
             }
         })
     }

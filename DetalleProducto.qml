@@ -50,6 +50,7 @@ Rectangle {
     signal editarSolicitado(var producto)
     signal eliminarSolicitado(var producto)
     signal cerrarSolicitado()
+    signal abrirCompraOriginal(int compraId)  // 🆕 Abrir compra del lote
     // ✅ V2.0: SEÑALES DE EDICIÓN/ELIMINACIÓN DE LOTES ELIMINADAS
     
     // ===============================
@@ -840,7 +841,21 @@ Rectangle {
                                             color: "#495057"
                                         }
                                     }
-                                }
+                                    
+                                    // 🆕 COLUMNA: LINK A COMPRA ORIGINAL
+                                    Rectangle {
+                                        Layout.preferredWidth: 60
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "COMPRA"
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            color: "#495057"
+                                        }
+                                    }
+                            }
                             }
                             
                             // Lista de lotes - ✅ SIN BOTONES DE ACCIONES
@@ -1011,6 +1026,47 @@ Rectangle {
                                                     font.pixelSize: 9
                                                     font.bold: true
                                                     color: "#ffffff"
+                                                }
+                                            }
+                                        }
+                                        
+                                        // 🆕 BOTÓN: LINK A COMPRA ORIGINAL
+                                        Rectangle {
+                                            Layout.preferredWidth: 60
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            
+                                            Button {
+                                                anchors.centerIn: parent
+                                                width: 40
+                                                height: 30
+                                                text: "→"
+                                                
+                                                background: Rectangle {
+                                                    color: parent.hovered ? "#2196F3" : "#E3F2FD"
+                                                    border.color: "#2196F3"
+                                                    border.width: 1
+                                                    radius: 4
+                                                }
+                                                
+                                                contentItem: Label {
+                                                    text: parent.text
+                                                    color: parent.hovered ? "#ffffff" : "#2196F3"
+                                                    font.bold: true
+                                                    font.pixelSize: 14
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                
+                                                ToolTip.visible: hovered
+                                                ToolTip.text: "Ver compra original"
+                                                
+                                                onClicked: {
+                                                    console.log("🔗 Abriendo compra:", loteActual.Compra_Id || loteActual.compra_id)
+                                                    var compraId = loteActual.Compra_Id || loteActual.compra_id || 0
+                                                    if (compraId > 0) {
+                                                        detalleProductoComponent.abrirCompraOriginal(compraId)
+                                                    }
                                                 }
                                             }
                                         }
