@@ -2,7 +2,8 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-// 🔍 DETALLEPRODUCTO.QML - FIFO 2.0 (CON DIÁLOGO DE CONFIRMACIÓN INTEGRADO)
+// 🔍 DETALLEPRODUCTO.QML - FIFO 2.0 (VISUALIZACIÓN DE HISTORIAL)
+// ✅ VERSIÓN 2.0 - SIN MÁRGENES, SIN ACCIONES EN LOTES
 
 Rectangle {
     id: detalleProductoComponent
@@ -29,20 +30,10 @@ Rectangle {
     property bool lotesLoaded: false
     property bool loadingLotes: false
     
-    // PROPIEDADES PARA PRECIOS Y MÁRGENES
+    // PROPIEDADES PARA PRECIOS
     property real costoPromedio: 0.0
     property real precioVenta: 0.0
-    property real margenActual: 0.0
-    property real porcentajeMargen: 0.0
     property bool editandoPrecio: false
-    
-    // PROPIEDADES PARA DIÁLOGO DE CONFIRMACIÓN
-    property bool mostrandoConfirmacion: false
-    property string confirmacionTitulo: ""
-    property string confirmacionMensaje: ""
-    property string confirmacionDetalle: ""
-    property var confirmacionDatos: null
-    property var confirmacionCallback: null
     
     // CONTROL DE CARGA INICIAL
     property bool datosInicialmenteCargados: false
@@ -59,9 +50,7 @@ Rectangle {
     signal editarSolicitado(var producto)
     signal eliminarSolicitado(var producto)
     signal cerrarSolicitado()
-    signal editarLoteSolicitado(var lote)
-    signal eliminarLoteSolicitado(var lote)
-    signal loteActualizadoEnDialog()
+    // ✅ V2.0: SEÑALES DE EDICIÓN/ELIMINACIÓN DE LOTES ELIMINADAS
     
     // ===============================
     // FUNCIONES
@@ -85,8 +74,8 @@ Rectangle {
             // 1. Cargar lotes usando FIFO 2.0
             cargarLotesFIFO()
             
-            // 2. Cargar datos de precios y márgenes
-            cargarPreciosYMargenes()
+            // 2. ✅ V2.0: Cargar solo precios (sin márgenes)
+            cargarPrecios()
             
             // 3. Si no hay stock, cargar última venta
             if (productoData.stockUnitario === 0 || productoData.stock === 0) {
@@ -131,14 +120,17 @@ Rectangle {
         }
     }
     
-    function cargarPreciosYMargenes() {
+    // ✅ V2.0: Función simplificada para cargar solo precios (sin márgenes)
+    function cargarPrecios() {
+        console.log("💰 Cargando precios del producto...")
+        
         if (!productoData) return
         
         try {
             // Precio de venta desde productoData
             precioVenta = productoData.precioVenta || productoData.Precio_venta || 0.0
             
-            // ✅ NUEVO: Calcular costo promedio desde los lotes cargados
+            // Calcular costo promedio desde los lotes cargados
             if (lotesData && lotesData.length > 0) {
                 var sumaCostos = 0
                 var totalUnidades = 0
@@ -166,19 +158,9 @@ Rectangle {
                 console.log("⚠️ No hay lotes para calcular costo promedio")
             }
             
-            // Calcular margen
-            if (precioVenta > 0 && costoPromedio > 0) {
-                margenActual = precioVenta - costoPromedio
-                porcentajeMargen = (margenActual / costoPromedio) * 100
-            } else {
-                margenActual = 0
-                porcentajeMargen = 0
-            }
-            
-            console.log("📊 Precios y márgenes:")
+            console.log("📊 Precios cargados:")
             console.log("   - Precio venta:", precioVenta)
             console.log("   - Costo promedio:", costoPromedio)
-            console.log("   - Margen:", margenActual, "(", porcentajeMargen.toFixed(1), "%)")
             
         } catch (error) {
             console.log("❌ Error calculando precios:", error.toString())
@@ -220,8 +202,6 @@ Rectangle {
         lotesLoaded = false
         costoPromedio = 0.0
         precioVenta = 0.0
-        margenActual = 0.0
-        porcentajeMargen = 0.0
     }
     
     function obtenerColorEstadoVencimiento(estadoVenc) {
@@ -280,10 +260,6 @@ Rectangle {
             // Validaciones adicionales
             if (isNaN(precio) || precio <= 0) {
                 console.log("❌ Precio inválido:", nuevoPrecio, "convertido a:", precio)
-                
-                // Mostrar mensaje de error (opcional)
-                // Podrías agregar un tooltip o mensaje temporal
-                
                 return false
             }
             
@@ -296,13 +272,6 @@ Rectangle {
             
             if (resultado) {
                 precioVenta = precio
-                
-                // Recalcular margen
-                if (costoPromedio > 0) {
-                    margenActual = precioVenta - costoPromedio
-                    porcentajeMargen = (margenActual / costoPromedio) * 100
-                }
-                
                 console.log("✅ Precio actualizado exitosamente")
                 return true
             } else {
@@ -325,39 +294,6 @@ Rectangle {
         return num.toLocaleString(Qt.locale("es_ES"), 'f', decimales || 2);
     }
     
-    // FUNCIONES PARA DIÁLOGO DE CONFIRMACIÓN
-    function mostrarConfirmacionEliminarLote(lote) {
-        console.log("🗑️ Mostrando confirmación para eliminar lote:", lote.Id_Lote || lote.id)
-        
-        var loteId = lote.Id_Lote || lote.id || 0
-        var stockLote = lote.Stock_Lote || lote.Stock_Actual || lote.Cantidad_Unitario || 0
-        var productoNombre = lote.Producto_Nombre || lote.Producto || "producto"
-        
-        confirmacionTitulo = "Eliminar Lote"
-        confirmacionMensaje = "¿Está seguro de eliminar el lote #" + loteId + "?"
-        confirmacionDetalle = "Producto: " + productoNombre + "\n" +
-                              "Stock: " + stockLote + " unidades\n" +
-                              "Esta acción no se puede deshacer."
-        confirmacionDatos = lote
-        
-        // Definir callback para confirmación
-        confirmacionCallback = function() {
-            console.log("✅ Confirmado eliminar lote:", loteId)
-            eliminarLoteSolicitado(lote)
-        }
-        
-        mostrandoConfirmacion = true
-    }
-    
-    function cerrarConfirmacion() {
-        mostrandoConfirmacion = false
-        confirmacionTitulo = ""
-        confirmacionMensaje = ""
-        confirmacionDetalle = ""
-        confirmacionDatos = null
-        confirmacionCallback = null
-    }
-    
     // ===============================
     // EVENTOS
     // ===============================
@@ -366,11 +302,6 @@ Rectangle {
         console.log("=== DETALLE PRODUCTO FIFO 2.0 CARGADO ===")
         console.log("  - Producto inicial:", productoData ? productoData.codigo : "NULL")
         console.log("  - InventarioModel disponible:", !!inventarioModel)
-    }
-    
-    onLoteActualizadoEnDialog: {
-        console.log("🔄 Señal recibida: lote actualizado, recargando datos")
-        cargarDatosProducto()
     }
     
     onProductoDataChanged: {
@@ -503,10 +434,10 @@ Rectangle {
                     anchors.topMargin: 20
                     anchors.bottomMargin: 20
                     
-                    // === WIDGET DE PRECIOS Y MÁRGENES ===
+                    // ✅ V2.0: WIDGET DE PRECIOS (SIN MÁRGENES)
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 200
+                        Layout.preferredHeight: 160
                         color: "#f8f9fa"
                         radius: 8
                         border.color: "#dee2e6"
@@ -518,7 +449,7 @@ Rectangle {
                             spacing: 16
                             
                             Label {
-                                text: "💰 PRECIOS Y MÁRGENES"
+                                text: "💰 PRECIOS DEL PRODUCTO"
                                 font.pixelSize: 14
                                 font.bold: true
                                 color: "#2c3e50"
@@ -558,6 +489,7 @@ Rectangle {
                                             color: "#2c3e50"
                                             visible: !editandoPrecio
                                         }
+                                        
                                         // Precio Venta
                                         TextField {
                                             id: precioVentaField
@@ -692,24 +624,7 @@ Rectangle {
                                     }
                                 }
                                 
-                                // Margen
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
-                                    
-                                    Label {
-                                        text: "Margen Actual"
-                                        font.pixelSize: 13
-                                        color: "#7f8c8d"
-                                    }
-                                    
-                                    Label {
-                                        text: "Bs " + margenActual.toFixed(2) + " (" + porcentajeMargen.toFixed(1) + "%)"
-                                        font.pixelSize: 20
-                                        font.bold: true
-                                        color: margenActual > 0 ? "#27ae60" : "#e74c3c"
-                                    }
-                                }
+                                // ✅ V2.0: Sección de márgenes ELIMINADA
                             }
                         }
                     }
@@ -772,7 +687,7 @@ Rectangle {
                         }
                     }
                     
-                    // === TABLA DE LOTES FIFO 2.0 ===
+                    // === TABLA DE LOTES FIFO 2.0 (SOLO VISUALIZACIÓN) ===
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 400
@@ -790,7 +705,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 
                                 Label {
-                                    text: "📦 LOTES"
+                                    text: "📦 HISTORIAL DE LOTES (FIFO)"
                                     font.pixelSize: 14
                                     font.bold: true
                                     color: "#2c3e50"
@@ -811,7 +726,7 @@ Rectangle {
                                 color: "#dee2e6"
                             }
                             
-                            // Header de tabla
+                            // Header de tabla - ✅ SIN COLUMNA DE ACCIONES
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 36
@@ -823,7 +738,7 @@ Rectangle {
                                     spacing: 0
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 60
+                                        Layout.preferredWidth: 80  // Ajustado
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -836,12 +751,12 @@ Rectangle {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 80
+                                        Layout.preferredWidth: 100  // Ajustado
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "STOCK"
+                                            text: "STOCK ACTUAL"
                                             font.pixelSize: 10
                                             font.bold: true
                                             color: "#495057"
@@ -849,7 +764,20 @@ Rectangle {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 90
+                                        Layout.preferredWidth: 110  // Ajustado
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "CANT. INICIAL"
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            color: "#495057"
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 100  // Ajustado
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -862,7 +790,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 100
+                                        Layout.preferredWidth: 120  // Ajustado
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -875,7 +803,20 @@ Rectangle {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 100
+                                        Layout.preferredWidth: 130  // Ajustado
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "F. VENCIMIENTO"
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            color: "#495057"
+                                        }
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 120  // Ajustado
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -888,7 +829,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle {
-                                        Layout.preferredWidth: 110
+                                        Layout.preferredWidth: 140  // Ajustado
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -899,23 +840,10 @@ Rectangle {
                                             color: "#495057"
                                         }
                                     }
-                                    
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "ACCIONES"
-                                            font.pixelSize: 10
-                                            font.bold: true
-                                            color: "#495057"
-                                        }
-                                    }
                                 }
                             }
                             
-                            // Lista de lotes
+                            // Lista de lotes - ✅ SIN BOTONES DE ACCIONES
                             ListView {
                                 id: lotesListView
                                 Layout.fillWidth: true
@@ -942,10 +870,6 @@ Rectangle {
                                         return stock === 0 ? "#cccccc" : "#dee2e6"
                                     }
                                     border.width: 1
-                                    opacity: {
-                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                        return stock === 0 ? 0.6 : 1.0  // Opacidad reducida para agotados
-                                    }
                                     
                                     property var loteActual: modelData
                                     
@@ -955,7 +879,7 @@ Rectangle {
                                         
                                         // Lote #
                                         Rectangle {
-                                            Layout.preferredWidth: 60
+                                            Layout.preferredWidth: 80
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
@@ -967,9 +891,9 @@ Rectangle {
                                             }
                                         }
                                         
-                                        // Stock
+                                        // Stock Actual
                                         Rectangle {
-                                            Layout.preferredWidth: 80
+                                            Layout.preferredWidth: 100
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             
@@ -988,7 +912,7 @@ Rectangle {
                                                     anchors.centerIn: parent
                                                     text: {
                                                         var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                                        return stock === 0 ? "AGOTADO" : stock.toString()
+                                                        return stock.toString()
                                                     }
                                                     font.pixelSize: 10
                                                     font.bold: true
@@ -997,9 +921,22 @@ Rectangle {
                                             }
                                         }
                                         
+                                        // Cantidad Inicial
+                                        Rectangle {
+                                            Layout.preferredWidth: 110
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: loteActual.Cantidad_Inicial || "---"
+                                                font.pixelSize: 11
+                                                color: "#212529"
+                                            }
+                                        }
+                                        
                                         // Precio Compra
                                         Rectangle {
-                                            Layout.preferredWidth: 90
+                                            Layout.preferredWidth: 100
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
@@ -1012,7 +949,7 @@ Rectangle {
                                         
                                         // Fecha Compra
                                         Rectangle {
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: 120
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
@@ -1020,14 +957,30 @@ Rectangle {
                                                 text: loteActual.Fecha_Compra 
                                                       ? new Date(loteActual.Fecha_Compra).toLocaleDateString('es-ES')
                                                       : "---"
-                                                font.pixelSize: 11
+                                                font.pixelSize: 10
                                                 color: "#212529"
+                                            }
+                                        }
+                                        
+                                        // Fecha Vencimiento
+                                        Rectangle {
+                                            Layout.preferredWidth: 130
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: loteActual.Fecha_Vencimiento
+                                                      ? new Date(loteActual.Fecha_Vencimiento).toLocaleDateString('es-ES')
+                                                      : "SIN VENCIMIENTO"
+                                                font.pixelSize: 10
+                                                color: loteActual.Fecha_Vencimiento ? "#212529" : "#7f8c8d"
+                                                font.italic: !loteActual.Fecha_Vencimiento
                                             }
                                         }
                                         
                                         // Días para Vencer
                                         Rectangle {
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: 120
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
@@ -1041,13 +994,13 @@ Rectangle {
                                         
                                         // Estado
                                         Rectangle {
-                                            Layout.preferredWidth: 110
+                                            Layout.preferredWidth: 140
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 95
+                                                width: 110
                                                 height: 22
                                                 radius: 11
                                                 color: obtenerColorEstadoVencimiento(loteActual.Estado_Vencimiento)
@@ -1055,111 +1008,9 @@ Rectangle {
                                                 Label {
                                                     anchors.centerIn: parent
                                                     text: obtenerTextoEstadoVencimiento(loteActual.Estado_Vencimiento)
-                                                    font.pixelSize: 8
+                                                    font.pixelSize: 9
                                                     font.bold: true
                                                     color: "#ffffff"
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Acciones
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            
-                                            RowLayout {
-                                                anchors.centerIn: parent
-                                                spacing: 6
-                                                // ✅ Ocultar botones en lotes agotados
-                                                visible: {
-                                                    var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                                    return stock > 0
-                                                }
-                                                
-                                                // Botón Editar
-                                                Button {
-                                                    Layout.preferredWidth: 70
-                                                    Layout.preferredHeight: 28
-                                                    text: "✏️ Editar"
-                                                    
-                                                    background: Rectangle {
-                                                        color: parent.pressed ? "#2980b9" : "#3498db"
-                                                        radius: 4
-                                                    }
-                                                    
-                                                    contentItem: Label {
-                                                        text: parent.text
-                                                        color: "white"
-                                                        font.pixelSize: 9
-                                                        font.bold: true
-                                                        horizontalAlignment: Text.AlignHCenter
-                                                        verticalAlignment: Text.AlignVCenter
-                                                    }
-                                                    
-                                                    onClicked: {
-                                                        // ✅ Capturar el objeto lote en una variable local
-                                                        var loteParaEditar = {
-                                                            "Id_Lote": loteActual.Id_Lote || loteActual.id,
-                                                            "id": loteActual.Id_Lote || loteActual.id,
-                                                            "Stock_Lote": loteActual.Stock_Lote || loteActual.Stock_Actual,
-                                                            "Stock": loteActual.Stock_Lote || loteActual.Stock_Actual,
-                                                            "Precio_Compra": loteActual.Precio_Compra,
-                                                            "PrecioCompra": loteActual.Precio_Compra,
-                                                            "Fecha_Vencimiento": loteActual.Fecha_Vencimiento || "",
-                                                            "FechaVencimiento": loteActual.Fecha_Vencimiento || "",
-                                                            "Cantidad_Inicial": loteActual.Cantidad_Inicial || loteActual.Stock_Lote,
-                                                            "Producto_Nombre": loteActual.Producto_Nombre || productoData.nombre,
-                                                            "Producto": loteActual.Producto_Nombre || productoData.nombre,
-                                                            "Fecha_Compra": loteActual.Fecha_Compra || "",
-                                                            "Estado_Lote": loteActual.Estado_Lote || "",
-                                                            "Estado_Vencimiento": loteActual.Estado_Vencimiento || "",
-                                                            "Dias_para_Vencer": loteActual.Dias_para_Vencer
-                                                        }
-                                                        
-                                                        console.log("Editando lote:", loteParaEditar.Id_Lote)
-                                                        console.log("📦 Datos del lote:", JSON.stringify(loteParaEditar))
-                                                        
-                                                        editarLoteSolicitado(loteParaEditar)
-                                                    }
-                                                }
-                                                
-                                                // Botón Eliminar
-                                                Button {
-                                                    Layout.preferredWidth: 80
-                                                    Layout.preferredHeight: 28
-                                                    text: "🗑️ Eliminar"
-                                                    
-                                                    background: Rectangle {
-                                                        color: parent.pressed ? "#c0392b" : "#e74c3c"
-                                                        radius: 4
-                                                    }
-                                                    
-                                                    contentItem: Label {
-                                                        text: parent.text
-                                                        color: "white"
-                                                        font.pixelSize: 9
-                                                        font.bold: true
-                                                        horizontalAlignment: Text.AlignHCenter
-                                                        verticalAlignment: Text.AlignVCenter
-                                                    }
-                                                    
-                                                    onClicked: {
-                                                        mostrarConfirmacionEliminarLote(loteActual)
-                                                    }
-                                                }
-                                            }
-                                            
-                                            // ✅ Mensaje para lotes agotados
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "Historial"
-                                                font.pixelSize: 11
-                                                font.italic: true
-                                                color: "#999999"
-                                                visible: {
-                                                    var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                                    return stock === 0
                                                 }
                                             }
                                         }
@@ -1195,7 +1046,7 @@ Rectangle {
                                             color: lotesLoaded ? "#e74c3c" : "#7f8c8d"
                                         }
                                         
-                                        // Mensaje explicativo (SIN BOTONES, solo texto)
+                                        // Mensaje explicativo
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             Layout.preferredWidth: 400
@@ -1207,14 +1058,15 @@ Rectangle {
                                                     if (ultimaVentaFecha) {
                                                         return "Este producto está agotado.\n\nÚltima venta registrada:\n" + 
                                                                ultimaVentaFecha + " (" + ultimaVentaCantidad + " unidades)\n\n" +
-                                                               "Realice una nueva compra para registrar lotes."
+                                                               "Realice una nueva compra desde el módulo de Compras para registrar lotes."
                                                     } else {
                                                         return "Este producto nunca ha sido comprado.\n\n" +
                                                                "No hay historial de lotes registrados.\n\n" +
                                                                "Realice la primera compra desde el módulo de Compras."
                                                     }
                                                 } else {
-                                                    return "No hay lotes registrados para este producto."
+                                                    return "No hay lotes registrados para este producto.\n\n" +
+                                                           "Los lotes se registran automáticamente cuando realiza una compra."
                                                 }
                                             }
                                             font.pixelSize: 13
