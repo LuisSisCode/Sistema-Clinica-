@@ -12,7 +12,7 @@ from ..core.excepciones import (
 )
 
 class ProductoRepository(BaseRepository):
-    """Repository para productos con lógica FIFO de lotes y control de vencimientos - VERSIÓN 2.0 SIN Stock_Unitario"""
+    """Repository para productos con lógica FIFO de lotes y control de vencimientos"""
     
     def __init__(self):
         super().__init__('Productos', 'productos')
@@ -21,7 +21,7 @@ class ProductoRepository(BaseRepository):
         """Obtiene productos activos (con stock > 0)"""
         query = """
         SELECT p.*, m.Nombre as Marca_Nombre,
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Calculado
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) > 0
@@ -43,13 +43,14 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (codigo,), fetch_one=True)
     
     def get_productos_con_marca(self) -> List[Dict[str, Any]]:
-        """Obtiene todos los productos con información de marca - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """Obtiene todos los productos con información de marca"""
         query = """
         SELECT 
-            p.id, p.Codigo, p.Nombre, p.Detalles as Producto_Detalles,
+            p.id, p.Codigo, p.Nombre, p.Detalles,
             p.Precio_compra, p.Precio_venta, p.Unidad_Medida,
             m.id as Marca_ID, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         ORDER BY p.id DESC
@@ -58,7 +59,7 @@ class ProductoRepository(BaseRepository):
     
     def buscar_productos(self, termino: str, incluir_sin_stock: bool = False) -> List[Dict[str, Any]]:
         """
-        ✅ VERSIÓN 2.0: Busca productos por nombre o código - STOCK CALCULADO DESDE LOTES
+        ✅ CORREGIDO: Busca productos por nombre o código - STOCK CALCULADO DESDE LOTES
         """
         if not termino:
             return []
@@ -85,6 +86,9 @@ class ProductoRepository(BaseRepository):
             ISNULL((SELECT SUM(l.Cantidad_Unitario) 
                     FROM Lote l 
                     WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id), 0) as Stock_Unitario,
             (SELECT COUNT(*) 
             FROM Lote l 
             WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
@@ -117,7 +121,7 @@ class ProductoRepository(BaseRepository):
         return resultados or []
     
     def get_productos_bajo_stock(self, stock_minimo: int = 10) -> List[Dict[str, Any]]:
-        """Obtiene productos con stock bajo - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """Obtiene productos con stock bajo"""
         query = """
         SELECT 
             p.*, m.Nombre as Marca_Nombre,
@@ -155,14 +159,7 @@ class ProductoRepository(BaseRepository):
     def get_lotes_producto_completo_fifo(self, producto_id: int) -> List[Dict[str, Any]]:
         """
         🚀 FIFO 2.0: Obtiene TODOS los lotes de un producto
-        Incluye: activos (stock>0), agotados (stock=0), vencidos
-        ✅ CORREGIDO: Fecha_Compra y Proveedor desde tablas relacionadas
-        
-        Args:
-            producto_id: ID del producto
-            
-        Returns:
-            Lista de lotes ordenados por fecha de vencimiento (FIFO)
+        ✅ CORREGIDO: Sin Cantidad_Inicial (no existe en BD)
         """
         validate_required(producto_id, "producto_id")
         
@@ -172,14 +169,13 @@ class ProductoRepository(BaseRepository):
             l.Id_Producto,
             l.Id_Compra,
             l.Cantidad_Unitario as Stock_Lote,
-            l.Cantidad_Unitario as Cantidad_Inicial,
             l.Precio_Compra,
-            c.Fecha AS Fecha_Compra,              -- ✅ CORREGIDO: De tabla Compra
+            l.Fecha_Compra,
             l.Fecha_Vencimiento,
             p.Codigo as Producto_Codigo,
             p.Nombre as Producto_Nombre,
             m.Nombre as Marca,
-            prov.Nombre as Proveedor,             -- ✅ AGREGADO: De tabla Proveedor
+            ISNULL(prov.Nombre, 'Sin proveedor') as Proveedor,
             DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) as Dias_para_Vencer,
             CASE 
                 WHEN l.Cantidad_Unitario = 0 THEN 'AGOTADO'
@@ -194,8 +190,8 @@ class ProductoRepository(BaseRepository):
         FROM Lote l
         INNER JOIN Productos p ON l.Id_Producto = p.id
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        LEFT JOIN Compra c ON l.Id_Compra = c.id          -- ✅ AGREGADO: JOIN con Compra
-        LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id  -- ✅ AGREGADO: JOIN con Proveedor
+        LEFT JOIN Compra c ON l.Id_Compra = c.id
+        LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
         WHERE l.Id_Producto = ?
         ORDER BY 
             CASE WHEN l.Cantidad_Unitario > 0 THEN 0 ELSE 1 END,
@@ -208,7 +204,7 @@ class ProductoRepository(BaseRepository):
             
             if resultado:
                 print(f"📦 Lotes del producto {producto_id}: {len(resultado)} lotes")
-                for lote in resultado[:3]:  # Mostrar primeros 3
+                for lote in resultado[:3]:
                     print(f"   - Lote #{lote.get('Id_Lote')} | Stock: {lote.get('Stock_Lote')} | Estado: {lote.get('Estado_Lote')}")
             else:
                 print(f"⚠️ Producto {producto_id} sin lotes registrados")
@@ -223,12 +219,6 @@ class ProductoRepository(BaseRepository):
     def get_ultima_venta_producto(self, producto_id: int) -> Optional[Dict[str, Any]]:
         """
         🚀 FIFO 2.0: Obtiene información de la última venta de un producto
-        
-        Args:
-            producto_id: ID del producto
-            
-        Returns:
-            Dict con fecha, cantidad y precio de la última venta, o None si nunca se vendió
         """
         validate_required(producto_id, "producto_id")
         
@@ -252,7 +242,6 @@ class ProductoRepository(BaseRepository):
             resultado = self._execute_query(query, (producto_id,), fetch_one=True, use_cache=False)
             
             if resultado:
-                # Formatear fecha para mostrar
                 fecha_venta = resultado.get('Fecha_Venta')
                 if isinstance(fecha_venta, datetime):
                     resultado['Fecha_Venta'] = fecha_venta.strftime('%d/%m/%Y %H:%M')
@@ -341,7 +330,7 @@ class ProductoRepository(BaseRepository):
     
     @ExceptionHandler.handle_exception
     def reducir_stock_fifo(self, producto_id: int, cantidad: int) -> List[Dict[str, Any]]:
-        """Reduce stock usando método FIFO - VERSIÓN 2.0 SIN actualizar Stock_Unitario"""
+        """Reduce stock usando método FIFO"""
         validate_required(producto_id, "producto_id")
         validate_positive_number(cantidad, "cantidad")
         
@@ -406,9 +395,6 @@ class ProductoRepository(BaseRepository):
                     cantidad
                 )
             
-            # ✅ VERSIÓN 2.0: ELIMINADO - Ya no se actualiza Stock_Unitario en Productos
-            # El stock se calcula dinámicamente desde Lote
-            
             conn.commit()
             self._invalidate_cache_after_modification()
             
@@ -428,9 +414,10 @@ class ProductoRepository(BaseRepository):
 
     @ExceptionHandler.handle_exception
     def crear_producto_con_lote_inicial(self, datos_producto: dict, datos_lote: dict) -> int:
-        """Crea producto con su primer lote - VERSIÓN 2.0 SIN Stock_Unitario"""
-        
-        # Validar que tenemos ID_Marca
+        """
+        ✅ CORREGIDO: Crea producto sin Stock_Unitario (no existe en BD)
+        """
+        # Validar marca
         if 'ID_Marca' not in datos_producto or not datos_producto['ID_Marca']:
             raise ValueError("ID de marca es requerido")
         
@@ -446,7 +433,7 @@ class ProductoRepository(BaseRepository):
         
         if not marca_existente:
             print(f"⚠️ Marca ID {id_marca} no existe, usando marca por defecto")
-            datos_producto['ID_Marca'] = 1  # Marca por defecto
+            datos_producto['ID_Marca'] = 1
         
         conn = None
         producto_id = None
@@ -455,12 +442,11 @@ class ProductoRepository(BaseRepository):
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # Crear producto sin OUTPUT (evita conflictos con triggers)
-            # ✅ VERSIÓN 2.0: Eliminado Stock_Unitario de la inserción
+            # ✅ CORREGIDO: Sin Stock_Unitario
             insert_producto_query = """
             INSERT INTO Productos (Codigo, Nombre, Detalles, Precio_compra, Precio_venta, 
-                                Unidad_Medida, ID_Marca)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                Unidad_Medida, ID_Marca, Stock_Minimo, Activo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             """
 
             cursor.execute(insert_producto_query, (
@@ -470,7 +456,8 @@ class ProductoRepository(BaseRepository):
                 datos_producto['Precio_compra'],
                 datos_producto['Precio_venta'],
                 datos_producto.get('Unidad_Medida', 'Tabletas'),
-                datos_producto.get('ID_Marca', 1)
+                datos_producto.get('ID_Marca', 1),
+                datos_producto.get('Stock_Minimo', 10)
             ))
             
             # Obtener ID del producto insertado
@@ -486,12 +473,18 @@ class ProductoRepository(BaseRepository):
             fecha_vencimiento = datos_lote.get('fecha_vencimiento')
 
             if cantidad_inicial > 0:
-                cursor.execute("""
-                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento)
-                    VALUES (?, ?, ?)
-                """, (producto_id, cantidad_inicial, fecha_vencimiento))
+                precio_compra = datos_producto.get('Precio_compra', 0)
                 
-                # ✅ VERSIÓN 2.0: ELIMINADO - Ya no se actualiza Stock_Unitario en Productos
+                if fecha_vencimiento:
+                    cursor.execute("""
+                        INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento, Precio_Compra, Fecha_Compra)
+                        VALUES (?, ?, ?, ?, GETDATE())
+                    """, (producto_id, cantidad_inicial, fecha_vencimiento, precio_compra))
+                else:
+                    cursor.execute("""
+                        INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento, Precio_Compra, Fecha_Compra)
+                        VALUES (?, ?, NULL, ?, GETDATE())
+                    """, (producto_id, cantidad_inicial, precio_compra))
 
             conn.commit()
             self._invalidate_cache_after_modification()
@@ -509,7 +502,10 @@ class ProductoRepository(BaseRepository):
     @ExceptionHandler.handle_exception
     def aumentar_stock_compra(self, producto_id: int, cantidad_unitario: int, 
                         fecha_vencimiento: str = None, precio_compra: float = None) -> int:
-        """Aumenta stock de producto creando nuevo lote - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """
+        ✅ CORREGIDO: Solo crea lote, NO actualiza Stock_Unitario (no existe)
+        El stock se calcula con: SUM(Lote.Cantidad_Unitario)
+        """
         validate_required(producto_id, "producto_id")
         
         if cantidad_unitario <= 0:
@@ -531,7 +527,6 @@ class ProductoRepository(BaseRepository):
         if not producto:
             raise Exception(f"Producto {producto_id} no encontrado")
         
-        # Usar una sola conexión para toda la transacción
         conn = None
         lote_id = None
         
@@ -542,14 +537,14 @@ class ProductoRepository(BaseRepository):
             # Crear nuevo lote
             if fecha_venc_final is not None:
                 cursor.execute("""
-                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento) 
-                    VALUES (?, ?, ?)
-                """, (producto_id, cantidad_unitario, fecha_venc_final))
+                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento, Precio_Compra, Fecha_Compra) 
+                    VALUES (?, ?, ?, ?, GETDATE())
+                """, (producto_id, cantidad_unitario, fecha_venc_final, precio_compra))
             else:
                 cursor.execute("""
-                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento) 
-                    VALUES (?, ?, NULL)
-                """, (producto_id, cantidad_unitario))
+                    INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento, Precio_Compra, Fecha_Compra) 
+                    VALUES (?, ?, NULL, ?, GETDATE())
+                """, (producto_id, cantidad_unitario, precio_compra))
 
             # Obtener el ID del lote insertado
             cursor.execute("SELECT @@IDENTITY as id")
@@ -559,8 +554,8 @@ class ProductoRepository(BaseRepository):
             
             lote_id = result[0]
             
-            # ✅ VERSIÓN 2.0: ELIMINADO - Ya no se actualiza Stock_Unitario en tabla Productos
-            # El stock se calcula dinámicamente desde Lote
+            # ✅ ELIMINADO: Ya NO actualizamos Stock_Unitario (no existe)
+            # El stock se calcula dinámicamente con: SELECT SUM(Cantidad_Unitario) FROM Lote
             
             # Actualizar precio de compra si se proporciona
             if precio_compra and precio_compra > 0:
@@ -596,16 +591,15 @@ class ProductoRepository(BaseRepository):
     
     @ExceptionHandler.handle_exception
     def actualizar_producto(self, producto_id: int, datos: dict) -> bool:
-        """Actualiza un producto existente - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """Actualiza un producto existente"""
         validate_required(producto_id, "producto_id")
         
         if not datos:
             raise ValueError("No hay datos para actualizar")
         
         try:
-            # ✅ VERSIÓN 2.0: Stock_Unitario eliminado de campos permitidos
             campos_permitidos = ['Nombre', 'Detalles', 'Precio_compra', 'Precio_venta', 
-                               'Unidad_Medida', 'ID_Marca']
+                               'Unidad_Medida', 'ID_Marca', 'Stock_Minimo', 'Activo']
             
             campos_update = []
             valores = []
@@ -634,7 +628,7 @@ class ProductoRepository(BaseRepository):
     
     @ExceptionHandler.handle_exception
     def eliminar_producto(self, producto_id: int) -> bool:
-        """Elimina un producto y todos sus lotes (solo si no tiene stock) - VERSIÓN 2.0"""
+        """Elimina un producto y todos sus lotes"""
         validate_required(producto_id, "producto_id")
         
         conn = None
@@ -642,12 +636,12 @@ class ProductoRepository(BaseRepository):
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # Verificar que no tenga stock
+            # Verificar que no tenga stock (opcional)
             cursor.execute("SELECT SUM(Cantidad_Unitario) as Stock_Total FROM Lote WHERE Id_Producto = ?", (producto_id,))
             resultado = cursor.fetchone()
             stock_total = resultado[0] if resultado and resultado[0] else 0
             
-            # Eliminar lotes vacíos y producto
+            # Eliminar lotes y producto
             cursor.execute("DELETE FROM Lote WHERE Id_Producto = ?", (producto_id,))
             cursor.execute("DELETE FROM Productos WHERE id = ?", (producto_id,))
             productos_eliminados = cursor.rowcount
@@ -669,7 +663,7 @@ class ProductoRepository(BaseRepository):
     
     @ExceptionHandler.handle_exception
     def eliminar_lote(self, lote_id: int) -> bool:
-        """Elimina un lote específico - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """Elimina un lote específico"""
         validate_required(lote_id, "lote_id")
         
         try:
@@ -684,9 +678,6 @@ class ProductoRepository(BaseRepository):
             filas_afectadas = self._execute_query("DELETE FROM Lote WHERE id = ?", (lote_id,), fetch_all=False, use_cache=False)
             
             if filas_afectadas > 0:
-                # ✅ VERSIÓN 2.0: ELIMINADO - Ya no se actualiza Stock_Unitario en Productos
-                # El stock se calcula dinámicamente desde Lote
-                
                 self._invalidate_cache_after_modification()
                 return True
             else:
@@ -696,7 +687,7 @@ class ProductoRepository(BaseRepository):
             raise Exception(f"Error eliminando lote: {str(e)}")
     
     def actualizar_lote(self, lote_id: int, datos: dict) -> bool:
-        """Actualiza un lote específico - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """Actualiza un lote específico"""
         validate_required(lote_id, "lote_id")
         
         if not datos:
@@ -710,7 +701,6 @@ class ProductoRepository(BaseRepository):
             
             producto_id = lote_info['Id_Producto']
             
-            # ✅ VERSIÓN 2.0: Ya no se maneja Stock_Unitario
             campos_permitidos = ['Cantidad_Unitario', 'Fecha_Vencimiento', 'Precio_Compra']
             campos_update = []
             valores = []
@@ -729,9 +719,6 @@ class ProductoRepository(BaseRepository):
             filas_afectadas = self._execute_query(query, valores, fetch_all=False, use_cache=False)
             
             if filas_afectadas > 0:
-                # ✅ VERSIÓN 2.0: ELIMINADO - Ya no se actualiza Stock_Unitario en Productos
-                # El stock se calcula dinámicamente desde Lote
-                
                 self._invalidate_cache_after_modification()
                 return True
             else:
@@ -774,17 +761,17 @@ class ProductoRepository(BaseRepository):
         return self._execute_query(query, (dias,))
     
     def get_valor_inventario(self) -> Dict[str, Any]:
-        """Valor total del inventario - VERSIÓN 2.0"""
+        """Valor total del inventario"""
         query = """
         SELECT 
-            SUM(stock_calculado.Stock_Total * p.Precio_compra) as Valor_Compra,
-            SUM(stock_calculado.Stock_Total * p.Precio_venta) as Valor_Venta,
+            SUM(stock_calculado.Stock_Real * p.Precio_compra) as Valor_Compra,
+            SUM(stock_calculado.Stock_Real * p.Precio_venta) as Valor_Venta,
             COUNT(*) as Total_Productos,
-            SUM(stock_calculado.Stock_Total) as Total_Unidades
+            SUM(stock_calculado.Stock_Real) as Total_Unidades
         FROM Productos p
         INNER JOIN (
             SELECT l.Id_Producto, 
-                SUM(l.Cantidad_Unitario) as Stock_Total
+                SUM(l.Cantidad_Unitario) as Stock_Real
             FROM Lote l
             GROUP BY l.Id_Producto
             HAVING SUM(l.Cantidad_Unitario) > 0
@@ -794,7 +781,9 @@ class ProductoRepository(BaseRepository):
     
     @ExceptionHandler.handle_exception
     def crear_producto(self, datos_producto: dict) -> int:
-        """Crea un producto sin lote inicial - VERSIÓN 2.0 SIN Stock_Unitario"""
+        """
+        ✅ CORREGIDO: Crea producto sin Stock_Unitario
+        """
         validate_required(datos_producto.get('Codigo'), "Codigo")
         validate_required(datos_producto.get('Nombre'), "Nombre")
         
@@ -803,12 +792,11 @@ class ProductoRepository(BaseRepository):
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # Insertar producto sin lote
-            # ✅ VERSIÓN 2.0: Eliminado Stock_Unitario de la inserción
+            # ✅ Sin Stock_Unitario
             cursor.execute("""
                 INSERT INTO Productos (Codigo, Nombre, Detalles, Precio_compra, Precio_venta, 
-                                    Unidad_Medida, ID_Marca)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    Unidad_Medida, ID_Marca, Stock_Minimo, Activo)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
                 datos_producto['Codigo'],
                 datos_producto['Nombre'],
@@ -816,7 +804,8 @@ class ProductoRepository(BaseRepository):
                 datos_producto['Precio_compra'],
                 datos_producto['Precio_venta'],
                 datos_producto.get('Unidad_Medida', 'Tabletas'),
-                datos_producto.get('ID_Marca', 1)
+                datos_producto.get('ID_Marca', 1),
+                datos_producto.get('Stock_Minimo', 10)
             ))
             
             # Obtener ID del producto insertado
@@ -840,9 +829,7 @@ class ProductoRepository(BaseRepository):
                 conn.close()
 
     def crear_marca(self, nombre_marca: str) -> int:
-        """
-        Crea una nueva marca en la base de datos - VERSIÓN 2.0
-        """
+        """Crea una nueva marca en la base de datos"""
         try:
             print(f"🏷️ Creando marca: '{nombre_marca}'")
             
@@ -853,7 +840,7 @@ class ProductoRepository(BaseRepository):
             
             nombre_limpio = nombre_marca.strip()
             
-            # Verificar si ya existe (case-insensitive)
+            # Verificar si ya existe
             marca_existente = self._execute_query(
                 "SELECT id FROM Marca WHERE LOWER(Nombre) = LOWER(?)", 
                 (nombre_limpio,), 
@@ -863,7 +850,7 @@ class ProductoRepository(BaseRepository):
             
             if marca_existente:
                 print(f"⚠️ Marca '{nombre_limpio}' ya existe con ID: {marca_existente['id']}")
-                return 0  # Ya existe
+                return 0
             
             # Crear nueva marca
             conn = None
@@ -871,7 +858,6 @@ class ProductoRepository(BaseRepository):
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 
-                # SQL Server: Usar OUTPUT INSERTED.id
                 query = """
                 INSERT INTO Marca (Nombre, Detalles) 
                 OUTPUT INSERTED.id
@@ -887,7 +873,6 @@ class ProductoRepository(BaseRepository):
                 nueva_marca_id = resultado[0]
                 conn.commit()
                 
-                # Invalidar caché de marcas
                 self._invalidate_cache_after_modification()
                 
                 print(f"✅ Marca '{nombre_limpio}' creada con ID: {nueva_marca_id}")
@@ -906,14 +891,14 @@ class ProductoRepository(BaseRepository):
             print(f"❌ Error creando marca: {e}")
             traceback.print_exc()
             return -1
+    
     # ===============================
-    # 🚀 SISTEMA FIFO 2.0 - MÉTODOS NUEVOS
-    # Usan vistas y procedimientos almacenados de SQL Server
+    # 🚀 MÉTODOS FIFO 2.0 - CORREGIDOS
     # ===============================
     
     def obtener_stock_actual(self) -> List[Dict[str, Any]]:
         """
-        🚀 FIFO 2.0: Obtiene stock REAL directamente desde tabla Producto
+        ✅ CORREGIDO: Obtiene stock REAL calculado desde lotes
         """
         try:
             query = """
@@ -923,118 +908,129 @@ class ProductoRepository(BaseRepository):
                 p.Nombre,
                 m.Nombre as Marca,
                 p.Unidad_Medida,
-                p.Stock_Minimo, 
-                p.Stock_Maximo,
+                ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                        FROM Lote l 
+                        WHERE l.Id_Producto = p.id), 0) as Stock_Real,
+                p.Stock_Minimo,
                 p.Activo,
-                ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Real,
-                -- Calcular Estado_Stock basado en umbrales
                 CASE 
-                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= 0 THEN 'CRÍTICO'
-                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo THEN 'CRÍTICO'
-                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 'BAJO'
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= 0 
+                        THEN 'CRÍTICO'
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo 
+                        THEN 'BAJO'
                     ELSE 'NORMAL'
                 END as Estado_Stock,
-                -- Información de vencimiento desde lotes activos
                 (SELECT MIN(l.Fecha_Vencimiento) 
                 FROM Lote l 
                 WHERE l.Id_Producto = p.id 
-                AND l.Cantidad_Unitario > 0 
-                AND l.Fecha_Vencimiento IS NOT NULL) as Proximo_Vencimiento,
-                (SELECT COUNT(*) 
-                FROM Lote l 
-                WHERE l.Id_Producto = p.id 
                 AND l.Cantidad_Unitario > 0
-                AND l.Fecha_Vencimiento IS NOT NULL
-                AND DATEDIFF(day, GETDATE(), l.Fecha_Vencimiento) <= 60
-                AND DATEDIFF(day, GETDATE(), l.Fecha_Vencimiento) >= 0) as Lotes_Proximos_Vencer
+                AND l.Fecha_Vencimiento IS NOT NULL) as Proximo_Vencimiento
             FROM Productos p
             LEFT JOIN Marca m ON p.ID_Marca = m.id
             WHERE p.Activo = 1
             ORDER BY 
                 CASE 
                     WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= 0 THEN 1
-                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo THEN 1
-                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= (p.Stock_Minimo + (p.Stock_Maximo - p.Stock_Minimo) * 0.3) THEN 2
+                    WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo THEN 2
                     ELSE 3
                 END,
                 p.Nombre
             """
             
+            # ✅ CORRECCIÓN: Validar tipo de retorno
             resultados = self._execute_query(query, use_cache=False)
-            print(f"📊 Stock actual obtenido: {len(resultados)} productos - Sistema FIFO 2.0")
             
-            # Debug: Mostrar primeros 3 productos con stock
-            for i, prod in enumerate(resultados[:3]):
-                print(f"   🔍 {prod['Codigo']} - Stock: {prod['Stock_Real']} Estado: {prod['Estado_Stock']}")
+            if not isinstance(resultados, list):
+                print(f"⚠️ _execute_query retornó tipo incorrecto: {type(resultados)}")
+                resultados = []
             
-            return resultados
+            print(f"📊 Stock actual obtenido: {len(resultados)} productos")
+            
+            return resultados if resultados else []
             
         except Exception as e:
             print(f"❌ Error obteniendo stock actual: {e}")
+            import traceback
             traceback.print_exc()
             return []
-    
+        
     def obtener_alertas_inventario(self) -> List[Dict[str, Any]]:
         """
-        🚀 FIFO 2.0: Obtiene todas las alertas activas usando vista vw_Alertas_Inventario
+        ✅ CORREGIDO: Obtiene alertas SIN usar vista
         """
         try:
             query = """
+            -- Alerta 1: Stock bajo
             SELECT 
-                Tipo_Alerta,
-                Codigo,
-                Nombre AS Producto,              -- ✅ Existe como "Nombre"
-                Stock_Minimo,
-                Stock_Real AS Stock_Actual,      -- ✅ Existe como "Stock_Real"
-                Detalle,
-                -- ✅ Campos que NO existen en la vista, se calculan:
-                CASE 
-                    WHEN Tipo_Alerta = 'STOCK BAJO' THEN 2
-                    WHEN Tipo_Alerta = 'PRODUCTO PRÓXIMO A VENCER' THEN 2
-                    WHEN Tipo_Alerta = 'PRODUCTO VENCIDO' THEN 3
-                    ELSE 1
-                END AS Prioridad
-            FROM vw_Alertas_Inventario
+                'STOCK BAJO' AS Tipo_Alerta,
+                p.Codigo,
+                p.Nombre AS Producto,
+                p.Stock_Minimo,
+                ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                        FROM Lote l 
+                        WHERE l.Id_Producto = p.id), 0) AS Stock_Actual,
+                CONCAT('Stock actual: ', 
+                    ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0),
+                    ' unidades (mínimo: ', p.Stock_Minimo, ')') AS Detalle,
+                2 AS Prioridad
+            FROM Productos p
+            WHERE p.Activo = 1
+            AND ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo
+            AND ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) > 0
+
             UNION ALL
+
+            -- Alerta 2: Próximo a vencer
+            SELECT 
+                'PRODUCTO PRÓXIMO A VENCER' AS Tipo_Alerta,
+                p.Codigo,
+                p.Nombre AS Producto,
+                p.Stock_Minimo,
+                l.Cantidad_Unitario AS Stock_Actual,
+                CONCAT('Vence el ', FORMAT(l.Fecha_Vencimiento, 'dd/MM/yyyy'), 
+                    ' (', DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento), ' días)') AS Detalle,
+                2 AS Prioridad
+            FROM Lote l
+            INNER JOIN Productos p ON l.Id_Producto = p.id
+            WHERE l.Cantidad_Unitario > 0
+            AND l.Fecha_Vencimiento IS NOT NULL
+            AND l.Fecha_Vencimiento >= GETDATE()
+            AND l.Fecha_Vencimiento <= DATEADD(DAY, 30, GETDATE())
+
+            UNION ALL
+
+            -- Alerta 3: Vencido
             SELECT 
                 'PRODUCTO VENCIDO' AS Tipo_Alerta,
                 p.Codigo,
                 p.Nombre AS Producto,
                 p.Stock_Minimo,
                 l.Cantidad_Unitario AS Stock_Actual,
-                CONCAT('Lote vencido desde: ', FORMAT(l.Fecha_Vencimiento, 'yyyy-MM-dd')) AS Detalle,
+                CONCAT('Venció el ', FORMAT(l.Fecha_Vencimiento, 'dd/MM/yyyy'), 
+                    ' (', ABS(DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento)), ' días atrás)') AS Detalle,
                 3 AS Prioridad
             FROM Lote l
             INNER JOIN Productos p ON l.Id_Producto = p.id
-            WHERE l.Fecha_Vencimiento < GETDATE()
-            AND l.Cantidad_Unitario > 0
-            UNION ALL
-            SELECT 
-                'STOCK BAJO' AS Tipo_Alerta,
-                p.Codigo,
-                p.Nombre AS Producto,
-                p.Stock_Minimo,
-                l.Cantidad_Unitario AS Stock_Actual,
-                CONCAT('Lote con stock bajo: ', l.Cantidad_Unitario, ' unidades') AS Detalle,
-                2 AS Prioridad
-            FROM Lote l
-            INNER JOIN Productos p ON l.Id_Producto = p.id
-            WHERE l.Cantidad_Unitario > 0 
-            AND l.Cantidad_Unitario <= p.Stock_Minimo
-            AND l.Fecha_Vencimiento >= GETDATE()
-            ORDER BY 
-                Prioridad DESC, 
-                Tipo_Alerta
+            WHERE l.Cantidad_Unitario > 0
+            AND l.Fecha_Vencimiento IS NOT NULL
+            AND l.Fecha_Vencimiento < GETDATE()
+
+            ORDER BY Prioridad DESC, Tipo_Alerta
             """
             
+            # ✅ CORRECCIÓN CRÍTICA: Asegurar que retorna lista
             alertas = self._execute_query(query, use_cache=False)
             
-            if alertas:
-                print(f"⚠️  {len(alertas)} alertas de inventario detectadas")
-                # Agrupar por tipo para logging
+            # ✅ Validar que alertas es una lista
+            if not isinstance(alertas, list):
+                print(f"⚠️ _execute_query retornó tipo incorrecto: {type(alertas)}")
+                alertas = []
+            
+            if alertas and len(alertas) > 0:  # ✅ Verificar antes de usar len()
+                print(f"⚠️ {len(alertas)} alertas de inventario detectadas")
                 tipos = {}
                 for alerta in alertas:
-                    tipo = alerta['Tipo_Alerta']
+                    tipo = alerta.get('Tipo_Alerta', 'DESCONOCIDO')
                     tipos[tipo] = tipos.get(tipo, 0) + 1
                 
                 for tipo, cantidad in tipos.items():
@@ -1042,400 +1038,93 @@ class ProductoRepository(BaseRepository):
             else:
                 print("✅ No hay alertas de inventario")
             
-            return alertas
+            return alertas if alertas else []
             
         except Exception as e:
             print(f"❌ Error obteniendo alertas: {e}")
+            import traceback
             traceback.print_exc()
             return []
-    
+        
     def obtener_lotes_activos_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
         """
-        🚀 FIFO 2.0: Obtiene detalle de lotes activos, vencidos y bajo stock usando vista vw_Lotes_Activos
+        ✅ CORREGIDO: Obtiene lotes SIN usar vista
         """
         try:
-            if producto_id:
-                query = """
-                SELECT 
-                    id AS Id_Lote,                    
-                    Id_Producto,
-                    Codigo AS Producto_Codigo,        
-                    Producto AS Producto_Nombre,      
-                    Marca,                            
-                    Cantidad_Inicial,
-                    Stock_Actual AS Stock_Lote,       
-                    Precio_Compra,
-                    Fecha_Compra,
-                    Fecha_Vencimiento,
-                    Dias_para_Vencer,
-                    Estado_Vencimiento,
-                    Estado_Lote,
-                    Id_Compra,
-                    Proveedor
-                FROM vw_Lotes_Activos
-                WHERE Id_Producto = ?
-                UNION ALL
-                SELECT 
-                    l.id AS Id_Lote,
-                    l.Id_Producto,
-                    p.Codigo AS Producto_Codigo,
-                    p.Nombre AS Producto_Nombre,
-                    m.Nombre AS Marca,
-                    l.Cantidad_Unitario AS Cantidad_Inicial,
-                    l.Cantidad_Unitario AS Stock_Lote,
-                    l.Precio_Compra,
-                    c.Fecha AS Fecha_Compra,
-                    l.Fecha_Vencimiento,
-                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
-                    'VENCIDO' AS Estado_Vencimiento,
-                    'VENCIDO' AS Estado_Lote,
-                    l.Id_Compra AS Id_Compra,
-                    prov.Nombre AS Proveedor
-                FROM Lote l
-                INNER JOIN Productos p ON l.Id_Producto = p.id
-                LEFT JOIN Marca m ON p.ID_Marca = m.id
-                LEFT JOIN Compra c ON l.Id_Compra = c.id
-                LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
-                WHERE l.Id_Producto = ?
-                AND l.Fecha_Vencimiento < GETDATE()
-                UNION ALL
-                SELECT 
-                    l.id AS Id_Lote,
-                    l.Id_Producto,
-                    p.Codigo AS Producto_Codigo,
-                    p.Nombre AS Producto_Nombre,
-                    m.Nombre AS Marca,
-                    l.Cantidad_Unitario AS Cantidad_Inicial,
-                    l.Cantidad_Unitario AS Stock_Lote,
-                    l.Precio_Compra,
-                    c.Fecha AS Fecha_Compra,
-                    l.Fecha_Vencimiento,
-                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
-                    'BAJO STOCK' AS Estado_Vencimiento,
-                    'BAJO STOCK' AS Estado_Lote,
-                    l.Id_Compra AS Id_Compra,
-                    prov.Nombre AS Proveedor
-                FROM Lote l
-                INNER JOIN Productos p ON l.Id_Producto = p.id
-                LEFT JOIN Marca m ON p.ID_Marca = m.id
-                LEFT JOIN Compra c ON l.Id_Compra = c.id
-                LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
-                WHERE l.Id_Producto = ?
-                AND l.Cantidad_Unitario < p.Stock_Minimo
-                AND l.Cantidad_Unitario > 0
-                UNION ALL
-                SELECT 
-                    l.id AS Id_Lote,
-                    l.Id_Producto,
-                    p.Codigo AS Producto_Codigo,
-                    p.Nombre AS Producto_Nombre,
-                    m.Nombre AS Marca,
-                    l.Cantidad_Unitario AS Cantidad_Inicial,
-                    l.Cantidad_Unitario AS Stock_Lote,
-                    l.Precio_Compra,
-                    c.Fecha AS Fecha_Compra,
-                    l.Fecha_Vencimiento,
-                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
-                    'AGOTADO' AS Estado_Vencimiento,
-                    'AGOTADO' AS Estado_Lote,
-                    l.Id_Compra AS Id_Compra,
-                    prov.Nombre AS Proveedor
-                FROM Lote l
-                INNER JOIN Productos p ON l.Id_Producto = p.id
-                LEFT JOIN Marca m ON p.ID_Marca = m.id
-                LEFT JOIN Compra c ON l.Id_Compra = c.id
-                LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
-                WHERE l.Id_Producto = ?
-                AND l.Cantidad_Unitario = 0
-                ORDER BY Dias_para_Vencer, Estado_Lote DESC
-                """
-                params = (producto_id, producto_id, producto_id, producto_id)
+            if producto_id and producto_id > 0:
+                where_clause = "WHERE l.Id_Producto = ?"
+                params = (producto_id,)
             else:
-                query = """
-                SELECT 
-                    id AS Id_Lote,                    
-                    Id_Producto,
-                    Codigo AS Producto_Codigo,        
-                    Producto AS Producto_Nombre,      
-                    Marca,                            
-                    Cantidad_Inicial,
-                    Stock_Actual AS Stock_Lote,       
-                    Precio_Compra,
-                    Fecha_Compra,
-                    Fecha_Vencimiento,
-                    Dias_para_Vencer,
-                    Estado_Vencimiento,
-                    Estado_Lote,
-                    Id_Compra,
-                    Proveedor
-                FROM vw_Lotes_Activos
-                UNION ALL
-                SELECT 
-                    l.id AS Id_Lote,
-                    l.Id_Producto,
-                    p.Codigo AS Producto_Codigo,
-                    p.Nombre AS Producto_Nombre,
-                    m.Nombre AS Marca,
-                    l.Cantidad_Unitario AS Cantidad_Inicial,
-                    l.Cantidad_Unitario AS Stock_Lote,
-                    l.Precio_Compra,
-                    c.Fecha AS Fecha_Compra,
-                    l.Fecha_Vencimiento,
-                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
-                    'VENCIDO' AS Estado_Vencimiento,
-                    'VENCIDO' AS Estado_Lote,
-                    l.Id_Compra AS Id_Compra,
-                    prov.Nombre AS Proveedor
-                FROM Lote l
-                INNER JOIN Productos p ON l.Id_Producto = p.id
-                LEFT JOIN Marca m ON p.ID_Marca = m.id
-                LEFT JOIN Compra c ON l.Id_Compra = c.id
-                LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
-                WHERE l.Fecha_Vencimiento < GETDATE()
-                UNION ALL
-                SELECT 
-                    l.id AS Id_Lote,
-                    l.Id_Producto,
-                    p.Codigo AS Producto_Codigo,
-                    p.Nombre AS Producto_Nombre,
-                    m.Nombre AS Marca,
-                    l.Cantidad_Unitario AS Cantidad_Inicial,
-                    l.Cantidad_Unitario AS Stock_Lote,
-                    l.Precio_Compra,
-                    c.Fecha AS Fecha_Compra,
-                    l.Fecha_Vencimiento,
-                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
-                    'BAJO STOCK' AS Estado_Vencimiento,
-                    'BAJO STOCK' AS Estado_Lote,
-                    l.Id_Compra AS Id_Compra,
-                    prov.Nombre AS Proveedor
-                FROM Lote l
-                INNER JOIN Productos p ON l.Id_Producto = p.id
-                LEFT JOIN Marca m ON p.ID_Marca = m.id
-                LEFT JOIN Compra c ON l.Id_Compra = c.id
-                LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
-                WHERE l.Cantidad_Unitario < p.Stock_Minimo
-                AND l.Cantidad_Unitario > 0
-                UNION ALL
-                SELECT 
-                    l.id AS Id_Lote,
-                    l.Id_Producto,
-                    p.Codigo AS Producto_Codigo,
-                    p.Nombre AS Producto_Nombre,
-                    m.Nombre AS Marca,
-                    l.Cantidad_Unitario AS Cantidad_Inicial,
-                    l.Cantidad_Unitario AS Stock_Lote,
-                    l.Precio_Compra,
-                    c.Fecha AS Fecha_Compra,
-                    l.Fecha_Vencimiento,
-                    DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
-                    'AGOTADO' AS Estado_Vencimiento,
-                    'AGOTADO' AS Estado_Lote,
-                    l.Id_Compra AS Id_Compra,
-                    prov.Nombre AS Proveedor
-                FROM Lote l
-                INNER JOIN Productos p ON l.Id_Producto = p.id
-                LEFT JOIN Marca m ON p.ID_Marca = m.id
-                LEFT JOIN Compra c ON l.Id_Compra = c.id
-                LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
-                WHERE l.Cantidad_Unitario = 0
-                ORDER BY Dias_para_Vencer, Estado_Lote DESC
-                """
+                where_clause = ""
                 params = ()
             
+            query = f"""
+            SELECT 
+                l.id AS Id_Lote,
+                l.Id_Producto,
+                p.Codigo AS Producto_Codigo,
+                p.Nombre AS Producto_Nombre,
+                m.Nombre AS Marca,
+                l.Cantidad_Unitario AS Stock_Lote,
+                l.Precio_Compra,
+                l.Fecha_Compra,
+                l.Fecha_Vencimiento,
+                DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
+                CASE 
+                    WHEN l.Cantidad_Unitario = 0 THEN 'AGOTADO'
+                    WHEN l.Fecha_Vencimiento < GETDATE() THEN 'VENCIDO'
+                    WHEN l.Fecha_Vencimiento <= DATEADD(DAY, 30, GETDATE()) THEN 'PRÓXIMO A VENCER'
+                    ELSE 'VIGENTE'
+                END AS Estado_Vencimiento,
+                CASE 
+                    WHEN l.Cantidad_Unitario = 0 THEN 'AGOTADO'
+                    WHEN l.Cantidad_Unitario <= p.Stock_Minimo THEN 'BAJO STOCK'
+                    ELSE 'ACTIVO'
+                END AS Estado_Lote,
+                l.Id_Compra,
+                ISNULL(prov.Nombre, 'Sin proveedor') AS Proveedor
+            FROM Lote l
+            INNER JOIN Productos p ON l.Id_Producto = p.id
+            LEFT JOIN Marca m ON p.ID_Marca = m.id
+            LEFT JOIN Compra c ON l.Id_Compra = c.id
+            LEFT JOIN Proveedor prov ON c.Id_Proveedor = prov.id
+            {where_clause}
+            ORDER BY 
+                CASE WHEN l.Cantidad_Unitario > 0 THEN 0 ELSE 1 END,
+                l.Fecha_Vencimiento ASC,
+                l.id ASC
+            """
+            
+            # ✅ CORRECCIÓN: Validar tipo de retorno
             lotes = self._execute_query(query, params, use_cache=False)
             
-            # ✅ CONVERTIR FECHAS A STRING PARA QML
+            if not isinstance(lotes, list):
+                print(f"⚠️ _execute_query retornó tipo incorrecto: {type(lotes)}")
+                lotes = []
+            
+            # Convertir fechas a string
             for lote in lotes:
-                # Convertir Fecha_Vencimiento
                 if lote.get('Fecha_Vencimiento'):
                     try:
                         fecha = lote['Fecha_Vencimiento']
                         if hasattr(fecha, 'strftime'):
                             lote['Fecha_Vencimiento'] = fecha.strftime('%Y-%m-%d')
-                        else:
-                            lote['Fecha_Vencimiento'] = str(fecha)
                     except:
                         lote['Fecha_Vencimiento'] = ""
-                else:
-                    lote['Fecha_Vencimiento'] = ""
                 
-                # Convertir Fecha_Compra
                 if lote.get('Fecha_Compra'):
                     try:
                         fecha = lote['Fecha_Compra']
                         if hasattr(fecha, 'strftime'):
                             lote['Fecha_Compra'] = fecha.strftime('%Y-%m-%d')
-                        else:
-                            lote['Fecha_Compra'] = str(fecha)
                     except:
                         lote['Fecha_Compra'] = ""
-                else:
-                    lote['Fecha_Compra'] = ""
             
-            print(f"📦 Lotes obtenidos: {len(lotes)} lotes (activos + vencidos + bajo stock + agotados) - Sistema FIFO 2.0")
-            return lotes
+            print(f"📦 Lotes obtenidos: {len(lotes)} lotes")
+            return lotes if lotes else []
             
         except Exception as e:
-            print(f"❌ Error obteniendo lotes (vista): {e}")
-            return []
-    
-    def obtener_costo_inventario(self) -> List[Dict[str, Any]]:
-        """
-        🚀 FIFO 2.0: Obtiene valorización del inventario usando vista vw_Costo_Inventario
-        """
-        try:
-            query = """
-            SELECT 
-                id AS Id_Producto,                          -- ✅ Existe como "id"
-                Codigo,                                     -- ✅ Existe
-                Nombre AS Producto,                         -- ✅ Existe como "Nombre"
-                Unidad_Medida,                              -- ✅ Existe
-                Stock_Total,                                -- ✅ Existe
-                Costo_Promedio_Real AS Costo_Promedio,      -- ✅ Existe
-                Valor_Inventario_Costo,                     -- ✅ Existe
-                Valor_Inventario_Venta,                     -- ✅ Existe
-                Ganancia_Potencial AS Margen_Potencial,     -- ✅ Existe
-                -- ✅ Porcentaje_Margen NO existe, se calcula:
-                CASE 
-                    WHEN Valor_Inventario_Costo > 0 
-                    THEN (Ganancia_Potencial / Valor_Inventario_Costo * 100)
-                    ELSE 0
-                END AS Porcentaje_Margen
-            FROM vw_Costo_Inventario
-            ORDER BY Valor_Inventario_Costo DESC
-            """
-            
-            valoracion = self._execute_query(query, use_cache=False)
-            
-            if valoracion:
-                total_costo = sum(item['Valor_Inventario_Costo'] or 0 for item in valoracion)
-                total_venta = sum(item['Valor_Inventario_Venta'] or 0 for item in valoracion)
-                print(f"💰 Valorización de inventario:")
-                print(f"   - Valor en costo: ${total_costo:,.2f}")
-                print(f"   - Valor en venta: ${total_venta:,.2f}")
-                print(f"   - Margen potencial: ${total_venta - total_costo:,.2f}")
-            
-            return valoracion
-            
-        except Exception as e:
-            print(f"❌ Error obteniendo valorización inventario: {e}")
+            print(f"❌ Error obteniendo lotes: {e}")
             import traceback
             traceback.print_exc()
             return []
-    
-    def obtener_rotacion_inventario(self, dias: int = 30) -> List[Dict[str, Any]]:
-        """
-        🚀 FIFO 2.0: Obtiene análisis de rotación de inventario usando vista vw_Rotacion_Inventario
-        """
-        try:
-            query = """
-            SELECT 
-                id AS Id_Producto,                                  -- ✅ Existe como "id"
-                Codigo,                                             -- ✅ Existe
-                Nombre AS Producto,                                 -- ✅ Existe como "Nombre"
-                Unidad_Medida,                                      -- ✅ Existe
-                Stock_Promedio AS Stock_Actual,                     -- ✅ Existe
-                Unidades_Vendidas_30_Dias AS Ventas_Periodo,        -- ✅ Existe
-                0 AS Compras_Periodo,                               -- ✅ NO EXISTE, poner 0
-                Dias_Inventario AS Dias_Stock,                      -- ✅ Existe
-                Indice_Rotacion,                                    -- ✅ Existe
-                -- ✅ Clasificacion NO existe, se calcula:
-                CASE 
-                    WHEN Indice_Rotacion >= 12 THEN 'A'
-                    WHEN Indice_Rotacion >= 6 THEN 'B'
-                    ELSE 'C'
-                END AS Clasificacion
-            FROM vw_Rotacion_Inventario
-            ORDER BY Indice_Rotacion DESC
-            """
-            
-            rotacion = self._execute_query(query, use_cache=False)
-            
-            if rotacion:
-                print(f"📈 Análisis de rotación (últimos {dias} días):")
-                clasificaciones = {}
-                for item in rotacion:
-                    clasif = item['Clasificacion']
-                    clasificaciones[clasif] = clasificaciones.get(clasif, 0) + 1
-                
-                for clasif, count in clasificaciones.items():
-                    print(f"   - {clasif}: {count} productos")
-            
-            return rotacion
-            
-        except Exception as e:
-            print(f"❌ Error obteniendo rotación de inventario: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
-    
-    def obtener_dashboard_metricas(self) -> Dict[str, Any]:
-        """
-        🚀 FIFO 2.0: Obtiene métricas consolidadas para dashboard
-        """
-        try:
-            metricas = {}
-            
-            # 1. Total productos activos
-            query_productos = """
-            SELECT 
-                COUNT(*) as total_productos,
-                SUM(CASE WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) <= p.Stock_Minimo 
-                    THEN 1 ELSE 0 END) as productos_bajo_stock,
-                SUM(CASE WHEN ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) = 0 
-                    THEN 1 ELSE 0 END) as productos_sin_stock
-            FROM Productos p
-            WHERE p.Activo = 1
-            """
-            
-            resultado_productos = self._execute_query(query_productos, fetch_one=True)
-            if resultado_productos:
-                metricas.update(resultado_productos)
-            
-            # 2. Valor total del inventario
-            query_valor = """
-            SELECT 
-                SUM(stock_calculado.Stock_Total * p.Precio_compra) as valor_inventario_costo,
-                SUM(stock_calculado.Stock_Total * p.Precio_venta) as valor_inventario_venta
-            FROM Productos p
-            INNER JOIN (
-                SELECT l.Id_Producto, 
-                    SUM(l.Cantidad_Unitario) as Stock_Total
-                FROM Lote l
-                GROUP BY l.Id_Producto
-            ) stock_calculado ON p.id = stock_calculado.Id_Producto
-            WHERE p.Activo = 1
-            """
-            
-            resultado_valor = self._execute_query(query_valor, fetch_one=True)
-            if resultado_valor:
-                metricas.update(resultado_valor)
-            
-            # 3. Lotes por vencer
-            query_lotes = """
-            SELECT COUNT(*) as lotes_proximos_vencer
-            FROM Lote l
-            WHERE l.Fecha_Vencimiento <= DATEADD(DAY, 30, GETDATE())
-            AND l.Fecha_Vencimiento >= GETDATE()
-            AND l.Cantidad_Unitario > 0
-            """
-            
-            resultado_lotes = self._execute_query(query_lotes, fetch_one=True)
-            if resultado_lotes:
-                metricas.update(resultado_lotes)
-            
-            # 4. Alertas activas
-            metricas['alertas_activas'] = len(self.obtener_alertas_inventario())
-            
-            print(f"📊 Métricas dashboard obtenidas:")
-            print(f"   - Total productos: {metricas.get('total_productos', 0)}")
-            print(f"   - Productos bajo stock: {metricas.get('productos_bajo_stock', 0)}")
-            print(f"   - Valor inventario: ${metricas.get('valor_inventario_costo', 0):,.2f}")
-            print(f"   - Lotes por vencer: {metricas.get('lotes_proximos_vencer', 0)}")
-            
-            return metricas
-            
-        except Exception as e:
-            print(f"❌ Error obteniendo métricas dashboard: {e}")
-            return {}
