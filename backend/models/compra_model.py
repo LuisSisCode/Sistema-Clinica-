@@ -47,6 +47,9 @@ class CompraModel(QObject):
     proveedorCompraCompletada = Signal(int, float)
     proveedorDatosActualizados = Signal()
     filtrosChanged = Signal()
+
+    # Signal asociada (agregar arriba con los otros signals)
+    compraDetalleChanged = Signal()
     
     def __init__(self):
         super().__init__()
@@ -76,6 +79,9 @@ class CompraModel(QObject):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update_compras)
         self.update_timer.start(120000)  # 2 minutos
+
+        # Variable interna (agregar en __init__)
+        self._compra_actual = {}
         
         # Cargar datos iniciales
         self._cargar_compras_recientes()
@@ -179,21 +185,30 @@ class CompraModel(QObject):
     def datos_originales(self):
         return self._datos_originales
     
+    @Property('QVariantMap', notify=compraDetalleChanged)
+    def compra_actual(self):
+        """Compra actualmente seleccionada con sus detalles"""
+        return self._compra_actual
+    
     # ===============================
     # MÉTODOS DE CARGA DE DATOS
     # ===============================
     def _cargar_compras_recientes(self):
         """Carga compras del mes actual"""
         try:
-            compras = safe_execute(self.compra_repo.get_active) or []
+            compras = self.compra_repo.get_active()
             self._compras_recientes = compras
+            
+            # DEBUG: Verificar productos
+            for compra in compras:
+                prod_count = compra.get('total_productos', 0)
+                prod_texto = compra.get('productos_texto', '')
+                print(f"  Compra {compra.get('id')}: {prod_count} productos - '{prod_texto[:50]}'")
+            
             self.comprasRecientesChanged.emit()
-            print(f"📦 Compras recientes cargadas: {len(compras)}")
-            self.estadisticasChanged.emit()
+            print(f"✅ {len(compras)} compras cargadas con productos")
         except Exception as e:
             print(f"❌ Error cargando compras: {e}")
-            self._compras_recientes = []
-            self.comprasRecientesChanged.emit()
     
     def _cargar_proveedores(self):
         """Carga lista de proveedores"""
@@ -297,6 +312,19 @@ class CompraModel(QObject):
             
         except Exception as e:
             print(f"❌ Error obteniendo datos: {e}")
+            self.operacionError.emit(f"Error: {str(e)}")
+            return {}
+        
+    @Slot(int, result='QVariantMap')
+    def get_compra_completa(self, compra_id: int):
+        """Obtiene detalle completo de una compra para QML"""
+        try:
+            compra = self.compra_repo.get_compra_completa(compra_id)
+            if compra:
+                return compra
+            return {}
+        except Exception as e:
+            print(f"❌ Error obteniendo compra completa: {e}")
             self.operacionError.emit(f"Error: {str(e)}")
             return {}
     
@@ -552,6 +580,26 @@ class CompraModel(QObject):
         """Refresca lista de compras"""
         self._cargar_compras_recientes()
         self._cargar_estadisticas()
+
+    @Slot(int)
+    def cargar_detalle_compra(self, compra_id: int):
+        """Carga el detalle de una compra y emite signal"""
+        try:
+            print(f"📋 Cargando detalle de compra ID: {compra_id}")
+            compra = self.compra_repo.get_compra_completa(compra_id)
+            
+            if compra:
+                self._compra_actual = compra
+                self.compraDetalleChanged.emit()
+                print(f"✅ Compra {compra_id} cargada: {len(compra.get('detalles', []))} productos")
+            else:
+                print(f"⚠️ Compra {compra_id} no encontrada")
+                self._compra_actual = {}
+                self.compraDetalleChanged.emit()
+                
+        except Exception as e:
+            print(f"❌ Error cargando detalle: {e}")
+            self.operacionError.emit(f"Error: {str(e)}")
 
 def register_compra_model():
     """Registra el modelo para uso en QML"""

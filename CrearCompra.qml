@@ -47,6 +47,7 @@ Item {
     property color successColor: "#27ae60"
     property color warningColor: "#f39c12"
     property color dangerColor: "#e74c3c"
+    property color errorColor: "#c62828"
     property color blueColor: "#3498db"
     property color whiteColor: "#ffffff"
     property color textColor: "#2c3e50"
@@ -225,10 +226,10 @@ Item {
                 "Vencimiento": inputNoExpiry ? null : inputExpiryDate
             }
             
-            // Si es primera compra, agregar precio de venta
-            if (esPrimeraCompra && inputPrecioVentaUnitario > 0) {
+            // ✅ CORRECCIÓN: ENVIAR PRECIO VENTA SIEMPRE
+            if (inputPrecioVentaUnitario > 0) {
                 datosLote["Precio_Venta"] = inputPrecioVentaUnitario
-                console.log("💰 Primera compra - Precio venta:", inputPrecioVentaUnitario)
+                console.log("💰 Precio venta enviado:", inputPrecioVentaUnitario)
             }
             
             if (productoEditandoIndex >= 0) {
@@ -348,14 +349,15 @@ Item {
             var item = items[j]
             var detalle = {
                 "Id_Producto": item.producto_id || 0,
-                "Cantidad": item.cantidad_unitario || 0,
+                "Cantidad": item.cantidad || 0,
                 "Precio_Unitario": item.precio_unitario || 0.0
             }
             
-            if (item.fecha_vencimiento && item.fecha_vencimiento !== "" && item.fecha_vencimiento !== "Sin vencimiento") {
-                detalle["Fecha_Vencimiento"] = item.fecha_vencimiento
+            if (item.vencimiento && item.vencimiento !== "" && item.vencimiento !== "Sin vencimiento") {
+                detalle["Fecha_Vencimiento"] = item.vencimiento
             }
             
+            // ✅ CORRECCIÓN: AGREGAR PRECIO VENTA SIEMPRE
             if (item.precio_venta && item.precio_venta > 0) {
                 detalle["Precio_Venta"] = item.precio_venta
             }
@@ -385,6 +387,12 @@ Item {
     
     function showSuccess(message) {
         successMessage = message
+        showSuccessMessage = true
+        successTimer.restart()
+    }
+    
+    function showError(mensaje) {
+        successMessage = mensaje
         showSuccessMessage = true
         successTimer.restart()
     }
@@ -1035,10 +1043,10 @@ Item {
                         }
                     }
                     
-                    // LISTA DE PRODUCTOS - COMPACTA
+                    // LISTA DE PRODUCTOS - COMPACTA CON ENCABEZADOS (MEJORADA)
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 350
+                        height: 400  // ✅ AUMENTADA DE 350 A 400
                         color: whiteColor
                         radius: 8
                         border.color: "#e0e0e0"
@@ -1066,7 +1074,89 @@ Item {
                                 }
                             }
                             
-                            // LISTA COMPACTA
+                            // ✅ ENCABEZADOS DE COLUMNA (CON PRECIO VENTA)
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 40  // ✅ AUMENTADA DE 35 A 40
+                                color: "#1976d2"
+                                radius: 4
+                                
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: spacing8
+                                    spacing: spacing8
+                                    
+                                    // CÓDIGO
+                                    Label {
+                                        text: "CÓDIGO"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.preferredWidth: 80
+                                    }
+                                    
+                                    // PRODUCTO
+                                    Label {
+                                        text: "PRODUCTO"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.fillWidth: true
+                                    }
+                                    
+                                    // CANTIDAD
+                                    Label {
+                                        text: "CANT."
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.preferredWidth: 60  // ✅ AUMENTADO
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    
+                                    // PRECIO VENTA (NUEVA COLUMNA)
+                                    Label {
+                                        text: "PRECIO V."
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.preferredWidth: 80  // ✅ AUMENTADO
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    
+                                    // VENCIMIENTO
+                                    Label {
+                                        text: "VENCIMIENTO"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.preferredWidth: 100
+                                        horizontalAlignment: Text.AlignCenter
+                                    }
+                                    
+                                    // TOTAL
+                                    Label {
+                                        text: "TOTAL"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.preferredWidth: 90  // ✅ AUMENTADO
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    
+                                    // ACCIONES
+                                    Label {
+                                        text: "ACCIONES"
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12  // ✅ AUMENTADO
+                                        Layout.preferredWidth: 80  // ✅ AUMENTADO
+                                        horizontalAlignment: Text.AlignCenter
+                                    }
+                                }
+                            }
+                            
+                            // ✅ LISTA COMPACTA CON DATOS CORRECTOS (MEJORADA)
                             ListView {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
@@ -1076,91 +1166,169 @@ Item {
                                 
                                 delegate: Rectangle {
                                     width: parent ? parent.width : 0
-                                    height: 40
-                                    color: index % 2 === 0 ? '#e3edf5' : whiteColor
+                                    height: 44  // ✅ AUMENTADA DE 40 A 44
+                                    color: index % 2 === 0 ? '#f5f5f5' : whiteColor
                                     radius: 4
                                     
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.margins: spacing3
+                                        anchors.margins: spacing6  // ✅ AUMENTADO DE spacing4 A spacing6
                                         spacing: spacing8
                                         
+                                        // CÓDIGO
                                         Label {
                                             text: modelData.codigo || ""
                                             color: textColor
                                             font.bold: true
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontMedium  // ✅ AUMENTADO DE Small A Medium
                                             Layout.preferredWidth: 80
                                             elide: Text.ElideRight
                                         }
                                         
+                                        // NOMBRE
                                         Label {
                                             text: modelData.nombre || ""
                                             color: textColor
-                                            font.pixelSize: fontSmall
+                                            font.pixelSize: fontMedium  // ✅ AUMENTADO DE Small A Medium
                                             Layout.fillWidth: true
                                             elide: Text.ElideRight
                                         }
                                         
+                                        // CANTIDAD
                                         Label {
-                                            text: modelData.cantidad_unitario || 0
+                                            text: modelData.cantidad || 0
                                             color: blueColor
                                             font.bold: true
-                                            font.pixelSize: fontSmall
-                                            Layout.preferredWidth: 50
+                                            font.pixelSize: fontMedium  // ✅ AUMENTADO DE Small A Medium
+                                            Layout.preferredWidth: 60  // ✅ AUMENTADO
                                             horizontalAlignment: Text.AlignRight
                                         }
                                         
+                                        // ✅ PRECIO VENTA (NUEVA COLUMNA)
+                                        Label {
+                                            text: modelData.precio_venta ? "Bs " + modelData.precio_venta.toFixed(2) : "—"
+                                            color: modelData.precio_venta ? "#2e7d32" : darkGrayColor
+                                            font.bold: modelData.precio_venta ? true : false
+                                            font.pixelSize: fontMedium  // ✅ AUMENTADO
+                                            Layout.preferredWidth: 80  // ✅ AUMENTADO
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                        
+                                        // FECHA DE VENCIMIENTO
+                                        Label {
+                                            text: modelData.vencimiento || "Sin venc."
+                                            color: modelData.vencimiento ? "#ff9800" : darkGrayColor
+                                            font.pixelSize: 11  // ✅ AUMENTADO DE 10 A 11
+                                            Layout.preferredWidth: 100
+                                            horizontalAlignment: Text.AlignCenter
+                                            elide: Text.ElideRight
+                                        }
+                                        
+                                        // TOTAL
                                         Label {
                                             text: "Bs " + (modelData.subtotal || 0).toFixed(2)
                                             color: successColor
                                             font.bold: true
-                                            font.pixelSize: fontSmall
-                                            Layout.preferredWidth: 80
+                                            font.pixelSize: fontMedium  // ✅ AUMENTADO
+                                            Layout.preferredWidth: 90  // ✅ AUMENTADO
                                             horizontalAlignment: Text.AlignRight
                                         }
                                         
+                                        // BOTONES EDITAR/ELIMINAR CON ICONOS SVG
                                         RowLayout {
-                                            spacing: spacing4
+                                            spacing: spacing6  // ✅ AUMENTADO DE spacing4 A spacing6
+                                            Layout.preferredWidth: 80  // ✅ AUMENTADO
+                                            Layout.alignment: Qt.AlignHCenter
                                             
+                                            // BOTÓN EDITAR CON SVG
                                             Button {
-                                                text: "✏️"
-                                                font.pixelSize: 16
-                                                padding: 2
+                                                Layout.preferredWidth: 32  // ✅ AUMENTADO
+                                                Layout.preferredHeight: 32  // ✅ AUMENTADO
+                                                padding: 0
+                                                
                                                 background: Rectangle {
-                                                    color: "transparent"
+                                                    color: parent.hovered ? "#e3f2fd" : "transparent"
+                                                    radius: 4
+                                                    border.color: parent.hovered ? blueColor : "transparent"
+                                                    border.width: 1
                                                 }
+                                                
+                                                contentItem: Image {
+                                                    source: "Resources/iconos/editar.svg"
+                                                    sourceSize.width: 20
+                                                    sourceSize.height: 20
+                                                    fillMode: Image.PreserveAspectFit
+                                                    anchors.centerIn: parent
+
+                                                }
+                                                
                                                 onClicked: {
+                                                    console.log("📝 Editando producto:", index)
                                                     // Cargar datos para edición
                                                     inputProductCode = modelData.codigo || ""
                                                     inputProductName = modelData.nombre || ""
-                                                    inputCantidad = modelData.cantidad_unitario || 0
-                                                    var precioUnit = modelData.precio_unitario || 0
-                                                    inputPrecioTotalCompra = precioUnit * inputCantidad
-                                                    inputExpiryDate = modelData.fecha_vencimiento || ""
-                                                    inputNoExpiry = (inputExpiryDate === "")
+                                                    inputProductId = modelData.id || 0
+                                                    inputCantidad = modelData.cantidad || 0
+                                                    inputPrecioTotalCompra = modelData.subtotal || 0
+                                                    inputPrecioUnitarioCalculado = modelData.precio_unitario || 0
+                                                    
+                                                    // Precio de venta
+                                                    if (modelData.precio_venta && modelData.precio_venta > 0) {
+                                                        inputPrecioVentaUnitario = modelData.precio_venta
+                                                    }
+                                                    
+                                                    // Fecha de vencimiento
+                                                    var venc = modelData.vencimiento || ""
+                                                    inputExpiryDate = venc === "Sin vencimiento" ? "" : venc
+                                                    inputNoExpiry = (venc === "" || venc === "Sin vencimiento")
+                                                    
                                                     productoEditandoIndex = index
                                                     
                                                     // Actualizar campos visuales
-                                                    productCodeField.text = inputProductName
-                                                    cantidadField.text = inputCantidad.toString()
-                                                    precioTotalField.text = inputPrecioTotalCompra.toFixed(2)
-                                                    expiryField.text = inputExpiryDate
+                                                    if (productCodeField) productCodeField.text = inputProductName
+                                                    if (cantidadField) cantidadField.text = inputCantidad.toString()
+                                                    if (precioTotalField) precioTotalField.text = inputPrecioTotalCompra.toFixed(2)
+                                                    if (expiryField) expiryField.text = inputExpiryDate
+                                                    if (precioVentaField && inputPrecioVentaUnitario > 0) {
+                                                        precioVentaField.text = inputPrecioVentaUnitario.toFixed(2)
+                                                    }
                                                     
                                                     calcularPreciosAutomaticos()
                                                 }
                                             }
                                             
+                                            // BOTÓN ELIMINAR CON SVG
                                             Button {
-                                                text: "🗑️"
-                                                font.pixelSize: 16
-                                                padding: 2
+                                                Layout.preferredWidth: 32  // ✅ AUMENTADO
+                                                Layout.preferredHeight: 32  // ✅ AUMENTADO
+                                                padding: 0
+                                                
                                                 background: Rectangle {
-                                                    color: "transparent"
+                                                    color: parent.hovered ? "#ffebee" : "transparent"
+                                                    radius: 4
+                                                    border.color: parent.hovered ? errorColor : "transparent"
+                                                    border.width: 1
                                                 }
+                                                
+                                                contentItem: Image {
+                                                    source: "Resources/iconos/eliminar.svg"
+                                                    sourceSize.width: 20  // ✅ AUMENTADO
+                                                    sourceSize.height: 20  // ✅ AUMENTADO
+                                                    fillMode: Image.PreserveAspectFit
+                                                    anchors.centerIn: parent
+                                                }
+                                                
                                                 onClicked: {
+                                                    console.log("🗑️ Eliminando producto:", index)
                                                     if (compraModel) {
-                                                        compraModel.remover_item_compra(modelData.codigo)
+                                                        var eliminado = compraModel.remover_item_compra(index)
+                                                        if (eliminado) {
+                                                            showSuccess("Producto eliminado")
+                                                            // Si estaba editando este producto, limpiar
+                                                            if (productoEditandoIndex === index) {
+                                                                limpiarFormulario()
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1169,7 +1337,7 @@ Item {
                                 }
                             }
                             
-                            // Mensaje lista vacía
+                            // ✅ Mensaje lista vacía
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
@@ -1392,10 +1560,5 @@ Item {
         
         updatePurchaseTotal()
         showSuccess("Compra cargada para edición")
-    }
-    function showError(mensaje) {
-        successMessage = mensaje
-        showSuccessMessage = true
-        successTimer.restart()
     }
 }

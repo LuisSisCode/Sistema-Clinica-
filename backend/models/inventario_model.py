@@ -407,19 +407,40 @@ class InventarioModel(QObject):
     
     @Slot(str, result='QVariant')
     def get_producto_by_codigo(self, codigo: str):
-        """Obtiene producto específico por código"""
-        if not codigo:
-            return {}
+        """
+        Obtiene un producto completo por su código (DATOS FRESCOS DE BD)
         
+        Args:
+            codigo (str): Código del producto
+            
+        Returns:
+            dict: Datos del producto o None
+        """
         try:
-            producto_raw = self.producto_repo.get_by_codigo(codigo.strip())
-            if producto_raw:
-                producto_normalizado = self._normalizar_producto(producto_raw)
-                return producto_normalizado
-            return {}
+            print(f"🔍 Obteniendo producto por código: {codigo}")
+            
+            producto = self.producto_repo.get_by_codigo(codigo)
+            
+            if not producto:
+                print(f"⚠️ Producto {codigo} no encontrado")
+                return None
+            
+            # Mapear nombres de propiedades para QML
+            producto['codigo'] = producto.get('Codigo')
+            producto['nombre'] = producto.get('Nombre')
+            producto['precioVenta'] = producto.get('Precio_venta', 0)
+            producto['Precio_venta'] = producto.get('Precio_venta', 0)
+            producto['precioCompra'] = producto.get('Precio_compra', 0)
+            
+            print(f"✅ Producto encontrado: {producto.get('Nombre')} - Precio: Bs {producto.get('Precio_venta', 0):.2f}")
+            
+            return producto
+            
         except Exception as e:
-            self.operacionError.emit(f"Error obteniendo producto: {str(e)}")
-            return {}
+            print(f"❌ Error obteniendo producto: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     @Slot(int, result='QVariant')
     def get_lotes_producto(self, producto_id: int):
@@ -1233,10 +1254,10 @@ class InventarioModel(QObject):
             return []
 
     @Slot(int, result='QVariant')
-    def obtener_lotes_activos_vista(self, producto_id: int = 0):
+    def obtener_lotes_vista(self, producto_id: int = 0):
         """Obtiene lotes activos"""
         try:
-            lotes = self.producto_repo.obtener_lotes_activos_vista(
+            lotes = self.producto_repo.obtener_lotes_vista(
                 producto_id if producto_id > 0 else None
             ) or []
             
@@ -1262,30 +1283,49 @@ class InventarioModel(QObject):
 
     @Slot(int, result='QVariant')
     def get_lotes_producto_fifo(self, producto_id: int):
-        """Obtiene TODOS los lotes de un producto (activos + agotados + vencidos)"""
-        try:
-            if producto_id <= 0:
-                return []
+        """
+        Obtiene TODOS los lotes de un producto (incluyendo AGOTADOS)
+        
+        Args:
+            producto_id (int): ID del producto
             
-            lotes = self.producto_repo.get_lotes_producto_completo_fifo(producto_id) or []
+        Returns:
+            list: Lista de lotes con TODOS los estados
+        """
+        try:
+            print(f"📦 Obteniendo lotes FIFO para producto {producto_id}")
+            
+            # ✅ IMPORTANTE: Este método debe llamar a get_lotes_producto_completo_fifo
+            # que YA incluye lotes AGOTADOS
+            lotes = self.producto_repo.get_lotes_producto_completo_fifo(producto_id)
+            
+            if not lotes:
+                print(f"⚠️ No se encontraron lotes para producto {producto_id}")
+                return []
             
             print(f"📦 Lotes obtenidos: {len(lotes)} lotes - Sistema FIFO 2.0")
             
-            if lotes:
-                estados_vencimiento = {}
-                for lote in lotes:
-                    estado = lote.get('Estado_Vencimiento', 'DESCONOCIDO')
-                    estados_vencimiento[estado] = estados_vencimiento.get(estado, 0) + 1
+            # Contar por estado (solo para logging, NO filtrar)
+            estados = {}
+            for lote in lotes:
+                estado_vencimiento = lote.get('Estado_Vencimiento', 'DESCONOCIDO')
+                estado_lote = lote.get('Estado_Lote', 'DESCONOCIDO')
                 
-                print(f"📦 Lotes del producto {producto_id}: {len(lotes)} lotes")
-                for estado, count in estados_vencimiento.items():
-                    print(f"   - {estado}: {count} lotes")
+                if estado_lote not in estados:
+                    estados[estado_lote] = 0
+                estados[estado_lote] += 1
             
+            print(f"📦 Lotes del producto {producto_id}: {len(lotes)} lotes")
+            for estado, cantidad in estados.items():
+                print(f"   - {estado}: {cantidad} lotes")
+            
+            # ✅ RETORNAR TODOS LOS LOTES (incluyendo AGOTADOS)
             return lotes
             
         except Exception as e:
-            print(f"❌ Error obteniendo lotes del producto {producto_id}: {e}")
-            self.operacionError.emit(f"Error obteniendo lotes: {str(e)}")
+            print(f"❌ Error obteniendo lotes FIFO: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     @Slot(int, result='QVariant')

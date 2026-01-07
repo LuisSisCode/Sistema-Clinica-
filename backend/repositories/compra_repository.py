@@ -38,19 +38,20 @@ class CompraRepository(BaseRepository):
             FORMAT(c.Fecha, 'HH:mm') as hora,
             c.Total as total,
             
-            -- Campos para información de productos (SIN Id_Lote)
+            -- Contar productos en lugar de STRING_AGG
             ISNULL((
+                SELECT COUNT(DISTINCT dc2.Id_Producto)
+                FROM DetalleCompra dc2
+                WHERE dc2.Id_Compra = c.id
+            ), 0) as total_productos,
+            
+            -- Texto de productos (con COALESCE para evitar NULL)
+            COALESCE((
                 SELECT STRING_AGG(p2.Nombre, ', ') WITHIN GROUP (ORDER BY dc2.id)
                 FROM DetalleCompra dc2
                 INNER JOIN Productos p2 ON dc2.Id_Producto = p2.id
                 WHERE dc2.Id_Compra = c.id
             ), 'Sin productos') as productos_texto,
-            
-            ISNULL((
-                SELECT SUM(dc2.Cantidad_Unitario)
-                FROM DetalleCompra dc2
-                WHERE dc2.Id_Compra = c.id
-            ), 0) as total_productos,
             
             -- Campos adicionales para compatibilidad
             p.Nombre as Proveedor_Nombre,
@@ -63,10 +64,12 @@ class CompraRepository(BaseRepository):
         INNER JOIN Proveedor p ON c.Id_Proveedor = p.id
         INNER JOIN Usuario u ON c.Id_Usuario = u.id
         WHERE MONTH(c.Fecha) = MONTH(GETDATE()) 
-          AND YEAR(c.Fecha) = YEAR(GETDATE())
+        AND YEAR(c.Fecha) = YEAR(GETDATE())
         ORDER BY c.Fecha DESC
         """
-        return self._execute_query(query)
+        resultado = self._execute_query(query)
+        print(f"📦 Compras recientes cargadas: {len(resultado)}")
+        return resultado
     
     def get_compras_con_detalles(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
         """Obtiene compras con filtro de fechas preciso"""
@@ -371,3 +374,5 @@ class CompraRepository(BaseRepository):
         except Exception as e:
             print(f"❌ Error eliminando compra: {e}")
             raise CompraError(f"Error eliminando compra: {str(e)}")
+        
+    

@@ -35,6 +35,7 @@ Rectangle {
     // CONTROL DE CARGA INICIAL
     property bool datosInicialmenteCargados: false
     
+    
     // ===============================
     // SEÑALES
     // ===============================
@@ -111,6 +112,7 @@ Rectangle {
             precioVenta = productoData.precioVenta || productoData.Precio_venta || 0.0
             
             // Calcular costo promedio desde los lotes cargados
+            // NUEVA LÓGICA: Precio_Compra es TOTAL, no unitario
             if (lotesData && lotesData.length > 0) {
                 var sumaCostos = 0
                 var totalUnidades = 0
@@ -118,10 +120,12 @@ Rectangle {
                 for (var i = 0; i < lotesData.length; i++) {
                     var lote = lotesData[i]
                     var stock = lote.Stock_Lote || lote.Stock_Actual || 0
-                    var precio = lote.Precio_Compra || 0
+                    var precioTotal = lote.Precio_Compra || 0
                     
-                    if (stock > 0) {
-                        sumaCostos += (stock * precio)
+                    if (stock > 0 && precioTotal > 0) {
+                        // Precio_Compra es el TOTAL, calcular unitario
+                        var precioUnitario = precioTotal / stock
+                        sumaCostos += (stock * precioUnitario)
                         totalUnidades += stock
                     }
                 }
@@ -158,6 +162,8 @@ Rectangle {
                 return "#FFB444"
             case "VIGENTE":
                 return "#2fb32f"
+            case "AGOTADO":
+                return '#000000'
             default:
                 return "#7f8c8d"
         }
@@ -180,6 +186,39 @@ Rectangle {
         return diasNum + " días"
     }
     
+    function formatearFecha(fecha) {
+        // 📅 Maneja fechas NULL correctamente
+        if (!fecha) return "---"
+        
+        try {
+            var fechaObj = new Date(fecha)
+            // Verificar si es una fecha válida (no NULL convertido a epoch)
+            var year = fechaObj.getFullYear()
+            if (year < 2000 || year > 2100) return "---"
+            
+            return fechaObj.toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            })
+        } catch (e) {
+            return "---"
+        }
+    }
+    
+    function obtenerColorPorStock(stock) {
+        // 🎨 Color basado en STOCK, no en estado
+        if (stock === 0) return "#95A5A6"  // Gris - AGOTADO
+        if (stock < 10) return "#FFB444"   // Amarillo - BAJO
+        return "#2fb32f"                    // Verde - NORMAL
+    }
+    
+    function obtenerTextoEstadoPorStock(stock) {
+        if (stock === 0) return "AGOTADO"
+        if (stock < 10) return "BAJO STOCK"
+        return "DISPONIBLE"
+    }
+    
     function actualizarPrecioVenta(nuevoPrecio) {
         if (!productoData || !inventarioModel) {
             console.log("❌ No se puede actualizar precio")
@@ -198,24 +237,43 @@ Rectangle {
             var precio = parseFloat(precioTexto);
             
             if (isNaN(precio) || precio <= 0) {
-                console.log("❌ Precio inválido:", nuevoPrecio, "convertido a:", precio)
+                console.log("❌ Precio inválido:", nuevoPrecio)
                 return false
             }
             
             precio = parseFloat(precio.toFixed(2));
             
-            console.log("💰 Actualizando precio de venta a:", precio, "de entrada:", nuevoPrecio)
+            console.log("💰 Actualizando precio de venta a:", precio)
             
             var resultado = inventarioModel.actualizar_precio_venta(productoData.codigo, precio)
             
             if (resultado) {
-                precioVenta = precio
-                console.log("✅ Precio actualizado exitosamente")
+                console.log("✅ Precio actualizado en BD")
                 
-                if (productoData) {
-                    productoData.precioVenta = precio
-                    productoData.Precio_venta = precio
+                // ✅ AGREGAR ESTAS LÍNEAS:
+                console.log("🔄 Refrescando datos del producto desde BD...")
+                
+                // Recargar producto completo desde BD
+                var productoActualizado = inventarioModel.get_producto_by_codigo(productoData.codigo)
+                
+                if (productoActualizado) {
+                    // Actualizar productoData con datos frescos
+                    productoData = productoActualizado
+                    
+                    // Actualizar property local
+                    precioVenta = productoData.Precio_venta || productoData.precioVenta || precio
+                    
+                    console.log("✅ UI actualizada - Precio:", precioVenta)
+                    
+                    // Emitir señal
                     productoActualizado(productoData)
+                } else {
+                    console.log("⚠️ No se pudo recargar producto, actualizando localmente")
+                    precioVenta = precio
+                    if (productoData) {
+                        productoData.precioVenta = precio
+                        productoData.Precio_venta = precio
+                    }
                 }
                 
                 return true
@@ -603,13 +661,13 @@ Rectangle {
                                 spacing: 2
                                 
                                 Label {
-                                    text: "Stock Total"
+                                    text: "Stock"
                                     font.pixelSize: 12
                                     color: "#7F8C8D"
                                 }
                                 
                                 Label {
-                                    text: productoData ? (productoData.stockUnitario || 0) + " uds" : "0"
+                                    text: productoData ? (productoData.stockUnitario || 0) : "0"
                                     font.pixelSize: 14
                                     font.bold: true
                                     color: "#2C3E50"
@@ -626,21 +684,13 @@ Rectangle {
                                 spacing: 2
                                 
                                 Label {
-                                    text: "Lotes Activos"
+                                    text: "Lotes Totales"
                                     font.pixelSize: 12
                                     color: "#7F8C8D"
                                 }
                                 
                                 Label {
-                                    text: {
-                                        if (!lotesLoaded) return "..."
-                                        var activos = 0
-                                        for (var i = 0; i < lotesData.length; i++) {
-                                            var stock = lotesData[i].Stock_Lote || lotesData[i].Stock_Actual || 0
-                                            if (stock > 0) activos++
-                                        }
-                                        return activos + "/" + lotesData.length
-                                    }
+                                    text: lotesLoaded ? lotesData.length : "..."
                                     font.pixelSize: 14
                                     font.bold: true
                                     color: "#3498DB"
@@ -713,7 +763,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle { // STOCK
-                                        Layout.preferredWidth: 100
+                                        Layout.preferredWidth: 80
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -725,13 +775,26 @@ Rectangle {
                                         }
                                     }
                                     
-                                    Rectangle { // PRECIO
-                                        Layout.preferredWidth: 110
+                                    Rectangle { // PRECIO UNITARIO
+                                        Layout.preferredWidth: 100
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "PRECIO COMPRA"
+                                            text: "PRECIO UNIT."
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            color: "#2C3E50"
+                                        }
+                                    }
+                                    
+                                    Rectangle { // PRECIO TOTAL
+                                        Layout.preferredWidth: 100
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "PRECIO TOTAL"
                                             font.pixelSize: 11
                                             font.bold: true
                                             color: "#2C3E50"
@@ -739,7 +802,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle { // FECHA COMPRA
-                                        Layout.preferredWidth: 110
+                                        Layout.preferredWidth: 100
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -752,7 +815,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle { // VENCIMIENTO
-                                        Layout.preferredWidth: 130
+                                        Layout.preferredWidth: 110
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -765,7 +828,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle { // DÍAS
-                                        Layout.preferredWidth: 110
+                                        Layout.preferredWidth: 90
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -778,7 +841,7 @@ Rectangle {
                                     }
                                     
                                     Rectangle { // ESTADO
-                                        Layout.preferredWidth: 130
+                                        Layout.preferredWidth: 110
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
@@ -814,7 +877,7 @@ Rectangle {
                                         }
                                     }
                                     border.color: "#ECF0F1"
-                                    border.width: stock === 0 ? 0 : 1
+                                    border.width: stockActual === 0 ? 0 : 1 
                                     
                                     property var loteActual: modelData
                                     property int stockActual: loteActual.Stock_Lote || loteActual.Stock_Actual || 0
@@ -839,7 +902,7 @@ Rectangle {
                                         
                                         // Stock Actual
                                         Rectangle {
-                                            Layout.preferredWidth: 100
+                                            Layout.preferredWidth: 80
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             
@@ -848,7 +911,7 @@ Rectangle {
                                                 width: 60
                                                 height: 22
                                                 radius: 11
-                                                color: stockActual === 0 ? "#95A5A6" : (stockActual < 10 ? "#FFB444" : "#2fb32f")
+                                                color: obtenerColorPorStock(stockActual)
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
@@ -860,29 +923,49 @@ Rectangle {
                                             }
                                         }
                                         
-                                        // Precio Compra
+                                        // Precio Unitario (Precio Compra / Stock)
                                         Rectangle {
-                                            Layout.preferredWidth: 110
+                                            Layout.preferredWidth: 100
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: "Bs " + (loteActual.Precio_Compra || 0).toFixed(2)
+                                                text: {
+                                                    var precioCompra = parent.parent.parent.loteActual.Precio_Compra || 0
+                                                    var stock = parent.parent.parent.stockActual || 1
+                                                    var precioUnitario = stock > 0 ? precioCompra / stock : 0
+                                                    return "Bs " + precioUnitario.toFixed(2)
+                                                }
                                                 font.pixelSize: 11
-                                                color: stockActual === 0 ? "#95A5A6" : "#2C3E50"
+                                                color: parent.parent.parent.stockActual === 0 ? "#95A5A6" : "#2C3E50"
+                                            }
+                                        }
+                                        
+                                        // Precio Total (Precio Compra)
+                                        Rectangle {
+                                            Layout.preferredWidth: 100
+                                            Layout.fillHeight: true
+                                            color: "transparent"
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: {
+                                                    var precioTotal = parent.parent.parent.loteActual.Precio_Compra || 0
+                                                    return "Bs " + precioTotal.toFixed(2)
+                                                }
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                color: parent.parent.parent.stockActual === 0 ? "#95A5A6" : "#27ae60"
                                             }
                                         }
                                         
                                         // Fecha Compra
                                         Rectangle {
-                                            Layout.preferredWidth: 110
+                                            Layout.preferredWidth: 100
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: loteActual.Fecha_Compra 
-                                                      ? new Date(loteActual.Fecha_Compra).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'})
-                                                      : "---"
+                                                text: formatearFecha(loteActual.Fecha_Compra)
                                                 font.pixelSize: 10
                                                 color: stockActual === 0 ? "#95A5A6" : "#2C3E50"
                                             }
@@ -890,14 +973,12 @@ Rectangle {
                                         
                                         // Fecha Vencimiento
                                         Rectangle {
-                                            Layout.preferredWidth: 130
+                                            Layout.preferredWidth: 110
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: loteActual.Fecha_Vencimiento
-                                                      ? new Date(loteActual.Fecha_Vencimiento).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'})
-                                                      : "SIN VENC."
+                                                text: loteActual.Fecha_Vencimiento ? formatearFecha(loteActual.Fecha_Vencimiento) : "SIN VENC."
                                                 font.pixelSize: 10
                                                 color: stockActual === 0 ? "#95A5A6" : "#2C3E50"
                                                 font.italic: !loteActual.Fecha_Vencimiento
@@ -906,7 +987,7 @@ Rectangle {
                                         
                                         // Días para Vencer
                                         Rectangle {
-                                            Layout.preferredWidth: 110
+                                            Layout.preferredWidth: 90
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
@@ -914,26 +995,29 @@ Rectangle {
                                                 text: formatearDiasParaVencer(loteActual.Dias_para_Vencer)
                                                 font.pixelSize: 10
                                                 font.bold: true
-                                                color: obtenerColorEstadoVencimiento(loteActual.Estado_Vencimiento)
+                                                color: {
+                                                    if (stockActual === 0) return "#95A5A6"
+                                                    return obtenerColorEstadoVencimiento(loteActual.Estado_Vencimiento)
+                                                }
                                             }
                                         }
                                         
-                                        // Estado
+                                        // Estado (basado en STOCK)
                                         Rectangle {
-                                            Layout.preferredWidth: 130
+                                            Layout.preferredWidth: 110
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 100
+                                                width: 95
                                                 height: 20
                                                 radius: 10
-                                                color: obtenerColorEstadoVencimiento(loteActual.Estado_Vencimiento)
+                                                color: obtenerColorPorStock(stockActual)
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: obtenerTextoEstadoVencimiento(loteActual.Estado_Vencimiento)
+                                                    text: obtenerTextoEstadoPorStock(stockActual)
                                                     font.pixelSize: 9
                                                     font.bold: true
                                                     color: "#FFFFFF"

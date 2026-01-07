@@ -63,7 +63,16 @@ class ProductoRepository(BaseRepository):
         INNER JOIN Marca m ON p.ID_Marca = m.id
         ORDER BY p.id DESC
         """
-        return self._execute_query(query)
+        resultados = self._execute_query(query)
+        
+        # ✅ AGREGAR: Mapear Stock_Total/Stock_Unitario a Stock
+        if resultados:
+            for producto in resultados:
+                stock_value = producto.get('Stock_Total', 0) or producto.get('Stock_Unitario', 0)
+                producto['Stock'] = stock_value
+                producto['stock'] = stock_value
+        
+        return resultados
     
     def buscar_productos(self, termino: str, incluir_sin_stock: bool = False) -> List[Dict[str, Any]]:
         """
@@ -120,13 +129,16 @@ class ProductoRepository(BaseRepository):
             (SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) FROM Lote l WHERE l.Id_Producto = p.id) DESC,
             p.Nombre ASC
         """
+        resultados = self._execute_query(query, (f"%{termino}%", f"%{termino}%"))
+    
+        # ✅ AGREGAR:
+        if resultados:
+            for producto in resultados:
+                stock_value = producto.get('Stock_Total', 0) or producto.get('Stock_Unitario', 0)
+                producto['Stock'] = stock_value
+                producto['stock'] = stock_value
         
-        termino_like = f"%{termino}%"
-        resultados = self._execute_query(query, (termino_like, termino_like))
-        
-        print(f"🔍 Búsqueda '{termino}': {len(resultados)} productos encontrados (stock desde lotes)")
-        
-        return resultados or []
+        return resultados if resultados else []
     
     def get_productos_bajo_stock(self, stock_minimo: int = 10) -> List[Dict[str, Any]]:
         """Obtiene productos con stock bajo"""
@@ -950,6 +962,16 @@ class ProductoRepository(BaseRepository):
             
             print(f"📊 Stock actual obtenido con cache: {len(resultados) if isinstance(resultados, list) else 0} productos")
             
+            # ✅ AGREGAR: Mapear Stock_Real a Stock para compatibilidad con QML
+            if resultados:
+                for producto in resultados:
+                    # Mapear Stock_Real a Stock (QML espera "Stock")
+                    producto['Stock'] = producto.get('Stock_Real', 0)
+                    # También agregar como 'stock' (lowercase) por si acaso
+                    producto['stock'] = producto.get('Stock_Real', 0)
+                
+                print(f"✅ Stock mapeado correctamente: {len(resultados)} productos")
+            
             return resultados if resultados else []
             
         except Exception as e:
@@ -1040,9 +1062,9 @@ class ProductoRepository(BaseRepository):
             traceback.print_exc()
             return []
     
-    def obtener_lotes_activos_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
+    def obtener_lotes_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
         """
-        ✅ CORREGIDO COMPLETO: Obtiene lotes SIN CICLOS INFINITOS
+        ✅ CORREGIDO: Obtiene TODOS los lotes (agotados, vencidos o con stock) - sin etiqueta 'ACTIVO'
         """
         try:
             if producto_id and producto_id > 0:
@@ -1065,7 +1087,6 @@ class ProductoRepository(BaseRepository):
                 l.Fecha_Vencimiento,
                 DATEDIFF(DAY, GETDATE(), l.Fecha_Vencimiento) AS Dias_para_Vencer,
                 CASE 
-                    WHEN l.Cantidad_Unitario = 0 THEN 'AGOTADO'
                     WHEN l.Fecha_Vencimiento < GETDATE() THEN 'VENCIDO'
                     WHEN l.Fecha_Vencimiento <= DATEADD(DAY, 30, GETDATE()) THEN 'PRÓXIMO A VENCER'
                     ELSE 'VIGENTE'
@@ -1073,7 +1094,7 @@ class ProductoRepository(BaseRepository):
                 CASE 
                     WHEN l.Cantidad_Unitario = 0 THEN 'AGOTADO'
                     WHEN l.Cantidad_Unitario <= p.Stock_Minimo THEN 'BAJO STOCK'
-                    ELSE 'ACTIVO'
+                    ELSE '' 
                 END AS Estado_Lote,
                 l.Id_Compra,
                 ISNULL(prov.Nombre, 'Sin proveedor') AS Proveedor
@@ -1089,15 +1110,11 @@ class ProductoRepository(BaseRepository):
                 l.id ASC
             """
             
-            # ✅ USAR MÉTODO READONLY CORREGIDO
             lotes = self._execute_readonly_query(query, params, fetch_one=False)
             
-            # ✅ Validación robusta
             if not isinstance(lotes, list):
-                print(f"⚠️ obtener_lotes_activos_vista: tipo incorrecto {type(lotes)}")
                 return []
             
-            # Convertir fechas a string
             for lote in lotes:
                 if lote.get('Fecha_Vencimiento'):
                     try:
@@ -1115,7 +1132,6 @@ class ProductoRepository(BaseRepository):
                     except:
                         lote['Fecha_Compra'] = ""
             
-            print(f"📦 Lotes obtenidos con cache: {len(lotes)} lotes")
             return lotes if lotes else []
             
         except Exception as e:
