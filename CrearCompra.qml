@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-// 🚀 CrearCompra.qml - Sistema FIFO 2.0 con Cálculo Automático de Precios
+// 🚀 CrearCompra.qml - Sistema FIFO 2.0 con UX Mejorada
 Item {
     id: crearCompraRoot
     
@@ -12,50 +12,37 @@ Item {
     property var ventaModel: null
     property var compraModel: null
     
-    // PROPIEDADES PARA EDICIÓN DE COMPRA
+    // PROPIEDADES PARA EDICIÓN
     property bool modoEdicion: compraModel ? compraModel.modo_edicion : false
     property int compraIdEdicion: compraModel ? compraModel.compra_id_edicion : 0
     property var datosOriginales: compraModel ? compraModel.datos_originales : {}
     
-    // PROPIEDAD: Índice del producto que se está editando
+    // PROPIEDAD: Índice del producto editando
     property int productoEditandoIndex: -1
     
-    // Señales para comunicación
+    // Señales
     signal compraCompletada()
     signal cancelarCompra()
     signal solicitarCrearProducto(string nombreProducto)
     
-    // SISTEMA DE MÉTRICAS COMPACTO
-    readonly property real scaleFactor: Math.min(width / 1400, height / 900)
-    readonly property real baseUnit: 4
-    readonly property real fontBaseSize: Math.max(13, height / 65)
-    
-    // Tamaños de fuente consistentes
+    // SISTEMA DE MÉTRICAS
+    readonly property real fontBaseSize: Math.max(12, height / 70)
     readonly property real fontSmall: fontBaseSize * 0.85
     readonly property real fontMedium: fontBaseSize
     readonly property real fontLarge: fontBaseSize * 1.2
-    readonly property real fontXLarge: fontBaseSize * 1.4
-    readonly property real fontHeader: fontBaseSize * 1.6
     
-    // Espaciados compactos
-    readonly property real spacing4: baseUnit
-    readonly property real spacing8: baseUnit * 2
-    readonly property real spacing12: baseUnit * 3
-    readonly property real spacing16: baseUnit * 4
-    readonly property real spacing20: baseUnit * 5
-    readonly property real spacing24: baseUnit * 6
+    // Espaciados
+    readonly property real spacing4: 4
+    readonly property real spacing6: 6
+    readonly property real spacing8: 8
+    readonly property real spacing12: 12
     
-    // Alturas estándar
-    readonly property real inputHeight: 32
+    // Alturas
+    readonly property real inputHeight: 36
     readonly property real buttonHeight: 36
-    readonly property real headerHeight: 70
+    readonly property real headerHeight: 60
 
-    // Radios uniformes
-    readonly property real radiusSmall: 6
-    readonly property real radiusMedium: 8
-    readonly property real radiusLarge: 12
-
-    // COLORES MINIMALISTAS
+    // COLORES
     property color primaryColor: modoEdicion ? "#2C3E50" : "#273746"
     property color accentColor: modoEdicion ? "#3498DB" : "#3498db"
     property color successColor: "#27ae60"
@@ -66,233 +53,240 @@ Item {
     property color textColor: "#2c3e50"
     property color darkGrayColor: "#7f8c8d"
     property color lightGrayColor: "#bdc3c7"
-    property color editModeColor: "#34495E"
 
-    // Estados de la interfaz
+    // Estados
     property bool showSuccessMessage: false
     property string successMessage: ""
     property bool showProductDropdown: false
-    property bool showComparisonPanel: false
-    property bool mostrarAyuda: false  // 🆕 Oculto por defecto para ahorrar espacio
-    property bool mostrarButtonCrearProducto: false  // 🆕 Mostrar botón "Crear Nuevo"
-    property bool mostrarFormularioProducto: false   // 🆕 ❌ OBSOLETO - ELIMINAR ESTA LÍNEA
-    property bool formularioActivo: false            // 🆕 ✅ NUEVO: Indica si hay producto seleccionado
-    property var productoSeleccionado: ({})          // 🆕 Datos del producto actual
-    property bool permitirActualizarPrecio: false    // 🆕 Checkbox: actualizar precio venta
+    property bool mostrarAyuda: false
+    property bool mostrarButtonCrearProducto: false
+    property bool formularioActivo: false
+    property bool creandoProducto: false
 
     property bool procesandoCompra: false
     property int contadorClics: 0 
     
-    // Datos para compra
+    // Datos compra
     property string newPurchaseProvider: ""
-    property string newPurchaseUser: "Dr. Admin"
     property string newPurchaseDate: ""
     property string newPurchaseId: ""
     property real newPurchaseTotal: 0.0
     
-    // 🚀 CAMPOS NUEVOS - FLUJO INTUITIVO
+    // 🚀 CAMPOS DEL PRODUCTO - TODOS DISPONIBLES DESDE EL INICIO
     property string inputProductCode: ""
     property string inputProductName: ""
     property int inputProductId: 0
-    property int inputCantidad: 0                      // Cantidad de unidades
-    property real inputPrecioTotalCompra: 0.0          // Precio total pagado
-    property real inputPrecioUnitarioCalculado: 0.0    // Auto-calculado
-    property real inputMargenPorcentaje: 100.0         // 100% por defecto
-    property real inputPrecioVentaSugerido: 0.0        // Auto-calculado
-    property real inputPrecioVentaFinal: 0.0           // Usuario puede modificar
-    property real inputGananciaUnitaria: 0.0           // Auto-calculado
-    property real inputGananciaTotal: 0.0              // Auto-calculado
-    property real inputMargenRealPorcentaje: 0.0       // Margen calculado después de redondeo
+    property int inputCantidad: 0
+    property real inputPrecioTotalCompra: 0.0
+    property real inputPrecioUnitarioCalculado: 0.0
+    property real inputPrecioVentaUnitario: 0.0
     property string inputExpiryDate: ""
     property bool inputNoExpiry: false
     property bool isNewProduct: true
     property bool esPrimeraCompra: false
-    property bool precioModificadoManualmente: false   // Flag para saber si usuario editó precio
+    property bool productoValidoParaAgregar: false
     
-    // 🆕 Propiedad para recibir función de crear producto
+    // Propiedad para crear producto
     property var abrirModalCrearProductoFunction: null
 
-    // 🆕 Estado para mostrar que se está creando producto
-    property bool creandoProducto: false
-
-    // Lista temporal de productos
-    ListModel {
-        id: temporaryProductsModel
-    }
-    
-    // Modelo para resultados de búsqueda
+    // Modelos
     ListModel {
         id: productSearchResultsModel
     }
     
-    // PROPIEDADES PARA PROVEEDORES
     property var providerNames: ["Seleccionar proveedor..."]
 
-    // CONEXIONES PARA EDICIÓN
+    // CONEXIONES
     Connections {
         target: compraModel
         
         function onModoEdicionChanged() {
-            console.log("📝 Modo edición cambiado:", compraModel.modo_edicion)
-            if (compraModel.modo_edicion) {
-                cargarDatosEdicion()
-            }
+            if (compraModel.modo_edicion) cargarDatosEdicion()
         }
         
         function onCompraActualizada(compraId, total) {
-            console.log("✅ Compra actualizada:", compraId, "Total:", total)
             showSuccess(`Compra #${compraId} actualizada: Bs${total.toFixed(2)}`)
-            Qt.callLater(function() {
-                compraCompletada()
-            })
+            Qt.callLater(compraCompletada)
         }
         
         function onProveedoresChanged() {
             updateProviderNames()
         }
-        
-        function onOperacionExitosa(mensaje) {
-            if (mensaje.includes("proveedores") || mensaje.includes("actualizada")) {
-                Qt.callLater(updateProviderNames)
-            }
-        }
     }
-    // Timer para ocultar mensaje de éxito
+    
     Timer {
         id: successTimer
         interval: 3000
         onTriggered: showSuccessMessage = false
     }
 
-    // ✅ Timer para resetear botón después de compra (AHORA TAMBIÉN RESETEA CONTADOR)
     Timer {
         id: resetButtonTimer
         interval: 2000
         onTriggered: {
-            completarCompraButton.text = modoEdicion ? "💾 Guardar Cambios" : "📦 Completar Compra"
+            completarCompraButton.text = modoEdicion ? "💾 Guardar" : "📦 Completar"
             procesandoCompra = false
-            // ✅ RE-CALCULAR enabled del botón
-            completarCompraButton.enabled = Qt.binding(function() {
-                return !procesandoCompra &&
-                    (providerCombo ? providerCombo.currentIndex > 0 : false) && 
-                    (compraModel ? compraModel.items_en_compra > 0 : false) &&
-                    productoEditandoIndex < 0
-            })
-            
-            // ✅ **CORRECCIÓN IMPORTANTE**: RESETEAR CONTADOR SOLO DESPUÉS DE COMPLETAR TODO EL PROCESO
             contadorClics = 0
-            console.log("🔄 Contador de clics reseteado (compra completada)")
         }
     }
+    
     // ============================================================================
-    // FUNCIONES DE NEGOCIO MEJORADAS + CÁLCULOS AUTOMÁTICOS
+    // FUNCIONES PRINCIPALES
     // ============================================================================
     
-    // 🚀 NUEVA FUNCIÓN: Calcular todos los precios automáticamente
     function calcularPreciosAutomaticos() {
-        if (inputCantidad <= 0 || inputPrecioTotalCompra <= 0) {
-            // Reset
-            inputPrecioUnitarioCalculado = 0
-            inputPrecioVentaSugerido = 0
-            if (!precioModificadoManualmente) {
-                inputPrecioVentaFinal = 0
+        if (inputCantidad > 0 && inputPrecioTotalCompra > 0) {
+            inputPrecioUnitarioCalculado = inputPrecioTotalCompra / inputCantidad
+            // Si es primera compra, sugerir precio venta con 30% margen
+            if (esPrimeraCompra && inputPrecioVentaUnitario <= 0) {
+                inputPrecioVentaUnitario = Math.ceil(inputPrecioUnitarioCalculado * 1.3 * 20) / 20
             }
-            inputGananciaUnitaria = 0
-            inputGananciaTotal = 0
-            inputMargenRealPorcentaje = 0
+        } else {
+            inputPrecioUnitarioCalculado = 0
+        }
+        validarProductoParaAgregar()
+    }
+    
+    function validarProductoParaAgregar() {
+        productoValidoParaAgregar = (
+            inputProductName.trim().length > 0 &&
+            inputCantidad > 0 &&
+            inputPrecioTotalCompra > 0 &&
+            (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate))) &&
+            inputPrecioVentaUnitario > 0 &&
+            inputPrecioVentaUnitario > inputPrecioUnitarioCalculado
+        )
+    }
+    
+    function buscarProductosExistentes(texto) {
+        productSearchResultsModel.clear()
+        if (!inventarioModel || texto.length < 2) {
+            showProductDropdown = false
+            mostrarButtonCrearProducto = false
             return
         }
         
-        // 1. Calcular precio unitario de compra
-        inputPrecioUnitarioCalculado = inputPrecioTotalCompra / inputCantidad
+        var textoBusqueda = texto.toLowerCase()
+        if (inventarioModel) inventarioModel.buscar_productos(textoBusqueda)
         
-        // 2. Calcular precio de venta con margen (100% por defecto)
-        var factor = 1 + (inputMargenPorcentaje / 100)
-        var precioSugerido = inputPrecioUnitarioCalculado * factor
+        Qt.callLater(function() {
+            var resultados = inventarioModel.search_results || []
+            if (resultados.length > 0) {
+                for (var i = 0; i < resultados.length; i++) {
+                    var producto = resultados[i]
+                    productSearchResultsModel.append({
+                        id: producto.id || producto.Id || 0,
+                        codigo: producto.Codigo || producto.codigo || "",
+                        nombre: producto.Nombre || producto.nombre || "",
+                        precioVentaBase: producto.Precio_venta || producto.precioVentaBase || 0
+                    })
+                }
+                showProductDropdown = true
+                mostrarButtonCrearProducto = false
+            } else {
+                showProductDropdown = false
+                mostrarButtonCrearProducto = true
+            }
+        })
+    }
+
+    function seleccionarProductoExistente(productoId, codigo, nombre) {
+        inputProductId = productoId
+        inputProductCode = codigo
+        inputProductName = nombre
         
-        // 3. Redondear a 0.05 más cercano (Bs0.10, Bs0.15, Bs0.20, Bs0.25...)
-        inputPrecioVentaSugerido = Math.ceil(precioSugerido * 20) / 20
-        
-        // 4. Si usuario no ha modificado precio, usar el sugerido
-        if (!precioModificadoManualmente) {
-            inputPrecioVentaFinal = inputPrecioVentaSugerido
+        if (compraModel && productoId > 0) {
+            var datosProducto = compraModel.obtener_datos_precio_producto(productoId)
+            if (datosProducto) {
+                esPrimeraCompra = datosProducto.es_primera || false
+                if (!esPrimeraCompra && datosProducto.precio_venta) {
+                    inputPrecioVentaUnitario = datosProducto.precio_venta
+                }
+            }
         }
         
-        // 5. Calcular ganancia
-        inputGananciaUnitaria = inputPrecioVentaFinal - inputPrecioUnitarioCalculado
-        inputGananciaTotal = inputGananciaUnitaria * inputCantidad
-        
-        // 6. Calcular margen real (puede diferir del sugerido por redondeo)
-        if (inputPrecioUnitarioCalculado > 0) {
-            inputMargenRealPorcentaje = (inputGananciaUnitaria / inputPrecioUnitarioCalculado) * 100
-        }
-        
-        console.log("💰 Cálculos:", 
-                    "Unit:", inputPrecioUnitarioCalculado.toFixed(2),
-                    "Venta:", inputPrecioVentaFinal.toFixed(2),
-                    "Margen:", inputMargenRealPorcentaje.toFixed(1) + "%")
+        showProductDropdown = false
+        Qt.callLater(function() {
+            if (cantidadField) {
+                cantidadField.focus = true
+                cantidadField.selectAll()
+            }
+        })
     }
     
-    function cargarDatosEdicion() {
-        if (!modoEdicion || !compraModel) return
+    function agregarProductoACompra() {
+        if (!productoValidoParaAgregar || !compraModel) return false
         
-        console.log("📋 Cargando datos para edición - Compra:", compraIdEdicion)
+        console.log("✅ Agregando producto:", inputProductCode)
         
-        // Configurar ID y fecha
-        newPurchaseId = `C${String(compraIdEdicion).padStart(3, '0')}`
-        
-        // Configurar proveedor
-        var datosOrig = datosOriginales
-        if (datosOrig && datosOrig.proveedor) {
-            newPurchaseProvider = datosOrig.proveedor
+        try {
+            var datosLote = {
+                "Cantidad_Unitario": inputCantidad,
+                "Precio_Compra": inputPrecioTotalCompra,
+                "Vencimiento": inputNoExpiry ? null : inputExpiryDate
+            }
             
-            for (var i = 0; i < providerNames.length; i++) {
-                if (providerNames[i] === datosOrig.proveedor) {
-                    if (providerCombo) {
-                        providerCombo.currentIndex = i
-                    }
-                    break
+            // Si es primera compra, agregar precio de venta
+            if (esPrimeraCompra && inputPrecioVentaUnitario > 0) {
+                datosLote["Precio_Venta"] = inputPrecioVentaUnitario
+                console.log("💰 Primera compra - Precio venta:", inputPrecioVentaUnitario)
+            }
+            
+            if (productoEditandoIndex >= 0) {
+                // EDITAR
+                var exito = compraModel.actualizar_item_compra(
+                    productoEditandoIndex,
+                    datosLote
+                )
+                
+                if (exito) {
+                    showSuccess("✏️ Producto actualizado")
+                    productoEditandoIndex = -1
+                    limpiarFormulario()
+                    return true
+                }
+            } else {
+                // AGREGAR
+                var agregado = compraModel.agregar_producto_a_compra(
+                    inputProductCode,
+                    datosLote
+                )
+                
+                if (agregado) {
+                    showSuccess("✅ Producto agregado")
+                    limpiarFormulario()
+                    return true
                 }
             }
+            
+            showError("❌ No se pudo agregar el producto")
+            return false
+            
+        } catch (error) {
+            console.log("❌ Error:", error)
+            showError("Error: " + error.toString())
+            return false
         }
-        
-        if (datosOrig && datosOrig.fecha) {
-            try {
-                var fechaStr = datosOrig.fecha.toString()
-                if (fechaStr && fechaStr.length > 0) {
-                    newPurchaseDate = fechaStr
-                }
-            } catch (e) {
-                console.log("⚠️ Error al convertir fecha:", e)
-                var fechaActual = new Date()
-                var dia = fechaActual.getDate().toString().padStart(2, '0')
-                var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
-                var año = fechaActual.getFullYear()
-                newPurchaseDate = dia + "/" + mes + "/" + año
-            }
-        }
-        
-        updatePurchaseTotal()
-        console.log("✅ Datos de edición cargados")
-        showSuccess("Compra cargada para edición")
     }
     
-    function updateProviderNames() {
-        var names = ["Seleccionar proveedor..."]
+    function limpiarFormulario() {
+        inputProductCode = ""
+        inputProductName = ""
+        inputProductId = 0
+        inputCantidad = 0
+        inputPrecioTotalCompra = 0.0
+        inputPrecioUnitarioCalculado = 0.0
+        inputPrecioVentaUnitario = 0.0
+        inputExpiryDate = ""
+        inputNoExpiry = false
+        esPrimeraCompra = false
+        productoEditandoIndex = -1
         
-        if (compraModel && compraModel.proveedores) {
-            var proveedores = compraModel.proveedores
-            
-            for (var i = 0; i < proveedores.length; i++) {
-                var provider = proveedores[i]
-                if (provider && (provider.Nombre || provider.nombre)) {
-                    var nombreProveedor = provider.Nombre || provider.nombre
-                    names.push(nombreProveedor)
-                }
-            }
-        }
-        
-        providerNames = names
+        if (productCodeField) productCodeField.text = ""
+        if (cantidadField) cantidadField.text = ""
+        if (precioTotalField) precioTotalField.text = ""
+        if (precioVentaField) precioVentaField.text = ""
+        if (expiryField) expiryField.text = ""
     }
     
     function updatePurchaseTotal() {
@@ -300,458 +294,39 @@ Item {
         if (compraModel && compraModel.items_compra) {
             var items = compraModel.items_compra
             for (var i = 0; i < items.length; i++) {
-                var item = items[i]
-                total += parseFloat(item.subtotal || 0)
+                total += parseFloat(items[i].subtotal || 0)
             }
         }
         newPurchaseTotal = total
     }
-
-    function buscarProductosExistentes(texto) {
-        productSearchResultsModel.clear()
-        
-        if (!inventarioModel || texto.length < 2) {
-            showProductDropdown = false
-            mostrarButtonCrearProducto = false  // 🆕 Ocultar botón
-            return
-        }
-        
-        var textoBusqueda = texto.toLowerCase()
-        
-        if (inventarioModel) {
-            inventarioModel.buscar_productos(textoBusqueda)
-        }
-        
-        Qt.callLater(function() {
-            var resultados = inventarioModel.search_results || []
-            
-            if (resultados.length > 0) {
-                for (var i = 0; i < resultados.length; i++) {
-                    var producto = resultados[i]
-                    
-                    productSearchResultsModel.append({
-                        id: producto.id || producto.Id || 0,
-                        codigo: producto.Codigo || producto.codigo || "",
-                        nombre: producto.Nombre || producto.nombre || "",
-                        precioCompraBase: producto.Precio_compra || producto.precioCompraBase || 0,
-                        precioVentaBase: producto.Precio_venta || producto.precioVentaBase || 0,
-                        unidadMedida: producto.Unidad_Medida || producto.unidadMedida || "Unidades"
-                    })
-                }
-                
-                showProductDropdown = true
-                mostrarButtonCrearProducto = false  // 🆕 Ocultar botón si hay resultados
-                isNewProduct = false
-            } else {
-                showProductDropdown = false
-                mostrarButtonCrearProducto = true  // 🆕 ✅ MOSTRAR BOTÓN SI NO HAY RESULTADOS
-                isNewProduct = true
-                inputProductName = ""
-            }
-        })
-    }
-
-    function seleccionarProductoExistente(productoId, codigo, nombre) {
-        console.log("📍 Producto seleccionado - ID:", productoId, "Código:", codigo, "Nombre:", nombre)
-        
-        // 🆕 Resetear estado de creación
-        creandoProducto = false
-        
-        // ✅ ESTABLECER datos del producto
-        inputProductCode = codigo
-        inputProductName = nombre
-        inputProductId = productoId
-        isNewProduct = false
-        
-        // ✅ ACTIVAR formulario
-        formularioActivo = true
-        
-        // ✅ Cerrar dropdowns
-        showProductDropdown = false
-        mostrarButtonCrearProducto = false
-        
-        // ✅ Obtener datos del producto (primera compra?)
-        if (compraModel && productoId > 0) {
-            var datosProducto = compraModel.obtener_datos_precio_producto(productoId)
-            
-            if (datosProducto) {
-                esPrimeraCompra = datosProducto.es_primera || false
-                precioModificadoManualmente = false
-                
-                if (esPrimeraCompra) {
-                    console.log("🆕 Primera compra de producto:", nombre)
-                    showSuccess("⚠️ Primera compra: Define precio de venta (100% margen sugerido)")
-                } else {
-                    console.log("♻️ Compra subsiguiente - Usar precio existente")
-                }
-            }
-        }
-        
-        // ✅ Enfocar campo de cantidad
-        Qt.callLater(function() {
-            if (cantidadField) {
-                cantidadField.focus = true
-                cantidadField.selectAll()
-            }
-        })
-        
-        showSuccess("Producto seleccionado: " + nombre)
-    }
-
-    // 🆕 FUNCIÓN: Mostrar formulario con datos del producto
-    function mostrarFormularioProductoSeleccionado() {
-        console.log("📋 Mostrando formulario para:", inputProductName)
-        mostrarFormularioProducto = true
-        mostrarButtonCrearProducto = false
-        
-        // Guardar referencia del producto
-        productoSeleccionado = {
-            id: inputProductId,
-            codigo: inputProductCode,
-            nombre: inputProductName,
-            precioVentaActual: esPrimeraCompra ? 0 : (compraModel ? compraModel.obtener_precio_venta(inputProductId) : 0),
-            stockActual: 0  // Se obtendría del backend si es necesario
-        }
-    }
     
-    // 🆕 FUNCIÓN: Limpiar formulario de compra
-    function limpiarFormularioCompra() {
-        console.log("🧹 Limpiando formulario de compra")
-        mostrarFormularioProducto = false
-        permitirActualizarPrecio = false
-        clearProductFields()
-    }
-
-    function limpiarSeleccionProducto() {
-        console.log("🧹 Limpiando selección de producto")
-    
-        // ✅ Desactivar formulario
-        formularioActivo = false
-        
-        // ✅ Limpiar datos del producto
-        inputProductId = 0
-        inputProductCode = ""
-        inputProductName = ""
-        isNewProduct = true
-        esPrimeraCompra = false
-        
-        // ✅ Limpiar campos
-        if (cantidadField) cantidadField.text = ""
-        if (precioTotalField) precioTotalField.text = ""
-        if (precioVentaField) precioVentaField.text = ""
-        if (expiryField) expiryField.text = ""
-        
-        // ✅ Resetear cálculos
-        inputCantidad = 0
-        inputPrecioTotalCompra = 0.0
-        inputPrecioUnitarioCalculado = 0.0
-        inputPrecioVentaSugerido = 0.0
-        inputPrecioVentaFinal = 0.0
-        inputGananciaUnitaria = 0.0
-        inputGananciaTotal = 0.0
-        inputMargenRealPorcentaje = 0.0
-        precioModificadoManualmente = false
-        
-        // ✅ Cerrar dropdowns
-        showProductDropdown = false
-        mostrarButtonCrearProducto = false
-        
-        // ✅ Enfocar campo de búsqueda
-        Qt.callLater(function() {
-            if (productCodeField) {
-                productCodeField.focus = true
-                productCodeField.selectAll()
-            }
-        })
-        
-        showSuccess("Selección cancelada - Busca otro producto")
-    }
-    
-    // Agregar o actualizar producto
-    function addProductToPurchase() {
-        if (inputProductCode.length === 0) {
-            showSuccess("Error: Ingrese el código del producto")
-            return false
-        }
-        
-        if (inputProductName.length === 0) {
-            showSuccess("Error: Ingrese el nombre del producto")
-            return false
-        }
-        
-        if (inputCantidad <= 0) {
-            showSuccess("Error: Ingrese cantidad de unidades")
-            return false
-        }
-        
-        if (inputPrecioTotalCompra <= 0) {
-            showSuccess("Error: El precio total debe ser mayor a 0")
-            return false
-        }
-        
-        // Validar precio de venta para primera compra
-        if (esPrimeraCompra && inputPrecioVentaFinal <= 0) {
-            showSuccess("Error: Debe definir precio de venta para primera compra")
-            return false
-        }
-        
-        if (esPrimeraCompra && inputPrecioVentaFinal <= inputPrecioUnitarioCalculado) {
-            showSuccess("Error: Precio de venta debe ser mayor al precio de compra")
-            return false
-        }
-        
-        if (!inputNoExpiry) {
-            if (inputExpiryDate.length === 0) {
-                showSuccess("Error: Ingrese fecha de vencimiento o marque 'Sin vencimiento'")
-                return false
-            }
-            if (!validateExpiryDate(inputExpiryDate)) {
-                showSuccess("Error: Fecha de vencimiento inválida (YYYY-MM-DD)")
-                return false
-            }
-        }
-        
-        // Verificar si estamos en modo edición
-        if (productoEditandoIndex >= 0) {
-            return actualizarProductoExistente()
-        } else {
-            return agregarNuevoProducto()
-        }
-    }
-    
-    // Agregar nuevo producto
-    function agregarNuevoProducto() {
-        if (compraModel) {
-            // Agregar item con precio unitario calculado
-            compraModel.agregar_item_compra(
-                inputProductCode,
-                inputCantidad,
-                inputPrecioUnitarioCalculado,
-                inputNoExpiry ? "" : inputExpiryDate
-            )
-            
-            // Guardar datos adicionales FIFO 2.0
-            Qt.callLater(function() {
-                var items = compraModel.items_compra
-                if (items && items.length > 0) {
-                    var ultimoItem = items[items.length - 1]
-                    
-                    // Guardar producto_id
-                    if (inputProductId > 0) {
-                        ultimoItem.producto_id = inputProductId
-                        console.log("✅ Producto ID guardado:", inputProductId)
-                    }
-                    
-                    // Guardar precio_venta SOLO si es primera compra
-                    if (esPrimeraCompra && inputPrecioVentaFinal > 0) {
-                        ultimoItem.precio_venta = inputPrecioVentaFinal
-                        console.log("💰 Precio venta guardado:", inputPrecioVentaFinal)
-                        
-                        showSuccess(`Producto agregado: ${inputProductName} | Margen: Bs${inputGananciaUnitaria.toFixed(2)} (${inputMargenRealPorcentaje.toFixed(1)}%)`)
-                    } else {
-                        showSuccess("Producto agregado: " + inputProductName)
-                    }
-                }
-            })
-        }
-        
-        updatePurchaseTotal()
-        clearProductFields()
-        return true
-    }
-    
-    // Actualizar producto existente
-    function actualizarProductoExistente() {
-        if (productoEditandoIndex < 0 || !compraModel) {
-            return false
-        }
-        
-        var items = compraModel.items_compra
-        if (productoEditandoIndex >= items.length) {
-            console.log("Índice inválido:", productoEditandoIndex)
-            cancelarEdicionProducto()
-            return false
-        }
-        
-        // Actualizar en el modelo
-        compraModel.actualizar_item_compra(
-            productoEditandoIndex,
-            inputCantidad,
-            inputPrecioUnitarioCalculado,
-            inputNoExpiry ? "" : inputExpiryDate
-        )
-        
-        showSuccess("Producto actualizado: " + inputProductName)
-        updatePurchaseTotal()
-        cancelarEdicionProducto()
-        return true
-    }
-    
-    // Editar producto existente
-    function editarProductoExistente(index) {
-        if (index < 0 || !compraModel) {
-            return
-        }
-        
-        var items = compraModel.items_compra
-        if (index >= items.length) {
-            console.log("Índice inválido:", index)
-            return
-        }
-        
-        var producto = items[index]
-        
-        console.log("Editando producto:", producto.codigo, "- Índice:", index)
-        
-        // Cargar datos en el formulario
-        inputProductCode = producto.codigo || ""
-        inputProductName = producto.nombre || ""
-        inputProductId = producto.producto_id || 0
-        inputCantidad = producto.cantidad_unitario || 0
-        
-        // Calcular precio total desde unitario
-        var precioUnit = producto.precio_unitario || 0
-        var cantidad = producto.cantidad_unitario || 1
-        inputPrecioTotalCompra = precioUnit * cantidad
-        
-        inputExpiryDate = producto.fecha_vencimiento || ""
-        inputNoExpiry = (inputExpiryDate.length === 0 || inputExpiryDate === "Sin vencimiento")
-        
-        // Recalcular precios
-        calcularPreciosAutomaticos()
-        
-        // Actualizar campos visuales
-        if (productCodeField) productCodeField.text = inputProductName
-        if (cantidadField) cantidadField.text = inputCantidad.toString()
-        if (precioTotalField) precioTotalField.text = inputPrecioTotalCompra.toString()
-        if (expiryField) expiryField.text = inputExpiryDate
-        
-        // Marcar como editando
-        productoEditandoIndex = index
-        
-        Qt.callLater(function() {
-            if (cantidadField) {
-                cantidadField.focus = true
-                cantidadField.selectAll()
-            }
-        })
-        
-        showSuccess("Editando: " + inputProductName)
-    }
-    
-    // Cancelar edición de producto
-    function cancelarEdicionProducto() {
-        productoEditandoIndex = -1
-        clearProductFields()
-        showSuccess("Edición cancelada")
-    }
-
-    function clearProductFields() {
-        // ✅ IMPORTANTE: Resetear flag PRIMERO
-        precioModificadoManualmente = false
-        
-        inputProductCode = ""
-        inputProductName = ""
-        inputProductId = 0
-        inputCantidad = 0
-        inputPrecioTotalCompra = 0.0
-        inputPrecioUnitarioCalculado = 0.0
-        inputMargenPorcentaje: 100.0
-        inputPrecioVentaSugerido = 0.0
-        inputPrecioVentaFinal = 0.0
-        inputGananciaUnitaria = 0.0
-        inputGananciaTotal = 0.0
-        inputMargenRealPorcentaje = 0.0
-        inputExpiryDate = ""
-        inputNoExpiry = false
-        isNewProduct = true
-        showProductDropdown = false
-        productSearchResultsModel.clear()
-        productoEditandoIndex = -1
-        esPrimeraCompra = false
-
-        // ❌ **CORRECCIÓN CRÍTICA**: NO resetear contadorClics aquí
-        // El contador se resetea solo cuando se completa la compra o se cancela
-        // contadorClics = 0  // ❌ ELIMINADO PARA EVITAR DUPLICACIONES
-        
-        if (productCodeField) productCodeField.text = ""
-        if (cantidadField) cantidadField.text = "" 
-        if (precioTotalField) precioTotalField.text = ""
-        if (precioVentaField) precioVentaField.text = ""
-        if (expiryField) expiryField.text = ""
-    }
-
     function validateExpiryDate(dateStr) {
-        if (dateStr === "" || dateStr === "Sin vencimiento") return true;
-        
-        var regex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!regex.test(dateStr)) return false;
-        
-        var parts = dateStr.split('-');
-        var year = parseInt(parts[0], 10);
-        var month = parseInt(parts[1], 10);
-        var day = parseInt(parts[2], 10);
-        
-        if (month < 1 || month > 12) return false;
-        if (day < 1 || day > 31) return false;
-        if (year < 2020 || year > 2050) return false;
-        
-        var daysInMonth = new Date(year, month, 0).getDate();
-        if (day > daysInMonth) return false;
-        
-        return true;
+        if (dateStr === "" || dateStr === "Sin vencimiento") return true
+        var regex = /^\d{4}-\d{2}-\d{2}$/
+        if (!regex.test(dateStr)) return false
+        var parts = dateStr.split('-')
+        var year = parseInt(parts[0], 10)
+        var month = parseInt(parts[1], 10)
+        var day = parseInt(parts[2], 10)
+        if (month < 1 || month > 12) return false
+        if (day < 1 || day > 31) return false
+        if (year < 2020 || year > 2050) return false
+        var daysInMonth = new Date(year, month, 0).getDate()
+        return day <= daysInMonth
     }
-
-    // Completar compra con FIFO 2.0
+    
     function completarCompra() {
-        console.log("Iniciando proceso de completar/actualizar compra FIFO 2.0...")
-        
-        if (!compraModel) {
-            showSuccess("Error: Sistema de compras no disponible")
-            return false
-        }
-        
-        if (newPurchaseProvider === "") {
-            showSuccess("Error: Seleccione un proveedor")
-            return false
-        }
-        
-        if (!compraModel.items_compra || compraModel.items_compra.length === 0) {
-            showSuccess("Error: Agregue al menos un producto")
+        if (!compraModel || !providerCombo || providerCombo.currentIndex <= 0) {
+            showSuccess("Error: Complete todos los campos")
             return false
         }
         
         if (productoEditandoIndex >= 0) {
-            showSuccess("Advertencia: Hay un producto en edición. Guárdelo o cancele primero")
+            showSuccess("Termine de editar el producto primero")
             return false
         }
         
-        // MODO EDICIÓN: usar método legacy
-        if (modoEdicion) {
-            var cambios = compraModel.obtener_cambios_realizados()
-            if (cambios && cambios.hay_cambios) {
-                var mensaje = `Cambios detectados: ${cambios.total_cambios} modificaciones`
-                showSuccess(mensaje)
-            } else if (cambios && !cambios.hay_cambios) {
-                showSuccess("No hay cambios para guardar")
-                return true
-            }
-            
-            var exito = compraModel.procesar_compra_actual()
-            
-            if (exito) {
-                showSuccess("Compra actualizada exitosamente")
-                return true
-            } else {
-                showSuccess("Error: No se pudo actualizar la compra")
-                return false
-            }
-        }
-        
-        // MODO CREACIÓN: usar FIFO 2.0
-        console.log("📦 Usando sistema FIFO 2.0 para nueva compra")
-        
-        // Obtener proveedor_id
+        // Modo creación
         var proveedor_id = 0
         var proveedores = compraModel.proveedores
         for (var i = 0; i < proveedores.length; i++) {
@@ -767,36 +342,28 @@ Item {
             return false
         }
         
-        // Construir JSON de detalles para FIFO 2.0
         var detalles = []
         var items = compraModel.items_compra
         
         for (var j = 0; j < items.length; j++) {
             var item = items[j]
-            
             var detalle = {
                 "Id_Producto": item.producto_id || 0,
                 "Cantidad": item.cantidad_unitario || 0,
                 "Precio_Unitario": item.precio_unitario || 0.0
             }
             
-            // Agregar fecha de vencimiento si existe
             if (item.fecha_vencimiento && item.fecha_vencimiento !== "" && item.fecha_vencimiento !== "Sin vencimiento") {
                 detalle["Fecha_Vencimiento"] = item.fecha_vencimiento
             }
             
-            // FIFO 2.0: Agregar Precio_Venta SOLO si es primera compra
             if (item.precio_venta && item.precio_venta > 0) {
                 detalle["Precio_Venta"] = item.precio_venta
-                console.log(`💰 Item ${item.codigo}: Precio Venta = Bs${item.precio_venta}`)
             }
             
             detalles.push(detalle)
         }
         
-        console.log("📋 Detalles FIFO 2.0:", JSON.stringify(detalles))
-        
-        // Llamar al método FIFO 2.0
         var usuario_id = compraModel.usuario_actual_id
         var resultado = compraModel.registrar_compra_fifo_v2(
             proveedor_id,
@@ -804,15 +371,11 @@ Item {
             JSON.stringify(detalles)
         )
         
-        console.log("📦 Resultado FIFO 2.0:", JSON.stringify(resultado))
-        
         if (resultado && resultado.exito) {
             var id_compra = resultado.id_compra || 0
             var total = resultado.total || 0.0
-            
-            showSuccess(`✅ Compra #${id_compra} registrada: Bs${total.toFixed(2)} (FIFO 2.0)`)
-            clearProductFields()
-            
+            showSuccess(`✅ Compra #${id_compra}: Bs${total.toFixed(2)}`)
+            limpiarFormulario()
             return true
         } else {
             var errorMsg = resultado ? resultado.mensaje : "Error desconocido"
@@ -820,88 +383,31 @@ Item {
             return false
         }
     }
-
+    
     function showSuccess(message) {
         successMessage = message
         showSuccessMessage = true
         successTimer.restart()
     }
 
-    // 🆕 FUNCIÓN DE FALLBACK: Crear modal directamente
-    function crearModalCrearProductoDirecto(nombreProducto) {
-        console.log("🎯 Creando modal CrearProducto directamente...")
-        
-        var crearProductoComponent = Qt.createComponent("CrearProducto.qml")
-        
-        if (crearProductoComponent.status === Component.Ready) {
-            // Crear modal como hijo de crearCompraRoot (no su parent)
-            var modal = crearProductoComponent.createObject(crearCompraRoot, {
-                "inventarioModel": inventarioModel,
-                "anchors.fill": crearCompraRoot,
-                "visible": true,
-                "anchors.margins": 0,
-                "z": 10000
-            })
-            
-            if (modal) {
-                // Pre-llenar nombre si se proporcionó
-                if (nombreProducto && nombreProducto.trim().length > 0) {
-                    modal.inputProductName = nombreProducto
-                }
-                
-                // Conectar señales
-                modal.productoCreado.connect(function(producto) {
-                    console.log("✅ Producto creado directamente:", producto.nombre)
-                    
-                    // 🆕 IMPORTANTE: Actualizar el campo actual con el nuevo producto
-                    Qt.callLater(function() {
-                        // Forzar selección del producto recién creado
-                        seleccionarProductoExistente(
-                            producto.id || 0,
-                            producto.codigo || "",
-                            producto.nombre || nombreProducto
-                        )
-                    })
-                    
-                    modal.destroy()
-                })
-                
-                modal.cancelarCreacion.connect(function() {
-                    console.log("❌ Creación cancelada")
-                    modal.destroy()
-                })
-                
-                console.log("✅ Modal creado directamente")
-            } else {
-                console.log("❌ Error al crear modal")
-                showSuccess("Error: No se pudo abrir el formulario de producto")
-            }
-        } else {
-            console.log("❌ Error al cargar componente:", crearProductoComponent.errorString())
-            showSuccess("Error: Sistema de productos no disponible")
-        }
-    }
-
     // ============================================================================
-    // INTERFAZ MEJORADA + INDICADORES EDUCATIVOS
+    // INTERFAZ REDISEÑADA - UX PRIORITARIA
     // ============================================================================
     
     Rectangle {
         anchors.fill: parent
-        color: "#f8f9fa"
+        color: "#f5f7fa"
         
-        // HEADER
+        // HEADER COMPACTO
         Rectangle {
-            id: fixedHeader
+            id: header
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             height: headerHeight
             color: whiteColor
-            radius: radiusLarge
-            border.color: modoEdicion ? editModeColor : "#e9ecef"
+            border.color: "#e0e0e0"
             border.width: 1
-            z: 10
             
             RowLayout {
                 anchors.fill: parent
@@ -911,114 +417,57 @@ Item {
                 Button {
                     Layout.preferredWidth: 40
                     Layout.preferredHeight: 40
-                    
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker(accentColor, 1.2) : accentColor
-                        radius: 20
+                        color: "transparent"
                     }
-                    
                     contentItem: Label {
                         text: "←"
-                        color: whiteColor
+                        color: blueColor
                         font.bold: true
-                        font.pixelSize: 16
+                        font.pixelSize: 20
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
-                    
-                    onClicked: {
-                        // ✅ RESETEAR CONTADOR DE CLICS
-                        contadorClics = 0
-                        console.log("↩️ Cancelar - Contador reseteado")
-                        
-                        if (modoEdicion && compraModel) {
-                            compraModel.cancelar_edicion()
-                        }
-                        cancelarCompra()
-                    }
+                    onClicked: cancelarCompra()
                 }
                 
-                RowLayout {
-                    spacing: spacing8
-                    
-                    Rectangle {
-                        width: 32
-                        height: 32
-                        color: modoEdicion ? editModeColor : primaryColor
-                        radius: 16
-                        
-                        Label {
-                            anchors.centerIn: parent
-                            text: modoEdicion ? "📝" : "🛒"
-                            font.pixelSize: 16
-                        }
+                ColumnLayout {
+                    spacing: 2
+                    Label {
+                        text: modoEdicion ? "✏️ EDITAR COMPRA" : "🛒 NUEVA COMPRA"
+                        color: textColor
+                        font.bold: true
+                        font.pixelSize: fontLarge
                     }
-                    
-                    ColumnLayout {
-                        spacing: 4
-                        
-                        Label {
-                            text: modoEdicion ? "Editar Compra" : "Nueva Compra"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontLarge
-                        }
-                        
-                        Label {
-                            text: modoEdicion ? `Compra ${newPurchaseId}` : `${newPurchaseId} - ${newPurchaseDate}`
-                            color: darkGrayColor
-                            font.pixelSize: fontSmall
-                        }
+                    Label {
+                        text: newPurchaseId + " • " + newPurchaseDate
+                        color: darkGrayColor
+                        font.pixelSize: fontSmall
                     }
                 }
                 
                 Item { Layout.fillWidth: true }
                 
-                // 🆕 Botón de ayuda
-                Button {
-                    Layout.preferredWidth: 100
-                    Layout.preferredHeight: 36
-                    text: mostrarAyuda ? "Ocultar ayuda" : "Mostrar ayuda"
-                    
-                    background: Rectangle {
-                        color: parent.pressed ? "#e3f2fd" : "#f8f9fa"
-                        radius: radiusSmall
-                        border.color: blueColor
-                        border.width: 1
-                    }
-                    
-                    contentItem: Label {
-                        text: parent.text
-                        color: blueColor
-                        font.pixelSize: fontSmall
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    
-                    onClicked: mostrarAyuda = !mostrarAyuda
-                }
-                
                 Rectangle {
-                    Layout.preferredWidth: 120
+                    Layout.preferredWidth: 150
                     Layout.preferredHeight: 40
-                    color: "#E8F5E9"
-                    radius: radiusMedium
+                    color: "#e8f5e9"
+                    radius: 6
                     border.color: successColor
                     border.width: 1
                     
                     ColumnLayout {
                         anchors.centerIn: parent
-                        spacing: 0
-                        
+                        spacing: 2
                         Label {
-                            text: "Total Compra"
-                            color: "#2E7D32"
-                            font.pixelSize: fontSmall
+                            text: "TOTAL COMPRA"
+                            color: "#2e7d32"
+                            font.bold: true
+                            font.pixelSize: 9
                             Layout.alignment: Qt.AlignHCenter
                         }
-                        
                         Label {
-                            text: "Bs" + newPurchaseTotal.toFixed(2)
+                            text: "Bs " + newPurchaseTotal.toFixed(2)
                             color: successColor
                             font.bold: true
                             font.pixelSize: fontMedium
@@ -1029,1436 +478,813 @@ Item {
             }
         }
         
-        // 🆕 PANEL DE AYUDA EDUCATIVO
-        Rectangle {
-            id: ayudaPanel
-            visible: mostrarAyuda
-            anchors.top: fixedHeader.bottom
+        // CONTENIDO PRINCIPAL CON SCROLL
+        ScrollView {
+            anchors.top: header.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.margins: spacing8
-            anchors.topMargin: spacing4
-            height: mostrarAyuda ? 60 : 0  // Más compacto y colapsable
-            color: "#E3F2FD"
-            radius: radiusMedium
-            border.color: "#2196F3"
-            border.width: 2
+            anchors.bottom: parent.bottom
+            clip: true
+            
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            
+            // CORRECCIÓN: Usar Item como contenedor con márgenes
+            Item {
+                width: parent.width
+                implicitHeight: mainColumn.implicitHeight + 2 * spacing12
+                
+                ColumnLayout {
+                    id: mainColumn
+                    anchors.fill: parent
+                    anchors.margins: spacing12  // ✅ CORREGIDO: Usar anchors.margins en lugar de padding
+                    spacing: spacing12
+                    
+                    // SECCIÓN PROVEEDOR
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 70
+                        color: whiteColor
+                        radius: 8
+                        border.color: "#e0e0e0"
+                        border.width: 1
+                        
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: spacing8
+                            spacing: spacing4
+                            
+                            Label {
+                                text: "PROVEEDOR"
+                                color: textColor
+                                font.bold: true
+                                font.pixelSize: fontSmall
+                            }
+                            
+                            RowLayout {
+                                spacing: spacing8
+                                ComboBox {
+                                    id: providerCombo
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 36
+                                    model: crearCompraRoot.providerNames
+                                    font.pixelSize: fontSmall
+                                    
+                                    background: Rectangle {
+                                        color: whiteColor
+                                        border.color: darkGrayColor
+                                        border.width: 1
+                                        radius: 6
+                                    }
+                                    
+                                    onCurrentTextChanged: {
+                                        if (currentIndex > 0) newPurchaseProvider = currentText
+                                        else newPurchaseProvider = ""
+                                    }
+                                }
+                                
+                                Button {
+                                    text: "➕"
+                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: 36
+                                    font.pixelSize: 16
+                                    onClicked: {
+                                        if (compraModel) compraModel.force_refresh_proveedores()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // SECCIÓN BÚSQUEDA DE PRODUCTO
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 80
+                        color: whiteColor
+                        radius: 8
+                        border.color: "#e0e0e0"
+                        border.width: 1
+                        
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: spacing8
+                            spacing: spacing4
+                            
+                            Label {
+                                text: "🔍 BUSCAR O CREAR PRODUCTO"
+                                color: textColor
+                                font.bold: true
+                                font.pixelSize: fontSmall
+                            }
+                            
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+                                color: "#f8f9fa"
+                                radius: 6
+                                border.color: productCodeField.activeFocus ? blueColor : "#ddd"
+                                border.width: 2
+                                
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: spacing8
+                                    spacing: spacing8
+                                    
+                                    TextInput {
+                                        id: productCodeField
+                                        Layout.fillWidth: true
+                                        font.pixelSize: fontMedium
+                                        color: textColor
+                                        verticalAlignment: Text.AlignVCenter
+                                        selectByMouse: true
+                                        
+                                        onTextChanged: {
+                                            inputProductName = text
+                                            if (text.length >= 2) buscarProductosExistentes(text)
+                                            else {
+                                                showProductDropdown = false
+                                                mostrarButtonCrearProducto = false
+                                            }
+                                        }
+                                        
+                                        onFocusChanged: if (focus) selectAll()
+                                        
+                                        Text {
+                                            anchors.fill: parent
+                                            text: "Escribe el nombre del producto..."
+                                            color: "#999"
+                                            font.pixelSize: fontSmall
+                                            verticalAlignment: Text.AlignVCenter
+                                            visible: parent.text.length === 0
+                                        }
+                                    }
+                                    
+                                    Button {
+                                        text: "➕ Crear"
+                                        visible: mostrarButtonCrearProducto
+                                        Layout.preferredHeight: 28
+                                        Layout.preferredWidth: 80
+                                        font.pixelSize: 10
+                                        
+                                        background: Rectangle {
+                                            color: parent.hovered ? "#43a047" : successColor
+                                            radius: 4
+                                        }
+                                        
+                                        contentItem: Label {
+                                            text: parent.text
+                                            color: whiteColor
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        
+                                        onClicked: {
+                                            var nombre = productCodeField.text.trim()
+                                            if (nombre.length > 0) {
+                                                crearCompraRoot.solicitarCrearProducto(nombre)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // ✅ RESULTADOS DE BÚSQUEDA (ABAJO DEL INPUT)
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(200, productSearchResultsModel.count * 40)
+                        visible: showProductDropdown
+                        color: whiteColor
+                        border.color: blueColor
+                        border.width: 1
+                        radius: 8
+                        
+                        ListView {
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            model: productSearchResultsModel
+                            clip: true
+                            spacing: 1
+                            
+                            delegate: Rectangle {
+                                width: ListView.view.width
+                                height: 40
+                                color: mouseArea.containsMouse ? "#e3f2fd" : "white"
+                                
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: spacing8
+                                    spacing: spacing8
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 60
+                                        Layout.preferredHeight: 24
+                                        color: blueColor
+                                        radius: 4
+                                        
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: model.codigo
+                                            color: whiteColor
+                                            font.bold: true
+                                            font.pixelSize: 9
+                                        }
+                                    }
+                                    
+                                    Label {
+                                        text: model.nombre
+                                        color: textColor
+                                        font.pixelSize: fontSmall
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    
+                                    Label {
+                                        text: "Bs " + (model.precioVentaBase || 0).toFixed(2)
+                                        color: successColor
+                                        font.bold: true
+                                        font.pixelSize: fontSmall
+                                    }
+                                }
+                                
+                                MouseArea {
+                                    id: mouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: seleccionarProductoExistente(model.id, model.codigo, model.nombre)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 🚀 DATOS DE COMPRA - TODO EN UNA FILA
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 100
+                        color: whiteColor
+                        radius: 8
+                        border.color: "#e0e0e0"
+                        border.width: 1
+                        
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: spacing8
+                            spacing: spacing6
+                            
+                            Label {
+                                text: "📝 DATOS DE LA COMPRA"
+                                color: textColor
+                                font.bold: true
+                                font.pixelSize: fontSmall
+                            }
+                            
+                            // ✅ TODOS LOS CAMPOS EN UNA SOLA FILA
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: spacing6
+                                
+                                // CANTIDAD
+                                ColumnLayout {
+                                    spacing: 2
+                                    Layout.preferredWidth: 100
+                                    
+                                    Label {
+                                        text: "Cantidad:"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 100
+                                        height: 32
+                                        color: "#f8f9fa"
+                                        radius: 4
+                                        border.color: cantidadField.activeFocus ? blueColor : "#ddd"
+                                        border.width: 1
+                                        
+                                        TextInput {
+                                            id: cantidadField
+                                            anchors.fill: parent
+                                            anchors.margins: 6
+                                            font.pixelSize: fontMedium
+                                            font.bold: true
+                                            color: textColor
+                                            validator: IntValidator { bottom: 1 }
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
+                                            
+                                            onTextChanged: {
+                                                inputCantidad = parseInt(text) || 0
+                                                calcularPreciosAutomaticos()
+                                            }
+                                            
+                                            onFocusChanged: if (focus) selectAll()
+                                        }
+                                    }
+                                }
+                                
+                                // PRECIO TOTAL
+                                ColumnLayout {
+                                    spacing: 2
+                                    Layout.preferredWidth: 120
+                                    
+                                    Label {
+                                        text: "Precio TOTAL:"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 120
+                                        height: 32
+                                        color: "#fff8e1"
+                                        radius: 4
+                                        border.color: precioTotalField.activeFocus ? "#ffb74d" : "#ffecb3"
+                                        border.width: 1
+                                        
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            spacing: 2
+                                            
+                                            Label {
+                                                text: "Bs"
+                                                color: "#f57c00"
+                                                font.bold: true
+                                                font.pixelSize: 12
+                                            }
+                                            
+                                            TextInput {
+                                                id: precioTotalField
+                                                Layout.fillWidth: true
+                                                font.pixelSize: fontMedium
+                                                font.bold: true
+                                                color: "#f57c00"
+                                                validator: RegularExpressionValidator { regularExpression: /^\d*\.?\d{0,2}$/ }
+                                                horizontalAlignment: Text.AlignRight
+                                                verticalAlignment: Text.AlignVCenter
+                                                
+                                                onTextChanged: {
+                                                    inputPrecioTotalCompra = parseFloat(text) || 0.0
+                                                    calcularPreciosAutomaticos()
+                                                }
+                                                
+                                                onFocusChanged: if (focus) selectAll()
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // COSTO UNITARIO
+                                ColumnLayout {
+                                    spacing: 2
+                                    Layout.preferredWidth: 100
+                                    
+                                    Label {
+                                        text: "Costo c/u:"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 100
+                                        height: 32
+                                        color: "#e3f2fd"
+                                        radius: 4
+                                        border.color: "#2196f3"
+                                        border.width: 1
+                                        
+                                        Label {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            text: "Bs " + inputPrecioUnitarioCalculado.toFixed(2)
+                                            color: "#1565c0"
+                                            font.bold: true
+                                            font.pixelSize: 12
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                                
+                                // PRECIO VENTA
+                                ColumnLayout {
+                                    spacing: 2
+                                    Layout.preferredWidth: 120
+                                    
+                                    Label {
+                                        text: "Precio VENTA:"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                    }
+                                    
+                                    Rectangle {
+                                        Layout.preferredWidth: 120
+                                        height: 32
+                                        color: "#e8f5e9"
+                                        radius: 4
+                                        border.color: precioVentaField.activeFocus ? "#4caf50" : "#a5d6a7"
+                                        border.width: 1
+                                        
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            spacing: 2
+                                            
+                                            Label {
+                                                text: "Bs"
+                                                color: "#2e7d32"
+                                                font.bold: true
+                                                font.pixelSize: 12
+                                            }
+                                            
+                                            TextInput {
+                                                id: precioVentaField
+                                                Layout.fillWidth: true
+                                                font.pixelSize: fontMedium
+                                                font.bold: true
+                                                color: "#2e7d32"
+                                                validator: RegularExpressionValidator { regularExpression: /^\d*\.?\d{0,2}$/ }
+                                                horizontalAlignment: Text.AlignRight
+                                                verticalAlignment: Text.AlignVCenter
+                                                
+                                                text: inputPrecioVentaUnitario > 0 ? inputPrecioVentaUnitario.toFixed(2) : ""
+                                                
+                                                onTextChanged: {
+                                                    inputPrecioVentaUnitario = parseFloat(text) || 0.0
+                                                    validarProductoParaAgregar()
+                                                }
+                                                
+                                                onFocusChanged: if (focus) selectAll()
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // VENCIMIENTO
+                                ColumnLayout {
+                                    spacing: 2
+                                    Layout.preferredWidth: 150
+                                    
+                                    Label {
+                                        text: "Vencimiento:"
+                                        color: textColor
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                    }
+                                    
+                                    RowLayout {
+                                        spacing: 4
+                                        
+                                        Rectangle {
+                                            Layout.preferredWidth: 100
+                                            height: 32
+                                            color: inputNoExpiry ? "#f5f5f5" : "white"
+                                            radius: 4
+                                            border.color: expiryField.activeFocus ? "#9c27b0" : "#ddd"
+                                            border.width: 1
+                                            
+                                            TextInput {
+                                                id: expiryField
+                                                anchors.fill: parent
+                                                anchors.margins: 6
+                                                font.pixelSize: 14
+                                                color: textColor
+                                                enabled: !inputNoExpiry
+                                                horizontalAlignment: Text.AlignCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                
+                                                text: inputExpiryDate
+                                                
+                                                onTextChanged: {
+                                                    if (!inputNoExpiry) inputExpiryDate = text
+                                                    validarProductoParaAgregar()
+                                                }
+                                                
+                                                onFocusChanged: if (focus) selectAll()
+                                                
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "AAAA-MM-DD"
+                                                    color: "#999"
+                                                    font.pixelSize: 14
+                                                    visible: parent.text.length === 0 && !inputNoExpiry
+                                                }
+                                            }
+                                        }
+                                        
+                                        CheckBox {
+                                            text: "Sin venc."
+                                            font.pixelSize: 12
+                                            checked: inputNoExpiry
+                                            Layout.preferredHeight: 40
+                                            onCheckedChanged: {
+                                                inputNoExpiry = checked
+                                                if (checked) {
+                                                    inputExpiryDate = ""
+                                                    expiryField.text = ""
+                                                }
+                                                validarProductoParaAgregar()
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // BOTÓN AGREGAR
+                                Button {
+                                    Layout.preferredWidth: 140
+                                    Layout.preferredHeight: 40
+                                    Layout.alignment: Qt.AlignVCenter
+                                    enabled: productoValidoParaAgregar
+                                    text: productoEditandoIndex >= 0 ? "✏️ ACTUALIZAR" : "➕ AGREGAR"
+                                    
+                                    background: Rectangle {
+                                        color: parent.enabled ? (parent.hovered ? "#1976d2" : blueColor) : lightGrayColor
+                                        radius: 4
+                                    }
+                                    
+                                    contentItem: Label {
+                                        text: parent.text
+                                        color: whiteColor
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    
+                                    onClicked: agregarProductoACompra()
+                                }
+                            }
+                        }
+                    }
+                    
+                    // LISTA DE PRODUCTOS - COMPACTA
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 350
+                        color: whiteColor
+                        radius: 8
+                        border.color: "#e0e0e0"
+                        border.width: 1
+                        
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: spacing8
+                            spacing: spacing4
+                            
+                            RowLayout {
+                                Label {
+                                    text: "🛒 PRODUCTOS EN LA COMPRA"
+                                    color: textColor
+                                    font.bold: true
+                                    font.pixelSize: fontSmall
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                Label {
+                                    text: compraModel ? compraModel.items_en_compra + " items" : "0 items"
+                                    color: darkGrayColor
+                                    font.pixelSize: fontSmall
+                                }
+                            }
+                            
+                            // LISTA COMPACTA
+                            ListView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                clip: true
+                                model: compraModel ? compraModel.items_compra : []
+                                spacing: 2
+                                
+                                delegate: Rectangle {
+                                    width: parent ? parent.width : 0
+                                    height: 40
+                                    color: index % 2 === 0 ? '#e3edf5' : whiteColor
+                                    radius: 4
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: spacing3
+                                        spacing: spacing8
+                                        
+                                        Label {
+                                            text: modelData.codigo || ""
+                                            color: textColor
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            Layout.preferredWidth: 80
+                                            elide: Text.ElideRight
+                                        }
+                                        
+                                        Label {
+                                            text: modelData.nombre || ""
+                                            color: textColor
+                                            font.pixelSize: fontSmall
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+                                        
+                                        Label {
+                                            text: modelData.cantidad_unitario || 0
+                                            color: blueColor
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            Layout.preferredWidth: 50
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                        
+                                        Label {
+                                            text: "Bs " + (modelData.subtotal || 0).toFixed(2)
+                                            color: successColor
+                                            font.bold: true
+                                            font.pixelSize: fontSmall
+                                            Layout.preferredWidth: 80
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                        
+                                        RowLayout {
+                                            spacing: spacing4
+                                            
+                                            Button {
+                                                text: "✏️"
+                                                font.pixelSize: 16
+                                                padding: 2
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                }
+                                                onClicked: {
+                                                    // Cargar datos para edición
+                                                    inputProductCode = modelData.codigo || ""
+                                                    inputProductName = modelData.nombre || ""
+                                                    inputCantidad = modelData.cantidad_unitario || 0
+                                                    var precioUnit = modelData.precio_unitario || 0
+                                                    inputPrecioTotalCompra = precioUnit * inputCantidad
+                                                    inputExpiryDate = modelData.fecha_vencimiento || ""
+                                                    inputNoExpiry = (inputExpiryDate === "")
+                                                    productoEditandoIndex = index
+                                                    
+                                                    // Actualizar campos visuales
+                                                    productCodeField.text = inputProductName
+                                                    cantidadField.text = inputCantidad.toString()
+                                                    precioTotalField.text = inputPrecioTotalCompra.toFixed(2)
+                                                    expiryField.text = inputExpiryDate
+                                                    
+                                                    calcularPreciosAutomaticos()
+                                                }
+                                            }
+                                            
+                                            Button {
+                                                text: "🗑️"
+                                                font.pixelSize: 16
+                                                padding: 2
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                }
+                                                onClicked: {
+                                                    if (compraModel) {
+                                                        compraModel.remover_item_compra(modelData.codigo)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Mensaje lista vacía
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: "transparent"
+                                visible: !compraModel || compraModel.items_en_compra === 0
+                                
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: spacing8
+                                    
+                                    Label {
+                                        text: "📭"
+                                        font.pixelSize: 24
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    Label {
+                                        text: "No hay productos en la compra"
+                                        color: darkGrayColor
+                                        font.pixelSize: fontSmall
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                    
+                                    Label {
+                                        text: "Agrega productos usando el formulario de arriba"
+                                        color: "#999"
+                                        font.pixelSize: 10
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // BOTONES INFERIORES FIJOS
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 70
+            color: whiteColor
+            border.color: "#e0e0e0"
+            border.width: 1
             
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: spacing12
                 spacing: spacing12
                 
-                Rectangle {
-                    Layout.preferredWidth: 40
-                    Layout.preferredHeight: 40
-                    color: "#2196F3"
-                    radius: 20
-                    
-                    Label {
-                        anchors.centerIn: parent
-                        text: "💡"
-                        font.pixelSize: 20
-                    }
-                }
-                
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 4
-                    
-                    Label {
-                        text: "¿CÓMO REGISTRAR UNA COMPRA?"
-                        color: "#1565C0"
-                        font.bold: true
-                        font.pixelSize: fontMedium
-                    }
-                    
-                    Label {
-                        text: "1️⃣ Busca el producto → 2️⃣ Ingresa CANTIDAD y PRECIO TOTAL que pagaste → 3️⃣ El sistema calcula precio unitario y sugiere precio de venta con 100% margen → 4️⃣ Puedes modificar el precio de venta → 5️⃣ Agregar"
-                        color: "#1976D2"
-                        font.pixelSize: fontSmall
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                }
-            }
-        }
-        
-        // SECCIÓN PROVEEDOR
-        Rectangle {
-            id: providerSection
-            anchors.top: mostrarAyuda ? ayudaPanel.bottom : fixedHeader.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: spacing8
-            anchors.topMargin: spacing4
-            height: 50
-            color: whiteColor
-            radius: radiusMedium
-            border.color: "#D5DBDB"
-            border.width: 1
-            
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: spacing8
-                spacing: spacing8
-                
-                Label {
-                    text: "Proveedor:"
-                    color: textColor
-                    font.bold: true
-                    font.pixelSize: fontSmall
-                }
-                
-                ComboBox {
-                    id: providerCombo
-                    Layout.preferredWidth: 250
-                    Layout.preferredHeight: inputHeight
-                    model: crearCompraRoot.providerNames
-                    font.pixelSize: fontSmall
-                    
-                    background: Rectangle {
-                        color: whiteColor
-                        border.color: modoEdicion ? editModeColor : darkGrayColor
-                        border.width: 1
-                        radius: radiusSmall
-                    }
-                    
-                    onCurrentTextChanged: {
-                        if (currentIndex > 0) {
-                            newPurchaseProvider = currentText
-                        } else {
-                            newPurchaseProvider = ""
-                        }
-                        
-                        if (compraModel) {
-                            var proveedores = compraModel.proveedores
-                            for (var i = 0; i < proveedores.length; i++) {
-                                var proveedor = proveedores[i]
-                                if ((proveedor.Nombre || proveedor.nombre) === currentText) {
-                                    compraModel.set_proveedor_seleccionado(proveedor.id)
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-                
                 Button {
-                    Layout.preferredWidth: 30
-                    Layout.preferredHeight: inputHeight
+                    text: "❌ CANCELAR"
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 42
+                    font.bold: true
                     
                     background: Rectangle {
-                        color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
-                        radius: radiusSmall
+                        color: parent.pressed ? "#d32f2f" : dangerColor
+                        radius: 6
                     }
                     
-                    contentItem: Label {
-                        text: "🔄"
-                        color: whiteColor
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    
-                    onClicked: {
-                        if (compraModel) {
-                            compraModel.force_refresh_proveedores()
-                        }
-                    }
+                    onClicked: cancelarCompra()
                 }
-                
-                Label {
-                    text: "💡 Para gestiónar proveedores, usa Farmacia → Proveedores"
-                    color: "#666"
-                    font.pixelSize: fontSmall
-                    font.italic: true
-                    Layout.fillWidth: true
-                }
-            }
-        }
-        
-        // 🚀 SECCIÓN FORMULARIO MEJORADO - FLUJO INTUITIVO CON CAMPOS MÁS GRANDES
-        Rectangle {
-            id: unifiedInputSection
-            anchors.top: providerSection.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: spacing8
-            anchors.topMargin: spacing4
-            height: {
-                if (formularioActivo) {
-                    return esPrimeraCompra ? 320 : 240
-                } else if (mostrarButtonCrearProducto) {
-                    return 105  // Más alto cuando hay botón
-                } else {
-                    return 80   // Solo búsqueda
-                }
-            }
-            color: productoEditandoIndex >= 0 ? "#FFF9C4" : "#F8F9FA"
-            radius: radiusMedium
-            border.color: {  // 🆕 COLOR DINÁMICO
-                if (productoEditandoIndex >= 0) return "#F39C12"
-                if (formularioActivo) return "#2196F3"
-                return "#D5DBDB"
-            }
-            border.width: formularioActivo ? 2 : 1  // 🆕 Más grueso cuando está activo
-            
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: spacing12
-                spacing: spacing8
-                
-                // ============================================
-                // SECCIÓN 1: BÚSQUEDA DE PRODUCTO
-                // ============================================
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 50
-                    visible: !formularioActivo  // 🆕 SOLO visible cuando NO hay producto seleccionado
-                    color: "#FFFFFF"
-                    border.color: productCodeField.activeFocus ? blueColor : darkGrayColor
-                    border.width: productCodeField.activeFocus ? 2 : 1
-                    radius: radiusMedium
-                    
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        spacing: 4
-                        
-                        Label {
-                            text: "1️⃣ BUSCAR PRODUCTO EXISTENTE"
-                            color: textColor
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                        
-                        RowLayout {
-                            spacing: 8
-                            
-                            TextInput {
-                                id: productCodeField
-                                Layout.fillWidth: true
-                                text: inputProductName.length > 0 ? inputProductName : inputProductCode
-                                enabled: productoEditandoIndex < 0
-                                font.pixelSize: fontMedium
-                                color: "#000000"
-                                verticalAlignment: Text.AlignVCenter
-                                selectByMouse: true
-                                
-                                onTextChanged: {
-                                    if (inputProductName.length > 0 && text === inputProductName) {
-                                        return
-                                    }
-                                    
-                                    if (text !== inputProductName) {
-                                        inputProductCode = text
-                                        inputProductName = ""
-                                        isNewProduct = true
-                                    }
-                                    
-                                    if (text.length >= 2) {
-                                        buscarProductosExistentes(text)
-                                    } else {
-                                        showProductDropdown = false
-                                        isNewProduct = true
-                                    }
-                                }
-                                
-                                onFocusChanged: {
-                                    if (focus) {
-                                        selectAll()
-                                    }
-                                }
-                            }
-                            
-                            Button {
-                                Layout.preferredWidth: 30
-                                Layout.preferredHeight: 30
-                                visible: productCodeField.text.length > 0
-                                
-                                background: Rectangle {
-                                    color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                                    radius: 15
-                                }
-                                
-                                contentItem: Label {
-                                    text: "✕"
-                                    color: whiteColor
-                                    font.pixelSize: 12
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: {
-                                    productCodeField.text = ""
-                                    inputProductCode = ""
-                                    inputProductName = ""
-                                    showProductDropdown = false
-                                    mostrarButtonCrearProducto = false
-                                }
-                            }
-                        }
-                        
-                        Text {
-                            text: "Escribe nombre o código del producto..."
-                            color: "#999999"
-                            font.pixelSize: fontSmall
-                            visible: productCodeField.text.length === 0
-                        }
-                    }
-                }
-                
-                // 🆕 BOTÓN CREAR NUEVO PRODUCTO (Aparece si no hay resultados)
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: mostrarButtonCrearProducto ? 45 : 0
-                    visible: mostrarButtonCrearProducto && !formularioActivo
-                    color: "#FFF3E0"
-                    border.color: "#FF6F00"
-                    border.width: 2
-                    radius: radiusMedium
-                    clip: true
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: spacing8
-                        spacing: spacing8
-                        
-                        Label {
-                            text: "❌ Producto no encontrado"
-                            color: "#E65100"
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                            Layout.fillWidth: true
-                        }
-                        
-                        // 🆕 ACTUALIZAR EL BOTÓN "CREAR NUEVO PRODUCTO"
-                        Button {
-                            text: creandoProducto ? "⏳ Creando..." : "➕ Crear Nuevo Producto"
-                            Layout.preferredHeight: 35
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#E65100" : (creandoProducto ? "#FFB74D" : "#FF6F00")
-                                radius: radiusSmall
-                            }
-                            
-                            contentItem: Label {
-                                text: parent.text
-                                color: "#ffffff"
-                                font.bold: true
-                                font.pixelSize: fontSmall
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: {
-                                console.log("🔓 Botón: Crear Nuevo Producto clickeado")
-                                
-                                if (creandoProducto) {
-                                    console.log("⏳ Ya se está creando un producto, espera...")
-                                    return
-                                }
-                                
-                                var nombreProducto = productCodeField.text.trim()
-                                
-                                if (nombreProducto.length === 0) {
-                                    showSuccess("✏️ Escribe el nombre del producto primero")
-                                    Qt.callLater(function() {
-                                        if (productCodeField) {
-                                            productCodeField.focus = true
-                                            productCodeField.selectAll()
-                                        }
-                                    })
-                                    return
-                                }
-                                
-                                if (nombreProducto.length < 2) {
-                                    showSuccess("⚠️ El nombre debe tener al menos 2 caracteres")
-                                    return
-                                }
-                                
-                                console.log("🆕 Iniciando creación de producto:", nombreProducto)
-                                
-                                // 🆕 Mostrar estado de "creando"
-                                creandoProducto = true
-                                mostrarButtonCrearProducto = false
-                                
-                                // Emitir señal
-                                crearCompraRoot.solicitarCrearProducto(nombreProducto)
-                                
-                                // 🆕 Timer para resetear estado si algo falla
-                                Qt.callLater(function() {
-                                    var resetTimer = Qt.createQmlObject('import QtQuick 2.15; Timer { interval: 5000; running: true }', 
-                                                                    crearCompraRoot, "resetTimer")
-                                    resetTimer.triggered.connect(function() {
-                                        if (creandoProducto) {
-                                            console.log("⚠️ Reset estado creandoProducto (timeout)")
-                                            creandoProducto = false
-                                            mostrarButtonCrearProducto = true
-                                        }
-                                        resetTimer.destroy()
-                                    })
-                                })
-                            }
-                        }
-                    }
-                }
-                
-                // ============================================
-                // SECCIÓN 2: FORMULARIO DE COMPRA (cuando hay producto seleccionado)
-                // ============================================
-                Rectangle {
-                    id: formularioCompra
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: formularioActivo ? (esPrimeraCompra ? 340 : 270) : 0
-                    visible: formularioActivo
-                    color: "#F5F7FA"
-                    border.color: "#2196F3"
-                    border.width: 2
-                    radius: 12
-                    
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-                        
-                        // ============================================
-                        // CABECERA DEL FORMULARIO
-                        // ============================================
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 12
-                            
-                            Rectangle {
-                                Layout.preferredWidth: 44
-                                Layout.preferredHeight: 44
-                                color: "#2196F3"
-                                radius: 22
-                                
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "📦"
-                                    font.pixelSize: 18
-                                }
-                            }
-                            
-                            ColumnLayout {
-                                spacing: 4
-                                
-                                Label {
-                                    text: inputProductName || "Producto sin nombre"
-                                    color: "#1565C0"
-                                    font.bold: true
-                                    font.pixelSize: fontMedium
-                                }
-                                
-                                Label {
-                                    text: "Código: " + inputProductCode
-                                    color: "#666666"
-                                    font.pixelSize: fontSmall
-                                }
-                            }
-                            
-                            Item { Layout.fillWidth: true }
-                            
-                            Button {
-                                text: "✕"
-                                Layout.preferredWidth: 36
-                                Layout.preferredHeight: 36
-                                
-                                background: Rectangle {
-                                    color: parent.hovered ? "#F0F0F0" : "#F5F5F5"
-                                    border.color: parent.hovered ? "#E57373" : "#BDBDBD"
-                                    border.width: 1
-                                    radius: 8
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: parent.hovered ? "#E57373" : "#999999"
-                                    font.pixelSize: 18
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: limpiarSeleccionProducto()
-                            }
-                        }
-                        
-                        // ============================================
-                        // FILA 1: CANTIDAD Y PRECIO TOTAL
-                        // ============================================
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 16
-                            
-                            // CANTIDAD
-                            ColumnLayout {
-                                spacing: 6
-                                Layout.preferredWidth: 160
-                                
-                                Label {
-                                    text: "Cantidad Unidades"
-                                    color: "#212121"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 44
-                                    color: "#FFFFFF"
-                                    border.color: cantidadField.activeFocus ? "#2196F3" : "#BDBDBD"
-                                    border.width: cantidadField.activeFocus ? 2 : 1
-                                    radius: 8
-                                    
-                                    TextInput {
-                                        id: cantidadField
-                                        anchors.fill: parent
-                                        anchors.margins: 10
-                                        
-                                        text: inputCantidad > 0 ? inputCantidad.toString() : ""
-                                        validator: IntValidator { bottom: 0 }
-                                        font.pixelSize: fontLarge
-                                        font.bold: true
-                                        color: "#000000"
-                                        horizontalAlignment: Text.AlignCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                        selectByMouse: true
-                                        
-                                        onTextChanged: {
-                                            inputCantidad = text.length > 0 ? (parseInt(text) || 0) : 0
-                                            calcularPreciosAutomaticos()
-                                        }
-                                        
-                                        onFocusChanged: {
-                                            if (focus) selectAll()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // PRECIO TOTAL
-                            ColumnLayout {
-                                spacing: 6
-                                Layout.fillWidth: true
-                                
-                                Label {
-                                    text: "Precio TOTAL que pagaste"
-                                    color: "#212121"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 44
-                                    color: "#FFF8F0"
-                                    border.color: precioTotalField.activeFocus ? "#FF6F00" : "#FFB74D"
-                                    border.width: precioTotalField.activeFocus ? 2 : 1
-                                    radius: 8
-                                    
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 10
-                                        spacing: 6
-                                        
-                                        Label {
-                                            text: "Bs"
-                                            font.bold: true
-                                            color: "#E65100"
-                                            font.pixelSize: fontMedium
-                                        }
-                                        
-                                        TextInput {
-                                            id: precioTotalField
-                                            Layout.fillWidth: true
-                                            
-                                            text: inputPrecioTotalCompra > 0 ? inputPrecioTotalCompra.toString() : ""
-                                            validator: RegularExpressionValidator { regularExpression: /^\d*\.?\d{0,2}$/ }
-                                            font.pixelSize: fontMedium
-                                            font.bold: true
-                                            color: "#E65100"
-                                            horizontalAlignment: Text.AlignCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            selectByMouse: true
-                                            
-                                            onTextChanged: {
-                                                inputPrecioTotalCompra = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
-                                                calcularPreciosAutomaticos()
-                                            }
-                                            
-                                            onFocusChanged: {
-                                                if (focus) selectAll()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // ============================================
-                        // FILA 2: PRECIO UNITARIO Y VENCIMIENTO
-                        // ============================================
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 16
-                            
-                            // PRECIO UNITARIO (READ-ONLY)
-                            ColumnLayout {
-                                spacing: 6
-                                visible: inputPrecioUnitarioCalculado > 0
-                                Layout.preferredWidth: 160
-                                
-                                Label {
-                                    text: "Precio Unitario"
-                                    color: "#1565C0"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 44
-                                    color: "#E3F2FD"
-                                    border.color: "#2196F3"
-                                    border.width: 2
-                                    radius: 8
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "Bs " + inputPrecioUnitarioCalculado.toFixed(2)
-                                        color: "#1565C0"
-                                        font.bold: true
-                                        font.pixelSize: fontMedium
-                                    }
-                                }
-                            }
-                            
-                            // VENCIMIENTO
-                            ColumnLayout {
-                                spacing: 6
-                                Layout.fillWidth: true
-                                
-                                Label {
-                                    text: "Vencimiento"
-                                    color: "#212121"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                }
-                                
-                                RowLayout {
-                                    spacing: 8
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 180
-                                        Layout.preferredHeight: 44
-                                        color: inputNoExpiry ? "#F5F5F5" : "#FFFFFF"
-                                        border.color: {
-                                            if (inputNoExpiry) return "#E0E0E0"
-                                            if (expiryField.activeFocus) return "#9C27B0"
-                                            if (inputExpiryDate.length > 0 && !validateExpiryDate(inputExpiryDate)) return "#E57373"
-                                            return "#BDBDBD"
-                                        }
-                                        border.width: expiryField.activeFocus ? 2 : 1
-                                        radius: 8
-                                        
-                                        TextInput {
-                                            id: expiryField
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            
-                                            text: inputExpiryDate
-                                            enabled: !inputNoExpiry
-                                            font.pixelSize: fontSmall
-                                            color: "#000000"
-                                            horizontalAlignment: Text.AlignCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            selectByMouse: true
-                                            
-                                            onTextChanged: {
-                                                if (!inputNoExpiry) {
-                                                    inputExpiryDate = text
-                                                }
-                                            }
-                                        }
-                                        
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "AAAA-MM-DD"
-                                            color: "#999999"
-                                            font.pixelSize: 11
-                                            visible: expiryField.text.length === 0 && !inputNoExpiry
-                                        }
-                                    }
-                                    
-                                    // Checkbox
-                                    RowLayout {
-                                        spacing: 6
-                                        
-                                        Rectangle {
-                                            width: 28
-                                            height: 28
-                                            radius: 6
-                                            border.color: "#BDBDBD"
-                                            border.width: 1
-                                            color: !inputNoExpiry ? "#4CAF50" : "#FFFFFF"
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "✓"
-                                                color: "#FFFFFF"
-                                                font.pixelSize: 14
-                                                font.bold: true
-                                                visible: !inputNoExpiry
-                                            }
-                                            
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                onClicked: {
-                                                    inputNoExpiry = !inputNoExpiry
-                                                    if (inputNoExpiry) {
-                                                        inputExpiryDate = ""
-                                                        expiryField.text = ""
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        
-                                        Label {
-                                            text: "Sin venc."
-                                            font.pixelSize: fontSmall
-                                            color: "#666666"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // ============================================
-                        // SECCIÓN: PRIMERA COMPRA (Si aplica)
-                        // ============================================
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: esPrimeraCompra && inputPrecioUnitarioCalculado > 0 ? 90 : 0
-                            visible: esPrimeraCompra && inputPrecioUnitarioCalculado > 0
-                            color: "#FFF3E0"
-                            border.color: "#FF6F00"
-                            border.width: 2
-                            radius: 8
-                            clip: true
-                            
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 8
-                                
-                                Label {
-                                    text: "⚠️ PRIMERA COMPRA - Define Precio de Venta"
-                                    color: "#E65100"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                }
-                                
-                                RowLayout {
-                                    spacing: 12
-                                    
-                                    ColumnLayout {
-                                        spacing: 4
-                                        Layout.preferredWidth: 140
-                                        
-                                        Label {
-                                            text: "Sugerido (100%)"
-                                            color: "#666666"
-                                            font.pixelSize: 10
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 36
-                                            color: "#FFE0B2"
-                                            border.color: "#FF6F00"
-                                            border.width: 1
-                                            radius: 6
-                                            
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "Bs " + inputPrecioVentaSugerido.toFixed(2)
-                                                color: "#BF360C"
-                                                font.bold: true
-                                                font.pixelSize: fontSmall
-                                            }
-                                        }
-                                    }
-                                    
-                                    Label {
-                                        text: "→"
-                                        font.pixelSize: 18
-                                        color: "#FF6F00"
-                                    }
-                                    
-                                    ColumnLayout {
-                                        spacing: 4
-                                        Layout.fillWidth: true
-                                        
-                                        Label {
-                                            text: "Precio Final"
-                                            color: "#212121"
-                                            font.bold: true
-                                            font.pixelSize: 10
-                                        }
-                                        
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 36
-                                            color: "#FFFFFF"
-                                            border.color: precioVentaField.activeFocus ? "#4CAF50" : "#FF6F00"
-                                            border.width: precioVentaField.activeFocus ? 2 : 1
-                                            radius: 6
-                                            
-                                            RowLayout {
-                                                anchors.fill: parent
-                                                anchors.margins: 6
-                                                spacing: 4
-                                                
-                                                Label {
-                                                    text: "Bs"
-                                                    font.bold: true
-                                                    color: "#E65100"
-                                                    font.pixelSize: fontSmall
-                                                }
-                                                
-                                                TextInput {
-                                                    id: precioVentaField
-                                                    Layout.fillWidth: true
-                                                    
-                                                    text: {
-                                                        if (precioModificadoManualmente && inputPrecioVentaFinal > 0) {
-                                                            return inputPrecioVentaFinal.toFixed(2)
-                                                        }
-                                                        if (inputPrecioVentaSugerido > 0) {
-                                                            return inputPrecioVentaSugerido.toFixed(2)
-                                                        }
-                                                        return ""
-                                                    }
-                                                    
-                                                    validator: RegularExpressionValidator { regularExpression: /^\d*\.?\d{0,2}$/ }
-                                                    font.pixelSize: fontSmall
-                                                    font.bold: true
-                                                    color: "#E65100"
-                                                    horizontalAlignment: Text.AlignCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    selectByMouse: true
-                                                    
-                                                    onTextChanged: {
-                                                        if (activeFocus) {
-                                                            precioModificadoManualmente = true
-                                                        }
-                                                        inputPrecioVentaFinal = text.length > 0 ? (parseFloat(text) || 0.0) : 0.0
-                                                        calcularPreciosAutomaticos()
-                                                    }
-                                                    
-                                                    onFocusChanged: {
-                                                        if (focus) selectAll()
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        visible: inputGananciaUnitaria > 0
-                                        Layout.preferredWidth: 120
-                                        Layout.preferredHeight: 50
-                                        color: inputMargenRealPorcentaje >= 50 ? "#E8F5E9" : 
-                                            inputMargenRealPorcentaje >= 30 ? "#FFF3E0" : "#FFEBEE"
-                                        border.color: inputMargenRealPorcentaje >= 50 ? "#4CAF50" : 
-                                                    inputMargenRealPorcentaje >= 30 ? "#FF9800" : "#F44336"
-                                        border.width: 2
-                                        radius: 6
-                                        
-                                        ColumnLayout {
-                                            anchors.centerIn: parent
-                                            spacing: 2
-                                            
-                                            Label {
-                                                text: "💰"
-                                                font.pixelSize: 14
-                                                Layout.alignment: Qt.AlignHCenter
-                                            }
-                                            
-                                            Label {
-                                                text: "Bs " + inputGananciaUnitaria.toFixed(2)
-                                                color: inputMargenRealPorcentaje >= 50 ? "#2E7D32" : 
-                                                    inputMargenRealPorcentaje >= 30 ? "#E65100" : "#C62828"
-                                                font.bold: true
-                                                font.pixelSize: 11
-                                                Layout.alignment: Qt.AlignHCenter
-                                            }
-                                            
-                                            Label {
-                                                text: "(" + inputMargenRealPorcentaje.toFixed(0) + "%)"
-                                                color: inputMargenRealPorcentaje >= 50 ? "#2E7D32" : 
-                                                    inputMargenRealPorcentaje >= 30 ? "#E65100" : "#C62828"
-                                                font.pixelSize: 9
-                                                Layout.alignment: Qt.AlignHCenter
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // ============================================
-                        // BOTONES DE ACCIÓN
-                        // ============================================
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 12
-                            
-                            Item { Layout.fillWidth: true }
-                            
-                            Button {
-                                text: "❌ Cancelar"
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 42
-                                
-                                background: Rectangle {
-                                    color: parent.hovered ? "#E8E8E8" : "#F5F5F5"
-                                    border.color: parent.hovered ? "#BDBDBD" : "#D0D0D0"
-                                    border.width: 1
-                                    radius: 8
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: "#666666"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: limpiarSeleccionProducto()
-                            }
-                            
-                            Button {
-                                text: productoEditandoIndex >= 0 ? "✏️ Actualizar" : "✅ Agregar a compra"
-                                Layout.preferredHeight: 42
-                                Layout.minimumWidth: 180
-                                Layout.fillWidth: true
-                                
-                                enabled: {
-                                    var baseEnabled = inputProductCode.length > 0 && 
-                                                inputProductName.length > 0 && 
-                                                inputCantidad > 0 &&
-                                                inputPrecioTotalCompra > 0 &&
-                                                (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
-                                    
-                                    if (esPrimeraCompra) {
-                                        return baseEnabled && inputPrecioVentaFinal > 0 && inputPrecioVentaFinal > inputPrecioUnitarioCalculado
-                                    }
-                                    
-                                    return baseEnabled
-                                }
-                                
-                                background: Rectangle {
-                                    color: parent.enabled ? (parent.hovered ? "#1976D2" : "#2196F3") : "#BDBDBD"
-                                    radius: 8
-                                }
-                                
-                                contentItem: Label {
-                                    text: parent.text
-                                    color: "#FFFFFF"
-                                    font.bold: true
-                                    font.pixelSize: fontSmall
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                onClicked: {
-                                    if (addProductToPurchase()) {
-                                        limpiarSeleccionProducto()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-            }
-        }
-        
-        // SECCIÓN LISTA DE PRODUCTOS
-        Rectangle {
-            id: productListSection
-            anchors.top: unifiedInputSection.bottom
-            anchors.bottom: actionsSection.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: spacing8
-            anchors.topMargin: spacing4
-            anchors.bottomMargin: spacing4
-            color: "#F8F9FA"
-            radius: radiusLarge
-            border.color: lightGrayColor
-            border.width: 1
-            
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: spacing8
-                spacing: spacing8
-                
-                RowLayout {
-                    Layout.fillWidth: true
-                    
-                    Label {
-                        text: "📦"
-                        font.pixelSize: 16
-                    }
-                    
-                    Label {
-                        text: `Productos en la compra: ${compraModel ? compraModel.items_en_compra : 0}`
-                        color: textColor
-                        font.bold: true
-                        font.pixelSize: fontMedium
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: whiteColor
-                    border.color: "#D5DBDB"
-                    border.width: 1
-                    radius: radiusMedium
-                    
-                    ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 0
-                        
-                        // Header de tabla
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 35
-                            color: "#F8F9FA"
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                spacing: 0
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.fillHeight: true
-                                    color: "#F8F9FA"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CÓDIGO"
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                        color: textColor
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 150
-                                    Layout.fillHeight: true
-                                    color: "#F8F9FA"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: spacing4
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "NOMBRE"
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.fillHeight: true
-                                    color: "#F8F9FA"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CANTIDAD"
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 100
-                                    Layout.fillHeight: true
-                                    color: "#F8F9FA"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "COSTO TOTAL"
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    Layout.preferredWidth: 80
-                                    Layout.fillHeight: true
-                                    color: "#F8F9FA"
-                                    border.color: "#D5DBDB"
-                                    border.width: 1
-                                    
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "ACCIONES"
-                                        color: textColor
-                                        font.bold: true
-                                        font.pixelSize: fontSmall
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Lista de productos
-                        ListView {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            
-                            model: compraModel ? compraModel.items_compra : []
-                            
-                            delegate: Rectangle {
-                                width: ListView.view ? ListView.view.width : 0
-                                height: 40
-                                color: index % 2 === 0 ? whiteColor : "#F8F9FA"
-                                
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
-                                    
-                                    // CÓDIGO
-                                    Rectangle {
-                                        Layout.preferredWidth: 80
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: modelData.codigo || ""
-                                            font.pixelSize: fontSmall
-                                            color: textColor
-                                        }
-                                    }
-                                    
-                                    // NOMBRE
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        Layout.minimumWidth: 150
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.left: parent.left
-                                            anchors.leftMargin: spacing4
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: modelData.nombre || ""
-                                            font.pixelSize: fontSmall
-                                            color: textColor
-                                            elide: Text.ElideRight
-                                            width: parent.width - spacing4 * 2
-                                        }
-                                    }
-                                    
-                                    // CANTIDAD
-                                    Rectangle {
-                                        Layout.preferredWidth: 80
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: (modelData.cantidad_unitario || 0).toString()
-                                            font.pixelSize: fontSmall
-                                            color: textColor
-                                        }
-                                    }
-                                    
-                                    // COSTO TOTAL
-                                    Rectangle {
-                                        Layout.preferredWidth: 100
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "Bs" + (modelData.subtotal || 0).toFixed(2)
-                                            font.pixelSize: fontSmall
-                                            font.bold: true
-                                            color: successColor
-                                        }
-                                    }
-                                    
-                                    // ACCIONES
-                                    Rectangle {
-                                        Layout.preferredWidth: 80
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        border.color: "#D5DBDB"
-                                        border.width: 1
-                                        
-                                        RowLayout {
-                                            anchors.centerIn: parent
-                                            spacing: spacing4
-                                            
-                                            Rectangle {
-                                                width: 24
-                                                height: 24
-                                                color: blueColor
-                                                radius: 12
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: "✏️"
-                                                    font.pixelSize: 10
-                                                }
-                                                
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    onClicked: editarProductoExistente(index)
-                                                }
-                                            }
-                                            
-                                            Rectangle {
-                                                width: 24
-                                                height: 24
-                                                color: dangerColor
-                                                radius: 12
-                                                
-                                                Label {
-                                                    anchors.centerIn: parent
-                                                    text: "🗑️"
-                                                    font.pixelSize: 10
-                                                }
-                                                
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    onClicked: {
-                                                        if (compraModel) {
-                                                            compraModel.remover_item_compra(modelData.codigo)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // SECCIÓN DE ACCIONES
-        Rectangle {
-            id: actionsSection
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: spacing8
-            height: 60
-            color: whiteColor
-            radius: radiusMedium
-            border.color: "#D5DBDB"
-            border.width: 1
-            
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: spacing8
-                spacing: spacing8
                 
                 Item { Layout.fillWidth: true }
                 
                 Button {
-                    text: "❌ Cancelar"
-                    Layout.preferredHeight: buttonHeight
-                    
-                    background: Rectangle {
-                        color: parent.pressed ? Qt.darker(dangerColor, 1.2) : dangerColor
-                        radius: radiusSmall
-                    }
-                    
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        font.pixelSize: fontSmall
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: {
-                        // ✅ RESETEAR CONTADOR DE CLICS
-                        contadorClics = 0
-                        console.log("↩️ Cancelar - Contador reseteado")
-                        
-                        if (modoEdicion && compraModel) {
-                            compraModel.cancelar_edicion()
-                        }
-                        cancelarCompra()
-                    }
-                }
-                
-                Button {
                     id: completarCompraButton
-                    text: modoEdicion ? "💾 Guardar Cambios" : "📦 Completar Compra"
-                    Layout.preferredHeight: buttonHeight
-                    enabled: !procesandoCompra &&  // ✅ AGREGAR ESTA LÍNEA
-                        (providerCombo ? providerCombo.currentIndex > 0 : false) && 
-                        (compraModel ? compraModel.items_en_compra > 0 : false) &&
-                        productoEditandoIndex < 0
+                    text: modoEdicion ? "💾 GUARDAR CAMBIOS" : "✅ COMPLETAR COMPRA"
+                    Layout.preferredWidth: 200
+                    Layout.preferredHeight: 42
+                    font.bold: true
+                    
+                    enabled: (
+                        providerCombo && providerCombo.currentIndex > 0 &&
+                        compraModel && compraModel.items_en_compra > 0 &&
+                        !procesandoCompra
+                    )
                     
                     background: Rectangle {
-                        color: !enabled ? darkGrayColor : (modoEdicion ? editModeColor : successColor)
-                        radius: radiusSmall
-                    }
-                    
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.bold: true
-                        font.pixelSize: fontSmall
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                        color: parent.enabled ? (parent.pressed ? "#388e3c" : successColor) : "#bdbdbd"
+                        radius: 6
                     }
                     
                     onClicked: {
-                        // ✅ INCREMENTAR Y LOGGEAR CLICS
-                        contadorClics++
-                        console.log("🔵 CLIC #" + contadorClics + " en botón Completar Compra")
-                        
-                        // ✅ BLOQUEAR SI YA HUBO UN CLIC
-                        if (contadorClics > 1) {
-                            console.log("🚫 CLIC DUPLICADO DETECTADO - BLOQUEANDO (Clic #" + contadorClics + ")")
-                            return  // ❌ Salir inmediatamente
-                        }
-                        
-                        // ✅ DESHABILITAR BOTÓN INMEDIATAMENTE
-                        completarCompraButton.enabled = false
-                        completarCompraButton.text = "⏳ Procesando..."
-                        console.log("🔒 Botón deshabilitado - Iniciando guardado")
-                        
-                        // Ejecutar compra
                         if (completarCompra()) {
-                            console.log("✅ Compra ejecutada exitosamente")
-                            Qt.callLater(function() {
-                                completarCompraButton.text = modoEdicion ? "✅ ¡Actualizado!" : "✅ ¡Completado!"
-                                // ✅ INICIAR TIMER PARA RESETEO COMPLETO
-                                resetButtonTimer.restart()
-                            })
-                        } else {
-                            console.log("❌ Error en compra - Reactivando botón")
-                            completarCompraButton.enabled = true
-                            completarCompraButton.text = modoEdicion ? "💾 Guardar Cambios" : "📦 Completar Compra"
-                            contadorClics = 0  // Reset del contador solo en error
+                            procesandoCompra = true
+                            completarCompraButton.text = "⏳ PROCESANDO..."
+                            resetButtonTimer.start()
                         }
                     }
                 }
             }
         }
-
-        // DROPDOWN FLOTANTE
+        
+        // MENSAJE DE ÉXITO
         Rectangle {
-            id: floatingDropdown
-            anchors.top: unifiedInputSection.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: spacing8
-            anchors.topMargin: spacing4
-            height: Math.min(100, productSearchResultsModel.count * 30)
-            color: whiteColor
-            border.color: blueColor
-            border.width: 1
-            radius: radiusSmall
-            visible: showProductDropdown && productoEditandoIndex < 0
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 80
+            width: Math.min(parent.width * 0.8, 400)
+            height: 50
+            color: "#4caf50"
+            radius: 8
+            visible: showSuccessMessage
             z: 1000
             
-            ListView {
+            RowLayout {
                 anchors.fill: parent
-                anchors.margins: spacing4
-                model: productSearchResultsModel
-                clip: true
+                anchors.margins: spacing8
+                spacing: spacing8
                 
-                delegate: Rectangle {
-                    width: ListView.view ? ListView.view.width : 0
-                    height: 30
-                    color: mouseArea.containsMouse ? "#E3F2FD" : "transparent"
-                    radius: radiusSmall
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: spacing4
-                        spacing: spacing4
-                        
-                        Rectangle {
-                            Layout.preferredWidth: 50
-                            Layout.preferredHeight: 16
-                            color: blueColor
-                            radius: 8
-                            
-                            Label {
-                                anchors.centerIn: parent
-                                text: model.codigo
-                                color: whiteColor
-                                font.bold: true
-                                font.pixelSize: 8
-                            }
-                        }
-                        
-                        Label {
-                            text: model.nombre
-                            color: textColor
-                            font.pixelSize: fontSmall
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                        
-                        Label {
-                            text: "Bs" + model.precioVentaBase.toFixed(2)
-                            color: successColor
-                            font.bold: true
-                            font.pixelSize: fontSmall
-                        }
-                    }
-                    
-                    MouseArea {
-                        id: mouseArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: seleccionarProductoExistente(model.id, model.codigo, model.nombre)
-                    }
+                Label {
+                    text: "✅"
+                    font.pixelSize: 20
+                }
+                
+                Label {
+                    text: successMessage
+                    color: whiteColor
+                    font.bold: true
+                    font.pixelSize: fontSmall
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
                 }
             }
         }
@@ -2473,54 +1299,92 @@ Item {
     }
 
     Component.onCompleted: {
-        console.log("✅ CrearCompra.qml inicializado - FIFO 2.0 con cálculos automáticos")
-        console.log("📦 Modelos disponibles:", !!compraModel, !!inventarioModel)
+        console.log("✅ CrearCompra.qml - UX Mejorada")
         
-        // Cargar proveedores con retraso para asegurar que están disponibles
-        Qt.callLater(function() {
-            console.log("🔄 Intentando cargar proveedores...")
-            if (compraModel) {
-                console.log("📊 Proveedores en modelo:", compraModel.proveedores ? compraModel.proveedores.length : "0")
-                compraModel.force_refresh_proveedores()
-                
-                // Actualizar lista de proveedores después de cargar
-                Qt.callLater(function() {
-                    updateProviderNames()
-                    console.log("✅ Proveedores actualizados, cantidad:", providerNames.length)
-                }, 500)
-                
-                if (compraModel.modo_edicion) {
-                    Qt.callLater(cargarDatosEdicion, 800)
-                }
-            }
-        }, 100)
+        // Configurar fecha actual
+        var fecha = new Date()
+        newPurchaseDate = fecha.getDate().toString().padStart(2, '0') + "/" +
+                         (fecha.getMonth() + 1).toString().padStart(2, '0') + "/" +
+                         fecha.getFullYear()
         
-        var fechaActual = new Date()
-        var dia = fechaActual.getDate().toString().padStart(2, '0')
-        var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
-        var año = fechaActual.getFullYear()
-        newPurchaseDate = dia + "/" + mes + "/" + año
-        
-        if (!modoEdicion) {
-            newPurchaseId = "C" + String((compraModel ? compraModel.total_compras_mes : 0) + 1).padStart(3, '0')
+        if (!modoEdicion && compraModel) {
+            newPurchaseId = "C" + String((compraModel.total_compras_mes || 0) + 1).padStart(3, '0')
         }
         
+        // Cargar proveedores
         Qt.callLater(function() {
-            if (productCodeField) {
-                productCodeField.focus = true
+            if (compraModel) {
+                compraModel.force_refresh_proveedores()
+                Qt.callLater(function() {
+                    updateProviderNames()
+                }, 500)
             }
         })
-        // 🔗 CONECTAR SEÑAL PARA CREAR PRODUCTO
+        
+        // Conectar señal para crear producto
         crearCompraRoot.solicitarCrearProducto.connect(function(nombreProducto) {
-            console.log("📢 Señal recibida: solicitarCrearProducto")
-            
-            if (abrirModalCrearProductoFunction && typeof abrirModalCrearProductoFunction === "function") {
-                console.log("✅ Abriendo modal CrearProducto")
+            if (abrirModalCrearProductoFunction) {
                 abrirModalCrearProductoFunction(nombreProducto)
-            } else {
-                console.log("⚠️ Usando fallback")
-                crearModalCrearProductoDirecto(nombreProducto)
             }
         })
+    }
+    
+    // FUNCIÓN AÑADIDA FALTANTE
+    function updateProviderNames() {
+        var names = ["Seleccionar proveedor..."]
+        if (compraModel && compraModel.proveedores) {
+            var proveedores = compraModel.proveedores
+            for (var i = 0; i < proveedores.length; i++) {
+                var provider = proveedores[i]
+                if (provider && (provider.Nombre || provider.nombre)) {
+                    var nombreProveedor = provider.Nombre || provider.nombre
+                    names.push(nombreProveedor)
+                }
+            }
+        }
+        providerNames = names
+    }
+    
+    // FUNCIÓN AÑADIDA FALTANTE
+    function cargarDatosEdicion() {
+        if (!modoEdicion || !compraModel) return
+        
+        console.log("📋 Cargando datos para edición - Compra:", compraIdEdicion)
+        
+        newPurchaseId = `C${String(compraIdEdicion).padStart(3, '0')}`
+        
+        var datosOrig = datosOriginales
+        if (datosOrig && datosOrig.proveedor) {
+            newPurchaseProvider = datosOrig.proveedor
+            
+            for (var i = 0; i < providerNames.length; i++) {
+                if (providerNames[i] === datosOrig.proveedor) {
+                    if (providerCombo) providerCombo.currentIndex = i
+                    break
+                }
+            }
+        }
+        
+        if (datosOrig && datosOrig.fecha) {
+            try {
+                var fechaStr = datosOrig.fecha.toString()
+                if (fechaStr && fechaStr.length > 0) newPurchaseDate = fechaStr
+            } catch (e) {
+                console.log("⚠️ Error al convertir fecha:", e)
+                var fechaActual = new Date()
+                var dia = fechaActual.getDate().toString().padStart(2, '0')
+                var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
+                var año = fechaActual.getFullYear()
+                newPurchaseDate = dia + "/" + mes + "/" + año
+            }
+        }
+        
+        updatePurchaseTotal()
+        showSuccess("Compra cargada para edición")
+    }
+    function showError(mensaje) {
+        successMessage = mensaje
+        showSuccessMessage = true
+        successTimer.restart()
     }
 }

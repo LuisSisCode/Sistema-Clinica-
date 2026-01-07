@@ -4,12 +4,12 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
 // ===============================================================================
-// CREAR PRODUCTO - FIFO 2.0 (DISEÑO MODAL CENTRADO)
+// CREAR PRODUCTO - FIFO 2.0 (DISEÑO MODAL CENTRADO OPTIMIZADO)
 // ===============================================================================
-// Versión Rectangle con overlay semi-transparente + modal centrado
-// - Sin sombra (más simple y rápido)
-// - Click en overlay NO cierra (más seguro)
-// - Modal flotante de 900x550px centrado
+// Versión mejorada con mejor uso del espacio
+// - Eliminado espacio en blanco en lado derecho
+// - Mejor distribución de elementos
+// - Mantiene compatibilidad con MarcaComboBox
 // ===============================================================================
 
 Rectangle {
@@ -37,12 +37,12 @@ Rectangle {
     // ===============================
     // MÉTRICAS DEL DISEÑO
     // ===============================
-    readonly property real baseSpacing: 12
+    readonly property real baseSpacing: 10
     readonly property real cardPadding: 16
-    readonly property real inputHeight: 40
-    readonly property real buttonHeight: 45
-    readonly property real headerHeight: 60
-    readonly property real sectionSpacing: 12
+    readonly property real inputHeight: 38
+    readonly property real buttonHeight: 44
+    readonly property real headerHeight: 55
+    readonly property real sectionSpacing: 10
     
     // ===============================
     // COLORES (CONSERVADOS)
@@ -75,7 +75,6 @@ Rectangle {
     property string inputMeasureUnit: "Tabletas"
     property string inputMarca: ""
     property int inputStockMinimo: 10
-    property int inputStockMaximo: 100
 
     // ===============================
     // PROPIEDADES DE MARCA
@@ -155,13 +154,6 @@ Rectangle {
         }
         return {valido: true, mensaje: ""}
     }
-
-    function validarStockMaximo() {
-        if (inputStockMaximo < inputStockMinimo) {
-            return {valido: false, mensaje: "El stock máximo debe ser mayor al stock mínimo"}
-        }
-        return {valido: true, mensaje: ""}
-    }
     
     // ===============================
     // FUNCIÓN GUARDAR PRODUCTO
@@ -171,7 +163,6 @@ Rectangle {
         console.log("   - marcaIdSeleccionada:", marcaIdSeleccionada)
         console.log("   - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
         console.log("   - stockMinimo:", inputStockMinimo)
-        console.log("   - stockMaximo:", inputStockMaximo)
 
         // ✅ VALIDACIÓN CRÍTICA DE MARCA
         if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
@@ -211,12 +202,6 @@ Rectangle {
             return false
         }
 
-        var validacionStockMax = validarStockMaximo()
-        if (!validacionStockMax.valido) {
-            showError(validacionStockMax.mensaje)
-            return false
-        }
-
         // ✅ CREAR OBJETO PRODUCTO FIFO 2.0
         var producto = {
             codigo: inputProductCode.trim(),
@@ -226,7 +211,6 @@ Rectangle {
             marca_id: marcaIdSeleccionada,
             marca: marcaSeleccionadaNombre,
             stock_minimo: inputStockMinimo,
-            stock_maximo: inputStockMaximo,
             precio_compra: 0.0,
             precio_venta: 0.0
         }
@@ -292,7 +276,6 @@ Rectangle {
             inputProductDetails = ""
             inputMeasureUnit = "Tabletas"
             inputStockMinimo = 10
-            inputStockMaximo = 100
             marcaIdSeleccionada = 0
             marcaSeleccionadaNombre = ""
             
@@ -300,7 +283,6 @@ Rectangle {
             if (nombreField) nombreField.text = ""
             if (detallesField) detallesField.text = ""
             if (stockMinimoField) stockMinimoField.text = "10"
-            if (stockMaximoField) stockMaximoField.text = "100"
             if (unidadCombo) unidadCombo.currentIndex = 0
             if (marcaComboBox) marcaComboBox.reset()
             
@@ -383,7 +365,6 @@ Rectangle {
         inputProductDetails = producto.detalles || ""
         inputMeasureUnit = producto.unidad_medida || "Tabletas"
         inputStockMinimo = producto.stock_minimo || 10
-        inputStockMaximo = producto.stock_maximo || 100
         
         // ✅ CORREGIR: Buscar marca_id si solo viene el nombre
         var marcaNombre = producto.marca || ""
@@ -415,7 +396,6 @@ Rectangle {
         if (nombreField) nombreField.text = inputProductName
         if (detallesField) detallesField.text = inputProductDetails
         if (stockMinimoField) stockMinimoField.text = inputStockMinimo.toString()
-        if (stockMaximoField) stockMaximoField.text = inputStockMaximo.toString()
         
         // Buscar índice de unidad de medida
         if (unidadCombo) {
@@ -438,21 +418,22 @@ Rectangle {
             console.log("⚠️ No se puede forzar selección - ID:", marcaIdSeleccionada)
         }
     }
+
     // ===============================
-    // MODAL CENTRADO
+    // MODAL CENTRADO MEJORADO
     // ===============================
     Rectangle {
-            id: modalContent
-            width: Math.min(1000, parent.width * 0.95)
-            height: Math.min(750, parent.height * 0.92)
-            x: (parent.width - width) / 2
-            y: (parent.height - height) / 2
-            color: white
-            radius: 12
-            border.color: borderColor
-            border.width: 1
-            z: 10001
-        
+        id: modalContent
+        width: Math.min(900, parent.width * 0.92)
+        height: Math.min(520, parent.height * 0.85)
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        color: white
+        radius: 12
+        border.color: borderColor
+        border.width: 1
+        z: 10001
+    
         // Detiene propagación de clicks al overlay
         MouseArea {
             anchors.fill: parent
@@ -544,7 +525,7 @@ Rectangle {
             }
 
             // ===============================
-            // CONTENIDO PRINCIPAL
+            // CONTENIDO PRINCIPAL OPTIMIZADO
             // ===============================
             Rectangle {
                 Layout.fillWidth: true
@@ -553,53 +534,52 @@ Rectangle {
                 
                 ScrollView {
                     anchors.fill: parent
-                    anchors.margins: baseSpacing
+                    anchors.margins: 14
                     clip: true
                     
                     ColumnLayout {
-                        width: parent.width - 20
-                        spacing: 16
+                        width: parent.width
+                        spacing: 12
                         
                         // ===============================
                         // ℹ️ BANNER INFORMATIVO FIFO 2.0
                         // ===============================
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 70
+                            Layout.preferredHeight: 60
                             color: "#EFF6FF"
                             border.color: "#3B82F6"
-                            border.width: 2
-                            radius: 8
+                            border.width: 1
+                            radius: 6
                             visible: !modoEdicion
                             
-                            ColumnLayout {
+                            RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 6
+                                anchors.margins: 10
+                                spacing: 8
                                 
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 8
-                                    
-                                    Text {
-                                        text: "ℹ️"
-                                        font.pixelSize: 18
-                                    }
+                                Text {
+                                    text: "ℹ️"
+                                    font.pixelSize: 20
+                                }
+                                
+                                ColumnLayout {
+                                    spacing: 4
                                     
                                     Text {
                                         text: "IMPORTANTE"
-                                        font.pixelSize: 12
+                                        font.pixelSize: 13
                                         font.bold: true
-                                        color: grayDark
+                                        color: "#1E40AF"
                                     }
-                                }
-                                
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: "El stock se calculará en la primera compra • El precio de venta se define al comprar"
-                                    font.pixelSize: 11
-                                    color: grayDark
-                                    wrapMode: Text.WordWrap
+                                    
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: "El stock se calculará en la primera compra • El precio de venta se define al comprar"
+                                        font.pixelSize: 11
+                                        color: "#374151"
+                                        wrapMode: Text.WordWrap
+                                    }
                                 }
                             }
                         }
@@ -607,13 +587,15 @@ Rectangle {
                         // ===============================
                         // FILA 1: Código, Nombre, Marca
                         // ===============================
-                        RowLayout {
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 12
+                            columns: 3
+                            columnSpacing: 12
+                            rowSpacing: 4
                             
                             // CÓDIGO
                             ColumnLayout {
-                                Layout.preferredWidth: 130
+                                Layout.fillWidth: true
                                 spacing: 4
                                 
                                 Text {
@@ -644,7 +626,7 @@ Rectangle {
                                         onTextChanged: inputProductCode = text
                                         
                                         Text {
-                                            text: "Auto"
+                                            text: "Auto-generado"
                                             color: grayMedium
                                             visible: !parent.text && !modoEdicion
                                             font.pixelSize: 11
@@ -656,6 +638,7 @@ Rectangle {
                             // NOMBRE DEL PRODUCTO
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.columnSpan: 2
                                 spacing: 4
                                 
                                 Text {
@@ -696,7 +679,8 @@ Rectangle {
                             
                             // MARCA
                             ColumnLayout {
-                                Layout.preferredWidth: 200
+                                Layout.fillWidth: true
+                                Layout.columnSpan: 3
                                 spacing: 4
                                 
                                 Text {
@@ -742,15 +726,17 @@ Rectangle {
                         }
                         
                         // ===============================
-                        // FILA 2: Unidad, Stock Min/Max
+                        // FILA 2: Unidad y Stock Mínimo
                         // ===============================
-                        RowLayout {
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 12
+                            columns: 3
+                            columnSpacing: 12
+                            rowSpacing: 4
                             
                             // UNIDAD DE MEDIDA
                             ColumnLayout {
-                                Layout.preferredWidth: 150
+                                Layout.fillWidth: true
                                 spacing: 4
                                 
                                 Text {
@@ -764,7 +750,7 @@ Rectangle {
                                     id: unidadCombo
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: inputHeight
-                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
+                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
                                     
                                     onCurrentTextChanged: {
                                         inputMeasureUnit = currentText
@@ -776,12 +762,42 @@ Rectangle {
                                         border.width: 1
                                         radius: 6
                                     }
+                                    
+                                    contentItem: Text {
+                                        text: parent.displayText
+                                        font.pixelSize: 11
+                                        color: grayDark
+                                        verticalAlignment: Text.AlignVCenter
+                                        horizontalAlignment: Text.AlignLeft
+                                        leftPadding: 8
+                                    }
+                                    
+                                    popup: Popup {
+                                        y: parent.height
+                                        width: parent.width
+                                        implicitHeight: contentItem.implicitHeight
+                                        
+                                        contentItem: ListView {
+                                            clip: true
+                                            implicitHeight: contentHeight
+                                            model: parent.parent.model
+                                            currentIndex: parent.parent.currentIndex
+                                            
+                                            delegate: ItemDelegate {
+                                                width: parent.width
+                                                height: 30
+                                                text: modelData
+                                                font.pixelSize: 11
+                                                highlighted: parent.currentIndex === index
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             
                             // STOCK MÍNIMO
                             ColumnLayout {
-                                Layout.preferredWidth: 120
+                                Layout.fillWidth: true
                                 spacing: 4
                                 
                                 Text {
@@ -820,52 +836,26 @@ Rectangle {
                                 }
                             }
                             
-                            // STOCK MÁXIMO
+                            // ESPACIO ADICIONAL (para futuros campos)
                             ColumnLayout {
-                                Layout.preferredWidth: 120
+                                Layout.fillWidth: true
                                 spacing: 4
                                 
                                 Text {
-                                    text: "Stock Máximo *"
+                                    text: " "
                                     font.pixelSize: 12
-                                    font.bold: true
-                                    color: grayDark
+                                    color: "transparent"
                                 }
                                 
-                                Rectangle {
+                                Item {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: inputHeight
-                                    color: white
-                                    border.color: stockMaximoField.activeFocus ? primaryBlue : borderColor
-                                    border.width: 1
-                                    radius: 6
-                                    
-                                    TextInput {
-                                        id: stockMaximoField
-                                        anchors.fill: parent
-                                        anchors.margins: 8
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        selectByMouse: true
-                                        font.pixelSize: 11
-                                        color: grayDark
-                                        text: "100"
-                                        validator: IntValidator { bottom: 0 }
-                                        
-                                        onTextChanged: {
-                                            var valor = parseInt(text)
-                                            if (!isNaN(valor)) {
-                                                inputStockMaximo = valor
-                                            }
-                                        }
-                                    }
                                 }
                             }
-                            
-                            Item { Layout.fillWidth: true }
                         }
                         
                         // ===============================
-                        // DETALLES DEL PRODUCTO
+                        // DETALLES DEL PRODUCTO (ALTURA MEJORADA)
                         // ===============================
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -880,7 +870,7 @@ Rectangle {
                             
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 80
+                                Layout.preferredHeight: 90
                                 color: white
                                 border.color: detallesField.activeFocus ? primaryBlue : borderColor
                                 border.width: 1
@@ -888,7 +878,7 @@ Rectangle {
                                 
                                 ScrollView {
                                     anchors.fill: parent
-                                    anchors.margins: 5
+                                    anchors.margins: 6
                                     clip: true
                                     
                                     TextArea {
@@ -897,6 +887,7 @@ Rectangle {
                                         wrapMode: TextArea.Wrap
                                         font.pixelSize: 11
                                         color: grayDark
+                                        placeholderText: "Información adicional, composición, presentación, etc."
                                         
                                         onTextChanged: inputProductDetails = text
                                         
@@ -907,72 +898,138 @@ Rectangle {
                                 }
                             }
                         }
+                        
+                        // ===============================
+                        // MENSAJES DE ESTADO
+                        // ===============================
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            color: showSuccessMessage ? "#DCFCE7" : (showErrorMessage ? "#FEE2E2" : "transparent")
+                            radius: 6
+                            visible: showSuccessMessage || showErrorMessage
+                            border.color: showSuccessMessage ? successGreen : (showErrorMessage ? dangerRed : "transparent")
+                            border.width: 1
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 8
+                                
+                                Text {
+                                    text: showSuccessMessage ? "✅" : "❌"
+                                    font.pixelSize: 14
+                                }
+                                
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: showSuccessMessage ? successMessage : errorMessage
+                                    font.pixelSize: 11
+                                    color: showSuccessMessage ? successGreen : dangerRed
+                                    wrapMode: Text.WordWrap
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             // ===============================
-            // FOOTER
+            // FOOTER MEJORADO
             // ===============================
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 65
+                Layout.preferredHeight: 70
                 color: "#F9FAFB"
                 radius: 12
                 
+                // Borde superior sutil
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: "#E5E7EB"
+                }
+                
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.margins: 16
                     spacing: 12
                     
-                    Item { Layout.fillWidth: true }
-                    
-                    // Botón Cancelar
-                    Button {
-                        Layout.preferredWidth: 120
-                        Layout.preferredHeight: 40
-                        text: "Cancelar"
+                    // Información contextual
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
                         
-                        background: Rectangle {
-                            color: parent.pressed ? "#E5E7EB" : "#F3F4F6"
-                            border.color: borderColor
-                            border.width: 1
-                            radius: 6
+                        Text {
+                            text: modoEdicion ? 
+                                "Los cambios se aplicarán inmediatamente" : 
+                                "Todos los campos marcados con * son obligatorios"
+                            font.pixelSize: 10
+                            color: grayMedium
                         }
                         
-                        contentItem: Text {
-                            text: parent.text
-                            color: grayDark
-                            font.bold: true
-                            font.pixelSize: 12
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                        Text {
+                            text: "FIFO 2.0 • Gestión de Inventario Inteligente"
+                            font.pixelSize: 9
+                            color: grayMedium
+                            opacity: 0.7
                         }
-                        
-                        onClicked: cancelarCreacion()
                     }
                     
-                    // Botón Guardar
-                    Button {
-                        Layout.preferredWidth: 160
-                        Layout.preferredHeight: 40
-                        text: modoEdicion ? "💾 Guardar Cambios" : "➕ Crear Producto"
+                    // Botones
+                    RowLayout {
+                        spacing: 8
                         
-                        background: Rectangle {
-                            color: parent.pressed ? "#1D4ED8" : primaryBlue
-                            radius: 6
+                        // Botón Cancelar
+                        Button {
+                            Layout.preferredWidth: 110
+                            Layout.preferredHeight: 38
+                            text: "Cancelar"
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#E5E7EB" : "#F3F4F6"
+                                border.color: borderColor
+                                border.width: 1
+                                radius: 6
+                            }
+                            
+                            contentItem: Text {
+                                text: parent.text
+                                color: grayDark
+                                font.bold: true
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            
+                            onClicked: cancelarCreacion()
                         }
                         
-                        contentItem: Text {
-                            text: parent.text
-                            color: white
-                            font.bold: true
-                            font.pixelSize: 12
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                        // Botón Guardar
+                        Button {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 38
+                            text: modoEdicion ? "💾 Guardar Cambios" : "➕ Crear Producto"
+                            
+                            background: Rectangle {
+                                color: parent.pressed ? "#1D4ED8" : primaryBlue
+                                radius: 6
+                            }
+                            
+                            contentItem: Text {
+                                text: parent.text
+                                color: white
+                                font.bold: true
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            
+                            onClicked: guardarProducto()
                         }
-                        
-                        onClicked: guardarProducto()
                     }
                 }
             }
@@ -980,7 +1037,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        console.log("🚀 CrearProducto.qml (Modal centrado) cargado")
+        console.log("🚀 CrearProducto.qml (Modal centrado OPTIMIZADO) cargado")
         console.log("   - InventarioModel:", !!inventarioModel)
         console.log("   - FarmaciaData:", !!farmaciaData)
     }

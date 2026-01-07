@@ -61,6 +61,10 @@ Item {
     property string confirmDialogTitle: ""
     property string confirmDialogMessage: ""
     property string confirmDialogAccion: ""
+    
+    // 🔧 NUEVO: Propiedades para menú contextual
+    property bool mostrandoMenuContextual: false
+    property var productoMenuContextual: null
 
     // Propiedades de colores
     readonly property color primaryColor: "#273746"
@@ -130,8 +134,7 @@ Item {
             cerrarEditarProducto()
         } else if (mostrandoDetalleProducto) {
             console.log("Cerrando detalle de producto con Escape")
-            mostrandoDetalleProducto = false
-            productoParaDetalle = null
+            cerrarDetalleProducto()
         } else if (editarPrecioDialogOpen) {
             console.log("Cerrando diálogo de precio con Escape")
             editarPrecioDialogOpen = false
@@ -142,6 +145,9 @@ Item {
         } else if (confirmDialogVisible) {
             console.log("Cerrando diálogo de confirmación con Escape")
             confirmDialogVisible = false
+        } else if (mostrandoMenuContextual) {
+            console.log("Cerrando menú contextual con Escape")
+            mostrandoMenuContextual = false
         }
     }
 
@@ -706,7 +712,7 @@ Item {
                     anchors.margins: 0
                     spacing: 0
                     
-                    // Header de la tabla - AJUSTADO PARA BOTONES MÁS COMPACTOS
+                    // Header de la tabla - AJUSTADO PARA BOTÓN VER
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
@@ -879,11 +885,11 @@ Item {
                                 }
                             }
 
-                            // === HEADER ACCIONES V2.0 - AUMENTADO ===
+                            // === HEADER ACCIONES - SOLO BOTÓN VER ===
                             Rectangle {
-                                Layout.preferredWidth: 300  // Aumentado de 240
-                                Layout.minimumWidth: 250    // Aumentado de 200
-                                Layout.maximumWidth: 300    // Aumentado de 260
+                                Layout.preferredWidth: 80
+                                Layout.minimumWidth: 70
+                                Layout.maximumWidth: 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1133,111 +1139,154 @@ Item {
                                     }
                                 }
 
-                                // === BOTONES DE ACCIÓN V2.0 - MÁS COMPACTOS ===
+                                // === BOTÓN VER (REEMPLAZA LOS 3 BOTONES) ===
                                 Rectangle {
-                                    Layout.preferredWidth: 300  // Aumentado de 240
-                                    Layout.minimumWidth: 250    // Aumentado de 200
-                                    Layout.maximumWidth: 300    // Aumentado de 260
+                                    Layout.preferredWidth: 80
+                                    Layout.minimumWidth: 70
+                                    Layout.maximumWidth: 90
                                     Layout.fillHeight: true
                                     color: "transparent"
                                     border.color: "#D5DBDB"
                                     border.width: 1
                                     
-                                    RowLayout {
+                                    Button {
                                         anchors.centerIn: parent
-                                        spacing: 10  // Aumentado de 6
+                                        width: Math.min(70, parent.width - 10)
+                                        height: 28
+                                        text: "Ver"
                                         
-                                        // Botón VER - MÁS COMPACTO
-                                        Button {
-                                            width: 40  // Reducido de 65
-                                            height: 26  // Reducido de 28
-                                            text: "👁️ Ver"
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker("#3498db", 1.2) : "#3498db"
-                                                radius: 4
-                                                Behavior on color { ColorAnimation { duration: 150 } }
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 9  // Reducido de 10
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("📘 Ver producto:", model.codigo)
-                                                productoSeleccionado = model
-                                                mostrarDetalleProducto(model)
-                                            }
+                                        background: Rectangle {
+                                            color: parent.pressed ? Qt.darker(blueColor, 1.2) : blueColor
+                                            radius: 4
+                                            Behavior on color { ColorAnimation { duration: 150 } }
                                         }
                                         
-                                        // Botón EDITAR - MÁS COMPACTO
-                                        Button {
-                                            width: 30  // Reducido de 70
-                                            height: 26  // Reducido de 28
-                                            text: "✏️ Editar"
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker('#c612f3', 1.2) : '#9416ad'
-                                                radius: 4
-                                                Behavior on color { ColorAnimation { duration: 150 } }
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 9  // Reducido de 10
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("✏️ Editar producto:", model.codigo)
-                                                abrirEditarProducto(model)
-                                            }
+                                        contentItem: Label {
+                                            text: parent.text
+                                            color: whiteColor
+                                            font.bold: true
+                                            font.pixelSize: 10
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
                                         }
                                         
-                                        // Botón ELIMINAR - MÁS COMPACTO
-                                        Button {
-                                            width: 10  // Reducido de 75
-                                            height: 10  // Reducido de 28
-                                            text: "🗑️ Eliminar"
-                                            
-                                            background: Rectangle {
-                                                color: parent.pressed ? Qt.darker("#e74c3c", 1.2) : "#e74c3c"
-                                                radius: 4
-                                                Behavior on color { ColorAnimation { duration: 150 } }
-                                            }
-                                            
-                                            contentItem: Label {
-                                                text: parent.text
-                                                color: whiteColor
-                                                font.bold: true
-                                                font.pixelSize: 9  // Reducido de 10
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            
-                                            onClicked: {
-                                                console.log("🗑️ Eliminar producto:", model.codigo)
-                                                confirmarEliminarProducto(model)
-                                            }
+                                        onClicked: {
+                                            console.log("📘 Ver producto:", model.codigo)
+                                            productoSeleccionado = model
+                                            mostrarDetalleProducto(model)
                                         }
                                     }
                                 }
                             }
                             
+                            // 🔧 MODIFICADO: MouseArea con click derecho para menú contextual
                             MouseArea {
                                 anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton
-                                onClicked: {
-                                    productosTable.currentIndex = index
-                                    selectedProduct = model
+                                acceptedButtons: Qt.RightButton
+                                propagateComposedEvents: true
+                                
+                                onClicked: function(mouse) {
+                                    if (mouse.button === Qt.LeftButton) {
+                                        productosTable.currentIndex = index
+                                        selectedProduct = model
+                                        mostrandoMenuContextual = false
+                                    } else if (mouse.button === Qt.RightButton) {
+                                        productosTable.currentIndex = index
+                                        selectedProduct = model
+                                        mostrandoMenuContextual = true
+                                        productoMenuContextual = model
+                                        mouse.accepted = true
+                                    }
+                                }
+                            }
+                            
+                            // 🔧 CAMBIO 1: Menú contextual con estilo antiguo
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                visible: mostrandoMenuContextual && productoMenuContextual && productoMenuContextual.id === model.id
+                                z: 10
+                                
+                                // Cuadro contenedor estilo menú contextual - altura reducida
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 120
+                                    height: 50
+                                    color: "#F8F9FA"
+                                    border.width: 0
+                                    radius: 4
+                                    
+                                    // Sombra sutil
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.topMargin: 2
+                                        anchors.leftMargin: 2
+                                        color: "#00000015"
+                                        radius: 4
+                                        z: -1
+                                    }
+                                    
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 0
+                                        spacing: 0
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25
+                                            color: editarHover.containsMouse ? "#E3F2FD" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Editar"
+                                                color: editarHover.containsMouse ? "#1976D2" : "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: editarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Editando producto:", model.codigo)
+                                                    abrirEditarProducto(model)
+                                                    mostrandoMenuContextual = false
+                                                    productoMenuContextual = null
+                                                    selectedProduct = null
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 25
+                                            color: eliminarHover.containsMouse ? "#FFEBEE" : "transparent"
+                                            radius: 0
+                                            
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "Eliminar"
+                                                color: eliminarHover.containsMouse ? "#D32F2F" : "#2C3E50"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Medium
+                                            }
+                                            
+                                            MouseArea {
+                                                id: eliminarHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    console.log("Eliminando producto:", model.codigo)
+                                                    confirmarEliminarProducto(model)
+                                                    mostrandoMenuContextual = false
+                                                    productoMenuContextual = null
+                                                    selectedProduct = null
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1369,6 +1418,7 @@ Item {
             height: Math.min(350, parent.height * 0.6)
             modal: true
             visible: editarPrecioDialogOpen
+            closePolicy: Dialog.NoAutoClose
             
             background: Rectangle {
                 color: whiteColor
@@ -1588,7 +1638,7 @@ Item {
         }
         
         // ===================================================
-        // DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN V2.0
+        // DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN
         // ===================================================
         Dialog {
             id: confirmDialog
@@ -1597,6 +1647,7 @@ Item {
             anchors.centerIn: parent
             width: Math.min(parent.width * 0.8, 500)
             height: Math.min(parent.height * 0.5, 300)
+            closePolicy: Dialog.NoAutoClose
             
             background: Rectangle {
                 color: whiteColor
@@ -1629,11 +1680,11 @@ Item {
             }
             
             contentItem: ColumnLayout {
-                spacing: 15
+                spacing: 5
                 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 48
+                    Layout.preferredHeight: 20
                     color: "transparent"
                     
                     RowLayout {
@@ -1643,7 +1694,7 @@ Item {
                         Rectangle {
                             width: 40
                             height: 40
-                            color: "#FEF2F2"
+                            color: '#f82020'
                             radius: 20
                             
                             Label {
@@ -1700,7 +1751,7 @@ Item {
                         color: whiteColor
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -1722,67 +1773,58 @@ Item {
     }
 
     // ===============================
-    // MODAL DE DETALLE DE PRODUCTO - FIFO 2.0
+    // FUNCIONES PARA DETALLE DE PRODUCTO
     // ===============================
-    Rectangle {
-        id: detalleProductoContainer
+    
+    function mostrarDetalleProducto(producto) {
+        console.log("👁️ Mostrando detalle de:", producto.codigo)
+        
+        productoParaDetalle = {
+            id: producto.id,
+            codigo: producto.codigo,
+            nombre: producto.nombre,
+            detalles: producto.detalles,
+            stockUnitario: producto.stock || 0,
+            precioVenta: producto.precioVenta,
+            precioCompra: producto.precioCompra,
+            unidadMedida: producto.unidadMedida,
+            idMarca: producto.idMarca,
+            stockMinimo: producto.stockMinimo
+        }
+        
+        mostrandoDetalleProducto = true
+    }
+
+    function cerrarDetalleProducto() {
+        console.log("❌ Cerrando detalle de producto")
+        mostrandoDetalleProducto = false
+        productoParaDetalle = null
+    }
+
+    // ===============================
+    // 🔧 CAMBIO 2: Loader de DetalleProducto simplificado
+    // ===============================
+    Loader {
+        id: detalleProductoLoader
         anchors.fill: parent
         z: 2000
-        visible: mostrandoDetalleProducto
-        color: "#80000000"  // Overlay semi-transparente
+        active: mostrandoDetalleProducto
+        source: mostrandoDetalleProducto ? "DetalleProducto.qml" : ""
         
-        Rectangle {
-            anchors.centerIn: parent
-            width: Math.min(900, parent.width * 0.9)
-            height: Math.min(700, parent.height * 0.9)
-            radius: 8
-            color: whiteColor
-            border.color: lightGrayColor
-            border.width: 1
-                        
-            Loader {
-                id: detalleProductoLoader
-                anchors.fill: parent
-                source: mostrandoDetalleProducto ? "DetalleProducto.qml" : ""
+        onLoaded: {
+            if (item) {
+                console.log("🔍 DetalleProducto.qml cargado")
+                item.inventarioModel = productosRoot.inventarioModel
+                item.productoData = productoParaDetalle
+                item.mostrarStock = true
+                item.mostrarAcciones = true
                 
-                onLoaded: {
-                    if (item) {
-                        console.log("🔍 DetalleProducto.qml cargado")
-                        item.inventarioModel = productosRoot.inventarioModel
-                        item.productoData = productoParaDetalle
-                        item.mostrarStock = true
-                        item.mostrarAcciones = true
-                        
-                        // Conectar señales
-                        if (item.cerrarSolicitado) {
-                            item.cerrarSolicitado.connect(function() {
-                                mostrandoDetalleProducto = false
-                                productoParaDetalle = null
-                            })
-                        }
-                        
-                        if (item.editarLoteSolicitado) {
-                            item.editarLoteSolicitado.connect(function(lote) {
-                                console.log("✏️ Editando lote desde detalle:", lote.id)
-                                abrirEditarLote(lote)
-                            })
-                        }
-                        
-                        if (item.eliminarLoteSolicitado) {
-                            item.eliminarLoteSolicitado.connect(function(lote) {
-                                console.log("🗑️ Eliminar lote solicitado:", lote.id)
-                                eliminarLote(lote)  // Llama directamente a eliminarLote
-                            })
-                        }
-                        
-                        // ✅ AGREGAR: Conectar señal de actualización de lote
-                        if (item.loteActualizadoEnDialog) {
-                            item.loteActualizadoEnDialog.connect(function() {
-                                console.log("🔄 Señal recibida: lote actualizado en diálogo")
-                                // Esto ya debería recargar automáticamente
-                            })
-                        }
-                    }
+                // Conectar señal de cerrar
+                if (item.cerrarSolicitado) {
+                    item.cerrarSolicitado.connect(function() {
+                        mostrandoDetalleProducto = false
+                        productoParaDetalle = null
+                    })
                 }
             }
         }
@@ -2034,14 +2076,7 @@ Item {
         
         console.log("✅ Stock precalculado para", Object.keys(mapaStock).length, "productos")
     }
-    
-    // ✅ FIFO 2.0: Mostrar detalle del producto (abre DetalleProducto.qml)
-    function mostrarDetalleProducto(producto) {
-        console.log("👁️ Abriendo detalle FIFO 2.0 para:", producto.codigo)
-        productoParaDetalle = producto
-        mostrandoDetalleProducto = true
-    }
-    
+
     // ===============================
     // FUNCIONES PARA MODALES
     // ===============================

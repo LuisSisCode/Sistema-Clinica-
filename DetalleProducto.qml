@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 // 🔍 DETALLEPRODUCTO.QML - FIFO 2.0 (VISUALIZACIÓN DE HISTORIAL)
-// ✅ VERSIÓN 2.0 - SIN MÁRGENES, SIN ACCIONES EN LOTES
+// ✅ VERSIÓN MEJORADA - SIN CANTIDAD INICIAL, MEJOR VISUALIZACIÓN
 
 Rectangle {
     id: detalleProductoComponent
@@ -16,11 +16,8 @@ Rectangle {
     // ===============================
     
     property var productoData: null
-
-    // Cachés para detectar cambios
     property string codigoCache: ""
     property string nombreCache: ""
-
     property bool mostrarStock: true
     property bool mostrarAcciones: true
     property var inventarioModel: null
@@ -38,25 +35,14 @@ Rectangle {
     // CONTROL DE CARGA INICIAL
     property bool datosInicialmenteCargados: false
     
-    // PROPIEDADES PARA ÚLTIMA VENTA
-    property string ultimaVentaFecha: ""
-    property real ultimaVentaCantidad: 0
-    property bool cargandoUltimaVenta: false
-    
     // ===============================
     // SEÑALES
     // ===============================
     
-    signal editarSolicitado(var producto)
-    signal eliminarSolicitado(var producto)
     signal cerrarSolicitado()
-<<<<<<< HEAD
-    signal abrirCompraOriginal(int compraId)  // 🆕 Abrir compra del lote
-=======
-    signal productoActualizado(var producto)  // 🆕 NUEVO: Para notificar cambios
->>>>>>> 93f3f522294a2fa4900a04a94bab279d606a2a2b
-    // ✅ V2.0: SEÑALES DE EDICIÓN/ELIMINACIÓN DE LOTES ELIMINADAS
-    
+    signal abrirCompraOriginal(int compraId)
+    signal productoActualizado(var producto)
+
     // ===============================
     // FUNCIONES
     // ===============================
@@ -74,18 +60,11 @@ Rectangle {
         loadingLotes = true
         
         try {
-            console.log("🔄 Cargando datos del producto:", productoData.codigo)
-            
             // 1. Cargar lotes usando FIFO 2.0
             cargarLotesFIFO()
             
-            // 2. ✅ V2.0: Cargar solo precios (sin márgenes)
+            // 2. Cargar precios
             cargarPrecios()
-            
-            // 3. Si no hay stock, cargar última venta
-            if (productoData.stockUnitario === 0 || productoData.stock === 0) {
-                cargarUltimaVenta()
-            }
             
         } catch (error) {
             console.log("❌ Error cargando datos:", error.toString())
@@ -103,15 +82,12 @@ Rectangle {
         try {
             console.log("📦 Cargando lotes FIFO 2.0 para producto ID:", productoData.id)
             
-            // ✅ CAMBIO: Usar método que devuelve TODOS los lotes (activos + agotados)
             var lotes = inventarioModel.get_lotes_producto_fifo(productoData.id)
             
             if (lotes && lotes.length > 0) {
                 lotesData = lotes
                 lotesLoaded = true
-                
                 console.log("✅ Lotes cargados:", lotes.length)
-                console.log("   Primer lote:", JSON.stringify(lotes[0]))
             } else {
                 lotesData = []
                 lotesLoaded = true
@@ -125,7 +101,6 @@ Rectangle {
         }
     }
     
-    // ✅ V2.0: Función simplificada para cargar solo precios (sin márgenes)
     function cargarPrecios() {
         console.log("💰 Cargando precios del producto...")
         
@@ -163,42 +138,8 @@ Rectangle {
                 console.log("⚠️ No hay lotes para calcular costo promedio")
             }
             
-            console.log("📊 Precios cargados:")
-            console.log("   - Precio venta:", precioVenta)
-            console.log("   - Costo promedio:", costoPromedio)
-            
         } catch (error) {
             console.log("❌ Error calculando precios:", error.toString())
-        }
-    }
-
-    function cargarUltimaVenta() {
-        if (!productoData || !productoData.id) {
-            return
-        }
-        
-        cargandoUltimaVenta = true
-        ultimaVentaFecha = ""
-        ultimaVentaCantidad = 0
-        
-        try {
-            console.log("🔍 Buscando última venta para producto ID:", productoData.id)
-            
-            // Llamar al backend para obtener última venta
-            var resultado = inventarioModel.get_ultima_venta_producto(productoData.id)
-            
-            if (resultado && resultado.Fecha_Venta) {
-                ultimaVentaFecha = resultado.Fecha_Venta
-                ultimaVentaCantidad = resultado.Cantidad_Total || 0
-                console.log("✅ Última venta encontrada:", ultimaVentaFecha, "- Cantidad:", ultimaVentaCantidad)
-            } else {
-                console.log("⚠️ No hay historial de ventas para este producto")
-            }
-            
-        } catch (error) {
-            console.log("❌ Error cargando última venta:", error.toString())
-        } finally {
-            cargandoUltimaVenta = false
         }
     }
     
@@ -212,11 +153,11 @@ Rectangle {
     function obtenerColorEstadoVencimiento(estadoVenc) {
         switch(estadoVenc) {
             case "VENCIDO":
-                return "#FF0000"
+                return "#FF4444"
             case "PRÓXIMO A VENCER":
-                return "#FFA500"
+                return "#FFB444"
             case "VIGENTE":
-                return "#00AA00"
+                return "#2fb32f"
             default:
                 return "#7f8c8d"
         }
@@ -233,7 +174,7 @@ Rectangle {
         var diasNum = parseInt(dias)
         
         if (isNaN(diasNum)) return "---"
-        if (diasNum < 0) return "HACE " + Math.abs(diasNum) + (Math.abs(diasNum) === 1 ? " día" : " días")
+        if (diasNum < 0) return "VENCIDO"
         if (diasNum === 0) return "HOY"
         if (diasNum === 1) return "1 día"
         return diasNum + " días"
@@ -246,29 +187,21 @@ Rectangle {
         }
         
         try {
-            // Limpiar y formatear el precio
             var precioTexto = nuevoPrecio.toString();
-            
-            // Reemplazar coma por punto para parseFloat
             precioTexto = precioTexto.replace(',', '.');
             
-            // Asegurarse de que solo haya un punto decimal
             var partes = precioTexto.split('.');
             if (partes.length > 2) {
-                // Si hay múltiples puntos, tomar solo el primero como parte entera
                 precioTexto = partes[0] + '.' + partes.slice(1).join('');
             }
             
-            // Convertir a número
             var precio = parseFloat(precioTexto);
             
-            // Validaciones adicionales
             if (isNaN(precio) || precio <= 0) {
                 console.log("❌ Precio inválido:", nuevoPrecio, "convertido a:", precio)
                 return false
             }
             
-            // Asegurar 2 decimales
             precio = parseFloat(precio.toFixed(2));
             
             console.log("💰 Actualizando precio de venta a:", precio, "de entrada:", nuevoPrecio)
@@ -279,7 +212,6 @@ Rectangle {
                 precioVenta = precio
                 console.log("✅ Precio actualizado exitosamente")
                 
-                // 🆕 Emitir signal para notificar cambio
                 if (productoData) {
                     productoData.precioVenta = precio
                     productoData.Precio_venta = precio
@@ -296,15 +228,6 @@ Rectangle {
             console.log("❌ Error:", error.toString())
             return false
         }
-    }
-
-    function formatearNumero(numero, decimales) {
-        if (isNaN(numero) || numero === null || numero === undefined) {
-            return "0.00";
-        }
-        
-        var num = parseFloat(numero);
-        return num.toLocaleString(Qt.locale("es_ES"), 'f', decimales || 2);
     }
     
     function formatearPrecioParaMostrar(precio) {
@@ -323,7 +246,6 @@ Rectangle {
     }
     
     onProductoDataChanged: {
-        // ✅ CORRECCIÓN PROBLEMA #3: Guardar datos en cache y permitir refreshes
         console.log("📦 productoData cambió:", productoData ? productoData.codigo : "NULL")
         if (productoData) {
             codigoCache = productoData.codigo || ""
@@ -349,15 +271,25 @@ Rectangle {
     }
     
     // ===============================
-    // LAYOUT PRINCIPAL (REDISEÑADO)
+    // LAYOUT PRINCIPAL MEJORADO
     // ===============================
     
     Rectangle {
         anchors.centerIn: parent
-        width: 900
-        height: 700
+        width: Math.min(1000, parent.width * 0.9)
+        height: Math.min(750, parent.height * 0.9)
         radius: 12
         color: "white"
+        
+        // Sombra
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 3
+            anchors.leftMargin: 3
+            color: "#40000000"
+            radius: 12
+            z: -1
+        }
         
         ColumnLayout {
             anchors.fill: parent
@@ -366,8 +298,8 @@ Rectangle {
             // ========== HEADER ==========
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                color: "#2c3e50"
+                Layout.preferredHeight: 70
+                color: "#34495E"
                 radius: 12
                 
                 // Redondear solo arriba
@@ -381,15 +313,22 @@ Rectangle {
                 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
-                    spacing: 12
+                    anchors.leftMargin: 24
+                    anchors.rightMargin: 24
+                    spacing: 16
                     
-                    Image {
-                        source: "Resources/iconos/productos.png"
-                        Layout.preferredWidth: 24
-                        Layout.preferredHeight: 24
-                        fillMode: Image.PreserveAspectFit
+                    Rectangle {
+                        width: 30
+                        height: 30
+                        radius: 8
+                        color: "#4A6572"
+                        
+                        Label {
+                            anchors.centerIn: parent
+                            text: "📦"
+                            font.pixelSize: 20
+                            color: "white"
+                        }
                     }
                     
                     Column {
@@ -401,32 +340,34 @@ Rectangle {
                             font.pixelSize: 18
                             font.bold: true
                             color: "white"
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
                         }
                         
                         Label {
                             text: codigoCache ? "Código: " + codigoCache : (productoData ? "Código: " + productoData.codigo : "")
-                            font.pixelSize: 12
-                            color: "white"
+                            font.pixelSize: 13
+                            color: "#BDC3C7"
                             opacity: 0.9
                         }
                     }
                     
                     Button {
                         text: "✕"
-                        Layout.preferredWidth: 40
-                        Layout.preferredHeight: 40
+                        Layout.preferredWidth: 36
+                        Layout.preferredHeight: 36
                         
                         background: Rectangle {
-                            color: parent.pressed ? "#E5E7EB" : "transparent"
+                            color: parent.pressed ? "#E74C3C" : "transparent"
                             border.color: "white"
                             border.width: 1
-                            radius: 8
+                            radius: 6
                         }
                         
                         contentItem: Text {
                             text: parent.text
                             color: "white"
-                            font.pixelSize: 18
+                            font.pixelSize: 16
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -446,37 +387,37 @@ Rectangle {
                 clip: true
                 
                 ColumnLayout {
-                    width: parent.width - 40
+                    width: parent.width - 50
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 20
-                    anchors.topMargin: 20
-                    anchors.bottomMargin: 20
+                    spacing: 10
+                    anchors.topMargin: 10
+                    anchors.bottomMargin: 10
                     
-                    // ✅ V2.0: WIDGET DE PRECIOS (SIN MÁRGENES)
+                    // === WIDGET DE PRECIOS ===
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 160
-                        color: "#f8f9fa"
+                        Layout.preferredHeight: 140
+                        color: "#F8F9FA"
                         radius: 8
-                        border.color: "#dee2e6"
+                        border.color: "#D5DBDB"
                         border.width: 1
                         
                         ColumnLayout {
                             anchors.fill: parent
                             anchors.margins: 20
-                            spacing: 16
+                            spacing: 12
                             
                             Label {
                                 text: "💰 PRECIOS DEL PRODUCTO"
                                 font.pixelSize: 14
                                 font.bold: true
-                                color: "#2c3e50"
+                                color: "#2C3E50"
                             }
                             
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 1
-                                color: "#dee2e6"
+                                color: "#D5DBDB"
                             }
                             
                             GridLayout {
@@ -493,7 +434,7 @@ Rectangle {
                                     Label {
                                         text: "Precio de Venta"
                                         font.pixelSize: 13
-                                        color: "#7f8c8d"
+                                        color: "#7F8C8D"
                                     }
                                     
                                     RowLayout {
@@ -504,53 +445,45 @@ Rectangle {
                                             text: "Bs " + formatearPrecioParaMostrar(precioVenta)
                                             font.pixelSize: 20
                                             font.bold: true
-                                            color: "#2c3e50"
+                                            color: "#2C3E50"
                                             visible: !editandoPrecio
                                         }
                                         
-                                        // Precio Venta
                                         TextField {
                                             id: precioVentaField
                                             Layout.preferredWidth: 140
-                                            Layout.preferredHeight: 40
+                                            Layout.preferredHeight: 36
                                             text: editandoPrecio ? (precioVenta > 0 ? precioVenta.toFixed(2) : "") : ""
                                             font.pixelSize: 16
                                             visible: editandoPrecio
                                             
-                                            // Permitir solo números, punto y coma
                                             inputMethodHints: Qt.ImhFormattedNumbersOnly
                                             
-                                            // Procesar entrada para manejar comas
                                             onTextChanged: {
                                                 if (!editandoPrecio || text === "") return;
                                                 
-                                                // Reemplazar comas por puntos
                                                 var cleanText = text.replace(',', '.');
                                                 
-                                                // Eliminar múltiples puntos decimales
                                                 var dotCount = (cleanText.match(/\./g) || []).length;
                                                 if (dotCount > 1) {
                                                     var parts = cleanText.split('.');
                                                     cleanText = parts[0] + '.' + parts.slice(1).join('');
                                                 }
                                                 
-                                                // Si el texto limpio es diferente, actualizarlo
                                                 if (cleanText !== text) {
                                                     text = cleanText;
                                                 }
                                             }
                                             
-                                            // Al recibir foco, seleccionar todo el texto
                                             onActiveFocusChanged: {
                                                 if (activeFocus && editandoPrecio) {
                                                     selectAll();
                                                 }
                                             }
                                             
-                                            
                                             background: Rectangle {
                                                 color: "white"
-                                                border.color: parent.activeFocus ? "#3498db" : "#dee2e6"
+                                                border.color: parent.activeFocus ? "#3498DB" : "#D5DBDB"
                                                 border.width: 1
                                                 radius: 4
                                             }
@@ -558,11 +491,11 @@ Rectangle {
                                         
                                         Button {
                                             text: editandoPrecio ? "💾" : "✏️"
-                                            Layout.preferredWidth: 44
-                                            Layout.preferredHeight: 40
+                                            Layout.preferredWidth: 40
+                                            Layout.preferredHeight: 36
                                             
                                             background: Rectangle {
-                                                color: parent.pressed ? "#2980b9" : "#3498db"
+                                                color: parent.pressed ? "#2980B9" : "#3498DB"
                                                 radius: 4
                                             }
                                             
@@ -576,41 +509,25 @@ Rectangle {
                                             
                                             onClicked: {
                                                 if (editandoPrecio) {
-                                                    // Guardar
                                                     var precioTexto = precioVentaField.text.trim();
                                                     
-                                                    console.log("📝 Texto a guardar:", precioTexto);
-                                                    
                                                     if (precioTexto === "" || precioTexto === "." || precioTexto === ",") {
-                                                        console.log("❌ Precio vacío o inválido");
                                                         return;
                                                     }
                                                     
-                                                    // Convertir a número (manejar comas)
                                                     precioTexto = precioTexto.replace(',', '.');
-                                                    
-                                                    // Validar que sea un número válido
                                                     var precioNum = parseFloat(precioTexto);
                                                     if (isNaN(precioNum) || precioNum <= 0) {
-                                                        console.log("❌ Número inválido:", precioTexto);
                                                         return;
                                                     }
                                                     
-                                                    // Formatear a 2 decimales
                                                     precioNum = parseFloat(precioNum.toFixed(2));
                                                     
                                                     if (actualizarPrecioVenta(precioNum)) {
-                                                        console.log("✅ Guardado exitoso, nuevo precio:", precioNum);
                                                         editandoPrecio = false;
-                                                    } else {
-                                                        console.log("❌ Error al guardar");
                                                     }
                                                 } else {
-                                                    // Editar
-                                                    console.log("✏️ Iniciando edición. Precio actual:", precioVenta);
                                                     editandoPrecio = true;
-                                                    
-                                                    // Usar setTimeout para asegurar que el TextField esté visible
                                                     Qt.callLater(function() {
                                                         if (precioVentaField) {
                                                             precioVentaField.forceActiveFocus();
@@ -631,87 +548,114 @@ Rectangle {
                                     Label {
                                         text: "Costo Promedio"
                                         font.pixelSize: 13
-                                        color: "#7f8c8d"
+                                        color: "#7F8C8D"
                                     }
                                     
                                     Label {
                                         text: "Bs " + costoPromedio.toFixed(2)
                                         font.pixelSize: 20
                                         font.bold: true
-                                        color: "#f39c12"
+                                        color: "#F39C12"
                                     }
                                 }
-                                
-                                // ✅ V2.0: Sección de márgenes ELIMINADA
                             }
                         }
                     }
                     
-                    // === INFORMACIÓN DEL PRODUCTO ===
+                    // === INFORMACIÓN RÁPIDA ===
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: infoGrid.height + 32
+                        Layout.preferredHeight: 50
                         color: "white"
-                        radius: 8
-                        border.color: "#dee2e6"
+                        radius: 10
+                        border.color: "#D5DBDB"
                         border.width: 1
                         
-                        GridLayout {
-                            id: infoGrid
+                        RowLayout {
                             anchors.fill: parent
-                            anchors.margins: 16
-                            columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 24
+                            anchors.margins: 8
+                            spacing: 30
                             
-                            Label {
-                                text: "Marca:"
-                                font.pixelSize: 12
-                                color: "#7f8c8d"
+                            Column {
+                                spacing: 2
+                                
+                                Label {
+                                    text: "Marca"
+                                    font.pixelSize: 12
+                                    color: "#7F8C8D"
+                                }
+                                
+                                Label {
+                                    text: productoData ? (productoData.idMarca || "Sin marca") : ""
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: "#2C3E50"
+                                }
                             }
                             
-                            Label {
-                                text: productoData ? (productoData.marca || "Sin marca") : ""
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: "#2c3e50"
+                            Rectangle {
+                                width: 1
+                                height: 40
+                                color: "#ECF0F1"
                             }
                             
-                            Label {
-                                text: "Stock Total:"
-                                font.pixelSize: 12
-                                color: "#7f8c8d"
+                            Column {
+                                spacing: 2
+                                
+                                Label {
+                                    text: "Stock Total"
+                                    font.pixelSize: 12
+                                    color: "#7F8C8D"
+                                }
+                                
+                                Label {
+                                    text: productoData ? (productoData.stockUnitario || 0) + " uds" : "0"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: "#2C3E50"
+                                }
                             }
                             
-                            Label {
-                                text: productoData ? (productoData.stockUnitario || 0) + " unidades" : "0"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: "#2c3e50"
+                            Rectangle {
+                                width: 1
+                                height: 40
+                                color: "#ECF0F1"
                             }
                             
-                            Label {
-                                text: "Lotes:"
-                                font.pixelSize: 12
-                                color: "#7f8c8d"
-                            }
-                            
-                            Label {
-                                text: lotesData ? lotesData.length : 0
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: "#3498db"
+                            Column {
+                                spacing: 2
+                                
+                                Label {
+                                    text: "Lotes Activos"
+                                    font.pixelSize: 12
+                                    color: "#7F8C8D"
+                                }
+                                
+                                Label {
+                                    text: {
+                                        if (!lotesLoaded) return "..."
+                                        var activos = 0
+                                        for (var i = 0; i < lotesData.length; i++) {
+                                            var stock = lotesData[i].Stock_Lote || lotesData[i].Stock_Actual || 0
+                                            if (stock > 0) activos++
+                                        }
+                                        return activos + "/" + lotesData.length
+                                    }
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: "#3498DB"
+                                }
                             }
                         }
                     }
                     
-                    // === TABLA DE LOTES FIFO 2.0 (SOLO VISUALIZACIÓN) ===
+                    // === TABLA DE LOTES MEJORADA ===
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 400
+                        Layout.preferredHeight: 450
                         color: "white"
                         radius: 8
-                        border.color: "#dee2e6"
+                        border.color: "#D5DBDB"
                         border.width: 1
                         
                         ColumnLayout {
@@ -726,7 +670,7 @@ Rectangle {
                                     text: "📦 HISTORIAL DE LOTES (FIFO)"
                                     font.pixelSize: 14
                                     font.bold: true
-                                    color: "#2c3e50"
+                                    color: "#2C3E50"
                                 }
                                 
                                 Item { Layout.fillWidth: true }
@@ -734,176 +678,146 @@ Rectangle {
                                 Label {
                                     text: lotesLoaded ? (lotesData.length + " lotes") : "Cargando..."
                                     font.pixelSize: 12
-                                    color: "#7f8c8d"
+                                    color: "#7F8C8D"
                                 }
                             }
                             
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 1
-                                color: "#dee2e6"
+                                color: "#D5DBDB"
                             }
                             
-                            // Header de tabla - ✅ SIN COLUMNA DE ACCIONES
+                            // Header de tabla - MEJORADO
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 36
-                                color: "#f8f9fa"
+                                Layout.preferredHeight: 32
+                                color: "#F8F9FA"
                                 radius: 4
                                 
                                 RowLayout {
                                     anchors.fill: parent
                                     spacing: 0
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 80  // Ajustado
+                                    Rectangle { // LOTE
+                                        Layout.preferredWidth: 80
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "LOTE #"
-                                            font.pixelSize: 10
+                                            text: "LOTE"
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 100  // Ajustado
+                                    Rectangle { // STOCK
+                                        Layout.preferredWidth: 100
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "STOCK ACTUAL"
-                                            font.pixelSize: 10
+                                            text: "STOCK"
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 110  // Ajustado
+                                    Rectangle { // PRECIO
+                                        Layout.preferredWidth: 110
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "CANT. INICIAL"
-                                            font.pixelSize: 10
+                                            text: "PRECIO COMPRA"
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 100  // Ajustado
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "P. COMPRA"
-                                            font.pixelSize: 10
-                                            font.bold: true
-                                            color: "#495057"
-                                        }
-                                    }
-                                    
-                                    Rectangle {
-                                        Layout.preferredWidth: 120  // Ajustado
+                                    Rectangle { // FECHA COMPRA
+                                        Layout.preferredWidth: 110
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
                                             text: "F. COMPRA"
-                                            font.pixelSize: 10
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 130  // Ajustado
+                                    Rectangle { // VENCIMIENTO
+                                        Layout.preferredWidth: 130
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "F. VENCIMIENTO"
-                                            font.pixelSize: 10
+                                            text: "VENCIMIENTO"
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 120  // Ajustado
+                                    Rectangle { // DÍAS
+                                        Layout.preferredWidth: 110
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
-                                            text: "DÍAS P/VENCER"
-                                            font.pixelSize: 10
+                                            text: "DÍAS"
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
                                     }
                                     
-                                    Rectangle {
-                                        Layout.preferredWidth: 140  // Ajustado
+                                    Rectangle { // ESTADO
+                                        Layout.preferredWidth: 130
                                         Layout.fillHeight: true
                                         color: "transparent"
                                         Label {
                                             anchors.centerIn: parent
                                             text: "ESTADO"
-                                            font.pixelSize: 10
+                                            font.pixelSize: 11
                                             font.bold: true
-                                            color: "#495057"
+                                            color: "#2C3E50"
                                         }
-                                    }
-                                    
-                                    // 🆕 COLUMNA: LINK A COMPRA ORIGINAL
-                                    Rectangle {
-                                        Layout.preferredWidth: 60
-                                        Layout.fillHeight: true
-                                        color: "transparent"
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "COMPRA"
-                                            font.pixelSize: 10
-                                            font.bold: true
-                                            color: "#495057"
-                                        }
-                                    }
-                            }
+                                    }                                 
+                                }
                             }
                             
-                            // Lista de lotes - ✅ SIN BOTONES DE ACCIONES
+                            // Lista de lotes - MEJORADA
                             ListView {
                                 id: lotesListView
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
-                                spacing: 2
+                                spacing: 1
                                 
                                 model: lotesData
                                 
                                 delegate: Rectangle {
                                     width: lotesListView.width
-                                    height: 45
-                                    // ✅ Color diferente para lotes agotados
+                                    height: 40
                                     color: {
                                         var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
                                         if (stock === 0) {
-                                            return "#f0f0f0"  // Gris claro para agotados
+                                            return "#F5F5F5"
                                         } else {
-                                            return index % 2 === 0 ? "#ffffff" : "#f8f9fa"
+                                            return index % 2 === 0 ? "#FFFFFF" : "#F8F9FA"
                                         }
                                     }
-                                    border.color: {
-                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                        return stock === 0 ? "#cccccc" : "#dee2e6"
-                                    }
-                                    border.width: 1
+                                    border.color: "#ECF0F1"
+                                    border.width: stock === 0 ? 0 : 1
                                     
                                     property var loteActual: modelData
+                                    property int stockActual: loteActual.Stock_Lote || loteActual.Stock_Actual || 0
                                     
                                     RowLayout {
                                         anchors.fill: parent
@@ -919,7 +833,7 @@ Rectangle {
                                                 text: "#" + String(loteActual.Id_Lote || loteActual.id || 0).padStart(3, '0')
                                                 font.pixelSize: 11
                                                 font.bold: true
-                                                color: "#007bff"
+                                                color: stockActual === 0 ? "#95A5A6" : "#3498DB"
                                             }
                                         }
                                         
@@ -931,66 +845,46 @@ Rectangle {
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 70
-                                                height: 24
-                                                radius: 12
-                                                // ✅ Color distintivo para stock agotado
-                                                color: {
-                                                    var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                                    return stock === 0 ? "#757575" : "#28a745"
-                                                }
+                                                width: 60
+                                                height: 22
+                                                radius: 11
+                                                color: stockActual === 0 ? "#95A5A6" : (stockActual < 10 ? "#FFB444" : "#2fb32f")
                                                 
                                                 Label {
                                                     anchors.centerIn: parent
-                                                    text: {
-                                                        var stock = loteActual.Stock_Lote || loteActual.Stock_Actual || 0
-                                                        return stock.toString()
-                                                    }
+                                                    text: stockActual.toString()
                                                     font.pixelSize: 10
                                                     font.bold: true
-                                                    color: "#ffffff"
+                                                    color: "#FFFFFF"
                                                 }
                                             }
                                         }
                                         
-                                        // Cantidad Inicial
+                                        // Precio Compra
                                         Rectangle {
                                             Layout.preferredWidth: 110
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
                                                 anchors.centerIn: parent
-                                                text: loteActual.Cantidad_Inicial || "---"
-                                                font.pixelSize: 11
-                                                color: "#212529"
-                                            }
-                                        }
-                                        
-                                        // Precio Compra
-                                        Rectangle {
-                                            Layout.preferredWidth: 100
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            Label {
-                                                anchors.centerIn: parent
                                                 text: "Bs " + (loteActual.Precio_Compra || 0).toFixed(2)
                                                 font.pixelSize: 11
-                                                color: "#212529"
+                                                color: stockActual === 0 ? "#95A5A6" : "#2C3E50"
                                             }
                                         }
                                         
                                         // Fecha Compra
                                         Rectangle {
-                                            Layout.preferredWidth: 120
+                                            Layout.preferredWidth: 110
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
                                                 anchors.centerIn: parent
                                                 text: loteActual.Fecha_Compra 
-                                                      ? new Date(loteActual.Fecha_Compra).toLocaleDateString('es-ES')
+                                                      ? new Date(loteActual.Fecha_Compra).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'})
                                                       : "---"
                                                 font.pixelSize: 10
-                                                color: "#212529"
+                                                color: stockActual === 0 ? "#95A5A6" : "#2C3E50"
                                             }
                                         }
                                         
@@ -1002,17 +896,17 @@ Rectangle {
                                             Label {
                                                 anchors.centerIn: parent
                                                 text: loteActual.Fecha_Vencimiento
-                                                      ? new Date(loteActual.Fecha_Vencimiento).toLocaleDateString('es-ES')
-                                                      : "SIN VENCIMIENTO"
+                                                      ? new Date(loteActual.Fecha_Vencimiento).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'})
+                                                      : "SIN VENC."
                                                 font.pixelSize: 10
-                                                color: loteActual.Fecha_Vencimiento ? "#212529" : "#7f8c8d"
+                                                color: stockActual === 0 ? "#95A5A6" : "#2C3E50"
                                                 font.italic: !loteActual.Fecha_Vencimiento
                                             }
                                         }
                                         
                                         // Días para Vencer
                                         Rectangle {
-                                            Layout.preferredWidth: 120
+                                            Layout.preferredWidth: 110
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             Label {
@@ -1026,15 +920,15 @@ Rectangle {
                                         
                                         // Estado
                                         Rectangle {
-                                            Layout.preferredWidth: 140
+                                            Layout.preferredWidth: 130
                                             Layout.fillHeight: true
                                             color: "transparent"
                                             
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 110
-                                                height: 22
-                                                radius: 11
+                                                width: 100
+                                                height: 20
+                                                radius: 10
                                                 color: obtenerColorEstadoVencimiento(loteActual.Estado_Vencimiento)
                                                 
                                                 Label {
@@ -1042,48 +936,7 @@ Rectangle {
                                                     text: obtenerTextoEstadoVencimiento(loteActual.Estado_Vencimiento)
                                                     font.pixelSize: 9
                                                     font.bold: true
-                                                    color: "#ffffff"
-                                                }
-                                            }
-                                        }
-                                        
-                                        // 🆕 BOTÓN: LINK A COMPRA ORIGINAL
-                                        Rectangle {
-                                            Layout.preferredWidth: 60
-                                            Layout.fillHeight: true
-                                            color: "transparent"
-                                            
-                                            Button {
-                                                anchors.centerIn: parent
-                                                width: 40
-                                                height: 30
-                                                text: "→"
-                                                
-                                                background: Rectangle {
-                                                    color: parent.hovered ? "#2196F3" : "#E3F2FD"
-                                                    border.color: "#2196F3"
-                                                    border.width: 1
-                                                    radius: 4
-                                                }
-                                                
-                                                contentItem: Label {
-                                                    text: parent.text
-                                                    color: parent.hovered ? "#ffffff" : "#2196F3"
-                                                    font.bold: true
-                                                    font.pixelSize: 14
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
-                                                
-                                                ToolTip.visible: hovered
-                                                ToolTip.text: "Ver compra original"
-                                                
-                                                onClicked: {
-                                                    console.log("🔗 Abriendo compra:", loteActual.Compra_Id || loteActual.compra_id)
-                                                    var compraId = loteActual.Compra_Id || loteActual.compra_id || 0
-                                                    if (compraId > 0) {
-                                                        detalleProductoComponent.abrirCompraOriginal(compraId)
-                                                    }
+                                                    color: "#FFFFFF"
                                                 }
                                             }
                                         }
@@ -1100,74 +953,52 @@ Rectangle {
                                     
                                     ColumnLayout {
                                         anchors.centerIn: parent
-                                        spacing: 20
+                                        spacing: 16
                                         
-                                        // Ícono
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
-                                            text: lotesLoaded ? "📦" : "⏳"
-                                            font.pixelSize: 64
-                                            color: "#7f8c8d"
+                                            text: lotesLoaded ? "📭" : "⏳"
+                                            font.pixelSize: 48
+                                            color: "#95A5A6"
                                         }
                                         
-                                        // Título
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             text: lotesLoaded ? "Sin lotes disponibles" : "Cargando lotes..."
                                             font.pixelSize: 16
                                             font.bold: true
-                                            color: lotesLoaded ? "#e74c3c" : "#7f8c8d"
+                                            color: lotesLoaded ? "#7F8C8D" : "#95A5A6"
                                         }
                                         
-                                        // Mensaje explicativo
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             Layout.preferredWidth: 400
-                                            text: {
-                                                if (!lotesLoaded) return ""
-                                                
-                                                if (productoData && (productoData.stockUnitario === 0 || productoData.stock === 0)) {
-                                                    // Producto sin stock - verificar si tiene historial de ventas
-                                                    if (ultimaVentaFecha) {
-                                                        return "Este producto está agotado.\n\nÚltima venta registrada:\n" + 
-                                                               ultimaVentaFecha + " (" + ultimaVentaCantidad + " unidades)\n\n" +
-                                                               "Realice una nueva compra desde el módulo de Compras para registrar lotes."
-                                                    } else {
-                                                        return "Este producto nunca ha sido comprado.\n\n" +
-                                                               "No hay historial de lotes registrados.\n\n" +
-                                                               "Realice la primera compra desde el módulo de Compras."
-                                                    }
-                                                } else {
-                                                    return "No hay lotes registrados para este producto.\n\n" +
-                                                           "Los lotes se registran automáticamente cuando realiza una compra."
-                                                }
-                                            }
+                                            text: lotesLoaded ? 
+                                                "No hay lotes registrados para este producto.\nLos lotes se crean automáticamente al realizar compras." :
+                                                "Obteniendo información de lotes..."
                                             font.pixelSize: 13
-                                            color: "#95a5a6"
+                                            color: "#95A5A6"
                                             horizontalAlignment: Text.AlignHCenter
                                             wrapMode: Text.WordWrap
-                                            visible: lotesLoaded
                                             lineHeight: 1.4
                                         }
                                     }
                                 }
                             }
                             
-                            // Nota informativa sobre solo lectura
+                            // Nota informativa
                             Label {
                                 Layout.fillWidth: true
-                                Layout.topMargin: 12
-                                text: "ℹ️ Solo lectura. Para editar lotes, ir a Compras > Historial de Compras"
+                                Layout.topMargin: 8
+                                text: "ℹ️ Solo lectura. Para editar lotes, vaya al Modulo de Compras."
                                 font.pixelSize: 11
                                 font.italic: true
-                                color: "#6c757d"
+                                color: "#7F8C8D"
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
                             }
                         }
                     }
-                    
-                    Item { Layout.fillHeight: true }
                 }
             }
         }
